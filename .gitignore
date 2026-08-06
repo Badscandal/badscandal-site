@@ -1,0 +1,25 @@
+# macOS
+.DS_Store
+._*
+.Spotlight-V100
+.Trashes
+
+# Archives — the 102MB site zip lives beside this folder, never commit it
+*.zip
+*.tar
+*.tar.gz
+
+# Editors
+.vscode/
+.idea/
+*.swp
+
+# Node (not used today, but keeps accidents out)
+node_modules/
+npm-debug.log*
+
+# Netlify local
+.netlify/
+
+# Claude Code local settings (keep CLAUDE.md, ignore local overrides)
+.claude/settings.local.json

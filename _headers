@@ -1,0 +1,7 @@
+# Always-fresh code (beats iPhone caching)
+/*
+  Cache-Control: no-store, no-cache, must-revalidate
+
+# Media cached hard
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
