@@ -4,11 +4,14 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Store — BADSCANDAL</title>
-<meta name="description" content="Official BADSCANDAL merch — Luke Power.">
+<meta name="description" content="Official BADSCANDAL merch — t-shirts and hoodies. Wear the trouble.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter+Tight:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="css/site.css">
+<link rel="icon" type="image/png" sizes="48x48" href="assets/favicon-48.png">
+<link rel="icon" type="image/png" sizes="192x192" href="assets/favicon-192.png">
+<link rel="apple-touch-icon" href="assets/favicon-180.png">
 </head>
 <body>
 
@@ -21,11 +24,12 @@
   <nav class="nav-links" aria-label="Primary">
     <a class="nav-link roll" href="index.html?about=1">About</a>
     <a class="nav-link roll" href="index.html">Home</a>
-    <a class="nav-link roll" href="index.html#music">Music</a>
-    <a class="nav-link roll" href="lukepower.html">Luke Power</a>
-    <a class="nav-link roll" href="store.html">Store</a>
+    <a class="nav-link roll" href="live.html">Live shows</a>
   </nav>
-  <a class="nav-cta roll" data-mag href="live.html">Live shows</a>
+  <a class="nav-cta roll" data-mag href="store.html">Store</a>
+  <button class="nav-cart" id="cart-open" type="button" aria-label="Open cart">
+    Cart&nbsp;<b id="cart-count">0</b>
+  </button>
   <button class="nav-burger" id="menu-btn" type="button" aria-expanded="false" aria-controls="menu"><span>Menu</span><span>Close</span></button>
 </header>
 
@@ -33,42 +37,93 @@
 <div class="menu" id="menu" aria-hidden="true">
   <a class="menu-item" href="index.html?about=1"><i>01</i> About</a>
   <a class="menu-item" href="index.html"><i>02</i> Home</a>
-  <a class="menu-item" href="index.html#music"><i>03</i> Music</a>
-  <a class="menu-item" href="lukepower.html"><i>04</i> Luke Power</a>
-  <a class="menu-item" href="store.html"><i>05</i> Store</a>
-  <a class="menu-item" href="live.html"><i>06</i> Live shows</a>
-  <a class="menu-item" href="mailto:contact@badscandal.com?subject=Start%20a%20project"><i>07</i> Contact</a>
+  <a class="menu-item" href="live.html"><i>03</i> Live shows</a>
+  <a class="menu-item" href="store.html"><i>04</i> Store</a>
+  <a class="menu-item" href="mailto:contact@badscandal.com?subject=Start%20a%20project"><i>05</i> Contact</a>
 </div>
 
-<main class="page-main">
+<main class="page-main store-main">
 
-  <section class="page-head reveal">
-    <p class="tag">Shop</p>
-    <h1>Store</h1>
-    <p class="lede">Official Badscandal merch. <b>Wear the brand.</b></p>
-  </section>
-
-  <!-- ============================================================
-       COMING SOON — the stick man drops a bomb in the middle, it
-       explodes into the "Coming soon" reveal + notify button.
-       Logic in store-soon.js (ported unchanged from v1).
-
-       NOTE: the full live store (product grid, cart, Stripe checkout)
-       still lives in the old store.js + Netlify functions. When you're
-       ready to launch, say the word and Claude swaps this section for
-       the live shop.
-  ============================================================ -->
-  <section class="soon" id="soon">
-    <canvas class="soon-canvas" aria-hidden="true"></canvas>
-    <div class="soon-content">
-      <h2 class="soon-title">Coming soon</h2>
-      <p class="soon-sub">The drop's being built. Get on the list and be first through the door.</p>
-      <!-- >>> EDIT HERE: notify link <<< -->
-      <a class="soon-btn" href="https://listen.badscandal.com/merch" target="_blank" rel="noopener">Get notified →</a>
+  <section class="page-head store-hero reveal">
+    <!-- >>> EDIT HERE: swap assets/store-hero.webp for a new campaign shot <<< -->
+    <img class="store-hero-img" src="assets/store-hero.webp" alt=""
+         onerror="this.style.display='none'">
+    <div class="store-hero-scrim" aria-hidden="true"></div>
+    <div class="store-hero-inner">
+      <p class="tag">The first drop</p>
+      <h1>Wear the<br>trouble.</h1>
+      <p class="lede">Official BADSCANDAL merch. T-shirts and hoodies,
+      made like the records — <b>meant, or binned.</b></p>
     </div>
   </section>
 
+  <!-- department tabs (H&M-style) + category chips ------------------------- -->
+  <section class="store-bar reveal" aria-label="Shop navigation">
+    <nav class="store-tabs" aria-label="Departments">
+      <button type="button" data-dept="all" class="on">All</button>
+      <button type="button" data-dept="men">Men</button>
+      <button type="button" data-dept="women">Women</button>
+    </nav>
+    <div class="store-chips" role="group" aria-label="Categories">
+      <button type="button" data-cat="all" class="on">Everything</button>
+      <button type="button" data-cat="tshirt">T-Shirts</button>
+      <button type="button" data-cat="hoodie">Hoodies</button>
+    </div>
+  </section>
+
+  <p class="store-note" id="store-note" hidden></p>
+
+  <!-- product grid ---------------------------------------------------------- -->
+  <section class="product-grid reveal" id="product-grid" aria-live="polite"></section>
+
 </main>
+
+<!-- PRODUCT MODAL --------------------------------------------------------------- -->
+<div class="pmodal" id="pmodal" role="dialog" aria-modal="true" aria-label="Product details" hidden>
+  <div class="pmodal-inner">
+    <button class="pmodal-close" id="pmodal-close" type="button">Close&nbsp;&nbsp;<i>esc</i></button>
+    <div class="pmodal-media">
+      <img id="pmodal-img" src="" alt="">
+      <div class="pmodal-views" id="pmodal-views" hidden></div>
+    </div>
+    <div class="pmodal-info">
+      <p class="tag" id="pmodal-cat"></p>
+      <h2 id="pmodal-title"></h2>
+      <p class="pmodal-price" id="pmodal-price"></p>
+      <p class="pmodal-desc" id="pmodal-desc"></p>
+      <button class="sg-btn" id="pmodal-sizeguide" type="button" hidden><b>Size guide</b> →</button>
+      <p class="pmodal-sizes-label">Size</p>
+      <div class="pmodal-sizes" id="pmodal-sizes"></div>
+      <button class="cta-btn pmodal-add" id="pmodal-add" type="button">Add to cart</button>
+    </div>
+  </div>
+</div>
+
+<!-- SIZE GUIDE OVERLAY ------------------------------------------------------------ -->
+<div class="sguide" id="sguide" role="dialog" aria-modal="true" aria-label="Size guide" hidden>
+  <div class="sguide-inner">
+    <button class="pmodal-close sguide-close" id="sguide-close" type="button">Close&nbsp;&nbsp;<i>esc</i></button>
+    <p class="tag">Size guide</p>
+    <div id="sguide-body"></div>
+  </div>
+</div>
+
+<!-- CART DRAWER ------------------------------------------------------------------ -->
+<div class="cart-scrim" id="cart-scrim" hidden></div>
+<aside class="cart-drawer" id="cart-drawer" aria-label="Shopping cart" aria-hidden="true">
+  <div class="cart-head">
+    <p class="tag" style="margin:0">Your cart</p>
+    <button class="cart-close" id="cart-close" type="button">Close&nbsp;&nbsp;<i>esc</i></button>
+  </div>
+  <div class="cart-lines" id="cart-lines">
+    <p class="cart-empty">Nothing in here yet. Fix that.</p>
+  </div>
+  <div class="cart-foot">
+    <div class="cart-subtotal"><span>Subtotal</span><b id="cart-subtotal">—</b></div>
+    <p class="cart-fineprint">Shipping &amp; taxes calculated at checkout.</p>
+    <button class="cta-btn cart-checkout" id="cart-checkout" type="button">Checkout</button>
+  </div>
+</aside>
 
 <!-- FOOTER -------------------------------------------------------------------- -->
 <footer class="foot">
@@ -83,10 +138,9 @@
       <ul class="plain">
         <li><a class="roll" href="index.html?about=1">About</a></li>
         <li><a class="roll" href="index.html">Home</a></li>
-        <li><a class="roll" href="index.html#music">Music</a></li>
-        <li><a class="roll" href="lukepower.html">Luke Power</a></li>
-        <li><a class="roll" href="store.html">Store</a></li>
         <li><a class="roll" href="live.html">Live shows</a></li>
+        <li><a class="roll" href="store.html">Store</a></li>
+        <li><a class="roll" href="lukepower.html">Luke Power</a></li>
         <li><a class="roll" href="mailto:contact@badscandal.com">Contact</a></li>
       </ul>
     </div>
@@ -102,9 +156,9 @@
     <div>
       <p class="tag">(Ask AI about BADSCANDAL)</p>
       <ul class="plain ai-links">
-        <li><a class="roll" href="https://claude.ai/new?q=Tell%20me%20about%20BADSCANDAL%20(badscandal.com)%2C%20the%20Dublin%20creative%20studio%20and%20music%20project%20of%20Luke%20Power%20%E2%80%94%20what%20they%20make%20and%20what%20the%20new%20single%20'Friendly'%20is." target="_blank" rel="noopener">Ask Claude</a></li>
-        <li><a class="roll" href="https://chat.openai.com/?q=Tell%20me%20about%20BADSCANDAL%20(badscandal.com)%2C%20the%20Dublin%20creative%20studio%20and%20music%20project%20of%20Luke%20Power." target="_blank" rel="noopener">Ask ChatGPT</a></li>
-        <li><a class="roll" href="https://www.perplexity.ai/search/new?q=Tell%20me%20about%20BADSCANDAL%20(badscandal.com)%2C%20the%20Dublin%20creative%20studio%20of%20Luke%20Power." target="_blank" rel="noopener">Ask Perplexity</a></li>
+        <li><a class="roll" href="https://claude.ai/new?q=Tell%20me%20about%20BADSCANDAL%20(badscandal.com)%2C%20the%20Dublin%20clothing%20brand%20%E2%80%94%20what%20they%20make%2C%20what%20they%20stand%20for%2C%20and%20who%20is%20behind%20it." target="_blank" rel="noopener">Ask Claude</a></li>
+        <li><a class="roll" href="https://chat.openai.com/?q=Tell%20me%20about%20BADSCANDAL%20(badscandal.com)%2C%20the%20Dublin%20clothing%20brand%20founded%20by%20Luke%20Power." target="_blank" rel="noopener">Ask ChatGPT</a></li>
+        <li><a class="roll" href="https://www.perplexity.ai/search/new?q=Tell%20me%20about%20BADSCANDAL%20(badscandal.com)%2C%20the%20Dublin%20clothing%20brand." target="_blank" rel="noopener">Ask Perplexity</a></li>
       </ul>
     </div>
   </div>
@@ -119,6 +173,6 @@
 </footer>
 
 <script src="js/main.js"></script>
-<script src="js/store-soon.js"></script>
+<script src="js/store.js"></script>
 </body>
 </html>

@@ -23,14 +23,32 @@
     el.appendChild(wrap);
   });
 
-  /* ---------- preloader ------------------------------------------------ */
+  /* ---------- preloader: decode intro (PixelVault-style, no brackets) --
+     Random glyphs cycle and progressively LOCK into "BADSCANDAL" as the
+     page actually loads; resolved word holds a beat, then melts apart in
+     the chromatic channels. ------------------------------------------- */
   var loader = document.getElementById("loader");
-  var loadPct = document.getElementById("load-pct");
+  var scrambleEl = document.getElementById("load-scramble");
   var loadClock = document.getElementById("load-clock");
+  var WORD = "BADSCANDAL";
+  var GLYPHS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789#%&<>/*+=";
+  /* letters resolve in a scattered order, not left-to-right */
+  var lockOrder = [3, 7, 0, 5, 9, 2, 6, 1, 8, 4];
   var pctVal = 0, pageLoaded = false;
+  function renderScramble() {
+    if (!scrambleEl) return;
+    var locked = Math.floor((pctVal / 100) * WORD.length);
+    var out = "";
+    for (var i = 0; i < WORD.length; i++) {
+      var isLocked = lockOrder.indexOf(i) < locked;
+      out += isLocked ? WORD.charAt(i)
+                      : GLYPHS.charAt(Math.floor(Math.random() * GLYPHS.length));
+    }
+    scrambleEl.textContent = out;
+  }
+  var scrambleTick = null;
   function setPct(v) {
     pctVal = Math.max(pctVal, Math.min(100, Math.round(v)));
-    if (loadPct) loadPct.textContent = pctVal + "%";
   }
   window.addEventListener("load", function () { pageLoaded = true; });
   /* completion: the loading line melts apart in chromatic channels */
@@ -49,9 +67,22 @@
       o.width = cv.width; o.height = Math.round(fs * 2.6);
       var c2 = o.getContext("2d");
       c2.fillStyle = color;
-      c2.textAlign = "center"; c2.textBaseline = "middle";
+      c2.textBaseline = "middle";
       c2.font = "700 " + fs + "px 'Space Grotesk', Arial, sans-serif";
-      c2.fillText("Loading trouble 100%", o.width / 2, o.height / 2);
+      /* draw per-character so the melt matches the letter-spaced DOM word */
+      var word = "BADSCANDAL";
+      var gap = fs * 0.32;
+      var widths = [], total = 0;
+      for (var wi = 0; wi < word.length; wi++) {
+        widths[wi] = c2.measureText(word.charAt(wi)).width;
+        total += widths[wi];
+      }
+      total += gap * (word.length - 1);
+      var x = (o.width - total) / 2;
+      for (var wj = 0; wj < word.length; wj++) {
+        c2.fillText(word.charAt(wj), x, o.height / 2);
+        x += widths[wj] + gap;
+      }
       return o;
     }
     var layers = [
@@ -85,19 +116,28 @@
     })();
   }
   if (!reduced) {
+    /* the glyphs flicker fast; letters lock in as loading progresses */
+    scrambleTick = setInterval(renderScramble, 55);
+    renderScramble();
     /* creep toward 90 while assets load, then rush to 100 once loaded */
     var tick = setInterval(function () {
       var ceiling = pageLoaded ? 100 : 90;
-      var step = pageLoaded ? 9 : Math.max(1, (ceiling - pctVal) * 0.12);
+      var step = pageLoaded ? 7 : Math.max(1, (ceiling - pctVal) * 0.10);
       setPct(pctVal + step);
       if (pctVal >= 100) {
         clearInterval(tick);
-        burst();
-        setTimeout(function () { if (loader) loader.classList.add("done"); }, 680);
+        clearInterval(scrambleTick);
+        if (scrambleEl) scrambleEl.textContent = WORD;
+        /* hold the resolved word a beat, then melt it apart */
+        setTimeout(function () {
+          burst();
+          setTimeout(function () { if (loader) loader.classList.add("done"); }, 680);
+        }, 520);
       }
     }, 90);
   } else {
     setPct(100);
+    if (scrambleEl) scrambleEl.textContent = WORD;
     setTimeout(function () { if (loader) loader.classList.add("done"); }, 150);
   }
   if (loadClock) {
@@ -108,7 +148,7 @@
     } catch (e) { loadClock.textContent = new Date().toTimeString().slice(0, 5) + ", DUB"; }
   }
   /* fail-open safety net: never trap the visitor behind the loader */
-  setTimeout(function () { if (loader) loader.classList.add("done"); }, 2600);
+  setTimeout(function () { if (loader) loader.classList.add("done"); }, 3400);
 
   /* ---------- hero word rotator ---------------------------------------- */
   (function rotator() {
@@ -316,9 +356,6 @@
   makeScrub(document.getElementById("hero"), document.getElementById("hero-video"),
             "assets/graded-sexy-4k.mp4", "assets/graded-sexy-1080.mp4",
             "assets/scrub-poster.jpg", "assets/scrub-poster.jpg");
-  makeScrub(document.getElementById("music"), document.getElementById("friendly-video"),
-            "assets/friendly-16x9-4k.mp4", "assets/friendly-vertical.mp4",
-            "assets/friendly-poster.jpg", "assets/friendly-poster-v.jpg");
   makeScrub(document.getElementById("lp-hero"), document.getElementById("lp-video"),
             "assets/underwater-4k.mp4", "assets/underwater-1080.mp4",
             "assets/underwater-poster.jpg", "assets/underwater-poster.jpg");

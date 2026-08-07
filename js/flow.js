@@ -77,7 +77,7 @@
     "void main(){",
     "  vec2 f = texture2D(prev, uv).rg;",
     "  vec2 d1 = f - 0.5;",
-    "  d1 *= 0.965;",
+    "  d1 *= 0.9685;",
     "  d1 -= sign(d1) * min(abs(d1), 0.0028);",  /* always reaches true zero */
     "  f = 0.5 + d1;",
     "  vec2 d0 = f - 0.5;",
@@ -86,8 +86,8 @@
     "  vec2 uva = uv; uva.x *= aspect;",
     "  vec2 aa = a; aa.x *= aspect; vec2 bb = b; bb.x *= aspect;",
     "  float dist = segDist(uva, aa, bb);",
-    "  float s = exp(-dist*dist * 30.0) * active;",
-    "  f += vel * 0.24 * s;",
+    "  float s = exp(-dist*dist * 25.0) * active;",
+    "  f += vel * 0.30 * s;",
     "  f = clamp(f, 0.0, 1.0);",
     "  gl_FragColor = vec4(f, 0.0, 1.0);",
     "}"
@@ -119,7 +119,7 @@
     "  vec2 f = (texture2D(flowT, uv).rg - 0.5);",
     "  float m = length(f);",
     "  float gate = smoothstep(0.002, 0.03, m);",
-    "  vec2 disp = f * 0.21;",
+    "  vec2 disp = f * 0.26;",
     "  float aR = texture2D(textT, uv + disp * 1.28).a;",
     "  float aG = texture2D(textT, uv + disp * 1.0).a;",
     "  float aB = texture2D(textT, uv + disp * 0.74).a;",
