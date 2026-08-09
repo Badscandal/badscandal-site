@@ -29,13 +29,19 @@
      the chromatic channels. ------------------------------------------- */
   var loader = document.getElementById("loader");
   var scrambleEl = document.getElementById("load-scramble");
-  var loadClock = document.getElementById("load-clock");
+  var pctEl = document.getElementById("load-pct");
   var WORD = "BADSCANDAL";
   var GLYPHS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789#%&<>/*+=";
   /* letters resolve in a scattered order, not left-to-right */
   var lockOrder = [3, 7, 0, 5, 9, 2, 6, 1, 8, 4];
   var pctVal = 0, pageLoaded = false;
+  /* the counter and the wordmark are the same signal: pctVal drives how
+     many letters have locked AND what the number reads */
+  function renderPct() {
+    if (pctEl) pctEl.textContent = pctVal;
+  }
   function renderScramble() {
+    renderPct();
     if (!scrambleEl) return;
     var locked = Math.floor((pctVal / 100) * WORD.length);
     var out = "";
@@ -130,6 +136,7 @@
         clearInterval(tick);
         clearInterval(scrambleTick);
         if (scrambleEl) scrambleEl.textContent = WORD;
+        renderPct();
         /* hold the resolved word a beat, then melt it apart */
         setTimeout(function () {
           burst();
@@ -140,17 +147,19 @@
   } else {
     setPct(100);
     if (scrambleEl) scrambleEl.textContent = WORD;
+    renderPct();
     setTimeout(function () { if (loader) loader.classList.add("done"); }, 150);
   }
-  if (loadClock) {
-    try {
-      loadClock.textContent = new Intl.DateTimeFormat("en-IE", {
-        timeZone: "Europe/Dublin", hour: "2-digit", minute: "2-digit", hour12: false
-      }).format(new Date()) + ", DUB";
-    } catch (e) { loadClock.textContent = new Date().toTimeString().slice(0, 5) + ", DUB"; }
-  }
-  /* fail-open safety net: never trap the visitor behind the loader */
-  setTimeout(function () { if (loader) loader.classList.add("done"); }, 3400);
+  /* fail-open safety net: never trap the visitor behind the loader.
+     Snap the count to 100 first — otherwise a slow connection sees the
+     loader slide away mid-count, stuck on something like 47. */
+  setTimeout(function () {
+    if (!loader) return;
+    setPct(100);
+    if (scrambleEl) scrambleEl.textContent = WORD;
+    renderPct();
+    loader.classList.add("done");
+  }, 3400);
 
   /* ---------- hero word rotator ---------------------------------------- */
   (function rotator() {

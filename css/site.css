@@ -120,8 +120,12 @@ body::before{content:"";position:fixed;inset:0;z-index:-1;
 .load-decode{display:block;max-width:none;white-space:nowrap;
   letter-spacing:.32em;margin-right:-.32em;text-align:center;
   font-size:clamp(18px,2.6vw,36px);color:var(--paper)}
-.load-pct{color:var(--blaze);font-variant-numeric:tabular-nums;
-  font-size:clamp(22px,3vw,40px)}
+/* wordmark over a climbing counter, centred as one stack */
+.load-stack{display:flex;flex-direction:column;align-items:center;gap:clamp(14px,2.4vh,26px)}
+.load-pct{color:var(--muted);font-family:var(--font-display);font-weight:700;
+  font-variant-numeric:tabular-nums;letter-spacing:.06em;
+  font-size:clamp(13px,1.5vw,18px)}
+.load-pct::after{content:"%";opacity:.5;margin-left:.15em}
 .load-nav{list-style:none;align-self:end;font-size:14px;color:var(--paper)}
 .load-nav li{margin:5px 0}
 .load-nav i{font-style:normal;color:var(--blaze);margin-right:14px;
@@ -471,6 +475,8 @@ main section{max-width:var(--maxw);margin:0 auto;
   .scroll-hint{animation:none}
   .cm-track{animation:none}
   .grain{animation:none}
+  /* the loader jumps straight to 100 in JS; don't slide it away too */
+  #loader{transition:none}
   .reveal{opacity:1;transform:none;transition:none}
   .roll:hover .roll-in > span{transform:none}
   .roll .roll-in > span:last-child{display:none}

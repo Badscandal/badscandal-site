@@ -35,10 +35,13 @@
 <div class="grain" aria-hidden="true"></div>
 <div class="blur-veil" aria-hidden="true"></div>
 
-<!-- 00 · PRELOADER — PixelVault-style decode: random glyphs lock into
-     BADSCANDAL (no brackets), hold a beat, then the chromatic melt. ------ -->
+<!-- 00 · PRELOADER — random glyphs lock into BADSCANDAL as the counter
+     climbs 0 to 100, hold a beat, then the melt. --------------------- -->
 <div id="loader" aria-hidden="true">
-  <p class="load-tag load-decode" id="load-scramble" aria-label="BADSCANDAL">BADSCANDAL</p>
+  <div class="load-stack">
+    <p class="load-tag load-decode" id="load-scramble" aria-label="BADSCANDAL">BADSCANDAL</p>
+    <p class="load-pct"><span id="load-pct">0</span></p>
+  </div>
 </div>
 
 <!-- NAV -------------------------------------------------------------------- -->
