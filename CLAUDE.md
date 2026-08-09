@@ -1,7 +1,7 @@
 # BADSCANDAL — badscandal.com
 
 Static site (no build step, no framework, no dependencies). Plain HTML +
-CSS + vanilla JS, deployed to Netlify by dragging/pushing the folder.
+CSS + vanilla JS, auto-deployed to Netlify on every push to `main`.
 Shop data comes live from Shopify's Storefront API at runtime.
 
 Owner: Luke Power — musician, and BADSCANDAL is the brand around it
@@ -137,15 +137,27 @@ product description. `openModal()` splits the description at the words
 
 ## Deploying
 
-Netlify, static publish of the whole folder. No build command, no
-`netlify.toml` currently. `_headers` is the only Netlify config.
+**Push to `main` and it's live.** Netlify watches
+`github.com/Badscandal/badscandal-site` and publishes the repo root as-is.
+No build command, no CI. Measured push → live: ~10 seconds.
 
-Given Netlify CLI + a linked site:
+    git add -A && git commit -m "..." && git push
 
-    netlify deploy --prod --dir .
+Netlify project `profound-haupia-db7ffa`
+(site id `41c9b6ee-3a12-4b2f-ba7c-8dac83281622`) →
+https://app.netlify.com/projects/profound-haupia-db7ffa
 
-Note assets/ is ~97MB of video — watch deploy times, and never re-encode
-the films casually (see the encoding gotcha above).
+Config: `netlify.toml` (publish `.`, empty build command) and `_headers`.
+Netlify's own post-processing does the pretty-URL rewriting — the served
+HTML has `href='/store'` where the source says `href="store.html"`, and
+attribute quotes get normalised. That's expected; don't "fix" it.
+
+Rolling back a bad deploy: either `git revert` and push, or use Netlify's
+deploy list → "Publish deploy" on an earlier one.
+
+Note assets/ is ~97MB of video — it's committed to the repo (largest file
+28.9MB, so no Git LFS needed). Never re-encode the films casually (see the
+encoding gotcha above).
 
 ## SEO / identity
 
