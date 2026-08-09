@@ -14,9 +14,13 @@
       -> Install app -> API credentials -> Storefront API access token.
 
    HOW PRODUCTS SORT THEMSELVES (tags, set on each product in Shopify):
-     "tshirt" or "hoodie"        -> category
-     "men", "women" or "unisex"  -> department
-   Unisex products (all hoodies) appear under BOTH Men and Women.
+     "statement" or "essential"          -> family  (the slogan pieces vs the blanks)
+     "tee", "hoodie", "tank" or "other"  -> garment
+   The two axes are independent, so a statement hoodie shows under
+   Statements AND under Hoodies. Both lists live in one place —
+   FAMILIES / GARMENTS below — which drives the Shopify query, the
+   filter buttons, the resolvers and the labels. Add a category there
+   and nowhere else.
    Sizes come from the product's variants (S / M / L / XL ...).
    ============================================================ */
 (function () {
@@ -30,43 +34,87 @@
   };
   /* ---------------------------------------------------------------------- */
 
+  /* >>> EDIT HERE — the whole taxonomy. One list per axis. <<<
+     key   : the value used in markup + filtering
+     label : what the visitor reads
+     tag   : the Shopify tag that assigns it (omit on "all")
+     test  : fallback regex, used only when a product has no tag yet    */
+  var FAMILIES = [
+    { key: "all",       label: "Everything" },
+    { key: "statement", label: "Statements", tag: "statement" },
+    { key: "essential", label: "Essentials", tag: "essential" }
+  ];
+  var GARMENTS = [
+    { key: "all",    label: "All" },
+    { key: "tee",    label: "Tees",    tag: "tee",    test: /t-?shirts?\b|\btees?\b/ },
+    { key: "hoodie", label: "Hoodies", tag: "hoodie", test: /hoodie|sweatshirt|crewneck|sweater|fleece|jumper/ },
+    { key: "tank",   label: "Tanks",   tag: "tank",   test: /tank|crop-?top|cropped/ },
+    { key: "other",  label: "Other",   tag: "other" }
+  ];
+  /* ---------------------------------------------------------------------- */
+
   var grid = document.getElementById("product-grid");
   if (!grid) return;
+
+  /* everything below is derived — no other file lists categories */
+  function real(list) { return list.filter(function (c) { return c.tag; }); }
+  function labelOf(list, key) {
+    var hit = list.filter(function (c) { return c.key === key; })[0];
+    return hit ? hit.label : "";
+  }
+  function resolve(list, tags, hints, fallback) {
+    var i, h, c;
+    for (i = 0; i < list.length; i++) {          /* tags always win */
+      c = list[i];
+      if (c.tag && tags.indexOf(c.tag) > -1) return c.key;
+    }
+    /* Nothing tagged: infer, strongest signal first. Printful sets
+       productType to "T-SHIRT" on everything it makes — including
+       hoodies — so the image filename slug is checked before it, or a
+       womens-cropped-hoodie gets filed under Tees. */
+    for (h = 0; h < hints.length; h++) {
+      for (i = 0; i < list.length; i++) {
+        c = list[i];
+        if (c.test && c.test.test(hints[h])) return c.key;
+      }
+    }
+    return fallback;
+  }
 
   var LIVE = !!(CONFIG.domain && CONFIG.token);
   var API = "https://" + CONFIG.domain + "/api/" + CONFIG.apiVersion + "/graphql.json";
 
   /* ---------- demo products (placeholder mode) -------------------------- */
   var DEMO = [
-    { id: "d1", title: "NO KINGS TEE", cat: "tshirt", dept: "men",
+    { id: "d1", title: "NO KINGS TEE", family: "statement", garment: "tee",
       price: 35, currency: "EUR", images: ["assets/col-1.webp", "assets/col-2.webp"],
       desc: "Heavyweight cotton. Printed front and back. Says what you were thinking.",
       variants: ["S", "M", "L", "XL"] },
-    { id: "d2", title: "TROUBLE TEE", cat: "tshirt", dept: "men",
+    { id: "d2", title: "TROUBLE TEE", family: "statement", garment: "tee",
       price: 35, currency: "EUR", images: ["assets/col-2.webp", "assets/col-3.webp"],
       desc: "Boxy fit, soft hand-feel print. For people who mean it.",
       variants: ["S", "M", "L", "XL"] },
-    { id: "d3", title: "SCANDAL BABY TEE", cat: "tshirt", dept: "women",
-      price: 33, currency: "EUR", images: ["assets/col-3.webp", "assets/col-4.webp"],
-      desc: "Fitted cut, cropped just enough. Loud on purpose.",
-      variants: ["XS", "S", "M", "L"] },
-    { id: "d4", title: "FOUR THOUSAND WEEKS TEE", cat: "tshirt", dept: "women",
+    { id: "d3", title: "FOUR THOUSAND WEEKS TEE", family: "statement", garment: "tee",
       price: 33, currency: "EUR", images: ["assets/col-4.webp", "assets/col-1.webp"],
-      desc: "Spend yours loudly. Fitted cut, heavyweight print.",
+      desc: "Spend yours loudly. Heavyweight print, front and back.",
       variants: ["XS", "S", "M", "L"] },
-    { id: "d5", title: "BADSCANDAL HOODIE", cat: "hoodie", dept: "unisex",
+    { id: "d4", title: "BADSCANDAL TANK", family: "essential", garment: "tank",
+      price: 28, currency: "EUR", images: ["assets/col-3.webp", "assets/col-4.webp"],
+      desc: "Cut clean, wears loose. Wordmark only — the quiet one.",
+      variants: ["XS", "S", "M", "L"] },
+    { id: "d5", title: "BADSCANDAL HOODIE", family: "essential", garment: "hoodie",
       price: 65, currency: "EUR", images: ["assets/cta-bg.webp", "assets/col-1.webp"],
-      desc: "Unisex. 450gsm brushed fleece, oversized hood, embroidered wordmark.",
+      desc: "450gsm brushed fleece, oversized hood, embroidered wordmark.",
       variants: ["S", "M", "L", "XL", "XXL"] },
-    { id: "d6", title: "NO GODS NO MASTERS HOODIE", cat: "hoodie", dept: "unisex",
+    { id: "d6", title: "NO GODS NO MASTERS HOODIE", family: "statement", garment: "hoodie",
       price: 68, currency: "EUR", images: ["assets/col-2.webp", "assets/cta-bg.webp"],
-      desc: "Unisex. Heavy fleece, puff print across the chest. Wear it loud.",
+      desc: "Heavy fleece, puff print across the chest. Wear it loud.",
       variants: ["S", "M", "L", "XL", "XXL"] }
   ];
 
   /* ---------- state ------------------------------------------------------ */
   var products = [];
-  var dept = "all", cat = "all";
+  var family = "all", garment = "all";
   var demoCart = [];              /* [{key, id, title, size, price, currency, img, qty}] */
   var cartId = null;              /* live Shopify cart id */
   var liveCart = null;            /* last cart payload from Shopify */
@@ -138,23 +186,19 @@
     el.textContent = msg;
     el.hidden = false;
   }
-  function catLabel(c) { return c === "hoodie" ? "Hoodie" : "T-Shirt"; }
-  /* tags win; otherwise infer from Printful's product type + title */
-  function catOf(tags, type, title) {
-    if (tags.indexOf("hoodie") > -1) return "hoodie";
-    if (tags.indexOf("tshirt") > -1) return "tshirt";
-    var s = ((type || "") + " " + (title || "")).toLowerCase();
-    if (/hoodie|sweatshirt|crewneck|sweater|fleece|jumper/.test(s)) return "hoodie";
-    return "tshirt";
+  /* the badge on a card: "Statement · Hoodie", or just the garment */
+  function badgeFor(p) {
+    var g = labelOf(GARMENTS, p.garment);
+    var one = g.replace(/s$/, "");                    /* "Tees" -> "Tee" */
+    return p.family === "statement" ? "Statement · " + one : one;
   }
-  function deptOf(tags, type, title) {
-    if (tags.indexOf("unisex") > -1) return "unisex";
-    if (tags.indexOf("women") > -1) return "women";
-    if (tags.indexOf("men") > -1) return "men";
-    var s = ((type || "") + " " + (title || "")).toLowerCase();
-    if (/women|woman|ladies|girls|femme|babydoll|baby tee|crop/.test(s)) return "women";
-    if (/\bmen'?s?\b/.test(s)) return "men";
-    return "unisex";
+  /* tags win; a product with no tag yet falls back to the regexes,
+     which read the title plus Printful's garment-bearing image slugs */
+  function familyOf(tags, type, hint) {
+    return resolve(FAMILIES, tags, [hint.toLowerCase(), (type || "").toLowerCase()], "essential");
+  }
+  function garmentOf(tags, type, hint) {
+    return resolve(GARMENTS, tags, [hint.toLowerCase(), (type || "").toLowerCase()], "other");
   }
 
   /* ---------- Storefront API ---------------------------------------------- */
@@ -195,8 +239,8 @@
       }).join(" ");
       return {
         id: n.id, title: n.title, desc: n.description || "",
-        cat: catOf(tags, n.productType, hint),
-        dept: deptOf(tags, n.productType, hint),
+        family: familyOf(tags, n.productType, hint),
+        garment: garmentOf(tags, n.productType, hint),
         price: parseFloat(n.priceRange.minVariantPrice.amount),
         currency: n.priceRange.minVariantPrice.currencyCode,
         images: imgs.length ? imgs : ["assets/cta-bg.webp"],
@@ -218,7 +262,11 @@
       " priceRange { minVariantPrice { amount currencyCode } }" +
       " variants(first: 100) { edges { node { id title availableForSale image { url } price { amount currencyCode } } } }" +
       "} } } }";
-    return gql(q, { q: "tag:tshirt OR tag:hoodie" }).then(function (d) {
+    /* built from the taxonomy, never hardcoded — a category added above
+       but missing here would be fetched by nobody and vanish silently */
+    var tagQuery = real(FAMILIES).concat(real(GARMENTS))
+      .map(function (c) { return "tag:" + c.tag; }).join(" OR ");
+    return gql(q, { q: tagQuery }).then(function (d) {
       var list = mapProducts(d);
       if (list.length) return list;
       /* nothing tagged yet: show everything so the shop is never empty */
@@ -227,11 +275,12 @@
   }
 
   /* ---------- grid rendering ----------------------------------------------- */
+  /* two independent axes, plainly ANDed — a statement hoodie is both */
   function visible() {
     return products.filter(function (p) {
-      var okDept = dept === "all" || p.dept === dept || p.dept === "unisex";
-      var okCat = cat === "all" || p.cat === cat;
-      return okDept && okCat;
+      var okFam = family === "all" || p.family === family;
+      var okGarm = garment === "all" || p.garment === garment;
+      return okFam && okGarm;
     });
   }
 
@@ -246,7 +295,11 @@
       var card = document.createElement("article");
       card.className = "pcard";
       card.style.transitionDelay = (Math.min(idx, 8) * 45) + "ms";
-      var alt = p.images[1] ? "<img class='pcard-alt' loading='lazy' src='" + p.images[1] + "' alt=''>" : "";
+      /* hover reveals the back of the garment where there is one — on a
+         statement piece that IS the statement — else the next shot along */
+      var altSrc = imgFor(p, null, "back") || p.images[1] || null;
+      if (altSrc === p.images[0]) altSrc = p.images[1] || null;
+      var alt = altSrc ? "<img class='pcard-alt' loading='lazy' src='" + altSrc + "' alt=''>" : "";
       var sizeBtns = "";
       var vs = LIVE ? p.variants : p.variants.map(function (s) { return { id: p.id + "-" + s, title: s, available: true }; });
       /* Printful-style variants ("Black / S") have colour AND size:
@@ -263,7 +316,7 @@
       card.innerHTML =
         "<div class='pcard-media'>" +
           "<img loading='lazy' src='" + p.images[0] + "' alt='" + p.title.replace(/'/g, "&#39;") + "'>" + alt +
-          "<span class='pcard-cat'>" + catLabel(p.cat) + (p.dept === "unisex" ? " · Unisex" : "") + "</span>" +
+          "<span class='pcard-cat'>" + badgeFor(p) + "</span>" +
           "<div class='pcard-quick'><span class='qa-label'>Quick add</span>" +
             "<div class='qa-sizes'>" + sizeBtns + "</div>" +
           "</div>" +
@@ -288,25 +341,28 @@
     });
   }
 
-  /* ---------- tabs + chips --------------------------------------------------- */
-  Array.prototype.forEach.call(document.querySelectorAll(".store-tabs [data-dept]"), function (b) {
-    b.addEventListener("click", function () {
-      dept = b.getAttribute("data-dept");
-      Array.prototype.forEach.call(document.querySelectorAll(".store-tabs [data-dept]"), function (x) {
-        x.classList.toggle("on", x === b);
+  /* ---------- filters: built from the taxonomy, not from markup -------------- */
+  function buildFilter(container, list, onPick) {
+    if (!container) return;
+    container.innerHTML = "";
+    list.forEach(function (c, i) {
+      var b = document.createElement("button");
+      b.type = "button";
+      b.className = i === 0 ? "on" : "";
+      b.setAttribute("data-key", c.key);
+      b.textContent = c.label;
+      b.addEventListener("click", function () {
+        onPick(c.key);
+        Array.prototype.forEach.call(container.children, function (x) {
+          x.classList.toggle("on", x === b);
+        });
+        render();
       });
-      render();
+      container.appendChild(b);
     });
-  });
-  Array.prototype.forEach.call(document.querySelectorAll(".store-chips [data-cat]"), function (b) {
-    b.addEventListener("click", function () {
-      cat = b.getAttribute("data-cat");
-      Array.prototype.forEach.call(document.querySelectorAll(".store-chips [data-cat]"), function (x) {
-        x.classList.toggle("on", x === b);
-      });
-      render();
-    });
-  });
+  }
+  buildFilter(document.querySelector(".store-tabs"), FAMILIES, function (k) { family = k; });
+  buildFilter(document.querySelector(".store-chips"), GARMENTS, function (k) { garment = k; });
 
   /* ---------- product modal --------------------------------------------------- */
   var pmodal = document.getElementById("pmodal");
@@ -364,8 +420,7 @@
     modalProduct = p; modalVariant = null;
     modalColour = null; modalView = null;
     document.getElementById("pmodal-img").src = p.images[0];
-    document.getElementById("pmodal-cat").textContent =
-      catLabel(p.cat) + (p.dept === "unisex" ? " · Unisex" : p.dept === "men" ? " · Men" : " · Women");
+    document.getElementById("pmodal-cat").textContent = badgeFor(p);
     document.getElementById("pmodal-title").textContent = p.title;
     document.getElementById("pmodal-price").textContent = money(p.price, p.currency);
     /* split the Printful size guide out of the description into its own

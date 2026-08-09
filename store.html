@@ -61,18 +61,11 @@
     </div>
   </section>
 
-  <!-- department tabs (H&M-style) + category chips ------------------------- -->
+  <!-- filters: both rows are filled by js/store.js from FAMILIES / GARMENTS.
+       >>> EDIT CATEGORIES THERE, not here <<< ------------------------------- -->
   <section class="store-bar reveal" aria-label="Shop navigation">
-    <nav class="store-tabs" aria-label="Departments">
-      <button type="button" data-dept="all" class="on">All</button>
-      <button type="button" data-dept="men">Men</button>
-      <button type="button" data-dept="women">Women</button>
-    </nav>
-    <div class="store-chips" role="group" aria-label="Categories">
-      <button type="button" data-cat="all" class="on">Everything</button>
-      <button type="button" data-cat="tshirt">T-Shirts</button>
-      <button type="button" data-cat="hoodie">Hoodies</button>
-    </div>
+    <nav class="store-tabs" aria-label="Collections"></nav>
+    <div class="store-chips" role="group" aria-label="Garment"></div>
   </section>
 
   <p class="store-note" id="store-note" hidden></p>
