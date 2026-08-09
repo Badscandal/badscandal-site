@@ -4,8 +4,11 @@ Static site (no build step, no framework, no dependencies). Plain HTML +
 CSS + vanilla JS, auto-deployed to Netlify on every push to `main`.
 Shop data comes live from Shopify's Storefront API at runtime.
 
-Owner: Luke Power — musician, and BADSCANDAL is the brand around it
-(music + film + clothing). Dublin, Ireland.
+BADSCANDAL is a **clothing brand** by Luke Power and Lilian — statement
+tees and essentials. The site sells the clothes and tells their story:
+they left their country to chase making things and travelling. There is
+no music or live-shows content any more (removed Aug 2026); it lives in
+git history if it is ever wanted back.
 
 ---
 
@@ -26,10 +29,24 @@ Owner: Luke Power — musician, and BADSCANDAL is the brand around it
 
 ## Palette (CSS vars in css/site.css `:root`)
 
-    --ink #070503   --ink-2 #120C07  --ink-3 #1D140C   (near-black browns)
-    --paper #F3E9DD --muted #A08C77  --silver #9A948C  (text)
-    --blaze #FF4E1A --uv #F0791E     --ember #FFB454   (orange accents)
-    --maroon #7A2620
+**Pure monochrome — there is no colour on this site by design.** The
+clothing photography is the only colour on the page. The var names are
+kept from the old warm palette because the stylesheet is built on their
+SEMANTICS, not their hue:
+
+    --ink #050505   --ink-2 #0C0C0C  --ink-3 #1F1F1F   bg / surface / hairline
+    --ink-rgb 5,5,5                                    channels, for scrims
+    --paper #F2F2F2 --muted #8A8A8A  --silver #6E6E6E  text 1 / 2 / 3
+    --uv #B4B4B4     resting border + small tracked labels
+    --blaze #FFFFFF  active/hovered fill (text on top inverts to --ink)
+    --ember #FFFFFF  emphasis: prices, link hover
+    --maroon #7A7A7A destructive / muted
+
+Two consequences worth knowing: `--blaze` and `--ember` are both white,
+so any two states that were previously distinguished *only* by hue now
+need a second signal (`.qa-size.added` uses a halo — see site.css). And
+scrims must use `rgba(var(--ink-rgb),.x)`, never a hand-written
+`rgba(5,5,5,.x)`, or they drift out of sync with the palette again.
 
 Fonts: Space Grotesk (display), Inter Tight (body), Archivo Black
 (wordmark only) — all from Google Fonts at runtime.
@@ -38,16 +55,17 @@ Fonts: Space Grotesk (display), Inter Tight (body), Archivo Black
 
 ## Files
 
-    index.html       Home: decode loader -> hero (scroll-scrubbed film
-                     behind the liquid WebGL wordmark) -> Friendly music
-                     section -> philosophy -> club -> process -> FAQ ->
-                     marquee CTA -> footer. About modal lives here;
-                     subpages open it via index.html?about=1
+    index.html       Home: loader (0->100 counter + decoding wordmark)
+                     -> hero (scroll-scrubbed film behind the liquid
+                     WebGL wordmark) -> the drop (two store worlds)
+                     -> four-thousand-weeks manifesto -> club -> process
+                     -> FAQ -> marquee CTA -> footer. About modal lives
+                     here; subpages open it via index.html?about=1
     store.html       The shop (see "Store" below)
-    lukepower.html   Artist page — underwater film, socials, IG feed,
-                     count-up stats, story
-    live.html        Live shows — coming soon
-    css/site.css     ALL styling for every page, one file (~800 lines)
+    us.html          The story — Luke & Lilian, the arithmetic count-up,
+                     socials, IG feed. Was lukepower.html
+    _redirects       /lukepower -> /us, /live -> / (both were indexed)
+    css/site.css     ALL styling for every page, one file (~680 lines)
     js/main.js       Shared: loader, roll-up links, cursor, magnetic
                      buttons, scroll-scrubbed video engine, reveals,
                      menu, about modal, clock
@@ -56,9 +74,7 @@ Fonts: Space Grotesk (display), Inter Tight (body), Archivo Black
                      to static <h1> with no WebGL/reduced motion
     js/store.js      Shop engine: Shopify Storefront API, filtering,
                      product modal, cart, checkout
-    js/store-soon.js Legacy stickman/bomb "coming soon" gag — unused now
-                     that the store is live, kept for reference
-    assets/          ~97MB, mostly the six .mp4 films
+    assets/          ~38MB, mostly the two hero .mp4 films
     _headers         Netlify headers
     tools/           gen_tiles.py — regenerates the spare brand tiles
 
@@ -67,12 +83,12 @@ Fonts: Space Grotesk (display), Inter Tight (body), Archivo Black
 Scrolling scrubs them; scrolling back rewinds. They can never "play" —
 `makeScrub()` in js/main.js hard-pauses any playback. Files are fetched
 as blobs so seeking is instant on iOS. Desktop gets 4K, phones get 1080
-(iOS refuses inline 4K); the Friendly section serves a vertical cut on
-phones so its on-screen writing stays in frame.
+(iOS refuses inline 4K).
 
-    hero:       graded-sexy-4k.mp4  / graded-sexy-1080.mp4
-    friendly:   friendly-16x9-4k.mp4 / friendly-vertical.mp4
-    lukepower:  underwater-4k.mp4   / underwater-1080.mp4
+    hero:  graded-sexy-4k.mp4 / graded-sexy-1080.mp4
+
+`makeScrub()` is generic and no-ops when its element is absent, so a
+second scrubbed section is just one more call plus the markup.
 
 **Critical encoding gotcha:** these must start at exactly timestamp
 0.000 with a keyframe, or browsers paint a black frame before the first
@@ -103,15 +119,36 @@ Config at the top of js/store.js:
 If `domain`/`token` are blank the file falls back to DEMO mode with
 placeholder products, so the page never looks broken.
 
-**Sorting into Men / Women / T-Shirts / Hoodies**, in priority order:
+### Categories — edit them in ONE place
 
-1. Shopify **tags** (lowercase): `tshirt`|`hoodie` and `men`|`women`|`unisex`.
-   Tags always win. `unisex` shows under BOTH Men and Women.
-2. Fallback inference from `productType` + title + **image filename slugs**.
-   Printful bakes the garment into filenames
-   (`womens-cropped-hoodie-military-green-back-<hash>.jpg`), which is how
-   the crop hoodie gets labelled correctly despite Printful setting its
-   productType to "T-SHIRT" for everything.
+`FAMILIES` and `GARMENTS` at the top of js/store.js are the single source
+of truth. They drive the Storefront query, the resolvers, the labels, the
+filter buttons and the demo data. **store.html does not list categories at
+all** — both filter rows are rendered from these arrays. Adding a category
+is one line there and nowhere else.
+
+Two **independent** axes, ANDed in `visible()`:
+
+    family   statement | essential      (the top row)
+    garment  tee | hoodie | tank | other (the chips)
+
+Because they're independent, a statement hoodie appears under Statements
+*and* under Hoodies. Resolution order per axis:
+
+1. Shopify **tags** (lowercase), which always win. All 15 products are
+   tagged: 9 statement / 6 essential.
+2. Fallback regex for anything untagged, checked against the **image
+   filename slug first and `productType` second**. That order matters:
+   Printful sets productType to "T-SHIRT" on everything it makes, so
+   checking it first files `womens-cropped-hoodie` under Tees. Untagged
+   products always land in `essential`, so new stock never claims to be a
+   Statement piece by accident.
+
+The trap that was there before, in case it ever regresses: the fetch
+query used to be a hardcoded `"tag:tshirt OR tag:hoodie"`. A product
+tagged only `statement` was excluded from the fetch entirely and simply
+never appeared — no console error, nothing. It is now built from the
+taxonomy, so that can't drift.
 
 Those same slugs drive two features — **don't break the parsing**:
 
@@ -132,6 +169,13 @@ product description. `openModal()` splits the description at the words
   store.badscandal.com shows a password page.
 * Store name in Shopify is still "My Store" (shows at checkout).
 * Product descriptions still carry the raw Printful compliance dump.
+* Some titles misdescribe the garment — "MADE YOU LOOK (White)" is
+  actually a women's cropped hoodie at EUR50, "Hate everyone equally" is
+  a tank top. The tags are correct, so the site files them correctly;
+  only the customer-facing title is wrong. Rename in Shopify when
+  convenient.
+* Two identical "Short-Sleeve T-Shirt" products exist (blank, no
+  statement) — likely test products worth deleting.
 
 ---
 
@@ -155,30 +199,42 @@ attribute quotes get normalised. That's expected; don't "fix" it.
 Rolling back a bad deploy: either `git revert` and push, or use Netlify's
 deploy list → "Publish deploy" on an earlier one.
 
-Note assets/ is ~97MB of video — it's committed to the repo (largest file
+Note assets/ is ~38MB of video — it's committed to the repo (largest file
 28.9MB, so no Git LFS needed). Never re-encode the films casually (see the
 encoding gotcha above).
 
 ## SEO / identity
 
 `index.html` carries: title `BADSCANDAL` (Luke Power deliberately removed
-from the title), a brand-voice meta description, favicons, and
-schema.org **Organization** JSON-LD naming Luke Power as founder/musician
-with `sameAs` socials. `lukepower.html` carries matching **Person**
-JSON-LD. Goal: badscandal.com surfaces for "Luke Power" searches without
-his name in the title.
+from the title), a brand-voice meta description, favicons, and schema.org
+**Organization** JSON-LD naming Luke Power as founder — the `jobTitle:
+"Musician"` is gone. `us.html` carries **AboutPage + Person** JSON-LD.
+The Person entry is kept deliberately: badscandal.com surfaces for "Luke
+Power" searches, and dropping the schema would throw that away for
+nothing. Lilian has no Person entry yet — needs her full name first.
+
+`_redirects` 301s `/lukepower` → `/us` and `/live` → `/`, so the indexed
+music-era URLs keep their equity instead of 404ing.
 
 ---
 
 ## Open tasks / next up
 
+* **Shared BADSCANDAL socials.** Every social link across index/store/us
+  still points at `@iguessimlukepower`, marked `>>> EDIT HERE <<<`. Swap
+  in the brand accounts when they exist — also the Behold IG feed id on
+  us.html, and the `sameAs` arrays in both JSON-LD blocks.
 * `assets/store-hero.webp` — store.html already has the markup, scrim and
   CSS for a campaign photo behind "Wear the trouble."; the image file was
   never supplied. Ships gracefully hidden until it exists (`onerror`).
-* Favicons are **placeholders** (ink tile + orange "B"). Luke has a
-  scratch-style wordmark logo to cut into 48/180/192/512px.
+* No photography of Lilian anywhere yet; the About modal still uses
+  `luke-bw.webp`. The story page is text-led until portraits exist.
+* Favicons are **placeholders** (ink tile + orange "B") — and the orange
+  now clashes with a fully monochrome site, so these want redoing.
 * Trim the Printful compliance text out of product descriptions in Shopify.
-* Tag all products properly in Shopify (see sorting above).
+* ~15 unreferenced images remain in assets/ (`svc-*`, `work-*`,
+  `luke-portrait`, `about-loop`, …) — leftovers from the studio-era
+  layouts, ~150KB total. Harmless; delete if you want the folder tidy.
 * Not yet done in Shopify: pick a plan, enable payments, test checkout
   with test card 4242 4242 4242 4242, connect store.badscandal.com
   (CNAME `store` -> `shops.myshopify.com` at GoDaddy).
@@ -190,8 +246,14 @@ his name in the title.
 
 No test suite. Verify by:
 
-    node --check js/store.js       # syntax
+    node --check js/store.js js/main.js js/flow.js
     python3 -m http.server 8000    # then open localhost:8000
+
+The taxonomy is worth testing directly when you touch it — the resolvers
+can be pulled out of js/store.js and run under node against live
+Storefront data, which is how the productType-vs-image-slug ordering bug
+was caught. Check the full family x garment matrix, not just one filter:
+a wrong resolver shows up as one silently empty combination.
 
 For Shopify data, query the Storefront API directly rather than guessing
 at what the site sees — it's the fastest way to tell a data problem from
