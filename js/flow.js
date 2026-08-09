@@ -123,9 +123,12 @@
     "  float aR = texture2D(textT, uv + disp * 1.28).a;",
     "  float aG = texture2D(textT, uv + disp * 1.0).a;",
     "  float aB = texture2D(textT, uv + disp * 0.74).a;",
-    "  vec3 paper = vec3(0.953, 0.914, 0.867);",
-    "  vec3 blaze = vec3(1.0, 0.306, 0.102);",
-    "  vec3 ember = vec3(1.0, 0.706, 0.329);",
+    /* monochrome: the three taps above are still displaced by different
+       amounts, so the wordmark still smears and ghosts under the cursor —
+       it just resolves in grey instead of orange. Matches --paper/--silver/--uv. */
+    "  vec3 paper = vec3(0.949, 0.949, 0.949);",
+    "  vec3 blaze = vec3(0.431, 0.431, 0.431);",
+    "  vec3 ember = vec3(0.706, 0.706, 0.706);",
     "  vec3 col = paper * aG;",
     "  col = mix(col, blaze, aR * clamp(m*4.2,0.0,0.8) * gate);",
     "  col = mix(col, ember, aB * clamp(m*3.0,0.0,0.6) * gate);",

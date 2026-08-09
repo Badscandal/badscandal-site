@@ -1,20 +1,31 @@
 /* ============================================================
-   BADSCANDAL v3 — Supersolid-grade interactions,
-   BADSCANDAL colouring. Palette from the brand gradient art.
+   BADSCANDAL v4 — Supersolid-grade interactions, pure monochrome.
+   Black, white and grey only. Hierarchy comes from contrast, scale,
+   grain and motion — the clothes are the only colour on the page.
    >>> EDIT PALETTE HERE if you ever want to retune <<<
+
+   The names are kept from the old warm palette because the whole
+   stylesheet is built on their SEMANTICS, not their hue:
+     ink/ink-2/ink-3 = background / raised surface / hairline
+     paper/muted/silver = primary / secondary / tertiary text
+     uv    = resting border + small tracked labels
+     blaze = active or hovered fill (inverts to ink text on top)
+     ember = emphasis: prices, link hover, the one thing to look at
+   Repointing these keeps that layering intact in greyscale.
    ============================================================ */
 :root{
-  --ink:#070503;
-  --ink-2:#120C07;
-  --ink-3:#1D140C;
-  --paper:#F3E9DD;
+  --ink:#050505;
+  --ink-2:#0C0C0C;
+  --ink-3:#1F1F1F;
+  --ink-rgb:5,5,5;      /* the scrims below need ink as channels */
+  --paper:#F2F2F2;
   --white:#FFFFFF;
-  --muted:#A08C77;
-  --silver:#9A948C;
-  --blaze:#FF4E1A;
-  --uv:#F0791E;
-  --ember:#FFB454;
-  --maroon:#7A2620;
+  --muted:#8A8A8A;
+  --silver:#6E6E6E;
+  --blaze:#FFFFFF;
+  --uv:#B4B4B4;
+  --ember:#FFFFFF;
+  --maroon:#7A7A7A;
   --maxw:1280px;
   --pad:clamp(18px,4vw,56px);
   --font-display:'Space Grotesk','Inter Tight',Helvetica,Arial,sans-serif;
@@ -73,13 +84,14 @@ html.has-cursor input,html.has-cursor textarea{cursor:auto}
   100%{transform:translate3d(0,0,0)}
 }
 
-/* warm gradient atmosphere (from the reference art) */
+/* atmosphere — the same four pools of light, now colourless. Keeps the
+   background from reading as flat black without introducing a hue. */
 body::before{content:"";position:fixed;inset:0;z-index:-1;
   background:
-    radial-gradient(42% 34% at 8% 6%, rgba(255,78,26,.30), transparent 70%),
-    radial-gradient(50% 40% at 38% 26%, rgba(154,148,140,.13), transparent 72%),
-    radial-gradient(46% 38% at 74% 62%, rgba(255,180,84,.15), transparent 70%),
-    radial-gradient(40% 30% at 60% 84%, rgba(122,38,32,.24), transparent 72%),
+    radial-gradient(42% 34% at 8% 6%, rgba(255,255,255,.055), transparent 70%),
+    radial-gradient(50% 40% at 38% 26%, rgba(255,255,255,.030), transparent 72%),
+    radial-gradient(46% 38% at 74% 62%, rgba(255,255,255,.038), transparent 70%),
+    radial-gradient(40% 30% at 60% 84%, rgba(255,255,255,.026), transparent 72%),
     var(--ink)}
 
 /* ---------- roll-up hover labels (the Supersolid signature) ---------- */
@@ -124,7 +136,7 @@ body::before{content:"";position:fixed;inset:0;z-index:-1;
 .nav{position:fixed;top:0;left:0;right:0;z-index:70;
   display:flex;align-items:center;gap:28px;
   padding:18px var(--pad);
-  background:linear-gradient(180deg,rgba(7,5,3,.9),rgba(7,5,3,.6) 70%,transparent)}
+  background:linear-gradient(180deg,rgba(var(--ink-rgb),.9),rgba(var(--ink-rgb),.6) 70%,transparent)}
 .nav-logo{font-family:var(--font-display);font-weight:700;font-size:22px;
   line-height:1}
 .nav-links{display:flex;gap:24px;margin-left:auto}
@@ -154,7 +166,7 @@ body.menu-open .menu{transform:none}
 .menu-item:hover{color:var(--blaze)}
 
 /* ---------- about modal ---------- */
-.about{position:fixed;inset:0;z-index:90;background:rgba(7,5,3,.97);
+.about{position:fixed;inset:0;z-index:90;background:rgba(var(--ink-rgb),.97);
   overflow-y:auto;padding:96px var(--pad) 80px}
 .about[hidden]{display:none}
 .about-close{position:fixed;top:22px;right:var(--pad);background:var(--ink);
@@ -182,8 +194,8 @@ body.menu-open .menu{transform:none}
 .hero-video{position:absolute;inset:0;width:100%;height:100%;
   object-fit:cover;z-index:0}
 .hero-scrim{position:absolute;inset:0;z-index:1;pointer-events:none;
-  background:linear-gradient(180deg,rgba(7,5,3,.62),rgba(7,5,3,.26) 30%,
-             rgba(7,5,3,.26) 62%,rgba(7,5,3,.66))}
+  background:linear-gradient(180deg,rgba(var(--ink-rgb),.62),rgba(var(--ink-rgb),.26) 30%,
+             rgba(var(--ink-rgb),.26) 62%,rgba(var(--ink-rgb),.66))}
 .hero-line{position:absolute;top:clamp(90px,16vh,150px);left:var(--pad);
   right:var(--pad);z-index:2;font-family:var(--font-display);font-weight:500;
   font-size:clamp(18px,2.6vw,30px);letter-spacing:-.01em;text-align:center}
@@ -339,92 +351,6 @@ main section{max-width:var(--maxw);margin:0 auto;
   color:var(--uv);letter-spacing:.1em;font-size:13px}
 
 /* ============================================================
-   PORTED FROM v1 — the little troublemaker (stick man)
-   Used by the Store page bomb gag (store-soon.js).
-   ============================================================ */
-.bs-stickman{position:absolute;left:0;top:0;z-index:5;pointer-events:none}
-.bs-stickman .sm-rig{display:block;width:100%;height:100%}
-.bs-stickman svg{width:100%;height:100%;display:block;overflow:visible}
-.bs-stickman .sm{stroke:#fff;stroke-width:2.1;stroke-linecap:round;fill:none}
-.bs-stickman .head{stroke-width:2}
-.bs-stickman svg *{transform-box:fill-box}
-.bs-stickman.swing .sm-rig{animation:bs-sm-swingin 1.25s cubic-bezier(.2,.65,.3,1) both}
-@keyframes bs-sm-swingin{
-  0%{transform:translate(-82vw,-46vh) rotate(-46deg);opacity:0}
-  12%{opacity:1}
-  45%{transform:translate(-26vw,-18vh) rotate(-26deg)}
-  70%{transform:translate(-3vw,-2vh) rotate(14deg)}
-  82%{transform:translate(2px,2px) rotate(-7deg)}
-  92%{transform:rotate(4deg)}
-  100%{transform:translate(0,0) rotate(0)}
-}
-.bs-stickman.walking .leg-front{animation:bs-sm-legA .32s ease-in-out infinite;transform-origin:top center}
-.bs-stickman.walking .leg-back{animation:bs-sm-legB .32s ease-in-out infinite;transform-origin:top center}
-.bs-stickman.walking .arm-front{animation:bs-sm-armA .32s ease-in-out infinite;transform-origin:top center}
-.bs-stickman.walking .arm-back{animation:bs-sm-armB .32s ease-in-out infinite;transform-origin:top center}
-.bs-stickman.walking .sm-bob{animation:bs-sm-bob .32s ease-in-out infinite}
-@keyframes bs-sm-legA{0%,100%{transform:rotate(22deg)}50%{transform:rotate(-22deg)}}
-@keyframes bs-sm-legB{0%,100%{transform:rotate(-22deg)}50%{transform:rotate(22deg)}}
-@keyframes bs-sm-armA{0%,100%{transform:rotate(-16deg)}50%{transform:rotate(16deg)}}
-@keyframes bs-sm-armB{0%,100%{transform:rotate(16deg)}50%{transform:rotate(-16deg)}}
-@keyframes bs-sm-bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-1.1px)}}
-.bs-stickman.grab .arm-front{animation:bs-sm-grab .56s cubic-bezier(.3,.6,.3,1) both;transform-origin:top center}
-@keyframes bs-sm-grab{
-  0%{transform:rotate(0)}38%{transform:rotate(-118deg)}
-  50%{transform:rotate(-128deg)}62%{transform:rotate(-116deg)}
-  100%{transform:rotate(0)}
-}
-.bs-stickman.sm-flip .sm-rig{transform:scaleX(-1)}
-@media (prefers-reduced-motion:reduce){.bs-stickman{display:none}}
-
-/* ============================================================
-   PORTED FROM v1 — Store "coming soon" (store-soon.js),
-   restyled to the v3 type system.
-   ============================================================ */
-.soon{position:relative;min-height:62vh;margin-top:14px;
-  display:flex;align-items:center;justify-content:center}
-.soon-canvas{position:absolute;inset:0;width:100%;height:100%;z-index:1;
-  pointer-events:none}
-.soon-content{position:relative;z-index:2;text-align:center;max-width:620px;
-  padding:0 16px}
-.soon-title{font-family:var(--font-display);
-  font-size:clamp(44px,9vw,110px);line-height:.92;font-weight:700;
-  text-transform:uppercase;letter-spacing:-.03em;color:var(--paper)}
-.soon-sub{margin-top:16px;color:var(--muted);
-  font-size:clamp(14px,2vw,17px);line-height:1.55}
-.soon-btn{display:inline-flex;align-items:center;gap:8px;margin-top:28px;
-  font:500 13px/1 var(--font-body);letter-spacing:.14em;text-transform:uppercase;
-  padding:16px 30px;border-radius:999px;text-decoration:none;
-  border:1px solid var(--uv);color:var(--paper);background:transparent;
-  transition:background .25s var(--ease),color .25s var(--ease),
-  border-color .25s var(--ease)}
-.soon-btn:hover{background:var(--blaze);border-color:var(--blaze);color:var(--ink)}
-.soon-title.soon-in{animation:soon-title-in .6s cubic-bezier(.2,.8,.3,1) both}
-@keyframes soon-title-in{
-  0%{opacity:0;transform:scale(.6);filter:blur(6px);
-     text-shadow:0 0 50px rgba(240,121,30,.9)}
-  60%{opacity:1}
-  100%{opacity:1;transform:none;filter:none}
-}
-.soon-sub.soon-in,.soon-btn.soon-in{animation:soon-fade-in .5s ease both}
-@keyframes soon-fade-in{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
-.soon-bomb{position:absolute;z-index:3;pointer-events:none;
-  transform:translate(-50%,-50%)}
-.soon-bomb svg{overflow:visible;display:block}
-.soon-bomb .fuse-spark{filter:drop-shadow(0 0 6px #ffd27a);
-  animation:soon-spark .12s steps(2,jump-none) infinite}
-@keyframes soon-spark{0%{opacity:1}50%{opacity:.35}100%{opacity:1}}
-.soon-bomb.boom{animation:soon-boom .2s ease forwards}
-@keyframes soon-boom{0%{transform:translate(-50%,-50%) scale(1)}
-  55%{transform:translate(-50%,-50%) scale(1.6)}
-  100%{transform:translate(-50%,-50%) scale(2.3);opacity:0}}
-.soon-flash{position:absolute;inset:0;z-index:2;pointer-events:none;
-  background:radial-gradient(circle at var(--fx,50%) var(--fy,55%),
-    rgba(255,205,130,.55),rgba(255,120,40,0) 58%);
-  animation:soon-flash .5s ease forwards}
-@keyframes soon-flash{0%{opacity:0}12%{opacity:1}100%{opacity:0}}
-
-/* ============================================================
    SUBPAGES (Luke Power · Store) + homepage Music section
    ============================================================ */
 .page-main{padding-top:clamp(120px,18vh,180px)}
@@ -473,14 +399,15 @@ main section{max-width:var(--maxw);margin:0 auto;
 /* ---------- progressive bottom blur (content sharpens as it scrolls up) --- */
 .blur-veil{position:fixed;left:0;right:0;bottom:0;height:24vh;z-index:60;
   pointer-events:none;
-  -webkit-backdrop-filter:blur(6px) saturate(1.35);
-  backdrop-filter:blur(6px) saturate(1.35);
+  -webkit-backdrop-filter:blur(6px) saturate(0);
+  backdrop-filter:blur(6px) saturate(0);
   -webkit-mask-image:linear-gradient(to bottom,transparent,#000 72%);
   mask-image:linear-gradient(to bottom,transparent,#000 72%);
   transition:transform .45s var(--ease)}
+/* was an orange-to-blue chromatic split; now a neutral edge lift */
 .blur-veil::after{content:"";position:absolute;inset:0;pointer-events:none;
-  background:linear-gradient(90deg,rgba(255,78,26,.05),transparent 28%,
-             transparent 72%,rgba(130,170,255,.045));
+  background:linear-gradient(90deg,rgba(255,255,255,.045),transparent 28%,
+             transparent 72%,rgba(255,255,255,.04));
   mix-blend-mode:screen}
 .blur-veil.away{transform:translateY(105%)}
 @supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){
@@ -610,29 +537,32 @@ main section{max-width:var(--maxw);margin:0 auto;
 /* the pop: card lifts + scales, image zooms, alt image fades in */
 .pcard:hover .pcard-media{transform:translateY(-8px) scale(1.02);
   border-color:var(--uv);
-  box-shadow:0 26px 60px rgba(0,0,0,.55),0 6px 18px rgba(255,78,26,.12)}
+  box-shadow:0 26px 60px rgba(0,0,0,.6),0 6px 18px rgba(255,255,255,.07)}
 .pcard:hover .pcard-media img{transform:scale(1.06)}
 .pcard:hover .pcard-alt{opacity:1}
 .pcard-cat{position:absolute;top:10px;left:10px;z-index:2;
   font-size:10px;letter-spacing:.2em;text-transform:uppercase;
-  color:var(--paper);background:rgba(7,5,3,.66);padding:6px 10px;
+  color:var(--paper);background:rgba(var(--ink-rgb),.66);padding:6px 10px;
   border-radius:999px;-webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px)}
 .pcard-quick{position:absolute;left:0;right:0;bottom:0;z-index:2;
   padding:12px;display:flex;flex-direction:column;gap:8px;
-  background:linear-gradient(180deg,transparent,rgba(7,5,3,.88) 40%);
+  background:linear-gradient(180deg,transparent,rgba(var(--ink-rgb),.88) 40%);
   transform:translateY(105%);transition:transform .4s var(--ease)}
 .pcard:hover .pcard-quick{transform:none}
 .qa-label{font-size:10px;letter-spacing:.24em;text-transform:uppercase;
   color:var(--ember)}
 .qa-sizes{display:flex;gap:6px;flex-wrap:wrap}
-.qa-size{min-width:38px;padding:8px 10px;background:rgba(243,233,221,.06);
+.qa-size{min-width:38px;padding:8px 10px;background:rgba(255,255,255,.06);
   border:1px solid var(--ink-3);border-radius:6px;color:var(--paper);
   font:500 12px/1 var(--font-body);cursor:pointer;
   transition:background .2s ease,border-color .2s ease,color .2s ease,
   transform .2s var(--ease)}
 .qa-size:hover{border-color:var(--blaze);transform:translateY(-2px)}
 .qa-size.sel{background:var(--blaze);border-color:var(--blaze);color:var(--ink)}
-.qa-size.added{background:var(--ember);border-color:var(--ember);color:var(--ink)}
+/* "added" and "selected" were separated by hue before; in monochrome the
+   confirmation reads as a halo instead, or the two states look identical */
+.qa-size.added{background:var(--ember);border-color:var(--ember);color:var(--ink);
+  box-shadow:0 0 0 3px rgba(255,255,255,.24)}
 .qa-size.off{opacity:.3;cursor:not-allowed;text-decoration:line-through}
 .pcard-meta{display:flex;justify-content:space-between;gap:12px;
   align-items:baseline;margin-top:12px}
@@ -642,7 +572,7 @@ main section{max-width:var(--maxw);margin:0 auto;
   font-variant-numeric:tabular-nums;white-space:nowrap}
 
 /* ---------- product modal ---------- */
-.pmodal{position:fixed;inset:0;z-index:90;background:rgba(7,5,3,.94);
+.pmodal{position:fixed;inset:0;z-index:90;background:rgba(var(--ink-rgb),.94);
   overflow-y:auto;padding:90px var(--pad) 60px}
 .pmodal[hidden]{display:none}
 .pmodal-inner{max-width:960px;margin:0 auto;display:grid;
@@ -670,7 +600,7 @@ main section{max-width:var(--maxw);margin:0 auto;
 .pmodal-add{margin-top:30px}
 
 /* ---------- cart drawer ---------- */
-.cart-scrim{position:fixed;inset:0;z-index:94;background:rgba(7,5,3,.6);
+.cart-scrim{position:fixed;inset:0;z-index:94;background:rgba(var(--ink-rgb),.6);
   -webkit-backdrop-filter:blur(3px);backdrop-filter:blur(3px)}
 .cart-scrim[hidden]{display:none}
 .cart-drawer{position:fixed;top:0;right:0;bottom:0;z-index:95;
@@ -738,7 +668,7 @@ main section{max-width:var(--maxw);margin:0 auto;
 .pmodal-media{position:relative}
 .pmodal-views{position:absolute;left:0;right:0;bottom:12px;
   display:flex;gap:8px;justify-content:center;z-index:2}
-.pmodal-view{background:rgba(7,5,3,.72);border:1px solid var(--ink-3);
+.pmodal-view{background:rgba(var(--ink-rgb),.72);border:1px solid var(--ink-3);
   color:var(--paper);font:500 11px/1 var(--font-body);letter-spacing:.12em;
   text-transform:uppercase;padding:9px 16px;border-radius:999px;cursor:pointer;
   -webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px);
@@ -755,7 +685,7 @@ main section{max-width:var(--maxw);margin:0 auto;
 .sg-btn:hover::after{background:var(--blaze)}
 
 /* size guide overlay */
-.sguide{position:fixed;inset:0;z-index:96;background:rgba(7,5,3,.92);
+.sguide{position:fixed;inset:0;z-index:96;background:rgba(var(--ink-rgb),.92);
   -webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px);
   overflow-y:auto;padding:100px var(--pad) 60px}
 .sguide[hidden]{display:none}
@@ -778,9 +708,9 @@ main section{max-width:var(--maxw);margin:0 auto;
   object-fit:cover;object-position:center 22%;z-index:0}
 .store-hero-scrim{position:absolute;inset:0;z-index:1;pointer-events:none;
   background:
-    linear-gradient(90deg,rgba(7,5,3,.82),rgba(7,5,3,.38) 46%,rgba(7,5,3,.18) 70%),
-    linear-gradient(180deg,rgba(7,5,3,.5),transparent 30%,
-                    transparent 55%,rgba(7,5,3,.92))}
+    linear-gradient(90deg,rgba(var(--ink-rgb),.82),rgba(var(--ink-rgb),.38) 46%,rgba(var(--ink-rgb),.18) 70%),
+    linear-gradient(180deg,rgba(var(--ink-rgb),.5),transparent 30%,
+                    transparent 55%,rgba(var(--ink-rgb),.92))}
 .store-hero-inner{position:relative;z-index:2;max-width:var(--maxw);
   margin:0 auto;width:100%}
 @media (max-width:760px){

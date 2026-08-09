@@ -86,9 +86,11 @@
       return o;
     }
     var layers = [
-      { img: textCanvas("#FF4E1A"), dx: -1, g: 0.85 },
-      { img: textCanvas("#FFB454"), dx: 1,  g: 0.85 },
-      { img: textCanvas("#F3E9DD"), dx: 0,  g: 1.0 }
+      /* three offset layers still split apart as the word melts —
+         achromatic now, so it reads as ghosting rather than RGB fringing */
+      { img: textCanvas("#6E6E6E"), dx: -1, g: 0.85 },
+      { img: textCanvas("#B4B4B4"), dx: 1,  g: 0.85 },
+      { img: textCanvas("#F2F2F2"), dx: 0,  g: 1.0 }
     ];
     if (tag) tag.style.opacity = "0";
     var t0 = null;
