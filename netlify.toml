@@ -1,0 +1,6 @@
+# BADSCANDAL — static site, no build step.
+# The whole repo root IS the site; Netlify just publishes it as-is.
+
+[build]
+  publish = "."
+  command = ""

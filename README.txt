@@ -6,31 +6,20 @@ DEPLOY
   Fonts (Space Grotesk + Inter Tight + Archivo Black) load from
   Google Fonts at runtime, so they appear once the site is live.
 
-NAVIGATION (every page)
-  Links:  About · Home · Live shows
-  Button: Store  (the highlighted nav CTA)
-  Luke Power lives in the FOOTER only — lukepower.html is still a
-  full page, it just isn't in the top nav or the burger menu.
-  Burger menu: 01 About · 02 Home · 03 Live shows · 04 Store ·
-  05 Contact.
-
 PAGES
-  index.html      CLOTHING-FIRST. Loader (decode intro: random glyphs
-                  lock into BADSCANDAL as the page loads, holds a beat,
-                  then melts apart in chromatic channels) -> hero: the
-                  4K film scroll-scrubbed behind the liquid BADSCANDAL
+  index.html      Loader (decode intro: random glyphs lock into
+                  BADSCANDAL as the page loads, holds a beat, then
+                  melts apart in chromatic channels) -> hero: the 4K film
+                  scroll-scrubbed behind the liquid BADSCANDAL
                   wordmark -> philosophy (headline + paragraphs
-                  slide in from up/left/right, reversible) -> the club
-                  -> how it goes -> what you should know (5) ->
+                  slide in from up/left/right, reversible) ->
+                  LATEST MUSIC: the Friendly film stage, copy
+                  centered, actions stacked (Listen on Spotify /
+                  Stream everything / Meet Luke Power) -> the club
+                  -> how it goes -> what you should know (4) ->
                   marquee CTA -> footer.
                   About modal: manifesto, The name, Contact,
                   Principles. Subpages open it via index.html?about=1.
-                  NOTE: the old "LATEST MUSIC" Friendly film section was
-                  removed — the gap between philosophy and the club is
-                  deliberate and is where a live product showcase goes
-                  when we build it. The Friendly films are still in
-                  assets/ and the .music* CSS is still in site.css, so
-                  the section can be pasted back in one block.
   lukepower.html  The Underwater film runs behind "Luke Power"
                   (same scroll mechanics) -> listen -> socials ->
                   live Instagram feed (Behold) -> info -> count-up
@@ -46,13 +35,14 @@ PAGES
 
 THE FILMS (all scroll-scrubbed: scroll plays, scroll back rewinds)
   Desktop gets true 4K; phones get full-quality 1080-class encodes
-  (iOS refuses inline 4K). Files are fully buffered in the browser
-  so seeking is instant on iOS, and a hard guard makes normal
-  playback physically impossible — no play button can ever appear.
+  (iOS refuses inline 4K) — the Friendly section serves the
+  VERTICAL cut on phones so its writing stays in frame. Files are
+  fully buffered in the browser so seeking is instant on iOS, and
+  a hard guard makes normal playback physically impossible — no
+  play button can ever appear.
     hero:      graded-sexy-4k.mp4  / graded-sexy-1080.mp4
+    friendly:  friendly-16x9-4k.mp4 / friendly-vertical.mp4
     lukepower: underwater-4k.mp4  / underwater-1080.mp4
-    (spare)    friendly-16x9-4k.mp4 / friendly-vertical.mp4 — kept,
-               not used on any page right now.
   To swap any film: replace the pair (+ its poster jpg), keep the
   filenames, redeploy.
 
@@ -70,18 +60,6 @@ LOOK
 
 STILL MARKED >>> EDIT HERE <<< IN THE FILES
   Film swap points, music links, store notify link, socials.
-
-GOTCHAS (read before deploying)
-  * Filenames matter. The homepage MUST be index.html, the headers
-    file MUST be _headers with no extension. If you re-download this
-    folder into a directory that already has it, macOS renames the
-    new copies (index-2.html, _headers.txt) and Netlify then serves
-    a 404 for the homepage. Check those two names first.
-  * Case matters on Netlify (not on your Mac). The media folder is
-    lowercase "assets" — if it ever becomes "Assets", every image,
-    video and favicon 404s live while still looking fine locally.
-  * js/store-soon.js is the OLD coming-soon store script. Nothing
-    loads it any more (store.html uses js/store.js). Kept, not used.
 
 SPARE ASSETS
   assets/work-*.webp, svc-*.webp, col-*.webp etc. are generated

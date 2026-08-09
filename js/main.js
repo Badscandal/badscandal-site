@@ -356,6 +356,9 @@
   makeScrub(document.getElementById("hero"), document.getElementById("hero-video"),
             "assets/graded-sexy-4k.mp4", "assets/graded-sexy-1080.mp4",
             "assets/scrub-poster.jpg", "assets/scrub-poster.jpg");
+  makeScrub(document.getElementById("music"), document.getElementById("friendly-video"),
+            "assets/friendly-16x9-4k.mp4", "assets/friendly-vertical.mp4",
+            "assets/friendly-poster.jpg", "assets/friendly-poster-v.jpg");
   makeScrub(document.getElementById("lp-hero"), document.getElementById("lp-video"),
             "assets/underwater-4k.mp4", "assets/underwater-1080.mp4",
             "assets/underwater-poster.jpg", "assets/underwater-poster.jpg");
