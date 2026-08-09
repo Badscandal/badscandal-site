@@ -70,8 +70,10 @@ Fonts: Space Grotesk (display), Inter Tight (body), Archivo Black
                      buttons, scroll-scrubbed video engine, reveals,
                      menu, about modal, clock
     js/flow.js       WebGL liquid wordmark (ping-pong flowmap +
-                     chromatic aberration). Self-contained, falls back
-                     to static <h1> with no WebGL/reduced motion
+                     achromatic ghosting). Self-contained, falls back
+                     to static <h1> with no WebGL/reduced motion.
+                     Desktop: the cursor stirs it. Phones: scroll
+                     sloshes it and a tap splashes it — see below
     js/store.js      Shop engine: Shopify Storefront API, filtering,
                      product modal, cart, checkout
     assets/          ~38MB, mostly the two hero .mp4 films
@@ -89,6 +91,32 @@ as blobs so seeking is instant on iOS. Desktop gets 4K, phones get 1080
 
 `makeScrub()` is generic and no-ops when its element is absent, so a
 second scrubbed section is just one more call plus the markup.
+
+## The liquid wordmark on phones
+
+`#flow` carries `touch-action:pan-y`, so a vertical drag belongs to the
+browser and only a horizontal swipe ever reached the canvas — meaning on
+a phone the effect was alive but essentially undiscoverable. Scroll now
+drives it, which is the same metaphor as the film scrub.
+
+It responds to **acceleration, not velocity**: scrolling at a steady rate
+settles, and only starting, stopping and reversing slosh — like liquid in
+a glass you're carrying. A smoothed `containerV` chases the instantaneous
+`scrollV`; the gap between them is what the liquid feels.
+
+Three constants at the top of that block in js/flow.js are the only
+things you should need to touch:
+
+    SLOSH_GAIN   how hard scroll pushes it
+    SLOSH_DIR    flip to 1 if it sloshes the wrong way
+    SPLASH_GAIN  tap impulse strength
+
+In the shader the scroll term is a **body force across the whole field**,
+not the pointer's local stir, and it is sheared across x on purpose — a
+flat push slides the wordmark rigidly and reads as a translate rather
+than a liquid. Note the field accumulates (decay 0.9685/frame), so a
+small per-frame injection builds into a large displacement over a flick;
+that's why the per-frame value is clamped well below saturation.
 
 **Critical encoding gotcha:** these must start at exactly timestamp
 0.000 with a keyframe, or browsers paint a black frame before the first

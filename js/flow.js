@@ -1,7 +1,9 @@
 /* ============================================================
    BADSCANDAL — kinetic wordmark · QUALITY BUILD
    Giant "BADSCANDAL" as a WebGL texture. A pointer writes velocity
-   into a ping-pong flowmap; a dedicated blur pass smooths the flow
+   into a ping-pong flowmap; on phones, where there is no pointer,
+   SCROLL drives it instead (see "scroll slosh" below) and a tap
+   splashes it; a dedicated blur pass smooths the flow
    every frame (this is what makes it read as liquid, not stepped);
    the display shader displaces the type by the smoothed flow and
    splits the colour channels (chromatic aberration) with a warm
@@ -69,6 +71,12 @@
     "uniform vec2 vel;",
     "uniform float aspect;",
     "uniform float active;",
+    /* scroll slosh (phones): a body force across the whole field rather
+       than a stir at a point — the container is accelerating, not a
+       finger dragging through it */
+    "uniform float slosh;",
+    /* tap splash: xy = centre, z = strength */
+    "uniform vec3 splash;",
     "float segDist(vec2 p, vec2 a, vec2 b){",
     "  vec2 pa = p - a; vec2 ba = b - a;",
     "  float h = clamp(dot(pa,ba)/max(dot(ba,ba),1e-5), 0.0, 1.0);",
@@ -88,6 +96,24 @@
     "  float dist = segDist(uva, aa, bb);",
     "  float s = exp(-dist*dist * 25.0) * active;",
     "  f += vel * 0.30 * s;",
+    /* --- scroll slosh -------------------------------------------------
+       A flat push would slide the whole wordmark rigidly, which reads as
+       a translate, not a liquid. Shearing it across x makes the middle
+       lag differently from the ends; the blur pass then smears those
+       bands into each other and it reads as fluid. The small x term is
+       the lateral wobble you get in a glass that isn't perfectly level. */
+    "  float shear = 0.62 + 0.38 * sin(uv.x * 6.2831 + 1.1)",
+    "                     + 0.14 * sin(uv.x * 15.9 + 4.2);",
+    /* NB: smoothstep is undefined when edge0 >= edge1, so the top taper is
+       written as 1.0 - smoothstep(lo, hi) rather than smoothstep(hi, lo) */
+    "  float edge = smoothstep(0.0, 0.22, uv.y) * (1.0 - smoothstep(0.78, 1.0, uv.y));",
+    "  f.g += slosh * shear * (0.55 + 0.45 * edge);",
+    "  f.r += slosh * 0.13 * sin(uv.x * 9.4 + uv.y * 3.7);",
+    /* --- tap splash: radial impulse out of the touch point ------------- */
+    "  vec2 sc = splash.xy; sc.x *= aspect;",
+    "  vec2 dv = uva - sc;",
+    "  float dl = max(length(dv), 1e-4);",
+    "  f += (dv / dl) * splash.z * exp(-dl * dl * 34.0);",
     "  f = clamp(f, 0.0, 1.0);",
     "  gl_FragColor = vec4(f, 0.0, 1.0);",
     "}"
@@ -246,6 +272,47 @@
   canvas.addEventListener("pointerdown", setMouse, { passive: true });
   canvas.addEventListener("pointerleave", function () { mouse.on = 0; }, { passive: true });
 
+  /* ---------- scroll slosh + tap splash (this is the phone story) -------
+     On a phone there is no hover, and touch-action:pan-y gives vertical
+     drags to the browser — so the only gesture anyone actually makes over
+     the wordmark is the one that scrolls past it. Scroll therefore drives
+     the liquid, the same way it drives the film behind it.
+
+     It reacts to ACCELERATION, not velocity: scrolling at a steady rate
+     settles, while starting, stopping and reversing slosh. That's how
+     liquid behaves in a glass you're carrying, and it means a long
+     scroll doesn't turn into constant undirected churn.
+
+     >>> TUNE HERE <<< */
+  var SLOSH_GAIN = 0.085;   /* how hard scroll pushes the liquid   */
+  var SLOSH_DIR = -1;       /* flip to 1 if it sloshes the wrong way */
+  var SPLASH_GAIN = 0.30;   /* tap impulse strength                */
+
+  var lastY = window.pageYOffset || 0;
+  var scrollV = 0;          /* instantaneous, normalised to viewports */
+  var containerV = 0;       /* the smoothed "glass" it lags behind    */
+  var sloshVal = 0;
+  var splash = { x: -9, y: -9, s: 0 };
+
+  window.addEventListener("scroll", function () {
+    var y = window.pageYOffset || 0;
+    var vh = window.innerHeight || 1;
+    /* clamped: an anchor jump or a restored scroll position arrives as one
+       enormous delta, which would slam the field to saturation */
+    var dv = (y - lastY) / vh;
+    scrollV = Math.max(-1.5, Math.min(1.5, dv));
+    lastY = y;
+    if (visible && !raf) raf = requestAnimationFrame(tick);
+  }, { passive: true });
+
+  /* a tap does nothing else on the hero, so let it break the surface */
+  canvas.addEventListener("pointerdown", function (e) {
+    var r = canvas.getBoundingClientRect();
+    splash.x = (e.clientX - r.left) / r.width;
+    splash.y = 1 - (e.clientY - r.top) / r.height;
+    splash.s = SPLASH_GAIN;
+  }, { passive: true });
+
   var visible = true, raf = null;
   if ("IntersectionObserver" in window) {
     new IntersectionObserver(function (es) {
@@ -286,10 +353,23 @@
     gl.uniform2f(gl.getUniformLocation(pFlow, "vel"), mouse.vx, mouse.vy);
     gl.uniform1f(gl.getUniformLocation(pFlow, "aspect"), FW / FH);
     gl.uniform1f(gl.getUniformLocation(pFlow, "active"), mouse.on);
+    gl.uniform1f(gl.getUniformLocation(pFlow, "slosh"), sloshVal);
+    gl.uniform3f(gl.getUniformLocation(pFlow, "splash"), splash.x, splash.y, splash.s);
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
 
     mouse.vx *= 0.62; mouse.vy *= 0.62;
     mouse.px = mouse.x; mouse.py = mouse.y;
+
+    /* the glass catches up to the hand; the gap is what the liquid feels.
+       Steady scrolling closes the gap and settles — only changes slosh. */
+    containerV += (scrollV - containerV) * 0.08;
+    var lag = (scrollV - containerV) * SLOSH_GAIN * SLOSH_DIR;
+    /* the field lives in 0..1 around 0.5, so anything past ~0.4 just
+       saturates and looks like a hard clip instead of a slosh */
+    sloshVal = Math.max(-0.11, Math.min(0.11, lag));
+    scrollV *= 0.86;          /* no scroll events = the flick is spending itself */
+    splash.s *= 0.82;         /* ~400ms tail */
+    if (Math.abs(splash.s) < 0.002) splash.s = 0;
 
     blurPass();
     blurPass();
