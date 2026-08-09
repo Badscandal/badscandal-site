@@ -113,7 +113,7 @@ body::before{content:"";position:fixed;inset:0;z-index:-1;
 .load-burst{position:absolute;inset:0;width:100%;height:100%;
   pointer-events:none}
 #loader.done{transform:translateY(-102%);opacity:.4;pointer-events:none}
-.load-tag{grid-column:1/-1;font-family:var(--font-display);font-weight:700;
+.load-tag{font-family:var(--font-display);font-weight:700;
   font-size:clamp(22px,3vw,40px);max-width:24ch;display:flex;align-items:baseline;
   gap:.5em;flex-wrap:wrap}
 /* decode intro: glyphs cycle + lock into BADSCANDAL (PixelVault-style) */
@@ -126,15 +126,6 @@ body::before{content:"";position:fixed;inset:0;z-index:-1;
   font-variant-numeric:tabular-nums;letter-spacing:.06em;
   font-size:clamp(13px,1.5vw,18px)}
 .load-pct::after{content:"%";opacity:.5;margin-left:.15em}
-.load-nav{list-style:none;align-self:end;font-size:14px;color:var(--paper)}
-.load-nav li{margin:5px 0}
-.load-nav i{font-style:normal;color:var(--blaze);margin-right:14px;
-  font-variant-numeric:tabular-nums;font-size:11px}
-.load-orbit{list-style:none;align-self:end;justify-self:end;text-align:right;
-  color:var(--muted);font-size:13px}
-.load-orbit li{margin:4px 0}
-.load-foot{grid-column:1/-1;display:flex;justify-content:space-between;
-  font-size:12px;letter-spacing:.12em;color:var(--muted)}
 
 /* ---------- nav ---------- */
 .nav{position:fixed;top:0;left:0;right:0;z-index:70;
@@ -375,16 +366,8 @@ main section{max-width:var(--maxw);margin:0 auto;
 .feed{margin-top:8px}
 .feed-link{display:inline-block;margin-top:20px;font-size:13px;
   letter-spacing:.12em;text-transform:uppercase;color:var(--ember)}
-.music .huge-title{font-family:var(--font-display);font-weight:700;
-  font-size:clamp(52px,10vw,150px);letter-spacing:-.04em;line-height:.92}
-.music .sub{margin-top:14px;color:var(--muted);letter-spacing:.02em}
-.music-actions{display:flex;flex-direction:column;gap:20px;
-  align-items:center;margin-top:30px;justify-content:center}
 
 /* ---------- act confidently (work video) ---------- */
-.act-video{display:block;width:min(440px,88vw);aspect-ratio:9/16;
-  object-fit:cover;margin:44px auto 0;border:1px solid var(--ink-3);
-  box-shadow:0 40px 90px rgba(0,0,0,.5);background:var(--ink-2)}
 
 /* ---------- numbers (Luke Power) ---------- */
 .num-row{border-bottom:1px solid var(--ink-3);padding:30px 0}
@@ -394,11 +377,6 @@ main section{max-width:var(--maxw);margin:0 auto;
   font-variant-numeric:tabular-nums;color:var(--paper);display:block}
 .num-row p{color:var(--muted);margin-top:10px;font-size:14px;
   letter-spacing:.04em}
-
-/* ---------- live shows ---------- */
-.live-soon{font-family:var(--font-display);font-weight:700;
-  font-size:clamp(48px,10vw,130px);letter-spacing:-.035em;line-height:.94;
-  color:var(--paper)}
 
 /* ---------- progressive bottom blur (content sharpens as it scrolls up) --- */
 .blur-veil{position:fixed;left:0;right:0;bottom:0;height:24vh;z-index:60;
@@ -416,30 +394,6 @@ main section{max-width:var(--maxw);margin:0 auto;
 .blur-veil.away{transform:translateY(105%)}
 @supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){
   .blur-veil{display:none}}
-
-/* ---------- scroll-scrubbed film (scroll plays it, scroll back rewinds) --- */
-.scrub{max-width:none;padding:0;height:280vh;position:relative}
-.scrub-stage{position:sticky;top:0;height:100vh;height:100dvh;overflow:hidden;
-  background:var(--ink)}
-.scrub-stage video{width:100%;height:100%;object-fit:cover;display:block}
-
-/* ---------- friendly film stage (same mechanics as the hero) ---------- */
-.music-scrub{max-width:none;padding:0;height:240vh;position:relative}
-.music-stage{position:sticky;top:0;height:100vh;height:100dvh;overflow:hidden;
-  display:flex;align-items:center}
-.stage-video{position:absolute;inset:0;width:100%;height:100%;
-  object-fit:cover;z-index:0}
-.music-copy{position:relative;z-index:2;max-width:var(--maxw);margin:0 auto;
-  padding:0 var(--pad);width:100%;text-align:center}
-
-/* ---------- Luke Power hero film ---------- */
-.lp-hero{max-width:none;padding:0;height:240vh;position:relative;
-  margin-top:calc(0px - clamp(120px,18vh,180px))}
-.lp-stage{position:sticky;top:0;height:100vh;height:100dvh;overflow:hidden;
-  display:flex;align-items:center}
-.lp-copy{position:relative;z-index:2;max-width:var(--maxw);margin:0 auto;
-  padding:0 var(--pad);width:100%}
-.lp-copy .lede{color:var(--paper)}
 
 /* ---------- scroll-driven pops ---------- */
 [data-pop]{will-change:transform}
@@ -461,9 +415,7 @@ main section{max-width:var(--maxw);margin:0 auto;
   .social-grid{grid-template-columns:1fr}
   .nav-burger{display:block}
   .quote-grid,.steps,.svc-grid{grid-template-columns:1fr}
-  #loader{grid-template-columns:1fr}
-  .load-orbit{display:none}
-  /* center the hero on phones so the wordmark sits mid-screen, not low */
+    /* center the hero on phones so the wordmark sits mid-screen, not low */
   .hero-stage{justify-content:center}
   .hero-line{position:static;margin-top:0;padding:0 var(--pad)}
   .hero-mark{margin-top:8vh}

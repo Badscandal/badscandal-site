@@ -1,0 +1,6 @@
+# Old music-era URLs. Keep these: they are indexed and linked from
+# elsewhere, and Netlify serves this file before it 404s.
+/lukepower      /us      301
+/lukepower.html /us      301
+/live           /        301
+/live.html      /        301
