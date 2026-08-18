@@ -21,7 +21,7 @@
 
   var reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   var DPR = Math.min(window.devicePixelRatio || 1, 2);
-  var FONT = '"Archivo Black", "Space Grotesk", Arial, sans-serif';
+  var FONT = '"Archivo", Helvetica, Arial, sans-serif';
 
   function useFallback() {
     canvas.style.display = "none";
@@ -218,17 +218,26 @@
     var off = document.createElement("canvas");
     off.width = TW; off.height = TH;
     var c = off.getContext("2d");
+    /* Archivo is a VARIABLE font and the display face elsewhere uses
+       wdth 125 / wght 900. Canvas 2D font shorthand cannot express a width
+       axis, and crucially measureText() does NOT honour a wdth set via
+       font-variation-settings on the canvas element while fillText() DOES —
+       so requesting wdth 125 here makes the raster ~20% wider than the size
+       fs was computed to fit, clipping the word at both edges. The canvas
+       wordmark therefore draws at Archivo's default width at wght 900:
+       measure and raster agree, and the word always fits. Do NOT re-add
+       font-variation-settings here without also measuring at that width. */
     c.clearRect(0, 0, TW, TH);
     c.fillStyle = "#fff";
     c.textAlign = "center";
     c.textBaseline = "middle";
     var word = "BADSCANDAL";
     var probe = 100;
-    c.font = "400 " + probe + "px " + FONT;
+    c.font = "900 " + probe + "px " + FONT;
     var w100 = c.measureText(word).width || 1;
     var fs = Math.floor(probe * (TW * 0.94) / w100);
     fs = Math.min(fs, Math.floor(TH * 0.9));
-    c.font = "400 " + fs + "px " + FONT;
+    c.font = "900 " + fs + "px " + FONT;
     c.fillText(word, TW / 2, TH / 2 + fs * 0.02);
     if (textTex) gl.deleteTexture(textTex);
     textTex = gl.createTexture();
@@ -405,7 +414,7 @@
       document.fonts.ready.then(function () { drawTextTexture(); });
     }
     if (document.fonts && document.fonts.load) {
-      document.fonts.load('400 100px "Archivo Black"').then(function () { drawTextTexture(); }).catch(function(){});
+      document.fonts.load('900 100px "Archivo"').then(function () { drawTextTexture(); }).catch(function(){});
     }
   } catch (e) { useFallback(); }
 })();

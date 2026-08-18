@@ -28,8 +28,13 @@
   --maroon:#7A7A7A;
   --maxw:1280px;
   --pad:clamp(18px,4vw,56px);
-  --font-display:'Space Grotesk','Inter Tight',Helvetica,Arial,sans-serif;
-  --font-body:'Inter Tight','Space Grotesk',Helvetica,Arial,sans-serif;
+  /* System A / Film Print — locked. Archivo (wdth 125 / wght 900) is the
+     wordmark + big display ONLY; Instrument Serif carries titles;
+     Figtree is everything you read; DM Mono is slates/labels/dates. */
+  --font-display:'Instrument Serif',Georgia,'Times New Roman',serif;
+  --font-body:'Figtree',-apple-system,Helvetica,Arial,sans-serif;
+  --font-mono:'DM Mono',ui-monospace,Menlo,monospace;
+  --font-mark:'Archivo',Helvetica,Arial,sans-serif;
   --ease:cubic-bezier(.22,.9,.24,1);
 }
 *{box-sizing:border-box;margin:0;padding:0}
@@ -43,10 +48,15 @@ a:hover{color:var(--ember)}
 a:focus-visible,button:focus-visible,summary:focus-visible{
   outline:2px solid var(--blaze);outline-offset:3px}
 b,strong{font-weight:600;color:var(--white)}
-h1,h2,h3{font-family:var(--font-display);font-weight:700;color:var(--paper);
-  letter-spacing:-.02em;line-height:1.04}
+/* Instrument Serif ships one weight (400) — asking for 700 would only
+   faux-bold it. Display line-height sits loose (~1.1–1.25) on purpose. */
+h1,h2,h3{font-family:var(--font-display);font-weight:400;color:var(--paper);
+  letter-spacing:-.01em;line-height:1.18}
+/* headline signature: exactly ONE word per headline gets the true italic */
+.em{font-family:var(--font-display);font-style:italic;font-weight:400}
 .sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
-.tag{font-size:11px;letter-spacing:.28em;text-transform:uppercase;
+.tag{font-family:var(--font-mono);font-weight:400;font-size:11px;
+  letter-spacing:.12em;text-transform:uppercase;
   color:var(--uv);margin-bottom:22px}
 .plain{list-style:none}
 .plain li{margin:7px 0}
@@ -113,17 +123,20 @@ body::before{content:"";position:fixed;inset:0;z-index:-1;
 .load-burst{position:absolute;inset:0;width:100%;height:100%;
   pointer-events:none}
 #loader.done{transform:translateY(-102%);opacity:.4;pointer-events:none}
-.load-tag{font-family:var(--font-display);font-weight:700;
+.load-tag{font-family:var(--font-display);font-weight:400;
   font-size:clamp(22px,3vw,40px);max-width:24ch;display:flex;align-items:baseline;
   gap:.5em;flex-wrap:wrap}
-/* decode intro: glyphs cycle + lock into BADSCANDAL (PixelVault-style) */
+/* decode intro: glyphs cycle + lock into BADSCANDAL (PixelVault-style).
+   It IS the wordmark, so it gets Archivo at wdth 125 / wght 900. */
 .load-decode{display:block;max-width:none;white-space:nowrap;
+  font-family:var(--font-mark);font-weight:900;
+  font-variation-settings:"wdth" 125,"wght" 900;
   letter-spacing:.32em;margin-right:-.32em;text-align:center;
   font-size:clamp(18px,2.6vw,36px);color:var(--paper)}
 /* wordmark over a climbing counter, centred as one stack */
 .load-stack{display:flex;flex-direction:column;align-items:center;gap:clamp(14px,2.4vh,26px)}
-.load-pct{color:var(--muted);font-family:var(--font-display);font-weight:700;
-  font-variant-numeric:tabular-nums;letter-spacing:.06em;
+.load-pct{color:var(--muted);font-family:var(--font-mono);font-weight:400;
+  font-variant-numeric:tabular-nums;letter-spacing:.12em;
   font-size:clamp(13px,1.5vw,18px)}
 .load-pct::after{content:"%";opacity:.5;margin-left:.15em}
 
@@ -132,7 +145,7 @@ body::before{content:"";position:fixed;inset:0;z-index:-1;
   display:flex;align-items:center;gap:28px;
   padding:18px var(--pad);
   background:linear-gradient(180deg,rgba(var(--ink-rgb),.9),rgba(var(--ink-rgb),.6) 70%,transparent)}
-.nav-logo{font-family:var(--font-display);font-weight:700;font-size:22px;
+.nav-logo{font-family:var(--font-display);font-weight:400;font-size:22px;
   line-height:1}
 .nav-links{display:flex;gap:24px;margin-left:auto}
 .nav-link{background:none;border:0;cursor:pointer;font:inherit;font-size:13px;
@@ -154,7 +167,7 @@ body.menu-open .nav-burger span:last-child{display:inline}
   padding:0 var(--pad);transform:translateY(-102%);transition:transform .5s var(--ease)}
 body.menu-open .menu{transform:none}
 .menu-item{background:none;border:0;text-align:left;cursor:pointer;
-  font-family:var(--font-display);font-weight:700;color:var(--paper);
+  font-family:var(--font-display);font-weight:400;color:var(--paper);
   font-size:clamp(32px,8vw,60px);letter-spacing:-.02em;padding:4px 0}
 .menu-item i{font-style:normal;font-size:.35em;color:var(--blaze);
   vertical-align:super;margin-right:10px;font-variant-numeric:tabular-nums}
@@ -171,14 +184,15 @@ body.menu-open .menu{transform:none}
 .about-close i{font-style:normal;color:var(--muted)}
 .about-inner{max-width:760px;margin:0 auto;display:flex;flex-direction:column;gap:26px}
 .about-lead{font-size:clamp(18px,2.2vw,24px);line-height:1.45}
-.about-meta{display:flex;gap:30px;font-size:11px;letter-spacing:.22em;color:var(--muted)}
+.about-meta{display:flex;gap:30px;font-family:var(--font-mono);font-weight:400;
+  font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
 .about-img{width:100%;max-height:420px;object-fit:cover;object-position:top;
   border:1px solid var(--ink-3)}
 .about-words{list-style:none;display:flex;gap:26px;color:var(--uv);
-  font-family:var(--font-display);font-weight:700;
+  font-family:var(--font-display);font-weight:400;
   font-size:clamp(18px,3vw,26px)}
 .about-cols{display:grid;grid-template-columns:1fr 1fr;gap:26px}
-.principles dt{font-family:var(--font-display);font-weight:700;
+.principles dt{font-family:var(--font-display);font-weight:400;
   font-size:clamp(17px,2vw,21px);margin-top:18px}
 .principles dd{color:var(--muted);margin-top:6px;max-width:56ch}
 
@@ -192,7 +206,7 @@ body.menu-open .menu{transform:none}
   background:linear-gradient(180deg,rgba(var(--ink-rgb),.62),rgba(var(--ink-rgb),.26) 30%,
              rgba(var(--ink-rgb),.26) 62%,rgba(var(--ink-rgb),.66))}
 .hero-line{position:absolute;top:clamp(90px,16vh,150px);left:var(--pad);
-  right:var(--pad);z-index:2;font-family:var(--font-display);font-weight:500;
+  right:var(--pad);z-index:2;font-family:var(--font-display);font-weight:400;
   font-size:clamp(18px,2.6vw,30px);letter-spacing:-.01em;text-align:center}
 /* the rotator is an inline-grid: words stack in the same cell IN FLOW,
    so the baseline always matches the surrounding text exactly */
@@ -209,11 +223,18 @@ body.menu-open .menu{transform:none}
 .hero-mark{width:100vw;position:relative;z-index:2}
 #flow{display:block;width:100vw;height:min(44vh,52vw);cursor:crosshair;
   touch-action:pan-y}
-.flow-fallback{font-family:"Archivo Black","Space Grotesk",sans-serif;
-  font-size:clamp(48px,13vw,240px);letter-spacing:-.01em;
-  line-height:.9;text-align:center;color:var(--paper);padding:0 var(--pad) 20px}
-.scroll-hint{position:absolute;bottom:16px;right:var(--pad);z-index:2;font-size:10px;
-  letter-spacing:.3em;text-transform:uppercase;color:var(--muted);
+/* one unwrappable 10-glyph word: at wdth 125 its ink is ~9.1x the font
+   size, so the size must stay <= ~11vw or the word overflows 100vw and
+   body{overflow-x:hidden} silently truncates it ("BADSCAND"). 10vw keeps
+   the ink at ~91vw at EVERY width — no px floor, no side padding, both of
+   which re-broke small viewports. */
+.flow-fallback{font-family:var(--font-mark);font-weight:900;
+  font-variation-settings:"wdth" 125,"wght" 900;
+  font-size:min(10vw,220px);letter-spacing:-.01em;
+  line-height:.9;text-align:center;color:var(--paper);padding:0 0 20px}
+.scroll-hint{position:absolute;bottom:16px;right:var(--pad);z-index:2;
+  font-family:var(--font-mono);font-weight:400;font-size:10px;
+  letter-spacing:.12em;text-transform:uppercase;color:var(--muted);
   animation:hint 2.4s ease infinite}
 @keyframes hint{0%,100%{opacity:.4}50%{opacity:.95}}
 
@@ -225,14 +246,14 @@ main section{max-width:var(--maxw);margin:0 auto;
 .reveal.in{opacity:1;transform:none}
 
 .big-link{display:inline-block;margin-top:38px;font-family:var(--font-display);
-  font-weight:500;font-size:clamp(16px,1.8vw,21px);color:var(--ember);
+  font-weight:400;font-size:clamp(16px,1.8vw,21px);color:var(--ember);
   background:none;border:0;cursor:pointer;padding:0}
 .big-link::after{content:"";display:block;height:1px;background:var(--ink-3);
   margin-top:8px;transition:background .3s ease}
 .big-link:hover::after{background:var(--blaze)}
 
 /* ---------- manifesto ---------- */
-.manifesto h2{font-size:clamp(26px,4.3vw,54px);font-weight:500;
+.manifesto h2{font-size:clamp(26px,4.3vw,54px);font-weight:400;
   letter-spacing:-.02em;max-width:28ch}
 .founder{display:flex;align-items:center;gap:18px;margin-top:46px}
 .founder img{width:86px;height:86px;object-fit:cover;object-position:top;
@@ -245,13 +266,14 @@ main section{max-width:var(--maxw);margin:0 auto;
   gap:20px;padding:26px 0;border-bottom:1px solid var(--ink-3);
   transition:padding .35s var(--ease)}
 .work-row:hover{padding-left:14px}
-.wr-client{font-size:12px;letter-spacing:.2em;text-transform:uppercase;
-  color:var(--muted)}
-.wr-title{font-family:var(--font-display);font-weight:700;
-  font-size:clamp(24px,3.6vw,46px);letter-spacing:-.02em;line-height:1;
+.wr-client{font-family:var(--font-mono);font-weight:400;font-size:12px;
+  letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.wr-title{font-family:var(--font-display);font-weight:400;
+  font-size:clamp(24px,3.6vw,46px);letter-spacing:-.02em;line-height:1.1;
   transition:color .3s ease}
 .work-row:hover .wr-title{color:var(--ember)}
-.wr-type{font-size:12px;letter-spacing:.14em;color:var(--muted);
+.wr-type{font-family:var(--font-mono);font-weight:400;font-size:12px;
+  letter-spacing:.12em;color:var(--muted);
   text-transform:uppercase;justify-self:end}
 .wr-thumb{display:none}
 #work-preview{position:absolute;top:0;left:0;width:min(320px,30vw);
@@ -263,14 +285,15 @@ main section{max-width:var(--maxw);margin:0 auto;
   letter-spacing:.04em;color:var(--maroon)}
 
 /* ---------- philosophy ---------- */
-.philo-word{font-size:clamp(44px,8.4vw,116px);letter-spacing:-.035em;line-height:.94}
+.philo-word{font-size:clamp(44px,8.4vw,116px);letter-spacing:-.02em;line-height:1.1}
 .philo-cols{display:grid;grid-template-columns:1fr 1fr;gap:34px;margin-top:38px}
 .philo-cols p{color:var(--muted);font-size:clamp(15px,1.4vw,18px);max-width:52ch}
-.philo-reel{margin-top:44px;font-size:12px;letter-spacing:.24em;
+.philo-reel{margin-top:44px;font-family:var(--font-mono);font-weight:400;
+  font-size:12px;letter-spacing:.12em;
   text-transform:uppercase;color:var(--maroon)}
 .highlights{list-style:none;border-top:1px solid var(--ink-3);margin-top:8px}
 .highlights li{padding:16px 0;border-bottom:1px solid var(--ink-3);
-  font-family:var(--font-display);font-weight:500;
+  font-family:var(--font-display);font-weight:400;
   font-size:clamp(16px,2vw,24px)}
 
 /* ---------- quotes ---------- */
@@ -285,21 +308,21 @@ main section{max-width:var(--maxw);margin:0 auto;
   border:1px solid var(--ink-3);transition:transform .45s var(--ease)}
 .svc-grid figure:hover img{transform:translateY(-8px)}
 .svc-grid figcaption{margin-top:12px;font-family:var(--font-display);
-  font-weight:500;font-size:clamp(15px,1.6vw,19px)}
+  font-weight:400;font-size:clamp(15px,1.6vw,19px)}
 
 /* ---------- process ---------- */
 .steps{list-style:none;display:grid;grid-template-columns:repeat(3,1fr);gap:34px}
-.step-n{font-size:11px;letter-spacing:.26em;color:var(--blaze);
-  text-transform:uppercase}
+.step-n{font-family:var(--font-mono);font-weight:400;font-size:11px;
+  letter-spacing:.12em;color:var(--blaze);text-transform:uppercase}
 .steps h3{margin-top:12px;font-size:clamp(20px,2.2vw,26px)}
 .steps p{color:var(--muted);font-size:14px;margin-top:10px}
 
 /* ---------- faq ---------- */
-.faq h2{font-size:clamp(24px,3.4vw,42px);font-weight:500;max-width:26ch}
+.faq h2{font-size:clamp(24px,3.4vw,42px);font-weight:400;max-width:26ch}
 .faq-list{margin-top:38px;border-top:1px solid var(--ink-3)}
 .faq-list details{border-bottom:1px solid var(--ink-3)}
 .faq-list summary{cursor:pointer;list-style:none;position:relative;
-  padding:20px 44px 20px 0;font-family:var(--font-display);font-weight:500;
+  padding:20px 44px 20px 0;font-family:var(--font-display);font-weight:400;
   font-size:clamp(16px,1.8vw,21px)}
 .faq-list summary::-webkit-details-marker{display:none}
 .faq-list summary::after{content:"+";position:absolute;right:4px;top:16px;
@@ -308,14 +331,18 @@ main section{max-width:var(--maxw);margin:0 auto;
 .faq-list details p{color:var(--muted);max-width:64ch;padding:0 0 22px}
 
 /* ---------- cta marquee ---------- */
-.cta{max-width:none;padding-left:0;padding-right:0;text-align:center;
+/* width:100% matters: .cta inherits margin:0 auto from `main section`, and
+   inside the .stack-panel flex column an auto cross-axis margin suppresses
+   align-items:stretch — without an explicit width the section sizes to the
+   max-content of .cm-track (~2400px+) and shoves the button off-screen. */
+.cta{max-width:none;width:100%;padding-left:0;padding-right:0;text-align:center;
   overflow:hidden}
 .cta .tag{padding:0 var(--pad)}
 .cta-marquee{display:flex;flex-direction:column;gap:6px}
 .cm-row{overflow:hidden;white-space:nowrap}
 .cm-track{display:inline-flex;animation:cm 18s linear infinite;
-  font-family:var(--font-display);font-weight:700;
-  font-size:clamp(40px,7.6vw,104px);letter-spacing:-.03em;color:var(--paper)}
+  font-family:var(--font-display);font-weight:400;
+  font-size:clamp(40px,7.6vw,104px);letter-spacing:-.02em;color:var(--paper)}
 .cm-row.rev .cm-track{animation-direction:reverse;color:var(--blaze);
   -webkit-text-stroke:0;opacity:.9}
 .cm-row:nth-child(3) .cm-track{color:transparent;
@@ -340,6 +367,8 @@ main section{max-width:var(--maxw);margin:0 auto;
   font-size:13px}
 .foot-bar{max-width:var(--maxw);margin:22px auto 0;display:flex;gap:26px;
   justify-content:space-between;flex-wrap:wrap;font-size:12px;
+  font-family:var(--font-mono);font-weight:400;letter-spacing:.12em;
+  text-transform:uppercase;
   color:var(--muted);border-top:1px solid var(--ink-3);padding-top:22px}
 .foot-bar b{font-variant-numeric:tabular-nums;color:var(--paper);font-weight:500}
 .foot-tag{max-width:var(--maxw);margin:30px auto 0;text-align:center;
@@ -349,7 +378,7 @@ main section{max-width:var(--maxw);margin:0 auto;
    SUBPAGES (Luke Power · Store) + homepage Music section
    ============================================================ */
 .page-main{padding-top:clamp(120px,18vh,180px)}
-.page-head h1{font-size:clamp(44px,8vw,110px);letter-spacing:-.035em;line-height:.94}
+.page-head h1{font-size:clamp(44px,8vw,110px);letter-spacing:-.02em;line-height:1.1}
 .page-head .lede{margin-top:18px;color:var(--muted);max-width:52ch;
   font-size:clamp(15px,1.5vw,19px)}
 .prose p{color:var(--muted);max-width:64ch;font-size:clamp(15px,1.4vw,18px)}
@@ -360,11 +389,12 @@ main section{max-width:var(--maxw);margin:0 auto;
 .social{display:block;border:1px solid var(--ink-3);padding:22px;
   transition:border-color .3s ease,transform .3s var(--ease)}
 .social:hover{border-color:var(--uv);transform:translateY(-4px)}
-.social .p{font-family:var(--font-display);font-weight:700;
+.social .p{font-family:var(--font-display);font-weight:400;
   font-size:clamp(17px,1.8vw,22px)}
 .social .h{margin-top:6px;color:var(--muted);font-size:13px}
 .feed{margin-top:8px}
-.feed-link{display:inline-block;margin-top:20px;font-size:13px;
+.feed-link{display:inline-block;margin-top:20px;
+  font-family:var(--font-mono);font-weight:400;font-size:13px;
   letter-spacing:.12em;text-transform:uppercase;color:var(--ember)}
 
 /* ---------- act confidently (work video) ---------- */
@@ -372,7 +402,10 @@ main section{max-width:var(--maxw);margin:0 auto;
 /* ---------- numbers (Luke Power) ---------- */
 .num-row{border-bottom:1px solid var(--ink-3);padding:30px 0}
 .num-row:first-of-type{border-top:1px solid var(--ink-3)}
-.stat-count{font-family:var(--font-display);font-weight:700;
+/* big display numbers = Archivo territory (wordmark + big display only) —
+   also keeps tabular figures honest while the count-up runs */
+.stat-count{font-family:var(--font-mark);font-weight:900;
+  font-variation-settings:"wdth" 125,"wght" 900;
   font-size:clamp(44px,7.5vw,104px);letter-spacing:-.03em;line-height:1;
   font-variant-numeric:tabular-nums;color:var(--paper);display:block}
 .num-row p{color:var(--muted);margin-top:10px;font-size:14px;
@@ -456,7 +489,7 @@ main section{max-width:var(--maxw);margin:0 auto;
 .store-bar{padding-top:0 !important}
 .store-tabs{display:flex;gap:34px;border-bottom:1px solid var(--ink-3)}
 .store-tabs button{background:none;border:0;cursor:pointer;color:var(--muted);
-  font-family:var(--font-display);font-weight:700;
+  font-family:var(--font-display);font-weight:400;
   font-size:clamp(20px,2.6vw,32px);letter-spacing:-.02em;
   padding:6px 2px 16px;position:relative;transition:color .3s ease}
 .store-tabs button::after{content:"";position:absolute;left:0;right:0;
@@ -499,7 +532,8 @@ main section{max-width:var(--maxw);margin:0 auto;
 .pcard:hover .pcard-media img{transform:scale(1.06)}
 .pcard:hover .pcard-alt{opacity:1}
 .pcard-cat{position:absolute;top:10px;left:10px;z-index:2;
-  font-size:10px;letter-spacing:.2em;text-transform:uppercase;
+  font-family:var(--font-mono);font-weight:400;
+  font-size:10px;letter-spacing:.12em;text-transform:uppercase;
   color:var(--paper);background:rgba(var(--ink-rgb),.66);padding:6px 10px;
   border-radius:999px;-webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px)}
 .pcard-quick{position:absolute;left:0;right:0;bottom:0;z-index:2;
@@ -507,8 +541,8 @@ main section{max-width:var(--maxw);margin:0 auto;
   background:linear-gradient(180deg,transparent,rgba(var(--ink-rgb),.88) 40%);
   transform:translateY(105%);transition:transform .4s var(--ease)}
 .pcard:hover .pcard-quick{transform:none}
-.qa-label{font-size:10px;letter-spacing:.24em;text-transform:uppercase;
-  color:var(--ember)}
+.qa-label{font-family:var(--font-mono);font-weight:400;font-size:10px;
+  letter-spacing:.12em;text-transform:uppercase;color:var(--ember)}
 .qa-sizes{display:flex;gap:6px;flex-wrap:wrap}
 .qa-size{min-width:38px;padding:8px 10px;background:rgba(255,255,255,.06);
   border:1px solid var(--ink-3);border-radius:6px;color:var(--paper);
@@ -524,7 +558,9 @@ main section{max-width:var(--maxw);margin:0 auto;
 .qa-size.off{opacity:.3;cursor:not-allowed;text-decoration:line-through}
 .pcard-meta{display:flex;justify-content:space-between;gap:12px;
   align-items:baseline;margin-top:12px}
-.pcard-name{font-family:var(--font-display);font-weight:700;
+/* product names are information, and Instrument Serif is never small —
+   so they read in Figtree */
+.pcard-name{font-family:var(--font-body);font-weight:600;
   font-size:clamp(13px,1.3vw,16px);letter-spacing:.01em}
 .pcard-price{color:var(--ember);font-size:14px;
   font-variant-numeric:tabular-nums;white-space:nowrap}
@@ -548,7 +584,8 @@ main section{max-width:var(--maxw);margin:0 auto;
   font-variant-numeric:tabular-nums}
 .pmodal-desc{margin-top:18px;color:var(--muted);max-width:44ch;
   font-size:15px;line-height:1.6}
-.pmodal-sizes-label{margin-top:28px;font-size:11px;letter-spacing:.24em;
+.pmodal-sizes-label{margin-top:28px;font-family:var(--font-mono);
+  font-weight:400;font-size:11px;letter-spacing:.12em;
   text-transform:uppercase;color:var(--uv)}
 .pmodal-sizes{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
 .pmodal-sizes .qa-size{min-width:46px;padding:12px 12px;font-size:13px}
@@ -580,7 +617,7 @@ main section{max-width:var(--maxw);margin:0 auto;
   padding:16px 0;border-bottom:1px solid var(--ink-3);align-items:center}
 .cart-line img{width:72px;height:90px;object-fit:cover;
   border:1px solid var(--ink-3);background:var(--ink)}
-.cl-title{font-family:var(--font-display);font-weight:700;font-size:14px}
+.cl-title{font-family:var(--font-body);font-weight:600;font-size:14px}
 .cl-sub{color:var(--muted);font-size:12px;margin-top:3px}
 .cl-qty{display:flex;align-items:center;gap:10px;margin-top:10px}
 .cl-qty button{background:none;border:1px solid var(--ink-3);color:var(--paper);
@@ -650,8 +687,8 @@ main section{max-width:var(--maxw);margin:0 auto;
 .sguide-inner{max-width:560px;margin:0 auto;background:var(--ink-2);
   border:1px solid var(--ink-3);padding:30px 30px 34px}
 .sguide-table{width:100%;border-collapse:collapse;font-size:14px}
-.sguide-table th{text-align:left;font-family:var(--font-display);
-  font-size:11px;letter-spacing:.18em;text-transform:uppercase;
+.sguide-table th{text-align:left;font-family:var(--font-mono);font-weight:400;
+  font-size:11px;letter-spacing:.12em;text-transform:uppercase;
   color:var(--uv);padding:10px 12px;border-bottom:1px solid var(--ink-3)}
 .sguide-table td{padding:12px;border-bottom:1px solid var(--ink-3);
   font-variant-numeric:tabular-nums;color:var(--paper)}
@@ -674,4 +711,139 @@ main section{max-width:var(--maxw);margin:0 auto;
 @media (max-width:760px){
   .store-hero{min-height:56vh}
   .store-hero-img{object-position:70% 20%}
+}
+
+/* ============================================================
+   STAMPS — the postcard/stamp scroll sequence (the centrepiece).
+   The stamps NEVER animate: they are static, opacity 1, and simply
+   OVERHANG the card's box (overflow:visible), so each one clears the
+   card beneath and punches into frame. All motion is the CARD flying
+   ~2000-2900px up on one overshooting spring (main.js), with double
+   rotation (card x stamp) so nothing is ever parallel. z 2/3/4 stacks
+   each new card OVER the last. Geometry (sticky 100vh panel + three
+   800px markers) IS the timeline — change either and it desyncs.
+   ============================================================ */
+.stamps{max-width:none;margin:0;padding:0;position:relative;
+  height:calc(100vh + 87px + 3*800px)}
+.stamps-panel{position:sticky;top:0;height:100vh;overflow:hidden}
+.stamps-tag{position:absolute;top:calc(var(--pad) + 64px);left:var(--pad);
+  z-index:1;margin:0}
+.stamps-marker{height:800px;pointer-events:none}
+.scard{position:absolute;left:50%;top:50%;width:min(409px,86vw);
+  overflow:visible;background:var(--ink-2);border:1px solid var(--ink-3);
+  padding:30px 28px 34px;box-shadow:0 34px 80px rgba(0,0,0,.55);
+  transform:translate(-50%,-50%) translateY(var(--fly,0px)) rotate(var(--crot,0deg))}
+.scard-1{--crot:-8deg;z-index:2}
+.scard-2{--crot:12deg;z-index:3}
+.scard-3{--crot:1deg;z-index:4}
+/* the stamp hangs OUTSIDE the card corner — that offset is the effect.
+   Offsets are calibrated so the stamp intrudes only into the card's
+   PADDING (28-30px): the stamp is 143x178, so e.g. left:-123px leaves a
+   20px overlap. Pull an offset closer to 0 and the stamp lands on the
+   slate line and the headline and hides the copy. */
+.scard-stamp{position:absolute;width:143px;aspect-ratio:.805556;
+  transform:rotate(var(--srot,0deg));
+  filter:drop-shadow(0 10px 22px rgba(0,0,0,.45))}
+.scard-1 .scard-stamp{top:-154px;left:-123px;--srot:-8deg}
+.scard-2 .scard-stamp{top:134px;right:-123px;--srot:22deg}
+.scard-3 .scard-stamp{top:-154px;right:-123px;--srot:-18deg}
+.scard-slate{font-family:var(--font-mono);font-weight:400;font-size:11px;
+  letter-spacing:.12em;text-transform:uppercase;color:var(--uv)}
+.scard h3{font-size:clamp(24px,3vw,32px);margin-top:12px}
+.scard-body{color:var(--muted);font-size:15px;line-height:1.55;margin-top:10px}
+/* JS flight mode (.fly is only ever added when motion is allowed):
+   the stamp "inks on" 90ms AFTER its card lands — opacity 0->1 plus
+   scale 1.15->1, the deliberate version of the reference's lazy-load
+   accident. Without JS or with reduced motion the cards (and stamps)
+   simply ARE in place. */
+.stamps.fly .scard{will-change:transform}
+.stamps.fly .scard-stamp{opacity:0;
+  transform:rotate(var(--srot,0deg)) scale(1.15);
+  transition:opacity .3s ease .09s,transform .34s var(--ease) .09s}
+.stamps.fly .scard.landed .scard-stamp{opacity:1;
+  transform:rotate(var(--srot,0deg))}
+@media (max-width:640px){
+  /* clamp the card + shrink the stamp, and hang it off the TOP/BOTTOM edge
+     instead of the corner: sideways overhang would either cover the copy or
+     get cut by the viewport edge on a phone. 104x129 stamp, so -108px
+     leaves a 21px overlap — inside the card's 24/28px padding. */
+  .scard{width:min(330px,86vw);padding:24px 22px 28px}
+  .scard-stamp{width:104px}
+  .scard-1 .scard-stamp{top:-108px;left:-8px}
+  .scard-2 .scard-stamp{top:auto;bottom:-108px;right:10px}
+  .scard-3 .scard-stamp{top:-108px;right:-8px}
+}
+@media (prefers-reduced-motion:reduce){
+  .stamps.fly .scard-stamp{opacity:1;transform:rotate(var(--srot,0deg));
+    transition:none}
+}
+/* No flight — reduced motion or no JS (main.js only adds .fly when motion
+   is allowed). The absolute left:50%/top:50% placement exists purely for
+   the scroll sequence: without it all three cards sit COINCIDENT and only
+   the top card (z 4) is readable. So without .fly the cards become a plain
+   stacked column — every card legible, no sticky, no 3500px runway. */
+.stamps:not(.fly){height:auto;padding:clamp(70px,11vh,130px) var(--pad)}
+.stamps:not(.fly) .stamps-panel{position:static;height:auto;overflow:visible}
+.stamps:not(.fly) .stamps-tag{position:static;margin:0 0 44px}
+.stamps:not(.fly) .stamps-marker{display:none}
+.stamps:not(.fly) .scard{position:relative;left:auto;top:auto;
+  margin:64px auto 0;transform:rotate(var(--crot,0deg))}
+.stamps:not(.fly) .scard-1{margin-top:0}
+
+/* ============================================================
+   BACK-HALF STACK — nested sticky wrappers with INCREASING z-index:
+   each panel pins at the top and the next slides up OVER it. The 2px
+   full-width rules + alternating headline alignment (left-of-centre,
+   then right, then centred) make it read as a magazine spread.
+   ============================================================ */
+.stack-panel{position:relative;border-top:2px solid var(--ink-3)}
+@media (min-width:901px) and (prefers-reduced-motion:no-preference){
+  .stack-panel{position:sticky;top:0;min-height:100vh;display:flex;
+    flex-direction:column;justify-content:center;
+    /* the page's own ink ground — NOT a colour, and visually identical
+       to transparent except while one panel slides over another; without
+       it the pinned section beneath would read through the incoming one */
+    background:var(--ink)}
+  .stack-panel:nth-child(1){z-index:1}
+  .stack-panel:nth-child(2){z-index:2}
+  .stack-panel:nth-child(3){z-index:3}
+  .stack-panel:nth-child(4){z-index:4}
+  /* sections inherit margin:0 auto from `main section`; on a flex item an
+     auto cross-axis margin suppresses align-items:stretch, so without an
+     explicit width each section sizes to its content's MAX-CONTENT width
+     (philo's grid, .cta's marquee track) and overflows the viewport */
+  .stack-panel > section{width:100%}
+}
+/* the zig-zag: philo already sits left-of-centre; then right, then centred */
+.club{text-align:right}
+.club .bio{margin-left:auto;max-width:46ch}
+.faq{text-align:center}
+.faq h2{margin-left:auto;margin-right:auto}
+.faq .faq-list{text-align:left}
+
+/* ---------- CRT footer wordmark ---------- */
+.crt{max-width:var(--maxw);margin:0 auto 46px}
+#crt-canvas{display:block;width:100%;height:clamp(96px,17vw,230px)}
+/* shown only if the canvas bails (no 2D, reduced motion, no JS) */
+.crt-fallback{font-family:var(--font-mark);font-weight:900;
+  font-variation-settings:"wdth" 125,"wght" 900;
+  font-size:clamp(38px,8.6vw,148px);line-height:.95;letter-spacing:-.01em;
+  text-align:center;color:var(--paper)}
+
+/* ============================================================
+   NO-JS SAFETY NET — .reveal and .pcard start at opacity:0 and are
+   only made visible by JS, and #loader only dismisses from JS. If
+   scripting is off, reset them so the page is readable. Support for
+   (scripting: none) is uneven, so each HTML head ALSO carries a
+   <noscript> block doing the same, and main.js carries a timeout
+   that force-dismisses the loader. Belt, braces, and a second belt.
+   ============================================================ */
+@media (scripting: none){
+  .reveal{opacity:1;transform:none}
+  .pcard{opacity:1;transform:none}
+  #loader{display:none}
+  #crt-canvas{display:none}
+  .crt-fallback[hidden]{display:block}
+  #flow{display:none}
+  .flow-fallback[hidden]{display:block}
 }

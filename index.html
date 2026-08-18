@@ -25,8 +25,18 @@
 </script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter+Tight:wght@400;500;600&family=Archivo+Black&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,100..900&family=DM+Mono:wght@300;400;500&family=Figtree:wght@300..900&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="css/site.css">
+<noscript><style>
+/* no JS: .reveal never gets .in and the loader never dismisses — reset both */
+.reveal{opacity:1 !important;transform:none !important}
+.pcard{opacity:1 !important;transform:none !important}
+#loader{display:none !important}
+#crt-canvas{display:none !important}
+.crt-fallback{display:block !important}
+#flow{display:none !important}
+.flow-fallback{display:block !important}
+</style></noscript>
 </head>
 <body>
 
@@ -134,10 +144,10 @@
   <section class="hero" id="hero">
     <div class="hero-stage">
       <!-- the film runs behind the wordmark — scroll plays it, scroll back rewinds -->
-      <video id="hero-video" class="hero-video" src="assets/graded-sexy-4k.mp4"
-             poster="assets/scrub-poster.jpg" muted playsinline preload="auto"></video>
+      <video id="hero-video" class="hero-video" src="assets/hero-sunset-4k-v1.mp4"
+             poster="assets/hero-sunset-poster-v1.jpg" muted playsinline preload="auto"></video>
       <div class="hero-scrim" aria-hidden="true"></div>
-      <p class="hero-line">Wear the trouble.
+      <p class="hero-line">Wear the <span class="em">trouble</span>.
         <span class="rotator" id="rotator"><span>Say it out loud.</span><span>Leave anyway.</span><span>Chase it.</span><span>Be a bad scandal.</span></span>
       </p>
       <div class="hero-mark">
@@ -171,7 +181,7 @@
   <!-- 03 · MANIFESTO ----------------------------------------------------------- -->
   <section class="philo reveal">
     <p class="tag">(02)&nbsp;&nbsp;Why</p>
-    <h2 class="philo-word" data-pop>You get four<br>thousand weeks.</h2>
+    <h2 class="philo-word" data-pop>You get four<br><span class="em">thousand</span> weeks.</h2>
     <div class="philo-cols">
       <p data-pop="left">That's it. That's the whole allocation, and a good chunk
       of yours is already gone. Nobody mentions this, because a person who has
@@ -183,15 +193,58 @@
     <button class="big-link roll" data-about type="button">Read the whole thing</button>
   </section>
 
+  <!-- 03b · THE ROAD — stamp/card scroll sequence. The stamps are STATIC and
+       simply overhang the card corner; all motion is the card flying in on one
+       overshooting spring (main.js), stacking OVER the previous card. The
+       geometry (sticky 100vh panel + three 800px markers) IS the timeline —
+       change either and the triggers desync. -->
+  <section class="stamps" aria-label="The road so far">
+    <div class="stamps-panel">
+      <p class="tag stamps-tag">(03)&nbsp;&nbsp;The road so far</p>
+      <article class="scard scard-1">
+        <img class="scard-stamp" src="assets/stamp-1-v1.svg" alt="" aria-hidden="true">
+        <p class="scard-slate">Ireland &rarr; out &middot; one-way</p>
+        <h3>Left the whole <span class="em">plan</span>.</h3>
+        <p class="scard-body">Country, family, the pension talk — all of it.
+        Everyone said too fast, too crazy, too much. They were still saying it
+        when the plane took off.</p>
+      </article>
+      <article class="scard scard-2">
+        <img class="scard-stamp" src="assets/stamp-2-v1.svg" alt="" aria-hidden="true">
+        <p class="scard-slate">Gibraltar &middot; two witnesses</p>
+        <h3>Married on a <span class="em">rock</span>.</h3>
+        <p class="scard-body">No venue, no seating chart, no speech from an
+        uncle. A registry office on a limestone rock and the two of us grinning
+        like we'd got away with something. We had.</p>
+      </article>
+      <article class="scard scard-3">
+        <img class="scard-stamp" src="assets/stamp-3-v1.svg" alt="" aria-hidden="true">
+        <p class="scard-slate">Brazil &rarr; Vietnam &middot; no return date</p>
+        <h3>The road got <span class="em">long</span>.</h3>
+        <p class="scard-body">Her family's side of the world, then the far side
+        of it. We make things as we go, the clothes travel with us — and the
+        opinions everyone had get very quiet from this far away.</p>
+      </article>
+    </div>
+    <div class="stamps-marker" aria-hidden="true"></div>
+    <div class="stamps-marker" aria-hidden="true"></div>
+    <div class="stamps-marker" aria-hidden="true"></div>
+  </section>
+
+  <!-- the back half pins: each panel sticks and the next slides up OVER it -->
+  <div class="stack">
+  <div class="stack-panel">
   <!-- 04 · THE CLUB ------------------------------------------------------------------ -->
   <section class="club reveal" id="club">
     <p class="tag">The club</p>
-    <h2 data-pop>Feeling like joining the club?</h2>
+    <h2 data-pop>Feeling like joining the <span class="em">club</span>?</h2>
     <p class="bio">Membership is simple: wear it, mean it, and stop apologising
     for taking up space.</p>
     <a class="cta-btn roll" data-mag href="store.html" style="margin-top:34px">Take me to the store</a>
   </section>
 
+  </div>
+  <div class="stack-panel">
   <!-- 05 · HOW IT GOES --------------------------------------------------------------------- -->
   <section class="process reveal" id="process">
     <p class="tag">How it goes</p>
@@ -219,9 +272,11 @@
     </ol>
   </section>
 
+  </div>
+  <div class="stack-panel">
   <!-- 06 · FAQ ---------------------------------------------------------------------------- -->
   <section class="faq reveal">
-    <h2 data-pop>What you should know.</h2>
+    <h2 data-pop>What you should <span class="em">know</span>.</h2>
     <div class="faq-list">
       <details><summary>What does BADSCANDAL stand for?</summary><p>Being the bad scandal. Anarchy of the personal kind — expressing yourself freely and being yourself, whatever that means for <b>you</b>. Not a puppet, not a people-pleaser, not a version of yourself built for someone else's comfort.</p></details>
       <details><summary>Who's behind it?</summary><p>Luke and Lilian. We left our country to chase making things and seeing the world, and started a clothing brand as a statement to ourselves that we were actually doing it. <a href="us.html">The whole story is here</a>.</p></details>
@@ -232,22 +287,27 @@
     <a class="big-link roll" href="mailto:contact@badscandal.com?subject=Got%20a%20question">Got more questions? Contact us</a>
   </section>
 
+  </div>
+  <div class="stack-panel">
   <!-- 07 · CTA ------------------------------------------------------------------------------ -->
   <section class="cta reveal">
     <p class="tag">Say it out loud</p>
     <div class="cta-marquee" aria-hidden="true">
-      <div class="cm-row"><div class="cm-track"><span>Be a bad scandal —&nbsp;</span><span>Be a bad scandal —&nbsp;</span><span>Be a bad scandal —&nbsp;</span><span>Be a bad scandal —&nbsp;</span></div></div>
-      <div class="cm-row rev"><div class="cm-track"><span>Be a bad scandal —&nbsp;</span><span>Be a bad scandal —&nbsp;</span><span>Be a bad scandal —&nbsp;</span><span>Be a bad scandal —&nbsp;</span></div></div>
-      <div class="cm-row"><div class="cm-track"><span>Be a bad scandal —&nbsp;</span><span>Be a bad scandal —&nbsp;</span><span>Be a bad scandal —&nbsp;</span><span>Be a bad scandal —&nbsp;</span></div></div>
+      <div class="cm-row"><div class="cm-track"><span>Be a bad <span class="em">scandal</span> —&nbsp;</span><span>Be a bad <span class="em">scandal</span> —&nbsp;</span><span>Be a bad <span class="em">scandal</span> —&nbsp;</span><span>Be a bad <span class="em">scandal</span> —&nbsp;</span></div></div>
+      <div class="cm-row rev"><div class="cm-track"><span>Be a bad <span class="em">scandal</span> —&nbsp;</span><span>Be a bad <span class="em">scandal</span> —&nbsp;</span><span>Be a bad <span class="em">scandal</span> —&nbsp;</span><span>Be a bad <span class="em">scandal</span> —&nbsp;</span></div></div>
+      <div class="cm-row"><div class="cm-track"><span>Be a bad <span class="em">scandal</span> —&nbsp;</span><span>Be a bad <span class="em">scandal</span> —&nbsp;</span><span>Be a bad <span class="em">scandal</span> —&nbsp;</span><span>Be a bad <span class="em">scandal</span> —&nbsp;</span></div></div>
     </div>
     <h2 class="sr-only">Be a bad scandal</h2>
     <a class="cta-btn roll" data-mag href="store.html">Wear the trouble</a>
   </section>
+  </div>
+  </div>
 
 </main>
 
 <!-- 08 · FOOTER -------------------------------------------------------------------------------- -->
 <footer class="foot">
+  <div class="crt"><canvas id="crt-canvas" role="img" aria-label="BADSCANDAL"></canvas><h2 class="crt-fallback" hidden>BADSCANDAL</h2></div>
   <div class="foot-grid">
     <div>
       <p class="tag">Contact</p>
@@ -295,5 +355,6 @@
 
 <script src="js/flow.js"></script>
 <script src="js/main.js"></script>
+<script src="js/crt.js"></script>
 </body>
 </html>

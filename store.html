@@ -7,8 +7,16 @@
 <meta name="description" content="BADSCANDAL store — statement tees and essentials. Say the thing nobody says. Made to order, shipped worldwide. Wear the trouble.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter+Tight:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,100..900&family=DM+Mono:wght@300;400;500&family=Figtree:wght@300..900&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="css/site.css">
+<noscript><style>
+/* no JS: .reveal never gets .in and the loader never dismisses — reset both */
+.reveal{opacity:1 !important;transform:none !important}
+.pcard{opacity:1 !important;transform:none !important}
+#loader{display:none !important}
+#crt-canvas{display:none !important}
+.crt-fallback{display:block !important}
+</style></noscript>
 <link rel="icon" type="image/png" sizes="48x48" href="assets/favicon-48.png">
 <link rel="icon" type="image/png" sizes="192x192" href="assets/favicon-192.png">
 <link rel="apple-touch-icon" href="assets/favicon-180.png">
@@ -45,13 +53,15 @@
 <main class="page-main store-main">
 
   <section class="page-head store-hero reveal">
-    <!-- >>> EDIT HERE: swap assets/store-hero.webp for a new campaign shot <<< -->
-    <img class="store-hero-img" src="assets/store-hero.webp" alt=""
+    <!-- >>> EDIT HERE: swap the src below for a new campaign shot.
+         CACHE RULE: any new shot needs a NEW filename (assets/* is cached
+         immutable for a year) — bump the -vN suffix, never reuse a name. <<< -->
+    <img class="store-hero-img" src="assets/hero-sunset-poster-v1.jpg" alt=""
          onerror="this.style.display='none'">
     <div class="store-hero-scrim" aria-hidden="true"></div>
     <div class="store-hero-inner">
       <p class="tag">The first drop</p>
-      <h1>Wear the<br>trouble.</h1>
+      <h1>Wear the<br><span class="em">trouble</span>.</h1>
       <p class="lede">Statements for saying it out loud, essentials for the
       rest of the week. Made to order, shipped worldwide —
       <b>meant, or binned.</b></p>
@@ -121,6 +131,7 @@
 
 <!-- FOOTER -------------------------------------------------------------------- -->
 <footer class="foot">
+  <div class="crt"><canvas id="crt-canvas" role="img" aria-label="BADSCANDAL"></canvas><h2 class="crt-fallback" hidden>BADSCANDAL</h2></div>
   <div class="foot-grid">
     <div>
       <p class="tag">Contact</p>
@@ -166,6 +177,7 @@
 </footer>
 
 <script src="js/main.js"></script>
+<script src="js/crt.js"></script>
 <script src="js/store.js"></script>
 </body>
 </html>

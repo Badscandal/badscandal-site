@@ -210,7 +210,21 @@
         "X-Shopify-Storefront-Access-Token": CONFIG.token
       },
       body: JSON.stringify({ query: query, variables: variables || {} })
-    }).then(function (r) { return r.json(); });
+    }).then(function (r) {
+      /* fetch() resolves on 4xx/5xx (a revoked token comes back as a
+         parseable 401 JSON body) — without this check that "success"
+         path returned {errors:[...]}, mapProducts saw no data, and the
+         DEMO fallback in .catch() was unreachable. */
+      if (!r.ok) throw new Error("Storefront HTTP " + r.status);
+      return r.json();
+    }).then(function (d) {
+      /* top-level GraphQL errors are failures too (userErrors, which
+         live INSIDE data, are handled by the callers instead) */
+      if (d && d.errors && d.errors.length) {
+        throw new Error("Storefront error: " + (d.errors[0].message || ""));
+      }
+      return d;
+    });
   }
 
   var CART_FIELDS =
@@ -301,7 +315,12 @@
       if (altSrc === p.images[0]) altSrc = p.images[1] || null;
       var alt = altSrc ? "<img class='pcard-alt' loading='lazy' src='" + altSrc + "' alt=''>" : "";
       var sizeBtns = "";
-      var vs = LIVE ? p.variants : p.variants.map(function (s) { return { id: p.id + "-" + s, title: s, available: true }; });
+      /* shape-based, NOT mode-based: after a live fetch fails the grid
+         shows DEMO products whose variants are plain strings — keying on
+         LIVE here crashed render() (v.title of undefined) */
+      var vs = (p.variants.length && typeof p.variants[0] === "string")
+        ? p.variants.map(function (s) { return { id: p.id + "-" + s, title: s, available: true }; })
+        : p.variants;
       /* Printful-style variants ("Black / S") have colour AND size:
          those get the full option picker in the modal instead */
       var multi = vs.some(function (v) { return v.title.indexOf(" / ") > -1; });
@@ -434,7 +453,12 @@
     if (sgBtn) sgBtn.hidden = !modalGuide;
     var wrap = document.getElementById("pmodal-sizes");
     wrap.innerHTML = "";
-    var vs = LIVE ? p.variants : p.variants.map(function (s) { return { id: p.id + "-" + s, title: s, available: true }; });
+    /* shape-based, NOT mode-based: after a live fetch fails the grid
+         shows DEMO products whose variants are plain strings — keying on
+         LIVE here crashed render() (v.title of undefined) */
+      var vs = (p.variants.length && typeof p.variants[0] === "string")
+        ? p.variants.map(function (s) { return { id: p.id + "-" + s, title: s, available: true }; })
+        : p.variants;
     var multi = vs.some(function (v) { return v.title.indexOf(" / ") > -1; });
     var staticLabel = document.querySelector(".pmodal-sizes-label");
     if (staticLabel) staticLabel.style.display = multi ? "none" : "";
@@ -569,10 +593,12 @@
       };
       if (!cartId) {
         gql("mutation C($lines:[CartLineInput!]) { cartCreate(input:{lines:$lines}) { cart { ...CartFields } userErrors { message } } } " + CART_FIELDS,
-          { lines: lines }).then(function (d) { done(d, "cartCreate"); });
+          { lines: lines }).then(function (d) { done(d, "cartCreate"); })
+          .catch(function () { note("Couldn't update the bag — try again."); });
       } else {
         gql("mutation A($cartId:ID!,$lines:[CartLineInput!]!) { cartLinesAdd(cartId:$cartId, lines:$lines) { cart { ...CartFields } userErrors { message } } } " + CART_FIELDS,
-          { cartId: cartId, lines: lines }).then(function (d) { done(d, "cartLinesAdd"); });
+          { cartId: cartId, lines: lines }).then(function (d) { done(d, "cartLinesAdd"); })
+          .catch(function () { note("Couldn't update the bag — try again."); });
       }
     } else {
       var key = p.id + "::" + sizeLabel;
@@ -621,7 +647,7 @@
             var k = q <= 0 ? "cartLinesRemove" : "cartLinesUpdate";
             var cart = (((d || {}).data || {})[k] || {}).cart;
             if (cart) { liveCart = cart; renderCart(); }
-          });
+          }).catch(function () { note("Couldn't update the bag — try again."); });
         };
         box.appendChild(lineRow(
           (m.product.featuredImage || {}).url || "assets/cta-bg.webp",
@@ -670,6 +696,10 @@
       products = list;
       render();
     }).catch(function () {
+      /* drop to full demo behaviour, not just demo DATA: every later
+         branch (quick-add, modal, cart, checkout) keys on LIVE at call
+         time, and DEMO products can't drive live cart mutations */
+      LIVE = false;
       note("Couldn't reach the store right now — showing the lookbook instead.");
       products = DEMO; render();
     });
@@ -681,7 +711,10 @@
           var cart = ((d || {}).data || {}).cart;
           if (cart) { liveCart = cart; renderCart(); }
           else { cartId = null; localStorage.removeItem("bs_cart_id"); }
-        });
+        })
+        /* gql now rejects on HTTP/GraphQL errors; a stale cart id must
+           not surface as an unhandled rejection */
+        .catch(function () {});
     }
   } else {
     products = DEMO;

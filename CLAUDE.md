@@ -4,11 +4,26 @@ Static site (no build step, no framework, no dependencies). Plain HTML +
 CSS + vanilla JS, auto-deployed to Netlify on every push to `main`.
 Shop data comes live from Shopify's Storefront API at runtime.
 
-BADSCANDAL is a **clothing brand** by Luke Power and Lilian — statement
-tees and essentials. The site sells the clothes and tells their story:
-they left their country to chase making things and travelling. There is
-no music or live-shows content any more (removed Aug 2026); it lives in
-git history if it is ever wanted back.
+**BADSCANDAL is the umbrella brand** of Luke Power and Lilian — a couple
+who left Ireland to travel and make things. Under the umbrella sit four
+things, and the site has to hold all of them:
+
+* **Luke & Lilian** — the couples/travel content, the story, the faces.
+* **Luke Power** — the music. This is the actual income. Music is fully
+  back in scope (an earlier revision of the site removed it — that
+  framing is dead, see "Stale docs" below).
+* **Goodscandal** — the counterpart project.
+* **The clothing line** — statement tees and essentials, sold via Shopify.
+
+The site sells the clothes and tells the story, but it is not "a clothing
+brand's website" — it is the front door to everything the two of them make.
+
+**THE ONE RULE: "BADSCANDAL is the ink, the world is the colour."**
+All brand furniture — wordmark, titles, nav, labels, slates, footer,
+buttons, stamps — is pure monochrome. Photography and footage carry ALL
+the colour. No section may have a background colour: sections are
+transparent over imagery. Flat colour is reserved for bars, buttons and
+card bodies only — and ours are grey.
 
 ---
 
@@ -27,12 +42,19 @@ git history if it is ever wanted back.
    so the served HTML stays crawler-safe — keep that trick.
 5. Files marked `>>> EDIT HERE <<<` are the intended tweak points.
 
+## Stale docs — do not trust
+
+`README.txt` and `README-STORE.txt` are leftovers from the music-era
+site and describe positioning and structure that no longer exist. Do not
+take direction from them. **This file is the only current doc in the
+repo.**
+
 ## Palette (CSS vars in css/site.css `:root`)
 
-**Pure monochrome — there is no colour on this site by design.** The
-clothing photography is the only colour on the page. The var names are
-kept from the old warm palette because the stylesheet is built on their
-SEMANTICS, not their hue:
+**Pure monochrome — brand furniture has no colour by design.** The
+photography and footage are the only colour on the page (the one rule,
+above). The var names are kept from the old warm palette because the
+stylesheet is built on their SEMANTICS, not their hue:
 
     --ink #050505   --ink-2 #0C0C0C  --ink-3 #1F1F1F   bg / surface / hairline
     --ink-rgb 5,5,5                                    channels, for scrims
@@ -41,6 +63,7 @@ SEMANTICS, not their hue:
     --blaze #FFFFFF  active/hovered fill (text on top inverts to --ink)
     --ember #FFFFFF  emphasis: prices, link hover
     --maroon #7A7A7A destructive / muted
+    --maxw 1280px  --pad clamp(18px,4vw,56px)  --ease cubic-bezier(.22,.9,.24,1)
 
 Two consequences worth knowing: `--blaze` and `--ember` are both white,
 so any two states that were previously distinguished *only* by hue now
@@ -48,8 +71,41 @@ need a second signal (`.qa-size.added` uses a halo — see site.css). And
 scrims must use `rgba(var(--ink-rgb),.x)`, never a hand-written
 `rgba(5,5,5,.x)`, or they drift out of sync with the palette again.
 
-Fonts: Space Grotesk (display), Inter Tight (body), Archivo Black
-(wordmark only) — all from Google Fonts at runtime.
+## Type — "System A / Film Print" (locked)
+
+Space Grotesk and Inter Tight are **OUT**. The system is:
+
+    Archivo, font-variation-settings: "wdth" 125, "wght" 900
+        -> wordmark + big display ONLY. Never body.
+    Instrument Serif (regular + TRUE italic)
+        -> title cards, section openers. Never small.
+    Figtree 350/400/600/700
+        -> everything you actually read.
+    DM Mono 400, letter-spacing .12em, uppercase
+        -> slates, locations, dates, small labels.
+
+Rule of thumb: **"If it's information, it's typed. If it's a joke, it's
+drawn."** Headline signature: exactly ONE word per headline is set in
+Instrument Serif ITALIC — no more, no fewer.
+
+One Google Fonts request, use verbatim (verified to return 200):
+
+    https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,100..900&family=DM+Mono:wght@300;400;500&family=Figtree:wght@300..900&family=Instrument+Serif:ital@0;1&display=swap
+
+**Changing fonts touches FIVE places** — miss one and part of the site
+silently renders in a fallback:
+
+1. `css/site.css` `:root` — `--font-display` / `--font-body` stacks.
+2. All **three** HTML heads (`index.html`, `store.html`, `us.html`) —
+   each carries its own `<link>` to Google Fonts.
+3. `js/flow.js` — the `FONT` constant near the top **and** the
+   `document.fonts.load('...')` call further down. The canvas draws the
+   wordmark itself; if the load call names the wrong face, the WebGL
+   texture is rasterised before the font arrives.
+4. `css/site.css` `.flow-fallback` — the static `<h1>` shown when
+   WebGL/motion is unavailable has its own hardcoded family.
+5. `js/main.js` — the loader **burst** draws text onto a canvas with its
+   own hardcoded `c2.font = ...` string.
 
 ---
 
@@ -65,7 +121,7 @@ Fonts: Space Grotesk (display), Inter Tight (body), Archivo Black
     us.html          The story — Luke & Lilian, the arithmetic count-up,
                      socials, IG feed. Was lukepower.html
     _redirects       /lukepower -> /us, /live -> / (both were indexed)
-    css/site.css     ALL styling for every page, one file (~680 lines)
+    css/site.css     ALL styling for every page, one file
     js/main.js       Shared: loader, roll-up links, cursor, magnetic
                      buttons, scroll-scrubbed video engine, reveals,
                      menu, about modal, clock
@@ -74,11 +130,17 @@ Fonts: Space Grotesk (display), Inter Tight (body), Archivo Black
                      to static <h1> with no WebGL/reduced motion.
                      Desktop: the cursor stirs it. Phones: scroll
                      sloshes it and a tap splashes it — see below
+    js/crt.js        CRT treatment for the stamp/card sequence — see
+                     "The stamp/card sequence" below
     js/store.js      Shop engine: Shopify Storefront API, filtering,
                      product modal, cart, checkout
-    assets/          ~38MB, mostly the two hero .mp4 films
-    _headers         Netlify headers
+    assets/          ~38MB, mostly the two hero .mp4 films — see the
+                     immutable-cache warning under "Deploying" BEFORE
+                     replacing anything in here
+    _headers         Netlify headers — assets are cached IMMUTABLE,
+                     see "Deploying"
     tools/           gen_tiles.py — regenerates the spare brand tiles
+    README.txt, README-STORE.txt   STALE music-era docs. Ignore.
 
 ## The films (scroll = transport control)
 
@@ -91,6 +153,12 @@ as blobs so seeking is instant on iOS. Desktop gets 4K, phones get 1080
 
 `makeScrub()` is generic and no-ops when its element is absent, so a
 second scrubbed section is just one more call plus the markup.
+
+**Scrub geometry is coupled:** the `.hero` height (240vh) and the sticky
+stage inside it are one system — the scrub maps scroll progress across
+that 240vh to the film's timeline. Change the hero height and you change
+the scrub speed; change either without the other and the stage unpins
+mid-film. Treat them as a pair.
 
 ## The liquid wordmark on phones
 
@@ -129,6 +197,26 @@ scrubbing:
       -movflags +faststart -an out.mp4
     # verify: ffprobe -select_streams v:0 -show_entries stream=start_time
     # then regenerate the poster from frame 1 of the new file
+
+## The stamp/card sequence (js/crt.js)
+
+A scroll sequence where brand stamps and cards pass over the footage —
+the clearest expression of the one rule on the whole site:
+
+* **Stamps** (DM Mono slates, dates, locations, drawn marks) are brand
+  furniture: pure monochrome ink over the imagery, never tinted, never
+  given a background of their own.
+* **Cards** are the only flat-colour surfaces in the sequence, and they
+  are grey (`--ink-2`/`--ink-3` territory) — never a hue.
+* The section behind them is **transparent** — the footage shows
+  through. Do not "fix" a see-through section by giving it a background.
+
+`js/crt.js` supplies the CRT treatment on the sequence. Like flow.js it
+is self-contained and hand-rolled — no libraries — and it must degrade
+to a clean static render under `prefers-reduced-motion` (golden rule 3).
+If you touch the sequence's scroll maths, remember it lives in the same
+document as the hero scrub: test both together, because they share the
+scroll position.
 
 ---
 
@@ -176,7 +264,7 @@ The trap that was there before, in case it ever regresses: the fetch
 query used to be a hardcoded `"tag:tshirt OR tag:hoodie"`. A product
 tagged only `statement` was excluded from the fetch entirely and simply
 never appeared — no console error, nothing. It is now built from the
-taxonomy, so that can't drift.
+taxonomy (a derived `tagQuery`), so that can't drift.
 
 Those same slugs drive two features — **don't break the parsing**:
 
@@ -215,6 +303,29 @@ No build command, no CI. Measured push → live: ~10 seconds.
 
     git add -A && git commit -m "..." && git push
 
+### READ THIS BEFORE TOUCHING assets/ — IMMUTABLE CACHING
+
+**This is the single easiest way to ship a broken update.** `_headers`
+caches everything under `/assets/*` with
+
+    Cache-Control: public, max-age=31536000, immutable
+
+`immutable` means returning browsers will not even revalidate — they
+will serve the year-old cached copy and never ask the server. So:
+
+* **Replacing the content of an existing asset filename does NOT ship.**
+  Everyone who has ever visited keeps the old bytes for up to a year.
+  The site will look updated on YOUR machine (fresh cache) and stale on
+  everyone else's — the worst kind of broken, because it passes your
+  own testing.
+* **New or changed assets need NEW FILENAMES**, and every reference to
+  them updated (HTML is `no-store`, so the reference change ships
+  instantly). Rename, don't overwrite. Always.
+
+HTML/CSS/JS at the root are `no-store, no-cache, must-revalidate`
+(beats iPhone caching), so code changes ship instantly — it is only
+`/assets/*` that bites.
+
 Netlify project `profound-haupia-db7ffa`
 (site id `41c9b6ee-3a12-4b2f-ba7c-8dac83281622`) →
 https://app.netlify.com/projects/profound-haupia-db7ffa
@@ -229,17 +340,22 @@ deploy list → "Publish deploy" on an earlier one.
 
 Note assets/ is ~38MB of video — it's committed to the repo (largest file
 28.9MB, so no Git LFS needed). Never re-encode the films casually (see the
-encoding gotcha above).
+encoding gotcha above), and remember: a re-encoded film is a changed
+asset, so it needs a new filename too.
 
 ## SEO / identity
 
-`index.html` carries: title `BADSCANDAL` (Luke Power deliberately removed
-from the title), a brand-voice meta description, favicons, and schema.org
-**Organization** JSON-LD naming Luke Power as founder — the `jobTitle:
-"Musician"` is gone. `us.html` carries **AboutPage + Person** JSON-LD.
-The Person entry is kept deliberately: badscandal.com surfaces for "Luke
-Power" searches, and dropping the schema would throw that away for
-nothing. Lilian has no Person entry yet — needs her full name first.
+`index.html` carries: title `BADSCANDAL`, a brand-voice meta description,
+favicons, and schema.org **Organization** JSON-LD naming Luke Power as
+founder. `us.html` carries **AboutPage + Person** JSON-LD. The Person
+entry matters: badscandal.com surfaces for "Luke Power" searches, and
+dropping the schema would throw that away for nothing. Lilian has no
+Person entry yet — needs her full name first.
+
+The current JSON-LD dates from the no-music revision (no `jobTitle:
+"Musician"`, Luke's name out of the title). With music back under the
+umbrella — and it being the actual income — those choices are worth
+revisiting rather than preserving.
 
 `_redirects` 301s `/lukepower` → `/us` and `/live` → `/`, so the indexed
 music-era URLs keep their equity instead of 404ing.
@@ -252,13 +368,14 @@ music-era URLs keep their equity instead of 404ing.
   still points at `@iguessimlukepower`, marked `>>> EDIT HERE <<<`. Swap
   in the brand accounts when they exist — also the Behold IG feed id on
   us.html, and the `sameAs` arrays in both JSON-LD blocks.
-* `assets/store-hero.webp` — store.html already has the markup, scrim and
-  CSS for a campaign photo behind "Wear the trouble."; the image file was
-  never supplied. Ships gracefully hidden until it exists (`onerror`).
+* Store hero photo: store.html currently reuses the homepage sunset
+  poster (`assets/hero-sunset-poster-v1.jpg`) behind "Wear the trouble."
+  A dedicated campaign shot would be better — when supplying one, give it
+  a NEW versioned filename (immutable cache) and swap the `src`.
 * No photography of Lilian anywhere yet; the About modal still uses
   `luke-bw.webp`. The story page is text-led until portraits exist.
 * Favicons are **placeholders** (ink tile + orange "B") — and the orange
-  now clashes with a fully monochrome site, so these want redoing.
+  clashes with a fully monochrome brand, so these want redoing.
 * Trim the Printful compliance text out of product descriptions in Shopify.
 * ~15 unreferenced images remain in assets/ (`svc-*`, `work-*`,
   `luke-portrait`, `about-loop`, …) — leftovers from the studio-era
@@ -274,7 +391,7 @@ music-era URLs keep their equity instead of 404ing.
 
 No test suite. Verify by:
 
-    node --check js/store.js js/main.js js/flow.js
+    node --check js/store.js js/main.js js/flow.js js/crt.js
     python3 -m http.server 8000    # then open localhost:8000
 
 The taxonomy is worth testing directly when you touch it — the resolvers

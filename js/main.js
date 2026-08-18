@@ -10,6 +10,15 @@
   var reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   var coarse = window.matchMedia("(pointer: coarse)").matches;
 
+  /* belt-and-braces loader dismissal: registered before ANYTHING that could
+     throw, so even a runtime error further down this file can never trap the
+     visitor behind the loader. (A parse error still can — the CSS
+     @media (scripting:none) + <noscript> fallbacks cover the no-JS case.) */
+  setTimeout(function () {
+    var l = document.getElementById("loader");
+    if (l && !l.classList.contains("done")) l.classList.add("done");
+  }, 4000);
+
   /* ---------- roll-up labels: wrap every .roll in two stacked copies --- */
   Array.prototype.forEach.call(document.querySelectorAll(".roll"), function (el) {
     var label = el.textContent.trim();
@@ -72,9 +81,14 @@
       var o = document.createElement("canvas");
       o.width = cv.width; o.height = Math.round(fs * 2.6);
       var c2 = o.getContext("2d");
+      /* Archivo variable font: wght 900 comes from the shorthand below;
+         wdth 125 is requested via font-variation-settings on the detached
+         canvas — honoured by Chromium/Firefox, harmlessly ignored elsewhere
+         (falls back to default width, still wght 900). Matches flow.js. */
+      try { o.style.fontVariationSettings = '"wdth" 125, "wght" 900'; } catch (err2) {}
       c2.fillStyle = color;
       c2.textBaseline = "middle";
-      c2.font = "700 " + fs + "px 'Space Grotesk', Arial, sans-serif";
+      c2.font = "900 " + fs + "px 'Archivo', Arial, sans-serif";
       /* draw per-character so the melt matches the letter-spaced DOM word */
       var word = "BADSCANDAL";
       var gap = fs * 0.32;
@@ -365,8 +379,90 @@
     });
   }
   makeScrub(document.getElementById("hero"), document.getElementById("hero-video"),
-            "assets/graded-sexy-4k.mp4", "assets/graded-sexy-1080.mp4",
-            "assets/scrub-poster.jpg", "assets/scrub-poster.jpg");
+            "assets/hero-sunset-4k-v1.mp4", "assets/hero-sunset-1080-v1.mp4",
+            "assets/hero-sunset-poster-v1.jpg", "assets/hero-sunset-poster-v1.jpg");
+
+
+  /* ---------- stamp/card sequence (the postcards) ------------------------
+     The stamps themselves NEVER animate. Each CARD flies ~2000-2900px up
+     on ONE spring (damped harmonic oscillator on rAF — duration ~0.7s,
+     small overshoot: the thwack on landing), rotated so nothing is ever
+     parallel, and stacks OVER the previous card (z 2/3/4 in CSS). A card
+     lands when its invisible 800px marker has fully scrolled into view —
+     because the panel is exactly 100vh, that is the moment the scroll
+     travelled past the panel exceeds (i+1)*800px. The stamp then inks on
+     90ms later via the CSS .landed transition. Scrolling back up flies
+     the card out again, so the sequence replays in reverse.
+     Reduced motion: this module exits first and the cards simply ARE in
+     place (CSS default --fly:0, stamps at opacity 1). ------------------ */
+  (function stamps() {
+    var sec = document.querySelector(".stamps");
+    if (!sec) return;
+    var cards = Array.prototype.slice.call(sec.querySelectorAll(".scard"));
+    if (!cards.length || reduced) return;
+    sec.classList.add("fly");
+    var STEP = 800;               /* must match .stamps-marker height in CSS */
+    var FLY = [2000, 2450, 2900]; /* flight distance per card, px */
+    var Z = 0.8, W0 = 7.5;        /* damping ratio + natural frequency:
+                                     ~0.7s settle with a ~1.5% overshoot
+                                     (the "duration .7, bounce .2" spring) */
+    var states = [];
+    for (var i = 0; i < cards.length; i++) {
+      var d = FLY[i % FLY.length];
+      cards[i].style.setProperty("--fly", d + "px");
+      states.push({ el: cards[i], x: d, v: 0, target: d, from: d, at: (i + 1) * STEP });
+    }
+    var raf = null, lastT = 0;
+    function step(now) {
+      raf = null;
+      var dt = lastT ? Math.min(0.032, (now - lastT) / 1000) : 0.016;
+      lastT = now;
+      var busy = false;
+      for (var k = 0; k < states.length; k++) {
+        var s = states[k];
+        if (Math.abs(s.x - s.target) < 0.5 && Math.abs(s.v) < 6) {
+          if (s.x !== s.target) {
+            s.x = s.target; s.v = 0;
+            s.el.style.setProperty("--fly", s.x + "px");
+          }
+          if (s.target === 0) s.el.classList.add("landed");
+          continue;
+        }
+        /* damped harmonic oscillator, stepped on rAF */
+        var a = -W0 * W0 * (s.x - s.target) - 2 * Z * W0 * s.v;
+        s.v += a * dt;
+        s.x += s.v * dt;
+        s.el.style.setProperty("--fly", s.x.toFixed(2) + "px");
+        busy = true;
+      }
+      if (busy) raf = requestAnimationFrame(step);
+      else lastT = 0;
+    }
+    function wake() {
+      if (!raf) { lastT = 0; raf = requestAnimationFrame(step); }
+    }
+    function onScroll() {
+      var past = -sec.getBoundingClientRect().top;
+      var changed = false;
+      for (var k = 0; k < states.length; k++) {
+        var s = states[k];
+        /* land at the marker line; fly back out 120px earlier so the
+           boundary can never chatter */
+        var want = s.target === 0
+          ? (past >= s.at - 120 ? 0 : s.from)
+          : (past >= s.at ? 0 : s.from);
+        if (want !== s.target) {
+          s.target = want;
+          changed = true;
+          if (want !== 0) s.el.classList.remove("landed");
+        }
+      }
+      if (changed) wake();
+    }
+    window.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("resize", onScroll);
+    onScroll();
+  })();
 
   /* ---------- scroll-driven pops (reversible, directional) --------------- */
   (function pops() {
