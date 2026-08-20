@@ -31,12 +31,26 @@
   /* ------------------------------------------------------------------
      >>> TUNE HERE <<<
      ------------------------------------------------------------------ */
-  var FPS = 24;          /* the whole point — do not run this at 60      */
+  var FPS = 40;          /* render cadence — smooth, but not 60 (cost)    */
+  var GRAIN_FPS = 14;    /* how often the noise field jumps               */
   var CA_MIN = 0.7;      /* RGB fringe at its calmest, CSS px            */
   var CA_MAX = 1.8;      /* RGB fringe at its widest, CSS px             */
   var CA_PERIOD = 9;     /* seconds for the fringe to breathe once       */
   var BLOOM_ALPHA = 0.38;/* phosphor glow strength                       */
-  var GRAIN_ALPHA = 0.06;/* tape noise strength                          */
+  var GRAIN_ALPHA = 0.07;/* tape noise strength                          */
+
+  /* Motion and texture are throttled SEPARATELY, and that split is the
+     whole trick: the fringe breathes at FPS so it reads as a live signal,
+     while the grain jumps at GRAIN_FPS so it reads as tape. An earlier
+     version pinned BOTH to 24fps and reseeded the noise only once per
+     second, which is what made it look like a stuttering GIF.
+
+     Cost note, learned the hard way: this ran at an unthrottled 60fps
+     with a pattern fillRect for the grain and it FROZE the renderer —
+     ~1.6M device px across two canvases, several passes each. Grain is
+     now generated ONCE and animated by offset (drawImage tiles, which
+     are cheap), and the render is capped by skipping rAF frames rather
+     than by a setTimeout, so frames still align to the compositor. */
 
   /* ------------------------------------------------------------------
      NO TEAR. NO SLICE DISPLACEMENT. This is deliberate and permanent.
@@ -77,14 +91,28 @@
      the reference shader's rand(uv + floor(time)/20.) cadence — holding
      each noise field for a full second is what makes it read as tape.
      One plate is SHARED by every instance: same seed, same cadence. */
-  var GRAIN_SIZE = 96;
-  var grainC = makeCanvas(GRAIN_SIZE, GRAIN_SIZE);
+  /* Grain is a per-instance plate slightly LARGER than its canvas, built
+     once per resize and then sampled through a moving window — so every
+     frame is a single 1:1 drawImage, never a tile loop and never a
+     pattern fill.
+
+     Both of those were tried and both saturated the main thread: tiling
+     a 512px plate across a 2304px canvas is ~12 blits of 262k px per
+     instance per frame (~250M px/sec across two canvases), and a pattern
+     fillRect over the same area is worse. One windowed blit costs the
+     same as the original stretched draw, but at 1:1 so it actually looks
+     like grain. */
+  var GRAIN_PAD = 192;   /* how far the sample window can travel         */
   var grainSeed = -1;
-  function renderGrain(seed) {
-    var g = grainC.getContext("2d");
-    var img = g.createImageData(GRAIN_SIZE, GRAIN_SIZE);
+  var grainOX = 0, grainOY = 0;
+
+  function buildGrain(inst) {
+    var gw = inst.W + GRAIN_PAD, gh = inst.H + GRAIN_PAD;
+    inst.grainC = makeCanvas(gw, gh);
+    var g = inst.grainC.getContext("2d");
+    var img = g.createImageData(gw, gh);
     var d = img.data;
-    var s = (seed * 747796405 + 2891336453) | 0;
+    var s = 1013904223;
     for (var i = 0; i < d.length; i += 4) {
       s = (s * 1664525 + 1013904223) | 0;
       var v = (s >>> 24);
@@ -156,6 +184,7 @@
     tc.fillRect(0, 0, 1, 2);
     inst.scanPat = inst.ctx.createPattern(tile, "repeat");
 
+    buildGrain(inst);
     renderText(inst);
   }
 
@@ -189,11 +218,20 @@
     ctx.drawImage(inst.bloomC, 0, 0);
 
     /* grain + scanlines ride ON the glyphs (source-atop), never on the
-       transparent ground — the section behind stays untouched */
+       transparent ground — the section behind stays untouched.
+
+       TILED 1:1, NEVER STRETCHED. Drawing the 160px plate scaled up to
+       the full canvas (which an earlier version did) blew each noise
+       texel into a ~23x4px block and filled the letterforms with coarse
+       grey bricks — it read as a broken TV, not as film grain. A repeat
+       pattern keeps one noise texel to one device pixel, which is the
+       only size at which grain looks like grain. */
     ctx.globalCompositeOperation = "source-atop";
     ctx.globalAlpha = GRAIN_ALPHA;
     ctx.imageSmoothingEnabled = false;
-    ctx.drawImage(grainC, 0, 0, GRAIN_SIZE, GRAIN_SIZE, 0, 0, W, H);
+    if (inst.grainC) {
+      ctx.drawImage(inst.grainC, grainOX, grainOY, W, H, 0, 0, W, H);
+    }
 
     ctx.globalAlpha = 1;
     ctx.fillStyle = inst.scanPat;
@@ -222,7 +260,8 @@
       bloomC: makeCanvas(2, 2),
       chanC: [makeCanvas(2, 2), makeCanvas(2, 2), makeCanvas(2, 2)],
       textX: null, bloomX: null,
-      scanPat: null
+      scanPat: null,
+      grainC: null
     };
   }
 
@@ -249,19 +288,31 @@
     return false;
   }
 
-  /* ~24fps loop shared by every instance: setTimeout throttle inside the
-     rAF chain, so frames still align to the compositor but only fire at
-     tape cadence — and only for the instances currently on screen */
+  /* full-rAF loop shared by every instance — only the grain is throttled.
+     The noise field is reseeded GRAIN_FPS times a second and the pattern
+     rebuilt for each instance (a CanvasPattern does not reliably track
+     later edits to its source canvas, so it is recreated, not reused). */
   var running = false;
+  var lastDraw = -1;
   function tick(now) {
     if (!anyVisible() || !instances.length) { running = false; return; }
     var t = (now || 0) / 1000;
-    var seed = Math.floor(t);
-    if (seed !== grainSeed) { grainSeed = seed; renderGrain(seed); }
-    for (var i = 0; i < instances.length; i++) {
-      if (instances[i].visible) frame(instances[i], t);
+
+    /* cap by SKIPPING rAF frames — never by setTimeout, which detaches
+       the work from the compositor and reads as stutter */
+    if (lastDraw < 0 || t - lastDraw >= 1 / FPS) {
+      lastDraw = t;
+      var seed = Math.floor(t * GRAIN_FPS);
+      if (seed !== grainSeed) {
+        grainSeed = seed;
+        grainOX = (Math.random() * GRAIN_PAD) | 0;
+        grainOY = (Math.random() * GRAIN_PAD) | 0;
+      }
+      for (var i = 0; i < instances.length; i++) {
+        if (instances[i].visible) frame(instances[i], t);
+      }
     }
-    setTimeout(function () { requestAnimationFrame(tick); }, 1000 / FPS);
+    requestAnimationFrame(tick);
   }
   function start() {
     if (running || !anyVisible()) return;
@@ -288,6 +339,9 @@
     clearTimeout(rT);
     rT = setTimeout(function () {
       instances.forEach(function (inst) { resize(inst); });
+      /* setting canvas.width resets the 2D context, so force the grain
+         patterns to be rebuilt on the next tick */
+      grainSeed = -1;
     }, 160);
   });
 

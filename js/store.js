@@ -309,10 +309,18 @@
       var card = document.createElement("article");
       card.className = "pcard";
       card.style.transitionDelay = (Math.min(idx, 8) * 45) + "ms";
-      /* hover reveals the back of the garment where there is one — on a
-         statement piece that IS the statement — else the next shot along */
-      var altSrc = imgFor(p, null, "back") || p.images[1] || null;
-      if (altSrc === p.images[0]) altSrc = p.images[1] || null;
+      /* On a STATEMENT piece the statement is printed on the back, so the
+         back is the product — lead with it and keep the front for the
+         hover. Leading with the front sold these as blank tees. Anything
+         else leads with the front and reveals the back on hover. */
+      var backSrc = imgFor(p, null, "back");
+      var frontSrc = imgFor(p, null, "front") || p.images[0];
+      var statementBack = (p.family === "statement" && backSrc);
+      var mainSrc = statementBack ? backSrc : frontSrc;
+      var altSrc = statementBack ? frontSrc : (backSrc || p.images[1] || null);
+      if (altSrc === mainSrc) {
+        altSrc = (p.images[1] && p.images[1] !== mainSrc) ? p.images[1] : null;
+      }
       var alt = altSrc ? "<img class='pcard-alt' loading='lazy' src='" + altSrc + "' alt=''>" : "";
       var sizeBtns = "";
       /* shape-based, NOT mode-based: after a live fetch fails the grid
@@ -334,7 +342,7 @@
       }
       card.innerHTML =
         "<div class='pcard-media'>" +
-          "<img loading='lazy' src='" + p.images[0] + "' alt='" + p.title.replace(/'/g, "&#39;") + "'>" + alt +
+          "<img loading='lazy' src='" + mainSrc + "' alt='" + p.title.replace(/'/g, "&#39;") + "'>" + alt +
           "<span class='pcard-cat'>" + badgeFor(p) + "</span>" +
           "<div class='pcard-quick'><span class='qa-label'>Quick add</span>" +
             "<div class='qa-sizes'>" + sizeBtns + "</div>" +
@@ -437,8 +445,14 @@
   }
   function openModal(p) {
     modalProduct = p; modalVariant = null;
-    modalColour = null; modalView = null;
-    document.getElementById("pmodal-img").src = p.images[0];
+    modalColour = null;
+    /* open a statement piece on its back, same reason as the grid card:
+       that is where the statement is. modalView is set so the Front/Back
+       buttons render with the right one already active. */
+    var openBack = (p.family === "statement" && imgFor(p, null, "back"));
+    modalView = openBack ? "back" : null;
+    document.getElementById("pmodal-img").src =
+      openBack || imgFor(p, null, "front") || p.images[0];
     document.getElementById("pmodal-cat").textContent = badgeFor(p);
     document.getElementById("pmodal-title").textContent = p.title;
     document.getElementById("pmodal-price").textContent = money(p.price, p.currency);

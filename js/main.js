@@ -137,7 +137,10 @@
       else if (cv.parentNode) cv.parentNode.removeChild(cv);
     })();
   }
-  if (!reduced) {
+  /* the intro was removed from the site; the machinery stays (it is
+     self-contained and documented) but must not run — without this guard
+     it kept two intervals ticking forever on a page with no #loader */
+  if (loader && !reduced) {
     /* the glyphs flicker fast; letters lock in as loading progresses */
     scrambleTick = setInterval(renderScramble, 55);
     renderScramble();

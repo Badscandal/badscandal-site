@@ -41,14 +41,9 @@
 <div class="grain" aria-hidden="true"></div>
 <div class="blur-veil" aria-hidden="true"></div>
 
-<!-- 00 · PRELOADER — random glyphs lock into BADSCANDAL as the counter
-     climbs 0 to 100, hold a beat, then the melt. --------------------- -->
-<div id="loader" aria-hidden="true">
-  <div class="load-stack">
-    <p class="load-tag load-decode" id="load-scramble" aria-label="BADSCANDAL">BADSCANDAL</p>
-    <p class="load-pct"><span id="load-pct">0</span></p>
-  </div>
-</div>
+<!-- No preloader. A shop should show product, not make you wait through
+     an intro. The machinery is still in js/main.js, guarded on #loader —
+     put the block back here if it is ever wanted again. -------------- -->
 
 <!-- NAV — carries the shop taxonomy (labels only; js/store.js owns the
      behaviour: these links click the filter buttons it renders).
