@@ -407,23 +407,18 @@ main section{max-width:var(--maxw);margin:0 auto;
   -webkit-mask-image:linear-gradient(to bottom,transparent,#000 72%);
   mask-image:linear-gradient(to bottom,transparent,#000 72%);
   transition:transform .45s var(--ease)}
-/* Chromatic edges — the same signal-fault language as the CRT wordmark:
-   red loses lock one way, cyan the other. Kept to the outer 24% and
-   screen-blended at very low alpha, so it reads as a lens artifact on
-   the blur rather than as colour entering the brand. */
-.blur-veil::after{content:"";position:absolute;inset:0;pointer-events:none;
-  background:
-    linear-gradient(90deg,rgba(255,64,72,.085),rgba(255,64,72,0) 24%),
-    linear-gradient(270deg,rgba(64,196,255,.085),rgba(64,196,255,0) 24%),
-    linear-gradient(90deg,rgba(255,255,255,.04),transparent 30%,
-                    transparent 70%,rgba(255,255,255,.035));
-  mix-blend-mode:screen}
-/* a hairline of chroma where the veil meets the page — the edge is where
-   a real set loses convergence first */
-.blur-veil::before{content:"";position:absolute;left:0;right:0;top:0;height:1px;
-  pointer-events:none;opacity:.5;mix-blend-mode:screen;
-  background:linear-gradient(90deg,rgba(255,64,72,.55),rgba(255,255,255,.3) 42%,
-             rgba(255,255,255,.3) 58%,rgba(64,196,255,.55))}
+/* Chromatic aberration belongs on the BLUR'S EDGE, not spread across the
+   panel. An earlier version put wide colour gradients on the left and
+   right of the whole veil, which pooled in the bottom corners and read as
+   two police lights. A lens splits colour at a boundary, so: a red fringe
+   right on the top edge and a cyan one a couple of pixels below it, both
+   fading within ~14px. Nothing anywhere else. */
+.blur-veil::after{content:"";position:absolute;left:0;right:0;top:0;height:14px;
+  pointer-events:none;mix-blend-mode:screen;
+  background:linear-gradient(180deg,rgba(255,64,72,.20),rgba(255,64,72,0) 60%)}
+.blur-veil::before{content:"";position:absolute;left:0;right:0;top:3px;height:14px;
+  pointer-events:none;mix-blend-mode:screen;
+  background:linear-gradient(180deg,rgba(64,196,255,.17),rgba(64,196,255,0) 60%)}
 .blur-veil.away{transform:translateY(105%)}
 @supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){
   .blur-veil{display:none}}

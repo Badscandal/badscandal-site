@@ -45,6 +45,10 @@
   var WAVE_CYCLES = 1.7; /* wave crests visible across the word at once  */
   var WAVE_TRAVEL = 4.2; /* seconds for one crest to cross the word      */
   var WAVE_SWELL = 11;   /* seconds for the wave's height to breathe     */
+  var SWEEP_PERIOD = 6.5;/* seconds for the refresh bar to cross once    */
+  var SWEEP_BAND = 0.30; /* bar height as a fraction of the canvas       */
+  var SWEEP_LIFT = 0.16; /* how much the bar brightens the glyphs        */
+  var SWEEP_CA = 0.75;   /* extra wave height while the bar is crossing  */
   var BLOOM_ALPHA = 0.38;/* phosphor glow strength                       */
   var GRAIN_ALPHA = 0.07;/* tape noise strength                          */
 
@@ -192,7 +196,7 @@
     /* scanlines: 2px dark bars every 4px, device space */
     var tile = makeCanvas(1, 4);
     var tc = tile.getContext("2d");
-    tc.fillStyle = "rgba(0,0,0,0.1)";
+    tc.fillStyle = "rgba(0,0,0,0.15)";
     tc.fillRect(0, 0, 1, 2);
     inst.scanPat = inst.ctx.createPattern(tile, "repeat");
 
@@ -229,6 +233,18 @@
     var swell = 0.62 + 0.38 * (0.5 + 0.5 *
                 Math.sin((t / WAVE_SWELL) * Math.PI * 2));
     var phase = (t / WAVE_TRAVEL) * Math.PI * 2;
+
+    /* the refresh bar: a soft band travelling top to bottom, entering and
+       leaving fully off-canvas. It brightens the glyphs as it passes AND
+       swells the convergence wave while it crosses them — the bar is the
+       thing that makes this read as a live tube rather than a still with
+       scanlines drawn on. It only ever changes BRIGHTNESS; it never
+       displaces a row, which is the mistake that scrambled the letters. */
+    var sweepH = H * SWEEP_BAND;
+    var sweepY = (((t / SWEEP_PERIOD) % 1) * (H + sweepH * 2)) - sweepH;
+    var sweepMid = (sweepY + sweepH * 0.5) / H;
+    var nearCore = Math.exp(-Math.pow((sweepMid - 0.5) / 0.42, 2));
+    swell *= 1 + SWEEP_CA * nearCore;
 
     /* Each shifted channel is composed in its OWN buffer first, with the
        source columns OVERLAPPING and drawn source-over.
@@ -292,6 +308,18 @@
     ctx.globalAlpha = 1;
     ctx.fillStyle = inst.scanPat;
     ctx.fillRect(0, 0, W, H);
+
+    /* refresh bar, painted last so it lifts everything under it. Still
+       source-atop, so it rides the glyphs and never the transparent
+       ground behind the wordmark. */
+    var gr = ctx.createLinearGradient(0, sweepY, 0, sweepY + sweepH);
+    gr.addColorStop(0, "rgba(255,255,255,0)");
+    gr.addColorStop(0.45, "rgba(255,255,255," + SWEEP_LIFT + ")");
+    gr.addColorStop(0.55, "rgba(255,255,255," + (SWEEP_LIFT * 0.82) + ")");
+    gr.addColorStop(1, "rgba(255,255,255,0)");
+    ctx.fillStyle = gr;
+    ctx.fillRect(0, sweepY, W, sweepH);
+
     ctx.globalCompositeOperation = "source-over";
   }
 
