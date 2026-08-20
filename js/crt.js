@@ -53,7 +53,8 @@
   var ROLL_CYCLES = 1.35;/* wobble crests down the canvas at once        */
   var ROLL_SPEED = 5.5;  /* seconds for the wobble to travel down once   */
   var ROLL_BAND = 6;     /* device px per blit band — smaller = smoother */
-  var SCAN_ALPHA = 0.22; /* scanline darkness                            */
+  var SCAN_PERIOD = 3;   /* device px between scanlines (1 dark, rest clear) */
+  var SCAN_ALPHA = 0.30; /* scanline darkness                            */
   var SCAN_DRIFT = 11;   /* seconds for the scanlines to crawl one tile  */
   var BLOOM_ALPHA = 0.38;/* phosphor glow strength                       */
   var GRAIN_ALPHA = 0.07;/* tape noise strength                          */
@@ -204,12 +205,21 @@
     }
     inst.compC.width = W; inst.compC.height = H;
 
-    /* scanlines: 2px dark bars every 4px, device space */
-    var tile = makeCanvas(1, 4);
+    /* Scanlines: ONE dark row every SCAN_PERIOD device px.
+       An earlier version used 2 dark of every 4, which at DPR 2 is a dark
+       band a whole CSS pixel tall — that reads as banding, not as a
+       raster. A single row on a short period is finer and denser, and it
+       is the difference between "lines drawn on it" and "a tube".
+
+       Created from compX, not ctx: since the roll was added, the picture
+       is composed in the offscreen buffer and only blitted to the visible
+       canvas, so a pattern made from the visible context was being used
+       on a different one. */
+    var tile = makeCanvas(1, SCAN_PERIOD);
     var tc = tile.getContext("2d");
     tc.fillStyle = "rgba(0,0,0," + SCAN_ALPHA + ")";
-    tc.fillRect(0, 0, 1, 2);
-    inst.scanPat = inst.ctx.createPattern(tile, "repeat");
+    tc.fillRect(0, 0, 1, 1);
+    inst.scanPat = inst.compX.createPattern(tile, "repeat");
 
     buildGrain(inst);
     renderText(inst);
@@ -319,11 +329,11 @@
     ctx.globalAlpha = 1;
     /* the scanlines CRAWL. A static comb reads as a texture laid over a
        picture; a slowly drifting one reads as a raster being redrawn. */
-    var scanShift = ((t / SCAN_DRIFT) % 1) * 4 * DPR;
+    var scanShift = ((t / SCAN_DRIFT) % 1) * SCAN_PERIOD;
     ctx.save();
-    ctx.translate(0, scanShift - 4 * DPR);
+    ctx.translate(0, scanShift - SCAN_PERIOD);
     ctx.fillStyle = inst.scanPat;
-    ctx.fillRect(0, 0, W, H + 4 * DPR);
+    ctx.fillRect(0, 0, W, H + SCAN_PERIOD);
     ctx.restore();
 
     /* refresh bar, painted last so it lifts everything under it. Still
