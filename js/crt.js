@@ -42,7 +42,7 @@
   var FPS = 40;          /* render cadence — smooth, but not 60 (cost)    */
   var GRAIN_FPS = 14;    /* how often the noise field jumps               */
   var CA_MIN = 0.7;      /* resting RGB fringe — STATIC, CSS px          */
-  var CA_MAX = 1.8;      /* fringe at the crest of a bar pass, CSS px    */
+  var CA_MAX = 3.2;      /* fringe at the crest of a bar pass, CSS px    */
   var WAVE_COLS = 44;    /* slices the wave is sampled across            */
   var WAVE_CYCLES = 1.7; /* wave crests visible across the word at once  */
   var WAVE_TRAVEL = 4.2; /* seconds for one crest to cross the word
@@ -57,7 +57,7 @@
                             the glyphs already sit at ~252/255, so white
                             painted over them changed nothing. A shade
                             is the only luminance cue that can show.    */
-  var ROLL_AMP = 2.5;    /* peak sideways tear INSIDE the bar, CSS px    */
+  var ROLL_AMP = 4;      /* peak sideways tear INSIDE the bar, CSS px    */
   var ROLL_CYCLES = 1.35;/* tear-wave crests down the canvas at once     */
   var ROLL_SPEED = 5.5;  /* seconds for the tear wave to travel down once*/
   var ROLL_BAND = 6;     /* CEILING on blit-band height, device px. The
