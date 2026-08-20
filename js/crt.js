@@ -2,10 +2,12 @@
    BADSCANDAL — CRT wordmark (original, no libraries)
    "BADSCANDAL" drawn from live text to a 2D canvas, then put
    through a hand-rolled CRT/VHS pass every frame: scanlines,
-   phosphor bloom, tape grain, and a chromatic convergence WAVE
-   that travels along the word. Renders at ~40fps while the grain
-   jumps at ~14fps, and pauses off-screen. Monochrome discipline:
-   the split fringe is the only colour that ever appears.
+   phosphor bloom, tape grain, and a refresh bar that occasionally
+   sweeps the canvas, dragging a band-local tear + convergence wave
+   with it. AT REST the geometry is perfectly still — only grain
+   and scanlines move. Renders at ~40fps while the grain jumps at
+   ~14fps, and pauses off-screen. Monochrome discipline: the split
+   fringe is the only colour that ever appears.
 
    MULTI-INSTANCE: every `.crt` block on the page gets its own
    canvas pipeline (own sizing, own visibility, own fallback),
@@ -39,20 +41,30 @@
      ------------------------------------------------------------------ */
   var FPS = 40;          /* render cadence — smooth, but not 60 (cost)    */
   var GRAIN_FPS = 14;    /* how often the noise field jumps               */
-  var CA_MIN = 0.7;      /* RGB fringe at its calmest, CSS px            */
-  var CA_MAX = 1.8;      /* RGB fringe at its widest, CSS px             */
+  var CA_MIN = 0.7;      /* resting RGB fringe — STATIC, CSS px          */
+  var CA_MAX = 1.8;      /* fringe at the crest of a bar pass, CSS px    */
   var WAVE_COLS = 44;    /* slices the wave is sampled across            */
   var WAVE_CYCLES = 1.7; /* wave crests visible across the word at once  */
-  var WAVE_TRAVEL = 4.2; /* seconds for one crest to cross the word      */
-  var WAVE_SWELL = 11;   /* seconds for the wave's height to breathe     */
-  var SWEEP_PERIOD = 6.5;/* seconds for the refresh bar to cross once    */
+  var WAVE_TRAVEL = 4.2; /* seconds for one crest to cross the word
+                            (the wave only EXISTS during a bar pass)     */
+  var SWEEP_PERIOD = 7.5;/* seconds from one bar pass to the next        */
+  var SWEEP_TRAVEL = 1.9;/* seconds the bar takes to actually cross —
+                            the rest of the period it is parked
+                            off-canvas and the picture is at rest        */
   var SWEEP_BAND = 0.30; /* bar height as a fraction of the canvas       */
-  var SWEEP_LIFT = 0.16; /* how much the bar brightens the glyphs        */
-  var SWEEP_CA = 0.75;   /* extra wave height while the bar is crossing  */
-  var ROLL_AMP = 1.5;    /* horizontal wobble of the picture, CSS px     */
-  var ROLL_CYCLES = 1.35;/* wobble crests down the canvas at once        */
-  var ROLL_SPEED = 5.5;  /* seconds for the wobble to travel down once   */
-  var ROLL_BAND = 6;     /* device px per blit band — smaller = smoother */
+  var SWEEP_SHADE = 0.12;/* how much the bar DARKENS the glyphs. It used
+                            to be a white "lift", which was invisible:
+                            the glyphs already sit at ~252/255, so white
+                            painted over them changed nothing. A shade
+                            is the only luminance cue that can show.    */
+  var ROLL_AMP = 2.5;    /* peak sideways tear INSIDE the bar, CSS px    */
+  var ROLL_CYCLES = 1.35;/* tear-wave crests down the canvas at once     */
+  var ROLL_SPEED = 5.5;  /* seconds for the tear wave to travel down once*/
+  var ROLL_BAND = 6;     /* CEILING on blit-band height, device px. The
+                            band height actually used tracks the bar
+                            (sweepH/16, min 1) so the gaussian stays
+                            finely sampled at the 64px mobile canvas
+                            floor, not just at desktop heights.         */
   var SCAN_PERIOD = 3;   /* device px between scanlines (1 dark, rest clear) */
   var SCAN_ALPHA = 0.30; /* scanline darkness                            */
   var SCAN_DRIFT = 11;   /* seconds for the scanlines to crawl one tile  */
@@ -73,20 +85,39 @@
      than by a setTimeout, so frames still align to the compositor. */
 
   /* ------------------------------------------------------------------
-     NO TEAR. NO SLICE DISPLACEMENT. This is deliberate and permanent.
+     THE TEAR IS BAND-LOCAL AND SMOOTH. QUIET EVERYWHERE ELSE.
 
      The first version walked the canvas row by row and gave each row its
-     own horizontal offset, driven by a drifting "tear band". Whenever
-     that band was wide relative to the cap height, every row inside a
-     letter shifted by a different amount and the glyph interiors turned
-     into a venetian-blind scramble — the wordmark stopped being legible
-     and read as a broken TV rather than a brand.
+     own RANDOM horizontal offset, driven by a drifting "tear band".
+     Every row inside a letter shifted by a different amount and the
+     glyph interiors turned into a venetian-blind scramble — the wordmark
+     stopped being legible and read as a broken TV rather than a brand.
+     A later version swung the whole picture and the RGB split
+     continuously, which read as the wordmark waving forever.
 
-     The whole layer is now drawn ONCE per channel, so a letterform can
-     never be sliced apart. The treatment is scanlines + phosphor bloom +
-     tape grain + a gentle chromatic fringe. If you are tempted to add a
-     roll bar, a sync tear or per-row jitter back in: don't. It was
-     removed on purpose, and it is the one thing that made this look bad.
+     The rules that keep it safe now, each learned from a regression:
+     - AT REST the geometry is STILL: no roll, no wave, the R/B split
+       parked at exactly CA_MIN. Only grain and scanlines animate.
+     - Displacement AND the split swell exist ONLY near the refresh bar:
+       both are shaped by a gaussian of distance from the bar centre
+       (sigma = half the bar height). An earlier version gated the split
+       on the bar's position alone — no y term — so the WHOLE wordmark
+       shimmered into colour whenever the bar was anywhere on the
+       canvas. The swell is now blended in per row-slice, so rows away
+       from the bar keep the untouched resting image, literally.
+     - The tear offset is a smooth long-wavelength sine x that gaussian,
+       NEVER random per row, capped at ROLL_AMP (~2.5 CSS px). The blit
+       band height follows the bar (sweepH/16, capped at ROLL_BAND) so
+       the gaussian is finely sampled at EVERY canvas size — at the 64px
+       mobile floor the fixed 6px band degenerated into 2-3 slabs
+       sliding ~1.8 CSS px against each other. Neighbouring bands now
+       differ by at most ~0.4 CSS px, and the visible blit interpolates
+       (smoothing ON during a pass — nearest-neighbour snapped every
+       offset to whole device px and notched the stems), so that
+       difference renders as a slope, not a step.
+     - The GREEN plate is always drawn WHOLE (the readable core).
+     - R/B column strips keep the overlap + source-over buffer
+       composition (the seam fix).
      ------------------------------------------------------------------ */
 
   var WORD = "BADSCANDAL";
@@ -204,6 +235,12 @@
       inst.compX = inst.compC.getContext("2d");
     }
     inst.compC.width = W; inst.compC.height = H;
+    /* scratch for the swelled split during a bar pass (see frame()) */
+    if (!inst.tempC) {
+      inst.tempC = makeCanvas(2, 2);
+      inst.tempX = inst.tempC.getContext("2d");
+    }
+    inst.tempC.width = W; inst.tempC.height = H;
 
     /* Scanlines: ONE dark row every SCAN_PERIOD device px.
        An earlier version used 2 dark of every 4, which at DPR 2 is a dark
@@ -239,62 +276,105 @@
        outer edges, where one plate overhangs the others, keep a colour
        fringe. Letterforms stay exactly intact because every plate is the
        SAME image drawn once — nothing is ever sliced. */
-    /* A WAVE, not a flicker. The convergence error travels along the word
-       instead of hitting all of it at once: the split is a function of x,
-       and the whole pattern drifts sideways over WAVE_TRAVEL seconds.
+    /* A WAVE only while the bar crosses — and only WHERE it crosses.
+       At rest both plates are drawn WHOLE at exactly CA_MIN, one
+       drawImage each: a static convergence error, zero motion. During a
+       pass, a swelled x-wavy copy of the plate is composed in a temp
+       buffer and blended over the resting one in horizontal slices
+       whose alpha is a gaussian of distance from the bar centre — so
+       the fringe widens ONLY in the rows the bar is passing through.
+       (An earlier version gated the swell on the bar's position alone,
+       with no y term, and the whole word shimmered during every pass.)
 
        The GREEN plate is always drawn WHOLE. That is the rule that keeps
        this safe — green carries the readable core, so the letterforms can
        never break no matter what red and blue do. Only the fringe moves.
 
-       Red and blue are drawn as WAVE_COLS vertical strips. Column slicing
-       is fine where row slicing was not: adjacent strips differ by a
-       fraction of a pixel, so the seam is invisible, and the core is
-       green's job anyway. */
-    var swell = 0.62 + 0.38 * (0.5 + 0.5 *
-                Math.sin((t / WAVE_SWELL) * Math.PI * 2));
+       In the temp buffer, red and blue are drawn as WAVE_COLS vertical
+       strips. Column slicing is fine where row slicing was not: adjacent
+       strips differ by a fraction of a pixel, so the seam is invisible,
+       and the core is green's job anyway. */
     var phase = (t / WAVE_TRAVEL) * Math.PI * 2;
 
-    /* the refresh bar: a soft band travelling top to bottom, entering and
-       leaving fully off-canvas. It brightens the glyphs as it passes AND
-       swells the convergence wave while it crosses them — the bar is the
-       thing that makes this read as a live tube rather than a still with
-       scanlines drawn on. It only ever changes BRIGHTNESS; it never
-       displaces a row, which is the mistake that scrambled the letters. */
+    /* the refresh bar: a soft band that OCCASIONALLY travels top to
+       bottom — it crosses in SWEEP_TRAVEL seconds, then parks fully
+       off-canvas for the rest of SWEEP_PERIOD, so the picture spends
+       most of its time at rest (like the reference wordmark). While it
+       crosses it shades the glyphs, swells the convergence fringe, and
+       drags the band-local tear — each shaped by the same gaussian of
+       distance from the bar centre. Parked 1.5 bar-heights off each
+       edge, so a pass starts and ends with the gaussian at ~exp(-4):
+       no pop on the top row the instant the bar appears. */
     var sweepH = H * SWEEP_BAND;
-    var sweepY = (((t / SWEEP_PERIOD) % 1) * (H + sweepH * 2)) - sweepH;
-    var sweepMid = (sweepY + sweepH * 0.5) / H;
-    var nearCore = Math.exp(-Math.pow((sweepMid - 0.5) / 0.42, 2));
-    swell *= 1 + SWEEP_CA * nearCore;
+    var run = Math.min(1, (((t / SWEEP_PERIOD) % 1) * SWEEP_PERIOD) / SWEEP_TRAVEL);
+    var sweepY = run * (H + sweepH * 3) - sweepH * 1.5;
+    var sweepOn = run < 1; /* false = parked off-canvas, picture at rest */
+    var barC = sweepY + sweepH * 0.5;   /* bar centre, device px */
+    var sigma = sweepH * 0.5;           /* gaussian width: half the bar */
+    /* Blit/slice band height: tracks the bar so the gaussian is finely
+       sampled at every canvas size. A fixed 6 CSS px band undersampled
+       it at the 64px mobile canvas floor — the "smooth" shear was 2-3
+       slabs sliding ~1.8 CSS px against each other. sigma/8 keeps
+       adjacent bands within ~0.4 CSS px of each other at the peak. */
+    var bh = Math.max(1, Math.min(ROLL_BAND * DPR, Math.floor(sigma / 8)));
 
-    /* Each shifted channel is composed in its OWN buffer first, with the
-       source columns OVERLAPPING and drawn source-over.
-
-       Compositing the columns straight onto the canvas under "lighter"
-       left a visible hairline down the wordmark: neighbouring columns
-       carry slightly different offsets, so a sub-pixel GAP opens between
-       them where that channel is simply absent, and the white core shows
-       through as its complement — a yellow line where blue dropped out.
-       Overlapping the reads closes the gap; source-over stops the overlap
-       double-adding and making a bright line instead. */
-    var colW = Math.ceil(W / WAVE_COLS);
-    var pad = Math.ceil(CA_MAX * DPR) + 2;
+    var sMin = CA_MIN * DPR;
     var ch, buf, k;
     for (k = 0; k < 2; k++) {
       ch = k === 0 ? 0 : 2;            /* red, then blue */
+      var sgn = k === 0 ? 1 : -1;
       buf = inst.waveX[k];
       buf.setTransform(1, 0, 0, 1, 0, 0);
+      buf.globalAlpha = 1;
       buf.globalCompositeOperation = "source-over";
       buf.clearRect(0, 0, W, H);
-      for (var cx = 0; cx < W; cx += colW) {
-        var cw = Math.min(colW, W - cx);
-        var u = (cx + cw * 0.5) / W;
-        var wv = Math.sin(u * WAVE_CYCLES * Math.PI * 2 - phase);
-        var s = (CA_MIN + (CA_MAX - CA_MIN) * (0.5 + 0.5 * wv)) * swell * DPR;
-        if (k === 1) s = -s;
-        var sx = Math.max(0, cx - pad);
-        var sw = Math.min(W - sx, cw + (cx - sx) + pad);
-        buf.drawImage(inst.chanC[ch], sx, 0, sw, H, sx + s, 0, sw, H);
+      /* the resting picture: the WHOLE plate at a constant CA_MIN
+         offset. At rest this single draw is all that ever happens —
+         nothing here is a function of t, so the geometry cannot move. */
+      buf.drawImage(inst.chanC[ch], sgn * sMin, 0);
+
+      if (sweepOn) {
+        /* the swelled split, composed in the temp buffer with the
+           source columns OVERLAPPING and drawn source-over.
+
+           Compositing columns under "lighter" left a visible hairline
+           down the wordmark: neighbouring columns carry slightly
+           different offsets, so a sub-pixel GAP opens between them
+           where that channel is simply absent, and the white core shows
+           through as its complement — a yellow line where blue dropped
+           out. Overlapping the reads closes the gap; source-over stops
+           the overlap double-adding and making a bright line instead. */
+        var tb = inst.tempX;
+        tb.setTransform(1, 0, 0, 1, 0, 0);
+        tb.globalAlpha = 1;
+        tb.globalCompositeOperation = "source-over";
+        tb.clearRect(0, 0, W, H);
+        var colW = Math.ceil(W / WAVE_COLS);
+        var pad = Math.ceil(CA_MAX * DPR) + 2;
+        for (var cx = 0; cx < W; cx += colW) {
+          var cw = Math.min(colW, W - cx);
+          var u = (cx + cw * 0.5) / W;
+          var wv = Math.sin(u * WAVE_CYCLES * Math.PI * 2 - phase);
+          var s = sgn * (CA_MIN + (CA_MAX - CA_MIN) * (0.5 + 0.5 * wv)) * DPR;
+          var sx = Math.max(0, cx - pad);
+          var sw = Math.min(W - sx, cw + (cx - sx) + pad);
+          tb.drawImage(inst.chanC[ch], sx, 0, sw, H, sx + s, 0, sw, H);
+        }
+        /* blend it over the resting plate in horizontal slices, alpha =
+           gaussian of the slice's distance from the bar centre. Rows
+           away from the bar are SKIPPED and keep the resting image
+           untouched; rows under it crossfade toward the swelled split.
+           The crossfade of two sub-pixel-offset copies of the same
+           plate reads as the fringe widening, and adjacent slices
+           differ by a sliver of alpha, so there is no seam. */
+        for (var sy = 0; sy < H; sy += bh) {
+          var sh2 = Math.min(bh, H - sy);
+          var gS = Math.exp(-Math.pow((sy + sh2 * 0.5 - barC) / sigma, 2));
+          if (gS <= 0.004) continue;
+          buf.globalAlpha = gS;
+          buf.drawImage(inst.tempC, 0, sy, W, sh2, 0, sy, W, sh2);
+        }
+        buf.globalAlpha = 1;
       }
     }
 
@@ -336,48 +416,78 @@
     ctx.fillRect(0, 0, W, H + SCAN_PERIOD);
     ctx.restore();
 
-    /* refresh bar, painted last so it lifts everything under it. Still
-       source-atop, so it rides the glyphs and never the transparent
-       ground behind the wordmark. */
-    var gr = ctx.createLinearGradient(0, sweepY, 0, sweepY + sweepH);
-    gr.addColorStop(0, "rgba(255,255,255,0)");
-    gr.addColorStop(0.45, "rgba(255,255,255," + SWEEP_LIFT + ")");
-    gr.addColorStop(0.55, "rgba(255,255,255," + (SWEEP_LIFT * 0.82) + ")");
-    gr.addColorStop(1, "rgba(255,255,255,0)");
-    ctx.fillStyle = gr;
-    ctx.fillRect(0, sweepY, W, sweepH);
+    /* refresh bar, painted last so it rides everything under it. Still
+       source-atop, so it marks the glyphs and never the transparent
+       ground behind the wordmark. Skipped entirely while parked.
+
+       It DARKENS. The first version painted a white lift, which was a
+       no-op: the glyph body already sits at ~252/255, so white at 0.16
+       alpha changed nothing and the bar was invisible — the only cues
+       left were the fringe and the tear. On a near-white wordmark the
+       only luminance signal with headroom is a shade, and a dark smear
+       is what a tape tear leaves anyway (see the reference band). */
+    if (sweepOn) {
+      var gr = ctx.createLinearGradient(0, sweepY, 0, sweepY + sweepH);
+      gr.addColorStop(0, "rgba(0,0,0,0)");
+      gr.addColorStop(0.45, "rgba(0,0,0," + SWEEP_SHADE + ")");
+      gr.addColorStop(0.55, "rgba(0,0,0," + (SWEEP_SHADE * 0.82) + ")");
+      gr.addColorStop(1, "rgba(0,0,0,0)");
+      ctx.fillStyle = gr;
+      ctx.fillRect(0, sweepY, W, sweepH);
+    }
 
     ctx.globalCompositeOperation = "source-over";
 
-    /* ---- and NOW the wobble -------------------------------------------
+    /* ---- and NOW the tear, band-local ---------------------------------
        The finished picture is blitted to the visible canvas in horizontal
-       bands, each nudged sideways by a smooth sine of its y position that
-       travels downward. Because the scanlines are already IN the picture,
-       they ride the wobble too — which is the whole point: the raster
-       bends, rather than a comb sitting flat over a still image.
+       bands. Each band's sideways offset is a smooth long-wavelength sine
+       MULTIPLIED BY A GAUSSIAN of its distance from the bar centre
+       (sigma = half the bar height), so rows inside the bar displace up
+       to ROLL_AMP CSS px and rows away from it get essentially zero.
+       Between passes the bar is parked off-canvas, every offset is zero,
+       and the picture is blitted whole — perfectly steady. Because the
+       scanlines are already IN the picture, they ride the tear too: the
+       raster bends inside the band, rather than a comb sitting flat over
+       a displaced image.
 
        This is row slicing, which wrecked the wordmark once before. The
        difference is discipline, and it matters: the offset is a SMOOTH
-       long-wavelength sine (never random per row) capped at ROLL_AMP
-       CSS px, so neighbouring bands differ by hundredths of a pixel and
-       the letterforms hold. The old version used a ~14px gaussian band
-       plus per-row random jitter, which is why it scrambled. Keep the
+       function of y (gaussian x long-wave sine, never random per row)
+       capped at ROLL_AMP CSS px. The band height tracks the bar (bh,
+       computed above) so neighbouring bands differ by at most ~0.4 CSS
+       px even at the 64px mobile canvas floor, and smoothing is ON for
+       the pass so the fractional offsets render sub-pixel — with
+       nearest-neighbour, every offset snapped to a whole device pixel
+       and the stems grew 1px staircase notches. The old version used
+       per-row random jitter, which is why it scrambled. Keep the
        amplitude small and the function smooth and this stays safe. */
     var out = inst.ctx;
     out.setTransform(1, 0, 0, 1, 0, 0);
     out.globalAlpha = 1;
     out.globalCompositeOperation = "source-over";
-    out.imageSmoothingEnabled = false;
     out.clearRect(0, 0, W, H);
 
-    var rollPh = (t / ROLL_SPEED) * Math.PI * 2;
-    var amp = ROLL_AMP * DPR * (0.55 + 0.45 * nearCore);
-    var bh = ROLL_BAND * DPR;
-    for (var by = 0; by < H; by += bh) {
-      var bhh = Math.min(bh, H - by);
-      var vy = (by + bhh * 0.5) / H;
-      var dx = Math.sin(vy * ROLL_CYCLES * Math.PI * 2 - rollPh) * amp;
-      out.drawImage(inst.compC, 0, by, W, bhh, dx, by, W, bhh);
+    if (!sweepOn) {
+      /* at rest: one whole pixel-exact blit, zero displacement anywhere */
+      out.imageSmoothingEnabled = false;
+      out.drawImage(inst.compC, 0, 0);
+    } else {
+      /* smoothing ON: dx is fractional and must render sub-pixel. The
+         source rects stay integer-aligned vertically, so the only
+         interpolation is the horizontal one the tear actually needs. */
+      out.imageSmoothingEnabled = true;
+      var rollPh = (t / ROLL_SPEED) * Math.PI * 2;
+      var amp = ROLL_AMP * DPR;
+      for (var by = 0; by < H; by += bh) {
+        var bhh = Math.min(bh, H - by);
+        var yc = by + bhh * 0.5;
+        var g = Math.exp(-Math.pow((yc - barC) / sigma, 2));
+        var dx = 0;
+        if (g > 0.002) {
+          dx = Math.sin((yc / H) * ROLL_CYCLES * Math.PI * 2 - rollPh) * amp * g;
+        }
+        out.drawImage(inst.compC, 0, by, W, bhh, dx, by, W, bhh);
+      }
     }
   }
 
@@ -407,7 +517,9 @@
       waveC: null,
       waveX: null,
       compC: null,
-      compX: null
+      compX: null,
+      tempC: null,
+      tempX: null
     };
   }
 
@@ -442,8 +554,8 @@
   var lastDraw = -1;
 
   /* No discrete glitch. A sudden hard separation read as a strobe rather
-     than a signal; the wave in frame() carries the whole effect now, and
-     it is continuous by design. */
+     than a signal; the refresh-bar pass in frame() carries the whole
+     effect now — deterministic in t, smooth on the way in and out. */
   function tick(now) {
     if (!anyVisible() || !instances.length) { running = false; return; }
     var t = (now || 0) / 1000;
