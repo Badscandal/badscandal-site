@@ -56,8 +56,14 @@
 <header class="nav">
   <a class="nav-logo" href="index.html" aria-label="Badscandal — home">/</a>
   <nav class="nav-links" aria-label="Primary">
-    <a class="nav-link roll" href="index.html?about=1">About</a>
-    <a class="nav-link roll" href="index.html">Home</a>
+    <!-- category links deep-link into the store: main.js applies the hash
+         to the filter buttons js/store.js renders (labels only here —
+         >>> EDIT CATEGORIES in js/store.js <<<) -->
+    <a class="nav-link roll" href="store.html#statement">Statements</a>
+    <a class="nav-link roll" href="store.html#essential">Essentials</a>
+    <a class="nav-link roll" href="store.html#tee">Tees</a>
+    <a class="nav-link roll" href="store.html#hoodie">Hoodies</a>
+    <a class="nav-link roll" href="store.html#tank">Tanks</a>
     <a class="nav-link roll" href="us.html">Story</a>
   </nav>
   <a class="nav-cta roll" data-mag href="store.html">Store</a>
@@ -120,6 +126,61 @@
     </div>
   </section>
 
+  <!-- THE ROAD — stamp/card scroll sequence (moved here from the homepage).
+       The stamps are STATIC and simply overhang the card corner; all motion
+       is the card flying in on one overshooting spring (main.js), stacking
+       OVER the previous card. The geometry (sticky 100vh panel + three
+       800px markers) IS the timeline — change either and the triggers
+       desync. Reduced motion / no JS: the cards become a plain stacked
+       column (.stamps:not(.fly) in site.css). ----------------------------- -->
+  <section class="stamps" aria-label="The road so far">
+    <div class="stamps-panel">
+      <p class="tag stamps-tag">The road so far</p>
+      <article class="scard scard-1">
+        <img class="scard-stamp" src="assets/stamp-1-v1.svg" alt="" aria-hidden="true">
+        <p class="scard-slate">Ireland &rarr; out &middot; one-way</p>
+        <h3>Left the whole <span class="em">plan</span>.</h3>
+        <p class="scard-body">Country, family, the pension talk — all of it.
+        Everyone said too fast, too crazy, too much. They were still saying it
+        when the plane took off.</p>
+      </article>
+      <article class="scard scard-2">
+        <img class="scard-stamp" src="assets/stamp-2-v1.svg" alt="" aria-hidden="true">
+        <p class="scard-slate">Gibraltar &middot; two witnesses</p>
+        <h3>Married on a <span class="em">rock</span>.</h3>
+        <p class="scard-body">No venue, no seating chart, no speech from an
+        uncle. A registry office on a limestone rock and the two of us grinning
+        like we'd got away with something. We had.</p>
+      </article>
+      <article class="scard scard-3">
+        <img class="scard-stamp" src="assets/stamp-3-v1.svg" alt="" aria-hidden="true">
+        <p class="scard-slate">Brazil &rarr; Vietnam &middot; no return date</p>
+        <h3>The road got <span class="em">long</span>.</h3>
+        <p class="scard-body">Her family's side of the world, then the far side
+        of it. We make things as we go, the clothes travel with us — and the
+        opinions everyone had get very quiet from this far away.</p>
+      </article>
+    </div>
+    <div class="stamps-marker" aria-hidden="true"></div>
+    <div class="stamps-marker" aria-hidden="true"></div>
+    <div class="stamps-marker" aria-hidden="true"></div>
+  </section>
+
+  <!-- MANIFESTO (moved here from the homepage) ------------------------------ -->
+  <section class="philo reveal">
+    <p class="tag">Why</p>
+    <h2 class="philo-word" data-pop>You get four<br><span class="em">thousand</span> weeks.</h2>
+    <div class="philo-cols">
+      <p data-pop="left">That's it. That's the whole allocation, and a good chunk
+      of yours is already gone. Nobody mentions this, because a person who has
+      done the arithmetic is much harder to keep in line.</p>
+      <p data-pop="right">So we left — country, family, friends, the sensible
+      version of the plan. This is the clothing that came out of it: for
+      chasing the thing you actually want, out loud, in front of everybody.</p>
+    </div>
+    <a class="big-link roll" href="index.html?about=1">Read the whole thing</a>
+  </section>
+
   <!-- NUMBERS — counts up on scroll ------------------------------------------ -->
   <section class="reveal numbers">
     <p class="tag">The arithmetic</p>
@@ -134,6 +195,66 @@
       most useful number we know.</p>
     </div>
   </section>
+
+  <!-- the back half pins: each panel sticks and the next slides up OVER it
+       (moved here from the homepage with the sections it wraps) ------------ -->
+  <div class="stack">
+  <div class="stack-panel">
+  <!-- THE CLUB ------------------------------------------------------------- -->
+  <section class="club reveal" id="club">
+    <p class="tag">The club</p>
+    <h2 data-pop>Feeling like joining the <span class="em">club</span>?</h2>
+    <p class="bio">Membership is simple: wear it, mean it, and stop apologising
+    for taking up space.</p>
+    <a class="cta-btn roll" data-mag href="store.html" style="margin-top:34px">Take me to the store</a>
+  </section>
+
+  </div>
+  <div class="stack-panel">
+  <!-- HOW IT GOES ---------------------------------------------------------- -->
+  <section class="process reveal" id="process">
+    <p class="tag">How it goes</p>
+    <ol class="steps">
+      <li>
+        <span class="step-n">Step 01</span>
+        <h3>We say it first</h3>
+        <p>Every piece starts as something one of us actually said out loud and
+        then thought better of. Those are the good ones. If it doesn't make us
+        slightly nervous, it doesn't get printed.</p>
+      </li>
+      <li>
+        <span class="step-n">Step 02</span>
+        <h3>We make the thing</h3>
+        <p>Heavyweight cotton, printed big enough to read from across the road.
+        Most of the statements live across the back, because that's the side of
+        you people are looking at when you walk away.</p>
+      </li>
+      <li>
+        <span class="step-n">Step 03</span>
+        <h3>You wear it out</h3>
+        <p>Somebody reads it, somebody has an opinion about it, and that's the
+        entire point. Then we go again.</p>
+      </li>
+    </ol>
+  </section>
+
+  </div>
+  <div class="stack-panel">
+  <!-- FAQ -------------------------------------------------------------------- -->
+  <section class="faq reveal">
+    <h2 data-pop>What you should <span class="em">know</span>.</h2>
+    <div class="faq-list">
+      <details><summary>What does BADSCANDAL stand for?</summary><p>Being the bad scandal. Anarchy of the personal kind — expressing yourself freely and being yourself, whatever that means for <b>you</b>. Not a puppet, not a people-pleaser, not a version of yourself built for someone else's comfort.</p></details>
+      <details><summary>Who's behind it?</summary><p>Luke and Lilian. We left our country to chase making things and seeing the world, and started a clothing brand as a statement to ourselves that we were actually doing it. You're on the story page — it's all above you.</p></details>
+      <details><summary>What's the difference between Statements and Essentials?</summary><p>Statements have something to say across them — that's the loud half of the wardrobe. Essentials are the blanks and basics you build the rest of the outfit from. <a href="store.html">Both are in the store</a>.</p></details>
+      <details><summary>What if someone's offended by what's printed on it?</summary><p>We don't care — we're here to express. If everything you make is safe for everyone, it says nothing to anyone. If you're not breaking the law, there's no problem.</p></details>
+      <details><summary>Where do you ship?</summary><p>Worldwide. Prices are in euro, and everything is made to order — so give it a little longer than you'd give a warehouse.</p></details>
+    </div>
+    <a class="big-link roll" href="mailto:contact@badscandal.com?subject=Got%20a%20question">Got more questions? Contact us</a>
+  </section>
+
+  </div>
+  </div>
 
   <!-- FOLLOW ----------------------------------------------------------------- -->
   <section class="reveal">

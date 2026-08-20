@@ -1,8 +1,8 @@
 /* ============================================================
    BADSCANDAL — interaction suite (original, no libraries)
-   roll-up link labels · hero word rotator · magnetic buttons ·
-   custom cursor · work-list floating previews · preloader ·
-   about modal · menu · reveals · Dublin clock
+   roll-up link labels · magnetic buttons · custom cursor ·
+   preloader · nav shop categories · scroll-scrub engine ·
+   stamp/card sequence · about modal · menu · reveals · Dublin clock
    ============================================================ */
 (function () {
   "use strict";
@@ -175,35 +175,6 @@
     loader.classList.add("done");
   }, 3400);
 
-  /* ---------- hero word rotator ---------------------------------------- */
-  (function rotator() {
-    var box = document.getElementById("rotator");
-    if (!box) return;
-    var words = Array.prototype.map.call(box.querySelectorAll("span"), function (s) { return s.textContent; });
-    if (!words.length) return;
-    box.classList.add("ready");
-    box.innerHTML = "<span class='rot-word is-in'>" + words[0] + "</span>";
-    if (reduced || words.length < 2) return;
-    var i = 0;
-    setInterval(function () {
-      if (document.hidden) return; /* never rotate in a background tab */
-      i = (i + 1) % words.length;
-      var current = box.querySelector(".rot-word.is-in");
-      /* purge any strays so words can never stack */
-      Array.prototype.forEach.call(box.querySelectorAll(".rot-word"), function (w) {
-        if (w !== current && w.parentNode) w.parentNode.removeChild(w);
-      });
-      var next = document.createElement("span");
-      next.className = "rot-word";
-      next.textContent = words[i];
-      box.appendChild(next);
-      void next.offsetHeight; /* force reflow so the slide always animates */
-      if (current) { current.classList.remove("is-in"); current.classList.add("is-out"); }
-      next.classList.add("is-in");
-      setTimeout(function () { if (current && current.parentNode) current.parentNode.removeChild(current); }, 650);
-    }, 2000);
-  })();
-
   /* ---------- custom cursor -------------------------------------------- */
   if (!coarse && !reduced) {
     var dot = document.createElement("div");
@@ -212,7 +183,7 @@
     var cx = -100, cy = -100, tx = cx, ty = cy;
     document.addEventListener("pointermove", function (e) {
       tx = e.clientX; ty = e.clientY;
-      var over = e.target.closest("a, button, summary, .work-row, #flow");
+      var over = e.target.closest("a, button, summary");
       dot.classList.toggle("grow", !!over);
     }, { passive: true });
     (function loop() {
@@ -240,39 +211,6 @@
       });
     });
   }
-
-  /* ---------- work list: floating preview ------------------------------- */
-  (function workPreview() {
-    var list = document.getElementById("work-list");
-    if (!list) return;
-    var img = document.createElement("img");
-    img.id = "work-preview";
-    img.alt = "";
-    img.setAttribute("aria-hidden", "true");
-    list.appendChild(img);
-    if (coarse || reduced) return; /* mobile shows inline thumbs instead */
-    var px = 0, py = 0, tx2 = 0, ty2 = 0, on = false, raf2 = null;
-    function loop() {
-      raf2 = null;
-      px += (tx2 - px) * 0.16; py += (ty2 - py) * 0.16;
-      img.style.transform = "translate(" + px + "px," + py + "px) translate(-50%,-58%) rotate(" + ((tx2 - px) * 0.04) + "deg)";
-      if (on) raf2 = requestAnimationFrame(loop);
-    }
-    list.addEventListener("pointermove", function (e) {
-      var rct = list.getBoundingClientRect();
-      tx2 = e.clientX - rct.left; ty2 = e.clientY - rct.top;
-      if (!raf2 && on) raf2 = requestAnimationFrame(loop);
-    }, { passive: true });
-    Array.prototype.forEach.call(list.querySelectorAll(".work-row"), function (row) {
-      row.addEventListener("pointerenter", function () {
-        var src = row.getAttribute("data-img");
-        if (src) { img.src = src; img.classList.add("show"); on = true; if (!raf2) raf2 = requestAnimationFrame(loop); }
-      });
-      row.addEventListener("pointerleave", function () {
-        img.classList.remove("show"); on = false;
-      });
-    });
-  })();
 
   /* ---------- count-up numbers (the arithmetic on the story page) ------- */
   (function counts() {
@@ -378,10 +316,55 @@
       if (!sRaf) sRaf = requestAnimationFrame(loop);
     });
   }
-  makeScrub(document.getElementById("hero"), document.getElementById("hero-video"),
-            "assets/hero-sunset-4k-v1.mp4", "assets/hero-sunset-1080-v1.mp4",
-            "assets/hero-sunset-poster-v1.jpg", "assets/hero-sunset-poster-v1.jpg");
+  /* The homepage hero is a still photo + CRT wordmark now — no scrubbed
+     film there any more. makeScrub() stays: it is generic, no-ops when
+     its element is absent, and a future scrubbed section is one call +
+     the markup (see CLAUDE.md, "The films"). */
 
+
+  /* ---------- nav shop categories --------------------------------------
+     The nav carries the shop taxonomy as plain hand-written LABELS only —
+     js/store.js stays the single source of truth for behaviour: it renders
+     the filter buttons (each carrying data-key), and these links simply
+     click the matching button. On a page with the store markup the link's
+     own #store anchor scrolls to the grid; on other pages the links point
+     at store.html#<key> and the hash is applied below once store.js has
+     built the filters. -------------------------------------------------- */
+  (function navShop() {
+    function pick(fam, gar) {
+      var tab = document.querySelector(".store-tabs [data-key='" + (fam || "all") + "']");
+      var chip = document.querySelector(".store-chips [data-key='" + (gar || "all") + "']");
+      var hit = false;
+      if (tab) { tab.click(); hit = true; }
+      if (chip) { chip.click(); hit = true; }
+      return hit;
+    }
+    Array.prototype.forEach.call(
+      document.querySelectorAll("[data-shop-family],[data-shop-garment]"),
+      function (a) {
+        a.addEventListener("click", function () {
+          /* one axis per nav link; the other resets to "all" so the nav
+             always shows exactly the named category */
+          pick(a.getAttribute("data-shop-family"), a.getAttribute("data-shop-garment"));
+        });
+      });
+    /* deep link: store.html#statement / #tee ... — applied after store.js
+       has rendered the filter rows (it runs later in the same body) */
+    function applyHash() {
+      var key = (location.hash || "").slice(1);
+      if (!key) return;
+      var tab = document.querySelector(".store-tabs [data-key='" + key + "']");
+      var chip = document.querySelector(".store-chips [data-key='" + key + "']");
+      if (tab) pick(key, null);
+      else if (chip) pick(null, key);
+    }
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", applyHash);
+    } else {
+      applyHash();
+    }
+    window.addEventListener("hashchange", applyHash);
+  })();
 
   /* ---------- stamp/card sequence (the postcards) ------------------------
      The stamps themselves NEVER animate. Each CARD flies ~2000-2900px up

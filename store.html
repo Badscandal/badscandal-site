@@ -30,11 +30,15 @@
 <header class="nav">
   <a class="nav-logo" href="index.html" aria-label="Badscandal — home">/</a>
   <nav class="nav-links" aria-label="Primary">
-    <a class="nav-link roll" href="index.html?about=1">About</a>
-    <a class="nav-link roll" href="index.html">Home</a>
+    <!-- category links: labels only — js/store.js renders the filter
+         buttons these click (via main.js). >>> EDIT CATEGORIES THERE <<< -->
+    <a class="nav-link roll" href="#store" data-shop-family="statement">Statements</a>
+    <a class="nav-link roll" href="#store" data-shop-family="essential">Essentials</a>
+    <a class="nav-link roll" href="#store" data-shop-garment="tee">Tees</a>
+    <a class="nav-link roll" href="#store" data-shop-garment="hoodie">Hoodies</a>
+    <a class="nav-link roll" href="#store" data-shop-garment="tank">Tanks</a>
     <a class="nav-link roll" href="us.html">Story</a>
   </nav>
-  <a class="nav-cta roll" data-mag href="store.html">Store</a>
   <button class="nav-cart" id="cart-open" type="button" aria-label="Open cart">
     Cart&nbsp;<b id="cart-count">0</b>
   </button>
@@ -70,7 +74,7 @@
 
   <!-- filters: both rows are filled by js/store.js from FAMILIES / GARMENTS.
        >>> EDIT CATEGORIES THERE, not here <<< ------------------------------- -->
-  <section class="store-bar reveal" aria-label="Shop navigation">
+  <section class="store-bar reveal" id="store" aria-label="Shop navigation">
     <nav class="store-tabs" aria-label="Collections"></nav>
     <div class="store-chips" role="group" aria-label="Garment"></div>
   </section>
