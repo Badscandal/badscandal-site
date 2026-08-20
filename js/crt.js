@@ -25,7 +25,14 @@
   if (!mounts.length) return;
 
   var reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-  var DPR = Math.min(window.devicePixelRatio || 1, 2);
+  /* Read LIVE, never cached. Browser zoom changes devicePixelRatio, and
+     an earlier version captured it once at load — after a zoom the
+     backing store no longer matched the CSS box, so the browser rescaled
+     the canvas and the 1:1 grain got magnified into heavy static that
+     filled the letters. Anything measured in device pixels must ask for
+     the ratio at the moment it measures. */
+  function dpr() { return Math.min(window.devicePixelRatio || 1, 2); }
+  var DPR = dpr();
   var FONT_TAIL = 'px "Archivo", "Archivo Black", Arial, sans-serif';
 
   /* ------------------------------------------------------------------
@@ -36,6 +43,10 @@
   var CA_MIN = 0.7;      /* RGB fringe at its calmest, CSS px            */
   var CA_MAX = 1.8;      /* RGB fringe at its widest, CSS px             */
   var CA_PERIOD = 9;     /* seconds for the fringe to breathe once       */
+  var GLITCH_GAP_MIN = 2.6;  /* shortest wait between glitches, seconds  */
+  var GLITCH_GAP_MAX = 7.5;  /* longest wait                             */
+  var GLITCH_DUR = 0.22;     /* how long one glitch lasts, seconds       */
+  var GLITCH_SPLIT = 13;     /* extra R/B separation at peak, CSS px     */
   var BLOOM_ALPHA = 0.38;/* phosphor glow strength                       */
   var GRAIN_ALPHA = 0.07;/* tape noise strength                          */
 
@@ -169,6 +180,7 @@
 
   function resize(inst) {
     var r = inst.canvas.getBoundingClientRect();
+    DPR = dpr();
     var W = Math.max(2, Math.round(r.width * DPR));
     var H = Math.max(2, Math.round(r.height * DPR));
     inst.W = W; inst.H = H;
@@ -205,10 +217,26 @@
     var split = (CA_MIN + (CA_MAX - CA_MIN) *
                  (0.5 + 0.5 * Math.sin((t / CA_PERIOD) * Math.PI * 2))) * DPR;
 
+    /* the glitch: every few seconds the red and blue plates tear apart
+       and snap back, the way chroma loses lock on a real set. It only
+       ever moves WHOLE plates, so the letterforms stay intact — this is
+       the safe way to get the effect, unlike the per-row slice that used
+       to scramble the glyphs. The two channels get different amounts and
+       a small vertical offset, because a symmetrical split reads as a
+       drop shadow rather than a fault. */
+    var rX = split, bX = -split, rY = 0, bY = 0;
+    if (glitchAmt > 0) {
+      var kick = glitchAmt * GLITCH_SPLIT * DPR;
+      rX += kick * glitchR;
+      bX -= kick * glitchB;
+      rY = glitchYR * glitchAmt * DPR;
+      bY = glitchYB * glitchAmt * DPR;
+    }
+
     ctx.globalCompositeOperation = "lighter";
-    ctx.drawImage(inst.chanC[0], split, 0);
+    ctx.drawImage(inst.chanC[0], rX, rY);
     ctx.drawImage(inst.chanC[1], 0, 0);
-    ctx.drawImage(inst.chanC[2], -split, 0);
+    ctx.drawImage(inst.chanC[2], bX, bY);
     ctx.globalCompositeOperation = "source-over";
 
     /* phosphor bloom, additive */
@@ -294,6 +322,42 @@
      later edits to its source canvas, so it is recreated, not reused). */
   var running = false;
   var lastDraw = -1;
+
+  /* glitch state, shared so both wordmarks fault together — they are the
+     same mark on the same imaginary signal */
+  var glitchAmt = 0, glitchAt = -1, glitchNext = -1;
+  var glitchR = 1, glitchB = 1, glitchYR = 0, glitchYB = 0;
+
+  /* Stepped, not smooth. A real chroma fault jumps between a couple of
+     levels and drops out; easing it in and out looks like an animation,
+     which is the one thing it must not look like. */
+  var GLITCH_STEPS = [1, 0.42, 0.78, 0.18];
+  function glitchEnvelope(e) {
+    if (e < 0 || e >= 1) return 0;
+    return GLITCH_STEPS[Math.min(GLITCH_STEPS.length - 1,
+                                 Math.floor(e * GLITCH_STEPS.length))];
+  }
+  function armGlitch(t) {
+    glitchNext = t + GLITCH_GAP_MIN +
+                 Math.random() * (GLITCH_GAP_MAX - GLITCH_GAP_MIN);
+  }
+  function updateGlitch(t) {
+    if (glitchNext < 0) { armGlitch(t); return; }
+    if (glitchAt < 0 && t >= glitchNext) {
+      glitchAt = t;
+      /* asymmetric every time, so no two faults look alike */
+      glitchR = 0.55 + Math.random() * 0.9;
+      glitchB = 0.55 + Math.random() * 0.9;
+      glitchYR = (Math.random() - 0.5) * 2.4;
+      glitchYB = (Math.random() - 0.5) * 2.4;
+      armGlitch(t);
+    }
+    if (glitchAt >= 0) {
+      var e = (t - glitchAt) / GLITCH_DUR;
+      glitchAmt = glitchEnvelope(e);
+      if (e >= 1) { glitchAt = -1; glitchAmt = 0; }
+    }
+  }
   function tick(now) {
     if (!anyVisible() || !instances.length) { running = false; return; }
     var t = (now || 0) / 1000;
@@ -302,6 +366,7 @@
        the work from the compositor and reads as stutter */
     if (lastDraw < 0 || t - lastDraw >= 1 / FPS) {
       lastDraw = t;
+      updateGlitch(t);
       var seed = Math.floor(t * GRAIN_FPS);
       if (seed !== grainSeed) {
         grainSeed = seed;
@@ -335,15 +400,32 @@
   }
 
   var rT;
-  window.addEventListener("resize", function () {
+  function scheduleResize() {
     clearTimeout(rT);
     rT = setTimeout(function () {
       instances.forEach(function (inst) { resize(inst); });
       /* setting canvas.width resets the 2D context, so force the grain
-         patterns to be rebuilt on the next tick */
+         window to be re-rolled on the next tick */
       grainSeed = -1;
     }, 160);
-  });
+  }
+  window.addEventListener("resize", scheduleResize);
+
+  /* A zoom can change devicePixelRatio WITHOUT changing the CSS viewport
+     size, in which case no resize event fires and the canvas is left at
+     the wrong backing-store scale. Watch the ratio itself: the query
+     stops matching the moment it changes, so re-arm it each time. */
+  function watchDPR() {
+    if (!window.matchMedia) return;
+    var mq = window.matchMedia("(resolution: " + window.devicePixelRatio + "dppx)");
+    var onChange = function () {
+      scheduleResize();
+      watchDPR();
+    };
+    if (mq.addEventListener) mq.addEventListener("change", onChange, { once: true });
+    else if (mq.addListener) mq.addListener(onChange);
+  }
+  watchDPR();
 
   instances.slice().forEach(function (inst) {
     try {

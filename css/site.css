@@ -216,6 +216,14 @@ body.menu-open .menu{transform:none}
   font-size:clamp(18px,2.3vw,28px);letter-spacing:-.01em;
   margin-top:clamp(8px,1.6vh,16px);padding:0 var(--pad)}
 .hero .cta-btn{margin-top:clamp(14px,2.4vh,24px)}
+/* On a phone the hero is tall and portrait, so top-anchoring the stack
+   left the wordmark riding high with dead space under the CTA. Centre
+   the whole group instead — it sits in the sky either way, but reads as
+   placed rather than pushed up. */
+@media (max-width:640px){
+  .hero-inner{justify-content:center;
+    padding-top:clamp(24px,5vh,56px);padding-bottom:clamp(30px,7vh,64px)}
+}
 
 /* DORMANT — the WebGL liquid wordmark (js/flow.js) is not loaded on any
    page right now, but the module stays on disk as documented in CLAUDE.md;
@@ -399,11 +407,23 @@ main section{max-width:var(--maxw);margin:0 auto;
   -webkit-mask-image:linear-gradient(to bottom,transparent,#000 72%);
   mask-image:linear-gradient(to bottom,transparent,#000 72%);
   transition:transform .45s var(--ease)}
-/* was an orange-to-blue chromatic split; now a neutral edge lift */
+/* Chromatic edges — the same signal-fault language as the CRT wordmark:
+   red loses lock one way, cyan the other. Kept to the outer 24% and
+   screen-blended at very low alpha, so it reads as a lens artifact on
+   the blur rather than as colour entering the brand. */
 .blur-veil::after{content:"";position:absolute;inset:0;pointer-events:none;
-  background:linear-gradient(90deg,rgba(255,255,255,.045),transparent 28%,
-             transparent 72%,rgba(255,255,255,.04));
+  background:
+    linear-gradient(90deg,rgba(255,64,72,.085),rgba(255,64,72,0) 24%),
+    linear-gradient(270deg,rgba(64,196,255,.085),rgba(64,196,255,0) 24%),
+    linear-gradient(90deg,rgba(255,255,255,.04),transparent 30%,
+                    transparent 70%,rgba(255,255,255,.035));
   mix-blend-mode:screen}
+/* a hairline of chroma where the veil meets the page — the edge is where
+   a real set loses convergence first */
+.blur-veil::before{content:"";position:absolute;left:0;right:0;top:0;height:1px;
+  pointer-events:none;opacity:.5;mix-blend-mode:screen;
+  background:linear-gradient(90deg,rgba(255,64,72,.55),rgba(255,255,255,.3) 42%,
+             rgba(255,255,255,.3) 58%,rgba(64,196,255,.55))}
 .blur-veil.away{transform:translateY(105%)}
 @supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){
   .blur-veil{display:none}}
