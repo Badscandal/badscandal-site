@@ -2,16 +2,15 @@
    BADSCANDAL — CRT wordmark (original, no libraries)
    "BADSCANDAL" drawn from live text to a 2D canvas, then put
    through a hand-rolled CRT/VHS pass every frame: scanlines,
-   chromatic aberration that breathes, phosphor bloom, and grain
-   quantised to whole seconds so it chunks like tape, not 60fps
-   hiss. Runs at ~24fps and pauses off-screen. Monochrome
-   discipline: the split fringe is the only colour that ever
-   appears.
+   phosphor bloom, tape grain, and a chromatic convergence WAVE
+   that travels along the word. Renders at ~40fps while the grain
+   jumps at ~14fps, and pauses off-screen. Monochrome discipline:
+   the split fringe is the only colour that ever appears.
 
    MULTI-INSTANCE: every `.crt` block on the page gets its own
    canvas pipeline (own sizing, own visibility, own fallback),
-   but ALL instances are driven from ONE ~24fps loop — two rAF
-   chains for the same treatment would just burn battery.
+   but ALL instances are driven from ONE loop — two rAF chains
+   for the same treatment would just burn battery.
    Markup pattern per instance:
      <div class="crt"><canvas></canvas>
        <h2 class="crt-fallback" hidden>BADSCANDAL</h2></div>
@@ -42,11 +41,10 @@
   var GRAIN_FPS = 14;    /* how often the noise field jumps               */
   var CA_MIN = 0.7;      /* RGB fringe at its calmest, CSS px            */
   var CA_MAX = 1.8;      /* RGB fringe at its widest, CSS px             */
-  var CA_PERIOD = 9;     /* seconds for the fringe to breathe once       */
-  var GLITCH_GAP_MIN = 2.6;  /* shortest wait between glitches, seconds  */
-  var GLITCH_GAP_MAX = 7.5;  /* longest wait                             */
-  var GLITCH_DUR = 0.22;     /* how long one glitch lasts, seconds       */
-  var GLITCH_SPLIT = 13;     /* extra R/B separation at peak, CSS px     */
+  var WAVE_COLS = 44;    /* slices the wave is sampled across            */
+  var WAVE_CYCLES = 1.7; /* wave crests visible across the word at once  */
+  var WAVE_TRAVEL = 4.2; /* seconds for one crest to cross the word      */
+  var WAVE_SWELL = 11;   /* seconds for the wave's height to breathe     */
   var BLOOM_ALPHA = 0.38;/* phosphor glow strength                       */
   var GRAIN_ALPHA = 0.07;/* tape noise strength                          */
 
@@ -98,10 +96,6 @@
     c.font = "900 expanded " + px + FONT_TAIL;
   }
 
-  /* grain: regenerated only when the seed (whole seconds) ticks over,
-     the reference shader's rand(uv + floor(time)/20.) cadence — holding
-     each noise field for a full second is what makes it read as tape.
-     One plate is SHARED by every instance: same seed, same cadence. */
   /* Grain is a per-instance plate slightly LARGER than its canvas, built
      once per resize and then sampled through a moving window — so every
      frame is a single 1:1 drawImage, never a tile loop and never a
@@ -188,6 +182,12 @@
     inst.textC.width = W; inst.textC.height = H;
     inst.bloomC.width = W; inst.bloomC.height = H;
     for (var i = 0; i < 3; i++) { inst.chanC[i].width = W; inst.chanC[i].height = H; }
+    if (!inst.waveC) {
+      inst.waveC = [makeCanvas(2, 2), makeCanvas(2, 2)];
+      inst.waveX = [inst.waveC[0].getContext("2d"),
+                    inst.waveC[1].getContext("2d")];
+    }
+    for (i = 0; i < 2; i++) { inst.waveC[i].width = W; inst.waveC[i].height = H; }
 
     /* scanlines: 2px dark bars every 4px, device space */
     var tile = makeCanvas(1, 4);
@@ -214,29 +214,57 @@
        outer edges, where one plate overhangs the others, keep a colour
        fringe. Letterforms stay exactly intact because every plate is the
        SAME image drawn once — nothing is ever sliced. */
-    var split = (CA_MIN + (CA_MAX - CA_MIN) *
-                 (0.5 + 0.5 * Math.sin((t / CA_PERIOD) * Math.PI * 2))) * DPR;
+    /* A WAVE, not a flicker. The convergence error travels along the word
+       instead of hitting all of it at once: the split is a function of x,
+       and the whole pattern drifts sideways over WAVE_TRAVEL seconds.
 
-    /* the glitch: every few seconds the red and blue plates tear apart
-       and snap back, the way chroma loses lock on a real set. It only
-       ever moves WHOLE plates, so the letterforms stay intact — this is
-       the safe way to get the effect, unlike the per-row slice that used
-       to scramble the glyphs. The two channels get different amounts and
-       a small vertical offset, because a symmetrical split reads as a
-       drop shadow rather than a fault. */
-    var rX = split, bX = -split, rY = 0, bY = 0;
-    if (glitchAmt > 0) {
-      var kick = glitchAmt * GLITCH_SPLIT * DPR;
-      rX += kick * glitchR;
-      bX -= kick * glitchB;
-      rY = glitchYR * glitchAmt * DPR;
-      bY = glitchYB * glitchAmt * DPR;
+       The GREEN plate is always drawn WHOLE. That is the rule that keeps
+       this safe — green carries the readable core, so the letterforms can
+       never break no matter what red and blue do. Only the fringe moves.
+
+       Red and blue are drawn as WAVE_COLS vertical strips. Column slicing
+       is fine where row slicing was not: adjacent strips differ by a
+       fraction of a pixel, so the seam is invisible, and the core is
+       green's job anyway. */
+    var swell = 0.62 + 0.38 * (0.5 + 0.5 *
+                Math.sin((t / WAVE_SWELL) * Math.PI * 2));
+    var phase = (t / WAVE_TRAVEL) * Math.PI * 2;
+
+    /* Each shifted channel is composed in its OWN buffer first, with the
+       source columns OVERLAPPING and drawn source-over.
+
+       Compositing the columns straight onto the canvas under "lighter"
+       left a visible hairline down the wordmark: neighbouring columns
+       carry slightly different offsets, so a sub-pixel GAP opens between
+       them where that channel is simply absent, and the white core shows
+       through as its complement — a yellow line where blue dropped out.
+       Overlapping the reads closes the gap; source-over stops the overlap
+       double-adding and making a bright line instead. */
+    var colW = Math.ceil(W / WAVE_COLS);
+    var pad = Math.ceil(CA_MAX * DPR) + 2;
+    var ch, buf, k;
+    for (k = 0; k < 2; k++) {
+      ch = k === 0 ? 0 : 2;            /* red, then blue */
+      buf = inst.waveX[k];
+      buf.setTransform(1, 0, 0, 1, 0, 0);
+      buf.globalCompositeOperation = "source-over";
+      buf.clearRect(0, 0, W, H);
+      for (var cx = 0; cx < W; cx += colW) {
+        var cw = Math.min(colW, W - cx);
+        var u = (cx + cw * 0.5) / W;
+        var wv = Math.sin(u * WAVE_CYCLES * Math.PI * 2 - phase);
+        var s = (CA_MIN + (CA_MAX - CA_MIN) * (0.5 + 0.5 * wv)) * swell * DPR;
+        if (k === 1) s = -s;
+        var sx = Math.max(0, cx - pad);
+        var sw = Math.min(W - sx, cw + (cx - sx) + pad);
+        buf.drawImage(inst.chanC[ch], sx, 0, sw, H, sx + s, 0, sw, H);
+      }
     }
 
     ctx.globalCompositeOperation = "lighter";
-    ctx.drawImage(inst.chanC[0], rX, rY);
-    ctx.drawImage(inst.chanC[1], 0, 0);
-    ctx.drawImage(inst.chanC[2], bX, bY);
+    ctx.drawImage(inst.chanC[1], 0, 0);   /* green whole — the readable core */
+    ctx.drawImage(inst.waveC[0], 0, 0);
+    ctx.drawImage(inst.waveC[1], 0, 0);
     ctx.globalCompositeOperation = "source-over";
 
     /* phosphor bloom, additive */
@@ -289,7 +317,9 @@
       chanC: [makeCanvas(2, 2), makeCanvas(2, 2), makeCanvas(2, 2)],
       textX: null, bloomX: null,
       scanPat: null,
-      grainC: null
+      grainC: null,
+      waveC: null,
+      waveX: null
     };
   }
 
@@ -323,41 +353,9 @@
   var running = false;
   var lastDraw = -1;
 
-  /* glitch state, shared so both wordmarks fault together — they are the
-     same mark on the same imaginary signal */
-  var glitchAmt = 0, glitchAt = -1, glitchNext = -1;
-  var glitchR = 1, glitchB = 1, glitchYR = 0, glitchYB = 0;
-
-  /* Stepped, not smooth. A real chroma fault jumps between a couple of
-     levels and drops out; easing it in and out looks like an animation,
-     which is the one thing it must not look like. */
-  var GLITCH_STEPS = [1, 0.42, 0.78, 0.18];
-  function glitchEnvelope(e) {
-    if (e < 0 || e >= 1) return 0;
-    return GLITCH_STEPS[Math.min(GLITCH_STEPS.length - 1,
-                                 Math.floor(e * GLITCH_STEPS.length))];
-  }
-  function armGlitch(t) {
-    glitchNext = t + GLITCH_GAP_MIN +
-                 Math.random() * (GLITCH_GAP_MAX - GLITCH_GAP_MIN);
-  }
-  function updateGlitch(t) {
-    if (glitchNext < 0) { armGlitch(t); return; }
-    if (glitchAt < 0 && t >= glitchNext) {
-      glitchAt = t;
-      /* asymmetric every time, so no two faults look alike */
-      glitchR = 0.55 + Math.random() * 0.9;
-      glitchB = 0.55 + Math.random() * 0.9;
-      glitchYR = (Math.random() - 0.5) * 2.4;
-      glitchYB = (Math.random() - 0.5) * 2.4;
-      armGlitch(t);
-    }
-    if (glitchAt >= 0) {
-      var e = (t - glitchAt) / GLITCH_DUR;
-      glitchAmt = glitchEnvelope(e);
-      if (e >= 1) { glitchAt = -1; glitchAmt = 0; }
-    }
-  }
+  /* No discrete glitch. A sudden hard separation read as a strobe rather
+     than a signal; the wave in frame() carries the whole effect now, and
+     it is continuous by design. */
   function tick(now) {
     if (!anyVisible() || !instances.length) { running = false; return; }
     var t = (now || 0) / 1000;
@@ -366,7 +364,7 @@
        the work from the compositor and reads as stutter */
     if (lastDraw < 0 || t - lastDraw >= 1 / FPS) {
       lastDraw = t;
-      updateGlitch(t);
+
       var seed = Math.floor(t * GRAIN_FPS);
       if (seed !== grainSeed) {
         grainSeed = seed;
