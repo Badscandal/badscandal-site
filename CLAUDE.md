@@ -111,86 +111,78 @@ silently renders in a fallback:
 
 ## Files
 
-    index.html       Home: loader (0->100 counter + decoding wordmark)
-                     -> hero (scroll-scrubbed film behind the liquid
-                     WebGL wordmark) -> the drop (two store worlds)
-                     -> four-thousand-weeks manifesto -> club -> process
-                     -> FAQ -> marquee CTA -> footer. About modal lives
-                     here; subpages open it via index.html?about=1
-    store.html       The shop (see "Store" below)
-    us.html          The story — Luke & Lilian, the arithmetic count-up,
-                     socials, IG feed. Was lukepower.html
+    index.html       THE STORE-FIRST HOMEPAGE (restructured 20 Aug 2026,
+                     modelled on saywaybrand.com's shape): nav carrying
+                     the shop categories -> compact photo hero (~58vh,
+                     the couple on the clifftop, hero-couple-v1.*) with
+                     the CRT wordmark over the sky -> the full shop
+                     (filter bar, grid, modal, cart — same DOM as
+                     store.html, driven by js/store.js) -> a slim story
+                     strip linking to /us -> marquee CTA -> footer with
+                     a second CRT wordmark. First product card sits at
+                     ~y=693 — visible without scrolling. KEEP IT THAT
+                     WAY. There is NO preloader (removed by request; the
+                     machinery survives in main.js, guarded on #loader)
+                     and NO scroll-scrub hero. About modal lives here;
+                     subpages open it via index.html?about=1
+    store.html       The dedicated shop page (see "Store" below)
+    us.html          The story page — and since the restructure it also
+                     holds everything that used to crowd the homepage:
+                     story prose, the STAMP/CARD scroll sequence, the
+                     four-thousand-weeks manifesto, the count-up, and
+                     the club/process/FAQ sticky stack. Was lukepower.html
+    favicon.ico      Root favicon (monochrome B). MUST exist: browsers
+                     request it by default, and when it 404'd they kept
+                     serving a cached ORANGE B from the old brand for
+                     weeks. Root files are no-store, so this one updates
+                     instantly — never move it into /assets/
     _redirects       /lukepower -> /us, /live -> / (both were indexed)
     css/site.css     ALL styling for every page, one file
-    js/main.js       Shared: loader, roll-up links, cursor, magnetic
-                     buttons, scroll-scrubbed video engine, reveals,
-                     menu, about modal, clock
-    js/flow.js       WebGL liquid wordmark (ping-pong flowmap +
-                     achromatic ghosting). Self-contained, falls back
-                     to static <h1> with no WebGL/reduced motion.
-                     Desktop: the cursor stirs it. Phones: scroll
-                     sloshes it and a tap splashes it — see below
-    js/crt.js        CRT treatment for the stamp/card sequence — see
-                     "The stamp/card sequence" below
+    js/main.js       Shared: roll-up links, cursor, magnetic buttons,
+                     nav shop-category links, makeScrub engine (kept,
+                     currently UNINVOKED), reveals, menu, about modal,
+                     clock, stamps flight, dormant loader machinery
+    js/flow.js       DORMANT. The WebGL liquid wordmark. No page loads
+                     it any more (the CRT wordmark replaced it) but the
+                     module and its CSS block stay so re-adding it is
+                     only markup + a script tag. Its lessons live below.
+    js/crt.js        THE CRT WORDMARK (hero + footer). The site's
+                     signature effect. See "The CRT wordmark" below and
+                     read its own comments before touching anything —
+                     every rule in there was paid for with a regression.
     js/store.js      Shop engine: Shopify Storefront API, filtering,
                      product modal, cart, checkout
-    assets/          ~38MB, mostly the two hero .mp4 films — see the
-                     immutable-cache warning under "Deploying" BEFORE
-                     replacing anything in here
+    assets/          hero photo (hero-couple-v1.*; the AI-edited v2
+                     set exists unreferenced as an alternate), the
+                     re-encoded hero-sunset-*.mp4 films (currently
+                     unreferenced except the store-hero poster), stamps,
+                     grain, monochrome favicons. See the immutable-cache
+                     warning under "Deploying" BEFORE touching anything
     _headers         Netlify headers — assets are cached IMMUTABLE,
                      see "Deploying"
     tools/           gen_tiles.py — regenerates the spare brand tiles
+                     (OLD WARM PALETTE — off-brand, don't use as-is)
     README.txt, README-STORE.txt   STALE music-era docs. Ignore.
 
-## The films (scroll = transport control)
+## The film-scrub engine (dormant) and the encoding gotcha
 
-Scrolling scrubs them; scrolling back rewinds. They can never "play" —
-`makeScrub()` in js/main.js hard-pauses any playback. Files are fetched
-as blobs so seeking is instant on iOS. Desktop gets 4K, phones get 1080
-(iOS refuses inline 4K).
+The homepage no longer scrubs film — the hero is a photo. But
+`makeScrub()` stays in js/main.js because it is generic, battle-tested
+and documented: it hard-pauses any playback, blob-fetches for instant
+iOS seeking, serves 4K/1080 by viewport, and no-ops when its elements
+are absent. To bring a scrubbed section back: markup + one call, plus a
+tall section with a sticky stage (the scrub maps scroll progress across
+the section height to the film timeline — height and stage are one
+system).
 
-    hero:  graded-sexy-4k.mp4 / graded-sexy-1080.mp4
+The re-encoded films are still in assets/ (hero-sunset-4k-v1.mp4,
+-1080-v1, -vert-v1 — short-GOP, keyframe every 6 frames, 86% smaller
+than their predecessor).
 
-`makeScrub()` is generic and no-ops when its element is absent, so a
-second scrubbed section is just one more call plus the markup.
-
-**Scrub geometry is coupled:** the `.hero` height (240vh) and the sticky
-stage inside it are one system — the scrub maps scroll progress across
-that 240vh to the film's timeline. Change the hero height and you change
-the scrub speed; change either without the other and the stage unpins
-mid-film. Treat them as a pair.
-
-## The liquid wordmark on phones
-
-`#flow` carries `touch-action:pan-y`, so a vertical drag belongs to the
-browser and only a horizontal swipe ever reached the canvas — meaning on
-a phone the effect was alive but essentially undiscoverable. Scroll now
-drives it, which is the same metaphor as the film scrub.
-
-It responds to **acceleration, not velocity**: scrolling at a steady rate
-settles, and only starting, stopping and reversing slosh — like liquid in
-a glass you're carrying. A smoothed `containerV` chases the instantaneous
-`scrollV`; the gap between them is what the liquid feels.
-
-Three constants at the top of that block in js/flow.js are the only
-things you should need to touch:
-
-    SLOSH_GAIN   how hard scroll pushes it
-    SLOSH_DIR    flip to 1 if it sloshes the wrong way
-    SPLASH_GAIN  tap impulse strength
-
-In the shader the scroll term is a **body force across the whole field**,
-not the pointer's local stir, and it is sheared across x on purpose — a
-flat push slides the wordmark rigidly and reads as a translate rather
-than a liquid. Note the field accumulates (decay 0.9685/frame), so a
-small per-frame injection builds into a large displacement over a flick;
-that's why the per-frame value is clamped well below saturation.
-
-**Critical encoding gotcha:** these must start at exactly timestamp
-0.000 with a keyframe, or browsers paint a black frame before the first
-one. A plain `-ss N -c copy` trim leaves a ~0.066s offset and reintroduces
-the bug. Re-encode instead, and keep the dense keyframes for smooth
-scrubbing:
+**Critical encoding gotcha (applies to ANY video that ever ships):**
+files must start at exactly timestamp 0.000 with a keyframe, or browsers
+paint a black frame before the first one. A plain `-ss N -c copy` trim
+leaves a ~0.066s offset and reintroduces the bug. Re-encode instead:
 
     ffmpeg -i in.mp4 -c:v libx264 -preset fast -crf 16 \
       -g 6 -keyint_min 6 -bf 0 -pix_fmt yuv420p -profile:v high \
@@ -198,7 +190,64 @@ scrubbing:
     # verify: ffprobe -select_streams v:0 -show_entries stream=start_time
     # then regenerate the poster from frame 1 of the new file
 
-## The stamp/card sequence (js/crt.js)
+## The liquid wordmark (js/flow.js — dormant)
+
+Replaced on-page by the CRT wordmark, kept on disk. If it ever returns:
+its tunables are SLOSH_GAIN / SLOSH_DIR / SPLASH_GAIN; it responds to
+scroll ACCELERATION, not velocity; the shader's scroll term is a sheared
+body force (a flat push reads as a translate, not a liquid); the GLSL
+hardcodes three greys whose names do NOT match the CSS vars they encode.
+
+## The CRT wordmark (js/crt.js) — the signature effect
+
+"BADSCANDAL" drawn from LIVE TEXT to a canvas (never a raster — it can't
+misspell and stays sharp at every DPR), then put through a hand-rolled
+CRT pass. Two instances (hero <h1>, footer <h2>), one shared loop.
+All tunables sit in the >>> TUNE HERE <<< block.
+
+How it behaves — this exact split is the product of many iterations and
+is what the user signed off on:
+
+* **At rest the GEOMETRY is completely still.** Fringe parked at CA_MIN,
+  zero displacement (verified 0.07px max edge drift). Only TEXTURE moves:
+  grain jumps at GRAIN_FPS, scanlines crawl slowly.
+* **Every SWEEP_PERIOD a bar crosses in SWEEP_TRAVEL seconds.** The
+  convergence wave, the tear and the fringe swell exist ONLY in rows
+  near the bar, on a gaussian falloff. The bar DARKENS the glyphs
+  (SWEEP_SHADE) — a white "lift" is invisible on ~252-value glyphs.
+* While the bar is parked the composed picture blits in ONE drawImage.
+
+RULES PAID FOR WITH REGRESSIONS — do not relearn these:
+
+1. **Never displace rows randomly or steeply.** The original tear gave
+   every row its own offset and scrambled the glyphs into venetian
+   blinds. Displacement must be a smooth long-wavelength function,
+   capped a few CSS px, with imageSmoothing ON during a pass (nearest-
+   neighbour snapping turns "smooth" into 1px staircase notches).
+2. **The green plate is always drawn whole.** It carries the readable
+   core; only red/blue ever move. R/B strips are composed in their own
+   buffers with OVERLAPPING columns drawn source-over — without the
+   overlap a sub-pixel gap opens between strips and the white core
+   shows through as a yellow hairline.
+3. **Grain is tiled/windowed 1:1, never stretched.** Stretching a small
+   noise plate across the canvas blows each texel into grey bricks that
+   fill the letters. It is also generated ONCE and animated by offset —
+   regenerating per frame froze the renderer.
+4. **devicePixelRatio is read LIVE, never cached.** Browser zoom changes
+   it without firing resize; a cached value leaves the backing store
+   mismatched and the grain magnifies into heavy static. A resolution
+   matchMedia watcher re-arms on every change.
+5. **Throttle by skipping rAF frames, never by setTimeout** (detaches
+   from the compositor and reads as stutter). Motion renders at FPS;
+   grain jumps at GRAIN_FPS. Pinning both low reads as a broken GIF.
+6. Scanlines: ONE dark row every SCAN_PERIOD device px (a 2-of-4 comb
+   reads as banding). They are composed INTO the picture so they bend
+   with it, and they stay source-atop the glyphs — the reference site's
+   full-panel lines work on solid black; ours sit over a photograph.
+7. Fallbacks: no canvas / no 2D / reduced-motion -> static .crt-fallback
+   text. Never remove that ladder.
+
+## The stamp/card sequence (us.html + js/main.js)
 
 A scroll sequence where brand stamps and cards pass over the footage —
 the clearest expression of the one rule on the whole site:
@@ -211,12 +260,12 @@ the clearest expression of the one rule on the whole site:
 * The section behind them is **transparent** — the footage shows
   through. Do not "fix" a see-through section by giving it a background.
 
-`js/crt.js` supplies the CRT treatment on the sequence. Like flow.js it
-is self-contained and hand-rolled — no libraries — and it must degrade
-to a clean static render under `prefers-reduced-motion` (golden rule 3).
-If you touch the sequence's scroll maths, remember it lives in the same
-document as the hero scrub: test both together, because they share the
-scroll position.
+The sequence lives on us.html since the store-first restructure. Cards
+fly ~2000px+ on a hand-written spring (duration .7, bounce .2), stamps
+overhang the card corners with double rotation, z-stacked 2/3/4. Under
+reduced motion (or no JS) `.stamps:not(.fly)` renders a separated static
+column — two of the three cards were once unreadable because they
+stacked coincident; don't reintroduce that.
 
 ---
 
@@ -364,6 +413,12 @@ music-era URLs keep their equity instead of 404ing.
 
 ## Open tasks / next up
 
+* **URGENT — the Storefront API returned 0 products on 20 Aug 2026**
+  (drained 15 -> 4 -> 0 over one day). The API itself is healthy; the
+  products need republishing to the HEADLESS sales channel in Shopify
+  admin (Products -> Publishing). Printful re-syncs publish only to
+  "Online Store" and silently drop Headless. Until fixed the site
+  correctly shows an empty shop.
 * **Shared BADSCANDAL socials.** Every social link across index/store/us
   still points at `@iguessimlukepower`, marked `>>> EDIT HERE <<<`. Swap
   in the brand accounts when they exist — also the Behold IG feed id on
@@ -374,8 +429,6 @@ music-era URLs keep their equity instead of 404ing.
   a NEW versioned filename (immutable cache) and swap the `src`.
 * No photography of Lilian anywhere yet; the About modal still uses
   `luke-bw.webp`. The story page is text-led until portraits exist.
-* Favicons are **placeholders** (ink tile + orange "B") — and the orange
-  clashes with a fully monochrome brand, so these want redoing.
 * Trim the Printful compliance text out of product descriptions in Shopify.
 * ~15 unreferenced images remain in assets/ (`svc-*`, `work-*`,
   `luke-portrait`, `about-loop`, …) — leftovers from the studio-era
