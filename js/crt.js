@@ -49,6 +49,12 @@
   var SWEEP_BAND = 0.30; /* bar height as a fraction of the canvas       */
   var SWEEP_LIFT = 0.16; /* how much the bar brightens the glyphs        */
   var SWEEP_CA = 0.75;   /* extra wave height while the bar is crossing  */
+  var ROLL_AMP = 1.5;    /* horizontal wobble of the picture, CSS px     */
+  var ROLL_CYCLES = 1.35;/* wobble crests down the canvas at once        */
+  var ROLL_SPEED = 5.5;  /* seconds for the wobble to travel down once   */
+  var ROLL_BAND = 6;     /* device px per blit band — smaller = smoother */
+  var SCAN_ALPHA = 0.22; /* scanline darkness                            */
+  var SCAN_DRIFT = 11;   /* seconds for the scanlines to crawl one tile  */
   var BLOOM_ALPHA = 0.38;/* phosphor glow strength                       */
   var GRAIN_ALPHA = 0.07;/* tape noise strength                          */
 
@@ -192,11 +198,16 @@
                     inst.waveC[1].getContext("2d")];
     }
     for (i = 0; i < 2; i++) { inst.waveC[i].width = W; inst.waveC[i].height = H; }
+    if (!inst.compC) {
+      inst.compC = makeCanvas(2, 2);
+      inst.compX = inst.compC.getContext("2d");
+    }
+    inst.compC.width = W; inst.compC.height = H;
 
     /* scanlines: 2px dark bars every 4px, device space */
     var tile = makeCanvas(1, 4);
     var tc = tile.getContext("2d");
-    tc.fillStyle = "rgba(0,0,0,0.15)";
+    tc.fillStyle = "rgba(0,0,0," + SCAN_ALPHA + ")";
     tc.fillRect(0, 0, 1, 2);
     inst.scanPat = inst.ctx.createPattern(tile, "repeat");
 
@@ -205,7 +216,7 @@
   }
 
   function frame(inst, t) {
-    var ctx = inst.ctx, W = inst.W, H = inst.H;
+    var ctx = inst.compX, W = inst.W, H = inst.H;
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.globalAlpha = 1;
     ctx.globalCompositeOperation = "source-over";
@@ -306,8 +317,14 @@
     }
 
     ctx.globalAlpha = 1;
+    /* the scanlines CRAWL. A static comb reads as a texture laid over a
+       picture; a slowly drifting one reads as a raster being redrawn. */
+    var scanShift = ((t / SCAN_DRIFT) % 1) * 4 * DPR;
+    ctx.save();
+    ctx.translate(0, scanShift - 4 * DPR);
     ctx.fillStyle = inst.scanPat;
-    ctx.fillRect(0, 0, W, H);
+    ctx.fillRect(0, 0, W, H + 4 * DPR);
+    ctx.restore();
 
     /* refresh bar, painted last so it lifts everything under it. Still
        source-atop, so it rides the glyphs and never the transparent
@@ -321,6 +338,37 @@
     ctx.fillRect(0, sweepY, W, sweepH);
 
     ctx.globalCompositeOperation = "source-over";
+
+    /* ---- and NOW the wobble -------------------------------------------
+       The finished picture is blitted to the visible canvas in horizontal
+       bands, each nudged sideways by a smooth sine of its y position that
+       travels downward. Because the scanlines are already IN the picture,
+       they ride the wobble too — which is the whole point: the raster
+       bends, rather than a comb sitting flat over a still image.
+
+       This is row slicing, which wrecked the wordmark once before. The
+       difference is discipline, and it matters: the offset is a SMOOTH
+       long-wavelength sine (never random per row) capped at ROLL_AMP
+       CSS px, so neighbouring bands differ by hundredths of a pixel and
+       the letterforms hold. The old version used a ~14px gaussian band
+       plus per-row random jitter, which is why it scrambled. Keep the
+       amplitude small and the function smooth and this stays safe. */
+    var out = inst.ctx;
+    out.setTransform(1, 0, 0, 1, 0, 0);
+    out.globalAlpha = 1;
+    out.globalCompositeOperation = "source-over";
+    out.imageSmoothingEnabled = false;
+    out.clearRect(0, 0, W, H);
+
+    var rollPh = (t / ROLL_SPEED) * Math.PI * 2;
+    var amp = ROLL_AMP * DPR * (0.55 + 0.45 * nearCore);
+    var bh = ROLL_BAND * DPR;
+    for (var by = 0; by < H; by += bh) {
+      var bhh = Math.min(bh, H - by);
+      var vy = (by + bhh * 0.5) / H;
+      var dx = Math.sin(vy * ROLL_CYCLES * Math.PI * 2 - rollPh) * amp;
+      out.drawImage(inst.compC, 0, by, W, bhh, dx, by, W, bhh);
+    }
   }
 
   /* ---------- build one instance per .crt block ------------------------ */
@@ -347,7 +395,9 @@
       scanPat: null,
       grainC: null,
       waveC: null,
-      waveX: null
+      waveX: null,
+      compC: null,
+      compX: null
     };
   }
 
