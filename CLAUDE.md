@@ -308,14 +308,43 @@ Two **independent** axes, ANDed in `visible()`:
 Because they're independent, a statement hoodie appears under Statements
 *and* under Hoodies. Resolution order per axis:
 
-1. Shopify **tags** (lowercase), which always win. All 15 products are
-   tagged: 9 statement / 6 essential.
-2. Fallback regex for anything untagged, checked against the **image
+1. Shopify **tags** (lowercase), which always win.
+2. **Alt tags** (`alts` on a family) in a second pass — the Aug 2026
+   catalogue shipped tagged `front-and-back`/`red-print`/`white-print`
+   instead of `statement`, so `front-and-back` files as statement. The
+   second pass matters: an explicit primary tag on ANY family beats an
+   alt on an earlier one.
+3. Fallback regex for anything untagged, checked against the **image
    filename slug first and `productType` second**. That order matters:
    Printful sets productType to "T-SHIRT" on everything it makes, so
    checking it first files `womens-cropped-hoodie` under Tees. Untagged
    products always land in `essential`, so new stock never claims to be a
    Statement piece by accident.
+
+### Colourways — same statement, several products (added 21 Aug 2026)
+
+The catalogue sells one statement as separate Shopify products per
+ink/shirt combination ("NOT SORRY NEVER WAS" red-on-white and "NOT SORRY
+NEVER WAS (BLACK)" white-on-black). `COLOURWAYS` in js/store.js (keyed
+on the `red-print`/`white-print`/`black-print` tags) folds products
+whose titles match after stripping a trailing colour parenthetical into
+ONE card with "Red on white / White on black" chips; the modal gets a
+matching Print row and the grid card follows modal switches. Solo
+products with a known colourway show one passive chip. Titles display
+suffix-stripped everywhere except the cart (raw title keeps the lines
+distinguishable). Grouping requires: same base title + colour word in
+parentheses + the print tag. Duplicate colourways in one group =
+deliberately left ungrouped (data mistake guard).
+
+### Statement display rules (paid for with feedback, keep them)
+
+* Statement-family cards and modals lead with the **back** image — the
+  statement is printed there; the front is the small logo. Leading with
+  the front sold them as blank tees.
+* Statement cards do NOT flip to the front on hover (`altSrc = null`)
+  — hover is when Quick Add opens, and the flip hid the product at the
+  exact moment of purchase intent. Front stays in the modal's view
+  buttons.
 
 The trap that was there before, in case it ever regresses: the fetch
 query used to be a hardcoded `"tag:tshirt OR tag:hoodie"`. A product
@@ -421,12 +450,24 @@ music-era URLs keep their equity instead of 404ing.
 
 ## Open tasks / next up
 
-* **URGENT — the Storefront API returned 0 products on 20 Aug 2026**
-  (drained 15 -> 4 -> 0 over one day). The API itself is healthy; the
-  products need republishing to the HEADLESS sales channel in Shopify
-  admin (Products -> Publishing). Printful re-syncs publish only to
-  "Online Store" and silently drop Headless. Until fixed the site
-  correctly shows an empty shop.
+**WHERE WE LEFT OFF (21 Aug 2026, end of session):** the 20 Aug empty-
+shop crisis is OVER — a brand-new catalogue (26 statement tees: 18 red-
+on-white + 8 white-on-black "(BLACK)" twins, plus 3 untagged blanks the
+site never fetches) is live and files correctly via the alt-tag +
+colourway systems above. The homepage hero is the RED scanlined film
+(hero-film-*-v6; the B&W v7 files are deployed but unused — swapping
+the three refs in index.html brings it back; v1-v5 also remain in
+assets/, and the source .movs sit UNTRACKED at the repo root — move
+them out when settled). Hero: back to the compact 58vh slab (72vh was
+tried + reverted, see .hero comment), phones drop the CTA and centre
+the wordmark +4vh. CRT: sweep every 5.5s, crest fringe 4.6px (raised
+because the red film ate the split), and crt.js now takes a per-
+instance word from the fallback element — us.html mounts "THE ROAD".
+/us: photo BACKDROP (.us-bg fixed collage, scrim in ::after), photos
+on the stamp cards, About modal has the couple selfie, stamp card 1
+lands 120px into the section (was a full dead 800px marker). Statement
+tagging in Shopify is still the right long-term fix (tags win over
+alts) — a tagsAdd write was permission-blocked this session.
 * **Shared BADSCANDAL socials.** Every social link across index/store/us
   still points at `@iguessimlukepower`, marked `>>> EDIT HERE <<<`. Swap
   in the brand accounts when they exist — also the Behold IG feed id on

@@ -734,16 +734,31 @@ main section{max-width:var(--maxw);margin:0 auto;
    each new card OVER the last. Geometry (sticky 100vh panel + three
    800px markers) IS the timeline — change either and it desyncs.
    ============================================================ */
-/* ---------- EVIDENCE photo grid on /us ---------- */
-/* photos = imagery (colour allowed); captions = typed DM Mono furniture */
-.us-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:18px}
-.us-grid figure{margin:0}
-.us-grid img{width:100%;aspect-ratio:4/5;object-fit:cover;display:block;
-  border-radius:3px}
-.us-cap{font-family:var(--font-mono);font-weight:400;font-size:10px;
-  letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-top:8px}
+/* ---------- /us photo backdrop + chromatic heading ---------- */
+/* The stills FILL the background; the page floats over them. Fixed
+   layer = the prose scrolls across stationary photos (and the stamps
+   section passes over imagery again, as originally designed). The
+   scrim in ::after keeps the text readable — do NOT give sections a
+   background to "fix" contrast, that breaks the one rule. */
+.us-bg{position:fixed;inset:0;z-index:0;pointer-events:none;overflow:hidden}
+.us-bg img{position:absolute;width:32vw;min-width:250px;aspect-ratio:4/5;
+  object-fit:cover;border-radius:4px;opacity:.95}
+.us-bg img:nth-child(1){top:-4%;left:-5%;transform:rotate(-7deg)}
+.us-bg img:nth-child(2){top:8%;right:-7%;transform:rotate(6deg)}
+.us-bg img:nth-child(3){top:34%;left:12%;transform:rotate(3deg)}
+.us-bg img:nth-child(4){top:46%;right:6%;transform:rotate(-5deg)}
+.us-bg img:nth-child(5){top:68%;left:-4%;transform:rotate(8deg)}
+.us-bg img:nth-child(6){top:74%;right:-5%;transform:rotate(-3deg)}
+.us-bg::after{content:"";position:absolute;inset:0;
+  background:linear-gradient(180deg,rgba(var(--ink-rgb),.70),
+    rgba(var(--ink-rgb),.5) 42%,rgba(var(--ink-rgb),.70))}
+.page-main{position:relative;z-index:1}
+.us-road{text-align:center}
+.crt-us{margin-bottom:0}
+.crt-us canvas{height:clamp(72px,12vw,170px)}
 @media (max-width:640px){
-  .us-grid{grid-template-columns:repeat(2,1fr);gap:10px}
+  .us-bg img{width:58vw;min-width:0;opacity:.4}
+  .us-bg img:nth-child(3),.us-bg img:nth-child(5){display:none}
 }
 
 .stamps{max-width:none;margin:0;padding:0;position:relative;

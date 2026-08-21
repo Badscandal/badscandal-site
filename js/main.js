@@ -405,7 +405,12 @@
     for (var i = 0; i < cards.length; i++) {
       var d = FLY[i % FLY.length];
       cards[i].style.setProperty("--fly", d + "px");
-      states.push({ el: cards[i], x: d, v: 0, target: d, from: d, at: (i + 1) * STEP });
+      /* card 1 lands 120px into the section instead of a full STEP —
+         a whole dead marker before anything happened read as "the
+         section is broken". Later cards keep STEP spacing, and card 3
+         landing well before the panel releases leaves a beat to read
+         it (before, it landed exactly at release). */
+      states.push({ el: cards[i], x: d, v: 0, target: d, from: d, at: 120 + i * STEP });
     }
     var raf = null, lastT = 0;
     function step(now) {

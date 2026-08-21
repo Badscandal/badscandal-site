@@ -184,11 +184,11 @@
     c.textBaseline = "middle";
     var probe = 100;
     setWordFont(c, probe);
-    var w100 = c.measureText(WORD).width || 1;
+    var w100 = c.measureText(inst.word).width || 1;
     var fs = Math.floor(probe * (W * 0.92) / w100);
     fs = Math.min(fs, Math.floor(H * 0.82));
     setWordFont(c, fs);
-    c.fillText(WORD, W / 2, H / 2 + fs * 0.03);
+    c.fillText(inst.word, W / 2, H / 2 + fs * 0.03);
 
     /* phosphor bloom: downsample 1/8 then upsample — the two bilinear
        passes are a cheap gaussian, no ctx.filter dependency */
@@ -509,6 +509,11 @@
     return {
       canvas: canvas,
       ctx: ctx,
+      /* per-instance word, read from the fallback element — lets other
+         pages mount CRT headings that aren't the wordmark (us.html:
+         "THE ROAD"). Empty/missing fallback = the brand word. */
+      word: (fallback && fallback.textContent
+              ? fallback.textContent.trim() : "") || WORD,
       useFallback: useFallback,
       visible: true,   /* assume on-screen until the observer says otherwise */
       W: 0, H: 0,

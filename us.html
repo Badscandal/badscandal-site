@@ -52,6 +52,19 @@
 <div class="grain" aria-hidden="true"></div>
 <div class="blur-veil" aria-hidden="true"></div>
 
+<!-- PHOTO BACKDROP — the stills fill the background and the page floats
+     over them (the one rule: sections transparent over imagery). Fixed
+     layer, so the prose scrolls across the photos. Scrim lives in the
+     ::after. Decorative: aria-hidden, empty alts. -->
+<div class="us-bg" aria-hidden="true">
+  <img src="assets/us-photo-selfie-v1.webp" alt="" loading="lazy">
+  <img src="assets/us-photo-lilian-v1.webp" alt="" loading="lazy">
+  <img src="assets/us-photo-church-v1.webp" alt="" loading="lazy">
+  <img src="assets/us-photo-crowd-v1.webp" alt="" loading="lazy">
+  <img src="assets/us-photo-luke-v1.webp" alt="" loading="lazy">
+  <img src="assets/us-photo-sandwich-v1.webp" alt="" loading="lazy">
+</div>
+
 <!-- NAV -------------------------------------------------------------------- -->
 <header class="nav">
   <a class="nav-logo" href="index.html" aria-label="Badscandal — home">/</a>
@@ -126,37 +139,10 @@
     </div>
   </section>
 
-  <!-- EVIDENCE — stills pulled straight from the footage. Imagery carries
-       the colour (the one rule); captions are typed, DM Mono, monochrome.
-       New photos: NEW versioned filenames (assets/* is immutable-cached). -->
-  <section class="us-photos reveal" aria-label="Photos of Luke and Lilian">
-    <p class="tag">Evidence</p>
-    <div class="us-grid">
-      <figure>
-        <img src="assets/us-photo-selfie-v1.webp" alt="Luke and Lilian, selfie above the caldera at dusk" loading="lazy">
-        <figcaption class="us-cap">Santorini &middot; the edge</figcaption>
-      </figure>
-      <figure>
-        <img src="assets/us-photo-crowd-v1.webp" alt="Luke on one knee in a sunset crowd, everyone filming" loading="lazy">
-        <figcaption class="us-cap">The yes &middot; everyone filmed it</figcaption>
-      </figure>
-      <figure>
-        <img src="assets/us-photo-lilian-v1.webp" alt="Lilian at golden hour above the town" loading="lazy">
-        <figcaption class="us-cap">Golden hour &middot; her</figcaption>
-      </figure>
-      <figure>
-        <img src="assets/us-photo-luke-v1.webp" alt="Luke on a ledge over the caldera at sunset" loading="lazy">
-        <figcaption class="us-cap">The ledge &middot; him</figcaption>
-      </figure>
-      <figure>
-        <img src="assets/us-photo-church-v1.webp" alt="Luke in white in front of a blue-domed church" loading="lazy">
-        <figcaption class="us-cap">Sunday best &middot; not sorry</figcaption>
-      </figure>
-      <figure>
-        <img src="assets/us-photo-sandwich-v1.webp" alt="Lilian at a sandwich counter, bag on her back" loading="lazy">
-        <figcaption class="us-cap">Fuel &middot; somewhere hot</figcaption>
-      </figure>
-    </div>
+  <!-- CHROMATIC HEADING — a third CRT instance (crt.js reads the word
+       from the fallback element), leading into the stamp sequence. -->
+  <section class="us-road reveal" aria-label="The road">
+    <div class="crt crt-us"><canvas></canvas><h2 class="crt-fallback" hidden>THE ROAD</h2></div>
   </section>
 
   <!-- THE ROAD — stamp/card scroll sequence (moved here from the homepage).
