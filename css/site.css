@@ -202,10 +202,13 @@ body.menu-open .menu{transform:none}
    wordmark sits large in the sky area (top ~40% of the shot). The old
    240vh scrubbed-film hero + WebGL liquid wordmark are gone from the
    homepage (flow.js stays on disk as a reusable module). ---------- */
-.hero{position:relative;height:min(58vh,580px);min-height:430px;
+.hero{position:relative;height:min(72vh,740px);min-height:430px;
   max-width:none;margin:0;padding:0;overflow:hidden}
+/* object-position 55%: the film's closing close-up puts Lilian's face
+   in the LOWER half of the frame — the old top-biased 30% crop cut her
+   mouth off on laptops. Phones keep their own values below. */
 .hero-photo{position:absolute;inset:0;width:100%;height:100%;
-  object-fit:cover;object-position:center 30%;z-index:0}
+  object-fit:cover;object-position:center 55%;z-index:0}
 .hero-scrim{position:absolute;inset:0;z-index:1;pointer-events:none;
   background:linear-gradient(180deg,rgba(var(--ink-rgb),.58),rgba(var(--ink-rgb),.24) 34%,
              rgba(var(--ink-rgb),.2) 60%,rgba(var(--ink-rgb),.74))}

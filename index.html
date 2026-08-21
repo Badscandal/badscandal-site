@@ -7,7 +7,7 @@
 <meta name="description" content="Clothing for the ones who left. Statement tees and essentials for chasing the thing you actually want, out loud, in front of everybody. Wear the trouble.">
 <meta property="og:title" content="BADSCANDAL">
 <meta property="og:description" content="You get four thousand weeks. Clothing for spending them on the thing you actually want. Wear the trouble.">
-<meta property="og:image" content="assets/hero-film-poster-v3.jpg">
+<meta property="og:image" content="assets/hero-film-poster-v4.jpg">
 <link rel="icon" type="image/png" sizes="48x48" href="assets/favicon-48-v2.png">
 <link rel="icon" type="image/png" sizes="192x192" href="assets/favicon-192-v2.png">
 <link rel="apple-touch-icon" href="assets/favicon-180-v2.png">
@@ -150,9 +150,12 @@
        (main.js cancels autoplay for them). -->
   <section class="hero" id="hero">
     <video class="hero-photo" autoplay muted loop playsinline preload="auto"
-           poster="assets/hero-film-poster-v3.jpg"
+           poster="assets/hero-film-poster-v4.jpg"
            aria-label="Luke and Lilian in Santorini">
-      <source src="assets/hero-film-4k-v3.mp4" type="video/mp4">
+      <!-- phones get the 1080 encode; everything else the 4K -->
+      <source src="assets/hero-film-1080-v4.mp4" type="video/mp4"
+              media="(max-width: 640px)">
+      <source src="assets/hero-film-4k-v4.mp4" type="video/mp4">
     </video>
     <div class="hero-scrim" aria-hidden="true"></div>
     <div class="hero-inner">
