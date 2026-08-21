@@ -38,10 +38,16 @@
      key   : the value used in markup + filtering
      label : what the visitor reads
      tag   : the Shopify tag that assigns it (omit on "all")
+     alts  : extra Shopify tags that ALSO assign it, but only after no
+             product matched a primary tag — the Aug 2026 catalogue
+             shipped tagged "front-and-back" (statement printed on the
+             back) instead of "statement", and without this every tee
+             filed as essential and led with its blank front
      test  : fallback regex, used only when a product has no tag yet    */
   var FAMILIES = [
     { key: "all",       label: "Everything" },
-    { key: "statement", label: "Statements", tag: "statement" },
+    { key: "statement", label: "Statements", tag: "statement",
+      alts: ["front-and-back"] },
     { key: "essential", label: "Essentials", tag: "essential" }
   ];
   var GARMENTS = [
@@ -67,6 +73,13 @@
     for (i = 0; i < list.length; i++) {          /* tags always win */
       c = list[i];
       if (c.tag && tags.indexOf(c.tag) > -1) return c.key;
+    }
+    /* alt tags run as a separate pass so an explicit primary tag on a
+       LATER family still beats an alt on an earlier one */
+    for (i = 0; i < list.length; i++) {
+      c = list[i];
+      if (c.alts && c.alts.some(function (t) { return tags.indexOf(t) > -1; }))
+        return c.key;
     }
     /* Nothing tagged: infer, strongest signal first. Printful sets
        productType to "T-SHIRT" on everything it makes — including
@@ -279,7 +292,9 @@
     /* built from the taxonomy, never hardcoded — a category added above
        but missing here would be fetched by nobody and vanish silently */
     var tagQuery = real(FAMILIES).concat(real(GARMENTS))
-      .map(function (c) { return "tag:" + c.tag; }).join(" OR ");
+      .map(function (c) { return [c.tag].concat(c.alts || []); })
+      .reduce(function (a, b) { return a.concat(b); }, [])
+      .map(function (t) { return "tag:" + t; }).join(" OR ");
     return gql(q, { q: tagQuery }).then(function (d) {
       var list = mapProducts(d);
       if (list.length) return list;
