@@ -392,14 +392,16 @@
       card.className = "pcard";
       if (!instant) card.style.transitionDelay = (Math.min(idx, 8) * 45) + "ms";
       /* On a STATEMENT piece the statement is printed on the back, so the
-         back is the product — lead with it and keep the front for the
-         hover. Leading with the front sold these as blank tees. Anything
-         else leads with the front and reveals the back on hover. */
+         back is the product — it shows at rest AND on hover (no alt
+         flip: hovering is when Quick Add opens, and flipping to the
+         blank front right then sold these as blank tees — the front
+         lives in the modal's view buttons instead). Anything else leads
+         with the front and reveals the back on hover. */
       var backSrc = imgFor(p, null, "back");
       var frontSrc = imgFor(p, null, "front") || p.images[0];
       var statementBack = (p.family === "statement" && backSrc);
       var mainSrc = statementBack ? backSrc : frontSrc;
-      var altSrc = statementBack ? frontSrc : (backSrc || p.images[1] || null);
+      var altSrc = statementBack ? null : (backSrc || p.images[1] || null);
       if (altSrc === mainSrc) {
         altSrc = (p.images[1] && p.images[1] !== mainSrc) ? p.images[1] : null;
       }
