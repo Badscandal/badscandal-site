@@ -26,6 +26,9 @@
 (function () {
   "use strict";
 
+  /* i18n hook: js/i18n.js loads first and provides BS_T; identity if absent */
+  var T = window.BS_T || function (s) { return s; };
+
   /* >>> EDIT HERE <<< ---------------------------------------------------- */
   var CONFIG = {
     domain: "cdziaw-1i.myshopify.com",
@@ -215,7 +218,7 @@
   function badgeFor(p) {
     var g = labelOf(GARMENTS, p.garment);
     var one = g.replace(/s$/, "");                    /* "Tees" -> "Tee" */
-    return p.family === "statement" ? "Statement · " + one : one;
+    return p.family === "statement" ? T("Statement") + " · " + T(one) : T(one);
   }
   /* tags win; a product with no tag yet falls back to the regexes,
      which read the title plus Printful's garment-bearing image slugs */
@@ -375,7 +378,7 @@
     var list = visible();
     grid.innerHTML = "";
     if (!list.length) {
-      grid.innerHTML = "<p class='grid-empty'>Nothing here yet — check another section.</p>";
+      grid.innerHTML = "<p class='grid-empty'>" + T("Nothing here yet — check another section.") + "</p>";
       return;
     }
     list.forEach(function (p, idx) {
@@ -417,7 +420,7 @@
          those get the full option picker in the modal instead */
       var multi = vs.some(function (v) { return v.title.indexOf(" / ") > -1; });
       if (multi) {
-        sizeBtns = "<button type='button' class='qa-size qa-openopts'>Choose options</button>";
+        sizeBtns = "<button type='button' class='qa-size qa-openopts'>" + T("Choose options") + "</button>";
       } else {
         vs.forEach(function (v) {
           sizeBtns += "<button type='button' class='qa-size" + (v.available ? "" : " off") +
@@ -433,14 +436,14 @@
       if (group) {
         ways = "<div class='pcard-ways'>" + group.map(function (s) {
           return "<button type='button' class='pcard-way" + (s === p ? " on" : "") +
-            "' data-way='" + s.way.key + "'>" + s.way.label + "</button>";
+            "' data-way='" + s.way.key + "'>" + T(s.way.label) + "</button>";
         }).join("") + "</div>";
       }
       card.innerHTML =
         "<div class='pcard-media'>" +
           "<img loading='lazy' src='" + mainSrc + "' alt='" + p.title.replace(/'/g, "&#39;") + "'>" + alt +
           "<span class='pcard-cat'>" + badgeFor(p) + "</span>" +
-          "<div class='pcard-quick'><span class='qa-label'>Quick add</span>" +
+          "<div class='pcard-quick'><span class='qa-label'>" + T("Quick add") + "</span>" +
             "<div class='qa-sizes'>" + sizeBtns + "</div>" +
           "</div>" +
         "</div>" +
@@ -485,7 +488,7 @@
       b.type = "button";
       b.className = i === 0 ? "on" : "";
       b.setAttribute("data-key", c.key);
-      b.textContent = c.label;
+      b.textContent = T(c.label);
       b.addEventListener("click", function () {
         onPick(c.key);
         Array.prototype.forEach.call(container.children, function (x) {
@@ -521,7 +524,7 @@
     for (var g = 0; g < n; g++) (function (g) {
       var label = document.createElement("p");
       label.className = "pmodal-sizes-label pmodal-opt-label";
-      label.textContent = names[g];
+      label.textContent = T(names[g]);
       var row = document.createElement("div");
       row.className = "pmodal-optrow";
       var seen = [];
@@ -605,14 +608,14 @@
     if (group) {
       var wl = document.createElement("p");
       wl.className = "pmodal-sizes-label pmodal-opt-label";
-      wl.textContent = "Print";
+      wl.textContent = T("Print");
       var wrow = document.createElement("div");
       wrow.className = "pmodal-optrow";
       group.forEach(function (s) {
         var b = document.createElement("button");
         b.type = "button";
         b.className = "qa-size" + (s === p ? " sel" : "");
-        b.textContent = s.way.label;
+        b.textContent = T(s.way.label);
         b.addEventListener("click", function () {
           if (s === p) return;
           wayChoice[p.base.toUpperCase()] = s.way.key;
@@ -677,7 +680,7 @@
     var table = document.createElement("table");
     table.className = "sguide-table";
     var tr = document.createElement("tr");
-    ["Size"].concat(cols).forEach(function (h) {
+    [T("Size")].concat(cols).forEach(function (h) {
       var th = document.createElement("th"); th.textContent = h; tr.appendChild(th);
     });
     table.appendChild(tr);
@@ -741,11 +744,11 @@
       if (!cartId) {
         gql("mutation C($lines:[CartLineInput!]) { cartCreate(input:{lines:$lines}) { cart { ...CartFields } userErrors { message } } } " + CART_FIELDS,
           { lines: lines }).then(function (d) { done(d, "cartCreate"); })
-          .catch(function () { note("Couldn't update the bag — try again."); });
+          .catch(function () { note(T("Couldn't update the bag — try again.")); });
       } else {
         gql("mutation A($cartId:ID!,$lines:[CartLineInput!]!) { cartLinesAdd(cartId:$cartId, lines:$lines) { cart { ...CartFields } userErrors { message } } } " + CART_FIELDS,
           { cartId: cartId, lines: lines }).then(function (d) { done(d, "cartLinesAdd"); })
-          .catch(function () { note("Couldn't update the bag — try again."); });
+          .catch(function () { note(T("Couldn't update the bag — try again.")); });
       }
     } else {
       var key = p.id + "::" + sizeLabel;
@@ -781,7 +784,7 @@
     box.innerHTML = "";
     if (LIVE && liveCart) {
       var edges = ((liveCart.lines || {}).edges) || [];
-      if (!edges.length) box.innerHTML = "<p class='cart-empty'>Nothing in here yet. Fix that.</p>";
+      if (!edges.length) box.innerHTML = "<p class='cart-empty'>" + T("Nothing in here yet. Fix that.") + "</p>";
       edges.forEach(function (e) {
         var l = e.node, m = l.merchandise;
         var change = function (q) {
@@ -794,7 +797,7 @@
             var k = q <= 0 ? "cartLinesRemove" : "cartLinesUpdate";
             var cart = (((d || {}).data || {})[k] || {}).cart;
             if (cart) { liveCart = cart; renderCart(); }
-          }).catch(function () { note("Couldn't update the bag — try again."); });
+          }).catch(function () { note(T("Couldn't update the bag — try again.")); });
         };
         box.appendChild(lineRow(
           (m.product.featuredImage || {}).url || "assets/cta-bg.webp",
@@ -811,7 +814,7 @@
         : "—";
       setCount(liveCart.totalQuantity || 0);
     } else {
-      if (!demoCart.length) box.innerHTML = "<p class='cart-empty'>Nothing in here yet. Fix that.</p>";
+      if (!demoCart.length) box.innerHTML = "<p class='cart-empty'>" + T("Nothing in here yet. Fix that.") + "</p>";
       var sub = 0, count = 0, cur = "EUR";
       demoCart.forEach(function (l) {
         sub += l.price * l.qty; count += l.qty; cur = l.currency;
@@ -831,7 +834,7 @@
     if (LIVE && liveCart && liveCart.checkoutUrl) {
       window.location.href = liveCart.checkoutUrl;
     } else {
-      note("Demo mode — connect your Shopify store in js/store.js (two lines at the top) to enable real checkout.");
+      note(T("Demo mode — connect your Shopify store in js/store.js (two lines at the top) to enable real checkout."));
       closeCart();
       window.scrollTo({ top: 0, behavior: "smooth" });
     }
@@ -847,7 +850,7 @@
          branch (quick-add, modal, cart, checkout) keys on LIVE at call
          time, and DEMO products can't drive live cart mutations */
       LIVE = false;
-      note("Couldn't reach the store right now — showing the lookbook instead.");
+      note(T("Couldn't reach the store right now — showing the lookbook instead."));
       products = DEMO; render();
     });
     /* restore an existing cart */
@@ -866,6 +869,6 @@
   } else {
     products = DEMO;
     render();
-    note("Preview drop — demo products. Real stock lands when Shopify connects.");
+    note(T("Preview drop — demo products. Real stock lands when Shopify connects."));
   }
 })();

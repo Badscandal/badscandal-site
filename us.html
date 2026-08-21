@@ -63,6 +63,12 @@
   <img src="assets/us-photo-crowd-v1.webp" alt="" loading="lazy">
   <img src="assets/us-photo-luke-v1.webp" alt="" loading="lazy">
   <img src="assets/us-photo-sandwich-v1.webp" alt="" loading="lazy">
+  <img src="assets/us-photo-embrace-v1.webp" alt="" loading="lazy">
+  <img src="assets/us-photo-dome-v1.webp" alt="" loading="lazy">
+  <img src="assets/us-photo-terrace-v1.webp" alt="" loading="lazy">
+  <img src="assets/us-photo-alley-v1.webp" alt="" loading="lazy">
+  <img src="assets/us-photo-stairs-v1.webp" alt="" loading="lazy">
+  <img src="assets/us-photo-pool-v1.webp" alt="" loading="lazy">
 </div>
 
 <!-- NAV -------------------------------------------------------------------- -->
@@ -79,6 +85,9 @@
     <a class="nav-link roll" href="store.html#tank">Tanks</a>
     <a class="nav-link roll" href="us.html">Story</a>
   </nav>
+  <div class="lang" role="group" aria-label="Language">
+    <button type="button" data-lang="en">EN</button><button type="button" data-lang="es">ES</button><button type="button" data-lang="pt">PT</button>
+  </div>
   <a class="nav-cta roll" data-mag href="store.html">Store</a>
   <button class="nav-burger" id="menu-btn" type="button" aria-expanded="false" aria-controls="menu"><span>Menu</span><span>Close</span></button>
 </header>
@@ -105,7 +114,7 @@
   <!-- THE STORY -------------------------------------------------------------- -->
   <section class="reveal">
     <p class="tag">The story</p>
-    <div class="prose">
+    <div class="prose" id="story-prose">
       <p>We met and fell for each other embarrassingly fast, and somewhere in
       the middle of that we worked out we wanted the same unreasonable thing:
       to go, and to make things about going. So we left. Not on a gap year, not
@@ -314,7 +323,7 @@
   <!-- WEAR IT ---------------------------------------------------------------- -->
   <section class="reveal">
     <p class="tag">Wear it</p>
-    <div class="prose">
+    <div class="prose" id="wearit-prose">
       <p>The clothes are the statement — the loud half of it across the back,
       where people read it as you walk away. Say the thing nobody says, or just
       take the plain one and mean it quietly.</p>
@@ -370,6 +379,7 @@
 </footer>
 
 <script src="https://w.behold.so/widget.js" type="module"></script>
+<script src="js/i18n.js"></script>
 <script src="js/main.js"></script>
 <script src="js/crt.js"></script>
 </body>

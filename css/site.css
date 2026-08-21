@@ -150,6 +150,18 @@ body::before{content:"";position:fixed;inset:0;z-index:-1;
 .nav-links{display:flex;gap:24px;margin-left:auto}
 .nav-link{background:none;border:0;cursor:pointer;font:inherit;font-size:13px;
   letter-spacing:.05em;color:var(--paper);padding:2px 0}
+/* language switcher: typed monochrome furniture, DM Mono like every
+   other small label. Sits in the nav on all sizes. */
+.lang{display:flex;gap:2px;align-items:center;margin-left:18px}
+.lang button{background:none;border:0;cursor:pointer;
+  font:400 10px/1 var(--font-mono);letter-spacing:.12em;
+  color:var(--muted);padding:7px 7px;border-radius:999px;
+  transition:color .25s var(--ease),background .25s var(--ease)}
+.lang button:hover{color:var(--paper)}
+.lang button.on{color:var(--ink);background:var(--blaze)}
+@media (max-width:640px){
+  .lang{margin-left:auto;margin-right:4px}
+}
 .nav-cta{font-size:12px;letter-spacing:.1em;border:1px solid var(--uv);
   padding:10px 18px;border-radius:999px;white-space:nowrap;
   transition:background .25s var(--ease),border-color .25s var(--ease)}
@@ -749,6 +761,12 @@ main section{max-width:var(--maxw);margin:0 auto;
 .us-bg img:nth-child(4){top:46%;right:6%;transform:rotate(-5deg)}
 .us-bg img:nth-child(5){top:68%;left:-4%;transform:rotate(8deg)}
 .us-bg img:nth-child(6){top:74%;right:-5%;transform:rotate(-3deg)}
+.us-bg img:nth-child(7){top:22%;left:34%;width:26vw;transform:rotate(-2deg)}
+.us-bg img:nth-child(8){top:-6%;left:38%;width:24vw;transform:rotate(4deg)}
+.us-bg img:nth-child(9){top:56%;left:30%;width:24vw;transform:rotate(6deg)}
+.us-bg img:nth-child(10){top:88%;left:8%;transform:rotate(-6deg)}
+.us-bg img:nth-child(11){top:92%;right:2%;transform:rotate(5deg)}
+.us-bg img:nth-child(12){top:84%;left:44%;width:24vw;transform:rotate(-4deg)}
 .us-bg::after{content:"";position:absolute;inset:0;
   background:linear-gradient(180deg,rgba(var(--ink-rgb),.70),
     rgba(var(--ink-rgb),.5) 42%,rgba(var(--ink-rgb),.70))}
@@ -758,7 +776,9 @@ main section{max-width:var(--maxw);margin:0 auto;
 .crt-us canvas{height:clamp(72px,12vw,170px)}
 @media (max-width:640px){
   .us-bg img{width:58vw;min-width:0;opacity:.4}
-  .us-bg img:nth-child(3),.us-bg img:nth-child(5){display:none}
+  .us-bg img:nth-child(3),.us-bg img:nth-child(5),
+  .us-bg img:nth-child(7),.us-bg img:nth-child(9),
+  .us-bg img:nth-child(12){display:none}
 }
 
 .stamps{max-width:none;margin:0;padding:0;position:relative;
