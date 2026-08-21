@@ -435,8 +435,13 @@ music-era URLs keep their equity instead of 404ing.
   poster (`assets/hero-sunset-poster-v1.jpg`) behind "Wear the trouble."
   A dedicated campaign shot would be better — when supplying one, give it
   a NEW versioned filename (immutable cache) and swap the `src`.
-* No photography of Lilian anywhere yet; the About modal still uses
-  `luke-bw.webp`. The story page is text-led until portraits exist.
+* Photography landed 21 Aug 2026: stills pulled from the Greece footage
+  (`~/Desktop/July 2026/Content Daily/Greece/Videos`) now populate the
+  About modal (`about-couple-v1.webp`), the three stamp cards
+  (`us-card-*-v1.webp`, capped-height `.scard-photo` so the 100vh panel
+  geometry survives) and the EVIDENCE grid on /us (`us-photo-*-v1.webp`).
+  More frames can be pulled the same way (ffmpeg -ss … crop … webp) —
+  always NEW versioned filenames.
 * Trim the Printful compliance text out of product descriptions in Shopify.
 * ~15 unreferenced images remain in assets/ (`svc-*`, `work-*`,
   `luke-portrait`, `about-loop`, …) — leftovers from the studio-era

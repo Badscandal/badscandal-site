@@ -734,6 +734,18 @@ main section{max-width:var(--maxw);margin:0 auto;
    each new card OVER the last. Geometry (sticky 100vh panel + three
    800px markers) IS the timeline — change either and it desyncs.
    ============================================================ */
+/* ---------- EVIDENCE photo grid on /us ---------- */
+/* photos = imagery (colour allowed); captions = typed DM Mono furniture */
+.us-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:18px}
+.us-grid figure{margin:0}
+.us-grid img{width:100%;aspect-ratio:4/5;object-fit:cover;display:block;
+  border-radius:3px}
+.us-cap{font-family:var(--font-mono);font-weight:400;font-size:10px;
+  letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-top:8px}
+@media (max-width:640px){
+  .us-grid{grid-template-columns:repeat(2,1fr);gap:10px}
+}
+
 .stamps{max-width:none;margin:0;padding:0;position:relative;
   height:calc(100vh + 87px + 3*800px)}
 .stamps-panel{position:sticky;top:0;height:100vh;overflow:hidden}
@@ -762,6 +774,11 @@ main section{max-width:var(--maxw);margin:0 auto;
   letter-spacing:.12em;text-transform:uppercase;color:var(--uv)}
 .scard h3{font-size:clamp(24px,3vw,32px);margin-top:12px}
 .scard-body{color:var(--muted);font-size:15px;line-height:1.55;margin-top:10px}
+/* card photo: imagery on the grey card carries the colour (the one rule).
+   Height is CAPPED in vh, not fixed by aspect — a taller card would push
+   the overhanging stamps out of the 100vh panel on short screens. */
+.scard-photo{width:100%;height:min(190px,24vh);object-fit:cover;display:block;
+  border-radius:3px;margin-bottom:14px}
 /* JS flight mode (.fly is only ever added when motion is allowed):
    the stamp "inks on" 90ms AFTER its card lands — opacity 0->1 plus
    scale 1.15->1, the deliberate version of the reference's lazy-load
