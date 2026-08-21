@@ -42,7 +42,11 @@
   var FPS = 40;          /* render cadence — smooth, but not 60 (cost)    */
   var GRAIN_FPS = 14;    /* how often the noise field jumps               */
   var CA_MIN = 0.7;      /* resting RGB fringe — STATIC, CSS px          */
-  var CA_MAX = 3.2;      /* fringe at the crest of a bar pass, CSS px    */
+  var CA_MAX = 4.6;      /* fringe at the crest of a bar pass, CSS px.
+                            3.2 read fine over the neutral/warm hero
+                            films, but the dark RED scanlined cut (v6)
+                            swallows the red half of the split and dims
+                            the blue — 4.6 restores the visible crest. */
   var WAVE_COLS = 44;    /* slices the wave is sampled across            */
   var WAVE_CYCLES = 1.7; /* wave crests visible across the word at once  */
   var WAVE_TRAVEL = 4.2; /* seconds for one crest to cross the word
