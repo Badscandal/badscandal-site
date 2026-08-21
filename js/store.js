@@ -57,6 +57,18 @@
     { key: "tank",   label: "Tanks",   tag: "tank",   test: /tank|crop-?top|cropped/ },
     { key: "other",  label: "Other",   tag: "other" }
   ];
+  /* Colourways: the SAME statement sold as separate Shopify products,
+     one per ink/shirt combination ("NOT SORRY NEVER WAS" red on white,
+     "NOT SORRY NEVER WAS (BLACK)" white on black). Products whose
+     titles match after stripping a trailing colour parenthetical fold
+     into ONE card, with these as the options. tag = the print tag that
+     identifies the colourway; list order = chip order, and the first
+     colourway a statement has is the one its card leads with. */
+  var COLOURWAYS = [
+    { key: "red-on-white",   label: "Red on white",   tag: "red-print" },
+    { key: "white-on-black", label: "White on black", tag: "white-print" },
+    { key: "black-on-white", label: "Black on white", tag: "black-print" }
+  ];
   /* ---------------------------------------------------------------------- */
 
   var grid = document.getElementById("product-grid");
@@ -253,6 +265,50 @@
     "  } } }" +
     "}";
 
+  /* ---------- colourway grouping ---------------------------------------- */
+  /* strip trailing "(Red)" / "(BLACK)" etc — only colour words, so
+     "WANNA BE MY CARDIO? (RESPECTFULLY)" keeps its parenthetical */
+  var WAY_PAREN = /\s*\((red|black|white|blue|green|navy|grey|gray|cream|natural)\)\s*$/i;
+  function baseTitle(t) {
+    var s = String(t);
+    while (WAY_PAREN.test(s)) s = s.replace(WAY_PAREN, "");
+    return s.trim();
+  }
+  function wayOf(tags) {
+    for (var i = 0; i < COLOURWAYS.length; i++)
+      if (tags.indexOf(COLOURWAYS[i].tag) > -1) return COLOURWAYS[i];
+    return null;
+  }
+  /* wayChoice remembers which colourway the visitor picked per
+     statement, so the grid card and the modal stay in step */
+  var wayChoice = {};
+  function linkGroups(list) {
+    var byBase = {};
+    list.forEach(function (p) {
+      if (!p.way) return;
+      var k = p.base.toUpperCase();
+      (byBase[k] = byBase[k] || []).push(p);
+    });
+    Object.keys(byBase).forEach(function (k) {
+      var g = byBase[k];
+      if (g.length < 2) return;
+      /* two products claiming the same colourway is a data mistake —
+         leave that statement ungrouped rather than hide one product */
+      var keys = g.map(function (p) { return p.way.key; });
+      if (keys.some(function (x, i) { return keys.indexOf(x) !== i; })) return;
+      g.sort(function (a, b) {
+        return COLOURWAYS.indexOf(a.way) - COLOURWAYS.indexOf(b.way);
+      });
+      g.forEach(function (p) { p.sibs = g; });
+    });
+    return list;
+  }
+  function isPrimary(p) {
+    if (!p.sibs) return true;
+    var want = wayChoice[p.base.toUpperCase()] || p.sibs[0].way.key;
+    return p.way.key === want;
+  }
+
   function mapProducts(data) {
     var edges = (((data || {}).data || {}).products || {}).edges || [];
     return edges.map(function (e) {
@@ -266,6 +322,7 @@
       }).join(" ");
       return {
         id: n.id, title: n.title, desc: n.description || "",
+        base: baseTitle(n.title), way: wayOf(tags),
         family: familyOf(tags, n.productType, hint),
         garment: garmentOf(tags, n.productType, hint),
         price: parseFloat(n.priceRange.minVariantPrice.amount),
@@ -309,7 +366,8 @@
     return products.filter(function (p) {
       var okFam = family === "all" || p.family === family;
       var okGarm = garment === "all" || p.garment === garment;
-      return okFam && okGarm;
+      /* grouped statements surface only their active colourway */
+      return okFam && okGarm && isPrimary(p);
     });
   }
 
@@ -321,9 +379,18 @@
       return;
     }
     list.forEach(function (p, idx) {
+      var card = buildCard(p, idx);
+      grid.appendChild(card);
+      requestAnimationFrame(function () { card.classList.add("in"); });
+    });
+  }
+
+  /* one product card. instant=true skips the reveal stagger — used when
+     a colourway chip swaps the card for its sibling in place. */
+  function buildCard(p, idx, instant) {
       var card = document.createElement("article");
       card.className = "pcard";
-      card.style.transitionDelay = (Math.min(idx, 8) * 45) + "ms";
+      if (!instant) card.style.transitionDelay = (Math.min(idx, 8) * 45) + "ms";
       /* On a STATEMENT piece the statement is printed on the back, so the
          back is the product — lead with it and keep the front for the
          hover. Leading with the front sold these as blank tees. Anything
@@ -355,6 +422,18 @@
             "' data-vid='" + v.id + "' " + (v.available ? "" : "disabled") + ">" + v.title + "</button>";
         });
       }
+      /* colourway chips: grouped statements get one per sibling; a solo
+         product with a known colourway gets a single passive chip so
+         the ink/shirt combination is still typed out (title is shown
+         stripped of its "(BLACK)" suffix, the chip carries that info) */
+      var group = p.sibs || (p.way ? [p] : null);
+      var ways = "";
+      if (group) {
+        ways = "<div class='pcard-ways'>" + group.map(function (s) {
+          return "<button type='button' class='pcard-way" + (s === p ? " on" : "") +
+            "' data-way='" + s.way.key + "'>" + s.way.label + "</button>";
+        }).join("") + "</div>";
+      }
       card.innerHTML =
         "<div class='pcard-media'>" +
           "<img loading='lazy' src='" + mainSrc + "' alt='" + p.title.replace(/'/g, "&#39;") + "'>" + alt +
@@ -364,9 +443,9 @@
           "</div>" +
         "</div>" +
         "<div class='pcard-meta'>" +
-          "<h3 class='pcard-name'>" + p.title + "</h3>" +
+          "<h3 class='pcard-name'>" + (p.base || p.title) + "</h3>" +
           "<p class='pcard-price'>" + money(p.price, p.currency) + "</p>" +
-        "</div>";
+        "</div>" + ways;
       /* quick add (single-option products only; multi-option opens the modal) */
       Array.prototype.forEach.call(card.querySelectorAll(".qa-size[data-vid]"), function (b) {
         b.addEventListener("click", function (ev) {
@@ -376,11 +455,23 @@
           setTimeout(function () { b.classList.remove("added"); }, 900);
         });
       });
+      /* colourway chip swaps this card for the sibling, in place */
+      Array.prototype.forEach.call(card.querySelectorAll(".pcard-way"), function (b) {
+        b.addEventListener("click", function (ev) {
+          ev.stopPropagation();
+          var sib = (p.sibs || [p]).filter(function (s) {
+            return s.way.key === b.getAttribute("data-way");
+          })[0];
+          if (!sib || sib === p) return;
+          wayChoice[p.base.toUpperCase()] = sib.way.key;
+          var fresh = buildCard(sib, idx, true);
+          card.parentNode.replaceChild(fresh, card);
+          fresh.classList.add("in");
+        });
+      });
       /* card opens the product modal */
       card.addEventListener("click", function () { openModal(p); });
-      grid.appendChild(card);
-      requestAnimationFrame(function () { card.classList.add("in"); });
-    });
+      return card;
   }
 
   /* ---------- filters: built from the taxonomy, not from markup -------------- */
@@ -469,7 +560,7 @@
     document.getElementById("pmodal-img").src =
       openBack || imgFor(p, null, "front") || p.images[0];
     document.getElementById("pmodal-cat").textContent = badgeFor(p);
-    document.getElementById("pmodal-title").textContent = p.title;
+    document.getElementById("pmodal-title").textContent = p.base || p.title;
     document.getElementById("pmodal-price").textContent = money(p.price, p.currency);
     /* split the Printful size guide out of the description into its own
        overlay, opened by the bold "Size guide" button */
@@ -505,6 +596,31 @@
         });
         wrap.appendChild(b);
       });
+    }
+    /* colourway row — mirrors the card chips. Picking one re-opens the
+       modal on the sibling product and the grid card follows. */
+    var group = p.sibs || (p.way ? [p] : null);
+    if (group) {
+      var wl = document.createElement("p");
+      wl.className = "pmodal-sizes-label pmodal-opt-label";
+      wl.textContent = "Print";
+      var wrow = document.createElement("div");
+      wrow.className = "pmodal-optrow";
+      group.forEach(function (s) {
+        var b = document.createElement("button");
+        b.type = "button";
+        b.className = "qa-size" + (s === p ? " sel" : "");
+        b.textContent = s.way.label;
+        b.addEventListener("click", function () {
+          if (s === p) return;
+          wayChoice[p.base.toUpperCase()] = s.way.key;
+          openModal(s);
+          render();
+        });
+        wrow.appendChild(b);
+      });
+      wrap.appendChild(wl);
+      wrap.appendChild(wrow);
     }
     modalRenderViews();
     modalSetImage();
@@ -722,7 +838,7 @@
   /* ---------- boot -------------------------------------------------------------- */
   if (LIVE) {
     fetchProducts().then(function (list) {
-      products = list;
+      products = linkGroups(list);
       render();
     }).catch(function () {
       /* drop to full demo behaviour, not just demo DATA: every later

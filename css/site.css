@@ -556,6 +556,16 @@ main section{max-width:var(--maxw);margin:0 auto;
   font-size:clamp(13px,1.3vw,16px);letter-spacing:.01em}
 .pcard-price{color:var(--ember);font-size:14px;
   font-variant-numeric:tabular-nums;white-space:nowrap}
+/* colourway chips: typed information (DM Mono), monochrome furniture —
+   the product photo shows the actual colours, the chip only names them */
+.pcard-ways{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.pcard-way{background:none;cursor:pointer;font:400 10px/1 var(--font-mono);
+  letter-spacing:.12em;text-transform:uppercase;color:var(--muted);
+  border:1px solid var(--ink-3);border-radius:999px;padding:6px 10px;
+  transition:color .25s var(--ease),border-color .25s var(--ease),
+    background .25s var(--ease)}
+.pcard-way:hover{color:var(--paper);border-color:var(--uv)}
+.pcard-way.on{color:var(--ink);background:var(--blaze);border-color:var(--blaze)}
 
 /* ---------- product modal ---------- */
 .pmodal{position:fixed;inset:0;z-index:90;background:rgba(var(--ink-rgb),.94);
