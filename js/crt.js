@@ -47,7 +47,7 @@
   var WAVE_CYCLES = 1.7; /* wave crests visible across the word at once  */
   var WAVE_TRAVEL = 4.2; /* seconds for one crest to cross the word
                             (the wave only EXISTS during a bar pass)     */
-  var SWEEP_PERIOD = 7.5;/* seconds from one bar pass to the next        */
+  var SWEEP_PERIOD = 5.5;/* seconds from one bar pass to the next        */
   var SWEEP_TRAVEL = 1.9;/* seconds the bar takes to actually cross —
                             the rest of the period it is parked
                             off-canvas and the picture is at rest        */
