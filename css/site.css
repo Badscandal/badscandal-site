@@ -445,6 +445,9 @@ main section{max-width:var(--maxw);margin:0 auto;
   /* phones: the portrait hero shot runs a little taller */
   .hero{height:min(62vh,580px)}
   .hero-photo{object-position:center 24%}
+  /* phones: no CTA (it crowded the film) — wordmark + line sit centred */
+  .hero .cta-btn{display:none}
+  .hero-inner{justify-content:center;padding-top:0}
 }
 @media (prefers-reduced-motion:reduce){
   html{scroll-behavior:auto}
