@@ -7,7 +7,7 @@
 <meta name="description" content="Clothing for the ones who left. Statement tees and essentials for chasing the thing you actually want, out loud, in front of everybody. Wear the trouble.">
 <meta property="og:title" content="BADSCANDAL">
 <meta property="og:description" content="You get four thousand weeks. Clothing for spending them on the thing you actually want. Wear the trouble.">
-<meta property="og:image" content="assets/hero-couple-v1.jpg">
+<meta property="og:image" content="assets/hero-film-poster-v1.jpg">
 <link rel="icon" type="image/png" sizes="48x48" href="assets/favicon-48-v2.png">
 <link rel="icon" type="image/png" sizes="192x192" href="assets/favicon-192-v2.png">
 <link rel="apple-touch-icon" href="assets/favicon-180-v2.png">
@@ -140,17 +140,20 @@
 
 <main id="top">
 
-  <!-- 01 · HERO — compact photo + CRT wordmark. The photo carries the
-       colour; the wordmark sits large in the sky. -------------------------
-       CACHE RULE: any new hero shot needs a NEW filename (assets/* is
-       cached immutable for a year) — bump the -vN suffix, never reuse. -->
+  <!-- 01 · HERO — film loop + CRT wordmark. The footage carries the
+       colour; the wordmark sits large over it. ----------------------------
+       CACHE RULE: any new hero film/poster needs a NEW filename (assets/*
+       is cached immutable for a year) — bump the -vN suffix, never reuse.
+       ENCODING RULE: the film must start at 0.000 on a keyframe (see
+       CLAUDE.md) or browsers paint a black first frame. Poster = the
+       sunset-viewpoint frame; it is what reduced-motion visitors keep
+       (main.js cancels autoplay for them). -->
   <section class="hero" id="hero">
-    <picture>
-      <source media="(max-width: 640px)" srcset="assets/hero-couple-portrait-v1.webp">
-      <source srcset="assets/hero-couple-v1.webp" type="image/webp">
-      <img class="hero-photo" src="assets/hero-couple-v1.jpg"
-           alt="Luke and Lilian on a clifftop at sunset" fetchpriority="high">
-    </picture>
+    <video class="hero-photo" autoplay muted loop playsinline preload="auto"
+           poster="assets/hero-film-poster-v1.jpg"
+           aria-label="Luke and Lilian in Santorini">
+      <source src="assets/hero-film-4k-v1.mp4" type="video/mp4">
+    </video>
     <div class="hero-scrim" aria-hidden="true"></div>
     <div class="hero-inner">
       <div class="crt crt-hero"><canvas></canvas><h1 class="crt-fallback" hidden>BADSCANDAL</h1></div>

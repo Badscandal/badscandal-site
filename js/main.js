@@ -10,6 +10,15 @@
   var reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   var coarse = window.matchMedia("(pointer: coarse)").matches;
 
+  /* hero film honours reduced motion: cancel autoplay so the visitor
+     keeps the poster frame instead of a moving loop */
+  if (reduced) {
+    Array.prototype.forEach.call(document.querySelectorAll(".hero video"), function (v) {
+      v.removeAttribute("autoplay");
+      v.pause();
+    });
+  }
+
   /* belt-and-braces loader dismissal: registered before ANYTHING that could
      throw, so even a runtime error further down this file can never trap the
      visitor behind the loader. (A parse error still can — the CSS
