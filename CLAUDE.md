@@ -113,21 +113,21 @@ silently renders in a fallback:
 
     index.html       THE STORE-FIRST HOMEPAGE (restructured 20 Aug 2026,
                      modelled on saywaybrand.com's shape): nav carrying
-                     the shop categories -> FILM-LOOP hero (added 21 Aug
-                     2026: the Santorini edit as a muted looping <video>,
-                     72vh/740px on desktop so Lilian's face survives the
-                     closing close-up at object-position 55%; phones keep
-                     62vh/24% and pick a 1080 encode via <source media>;
-                     poster = the sunset-viewpoint frame, kept by
-                     reduced-motion visitors — main.js cancels autoplay)
-                     with the CRT wordmark over it -> the full shop
-                     (filter bar, grid, modal, cart — same DOM as
-                     store.html, driven by js/store.js) -> a slim story
-                     strip linking to /us -> marquee CTA -> footer with
-                     a second CRT wordmark. The taller hero pushed the
-                     first product card just below the fold — accepted
-                     trade, requested 21 Aug. Any new hero film goes
-                     through the encoding rule below and gets -vN
+                     the shop categories -> compact FILM-LOOP hero
+                     (~58vh/580px, added 21 Aug 2026: the Santorini edit
+                     as a muted looping <video>, object-position 30%;
+                     phones keep 62vh/24% and pick a 1080 encode via
+                     <source media>; poster = the sunset-viewpoint
+                     frame, kept by reduced-motion visitors — main.js
+                     cancels autoplay) with the CRT wordmark over it ->
+                     the full shop (filter bar, grid, modal, cart — same
+                     DOM as store.html, driven by js/store.js) -> a slim
+                     story strip linking to /us -> marquee CTA -> footer
+                     with a second CRT wordmark. First product card is
+                     visible without scrolling. KEEP IT THAT WAY — a
+                     taller 72vh hero was tried and reverted same day
+                     (see css/site.css .hero comment). Any new hero film
+                     goes through the encoding rule below and gets -vN
                      filenames (film, 1080, poster all bump together).
                      There is NO preloader (removed by request; the
                      machinery survives in main.js, guarded on #loader)
