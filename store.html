@@ -5,33 +5,44 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Store — BADSCANDAL</title>
 <meta name="description" content="BADSCANDAL store — statement tees and essentials. Say the thing nobody says. Made to order, shipped worldwide. Wear the trouble.">
+<meta property="og:title" content="BADSCANDAL">
+<meta property="og:description" content="You get four thousand weeks. Clothing for spending them on the thing you actually want. Wear the trouble.">
+<meta property="og:image" content="assets/hero-film-poster-v6.jpg">
+<link rel="icon" type="image/png" sizes="48x48" href="assets/favicon-48-v2.png">
+<link rel="icon" type="image/png" sizes="192x192" href="assets/favicon-192-v2.png">
+<link rel="apple-touch-icon" href="assets/favicon-180-v2.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,100..900&family=DM+Mono:wght@300;400;500&family=Figtree:wght@300..900&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="css/site.css">
 <noscript><style>
-/* no JS: .reveal never gets .in and the loader never dismisses — reset both */
+/* no JS: .reveal/.pcard never get .in and the loader never dismisses — reset */
 .reveal{opacity:1 !important;transform:none !important}
 .pcard{opacity:1 !important;transform:none !important}
 #loader{display:none !important}
-#crt-canvas{display:none !important}
+.crt canvas{display:none !important}
 .crt-fallback{display:block !important}
 </style></noscript>
-<link rel="icon" type="image/png" sizes="48x48" href="assets/favicon-48-v2.png">
-<link rel="icon" type="image/png" sizes="192x192" href="assets/favicon-192-v2.png">
-<link rel="apple-touch-icon" href="assets/favicon-180-v2.png">
 </head>
 <body>
 
 <div class="grain" aria-hidden="true"></div>
 <div class="blur-veil" aria-hidden="true"></div>
 
-<!-- NAV -------------------------------------------------------------------- -->
+<!-- /store IS THE HOMEPAGE, VERBATIM (by request, 23 Aug 2026): when the
+     homepage is reworked to hold the music, this page keeps the store-first
+     layout. Until then, edit index.html and mirror the change here — the
+     only intended differences are <title>/description and the handful of
+     link targets marked below. --------------------------------------------- -->
+
+<!-- NAV — carries the shop taxonomy (labels only; js/store.js owns the
+     behaviour: these links click the filter buttons it renders).
+     >>> EDIT CATEGORIES in js/store.js (FAMILIES / GARMENTS), then update
+     just the labels here <<< ------------------------------------------- -->
 <header class="nav">
+  <!-- differs from index.html: logo leaves for the homepage -->
   <a class="nav-logo" href="index.html" aria-label="Badscandal — home">/</a>
   <nav class="nav-links" aria-label="Primary">
-    <!-- category links: labels only — js/store.js renders the filter
-         buttons these click (via main.js). >>> EDIT CATEGORIES THERE <<< -->
     <a class="nav-link roll" href="#store" data-shop-family="statement">Statements</a>
     <a class="nav-link roll" href="#store" data-shop-family="essential">Essentials</a>
     <a class="nav-link roll" href="#store" data-shop-garment="tee">Tees</a>
@@ -50,33 +61,108 @@
 
 <!-- FULLSCREEN MENU ---------------------------------------------------------- -->
 <div class="menu" id="menu" aria-hidden="true">
-  <a class="menu-item" href="index.html?about=1"><i>01</i> About</a>
-  <a class="menu-item" href="index.html"><i>02</i> Home</a>
-  <a class="menu-item" href="store.html"><i>03</i> Store</a>
-  <a class="menu-item" href="us.html"><i>04</i> Story</a>
-  <a class="menu-item" href="mailto:contact@badscandal.com?subject=Hello"><i>05</i> Contact</a>
+  <button class="menu-item" data-about type="button"><i>01</i> About</button>
+  <a class="menu-item" href="#store"><i>02</i> Store</a>
+  <a class="menu-item" href="us.html"><i>03</i> Story</a>
+  <a class="menu-item" href="mailto:contact@badscandal.com?subject=Hello"><i>04</i> Contact</a>
 </div>
 
-<main class="page-main store-main">
+<!-- ABOUT MODAL ---------------------------------------------------------------- -->
+<div class="about" id="about" role="dialog" aria-modal="true" aria-label="About BADSCANDAL" hidden>
+  <button class="about-close" id="close-about" type="button">Close&nbsp;&nbsp;<i>esc</i></button>
+  <div class="about-inner">
+    <p class="tag">About BADSCANDAL</p>
+    <p class="about-lead">We left. Country, family, friends, the whole set-up —
+    traded for a dream of making things and seeing the world. We met, fell for
+    each other embarrassingly fast, and decided life was too short to do it the
+    sensible way.</p>
+    <p class="about-lead">BADSCANDAL is the clothing that came out of that.
+    <b>Say the thing nobody says.</b> Chase the thing you actually want, out
+    loud, in front of everybody.</p>
+    <div class="about-meta">
+      <span>LUKE &amp; LILIAN</span>
+      <span>WHEREVER WE ARE THIS MONTH</span>
+    </div>
+    <img class="about-img" src="assets/about-couple-v1.webp"
+         alt="Luke and Lilian above the caldera at dusk" loading="lazy">
+    <ul class="about-words" aria-hidden="true">
+      <li>leave</li><li>chase</li><li>ignore</li><li>repeat</li>
+    </ul>
+    <p class="tag">Four thousand weeks</p>
+    <div class="prose">
+      <p>That's the whole allocation. If you're thirty you've spent about
+      fifteen hundred of them already. Nobody mentions this, because a person
+      who has done the arithmetic is much harder to keep in line.</p>
+      <p>Everyone will have something to say. Too fast, too crazy, too much,
+      not normal. They said it before you and they'll say it after you, and
+      none of it will matter — nobody studies Shakespeare's private life. The
+      work outlived the man and the gossip didn't survive the century.
+      <b>Yours won't either.</b></p>
+      <p>Society is built to keep things running smoothly, not to get you where
+      you want to go. Work, rent, repeat — and most people never get out the
+      door. If you're not breaking the law, there's no problem. There was never
+      a problem.</p>
+    </div>
+    <p class="tag">The name</p>
+    <div class="prose">
+      <p><b>BADSCANDAL is about becoming one.</b> A bad scandal is what they
+      call you when you stop asking. It's for the people who cared too much,
+      got hurt doing it, and came out the other side realising nothing really
+      matters except the moment you're standing in.</p>
+      <p>Everyone is welcome here — every race, every sex, every orientation.
+      The goal is to outgrow the fear of being judged and live honestly from a
+      place of not giving a <span class="bs-swear">f***</span>. The clothes are
+      the statement. Follow us around the world.</p>
+    </div>
+    <p class="tag">Contact</p>
+    <div class="prose">
+      <p>Wholesale, press and anything else:
+      <a href="mailto:contact@badscandal.com">contact@badscandal.com</a></p>
+    </div>
+    <p class="tag">Principles</p>
+    <dl class="principles">
+      <dt>Mean it or bin it</dt>
+      <dd>If a piece doesn't say something true, it doesn't go in the drop. Taste is the second filter. Honesty is the first.</dd>
+      <dt>All in or nothing</dt>
+      <dd>Fewer pieces, everything given. We'd rather make ten things we'd wear every day than a hundred we wouldn't.</dd>
+      <dt>Say it out loud</dt>
+      <dd>If a statement needs explaining, it wasn't a statement. It goes across the back where people can read it from behind you.</dd>
+      <dt>Trouble over polish</dt>
+      <dd>Rushed work is forgettable and over-polished work is worse. The edge stays in.</dd>
+    </dl>
+  </div>
+</div>
 
-  <section class="page-head store-hero reveal">
-    <!-- >>> EDIT HERE: swap the src below for a new campaign shot.
-         CACHE RULE: any new shot needs a NEW filename (assets/* is cached
-         immutable for a year) — bump the -vN suffix, never reuse a name. <<< -->
-    <img class="store-hero-img" src="assets/hero-sunset-poster-v1.jpg" alt=""
-         onerror="this.style.display='none'">
-    <div class="store-hero-scrim" aria-hidden="true"></div>
-    <div class="store-hero-inner">
-      <p class="tag">The first drop</p>
-      <h1>Wear the<br><span class="em">trouble</span>.</h1>
-      <p class="lede">Statements for saying it out loud, essentials for the
-      rest of the week. Made to order, shipped worldwide —
-      <b>meant, or binned.</b></p>
+<main id="top">
+
+  <!-- 01 · HERO — film loop + CRT wordmark. The footage carries the
+       colour; the wordmark sits large over it. ----------------------------
+       CACHE RULE: any new hero film/poster needs a NEW filename (assets/*
+       is cached immutable for a year) — bump the -vN suffix, never reuse.
+       ENCODING RULE: the film must start at 0.000 on a keyframe (see
+       CLAUDE.md) or browsers paint a black first frame. Poster = the
+       sunset-viewpoint frame; it is what reduced-motion visitors keep
+       (main.js cancels autoplay for them). -->
+  <section class="hero" id="hero">
+    <video class="hero-photo" autoplay muted loop playsinline preload="auto"
+           poster="assets/hero-film-poster-v6.jpg"
+           aria-label="Luke and Lilian in Santorini">
+      <!-- phones get the 1080 encode; everything else the 4K -->
+      <source src="assets/hero-film-1080-v6.mp4" type="video/mp4"
+              media="(max-width: 640px)">
+      <source src="assets/hero-film-4k-v6.mp4" type="video/mp4">
+    </video>
+    <div class="hero-scrim" aria-hidden="true"></div>
+    <div class="hero-inner">
+      <div class="crt crt-hero"><canvas></canvas><h1 class="crt-fallback" hidden>BADSCANDAL</h1></div>
+      <p class="hero-line">Wear the <span class="em">trouble</span>.</p>
+      <a class="cta-btn roll" data-mag href="#store">Shop the drop</a>
     </div>
   </section>
 
-  <!-- filters: both rows are filled by js/store.js from FAMILIES / GARMENTS.
-       >>> EDIT CATEGORIES THERE, not here <<< ------------------------------- -->
+  <!-- 02 · THE STORE — filters + grid, straight after the hero.
+       Both filter rows are filled by js/store.js from FAMILIES / GARMENTS.
+       >>> EDIT CATEGORIES THERE, not here <<< ------------------------------ -->
   <section class="store-bar reveal" id="store" aria-label="Shop navigation">
     <nav class="store-tabs" aria-label="Collections"></nav>
     <div class="store-chips" role="group" aria-label="Garment"></div>
@@ -84,8 +170,28 @@
 
   <p class="store-note" id="store-note" hidden></p>
 
-  <!-- product grid ---------------------------------------------------------- -->
   <section class="product-grid reveal" id="product-grid" aria-live="polite"></section>
+
+  <!-- 03 · STORY STRIP — one slim band; the whole story lives on /us ------- -->
+  <section class="story-strip reveal">
+    <p class="tag">Luke &amp; Lilian</p>
+    <p class="strip-line">We left — country, family, the sensible
+    <span class="em">plan</span> — to make things and see the world.
+    This is the clothing that came out of it.</p>
+    <a class="big-link roll" href="us.html">Read the whole story</a>
+  </section>
+
+  <!-- 04 · CTA ------------------------------------------------------------- -->
+  <section class="cta reveal">
+    <p class="tag">Say it out loud</p>
+    <div class="cta-marquee" aria-hidden="true">
+      <div class="cm-row"><div class="cm-track"><span>Be a bad <span class="em">scandal</span> —&nbsp;</span><span>Be a bad <span class="em">scandal</span> —&nbsp;</span><span>Be a bad <span class="em">scandal</span> —&nbsp;</span><span>Be a bad <span class="em">scandal</span> —&nbsp;</span></div></div>
+      <div class="cm-row rev"><div class="cm-track"><span>Be a bad <span class="em">scandal</span> —&nbsp;</span><span>Be a bad <span class="em">scandal</span> —&nbsp;</span><span>Be a bad <span class="em">scandal</span> —&nbsp;</span><span>Be a bad <span class="em">scandal</span> —&nbsp;</span></div></div>
+      <div class="cm-row"><div class="cm-track"><span>Be a bad <span class="em">scandal</span> —&nbsp;</span><span>Be a bad <span class="em">scandal</span> —&nbsp;</span><span>Be a bad <span class="em">scandal</span> —&nbsp;</span><span>Be a bad <span class="em">scandal</span> —&nbsp;</span></div></div>
+    </div>
+    <h2 class="sr-only">Be a bad scandal</h2>
+    <a class="cta-btn roll" data-mag href="#store">Wear the trouble</a>
+  </section>
 
 </main>
 
@@ -136,23 +242,25 @@
   </div>
 </aside>
 
-<!-- FOOTER -------------------------------------------------------------------- -->
+<!-- FOOTER -------------------------------------------------------------------------------- -->
 <footer class="foot">
   <div class="crt"><canvas id="crt-canvas" role="img" aria-label="BADSCANDAL"></canvas><h2 class="crt-fallback" hidden>BADSCANDAL</h2></div>
   <div class="foot-grid">
     <div>
       <p class="tag">Contact</p>
-      <p><a class="roll" href="mailto:contact@badscandal.com">contact@badscandal.com</a></p>
-      <p class="foot-addr">Made to order.<br>Shipped worldwide.</p>
+      <p class="foot-addr">
+        <a class="roll" href="mailto:contact@badscandal.com">contact@badscandal.com</a><br>
+        Made to order · Shipped worldwide
+      </p>
     </div>
     <div>
       <p class="tag">Navigation</p>
       <ul class="plain">
-        <li><a class="roll" href="index.html?about=1">About</a></li>
+        <li><button class="roll linklike" data-about type="button">About</button></li>
+        <!-- differs from index.html: Home leaves for the homepage, Store stays here -->
         <li><a class="roll" href="index.html">Home</a></li>
-        <li><a class="roll" href="store.html">Store</a></li>
+        <li><a class="roll" href="#top">Store</a></li>
         <li><a class="roll" href="us.html">Story</a></li>
-        <li><a class="roll" href="mailto:contact@badscandal.com">Contact</a></li>
       </ul>
     </div>
     <div>
@@ -174,13 +282,13 @@
       </ul>
     </div>
   </div>
-  <p class="foot-note">Everything you heard is probably true.</p>
+  <p class="foot-note">BADSCANDAL — clothing for the ones who left. Statement
+  tees and essentials, made to order, shipped worldwide.</p>
   <div class="foot-bar">
-    <span>&copy;&nbsp;<b id="year">####</b>&nbsp;BADSCANDAL</span>
-    <a class="roll" href="#top">Back to top &uarr;</a>
-    <span><b id="clock">--------- --:--:-- DUB</b></span>
+    <span>&copy; <b id="year">2026</b> BADSCANDAL</span>
+    <span id="clock"></span>
   </div>
-  <p class="foot-tag">『&nbsp;No kings. No gods. No masters.&nbsp;』</p>
+  <p class="foot-tag">『 No kings. No gods. No masters. 』</p>
 </footer>
 
 <script src="js/i18n.js"></script>
