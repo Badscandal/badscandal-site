@@ -61,77 +61,14 @@
 
 <!-- FULLSCREEN MENU ---------------------------------------------------------- -->
 <div class="menu" id="menu" aria-hidden="true">
-  <button class="menu-item" data-about type="button"><i>01</i> About</button>
+  <a class="menu-item" href="#about-sec"><i>01</i> About</a>
   <a class="menu-item" href="#store"><i>02</i> Store</a>
   <a class="menu-item" href="us.html"><i>03</i> Story</a>
   <a class="menu-item" href="mailto:contact@badscandal.com?subject=Hello"><i>04</i> Contact</a>
 </div>
 
-<!-- ABOUT MODAL ---------------------------------------------------------------- -->
-<div class="about" id="about" role="dialog" aria-modal="true" aria-label="About BADSCANDAL" hidden>
-  <button class="about-close" id="close-about" type="button">Close&nbsp;&nbsp;<i>esc</i></button>
-  <div class="about-inner">
-    <p class="tag">About BADSCANDAL</p>
-    <p class="about-lead">We left. Country, family, friends, the whole set-up —
-    traded for a dream of making things and seeing the world. We met, fell for
-    each other embarrassingly fast, and decided life was too short to do it the
-    sensible way.</p>
-    <p class="about-lead">BADSCANDAL is the clothing that came out of that.
-    <b>Say the thing nobody says.</b> Chase the thing you actually want, out
-    loud, in front of everybody.</p>
-    <div class="about-meta">
-      <span>LUKE &amp; LILIAN</span>
-      <span>WHEREVER WE ARE THIS MONTH</span>
-    </div>
-    <img class="about-img" src="assets/about-couple-v1.webp"
-         alt="Luke and Lilian above the caldera at dusk" loading="lazy">
-    <ul class="about-words" aria-hidden="true">
-      <li>leave</li><li>chase</li><li>ignore</li><li>repeat</li>
-    </ul>
-    <p class="tag">Four thousand weeks</p>
-    <div class="prose">
-      <p>That's the whole allocation. If you're thirty you've spent about
-      fifteen hundred of them already. Nobody mentions this, because a person
-      who has done the arithmetic is much harder to keep in line.</p>
-      <p>Everyone will have something to say. Too fast, too crazy, too much,
-      not normal. They said it before you and they'll say it after you, and
-      none of it will matter — nobody studies Shakespeare's private life. The
-      work outlived the man and the gossip didn't survive the century.
-      <b>Yours won't either.</b></p>
-      <p>Society is built to keep things running smoothly, not to get you where
-      you want to go. Work, rent, repeat — and most people never get out the
-      door. If you're not breaking the law, there's no problem. There was never
-      a problem.</p>
-    </div>
-    <p class="tag">The name</p>
-    <div class="prose">
-      <p><b>BADSCANDAL is about becoming one.</b> A bad scandal is what they
-      call you when you stop asking. It's for the people who cared too much,
-      got hurt doing it, and came out the other side realising nothing really
-      matters except the moment you're standing in.</p>
-      <p>Everyone is welcome here — every race, every sex, every orientation.
-      The goal is to outgrow the fear of being judged and live honestly from a
-      place of not giving a <span class="bs-swear">f***</span>. The clothes are
-      the statement. Follow us around the world.</p>
-    </div>
-    <p class="tag">Contact</p>
-    <div class="prose">
-      <p>Wholesale, press and anything else:
-      <a href="mailto:contact@badscandal.com">contact@badscandal.com</a></p>
-    </div>
-    <p class="tag">Principles</p>
-    <dl class="principles">
-      <dt>Mean it or bin it</dt>
-      <dd>If a piece doesn't say something true, it doesn't go in the drop. Taste is the second filter. Honesty is the first.</dd>
-      <dt>All in or nothing</dt>
-      <dd>Fewer pieces, everything given. We'd rather make ten things we'd wear every day than a hundred we wouldn't.</dd>
-      <dt>Say it out loud</dt>
-      <dd>If a statement needs explaining, it wasn't a statement. It goes across the back where people can read it from behind you.</dd>
-      <dt>Trouble over polish</dt>
-      <dd>Rushed work is forgettable and over-polished work is worse. The edge stays in.</dd>
-    </dl>
-  </div>
-</div>
+<!-- The ABOUT MODAL is gone (24 Aug 2026 rework) — About now lives as a
+     section at the bottom of this page, see #about-sec below. ------------- -->
 
 <main id="top">
 
@@ -191,6 +128,89 @@
     </div>
     <h2 class="sr-only">Be a bad scandal</h2>
     <a class="cta-btn roll" data-mag href="#store">Wear the trouble</a>
+  </section>
+
+  <!-- 05 · ABOUT — moved here from the index modal (24 Aug 2026 rework).
+       The id is about-sec, NOT about, on purpose: main.js still treats
+       #about as the modal (Escape would hide this section) and its
+       pageSwears() only auto-assembles .bs-swear OUTSIDE #about — which
+       is exactly what a static section needs. The inner classes
+       (.about-inner/.about-lead/.principles…) are the modal's own,
+       reused unchanged. ---------------------------------------------------- -->
+  <section class="about-sec reveal" id="about-sec" aria-label="About BADSCANDAL">
+    <div class="about-inner">
+      <p class="tag">About BADSCANDAL</p>
+      <p class="about-lead"><b>BADSCANDAL is the alias of Luke Power</b> —
+      the music came first, and everything else grew out of it. It's also a
+      way of living: doing the things that get people in a stir, out loud,
+      in front of everybody.</p>
+      <p class="about-lead">We left. Country, family, friends, the whole
+      set-up — traded for a dream of making things and seeing the world.
+      It's run by the two of us, Luke and Lilian. <b>Say the thing nobody
+      says.</b></p>
+      <div class="about-meta">
+        <span>RUN BY LUKE &amp; LILIAN</span>
+        <span>WHEREVER WE ARE THIS MONTH</span>
+      </div>
+      <img class="about-img" src="assets/about-couple-v1.webp"
+           alt="Luke and Lilian above the caldera at dusk" loading="lazy">
+      <ul class="about-words" aria-hidden="true">
+        <li>leave</li><li>chase</li><li>ignore</li><li>repeat</li>
+      </ul>
+      <p class="tag">Four thousand weeks</p>
+      <div class="prose">
+        <p>That's the whole allocation. If you're thirty you've spent about
+        fifteen hundred of them already. Nobody mentions this, because a person
+        who has done the arithmetic is much harder to keep in line.</p>
+        <p>Everyone will have something to say. Too fast, too crazy, too much,
+        not normal. They said it before you and they'll say it after you, and
+        none of it will matter — nobody studies Shakespeare's private life. The
+        work outlived the man and the gossip didn't survive the century.
+        <b>Yours won't either.</b></p>
+        <p>Society is built to keep things running smoothly, not to get you where
+        you want to go. Work, rent, repeat — and most people never get out the
+        door. If you're not breaking the law, there's no problem. There was never
+        a problem.</p>
+      </div>
+      <p class="tag">The name</p>
+      <div class="prose">
+        <p><b>BADSCANDAL is about becoming one.</b> A bad scandal is what they
+        call you when you stop asking. It's for the people who cared too much,
+        got hurt doing it, and came out the other side realising nothing really
+        matters except the moment you're standing in.</p>
+        <p>Everyone is welcome here — every race, every sex, every orientation.
+        The goal is to outgrow the fear of being judged and live honestly from a
+        place of not giving a <span class="bs-swear">f***</span>. The clothes are
+        the statement. Follow us around the world.</p>
+      </div>
+      <p class="tag">Contact</p>
+      <div class="prose">
+        <p>Wholesale, press and anything else:
+        <a href="mailto:contact@badscandal.com">contact@badscandal.com</a></p>
+      </div>
+      <p class="tag">Principles</p>
+      <dl class="principles">
+        <dt>Mean it or bin it</dt>
+        <dd>If a piece doesn't say something true, it doesn't go in the drop. Taste is the second filter. Honesty is the first.</dd>
+        <dt>All in or nothing</dt>
+        <dd>Fewer pieces, everything given. We'd rather make ten things we'd wear every day than a hundred we wouldn't.</dd>
+        <dt>Say it out loud</dt>
+        <dd>If a statement needs explaining, it wasn't a statement. It goes across the back where people can read it from behind you.</dd>
+        <dt>Trouble over polish</dt>
+        <dd>Rushed work is forgettable and over-polished work is worse. The edge stays in.</dd>
+      </dl>
+      <div class="about-foot">
+        <div>
+          <p class="tag">Luke</p>
+          <a class="roll" href="https://instagram.com/iguessimlukepower" target="_blank" rel="noopener">Instagram</a>
+        </div>
+        <div>
+          <p class="tag">Lilian</p>
+          <!-- >>> EDIT HERE: drop in Lilian's real Instagram handle <<< -->
+          <a class="roll" href="https://instagram.com/" target="_blank" rel="noopener">Instagram</a>
+        </div>
+      </div>
+    </div>
   </section>
 
 </main>
@@ -256,7 +276,7 @@
     <div>
       <p class="tag">Navigation</p>
       <ul class="plain">
-        <li><button class="roll linklike" data-about type="button">About</button></li>
+        <li><a class="roll" href="#about-sec">About</a></li>
         <!-- differs from index.html: Home leaves for the homepage, Store stays here -->
         <li><a class="roll" href="index.html">Home</a></li>
         <li><a class="roll" href="#top">Store</a></li>

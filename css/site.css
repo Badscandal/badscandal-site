@@ -921,3 +921,37 @@ main section{max-width:var(--maxw);margin:0 auto;
   #flow{display:none}
   .flow-fallback[hidden]{display:block}
 }
+
+/* ============================================================
+   LANDING (index, 24 Aug 2026 rework) — just the wordmark and
+   the film. Everything else — the shop, the story strip, the
+   About — lives on /store now. Two rules:
+   * .hero--full stretches the same hero slab to the viewport
+     (declared last so it beats the 640px media-query height).
+   * .music-line is the index tagline. It deliberately does NOT
+     use .hero-line: i18n.js rewrites .hero-line innerHTML to
+     the "Wear the trouble." translations, which belong to the
+     store. It carries its own i18n entry instead. */
+.hero.hero--full{height:100svh;min-height:520px}
+@supports not (height:100svh){.hero.hero--full{height:100vh}}
+.hero.hero--full .hero-inner{justify-content:center;padding-top:0;
+  padding-bottom:0;transform:none}
+.music-line{position:absolute;left:0;right:0;z-index:2;
+  bottom:clamp(30px,7vh,76px);margin:0;padding:0 var(--pad);
+  text-align:center;font-family:var(--font-display);font-weight:400;
+  color:var(--paper);font-size:clamp(17px,2vw,24px);letter-spacing:-.01em}
+
+/* ---------- ABOUT — bottom of the store page --------------------
+   Was the index About modal (24 Aug 2026 rework). The inner pieces
+   (.about-inner column, .about-lead, .about-meta, .about-img,
+   .about-words, .principles) are the modal's own classes, reused
+   unchanged — only the shell differs: a normal transparent section
+   instead of a fixed overlay. The id is about-sec, NOT about, on
+   purpose: main.js treats #about as the modal (hides it on Escape)
+   and pageSwears() only auto-assembles .bs-swear OUTSIDE #about. */
+.about-sec{padding:clamp(80px,12vh,130px) var(--pad) 96px;
+  border-top:1px solid var(--ink-3)}
+.about-foot{border-top:1px solid var(--ink-3);padding-top:30px;
+  display:flex;gap:clamp(40px,8vw,90px);flex-wrap:wrap}
+.about-foot .tag{margin-bottom:10px}
+.about-foot a{font-size:15px}

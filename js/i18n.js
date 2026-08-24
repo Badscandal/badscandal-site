@@ -65,6 +65,7 @@
 
     /* about modal */
     "About BADSCANDAL": { es: "Sobre BADSCANDAL", pt: "Sobre a BADSCANDAL" },
+    "RUN BY LUKE & LILIAN": { es: "DIRIGIDO POR LUKE & LILIAN", pt: "TOCADO POR LUKE & LILIAN" },
     "WHEREVER WE ARE THIS MONTH": { es: "DONDE ESTEMOS ESTE MES", pt: "ONDE ESTIVERMOS ESTE MÊS" },
     "leave": { es: "irse", pt: "ir embora" },
     "chase": { es: "perseguir", pt: "correr atrás" },
@@ -199,14 +200,17 @@
     { sel: ".cm-track span",
       es: "Sé un bad <span class=\"em\">scandal</span> —&nbsp;",
       pt: "Seja um bad <span class=\"em\">scandal</span> —&nbsp;" },
+    { sel: ".music-line",
+      es: "Música a la que le da <span class=\"em\">igual</span>.",
+      pt: "Música que não está nem <span class=\"em\">aí</span>." },
     { sel: ".about-lead", es: [
-        "Nos fuimos. País, familia, amigos, toda la estructura — cambiados por el sueño de crear cosas y ver el mundo. Nos conocimos, nos enamoramos vergonzosamente rápido, y decidimos que la vida era demasiado corta para hacerla a la manera sensata.",
-        "BADSCANDAL es la ropa que salió de eso. <b>Di lo que nadie dice.</b> Persigue lo que de verdad quieres, en voz alta, delante de todos."
+        "<b>BADSCANDAL es el alias de Luke Power</b> — primero fue la música, y todo lo demás creció de ahí. También es una forma de vivir: hacer las cosas que alborotan a la gente, en voz alta, delante de todos.",
+        "Nos fuimos. País, familia, amigos, toda la estructura — cambiados por el sueño de crear cosas y ver el mundo. Lo llevamos entre los dos, Luke y Lilian. <b>Di lo que nadie dice.</b>"
       ], pt: [
-        "Fomos embora. País, família, amigos, a estrutura toda — trocados pelo sonho de criar coisas e ver o mundo. Nos conhecemos, nos apaixonamos rápido de dar vergonha, e decidimos que a vida era curta demais pra fazer do jeito sensato.",
-        "BADSCANDAL é a roupa que saiu disso. <b>Diga o que ninguém diz.</b> Corra atrás do que você quer de verdade, em voz alta, na frente de todo mundo."
+        "<b>BADSCANDAL é o alias de Luke Power</b> — primeiro veio a música, e todo o resto cresceu daí. Também é um jeito de viver: fazer as coisas que causam alvoroço, em voz alta, na frente de todo mundo.",
+        "Fomos embora. País, família, amigos, a estrutura toda — trocados pelo sonho de criar coisas e ver o mundo. Tocado por nós dois, Luke e Lilian. <b>Diga o que ninguém diz.</b>"
       ] },
-    { sel: ".about .prose p", es: [
+    { sel: ".about-sec .prose p", es: [
         "Esa es toda la asignación. Si tienes treinta, ya gastaste unas mil quinientas. Nadie lo menciona, porque una persona que hizo la cuenta es mucho más difícil de mantener en fila.",
         "Todos tendrán algo que decir. Demasiado rápido, demasiado loco, demasiado, no es normal. Lo dijeron antes de ti y lo dirán después, y nada importará — nadie estudia la vida privada de Shakespeare. La obra sobrevivió al hombre y el chisme no sobrevivió al siglo. <b>El tuyo tampoco.</b>",
         "La sociedad está construida para que todo funcione sin fricción, no para llevarte a donde quieres ir. Trabajo, renta, repetir — y la mayoría nunca sale por la puerta. Si no estás rompiendo la ley, no hay problema. Nunca hubo un problema.",
