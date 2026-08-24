@@ -41,8 +41,8 @@
 <!-- LANDING (24 Aug 2026 rework): badscandal.com is just the wordmark
      over the film. The entire store-first page — nav taxonomy, shop,
      story strip, marquee, About — lives on store.html now (About is a
-     section at the bottom of it: store.html#about-sec). Nav here is
-     Home + Store BY DESIGN; no cart, no burger, no footer, no store.js.
+     story strip, marquee — lives on store.html now. Nav here is
+     Home + Store plus the burger menu; no cart, no footer, no store.js.
      The tagline is .music-line, NOT .hero-line — i18n.js rewrites
      .hero-line to the "Wear the trouble." translations, which belong to
      the store page; .music-line has its own entry there. --------------- -->
@@ -55,7 +55,16 @@
   <div class="lang" role="group" aria-label="Language">
     <button type="button" data-lang="en">EN</button><button type="button" data-lang="es">ES</button><button type="button" data-lang="pt">PT</button>
   </div>
+  <button class="nav-burger" id="menu-btn" type="button" aria-expanded="false" aria-controls="menu"><span>Menu</span><span>Close</span></button>
 </header>
+
+<!-- FULLSCREEN MENU ---------------------------------------------------------- -->
+<div class="menu" id="menu" aria-hidden="true">
+  <a class="menu-item" href="#top"><i>01</i> Home</a>
+  <a class="menu-item" href="store.html"><i>02</i> Store</a>
+  <a class="menu-item" href="us.html"><i>03</i> Story</a>
+  <a class="menu-item" href="mailto:contact@badscandal.com?subject=Hello"><i>04</i> Contact</a>
+</div>
 
 <main id="top">
 
