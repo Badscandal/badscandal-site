@@ -4,22 +4,19 @@ Static site (no build step, no framework, no dependencies). Plain HTML +
 CSS + vanilla JS, auto-deployed to Netlify on every push to `main`.
 Shop data comes live from Shopify's Storefront API at runtime.
 
-**BADSCANDAL is Luke Power's electronic-music artist alias — the artist
-IS the brand** (redirected 24 Aug 2026; the model is Alok: one alias built
-like a world act, with the clothing and the store orbiting the music).
-The alias already carries real equity from the 2021–2024 run: ~418K Spotify
-monthly listeners (artist id 29kaubgb6Esvwu0idVndGy), Apple Music, Discogs,
-Genius, Viberate. Under the name sit:
+**BADSCANDAL is the umbrella brand** of Luke Power and Lilian — a couple
+who left Ireland to travel and make things. Under the umbrella sit four
+things, and the site has to hold all of them:
 
-* **The music** — EDM releases as BADSCANDAL. The income and the product.
-* **The clothing line** — statement tees and essentials, sold via Shopify;
-  merch worn on camera. Instagram handle for the store: `badscandal.store`.
-* **Luke & Lilian** — the couples/travel content; parked as a side lane,
-  no longer the front of the brand.
+* **Luke & Lilian** — the couples/travel content, the story, the faces.
+* **Luke Power** — the music. This is the actual income. Music is fully
+  back in scope (an earlier revision of the site removed it — that
+  framing is dead, see "Stale docs" below).
+* **Goodscandal** — the counterpart project.
+* **The clothing line** — statement tees and essentials, sold via Shopify.
 
-The site keeps the store AND is the artist's front door. index.html carries
-MusicGroup + Organization JSON-LD (updated 24 Aug 2026) — keep both.
-See `BADSCANDAL - Brand & Content Playbook v2.md` in the parent folder.
+The site sells the clothes and tells the story, but it is not "a clothing
+brand's website" — it is the front door to everything the two of them make.
 
 **THE ONE RULE: "BADSCANDAL is the ink, the world is the colour."**
 All brand furniture — wordmark, titles, nav, labels, slates, footer,
