@@ -15,7 +15,7 @@
 
    HOW PRODUCTS SORT THEMSELVES (tags, set on each product in Shopify):
      "statement" or "essential"          -> family  (the slogan pieces vs the blanks)
-     "tee", "hoodie", "tank" or "other"  -> garment
+     "tee", "hoodie", "crop", "cap", "tank" or "other" -> garment
    The two axes are independent, so a statement hoodie shows under
    Statements AND under Hoodies. Both lists live in one place —
    FAMILIES / GARMENTS below — which drives the Shopify query, the
@@ -55,10 +55,16 @@
   ];
   var GARMENTS = [
     { key: "all",    label: "All" },
-    { key: "tee",    label: "Tees",    tag: "tee",    test: /t-?shirts?\b|\btees?\b/ },
-    { key: "hoodie", label: "Hoodies", tag: "hoodie", test: /hoodie|sweatshirt|crewneck|sweater|fleece|jumper/ },
-    { key: "tank",   label: "Tanks",   tag: "tank",   test: /tank|crop-?top|cropped/ },
-    { key: "other",  label: "Other",   tag: "other" }
+    { key: "tee",    label: "Tees",      tag: "tee",    test: /t-?shirts?\b|\btees?\b/ },
+    { key: "hoodie", label: "Hoodies",   tag: "hoodie", test: /hoodie|sweatshirt|crewneck|sweater|fleece|jumper/ },
+    /* ORDER MATTERS: tags resolve in list order, and the Aug 2026 caps
+       ship tagged "cap" AND "other", the crop tops "crop" AND "tank" —
+       so crop must sit before tank and hat before other, or the old tag
+       claims them and the new sections stay empty */
+    { key: "crop",   label: "Crop tops", tag: "crop",   test: /crop-?top/ },
+    { key: "hat",    label: "Hats",      tag: "cap",    test: /\bcaps?\b|\bhats?\b|beanie|snapback/ },
+    { key: "tank",   label: "Tanks",     tag: "tank",   test: /tank/ },
+    { key: "other",  label: "Other",     tag: "other" }
   ];
   /* Colourways: the SAME statement sold as separate Shopify products,
      one per ink/shirt combination ("NOT SORRY NEVER WAS" red on white,
@@ -270,11 +276,17 @@
 
   /* ---------- colourway grouping ---------------------------------------- */
   /* strip trailing "(Red)" / "(BLACK)" etc — only colour words, so
-     "WANNA BE MY CARDIO? (RESPECTFULLY)" keeps its parenthetical */
+     "WANNA BE MY CARDIO? (RESPECTFULLY)" keeps its parenthetical.
+     WAY_INNER handles the crop-top pattern "(CROP BLACK)": only the
+     colour word is dropped -> "(CROP)", so the black crop twins group
+     with their red siblings WITHOUT colliding into the tee of the same
+     statement (whose base has no "(CROP)") */
   var WAY_PAREN = /\s*\((red|black|white|blue|green|navy|grey|gray|cream|natural)\)\s*$/i;
+  var WAY_INNER = /\s*\(([^()]+?)\s+(red|black|white|blue|green|navy|grey|gray|cream|natural)\)\s*$/i;
   function baseTitle(t) {
     var s = String(t);
     while (WAY_PAREN.test(s)) s = s.replace(WAY_PAREN, "");
+    s = s.replace(WAY_INNER, function (m, keep) { return " (" + keep + ")"; });
     return s.trim();
   }
   function wayOf(tags) {
@@ -326,6 +338,11 @@
       return {
         id: n.id, title: n.title, desc: n.description || "",
         base: baseTitle(n.title), way: wayOf(tags),
+        /* where the statement is printed: the tees ship tagged
+           "front-and-back" (statement on the back); caps and crop tops
+           are printed on the FRONT — leading those with the back showed
+           a blank garment */
+        backPrint: tags.indexOf("front-and-back") > -1,
         family: familyOf(tags, n.productType, hint),
         garment: garmentOf(tags, n.productType, hint),
         price: parseFloat(n.priceRange.minVariantPrice.amount),
@@ -343,7 +360,10 @@
   }
 
   function fetchProducts() {
-    var q = "query P($q: String) { products(first: 60, query: $q) { edges { node {" +
+    /* 250 = the Storefront page maximum. The catalogue passed 60 when
+       the caps + crop tops landed (Aug 2026) and the tail of the list —
+       the newest products — silently never arrived */
+    var q = "query P($q: String) { products(first: 250, query: $q) { edges { node {" +
       " id title handle description tags productType" +
       " images(first: 50) { edges { node { url altText } } }" +
       " priceRange { minVariantPrice { amount currencyCode } }" +
@@ -394,17 +414,19 @@
       var card = document.createElement("article");
       card.className = "pcard";
       if (!instant) card.style.transitionDelay = (Math.min(idx, 8) * 45) + "ms";
-      /* On a STATEMENT piece the statement is printed on the back, so the
-         back is the product — it shows at rest AND on hover (no alt
-         flip: hovering is when Quick Add opens, and flipping to the
-         blank front right then sold these as blank tees — the front
-         lives in the modal's view buttons instead). Anything else leads
-         with the front and reveals the back on hover. */
+      /* A STATEMENT piece leads with the side the statement is printed
+         on — the back for the tees (backPrint, from the front-and-back
+         tag), the front for caps and crop tops — and that side shows at
+         rest AND on hover (no alt flip: hovering is when Quick Add
+         opens, and flipping to the blank side right then sold these as
+         blank garments — the other side lives in the modal's view
+         buttons instead). Anything else leads with the front and
+         reveals the back on hover. */
       var backSrc = imgFor(p, null, "back");
       var frontSrc = imgFor(p, null, "front") || p.images[0];
-      var statementBack = (p.family === "statement" && backSrc);
+      var statementBack = (p.family === "statement" && p.backPrint && backSrc);
       var mainSrc = statementBack ? backSrc : frontSrc;
-      var altSrc = statementBack ? null : (backSrc || p.images[1] || null);
+      var altSrc = p.family === "statement" ? null : (backSrc || p.images[1] || null);
       if (altSrc === mainSrc) {
         altSrc = (p.images[1] && p.images[1] !== mainSrc) ? p.images[1] : null;
       }
@@ -557,10 +579,11 @@
   function openModal(p) {
     modalProduct = p; modalVariant = null;
     modalColour = null;
-    /* open a statement piece on its back, same reason as the grid card:
-       that is where the statement is. modalView is set so the Front/Back
-       buttons render with the right one already active. */
-    var openBack = (p.family === "statement" && imgFor(p, null, "back"));
+    /* open a statement piece on the side it's printed on, same reason
+       as the grid card: back for the tees, front for caps/crop tops.
+       modalView is set so the Front/Back buttons render with the right
+       one already active. */
+    var openBack = (p.family === "statement" && p.backPrint && imgFor(p, null, "back"));
     modalView = openBack ? "back" : null;
     document.getElementById("pmodal-img").src =
       openBack || imgFor(p, null, "front") || p.images[0];
