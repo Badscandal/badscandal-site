@@ -4,19 +4,24 @@ Static site (no build step, no framework, no dependencies). Plain HTML +
 CSS + vanilla JS, auto-deployed to Netlify on every push to `main`.
 Shop data comes live from Shopify's Storefront API at runtime.
 
-**BADSCANDAL is the umbrella brand** of Luke Power and Lilian — a couple
-who left Ireland to travel and make things. Under the umbrella sit four
-things, and the site has to hold all of them:
+**BADSCANDAL is Luke Power's electronic-music artist alias — the artist
+IS the brand** (direction locked 24 Aug 2026; the model is Alok: one
+alias built like a world act, with the clothing and the store orbiting
+the music). The alias carries real equity from the 2021–2024 run:
+~418K Spotify monthly listeners (artist id `29kaubgb6Esvwu0idVndGy`),
+Apple Music, Discogs, Genius, Viberate. Run by Luke and Lilian. Under
+the name sit:
 
-* **Luke & Lilian** — the couples/travel content, the story, the faces.
-* **Luke Power** — the music. This is the actual income. Music is fully
-  back in scope (an earlier revision of the site removed it — that
-  framing is dead, see "Stale docs" below).
-* **Goodscandal** — the counterpart project.
-* **The clothing line** — statement tees and essentials, sold via Shopify.
+* **The music** — EDM releases as BADSCANDAL. The income and the product.
+* **The clothing line** — statement tees and essentials via Shopify;
+  merch worn on camera. Store Instagram handle: `badscandal.store`.
+* **Luke & Lilian** — the couples/travel content; parked as a side lane
+  (us.html still tells that story), no longer the front of the brand.
 
-The site sells the clothes and tells the story, but it is not "a clothing
-brand's website" — it is the front door to everything the two of them make.
+**Site shape since the 24 Aug 2026 restructure:** badscandal.com is a
+one-screen landing — the CRT wordmark over the red film, "Music that
+doesn't *care*." — and the ENTIRE store-first page lives at /store.
+See "Where the site is at" under Open tasks for the current state.
 
 **THE ONE RULE: "BADSCANDAL is the ink, the world is the colour."**
 All brand furniture — wordmark, titles, nav, labels, slates, footer,
@@ -111,29 +116,41 @@ silently renders in a fallback:
 
 ## Files
 
-    index.html       THE STORE-FIRST HOMEPAGE (restructured 20 Aug 2026,
-                     modelled on saywaybrand.com's shape): nav carrying
-                     the shop categories -> compact FILM-LOOP hero
-                     (~58vh/580px, added 21 Aug 2026: the Santorini edit
-                     as a muted looping <video>, object-position 30%;
-                     phones keep 62vh/24% and pick a 1080 encode via
-                     <source media>; poster = the sunset-viewpoint
-                     frame, kept by reduced-motion visitors — main.js
-                     cancels autoplay) with the CRT wordmark over it ->
-                     the full shop (filter bar, grid, modal, cart — same
-                     DOM as store.html, driven by js/store.js) -> a slim
-                     story strip linking to /us -> marquee CTA -> footer
-                     with a second CRT wordmark. First product card is
-                     visible without scrolling. KEEP IT THAT WAY — a
-                     taller 72vh hero was tried and reverted same day
-                     (see css/site.css .hero comment). Any new hero film
-                     goes through the encoding rule below and gets -vN
-                     filenames (film, 1080, poster all bump together).
-                     There is NO preloader (removed by request; the
-                     machinery survives in main.js, guarded on #loader)
-                     and NO scroll-scrub hero. About modal lives here;
-                     subpages open it via index.html?about=1
-    store.html       The dedicated shop page (see "Store" below)
+    index.html       THE LANDING (restructured 24 Aug 2026): one full-
+                     viewport screen, nothing else. The red-scanline film
+                     as a muted looping <video> (phones pick the 1080
+                     encode via <source media>; poster kept by reduced-
+                     motion visitors — main.js cancels autoplay), the CRT
+                     wordmark centred over it (.hero--full stretches the
+                     shared hero slab to 100svh — declared at the END of
+                     site.css so it beats the 640px media query), and the
+                     tagline "Music that doesn't care." near the bottom.
+                     The tagline is .music-line, NOT .hero-line — i18n.js
+                     rewrites .hero-line innerHTML to the "Wear the
+                     trouble." translations, which belong to /store;
+                     .music-line has its own i18n entry. Nav is Home +
+                     Store inline (desktop) plus the burger menu
+                     (Home/Store/Story/Contact) — on phones .nav-links
+                     hide, so the burger IS the mobile route to the
+                     store. No cart, no footer, no store.js, no About.
+    store.html       THE STORE-FIRST PAGE — everything index.html used to
+                     be (20 Aug shape, modelled on saywaybrand.com): nav
+                     carrying the shop categories -> compact FILM-LOOP
+                     hero (~58vh/580px) with the CRT wordmark + "Wear the
+                     trouble." + Shop-the-drop -> the full shop (filter
+                     bar, grid, modal, cart — js/store.js) -> slim story
+                     strip linking to /us -> marquee CTA -> footer with
+                     the second CRT wordmark. First product card visible
+                     without scrolling; KEEP IT THAT WAY (72vh hero was
+                     tried + reverted, see css/site.css .hero comment).
+                     Any new hero film follows the encoding rule below
+                     and gets -vN filenames. NO preloader (machinery
+                     survives in main.js, guarded on #loader). The ABOUT
+                     MODAL IS GONE EVERYWHERE (24 Aug): briefly a
+                     #about-sec section at the store's foot, removed the
+                     same day — /us carries who-we-are now. The alias-of-
+                     Luke-Power About copy (+ both IGs) is preserved in
+                     git at commit 01441cb if it's ever wanted on /us.
     us.html          The story page — and since the restructure it also
                      holds everything that used to crowd the homepage:
                      story prose, the STAMP/CARD scroll sequence, the
@@ -450,28 +467,52 @@ music-era URLs keep their equity instead of 404ing.
 
 ## Open tasks / next up
 
-**WHERE WE LEFT OFF (21 Aug 2026, end of session):** the 20 Aug empty-
-shop crisis is OVER — a brand-new catalogue (26 statement tees: 18 red-
-on-white + 8 white-on-black "(BLACK)" twins, plus 3 untagged blanks the
-site never fetches) is live and files correctly via the alt-tag +
-colourway systems above. The homepage hero is the RED scanlined film
-(hero-film-*-v6; the B&W v7 files are deployed but unused — swapping
-the three refs in index.html brings it back; v1-v5 also remain in
-assets/, and the source .movs sit UNTRACKED at the repo root — move
-them out when settled). Hero: back to the compact 58vh slab (72vh was
-tried + reverted, see .hero comment), phones drop the CTA and centre
-the wordmark +4vh. CRT: sweep every 5.5s, crest fringe 4.6px (raised
-because the red film ate the split), and crt.js now takes a per-
-instance word from the fallback element — us.html mounts "THE ROAD".
-/us: photo BACKDROP (.us-bg fixed collage, scrim in ::after), photos
-on the stamp cards, About modal has the couple selfie, stamp card 1
-lands 120px into the section (was a full dead 800px marker). Statement
-tagging in Shopify is still the right long-term fix (tags win over
-alts) — a tagsAdd write was permission-blocked this session.
-* **Shared BADSCANDAL socials.** Every social link across index/store/us
-  still points at `@iguessimlukepower`, marked `>>> EDIT HERE <<<`. Swap
-  in the brand accounts when they exist — also the Behold IG feed id on
-  us.html, and the `sameAs` arrays in both JSON-LD blocks.
+**WHERE THE SITE IS AT (26 Aug 2026):**
+
+* **Live structure** (commits `01441cb` + `6db0519`, 24 Aug):
+  badscandal.com = landing (wordmark + film + "Music that doesn't
+  care."), /store = the full store-first page, /us = the story. The
+  About modal is gone everywhere; About links were removed from every
+  menu/footer, and us.html's "Read the whole thing" now anchors to its
+  own #story-prose. i18n updated to match (.music-line entry; the
+  .about-lead / .about-sec translation blocks are currently unused but
+  kept). Verified live: zero console errors, shop fetches fine.
+* **Direction:** BADSCANDAL = Luke's EDM artist alias (see the top of
+  this file). A prepared-but-reverted SEO change — "musician and
+  clothing" meta description + MusicGroup JSON-LD with all the artist-
+  profile sameAs links — sits in git: commit `e1fa86a`, reverted in
+  `6ed1bc5`; ship it later with `git revert 6ed1bc5 && git push`. The
+  live JSON-LD still carries the OLD clothing-only framing and the
+  unverified `@lukeandlilian` handles.
+* **YouTube assets exist** (24 Aug, Higgsfield, matched to the site's
+  CRT identity): banner + thumbnail in
+  `~/Desktop/Claude Works/Badscandal - YouTube Assets/`.
+* **Digital products are planned** (26 Aug discussion): DAW plugin with
+  licence keys (likely Lemon Squeezy/Paddle as merchant of record) and
+  sample packs via Shopify's Digital Downloads app. Site-side, a
+  digital product needs ONE line — a `digital`/`samples` category in
+  the FAMILIES/GARMENTS arrays in js/store.js — or the tag-derived
+  fetch query never even requests it (the classic trap below).
+* Lilian's Instagram handle is still unknown — needed if her IG ever
+  goes on the site.
+* Catalogue (from 21 Aug): 26 statement tees (18 red-on-white + 8
+  white-on-black "(BLACK)" twins, 3 untagged blanks the site never
+  fetches) live and filing correctly via the alt-tag + colourway
+  systems above. Statement tagging in Shopify is still the right
+  long-term fix (tags win over alts) — a tagsAdd write was
+  permission-blocked on 21 Aug.
+* Hero films: the RED scanlined film (hero-film-*-v6) on both index and
+  store; B&W v7 deployed but unused (swap the refs to bring it back);
+  v1–v5 remain in assets/; source .movs sit UNTRACKED at the repo root
+  — move them out when settled. CRT: sweep 5.5s, crest fringe 4.6px;
+  crt.js takes a per-instance word from the fallback element — us.html
+  mounts "THE ROAD".
+* **Shared BADSCANDAL socials.** The social links on store/us (index has
+  none since the restructure) still point at `@iguessimlukepower`, marked
+  `>>> EDIT HERE <<<`. Swap in the brand accounts when they exist — also
+  the Behold IG feed id on us.html, and the `sameAs` arrays in both
+  JSON-LD blocks (or ship the prepared e1fa86a schema, which already
+  points Luke at the verified music profiles).
 * Store hero photo: store.html currently reuses the homepage sunset
   poster (`assets/hero-sunset-poster-v1.jpg`) behind "Wear the trouble."
   A dedicated campaign shot would be better — when supplying one, give it
