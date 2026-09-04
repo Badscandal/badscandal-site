@@ -90,7 +90,8 @@
     <video class="hero-photo" autoplay muted loop playsinline preload="auto"
            poster="assets/plugin-film-poster-v1.jpg"
            aria-label="CLEANSLATE — a light pulse runs through the eight modules">
-      <source src="assets/plugin-film-1080-v1.mp4" type="video/mp4"
+      <!-- phones: the 9:16 portrait cut of the same loop -->
+      <source src="assets/plugin-film-vert-1080-v1.mp4" type="video/mp4"
               media="(max-width: 640px)">
       <source src="assets/plugin-film-4k-v1.mp4" type="video/mp4">
     </video>
@@ -145,8 +146,9 @@
   <section class="plug-scrub" aria-label="CLEANSLATE — the film"
            data-scrub
            data-src="assets/plugin-scrub-1440-v1.mp4"
-           data-src-phone="assets/plugin-scrub-1080-v1.mp4"
-           data-poster="assets/plugin-scrub-poster-v1.jpg">
+           data-src-phone="assets/plugin-scrub-vert-1080-v1.mp4"
+           data-poster="assets/plugin-scrub-poster-v1.jpg"
+           data-poster-phone="assets/plugin-scrub-vert-poster-v1.jpg">
     <div class="plug-stage">
       <video muted playsinline preload="auto" poster="assets/plugin-scrub-poster-v1.jpg"
              aria-label="CLEANSLATE — from one glowing knob to the whole chain"></video>

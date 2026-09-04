@@ -19,6 +19,20 @@
     });
   }
 
+  /* autoplay refused (iOS Low Power Mode, data saver): the loops sit on
+     their poster with a play glyph. Retry on the first touch / scroll,
+     which counts as the user gesture Safari wants. */
+  if (!reduced) {
+    var kick = function () {
+      Array.prototype.forEach.call(document.querySelectorAll(".hero video[autoplay]"), function (v) {
+        if (v.paused) { var p = v.play(); if (p && p.catch) p.catch(function () {}); }
+      });
+    };
+    window.addEventListener("touchstart", kick, { once: true, passive: true });
+    window.addEventListener("scroll", kick, { once: true, passive: true });
+    window.addEventListener("pointerdown", kick, { once: true, passive: true });
+  }
+
   /* belt-and-braces loader dismissal: registered before ANYTHING that could
      throw, so even a runtime error further down this file can never trap the
      visitor behind the loader. (A parse error still can — the CSS

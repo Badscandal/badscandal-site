@@ -1115,3 +1115,14 @@ main section{max-width:var(--maxw);margin:0 auto;
 .buy-perks{display:flex;gap:clamp(14px,3vw,38px);justify-content:center;flex-wrap:wrap;
   margin-top:28px;font-family:var(--font-mono);font-weight:400;font-size:10.5px;
   letter-spacing:.14em;text-transform:uppercase;color:var(--uv)}
+
+/* ---------- phones: never show Safari's play glyph ----------
+   iOS paints a centred play button over any inline <video> that has not
+   started yet (the scroll film before its first touch; the hero loops
+   when Low Power Mode blocks autoplay). The films are decorative and
+   controls-free, so hide the glyph everywhere; main.js starts the loops
+   on the first touch when autoplay was refused. */
+video::-webkit-media-controls-start-playback-button{display:none !important;
+  -webkit-appearance:none}
+video::-webkit-media-controls{display:none !important}
+video::-webkit-media-controls-panel{display:none !important}
