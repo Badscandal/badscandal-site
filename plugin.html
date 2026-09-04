@@ -1,0 +1,333 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CLEANSLATE — Plugin store — BADSCANDAL</title>
+<meta name="description" content="CLEANSLATE by BADSCANDAL — the eight-module vocal chain in one window. Noise, cleanup, spectral, tape, de-ess, EQ, two compressors. AU, VST3 and standalone. Buy once, key by email, works offline.">
+<meta property="og:title" content="CLEANSLATE — the vocal chain that doesn't flinch">
+<meta property="og:description" content="Eight modules. One window. No excuses. The BADSCANDAL vocal chain plugin for every DAW.">
+<meta property="og:image" content="assets/plugin-still-hero-4k-v1.jpg">
+<link rel="icon" type="image/png" sizes="48x48" href="assets/favicon-48-v2.png">
+<link rel="icon" type="image/png" sizes="192x192" href="assets/favicon-192-v2.png">
+<link rel="apple-touch-icon" href="assets/favicon-180-v2.png">
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"SoftwareApplication",
+ "name":"CLEANSLATE",
+ "applicationCategory":"MultimediaApplication",
+ "applicationSubCategory":"Audio plugin",
+ "operatingSystem":"macOS, Windows",
+ "url":"https://www.badscandal.com/plugin.html",
+ "image":"https://www.badscandal.com/assets/plugin-still-hero-4k-v1.jpg",
+ "description":"Eight-module vocal chain plugin: noise suppression, cleanup, spectral resonance control, tape saturation, de-esser, 12-band EQ, FET and opto compression. AU, VST3 and standalone.",
+ "author":{"@type":"Organization","name":"BADSCANDAL","url":"https://www.badscandal.com/"}}
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,100..900&family=DM+Mono:wght@300;400;500&family=Figtree:wght@300..900&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/site.css">
+<noscript><style>
+/* no JS: reveals never get .in, the CRT canvas never draws, the scrub film
+   sits on its poster — reset so the page reads top to bottom */
+.reveal{opacity:1 !important;transform:none !important}
+.crt canvas{display:none !important}
+.crt-fallback{display:block !important}
+[data-pop]{opacity:1 !important;transform:none !important}
+</style></noscript>
+</head>
+<body>
+
+<div class="grain" aria-hidden="true"></div>
+<div class="blur-veil" aria-hidden="true"></div>
+
+<!-- PLUGIN STORE (5 Sep 2026) — the dedicated CLEANSLATE page. One product,
+     one job: get the visitor to BUY NOW. Structure top to bottom:
+       hero (signal-flow film loop + CRT "CLEANSLATE" + buy)
+       -> statement + facts
+       -> the scroll-played film (the centre of the page — scroll IS the
+          transport, main.js makeScrub via the [data-scrub] mount)
+       -> the eight modules with their real UI pages
+       -> gallery of the glass renders
+       -> specs -> BUY block -> FAQ -> footer.
+     The one rule holds: furniture is monochrome, the renders carry all the
+     colour. Sections are transparent; only cards are grey.
+     CACHE RULE: every asset here is -v1; a re-render needs -v2, never an
+     overwrite (assets/* is immutable for a year).
+     BUY NOW: js/plugin.js looks the product up on Shopify by handle
+     ("cleanslate") and sends the click straight to checkout. Until that
+     product exists the button falls back to the href below. ------------- -->
+
+<!-- NAV -------------------------------------------------------------------- -->
+<header class="nav">
+  <a class="nav-logo" href="index.html" aria-label="Badscandal — home">/</a>
+  <nav class="nav-links" aria-label="Primary">
+    <a class="nav-link roll" href="store.html">Clothing store</a>
+    <a class="nav-link roll on" href="plugin.html" aria-current="page">Plugin store</a>
+    <a class="nav-link roll" href="us.html">Story</a>
+  </nav>
+  <div class="lang" role="group" aria-label="Language">
+    <button type="button" data-lang="en">EN</button><button type="button" data-lang="es">ES</button><button type="button" data-lang="pt">PT</button>
+  </div>
+  <a class="nav-cta roll" data-mag href="#buy">Buy now</a>
+  <button class="nav-burger" id="menu-btn" type="button" aria-expanded="false" aria-controls="menu"><span>Menu</span><span>Close</span></button>
+</header>
+
+<!-- FULLSCREEN MENU ---------------------------------------------------------- -->
+<div class="menu" id="menu" aria-hidden="true">
+  <a class="menu-item" href="index.html"><i>01</i> Home</a>
+  <a class="menu-item" href="store.html"><i>02</i> Clothing store</a>
+  <a class="menu-item" href="plugin.html"><i>03</i> Plugin store</a>
+  <a class="menu-item" href="us.html"><i>04</i> Story</a>
+  <a class="menu-item" href="mailto:contact@badscandal.com?subject=CLEANSLATE"><i>05</i> Contact</a>
+</div>
+
+<main id="top" class="page-main">
+
+  <!-- 01 · HERO — the signal-flow loop behind a CRT "CLEANSLATE" (crt.js
+       takes the word from the fallback element, same as "THE ROAD" on
+       /us) and the first BUY NOW. Phones get the 1080 encode. ----------- -->
+  <section class="hero hero--full plug-hero" id="hero">
+    <video class="hero-photo" autoplay muted loop playsinline preload="auto"
+           poster="assets/plugin-film-poster-v1.jpg"
+           aria-label="CLEANSLATE — a light pulse runs through the eight modules">
+      <source src="assets/plugin-film-1080-v1.mp4" type="video/mp4"
+              media="(max-width: 640px)">
+      <source src="assets/plugin-film-4k-v1.mp4" type="video/mp4">
+    </video>
+    <div class="hero-scrim" aria-hidden="true"></div>
+    <div class="hero-inner">
+      <p class="plug-kicker">BADSCANDAL audio · vocal chain</p>
+      <div class="crt crt-plug"><canvas></canvas><h1 class="crt-fallback" hidden>CLEANSLATE</h1></div>
+      <p class="plug-line">Vocals that don't <span class="em">flinch</span>.</p>
+      <div class="buy-row">
+        <a class="buy-btn roll" data-mag data-buy href="mailto:contact@badscandal.com?subject=CLEANSLATE%20%E2%80%94%20buy">Buy now</a>
+        <span class="buy-price" data-price hidden></span>
+      </div>
+      <p class="buy-note">Instant key by email · 3 machines · works offline</p>
+    </div>
+    <p class="plug-strip" aria-hidden="true">
+      <span>AU · VST3 · Standalone</span><span>Mac &amp; Windows</span><span>8 modules · one window</span><span>10.7 ms tracking mode</span>
+    </p>
+  </section>
+
+  <!-- 02 · THE STATEMENT ------------------------------------------------------ -->
+  <section class="plug-intro reveal">
+    <p class="tag">What it is</p>
+    <h2>Eight modules. One window. No <span class="em">excuses</span>.</h2>
+    <div class="plug-cols">
+      <div>
+        <p>CLEANSLATE is the whole vocal chain in the order it should actually run:
+        noise out, mud out, resonances out, then tape, de-ess, EQ and two
+        compressors that behave like the hardware people mortgage things for.
+        Signal flows top to bottom. Every module has its own page, its own
+        power dot, and nothing you have to read a manual to understand.</p>
+        <p>It was built on an SM7B in a rented flat, measured against the plugins
+        that cost more than the microphone, and tuned until the difference was
+        the price. The noise suppressor is fully adaptive — no learn button to
+        hit by accident mid-take. Flip TRACK and the whole chain drops to
+        10.7&nbsp;ms so you can sing through it live.</p>
+      </div>
+      <ul class="plug-facts">
+        <li><span>Formats</span><b>AU · VST3 · Standalone</b></li>
+        <li><span>Systems</span><b>macOS 11+ (Apple silicon &amp; Intel) · Windows 10+</b></li>
+        <li><span>Modules</span><b>Noise · Cleanup · Spectral · Tape · De-ess · EQ · Catch · Level</b></li>
+        <li><span>Presets</span><b>7 genres + mic presets, plus your own</b></li>
+        <li><span>Licence</span><b>Key by email · 3 machines · offline after activation</b></li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- 03 · THE FILM — scroll is the transport. The section is tall; the
+       stage is sticky; main.js maps scroll progress across the section to
+       the film timeline (makeScrub, mounted from the data-* below). The
+       film starts at 0.000 on a keyframe with a keyframe every 6 frames —
+       see CLAUDE.md "encoding gotcha" before ever re-encoding it. -------- -->
+  <section class="plug-scrub" aria-label="CLEANSLATE — the film"
+           data-scrub
+           data-src="assets/plugin-scrub-1440-v1.mp4"
+           data-src-phone="assets/plugin-scrub-1080-v1.mp4"
+           data-poster="assets/plugin-scrub-poster-v1.jpg">
+    <div class="plug-stage">
+      <video muted playsinline preload="auto" poster="assets/plugin-scrub-poster-v1.jpg"
+             aria-label="CLEANSLATE — from one glowing knob to the whole chain"></video>
+      <p class="tag plug-stage-tag">Scroll to play</p>
+      <p class="plug-stage-cap">From one knob to the whole <span class="em">chain</span>.</p>
+      <div class="plug-stage-bar" aria-hidden="true"><i data-scrub-bar></i></div>
+    </div>
+  </section>
+
+  <!-- 04 · THE MODULES — the eight real UI pages, in signal order. Cards are
+       grey (the only flat colour allowed); the screenshots carry the hue. -->
+  <section class="plug-mods reveal" id="modules">
+    <p class="tag">Signal flow · top to bottom</p>
+    <h2>What's in the <span class="em">chain</span>.</h2>
+    <div class="mod-grid">
+      <article class="mod-card" data-pop="up">
+        <img src="assets/plugin-ui-noise-v1.webp" alt="CLEANSLATE Noise page" loading="lazy">
+        <div class="mod-body"><p class="mod-n">01</p><h3>Noise</h3>
+        <p>Adaptive suppression that kills the room, not the take. No learn button, nothing to arm — it just listens.</p></div>
+      </article>
+      <article class="mod-card" data-pop="up">
+        <img src="assets/plugin-ui-cleanup-v1.webp" alt="CLEANSLATE Cleanup page" loading="lazy">
+        <div class="mod-body"><p class="mod-n">02</p><h3>Cleanup</h3>
+        <p>High-pass, low-pass and the mud filter. The stuff you do on every vocal, done before you have to think about it.</p></div>
+      </article>
+      <article class="mod-card" data-pop="up">
+        <img src="assets/plugin-ui-spectral-v1.webp" alt="CLEANSLATE Spectral page" loading="lazy">
+        <div class="mod-body"><p class="mod-n">03</p><h3>Spectral</h3>
+        <p>Resonance control with four nodes and a live reduction burn. Boxiness, harshness and mic ring, carved out as they appear.</p></div>
+      </article>
+      <article class="mod-card" data-pop="up">
+        <img src="assets/plugin-ui-tape-v1.webp" alt="CLEANSLATE Tape page" loading="lazy">
+        <div class="mod-body"><p class="mod-n">04</p><h3>Tape</h3>
+        <p>Oversampled tape saturation with Character, Steady, Focus and Tube. Level-invariant, so quiet takes get the same glow.</p></div>
+      </article>
+      <article class="mod-card" data-pop="up">
+        <img src="assets/plugin-ui-deess-v1.webp" alt="CLEANSLATE De-ess page" loading="lazy">
+        <div class="mod-body"><p class="mod-n">05</p><h3>De-ess</h3>
+        <p>Adaptive threshold, no attack, no release, no lisp. Wide or split, it only ever touches the ess.</p></div>
+      </article>
+      <article class="mod-card" data-pop="up">
+        <img src="assets/plugin-ui-eq-v1.webp" alt="CLEANSLATE EQ page" loading="lazy">
+        <div class="mod-body"><p class="mod-n">06</p><h3>EQ</h3>
+        <p>Twelve surgical bands, ten shapes, slopes to 96&nbsp;dB, per-band dynamics. Air Link lifts the top as the de-esser works.</p></div>
+      </article>
+      <article class="mod-card" data-pop="up">
+        <img src="assets/plugin-ui-knobinfo-v1.webp" alt="CLEANSLATE Catch page" loading="lazy">
+        <div class="mod-body"><p class="mod-n">07</p><h3>Catch</h3>
+        <p>A FET compressor in the classic fast style: grabs the peaks, adds the grit, holds the vocal in front.</p></div>
+      </article>
+      <article class="mod-card" data-pop="up">
+        <img src="assets/plugin-ui-level-v1.webp" alt="CLEANSLATE Level page" loading="lazy">
+        <div class="mod-body"><p class="mod-n">08</p><h3>Level</h3>
+        <p>Opto levelling after the catch. Slow, musical, invisible — the reason the vocal never leaves the mix.</p></div>
+      </article>
+    </div>
+  </section>
+
+  <!-- 05 · GALLERY — the glass renders, full bleed. Decorative: empty alts. -->
+  <section class="plug-gallery">
+    <p class="tag">The hardware that isn't</p>
+    <div class="gal">
+      <img class="wide" src="assets/plugin-still-topdown-1920-v1.webp" alt="" loading="lazy" data-pop="up">
+      <img src="assets/plugin-still-closecrop-1920-v1.webp" alt="" loading="lazy" data-pop="left">
+      <img src="assets/plugin-still-spectral-1920-v1.webp" alt="" loading="lazy" data-pop="right">
+      <img src="assets/plugin-still-macro-1920-v1.webp" alt="" loading="lazy" data-pop="left">
+      <img src="assets/plugin-still-threequarter-1920-v1.webp" alt="" loading="lazy" data-pop="right">
+    </div>
+  </section>
+
+  <!-- 06 · SPECS ------------------------------------------------------------ -->
+  <section class="plug-specs reveal">
+    <p class="tag">The boring bits</p>
+    <h2>Runs <span class="em">everywhere</span>.</h2>
+    <dl class="spec-list">
+      <div><dt>Formats</dt><dd>AU, VST3, Standalone app</dd></div>
+      <div><dt>DAWs</dt><dd>Logic, Ableton Live, FL Studio, Cubase, Studio One, Reaper, Bitwig, Luna, GarageBand — anything that loads AU or VST3</dd></div>
+      <div><dt>Systems</dt><dd>macOS 11 or later, universal binary. Windows 10 or later, 64-bit</dd></div>
+      <div><dt>Latency</dt><dd>~95 ms full chain (reported to the host). TRACK mode: 10.7 ms for live monitoring</dd></div>
+      <div><dt>Loudness match</dt><dd>1:1 button — the output lands at the input level whatever the chain did</dd></div>
+      <div><dt>Licence</dt><dd>One key, three machines, activate once then work offline. Move seats yourself</dd></div>
+      <div><dt>Delivery</dt><dd>Key and installers by email the moment payment clears</dd></div>
+      <div><dt>Updates</dt><dd>Every 1.x update is free with your key</dd></div>
+      <div><dt>Made by</dt><dd>BADSCANDAL, on an SM7B, in a rented flat, out loud</dd></div>
+    </dl>
+  </section>
+
+  <!-- 07 · BUY — the big one. Thick-glass render behind; scrim keeps the copy
+       readable (never a section background). ---------------------------- -->
+  <section class="plug-buy" id="buy">
+    <img class="plug-buy-img" src="assets/plugin-still-hero-4k-v1.webp" alt="" loading="lazy">
+    <div class="plug-buy-scrim" aria-hidden="true"></div>
+    <div class="plug-buy-inner reveal">
+      <p class="tag">CLEANSLATE · v1</p>
+      <h2>Get the <span class="em">chain</span>.</h2>
+      <p class="lede">One licence. Every DAW you own. The whole vocal chain, in the order it
+      should run, in one window. Pay once and the key is in your inbox before you've closed the tab.</p>
+      <div class="buy-row">
+        <a class="buy-btn roll" data-mag data-buy href="mailto:contact@badscandal.com?subject=CLEANSLATE%20%E2%80%94%20buy">Buy now</a>
+        <span class="buy-price" data-price hidden></span>
+      </div>
+      <p class="buy-perks"><span>Instant key by email</span><span>3 machines</span><span>Works offline</span><span>Free 1.x updates</span></p>
+    </div>
+  </section>
+
+  <!-- 08 · FAQ -------------------------------------------------------------- -->
+  <section class="faq reveal">
+    <p class="tag">Questions</p>
+    <h2>Things you'd <span class="em">ask</span>.</h2>
+    <div class="faq-list">
+      <details>
+        <summary>Will it load in my DAW?</summary>
+        <p>If your DAW loads AU or VST3, yes. Logic, Ableton, FL, Cubase, Studio One, Reaper, Bitwig, Luna and GarageBand are all covered. Pro Tools (AAX) isn't at launch — if you need it, tell us and it moves up the list.</p>
+      </details>
+      <details>
+        <summary>How does the licence work?</summary>
+        <p>You get a key by email. Enter it once on each machine (up to three), and from then on the plugin works with no internet at all. Deactivate a seat yourself when you change computers. Until a key is entered the plugin passes audio through clean, so a session never goes silent.</p>
+      </details>
+      <details>
+        <summary>Is there a trial?</summary>
+        <p>Not yet. Everything on this page is the real plugin, recorded through it. If it doesn't do what it says on a vocal you own, write to us within 14 days and we'll sort it.</p>
+      </details>
+      <details>
+        <summary>Do I get updates?</summary>
+        <p>Every 1.x update is free with your key. Installers land in your inbox; presets and settings carry over.</p>
+      </details>
+    </div>
+  </section>
+
+</main>
+
+<!-- FOOTER -------------------------------------------------------------------------------- -->
+<footer class="foot">
+  <div class="crt"><canvas id="crt-canvas" role="img" aria-label="BADSCANDAL"></canvas><h2 class="crt-fallback" hidden>BADSCANDAL</h2></div>
+  <div class="foot-grid">
+    <div>
+      <p class="tag">Contact</p>
+      <p class="foot-addr">
+        <a class="roll" href="mailto:contact@badscandal.com?subject=CLEANSLATE">contact@badscandal.com</a><br>
+        Key by email · Works offline
+      </p>
+    </div>
+    <div>
+      <p class="tag">Navigation</p>
+      <ul class="plain">
+        <li><a class="roll" href="index.html">Home</a></li>
+        <li><a class="roll" href="store.html">Clothing store</a></li>
+        <li><a class="roll" href="#top">Plugin store</a></li>
+        <li><a class="roll" href="us.html">Story</a></li>
+      </ul>
+    </div>
+    <div>
+      <p class="tag">Follow us</p>
+      <ul class="plain">
+        <!-- >>> EDIT HERE: swap in the shared BADSCANDAL handles <<< -->
+        <li><a class="roll" href="https://instagram.com/iguessimlukepower" target="_blank" rel="noopener">Instagram</a></li>
+        <li><a class="roll" href="https://youtube.com/@iguessimlukepower" target="_blank" rel="noopener">YouTube</a></li>
+        <li><a class="roll" href="https://www.tiktok.com/@iguessimlukepower" target="_blank" rel="noopener">TikTok</a></li>
+      </ul>
+    </div>
+    <div>
+      <p class="tag">(Ask AI about BADSCANDAL)</p>
+      <ul class="plain ai-links">
+        <li><a class="roll" href="https://claude.ai/new?q=Tell%20me%20about%20CLEANSLATE%2C%20the%20vocal%20chain%20plugin%20by%20BADSCANDAL%20(badscandal.com)." target="_blank" rel="noopener">Ask Claude</a></li>
+        <li><a class="roll" href="https://chat.openai.com/?q=Tell%20me%20about%20CLEANSLATE%2C%20the%20vocal%20chain%20plugin%20by%20BADSCANDAL%20(badscandal.com)." target="_blank" rel="noopener">Ask ChatGPT</a></li>
+        <li><a class="roll" href="https://www.perplexity.ai/search/new?q=Tell%20me%20about%20CLEANSLATE%2C%20the%20vocal%20chain%20plugin%20by%20BADSCANDAL." target="_blank" rel="noopener">Ask Perplexity</a></li>
+      </ul>
+    </div>
+  </div>
+  <p class="foot-note">CLEANSLATE — the BADSCANDAL vocal chain. Eight modules, one window,
+  every DAW. Made in a rented flat, out loud.</p>
+  <div class="foot-bar">
+    <span>&copy; <b id="year">2026</b> BADSCANDAL</span>
+    <span id="clock"></span>
+  </div>
+  <p class="foot-tag">『 No kings. No gods. No masters. 』</p>
+</footer>
+
+<script src="js/i18n.js"></script>
+<script src="js/main.js"></script>
+<script src="js/crt.js"></script>
+<script src="js/plugin.js"></script>
+</body>
+</html>

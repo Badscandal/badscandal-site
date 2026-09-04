@@ -551,3 +551,32 @@ a wrong resolver shows up as one silently empty combination.
 For Shopify data, query the Storefront API directly rather than guessing
 at what the site sees — it's the fastest way to tell a data problem from
 a code problem.
+
+## Plugin store (plugin.html, added 5 Sep 2026)
+
+The dedicated CLEANSLATE page — one product, one job: BUY NOW. The nav
+now reads **Clothing store** (store.html) / **Plugin store** (plugin.html)
+/ Story on every page, menus and footers included; i18n carries both
+labels. Structure: full-viewport hero (the signal-flow glass loop
+`plugin-film-*-v1` + CRT "CLEANSLATE" — crt.js reads the word from the
+fallback, like "THE ROAD") -> statement + facts -> **the scroll-played
+film** -> the eight module cards (real UI pages, `plugin-ui-*-v1.webp`)
+-> gallery of the glass renders (`plugin-still-*-1920-v1.webp`) -> specs
+-> BUY block over the 4K hero still -> FAQ -> footer.
+
+* **Scroll film = makeScrub.** main.js now mounts it generically on any
+  `[data-scrub]` section (data-src / data-src-phone / data-poster).
+  `plugin-scrub-1440-v1.mp4` / `-1080-v1` are Luke's "Vid 1" with the
+  first 2 s trimmed, audio stripped, encoded with the house recipe
+  (keyframe every 6 frames, start 0.000). Section height
+  `100vh + 2400px` is the timeline; reduced motion collapses it to a
+  still band.
+* **BUY NOW = js/plugin.js.** Looks the product up on the Storefront API
+  by handle `cleanslate` (>>> EDIT HERE <<< at the top); found -> live
+  price + cartCreate -> Shopify checkout; not found -> the buttons keep
+  their mailto href and no price shows. The product must be published to
+  the **Headless** channel or the lookup returns null silently.
+* Assets are all `-v1`; a re-render is a `-v2` (immutable cache).
+* Still open: the Shopify product + price (nothing is hard-coded), the
+  installer download links on the thank-you page, and ES/PT copy for the
+  page body (nav labels, hero line and the key lines are translated).

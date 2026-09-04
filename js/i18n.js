@@ -40,6 +40,12 @@
     "Other": { es: "Otros", pt: "Outros" },
     "Story": { es: "Historia", pt: "História" },
     "Store": { es: "Tienda", pt: "Loja" },
+    "Clothing store": { es: "Tienda de ropa", pt: "Loja de roupa" },
+    "Plugin store": { es: "Tienda de plugins", pt: "Loja de plugins" },
+    "Buy now": { es: "Comprar ahora", pt: "Comprar agora" },
+    "Scroll to play": { es: "Desplázate para reproducir", pt: "Role para reproduzir" },
+    "Instant key by email · 3 machines · works offline": { es: "Clave al instante por email · 3 equipos · funciona sin conexión", pt: "Chave na hora por e-mail · 3 máquinas · funciona offline" },
+    "Key by email · Works offline": { es: "Clave por email · Funciona sin conexión", pt: "Chave por e-mail · Funciona offline" },
     "Home": { es: "Inicio", pt: "Início" },
     "About": { es: "Nosotros", pt: "Sobre" },
     "Contact": { es: "Contacto", pt: "Contato" },
@@ -207,6 +213,9 @@
     { sel: ".music-line",
       es: "Música a la que le da <span class=\"em\">igual</span>.",
       pt: "Música que não está nem <span class=\"em\">aí</span>." },
+    { sel: ".plug-line",
+      es: "Voces que no se <span class=\"em\">inmutan</span>.",
+      pt: "Vocais que não <span class=\"em\">vacilam</span>." },
     { sel: ".about-lead", es: [
         "<b>BADSCANDAL es el alias de Luke Power</b> — primero fue la música, y todo lo demás creció de ahí. También es una forma de vivir: hacer las cosas que alborotan a la gente, en voz alta, delante de todos.",
         "Nos fuimos. País, familia, amigos, toda la estructura — cambiados por el sueño de crear cosas y ver el mundo. Lo llevamos entre los dos, Luke y Lilian. <b>Di lo que nadie dice.</b>"

@@ -328,6 +328,14 @@
       if (!sRaf) sRaf = requestAnimationFrame(loop);
     });
   }
+  /* Generic mount (5 Sep 2026): any [data-scrub] section holding a <video>
+     is a scrolled film — the plugin page's centrepiece. Sources and
+     posters come from its data-* attributes so this file stays generic. */
+  Array.prototype.forEach.call(document.querySelectorAll("[data-scrub]"), function (sec) {
+    makeScrub(sec, sec.querySelector("video"),
+              sec.getAttribute("data-src"), sec.getAttribute("data-src-phone"),
+              sec.getAttribute("data-poster"), sec.getAttribute("data-poster-phone"));
+  });
   /* The homepage hero is a still photo + CRT wordmark now — no scrubbed
      film there any more. makeScrub() stays: it is generic, no-ops when
      its element is absent, and a future scrubbed section is one call +
