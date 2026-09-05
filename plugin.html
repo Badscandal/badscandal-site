@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>CLEANSLATE — Plugin store — BADSCANDAL</title>
 <meta name="description" content="CLEANSLATE by BADSCANDAL — the eight-module vocal chain in one window. Noise, cleanup, spectral, tape, de-ess, EQ, two compressors. AU, VST3 and standalone. Buy once, key by email, works offline.">
-<meta property="og:title" content="CLEANSLATE — the vocal chain that doesn't flinch">
-<meta property="og:description" content="Eight modules. One window. No excuses. The BADSCANDAL vocal chain plugin for every DAW.">
+<meta property="og:title" content="CLEANSLATE — the all-in-one vocal chain, made by engineers">
+<meta property="og:description" content="Eight modules. One window. Built for the voice. The BADSCANDAL vocal chain plugin for every DAW.">
 <meta property="og:image" content="assets/plugin-still-hero-4k-v1.jpg">
 <link rel="icon" type="image/png" sizes="48x48" href="assets/favicon-48-v2.png">
 <link rel="icon" type="image/png" sizes="192x192" href="assets/favicon-192-v2.png">
@@ -44,11 +44,12 @@
      one job: get the visitor to BUY NOW. Structure top to bottom:
        hero (signal-flow film loop + CRT "CLEANSLATE" + buy)
        -> statement + facts
-       -> the scroll-played film (the centre of the page — scroll IS the
-          transport, main.js makeScrub via the [data-scrub] mount)
        -> the eight modules with their real UI pages
-       -> gallery of the glass renders
-       -> specs -> BUY block -> FAQ -> footer.
+       -> gallery of the glass renders with the spec list over them
+       -> BUY block -> FAQ -> footer.
+     (The scroll-played film section was removed 5 Sep 2026 at Luke's request;
+     its assets plugin-scrub-*-v1 and the [data-scrub] mount in main.js stay,
+     so restoring it is one <section data-scrub> block.)
      The one rule holds: furniture is monochrome, the renders carry all the
      colour. Sections are transparent; only cards are grey.
      CACHE RULE: every asset here is -v1; a re-render needs -v2, never an
@@ -99,7 +100,7 @@
     <div class="hero-inner">
       <p class="plug-kicker">BADSCANDAL audio · vocal chain</p>
       <div class="crt crt-plug"><canvas></canvas><h1 class="crt-fallback" hidden>CLEANSLATE</h1></div>
-      <p class="plug-line">Vocals that don't <span class="em">flinch</span>.</p>
+      <p class="plug-line">The all-in-one vocal chain, made by <span class="em">engineers</span>.</p>
       <div class="buy-row">
         <a class="buy-btn roll" data-mag data-buy href="mailto:contact@badscandal.com?subject=CLEANSLATE%20%E2%80%94%20buy">Buy now</a>
         <span class="buy-price" data-price hidden></span>
@@ -114,47 +115,32 @@
   <!-- 02 · THE STATEMENT ------------------------------------------------------ -->
   <section class="plug-intro reveal">
     <p class="tag">What it is</p>
-    <h2>Eight modules. One window. No <span class="em">excuses</span>.</h2>
+    <h2>Eight modules. One window. Built for the <span class="em">voice</span>.</h2>
     <div class="plug-cols">
       <div>
-        <p>CLEANSLATE is the whole vocal chain in the order it should actually run:
-        noise out, mud out, resonances out, then tape, de-ess, EQ and two
-        compressors that behave like the hardware people mortgage things for.
-        Signal flows top to bottom. Every module has its own page, its own
-        power dot, and nothing you have to read a manual to understand.</p>
-        <p>It was built on an SM7B in a rented flat, measured against the plugins
-        that cost more than the microphone, and tuned until the difference was
-        the price. The noise suppressor is fully adaptive — no learn button to
-        hit by accident mid-take. Flip TRACK and the whole chain drops to
-        10.7&nbsp;ms so you can sing through it live.</p>
+        <p>CLEANSLATE is a complete vocal chain in the order a professional session
+        runs it: noise suppression, cleanup, spectral resonance control, tape
+        saturation, de-essing, a surgical EQ and two stages of compression, in a
+        single window with the signal flowing top to bottom.</p>
+        <p>Every module is modelled on the analogue compressors and spectral
+        processors engineers reach for, then tuned specifically for vocals rather
+        than shipped as a general-purpose effect. Spectral knows the regions where
+        a voice builds resonance and listens for them in your take; if it finds
+        nothing, it removes nothing. The compressors, the noise suppression and
+        the de-esser follow the same principle: prepared for the voice, acting
+        only when the voice calls for it, with every parameter still under your
+        control.</p>
+        <p>Switch on TRACK and the chain drops to 10.7&nbsp;ms of latency, so the
+        same processing that finishes a vocal can be sung through live.</p>
       </div>
       <ul class="plug-facts">
         <li><span>Formats</span><b>AU · VST3 · Standalone</b></li>
         <li><span>Systems</span><b>macOS 11+ (Apple silicon &amp; Intel) · Windows 10+</b></li>
         <li><span>Modules</span><b>Noise · Cleanup · Spectral · Tape · De-ess · EQ · Catch · Level</b></li>
-        <li><span>Presets</span><b>7 genres + mic presets, plus your own</b></li>
-        <li><span>Licence</span><b>Key by email · 3 machines · offline after activation</b></li>
+        <li><span>Presets</span><b>7 presets made by engineers, plus your own</b></li>
+        <li><span>Tested on</span><b>A wide range of microphones, dynamic to condenser</b></li>
+        <li><span>Live</span><b>TRACK mode · 10.7 ms latency</b></li>
       </ul>
-    </div>
-  </section>
-
-  <!-- 03 · THE FILM — scroll is the transport. The section is tall; the
-       stage is sticky; main.js maps scroll progress across the section to
-       the film timeline (makeScrub, mounted from the data-* below). The
-       film starts at 0.000 on a keyframe with a keyframe every 6 frames —
-       see CLAUDE.md "encoding gotcha" before ever re-encoding it. -------- -->
-  <section class="plug-scrub" aria-label="CLEANSLATE — the film"
-           data-scrub
-           data-src="assets/plugin-scrub-1440-v1.mp4"
-           data-src-phone="assets/plugin-scrub-vert-1080-v1.mp4"
-           data-poster="assets/plugin-scrub-poster-v1.jpg"
-           data-poster-phone="assets/plugin-scrub-vert-poster-v1.jpg">
-    <div class="plug-stage">
-      <video muted playsinline preload="auto" poster="assets/plugin-scrub-poster-v1.jpg"
-             aria-label="CLEANSLATE — from one glowing knob to the whole chain"></video>
-      <p class="tag plug-stage-tag">Scroll to play</p>
-      <p class="plug-stage-cap">From one knob to the whole <span class="em">chain</span>.</p>
-      <div class="plug-stage-bar" aria-hidden="true"><i data-scrub-bar></i></div>
     </div>
   </section>
 
@@ -207,36 +193,45 @@
     </div>
   </section>
 
-  <!-- 05 · GALLERY — the glass renders, full bleed. Decorative: empty alts. -->
-  <section class="plug-gallery">
-    <p class="tag">The hardware that isn't</p>
-    <div class="gal">
-      <img class="wide" src="assets/plugin-still-topdown-1920-v1.webp" alt="" loading="lazy" data-pop="up">
-      <img src="assets/plugin-still-closecrop-1920-v1.webp" alt="" loading="lazy" data-pop="left">
-      <img src="assets/plugin-still-spectral-1920-v1.webp" alt="" loading="lazy" data-pop="right">
-      <img src="assets/plugin-still-macro-1920-v1.webp" alt="" loading="lazy" data-pop="left">
-      <img src="assets/plugin-still-threequarter-1920-v1.webp" alt="" loading="lazy" data-pop="right">
+  <!-- 05 · GALLERY + SPECS — one section. The glass renders are the backdrop
+       (darkened, vignetted, softly blurred so type reads over them); the
+       headline sits over the wide render, the spec list over the four below.
+       Decorative images: empty alts. Never a section background — the scrim
+       lives on the figures. -------------------------------------------------- -->
+  <section class="plug-gallery" id="specs">
+    <figure class="gal-lead reveal">
+      <img src="assets/plugin-still-topdown-1920-v1.webp" alt="" loading="lazy">
+      <figcaption>
+        <p class="tag">CLEANSLATE</p>
+        <h2>Made by engineers and vocalists, for vocalists and <span class="em">engineers</span>.</h2>
+      </figcaption>
+    </figure>
+    <div class="gal-bed">
+      <div class="gal-grid" aria-hidden="true">
+        <figure class="reveal"><img src="assets/plugin-still-closecrop-1920-v1.webp" alt="" loading="lazy"></figure>
+        <figure class="reveal"><img src="assets/plugin-still-spectral-1920-v1.webp" alt="" loading="lazy"></figure>
+        <figure class="reveal"><img src="assets/plugin-still-macro-1920-v1.webp" alt="" loading="lazy"></figure>
+        <figure class="reveal"><img src="assets/plugin-still-threequarter-1920-v1.webp" alt="" loading="lazy"></figure>
+      </div>
+      <div class="gal-specs reveal">
+        <p class="tag">The boring bits</p>
+        <h3>Runs <span class="em">everywhere</span>.</h3>
+        <dl class="spec-list">
+          <div><dt>Formats</dt><dd>AU, VST3, Standalone app</dd></div>
+          <div><dt>DAWs</dt><dd>Logic, Ableton Live, FL Studio, Cubase, Studio One, Reaper, Bitwig, Luna, GarageBand — anything that loads AU or VST3</dd></div>
+          <div><dt>Systems</dt><dd>macOS 11 or later, universal binary. Windows 10 or later, 64-bit</dd></div>
+          <div><dt>Latency</dt><dd>~95 ms full chain, reported to the host. TRACK mode: 10.7 ms for live monitoring</dd></div>
+          <div><dt>Loudness match</dt><dd>1:1 button — the output lands at the input level whatever the chain did</dd></div>
+          <div><dt>Licence</dt><dd>One key, three machines, activate once then work offline. Move seats yourself</dd></div>
+          <div><dt>Delivery</dt><dd>Key and installers by email the moment payment clears</dd></div>
+          <div><dt>Updates</dt><dd>Every 1.x update is free with your key</dd></div>
+          <div><dt>Made by</dt><dd>BADSCANDAL Audio — engineers and vocalists</dd></div>
+        </dl>
+      </div>
     </div>
   </section>
 
-  <!-- 06 · SPECS ------------------------------------------------------------ -->
-  <section class="plug-specs reveal">
-    <p class="tag">The boring bits</p>
-    <h2>Runs <span class="em">everywhere</span>.</h2>
-    <dl class="spec-list">
-      <div><dt>Formats</dt><dd>AU, VST3, Standalone app</dd></div>
-      <div><dt>DAWs</dt><dd>Logic, Ableton Live, FL Studio, Cubase, Studio One, Reaper, Bitwig, Luna, GarageBand — anything that loads AU or VST3</dd></div>
-      <div><dt>Systems</dt><dd>macOS 11 or later, universal binary. Windows 10 or later, 64-bit</dd></div>
-      <div><dt>Latency</dt><dd>~95 ms full chain (reported to the host). TRACK mode: 10.7 ms for live monitoring</dd></div>
-      <div><dt>Loudness match</dt><dd>1:1 button — the output lands at the input level whatever the chain did</dd></div>
-      <div><dt>Licence</dt><dd>One key, three machines, activate once then work offline. Move seats yourself</dd></div>
-      <div><dt>Delivery</dt><dd>Key and installers by email the moment payment clears</dd></div>
-      <div><dt>Updates</dt><dd>Every 1.x update is free with your key</dd></div>
-      <div><dt>Made by</dt><dd>BADSCANDAL, on an SM7B, in a rented flat, out loud</dd></div>
-    </dl>
-  </section>
-
-  <!-- 07 · BUY — the big one. Thick-glass render behind; scrim keeps the copy
+  <!-- 06 · BUY — the big one. Thick-glass render behind; scrim keeps the copy
        readable (never a section background). ---------------------------- -->
   <section class="plug-buy" id="buy">
     <img class="plug-buy-img" src="assets/plugin-still-hero-4k-v1.webp" alt="" loading="lazy">
@@ -254,7 +249,7 @@
     </div>
   </section>
 
-  <!-- 08 · FAQ -------------------------------------------------------------- -->
+  <!-- 07 · FAQ -------------------------------------------------------------- -->
   <section class="faq reveal">
     <p class="tag">Questions</p>
     <h2>Things you'd <span class="em">ask</span>.</h2>
@@ -319,7 +314,7 @@
     </div>
   </div>
   <p class="foot-note">CLEANSLATE — the BADSCANDAL vocal chain. Eight modules, one window,
-  every DAW. Made in a rented flat, out loud.</p>
+  every DAW. Made by engineers and vocalists.</p>
   <div class="foot-bar">
     <span>&copy; <b id="year">2026</b> BADSCANDAL</span>
     <span id="clock"></span>

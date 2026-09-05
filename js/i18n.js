@@ -214,8 +214,8 @@
       es: "Música a la que le da <span class=\"em\">igual</span>.",
       pt: "Música que não está nem <span class=\"em\">aí</span>." },
     { sel: ".plug-line",
-      es: "Voces que no se <span class=\"em\">inmutan</span>.",
-      pt: "Vocais que não <span class=\"em\">vacilam</span>." },
+      es: "La cadena vocal todo en uno, hecha por <span class=\"em\">ingenieros</span>.",
+      pt: "A cadeia vocal tudo-em-um, feita por <span class=\"em\">engenheiros</span>." },
     { sel: ".about-lead", es: [
         "<b>BADSCANDAL es el alias de Luke Power</b> — primero fue la música, y todo lo demás creció de ahí. También es una forma de vivir: hacer las cosas que alborotan a la gente, en voz alta, delante de todos.",
         "Nos fuimos. País, familia, amigos, toda la estructura — cambiados por el sueño de crear cosas y ver el mundo. Lo llevamos entre los dos, Luke y Lilian. <b>Di lo que nadie dice.</b>"

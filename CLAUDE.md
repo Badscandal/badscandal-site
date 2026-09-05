@@ -564,13 +564,24 @@ film** -> the eight module cards (real UI pages, `plugin-ui-*-v1.webp`)
 -> gallery of the glass renders (`plugin-still-*-1920-v1.webp`) -> specs
 -> BUY block over the 4K hero still -> FAQ -> footer.
 
-* **Scroll film = makeScrub.** main.js now mounts it generically on any
-  `[data-scrub]` section (data-src / data-src-phone / data-poster).
-  `plugin-scrub-1440-v1.mp4` / `-1080-v1` are Luke's "Vid 1" with the
-  first 2 s trimmed, audio stripped, encoded with the house recipe
-  (keyframe every 6 frames, start 0.000). Section height
-  `100vh + 2400px` is the timeline; reduced motion collapses it to a
-  still band.
+* **The scroll film is OUT (removed 5 Sep 2026, same day, at Luke's
+  request).** The machinery stays: main.js mounts makeScrub on any
+  `[data-scrub]` section (data-src / data-src-phone / data-poster /
+  data-poster-phone) and the encodes `plugin-scrub-1440-v1`, `-1080-v1`
+  and the portrait `plugin-scrub-vert-1080-v1` (house recipe: keyframe
+  every 6 frames, start 0.000, no audio) are still in assets/. Restoring
+  it is one `<section data-scrub>` with a sticky `.plug-stage` — the CSS
+  block is still in site.css.
+* **Gallery + specs are one section** (`.plug-gallery`): the wide render
+  carries the "Made by engineers and vocalists…" headline, the 2x2 bed of
+  darkened, vignetted, blurred renders carries "The boring bits" spec
+  list on top. Copy is deliberately professional: no SM7B, no rented
+  flat, no licence talk in the What-it-is facts (that lives in the specs
+  and the BUY block).
+* **Phones** get the 9:16 hero loop `plugin-film-vert-1080-v1.mp4` via the
+  `<source media>` swap; Safari's start-playback glyph is hidden on every
+  video site-wide and main.js retries hero autoplay on the first
+  touch/scroll when the browser refused it (Low Power Mode).
 * **BUY NOW = js/plugin.js.** Looks the product up on the Storefront API
   by handle `cleanslate` (>>> EDIT HERE <<< at the top); found -> live
   price + cartCreate -> Shopify checkout; not found -> the buttons keep

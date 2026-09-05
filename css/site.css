@@ -1001,7 +1001,7 @@ main section{max-width:var(--maxw);margin:0 auto;
   font-size:clamp(22px,2.6vw,34px);color:var(--paper);
   font-variant-numeric:tabular-nums}
 .buy-price[hidden]{display:none}
-.buy-note{margin-top:16px;font-family:var(--font-mono);font-weight:400;
+.buy-note{margin-top:16px;padding:0 var(--pad);text-align:center;font-family:var(--font-mono);font-weight:400;
   font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
 .plug-strip{position:absolute;left:0;right:0;bottom:clamp(22px,4vh,44px);z-index:2;
   margin:0;padding:0 var(--pad);display:flex;justify-content:center;
@@ -1073,20 +1073,54 @@ main section{max-width:var(--maxw);margin:0 auto;
 @media (max-width:1020px){.mod-grid{grid-template-columns:repeat(2,1fr)}}
 @media (max-width:520px){.mod-grid{grid-template-columns:1fr}}
 
-/* ---------- gallery: full bleed, the renders carry the colour ---------- */
-.plug-gallery{max-width:none;padding-left:0;padding-right:0}
-.plug-gallery .tag{padding:0 var(--pad)}
-.gal{display:grid;grid-template-columns:1fr 1fr;
-  grid-auto-rows:clamp(220px,34vw,560px);gap:12px;padding:0 12px}
-.gal img{width:100%;height:100%;object-fit:cover;display:block;
-  border:1px solid var(--ink-3)}
-.gal .wide{grid-column:1/-1}
+/* ---------- gallery + specs: the renders as a darkened backdrop ----------
+   Two layers. The wide render carries the headline; the 2x2 bed carries the
+   spec list. Images are darkened + vignetted + softly blurred INSIDE their
+   figures (never a section background) so the type reads. Reveal: the
+   figures use the shared .reveal observer with a slower, larger easing. */
+.plug-gallery{max-width:none;padding:0 12px clamp(70px,11vh,130px)}
+.plug-gallery figure{position:relative;overflow:hidden;margin:0;
+  background:var(--ink-2);border:1px solid var(--ink-3)}
+.plug-gallery figure img{width:100%;height:100%;object-fit:cover;display:block;
+  filter:brightness(.5) saturate(1.05) blur(1.6px);transform:scale(1.03)}
+.plug-gallery figure::after{content:"";position:absolute;inset:0;pointer-events:none;
+  background:radial-gradient(120% 90% at 50% 45%,transparent 35%,rgba(var(--ink-rgb),.82) 100%)}
+/* slide in: slower and larger than the default reveal, with a settle */
+.plug-gallery .reveal{opacity:0;transform:translateY(56px) scale(.985);
+  transition:opacity 1.1s cubic-bezier(.16,.84,.24,1),transform 1.25s cubic-bezier(.16,.84,.24,1)}
+.plug-gallery .reveal.in{opacity:1;transform:none}
+.plug-gallery .gal-grid figure:nth-child(2),
+.plug-gallery .gal-grid figure:nth-child(4){transition-delay:.12s}
+/* the lead: headline over the wide render */
+.gal-lead{height:clamp(300px,52vw,700px)}
+.gal-lead img{filter:brightness(.7) saturate(1.05) blur(.6px)}
+.gal-lead figcaption{position:absolute;inset:0;z-index:2;display:flex;
+  flex-direction:column;align-items:center;justify-content:center;
+  text-align:center;padding:0 var(--pad)}
+.gal-lead .tag{margin-bottom:16px}
+.gal-lead h2{font-size:clamp(28px,4.6vw,66px);letter-spacing:-.02em;line-height:1.05;
+  max-width:18ch;text-shadow:0 2px 30px rgba(0,0,0,.7)}
+/* the bed: four renders behind the spec list */
+.gal-bed{position:relative;margin-top:12px}
+.gal-grid{position:absolute;inset:0;display:grid;grid-template-columns:1fr 1fr;
+  grid-template-rows:1fr 1fr;gap:12px}
+.gal-specs{position:relative;z-index:2;max-width:var(--maxw);margin:0 auto;
+  padding:clamp(60px,9vh,110px) var(--pad)}
+.gal-specs h3{font-family:var(--font-display);font-weight:400;
+  font-size:clamp(30px,4.8vw,62px);letter-spacing:-.02em;line-height:1.05}
+.gal-specs .spec-list{margin-top:34px;border-top-color:rgba(255,255,255,.14)}
+.gal-specs .spec-list > div{border-bottom-color:rgba(255,255,255,.14)}
+.gal-specs dd{text-shadow:0 1px 12px rgba(0,0,0,.6)}
 @media (max-width:760px){
-  .gal{grid-template-columns:1fr;grid-auto-rows:clamp(200px,60vw,360px)}
+  .gal-lead{height:clamp(260px,70vw,420px)}
+  .gal-grid{grid-template-columns:1fr;grid-template-rows:repeat(4,1fr)}
+  .gal-grid figure img{filter:brightness(.5) saturate(1.05) blur(1.6px)}
+}
+@media (prefers-reduced-motion:reduce){
+  .plug-gallery .reveal{opacity:1;transform:none;transition:none}
 }
 
-/* ---------- specs ---------- */
-.plug-specs h2{font-size:clamp(30px,4.8vw,62px);letter-spacing:-.02em}
+/* ---------- specs list (shared by the gallery bed) ---------- */
 .spec-list{display:grid;grid-template-columns:repeat(3,1fr);gap:0 40px;
   margin-top:38px;border-top:1px solid var(--ink-3)}
 .spec-list > div{padding:20px 0;border-bottom:1px solid var(--ink-3)}
