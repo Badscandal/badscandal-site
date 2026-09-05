@@ -1160,3 +1160,18 @@ video::-webkit-media-controls-start-playback-button{display:none !important;
   -webkit-appearance:none}
 video::-webkit-media-controls{display:none !important}
 video::-webkit-media-controls-panel{display:none !important}
+
+/* plugin hero, 5 Sep 2026 pm: the wordmark group sits higher, and the
+   film's top edge fades into the page ink (a mask on the video plus a
+   heavier top scrim) so no frame line can show on tall windows. Four
+   classes so it beats the .hero.hero--full .hero-inner rule above. */
+.hero.hero--full.plug-hero .hero-inner{padding-bottom:clamp(70px,14vh,170px)}
+.plug-hero .hero-photo{
+  -webkit-mask-image:linear-gradient(180deg,transparent 0,rgba(0,0,0,.35) 9%,#000 26%);
+  mask-image:linear-gradient(180deg,transparent 0,rgba(0,0,0,.35) 9%,#000 26%)}
+.plug-hero .hero-scrim{
+  background:linear-gradient(180deg,rgba(var(--ink-rgb),1),rgba(var(--ink-rgb),.55) 16%,
+             rgba(var(--ink-rgb),.14) 40%,rgba(var(--ink-rgb),.2) 60%,rgba(var(--ink-rgb),.9))}
+@media (max-width:640px){
+  .hero.hero--full.plug-hero .hero-inner{padding-bottom:clamp(40px,9vh,90px)}
+}

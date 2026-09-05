@@ -44,7 +44,7 @@
     "Plugin store": { es: "Tienda de plugins", pt: "Loja de plugins" },
     "Buy now": { es: "Comprar ahora", pt: "Comprar agora" },
     "Scroll to play": { es: "Desplázate para reproducir", pt: "Role para reproduzir" },
-    "Instant key by email · 3 machines · works offline": { es: "Clave al instante por email · 3 equipos · funciona sin conexión", pt: "Chave na hora por e-mail · 3 máquinas · funciona offline" },
+    "Instant key by email · 2 machines · works offline": { es: "Clave al instante por email · 2 equipos · funciona sin conexión", pt: "Chave na hora por e-mail · 2 máquinas · funciona offline" },
     "Key by email · Works offline": { es: "Clave por email · Funciona sin conexión", pt: "Chave por e-mail · Funciona offline" },
     "Home": { es: "Inicio", pt: "Início" },
     "About": { es: "Nosotros", pt: "Sobre" },
