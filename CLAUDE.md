@@ -588,6 +588,13 @@ film** -> the eight module cards (real UI pages, `plugin-ui-*-v1.webp`)
   their mailto href and no price shows. The product must be published to
   the **Headless** channel or the lookup returns null silently.
 * Assets are all `-v1`; a re-render is a `-v2` (immutable cache).
-* Still open: the Shopify product + price (nothing is hard-coded), the
-  installer download links on the thank-you page, and ES/PT copy for the
-  page body (nav labels, hero line and the key lines are translated).
+* **Live since 6 Sep 2026.** Shopify product `cleanslate` (id
+  15713438040390) is ACTIVE, EUR 25 with compare-at EUR 50 (launch 50%
+  off), published ONLY to the **Badscandal** (headless) channel — never to
+  Online Store / Shop / POS, so it stays out of the clothing store.
+  plugin.js reads `compareAtPrice` and renders `<s>old</s> new -50%`.
+  Installer links (Shopify CDN, `-b2` builds) sit under the BUY perks
+  (`.buy-dl`) and in a fifth FAQ item; both are in i18n TEXT. The key
+  email itself carries the same two links (server repo, wrangler.toml).
+* Still open: ES/PT copy for the rest of the page body (nav labels, hero
+  line and the key lines are translated).

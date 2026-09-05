@@ -119,7 +119,7 @@
 
   var PRODUCT_Q =
     "query($handle:String!){ product(handle:$handle){ id title availableForSale " +
-    "variants(first:5){ nodes{ id availableForSale price{ amount currencyCode } } } } }";
+    "variants(first:5){ nodes{ id availableForSale price{ amount currencyCode } compareAtPrice{ amount currencyCode } } } } }";
 
   var CART_M =
     "mutation($lines:[CartLineInput!]!){ cartCreate(input:{lines:$lines}){ " +
@@ -134,7 +134,25 @@
 
   function wire(variant) {
     var label = money(variant.price.amount, variant.price.currencyCode);
-    prices.forEach(function (p) { p.textContent = label; p.hidden = false; });
+    var was = variant.compareAtPrice && parseFloat(variant.compareAtPrice.amount) > parseFloat(variant.price.amount)
+      ? variant.compareAtPrice : null;
+    prices.forEach(function (p) {
+      p.textContent = "";
+      if (was) {
+        var s = document.createElement("s");
+        s.textContent = money(was.amount, was.currencyCode);
+        p.appendChild(s);
+        p.appendChild(document.createTextNode(" "));
+      }
+      p.appendChild(document.createTextNode(label));
+      if (was) {
+        var off = document.createElement("em");
+        off.className = "buy-off";
+        off.textContent = "-" + Math.round(100 - 100 * parseFloat(variant.price.amount) / parseFloat(was.amount)) + "%";
+        p.appendChild(off);
+      }
+      p.hidden = false;
+    });
     buttons.forEach(function (b) {
       b.setAttribute("href", "#buy");
       b.addEventListener("click", function (e) {

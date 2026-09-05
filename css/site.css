@@ -1152,6 +1152,18 @@ main section{max-width:var(--maxw);margin:0 auto;
 .buy-perks{display:flex;gap:clamp(14px,3vw,38px);justify-content:center;flex-wrap:wrap;
   margin-top:28px;font-family:var(--font-mono);font-weight:400;font-size:10.5px;
   letter-spacing:.14em;text-transform:uppercase;color:var(--uv)}
+/* sale: the old price struck through, the saving as a small pill */
+.buy-price s{color:var(--muted);text-decoration-thickness:2px;font-size:.62em;margin-right:.35em}
+.buy-price .buy-off{display:inline-block;vertical-align:middle;margin-left:.55em;
+  font:500 10.5px/1 var(--font-mono);letter-spacing:.14em;color:var(--ink);
+  background:var(--blaze);border-radius:999px;padding:6px 9px;font-style:normal}
+/* installers are free: one quiet line under the perks, links roll like the nav */
+.buy-dl{display:flex;gap:12px;justify-content:center;flex-wrap:wrap;align-items:baseline;
+  margin-top:22px;font-family:var(--font-mono);font-weight:400;font-size:10.5px;
+  letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+.buy-dl a{color:var(--paper);text-decoration:underline;text-underline-offset:3px}
+.faq-dl{display:flex;gap:12px;flex-wrap:wrap}
+.faq-dl a{text-decoration:underline;text-underline-offset:3px}
 
 /* ---------- phones: never show Safari's play glyph ----------
    iOS paints a centred play button over any inline <video> that has not
