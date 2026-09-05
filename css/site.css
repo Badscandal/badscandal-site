@@ -1178,3 +1178,12 @@ video::-webkit-media-controls-panel{display:none !important}
 @media (max-width:640px){
   .hero.hero--full.plug-hero .hero-inner{padding-bottom:clamp(60px,14vh,140px)}
 }
+
+/* plugin store nav (5 Sep 2026): Home + languages + BUY NOW only, no
+   burger. On phones .nav-links normally hide behind the menu; here the
+   single Home link is the only way back, so it stays visible. */
+@media (max-width:640px){
+  body.plug .nav-links{display:flex;margin-left:0}
+  body.plug .lang{margin-left:auto}
+  body.plug .nav-cta{display:inline-block}
+}

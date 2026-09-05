@@ -35,7 +35,7 @@
 [data-pop]{opacity:1 !important;transform:none !important}
 </style></noscript>
 </head>
-<body>
+<body class="plug">
 
 <div class="grain" aria-hidden="true"></div>
 <div class="blur-veil" aria-hidden="true"></div>
@@ -61,26 +61,18 @@
 <!-- NAV -------------------------------------------------------------------- -->
 <header class="nav">
   <a class="nav-logo" href="index.html" aria-label="Badscandal — home">/</a>
+  <!-- plugin store nav is deliberately minimal (5 Sep 2026): Home, the
+       language switcher and BUY NOW. No categories, no Story, no burger
+       menu — nothing to wander off to. body.plug keeps .nav-links visible
+       on phones since it is the only route home. -->
   <nav class="nav-links" aria-label="Primary">
-    <a class="nav-link roll" href="store.html">Clothing store</a>
-    <a class="nav-link roll on" href="plugin.html" aria-current="page">Plugin store</a>
-    <a class="nav-link roll" href="us.html">Story</a>
+    <a class="nav-link roll" href="index.html">Home</a>
   </nav>
   <div class="lang" role="group" aria-label="Language">
     <button type="button" data-lang="en">EN</button><button type="button" data-lang="es">ES</button><button type="button" data-lang="pt">PT</button>
   </div>
   <a class="nav-cta roll" data-mag href="#buy">Buy now</a>
-  <button class="nav-burger" id="menu-btn" type="button" aria-expanded="false" aria-controls="menu"><span>Menu</span><span>Close</span></button>
 </header>
-
-<!-- FULLSCREEN MENU ---------------------------------------------------------- -->
-<div class="menu" id="menu" aria-hidden="true">
-  <a class="menu-item" href="index.html"><i>01</i> Home</a>
-  <a class="menu-item" href="store.html"><i>02</i> Clothing store</a>
-  <a class="menu-item" href="plugin.html"><i>03</i> Plugin store</a>
-  <a class="menu-item" href="us.html"><i>04</i> Story</a>
-  <a class="menu-item" href="mailto:contact@badscandal.com?subject=CLEANSLATE"><i>05</i> Contact</a>
-</div>
 
 <main id="top" class="page-main">
 
@@ -291,9 +283,7 @@
       <p class="tag">Navigation</p>
       <ul class="plain">
         <li><a class="roll" href="index.html">Home</a></li>
-        <li><a class="roll" href="store.html">Clothing store</a></li>
-        <li><a class="roll" href="#top">Plugin store</a></li>
-        <li><a class="roll" href="us.html">Story</a></li>
+        <li><a class="roll" href="#buy">Buy now</a></li>
       </ul>
     </div>
     <div>
