@@ -968,7 +968,10 @@ main section{max-width:var(--maxw);margin:0 auto;
   text-decoration-color:var(--uv);text-decoration-thickness:1px}
 
 /* ---------- hero: film loop + CRT "CLEANSLATE" + buy ---------- */
-.plug-hero .hero-photo{object-position:center 50%}
+/* the film is scaled up a touch and pulled upward so the slab sits behind
+   the wordmark rather than under it; .hero clips the overflow */
+.plug-hero .hero-photo{object-position:center 50%;transform:translateY(-7%) scale(1.16);
+  transform-origin:50% 50%}
 .plug-hero .hero-scrim{
   background:linear-gradient(180deg,rgba(var(--ink-rgb),.66),rgba(var(--ink-rgb),.16) 34%,
              rgba(var(--ink-rgb),.2) 58%,rgba(var(--ink-rgb),.9))}
