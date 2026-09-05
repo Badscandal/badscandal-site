@@ -196,7 +196,105 @@
         pt: "Modo demo — conecte sua loja Shopify em js/store.js para ativar o checkout real." },
     "Preview drop — demo products. Real stock lands when Shopify connects.":
       { es: "Drop de vista previa — productos demo. El stock real llega cuando Shopify conecte.",
-        pt: "Drop de prévia — produtos demo. O estoque real chega quando a Shopify conectar." }
+        pt: "Drop de prévia — produtos demo. O estoque real chega quando a Shopify conectar." },
+    /* ---------- plugin store (plugin.html) — added 5 Sep 2026 ---------- */
+    "BADSCANDAL audio · vocal chain": { es: "BADSCANDAL audio · cadena vocal", pt: "BADSCANDAL audio · cadeia vocal" },
+    "Mac & Windows": { es: "Mac y Windows", pt: "Mac e Windows" },
+    "8 modules · one window": { es: "8 módulos · una ventana", pt: "8 módulos · uma janela" },
+    "10.7 ms tracking mode": { es: "modo tracking de 10,7 ms", pt: "modo tracking de 10,7 ms" },
+    "What it is": { es: "Qué es", pt: "O que é" },
+    "Formats": { es: "Formatos", pt: "Formatos" },
+    "Systems": { es: "Sistemas", pt: "Sistemas" },
+    "Modules": { es: "Módulos", pt: "Módulos" },
+    "Presets": { es: "Presets", pt: "Presets" },
+    "Tested on": { es: "Probado con", pt: "Testado com" },
+    "Live": { es: "En directo", pt: "Ao vivo" },
+    "macOS 11+ (Apple silicon & Intel) · Windows 10+": { es: "macOS 11+ (Apple silicon e Intel) · Windows 10+", pt: "macOS 11+ (Apple silicon e Intel) · Windows 10+" },
+    "7 presets made by engineers, plus your own": { es: "7 presets hechos por ingenieros, más los tuyos", pt: "7 presets feitos por engenheiros, mais os seus" },
+    "A wide range of microphones, dynamic to condenser": { es: "Una amplia gama de micrófonos, de dinámicos a condensadores", pt: "Uma ampla gama de microfones, de dinâmicos a condensadores" },
+    "TRACK mode · 10.7 ms latency": { es: "Modo TRACK · 10,7 ms de latencia", pt: "Modo TRACK · 10,7 ms de latência" },
+    "Signal flow · top to bottom": { es: "Flujo de señal · de arriba abajo", pt: "Fluxo de sinal · de cima para baixo" },
+    "Adaptive suppression that kills the room, not the take. No learn button, nothing to arm — it just listens.":
+      { es: "Supresión adaptativa que elimina la sala, no la toma. Sin botón de aprendizaje, nada que armar: solo escucha.",
+        pt: "Supressão adaptativa que elimina a sala, não o take. Sem botão de aprendizado, nada para armar: ela só escuta." },
+    "High-pass, low-pass and the mud filter. The stuff you do on every vocal, done before you have to think about it.":
+      { es: "Paso alto, paso bajo y el filtro de barro. Lo que haces en cada voz, hecho antes de que tengas que pensarlo.",
+        pt: "Passa-alta, passa-baixa e o filtro de lama. O que você faz em todo vocal, feito antes de você precisar pensar." },
+    "Resonance control with four nodes and a live reduction burn. Boxiness, harshness and mic ring, carved out as they appear.":
+      { es: "Control de resonancias con cuatro nodos y reducción visible en vivo. Cajón, aspereza y resonancia del micro, eliminados según aparecen.",
+        pt: "Controle de ressonâncias com quatro nós e redução visível ao vivo. Caixa, aspereza e ressonância do mic, removidos assim que aparecem." },
+    "Oversampled tape saturation with Character, Steady, Focus and Tube. Level-invariant, so quiet takes get the same glow.":
+      { es: "Saturación de cinta con sobremuestreo y Character, Steady, Focus y Tube. Invariante al nivel: las tomas suaves reciben el mismo brillo.",
+        pt: "Saturação de fita com oversampling e Character, Steady, Focus e Tube. Invariante ao nível: takes baixos ganham o mesmo brilho." },
+    "Adaptive threshold, no attack, no release, no lisp. Wide or split, it only ever touches the ess.":
+      { es: "Umbral adaptativo, sin ataque, sin release, sin ceceo. Ancho o dividido, solo toca la ese.",
+        pt: "Threshold adaptativo, sem attack, sem release, sem ceceio. Largo ou dividido, só toca no esse." },
+    "Twelve surgical bands, ten shapes, slopes to 96 dB, per-band dynamics. Air Link lifts the top as the de-esser works.":
+      { es: "Doce bandas quirúrgicas, diez formas, pendientes hasta 96 dB, dinámica por banda. Air Link abre el aire mientras el de-esser trabaja.",
+        pt: "Doze bandas cirúrgicas, dez formas, slopes até 96 dB, dinâmica por banda. O Air Link abre o topo enquanto o de-esser trabalha." },
+    "A FET compressor in the classic fast style: grabs the peaks, adds the grit, holds the vocal in front.":
+      { es: "Un compresor FET del estilo rápido clásico: atrapa los picos, añade carácter, mantiene la voz delante.",
+        pt: "Um compressor FET no estilo rápido clássico: segura os picos, adiciona textura, mantém o vocal na frente." },
+    "Opto levelling after the catch. Slow, musical, invisible — the reason the vocal never leaves the mix.":
+      { es: "Nivelación óptica después del catch. Lenta, musical, invisible: la razón por la que la voz nunca se pierde en la mezcla.",
+        pt: "Nivelamento óptico depois do catch. Lento, musical, invisível: o motivo de o vocal nunca sumir da mix." },
+    "The boring bits": { es: "La parte aburrida", pt: "A parte chata" },
+    "DAWs": { es: "DAWs", pt: "DAWs" },
+    "Latency": { es: "Latencia", pt: "Latência" },
+    "Loudness match": { es: "Igualación de nivel", pt: "Igualação de nível" },
+    "Licence": { es: "Licencia", pt: "Licença" },
+    "Delivery": { es: "Entrega", pt: "Entrega" },
+    "Updates": { es: "Actualizaciones", pt: "Atualizações" },
+    "Made by": { es: "Hecho por", pt: "Feito por" },
+    "AU, VST3, Standalone app": { es: "AU, VST3, app independiente", pt: "AU, VST3, app standalone" },
+    "Logic, Ableton Live, FL Studio, Cubase, Studio One, Reaper, Bitwig, Luna, GarageBand — anything that loads AU or VST3":
+      { es: "Logic, Ableton Live, FL Studio, Cubase, Studio One, Reaper, Bitwig, Luna, GarageBand: cualquiera que cargue AU o VST3",
+        pt: "Logic, Ableton Live, FL Studio, Cubase, Studio One, Reaper, Bitwig, Luna, GarageBand: qualquer um que carregue AU ou VST3" },
+    "macOS 11 or later, universal binary. Windows 10 or later, 64-bit":
+      { es: "macOS 11 o posterior, binario universal. Windows 10 o posterior, 64 bits",
+        pt: "macOS 11 ou superior, binário universal. Windows 10 ou superior, 64 bits" },
+    "~95 ms full chain, reported to the host. TRACK mode: 10.7 ms for live monitoring":
+      { es: "~95 ms con toda la cadena, informados al host. Modo TRACK: 10,7 ms para monitorizar en directo",
+        pt: "~95 ms com a cadeia completa, reportados ao host. Modo TRACK: 10,7 ms para monitorar ao vivo" },
+    "1:1 button — the output lands at the input level whatever the chain did":
+      { es: "Botón 1:1: la salida queda al nivel de entrada hiciera lo que hiciera la cadena",
+        pt: "Botão 1:1: a saída fica no nível da entrada, não importa o que a cadeia fez" },
+    "One key, two machines, activate once then work offline. Move seats yourself":
+      { es: "Una clave, dos equipos, actívala una vez y trabaja sin conexión. Mueve las licencias tú mismo",
+        pt: "Uma chave, duas máquinas, ative uma vez e trabalhe offline. Mova as ativações você mesmo" },
+    "Key and installers by email the moment payment clears":
+      { es: "Clave e instaladores por email en cuanto se confirma el pago",
+        pt: "Chave e instaladores por e-mail assim que o pagamento é confirmado" },
+    "One update a month, free with your key": { es: "Una actualización al mes, gratis con tu clave", pt: "Uma atualização por mês, grátis com a sua chave" },
+    "BADSCANDAL Audio — engineers and vocalists": { es: "BADSCANDAL Audio: ingenieros y vocalistas", pt: "BADSCANDAL Audio: engenheiros e vocalistas" },
+    "One licence. Every DAW you own. The whole vocal chain, in the order it should run, in one window. Pay once and the key is in your inbox before you've closed the tab.":
+      { es: "Una licencia. Todos los DAW que tengas. La cadena vocal completa, en el orden correcto, en una sola ventana. Paga una vez y la clave llega a tu correo antes de que cierres la pestaña.",
+        pt: "Uma licença. Todos os DAWs que você tiver. A cadeia vocal completa, na ordem certa, em uma única janela. Pague uma vez e a chave chega no seu e-mail antes de você fechar a aba." },
+    "Instant key by email": { es: "Clave al instante por email", pt: "Chave na hora por e-mail" },
+    "2 machines": { es: "2 equipos", pt: "2 máquinas" },
+    "Works offline": { es: "Funciona sin conexión", pt: "Funciona offline" },
+    "Monthly updates": { es: "Actualizaciones mensuales", pt: "Atualizações mensais" },
+    "Questions": { es: "Preguntas", pt: "Perguntas" },
+    "Will it load in my DAW?": { es: "¿Funciona en mi DAW?", pt: "Funciona no meu DAW?" },
+    "If your DAW loads AU or VST3, yes. Logic, Ableton, FL, Cubase, Studio One, Reaper, Bitwig, Luna and GarageBand are all covered. Pro Tools (AAX) isn't at launch — if you need it, tell us and it moves up the list.":
+      { es: "Si tu DAW carga AU o VST3, sí. Logic, Ableton, FL, Cubase, Studio One, Reaper, Bitwig, Luna y GarageBand están cubiertos. Pro Tools (AAX) no está en el lanzamiento: si lo necesitas, dínoslo y sube en la lista.",
+        pt: "Se o seu DAW carrega AU ou VST3, sim. Logic, Ableton, FL, Cubase, Studio One, Reaper, Bitwig, Luna e GarageBand estão cobertos. Pro Tools (AAX) não está no lançamento: se você precisa, avise e ele sobe na lista." },
+    "How does the licence work?": { es: "¿Cómo funciona la licencia?", pt: "Como funciona a licença?" },
+    "You get a key by email. Enter it once on each machine (up to two), and from then on the plugin works with no internet at all. Deactivate a seat yourself when you change computers. Until a key is entered the plugin passes audio through clean, so a session never goes silent.":
+      { es: "Recibes una clave por email. Introdúcela una vez en cada equipo (hasta dos) y a partir de ahí el plugin funciona sin ninguna conexión. Desactiva una licencia tú mismo cuando cambies de ordenador. Hasta que introduzcas la clave, el plugin deja pasar el audio limpio, así que una sesión nunca se queda en silencio.",
+        pt: "Você recebe uma chave por e-mail. Insira uma vez em cada máquina (até duas) e, a partir daí, o plugin funciona sem nenhuma internet. Desative uma ativação você mesmo quando trocar de computador. Até a chave ser inserida, o plugin deixa o áudio passar limpo, então uma sessão nunca fica muda." },
+    "Is there a trial?": { es: "¿Hay versión de prueba?", pt: "Tem versão de teste?" },
+    "Not yet. Everything on this page is the real plugin, recorded through it. If it doesn't do what it says on a vocal you own, write to us within 14 days and we'll sort it.":
+      { es: "Todavía no. Todo lo que ves en esta página es el plugin real, grabado a través de él. Si no hace lo que promete con una voz tuya, escríbenos en 14 días y lo resolvemos.",
+        pt: "Ainda não. Tudo nesta página é o plugin real, gravado através dele. Se ele não fizer o que promete em um vocal seu, escreva em até 14 dias e a gente resolve." },
+    "Do I get updates?": { es: "¿Recibo actualizaciones?", pt: "Recebo atualizações?" },
+    "Yes. We treat a purchase as something to maintain and improve, not something to sell and forget. CLEANSLATE receives one update every month, refining the existing modules and adding new features, with a single aim: the most efficient all-in-one vocal chain for producers and artists.":
+      { es: "Sí. Tratamos una compra como algo que hay que mantener y mejorar, no algo que se vende y se olvida. CLEANSLATE recibe una actualización cada mes, refinando los módulos existentes y añadiendo funciones nuevas, con un único objetivo: la cadena vocal todo en uno más eficiente para productores y artistas.",
+        pt: "Sim. Tratamos uma compra como algo para manter e melhorar, não algo para vender e esquecer. O CLEANSLATE recebe uma atualização por mês, refinando os módulos existentes e adicionando novos recursos, com um único objetivo: a cadeia vocal tudo-em-um mais eficiente para produtores e artistas." },
+    "Key by email · Works offline": { es: "Clave por email · Funciona sin conexión", pt: "Chave por e-mail · Funciona offline" },
+    "CLEANSLATE — the BADSCANDAL vocal chain. Eight modules, one window, every DAW. Made by engineers and vocalists.":
+      { es: "CLEANSLATE: la cadena vocal de BADSCANDAL. Ocho módulos, una ventana, todos los DAW. Hecho por ingenieros y vocalistas.",
+        pt: "CLEANSLATE: a cadeia vocal da BADSCANDAL. Oito módulos, uma janela, todos os DAWs. Feito por engenheiros e vocalistas." },
   };
 
   /* ---------- markup blocks (selector -> innerHTML; array = per match) --- */
@@ -300,7 +398,38 @@
       pt: "Vista o<br><span class=\"em\">problema</span>." },
     { sel: ".store-hero-inner .lede",
       es: "Declaraciones para decirlo en voz alta, esenciales para el resto de la semana. Hecho por encargo, enviado a todo el mundo — <b>en serio, o a la basura.</b>",
-      pt: "Declarações pra dizer em voz alta, essenciais pro resto da semana. Feito sob demanda, enviado pro mundo todo — <b>falado sério, ou jogado fora.</b>" }
+      pt: "Declarações pra dizer em voz alta, essenciais pro resto da semana. Feito sob demanda, enviado pro mundo todo — <b>falado sério, ou jogado fora.</b>" },
+    /* ---------- plugin store (plugin.html) — added 5 Sep 2026 ---------- */
+    { sel: ".plug-intro h2",
+      es: "Ocho módulos. Una ventana. Hecho para la <span class=\"em\">voz</span>.",
+      pt: "Oito módulos. Uma janela. Feito para a <span class=\"em\">voz</span>." },
+    { sel: ".plug-cols > div > p", es: [
+        "CLEANSLATE es una cadena vocal completa en el orden en que la usa una sesión profesional: supresión de ruido, limpieza, control espectral de resonancias, saturación de cinta, de-esser, un EQ quirúrgico y dos etapas de compresión, en una sola ventana con la señal fluyendo de arriba abajo.",
+        "Cada módulo está modelado a partir de los compresores analógicos y procesadores espectrales que usan los ingenieros, y después afinado específicamente para voces en lugar de venderse como un efecto genérico. Spectral conoce las zonas donde una voz acumula resonancias y las busca en tu toma; si no encuentra nada, no quita nada. Los compresores, la supresión de ruido y el de-esser siguen el mismo principio: preparados para la voz, actuando solo cuando la voz lo pide, con cada parámetro todavía bajo tu control.",
+        "Activa TRACK y la cadena baja a 10,7&nbsp;ms de latencia, así que el mismo procesado que termina una voz se puede cantar en directo."
+      ], pt: [
+        "O CLEANSLATE é uma cadeia vocal completa na ordem em que uma sessão profissional a usa: supressão de ruído, limpeza, controle espectral de ressonâncias, saturação de fita, de-esser, um EQ cirúrgico e dois estágios de compressão, em uma única janela com o sinal fluindo de cima para baixo.",
+        "Cada módulo é modelado a partir dos compressores analógicos e processadores espectrais que os engenheiros usam, e depois ajustado especificamente para vocais em vez de vendido como um efeito genérico. O Spectral conhece as regiões onde uma voz acumula ressonância e procura por elas no seu take; se não encontra nada, não remove nada. Os compressores, a supressão de ruído e o de-esser seguem o mesmo princípio: preparados para a voz, agindo só quando a voz pede, com cada parâmetro ainda sob o seu controle.",
+        "Ligue o TRACK e a cadeia cai para 10,7&nbsp;ms de latência, então o mesmo processamento que finaliza um vocal pode ser cantado ao vivo."
+      ] },
+    { sel: ".plug-mods h2",
+      es: "Qué hay en la <span class=\"em\">cadena</span>.",
+      pt: "O que tem na <span class=\"em\">cadeia</span>." },
+    { sel: ".gal-lead h2",
+      es: "Hecho por ingenieros y vocalistas, para ingenieros y <span class=\"em\">vocalistas</span>.",
+      pt: "Feito por engenheiros e vocalistas, para engenheiros e <span class=\"em\">vocalistas</span>." },
+    { sel: ".gal-specs h3",
+      es: "Funciona en <span class=\"em\">todas partes</span>.",
+      pt: "Roda em <span class=\"em\">tudo</span>." },
+    { sel: ".plug-buy h2",
+      es: "Consigue la <span class=\"em\">cadena</span>.",
+      pt: "Pegue a <span class=\"em\">cadeia</span>." },
+    { sel: "#plug-faq h2",
+      es: "Lo que <span class=\"em\">preguntarías</span>.",
+      pt: "O que você <span class=\"em\">perguntaria</span>." },
+    { sel: "#plug-faq details:nth-of-type(4) p:last-child",
+      es: "Ese plan lo marcan las personas que lo usan. Envía peticiones de funciones o informes de errores a <a href=\"mailto:contact@badscandal.com?subject=CLEANSLATE%20feedback\">contact@badscandal.com</a> y los atenderemos.",
+      pt: "Esse roteiro é definido por quem usa o plugin. Mande pedidos de recursos ou relatos de bugs para <a href=\"mailto:contact@badscandal.com?subject=CLEANSLATE%20feedback\">contact@badscandal.com</a> e nós cuidamos disso." },
   ];
 
   window.BS_LANG = lang;
