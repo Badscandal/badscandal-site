@@ -142,45 +142,53 @@
     <p class="tag">Signal flow · top to bottom</p>
     <h2>What's in the <span class="em">chain</span>.</h2>
     <div class="mod-grid">
-      <article class="mod-card" data-pop="up">
+      <article class="mod-card" data-pop="up" data-module="noise" role="button" tabindex="0" aria-haspopup="dialog">
         <img src="assets/plugin-ui-noise-v1.webp" alt="CLEANSLATE Noise page" loading="lazy">
         <div class="mod-body"><p class="mod-n">01</p><h3>Noise</h3>
-        <p>Adaptive suppression that kills the room, not the take. No learn button, nothing to arm — it just listens.</p></div>
+        <p>Adaptive suppression that kills the room, not the take. No learn button, nothing to arm — it just listens.</p>
+        <p class="mod-more">Tap for the full story</p></div>
       </article>
-      <article class="mod-card" data-pop="up">
+      <article class="mod-card" data-pop="up" data-module="cleanup" role="button" tabindex="0" aria-haspopup="dialog">
         <img src="assets/plugin-ui-cleanup-v1.webp" alt="CLEANSLATE Cleanup page" loading="lazy">
         <div class="mod-body"><p class="mod-n">02</p><h3>Cleanup</h3>
-        <p>High-pass, low-pass and the mud filter. The stuff you do on every vocal, done before you have to think about it.</p></div>
+        <p>High-pass, low-pass and the mud filter. The stuff you do on every vocal, done before you have to think about it.</p>
+        <p class="mod-more">Tap for the full story</p></div>
       </article>
-      <article class="mod-card" data-pop="up">
+      <article class="mod-card" data-pop="up" data-module="spectral" role="button" tabindex="0" aria-haspopup="dialog">
         <img src="assets/plugin-ui-spectral-v1.webp" alt="CLEANSLATE Spectral page" loading="lazy">
         <div class="mod-body"><p class="mod-n">03</p><h3>Spectral</h3>
-        <p>Resonance control with four nodes and a live reduction burn. Boxiness, harshness and mic ring, carved out as they appear.</p></div>
+        <p>Resonance control with four nodes and a live reduction burn. Boxiness, harshness and mic ring, carved out as they appear.</p>
+        <p class="mod-more">Tap for the full story</p></div>
       </article>
-      <article class="mod-card" data-pop="up">
+      <article class="mod-card" data-pop="up" data-module="tape" role="button" tabindex="0" aria-haspopup="dialog">
         <img src="assets/plugin-ui-tape-v1.webp" alt="CLEANSLATE Tape page" loading="lazy">
         <div class="mod-body"><p class="mod-n">04</p><h3>Tape</h3>
-        <p>Oversampled tape saturation with Character, Steady, Focus and Tube. Level-invariant, so quiet takes get the same glow.</p></div>
+        <p>Oversampled tape saturation with Character, Steady, Focus and Tube. Level-invariant, so quiet takes get the same glow.</p>
+        <p class="mod-more">Tap for the full story</p></div>
       </article>
-      <article class="mod-card" data-pop="up">
+      <article class="mod-card" data-pop="up" data-module="deess" role="button" tabindex="0" aria-haspopup="dialog">
         <img src="assets/plugin-ui-deess-v1.webp" alt="CLEANSLATE De-ess page" loading="lazy">
         <div class="mod-body"><p class="mod-n">05</p><h3>De-ess</h3>
-        <p>Adaptive threshold, no attack, no release, no lisp. Wide or split, it only ever touches the ess.</p></div>
+        <p>Adaptive threshold, no attack, no release, no lisp. Wide or split, it only ever touches the ess.</p>
+        <p class="mod-more">Tap for the full story</p></div>
       </article>
-      <article class="mod-card" data-pop="up">
+      <article class="mod-card" data-pop="up" data-module="eq" role="button" tabindex="0" aria-haspopup="dialog">
         <img src="assets/plugin-ui-eq-v1.webp" alt="CLEANSLATE EQ page" loading="lazy">
         <div class="mod-body"><p class="mod-n">06</p><h3>EQ</h3>
-        <p>Twelve surgical bands, ten shapes, slopes to 96&nbsp;dB, per-band dynamics. Air Link lifts the top as the de-esser works.</p></div>
+        <p>Twelve surgical bands, ten shapes, slopes to 96&nbsp;dB, per-band dynamics. Air Link lifts the top as the de-esser works.</p>
+        <p class="mod-more">Tap for the full story</p></div>
       </article>
-      <article class="mod-card" data-pop="up">
+      <article class="mod-card" data-pop="up" data-module="catch" role="button" tabindex="0" aria-haspopup="dialog">
         <img src="assets/plugin-ui-knobinfo-v1.webp" alt="CLEANSLATE Catch page" loading="lazy">
         <div class="mod-body"><p class="mod-n">07</p><h3>Catch</h3>
-        <p>A FET compressor in the classic fast style: grabs the peaks, adds the grit, holds the vocal in front.</p></div>
+        <p>A FET compressor in the classic fast style: grabs the peaks, adds the grit, holds the vocal in front.</p>
+        <p class="mod-more">Tap for the full story</p></div>
       </article>
-      <article class="mod-card" data-pop="up">
+      <article class="mod-card" data-pop="up" data-module="level" role="button" tabindex="0" aria-haspopup="dialog">
         <img src="assets/plugin-ui-level-v1.webp" alt="CLEANSLATE Level page" loading="lazy">
         <div class="mod-body"><p class="mod-n">08</p><h3>Level</h3>
-        <p>Opto levelling after the catch. Slow, musical, invisible — the reason the vocal never leaves the mix.</p></div>
+        <p>Opto levelling after the catch. Slow, musical, invisible — the reason the vocal never leaves the mix.</p>
+        <p class="mod-more">Tap for the full story</p></div>
       </article>
     </div>
   </section>
@@ -267,6 +275,162 @@
   </section>
 
 </main>
+
+  <!-- MODULE DETAILS — one hidden article per module. js/plugin.js clones the
+       one whose id matches the card's data-module into the #mmodal overlay.
+       Text lives here (not in JS) so i18n.js translates it like the rest of
+       the page. Facts come from the plugin's own handoff + knob cards. ----- -->
+  <div class="mdetails" hidden>
+    <article class="mdetail" id="md-noise" data-img="assets/plugin-ui-noise-v1.webp">
+      <p class="tag">01 · Noise</p>
+      <h2>Kills the room. Keeps the <span class="em">take</span>.</h2>
+      <p class="md-lede">An adaptive noise suppressor that tracks the room's noise floor and subtracts it before anything else in the chain hears it.</p>
+      <h3>What it does</h3>
+      <p>It listens to the spectrum continuously and builds a model of everything that is not the voice: air conditioning, computer fans, hum, hiss. That model is subtracted between and under the words, and what remains in the pauses is a steady, natural room tone rather than a gate opening and closing. There is no learn button to press and nothing to arm mid-take.</p>
+      <h3>Why it's better</h3>
+      <p>The gain rule is the same class of speech-enhancement mathematics used in broadcast and forensic tools, tuned for sung vocals rather than speech. Held notes lose almost nothing (measured erosion of 0.04 dB on sustained tones), sibilance and breath onsets keep their attack, hum and whine that sit still for a few seconds are absorbed into the noise model, and a comfort-noise bed keeps pauses sounding like a room instead of a vacuum. Everything that is not voice gets quieter; the voice stays exactly where it was.</p>
+      <h3>The controls</h3>
+      <dl class="md-knobs">
+        <div><dt>AMOUNT</dt><dd>How much of the noise between and under the words is removed. 100 is full reduction down to the ambience floor; 30 is a gentle clean-up.</dd></div>
+        <div><dt>AMBIENCE</dt><dd>How much room tone is left behind. Lower is drier; the remaining floor is a steady bed, so pauses never sound gated.</dd></div>
+        <div><dt>LISTEN</dt><dd>Monitors only what is being removed. If you can hear words in here, back off AMOUNT.</dd></div>
+      </dl>
+    </article>
+    <article class="mdetail" id="md-cleanup" data-img="assets/plugin-ui-cleanup-v1.webp">
+      <p class="tag">02 · Cleanup</p>
+      <h2>Rumble and mud, gone before the <span class="em">tone</span> starts.</h2>
+      <p class="md-lede">A high-pass filter and a low-mid cut, placed first so every stage after them works on a clean signal.</p>
+      <h3>What it does</h3>
+      <p>The high-pass removes handling noise, proximity boom and stand rumble below the voice, at 12, 24 or 48 dB per octave. The mud cut is a single bell in the 150 to 500 Hz region where boxiness lives. Sweeping the corner glides instead of stepping, and changing the slope crossfades between filters so nothing clicks.</p>
+      <h3>Why it's better</h3>
+      <p>These are the two moves every engineer makes on every vocal, done in one place and done precisely: double-precision filters, a corner that glides instead of stepping, and slope changes that never pop in a session. Getting this out of the way early means the compressors and the tape are never fed rumble they would otherwise react to.</p>
+      <h3>The controls</h3>
+      <dl class="md-knobs">
+        <div><dt>HPF</dt><dd>High-pass corner. Removes rumble, handling noise and proximity boom below the voice.</dd></div>
+        <div><dt>SLOPE</dt><dd>Steepness of the high-pass: 12, 24 or 48 dB per octave. Steeper is cleaner but less natural right at the corner.</dd></div>
+        <div><dt>MUD FREQ</dt><dd>Centre of the low-mid cut, where boxiness lives, roughly 150 to 500 Hz.</dd></div>
+        <div><dt>MUD CUT</dt><dd>Depth of the low-mid cut.</dd></div>
+        <div><dt>MUD Q</dt><dd>Width of the low-mid cut. Higher is narrower.</dd></div>
+      </dl>
+    </article>
+    <article class="mdetail" id="md-spectral" data-img="assets/plugin-ui-spectral-v1.webp">
+      <p class="tag">03 · Spectral</p>
+      <h2>Resonances found and carved, <span class="em">only</span> when they appear.</h2>
+      <p class="md-lede">A dynamic resonance suppressor with four nodes that watches your vocal for build-ups and pushes them down as they happen.</p>
+      <h3>What it does</h3>
+      <p>You place up to four nodes on the regions where a voice tends to ring: low-mid boxiness, upper-mid harshness, mic and room resonances. Spectral listens inside each region and, when a peak stands out from the harmonics around it, dips exactly that peak by exactly as much as it sticks out. When nothing resonates, nothing is removed. The display shows the reduction being carved in real time.</p>
+      <h3>Why it's better</h3>
+      <p>Calibrated against the industry reference for this kind of processing, so depth, width and timing behave the way experienced engineers expect. Precision narrows each notch toward surgical, Selectivity leaves ordinary harmonics alone and catches only true resonances, and reduction saturates rather than chasing every peak, which is why it stays musical at high depth. A Delta mode plays only what is being removed, so you always know what you are giving up.</p>
+      <h3>The controls</h3>
+      <dl class="md-knobs">
+        <div><dt>DEPTH</dt><dd>How far resonances are pushed down. Reduction saturates instead of chasing every peak, so it stays musical.</dd></div>
+        <div><dt>PRECISION</dt><dd>Width and maximum depth of each notch. Low is broad and shallow, high is narrow and surgical.</dd></div>
+        <div><dt>SELECTIVITY</dt><dd>How prominent a peak must be before it counts. Higher leaves ordinary harmonics alone and only catches real resonances.</dd></div>
+        <div><dt>ATTACK / RELEASE</dt><dd>How quickly suppression engages and lets go, in milliseconds.</dd></div>
+        <div><dt>STYLE</dt><dd>SOFT eases resonances down in proportion to how much they stick out. HARD lets absolute level push harder.</dd></div>
+        <div><dt>DELTA</dt><dd>Monitors only what is being removed. If you hear words in here, lower DEPTH.</dd></div>
+      </dl>
+    </article>
+    <article class="mdetail" id="md-tape" data-img="assets/plugin-ui-tape-v1.webp">
+      <p class="tag">04 · Tape</p>
+      <h2>Warmth that ignores your <span class="em">level</span>.</h2>
+      <p class="md-lede">An oversampled tape stage with Character, Steady, Focus and Tube: harmonics, gentle squash and density, without touching the words.</p>
+      <h3>What it does</h3>
+      <p>Drive pushes the vocal into a tape model running at four times the sample rate, so the harmonics are clean rather than aliased. Character moves from velvet, a soft tube-like curve that is almost all second harmonic, to crunch, a hard knee with odd harmonics. Speed sets the head bump and the high-frequency roll-off together: 7.5 is thick and dark, 30 is clean and wide. Auto gain keeps the loudness where it was, so turning up drive adds colour, not volume.</p>
+      <h3>Why it's better</h3>
+      <p>Steady is the difference. At 100 a quiet verse gets exactly the same harmonics as a loud chorus, measured at the same distortion figure across a 24 dB range of input, with the level left untouched. Focus band-limits where the warmth is made, so the sub and the air pass around the tape and you can push drive without fizz. A transient guard lets consonants through cleaner than vowels, and the dry path is delay-matched to the wet, so any mix setting is phase-safe.</p>
+      <h3>The controls</h3>
+      <dl class="md-knobs">
+        <div><dt>DRIVE</dt><dd>How hard the signal hits the tape, 0 to +24 dB. Harmonics, high-frequency squash and low-end density all grow with it. Auto gain keeps the volume steady.</dd></div>
+        <div><dt>CHARACTER</dt><dd>Velvet on the left: a soft curve biased like a class-A tube, almost all second harmonic, warm and round. Crunch on the right: a hard knee, odd harmonics, hotter and edgier.</dd></div>
+        <div><dt>STEADY</dt><dd>How much the warmth ignores your level. At 0 quiet passages stay clean and loud ones saturate. At 100 a quiet verse gets exactly the same harmonics as a loud chorus, with the level left untouched.</dd></div>
+        <div><dt>FOCUS</dt><dd>Where the warmth is made. At 0 the whole band is driven; turning up narrows it toward the body of the voice, so the sub and the air pass around the tape untouched.</dd></div>
+        <div><dt>TUBE</dt><dd>A soft tube stage in front of the tape, mostly second harmonic. Two gentle stages in series give a layered density one curve cannot; it never changes the level.</dd></div>
+        <div><dt>SPEED</dt><dd>Tape speed. Moves the head bump, the high-frequency loss and where the top starts to saturate together. 7.5 is thick and dark, 30 is clean and wide.</dd></div>
+        <div><dt>MIX</dt><dd>Parallel blend of dry and tape. Phase-aligned, so any setting is safe.</dd></div>
+      </dl>
+    </article>
+    <article class="mdetail" id="md-deess" data-img="assets/plugin-ui-deess-v1.webp">
+      <p class="tag">05 · De-ess</p>
+      <h2>Catches the ess, never the <span class="em">word</span>.</h2>
+      <p class="md-lede">An adaptive de-esser with no attack, no release and no threshold to babysit.</p>
+      <h3>What it does</h3>
+      <p>A sibilance detector looks 10 ms ahead of the audio and only opens on the spectral signature of an ess or an affricate, never on a loud dark vowel. The threshold adapts to the performance and freezes during silence and during sibilance itself, so a quiet verse and a loud chorus are de-essed to the same degree. Range sets the most an ess can be turned down; Split dips only the sibilant band and leaves the body alone.</p>
+      <h3>Why it's better</h3>
+      <p>Most de-essers are compressors with a filter in front, and they lisp when pushed. This one approaches the range asymptotically, so loud esses stay proportionally louder than quiet ones and nothing ever goes dead. The lookahead catches the first millisecond of every ess. Air Link feeds its activity to the EQ, lifting the air shelf by up to 3 dB as it works, so taming sibilance no longer dulls the top.</p>
+      <h3>The controls</h3>
+      <dl class="md-knobs">
+        <div><dt>FREQUENCY</dt><dd>Where the detector listens for sibilance. 5 to 7 kHz suits most voices.</dd></div>
+        <div><dt>DETECT</dt><dd>HIPASS listens to everything above the frequency. BAND targets a single ess region for surgical work.</dd></div>
+        <div><dt>SENSITIVITY</dt><dd>Biases the adaptive threshold. Positive catches more esses, negative fewer. There are no attack or release knobs: it only reacts to sibilance, never to loud dark vowels.</dd></div>
+        <div><dt>RANGE</dt><dd>The most an ess can be turned down. Loud esses stay proportionally louder than quiet ones, so nothing sounds lisped.</dd></div>
+        <div><dt>MODE</dt><dd>WIDE turns the whole signal down during an ess. SPLIT dips only the sibilant band and leaves the body alone.</dd></div>
+        <div><dt>AIR LINK</dt><dd>How much de-esser activity lifts the EQ's air shelf, up to +3 dB. Taming esses no longer dulls the top.</dd></div>
+      </dl>
+    </article>
+    <article class="mdetail" id="md-eq" data-img="assets/plugin-ui-eq-v1.webp">
+      <p class="tag">06 · EQ</p>
+      <h2>Twelve bands, <span class="em">surgical</span> or broad.</h2>
+      <p class="md-lede">A twelve-band equaliser with ten shapes, cut slopes to 96 dB per octave and dynamics on any band.</p>
+      <h3>What it does</h3>
+      <p>Bells, shelves, cuts, notches, tilt and all-pass shapes, each with its own power, solo and dynamic mode. Dynamic bands compress or expand only their own region, with a band-limited detector and an anti-pump release. Click on the curve to create a band where you point. Scale drags every band's gain at once, from flat to double, so a preset can be dialled back without redrawing it.</p>
+      <h3>Why it's better</h3>
+      <p>The filter mathematics is calibrated so the drawn curve is the curve you hear, with the frequency response verified against a professional reference equaliser. Analog Phase mode matches the phase of the analogue curve as well as its magnitude, with no pre-ringing and zero latency. Any structural change, a band switched on, a shape changed, a slope moved, crossfades in ten milliseconds, so the EQ can be adjusted while the singer is performing.</p>
+      <h3>The controls</h3>
+      <dl class="md-knobs">
+        <div><dt>BANDS</dt><dd>Frequency, gain and Q per band, ten shapes, cut slopes from 6 to 96 dB per octave. Double-click a band to switch it off; solo auditions just that band.</dd></div>
+        <div><dt>DYNAMIC</dt><dd>Per-band dynamics: the band only moves when its own region gets loud, compressing or expanding by the range you set.</dd></div>
+        <div><dt>SCALE</dt><dd>Scales every band's gain at once: 100% as drawn, 0% flat, 200% double.</dd></div>
+        <div><dt>PROCESSING</dt><dd>Zero Latency matches the analogue magnitude curve. Analog Phase also matches the analogue phase, with no pre-ringing.</dd></div>
+        <div><dt>ANALYZER</dt><dd>Spectrum display: off, before the EQ, after it, or both, with a freeze for reading it.</dd></div>
+      </dl>
+    </article>
+    <article class="mdetail" id="md-catch" data-img="assets/plugin-ui-knobinfo-v1.webp">
+      <p class="tag">07 · Catch</p>
+      <h2>The fast one. Peaks caught, vocal kept <span class="em">forward</span>.</h2>
+      <p class="md-lede">A FET compressor in the classic fast style: a fixed threshold, an input you drive into it and ratios you punch in.</p>
+      <h3>What it does</h3>
+      <p>The detector sits after the gain stage, in a feedback loop, so it behaves like the hardware: more input means more compression, attack runs down to 20 microseconds, and release is programme-dependent, letting a sustained squash go more slowly than a brief peak. Ratios of 4, 8, 12 and 20 to 1, plus the all-buttons mode with its plateau curve and bite. Output is compensated automatically, so presets carry across levels.</p>
+      <h3>Why it's better</h3>
+      <p>The coloration follows the gain reduction the way a real FET stage does, odd-dominant and growing as you push it, instead of being a static saturation bolted on afterwards. The ratio buttons couple slope, threshold and knee together as one system, so each setting has its own character rather than being a number. Auto gain keeps the level honest while you find the sound.</p>
+      <h3>The controls</h3>
+      <dl class="md-knobs">
+        <div><dt>INPUT</dt><dd>Drive into the FET compressor. The threshold is fixed like the hardware, so more input means more compression. Output is compensated automatically.</dd></div>
+        <div><dt>RATIO</dt><dd>4, 8, 12 or 20 to 1, or ALL: every button in, the aggressive all-buttons shape.</dd></div>
+        <div><dt>ATTACK</dt><dd>1 to 7, hardware style: 7 is the fastest, 20 microseconds.</dd></div>
+        <div><dt>RELEASE</dt><dd>1 to 7, 7 fastest. Programme dependent: a sustained squash lets go more slowly than a brief peak.</dd></div>
+        <div><dt>AUTO GAIN</dt><dd>Compensates the input drive so the level stays honest as you push it.</dd></div>
+        <div><dt>MIX</dt><dd>Parallel blend of compressed and dry.</dd></div>
+      </dl>
+    </article>
+    <article class="mdetail" id="md-level" data-img="assets/plugin-ui-level-v1.webp">
+      <p class="tag">08 · Level</p>
+      <h2>Slow, musical, <span class="em">invisible</span>.</h2>
+      <p class="md-lede">An optical leveller after the catch, modelled on the classic two-knob studio compressor.</p>
+      <h3>What it does</h3>
+      <p>Peak Reduction sets how much the performance is levelled. A light-dependent cell model gives programme-dependent attack and a two-stage release that recovers half quickly and the rest slowly, following the last several seconds of the performance. Compress is a gentle 3 to 1; Limit is near-hard for catching peaks. Emphasis makes the detector more sensitive to brightness, so harsh moments trigger levelling sooner. Tube colour sits outside the loop, level-tracked.</p>
+      <h3>Why it's better</h3>
+      <p>This is the stage that keeps the vocal in the mix without anyone hearing it work. The release memory means a long phrase and a short shout are treated differently, the way the original hardware does it, and consonants pass through untouched. With the fast compressor catching peaks in front of it, Level only ever has to do the gentle part.</p>
+      <h3>The controls</h3>
+      <dl class="md-knobs">
+        <div><dt>PEAK REDUCTION</dt><dd>How much the opto compressor levels the performance. Slow, smooth, and it stays out of the way of consonants.</dd></div>
+        <div><dt>MODE</dt><dd>COMPRESS is gentle, about 3 to 1. LIMIT is near-hard for catching peaks.</dd></div>
+        <div><dt>EMPHASIS</dt><dd>Makes the detector more sensitive to highs, so brightness triggers levelling sooner.</dd></div>
+        <div><dt>GAIN</dt><dd>Make-up gain after levelling.</dd></div>
+        <div><dt>AUTO GAIN</dt><dd>Compensates the levelling so loudness stays where it was.</dd></div>
+        <div><dt>MIX</dt><dd>Parallel blend of levelled and dry.</dd></div>
+      </dl>
+    </article>
+  </div>
+
+  <!-- MODULE MODAL — filled by js/plugin.js from .mdetail ------------------- -->
+  <div class="mmodal" id="mmodal" role="dialog" aria-modal="true" aria-label="Module details" hidden>
+    <div class="mmodal-inner">
+      <button class="pmodal-close mmodal-close" id="mmodal-close" type="button">Close&nbsp;&nbsp;<i>esc</i></button>
+      <div class="mmodal-media"><img id="mmodal-img" src="" alt=""></div>
+      <div class="mmodal-body" id="mmodal-body"></div>
+    </div>
+  </div>
 
 <!-- FOOTER -------------------------------------------------------------------------------- -->
 <footer class="foot">

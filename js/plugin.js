@@ -52,6 +52,47 @@
     upd();
   })();
 
+
+  /* ---------- module detail dialog ---------------------------------------
+     Each .mod-card[data-module] opens #mmodal with the matching hidden
+     .mdetail article cloned in (text stays in the HTML so i18n runs on it).
+     Esc / backdrop / Close all close; focus returns to the card. --------- */
+  (function modules() {
+    var modal = document.getElementById("mmodal");
+    var body = document.getElementById("mmodal-body");
+    var img = document.getElementById("mmodal-img");
+    var closeBtn = document.getElementById("mmodal-close");
+    if (!modal || !body) return;
+    var last = null;
+    function open(card) {
+      var key = card.getAttribute("data-module");
+      var src = document.getElementById("md-" + key);
+      if (!src) return;
+      body.innerHTML = src.innerHTML;
+      if (img) { img.src = src.getAttribute("data-img") || ""; img.alt = "CLEANSLATE " + key + " page"; }
+      last = card;
+      modal.hidden = false;
+      modal.scrollTop = 0;
+      document.body.style.overflow = "hidden";
+      if (closeBtn) closeBtn.focus();
+    }
+    function close() {
+      if (modal.hidden) return;
+      modal.hidden = true;
+      document.body.style.overflow = "";
+      if (last && last.focus) last.focus();
+    }
+    Array.prototype.forEach.call(document.querySelectorAll(".mod-card[data-module]"), function (card) {
+      card.addEventListener("click", function () { open(card); });
+      card.addEventListener("keydown", function (e) {
+        if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(card); }
+      });
+    });
+    if (closeBtn) closeBtn.addEventListener("click", close);
+    modal.addEventListener("click", function (e) { if (e.target === modal) close(); });
+    document.addEventListener("keydown", function (e) { if (e.key === "Escape") close(); });
+  })();
+
   if (!buttons.length || !CONFIG.domain || !CONFIG.token) return;
 
   var API = "https://" + CONFIG.domain + "/api/" + CONFIG.apiVersion + "/graphql.json";
