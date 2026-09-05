@@ -1152,6 +1152,11 @@ main section{max-width:var(--maxw);margin:0 auto;
 .buy-perks{display:flex;gap:clamp(14px,3vw,38px);justify-content:center;flex-wrap:wrap;
   margin-top:28px;font-family:var(--font-mono);font-weight:400;font-size:10.5px;
   letter-spacing:.14em;text-transform:uppercase;color:var(--uv)}
+/* launch offer line under the buy row — the one loud thing on the page after the button */
+.buy-launch{margin:18px 0 0;padding:0 var(--pad);text-align:center;font-family:var(--font-mono);
+  font-weight:500;font-size:12px;letter-spacing:.18em;text-transform:uppercase;color:var(--blaze)}
+.buy-launch + .buy-note{margin-top:10px}
+.buy-launch + .buy-perks{margin-top:22px}
 /* sale: the old price struck through, the saving as a small pill */
 .buy-price s{color:var(--muted);text-decoration-thickness:2px;font-size:.62em;margin-right:.35em}
 .buy-price .buy-off{display:inline-block;vertical-align:middle;margin-left:.55em;
