@@ -984,8 +984,10 @@ main section{max-width:var(--maxw);margin:0 auto;
 .plug-line{font-family:var(--font-display);font-weight:400;
   font-size:clamp(20px,2.7vw,34px);letter-spacing:-.01em;
   margin-top:clamp(10px,2vh,20px);padding:0 var(--pad);text-align:center}
-.buy-row{display:flex;align-items:center;justify-content:center;gap:22px;
-  flex-wrap:wrap;margin-top:clamp(24px,4.4vh,44px)}
+.buy-row{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;
+  margin-top:clamp(24px,4.4vh,44px)}
+/* the button sits dead-centre under the line; the price stacks beneath it */
+.buy-price{display:inline-flex;align-items:center;justify-content:center;gap:.35em;line-height:1}
 /* THE button. White fill (blaze), ink text — the site's only inverted
    surface, and this page's whole reason to exist. */
 .buy-btn{display:inline-flex;align-items:center;justify-content:center;
@@ -1153,13 +1155,13 @@ main section{max-width:var(--maxw);margin:0 auto;
   margin-top:28px;font-family:var(--font-mono);font-weight:400;font-size:10.5px;
   letter-spacing:.14em;text-transform:uppercase;color:var(--uv)}
 /* launch offer line under the buy row — the one loud thing on the page after the button */
-.buy-launch{margin:18px 0 0;padding:0 var(--pad);text-align:center;font-family:var(--font-mono);
+.buy-launch{margin:16px 0 0;padding:0 var(--pad);text-align:center;font-family:var(--font-mono);
   font-weight:500;font-size:12px;letter-spacing:.18em;text-transform:uppercase;color:var(--blaze)}
 .buy-launch + .buy-note{margin-top:10px}
 .buy-launch + .buy-perks{margin-top:22px}
 /* sale: the old price struck through, the saving as a small pill */
-.buy-price s{color:var(--muted);text-decoration-thickness:2px;font-size:.62em;margin-right:.35em}
-.buy-price .buy-off{display:inline-block;vertical-align:middle;margin-left:.55em;
+.buy-price s{color:var(--muted);text-decoration-thickness:2px;font-size:.62em}
+.buy-price .buy-off{display:inline-block;vertical-align:middle;margin-left:.3em;
   font:500 10.5px/1 var(--font-mono);letter-spacing:.14em;color:var(--ink);
   background:var(--blaze);border-radius:999px;padding:6px 9px;font-style:normal}
 /* installers are free: one quiet line under the perks, links roll like the nav */
