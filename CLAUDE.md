@@ -593,6 +593,14 @@ film** -> the eight module cards (real UI pages, `plugin-ui-*-v1.webp`)
   off), published ONLY to the **Badscandal** (headless) channel — never to
   Online Store / Shop / POS, so it stays out of the clothing store.
   plugin.js reads `compareAtPrice` and renders `<s>old</s> new -50%`.
+  **Priced in USD for everyone (6 Sep 2026):** plugin.js queries and creates
+  the cart `@inContext(country: US)` with `buyerIdentity.countryCode = US`,
+  so the page shows the United States market price (Shopify auto-converts
+  the EUR base: $30 / $60) and checkout runs in USD. A fixed $25 needs a
+  US market catalog + price list; an API attempt on 6 Sep briefly hid every
+  clothing product from US visitors (a new catalog only contains what is
+  published to it) and was rolled back — if you do it again, publish ALL
+  products to the catalog's publication first, then add the fixed price.
   Installer links (Shopify CDN, `-b2` builds) sit under the BUY perks
   (`.buy-dl`) and in a fifth FAQ item; both are in i18n TEXT. The key
   email itself carries the same two links (server repo, wrangler.toml).
