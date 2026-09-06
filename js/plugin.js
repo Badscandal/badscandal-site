@@ -28,7 +28,10 @@
     domain: "cdziaw-1i.myshopify.com",
     token: "98b69d5eea492db921df63b35200ab10",  /* public Storefront token */
     apiVersion: "2025-04",
-    handle: "cleanslate"
+    handle: "cleanslate",
+    /* Price + checkout in the United States market (USD) for everyone: the plug-in is sold in
+       dollars world-wide. The store's base currency stays EUR for the clothing. */
+    country: "US"
   };
 
   var buttons = Array.prototype.slice.call(document.querySelectorAll("[data-buy]"));
@@ -110,7 +113,8 @@
 
   function money(amount, currency) {
     try {
-      return new Intl.NumberFormat("en-IE", { style: "currency", currency: currency,
+      /* en-US renders USD as "$25"; en-IE would say "US$25" */
+      return new Intl.NumberFormat(currency === "USD" ? "en-US" : "en-IE", { style: "currency", currency: currency,
         minimumFractionDigits: 0, maximumFractionDigits: 2 }).format(parseFloat(amount));
     } catch (e) {
       return currency + " " + amount;
@@ -118,11 +122,12 @@
   }
 
   var PRODUCT_Q =
-    "query($handle:String!){ product(handle:$handle){ id title availableForSale " +
+    "query($handle:String!,$country:CountryCode!) @inContext(country:$country){ product(handle:$handle){ id title availableForSale " +
     "variants(first:5){ nodes{ id availableForSale price{ amount currencyCode } compareAtPrice{ amount currencyCode } } } } }";
 
   var CART_M =
-    "mutation($lines:[CartLineInput!]!){ cartCreate(input:{lines:$lines}){ " +
+    "mutation($lines:[CartLineInput!]!,$country:CountryCode!) @inContext(country:$country){ " +
+    "cartCreate(input:{lines:$lines,buyerIdentity:{countryCode:$country}}){ " +
     "cart{ checkoutUrl } userErrors{ message } } }";
 
   function setBusy(on) {
@@ -159,7 +164,7 @@
         e.preventDefault();
         if (b.classList.contains("busy")) return;
         setBusy(true);
-        gql(CART_M, { lines: [{ merchandiseId: variant.id, quantity: 1 }] })
+        gql(CART_M, { lines: [{ merchandiseId: variant.id, quantity: 1 }], country: CONFIG.country })
           .then(function (res) {
             var cart = res && res.data && res.data.cartCreate && res.data.cartCreate.cart;
             if (cart && cart.checkoutUrl) { location.href = cart.checkoutUrl; return; }
@@ -174,7 +179,7 @@
     });
   }
 
-  gql(PRODUCT_Q, { handle: CONFIG.handle }).then(function (res) {
+  gql(PRODUCT_Q, { handle: CONFIG.handle, country: CONFIG.country }).then(function (res) {
     var p = res && res.data && res.data.product;
     if (!p) return;                                   /* keep the mailto fallback */
     var v = (p.variants.nodes || []).filter(function (x) { return x.availableForSale; })[0]
