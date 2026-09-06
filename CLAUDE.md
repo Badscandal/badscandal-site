@@ -595,12 +595,13 @@ film** -> the eight module cards (real UI pages, `plugin-ui-*-v1.webp`)
   plugin.js reads `compareAtPrice` and renders `<s>old</s> new -50%`.
   **Priced in USD for everyone (6 Sep 2026):** plugin.js queries and creates
   the cart `@inContext(country: US)` with `buyerIdentity.countryCode = US`,
-  so the page shows the United States market price (Shopify auto-converts
-  the EUR base: $30 / $60) and checkout runs in USD. A fixed $25 needs a
-  US market catalog + price list; an API attempt on 6 Sep briefly hid every
-  clothing product from US visitors (a new catalog only contains what is
-  published to it) and was rolled back — if you do it again, publish ALL
-  products to the catalog's publication first, then add the fixed price.
+  so the page shows the United States market price and checkout runs in
+  USD. CLEANSLATE has a FIXED $25 / $50 there: Shopify catalog "United
+  States" (MarketCatalog 172862603590, price list 32378880326, all products
+  included + auto-include new ones, 0% adjustment, so the clothing keeps its
+  converted USD prices). Lesson: a catalog created via the API contains only
+  what is published to it and briefly hid all 80 clothing products from US
+  visitors — create catalogs in the admin UI (it includes everything).
   Installer links (Shopify CDN, `-b2` builds) sit under the BUY perks
   (`.buy-dl`) and in a fifth FAQ item; both are in i18n TEXT. The key
   email itself carries the same two links (server repo, wrangler.toml).
