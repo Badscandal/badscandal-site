@@ -1,10 +1,10 @@
 {
   "product": "cleanslate",
-  "latest": "1.0.1",
+  "latest": "1.0.2",
   "released": "2026-09-08",
   "page": "https://badscandal.com/updatecleanslate",
   "downloads": {
-    "mac": "https://cdn.shopify.com/s/files/1/1011/9154/9254/files/Install-CLEANSLATE-1.0.1.pkg?v=1788861774",
-    "win": "https://cdn.shopify.com/s/files/1/1011/9154/9254/files/CLEANSLATE-Setup-1.0.1.exe?v=1788862936"
+    "mac": "https://cdn.shopify.com/s/files/1/1011/9154/9254/files/Install-CLEANSLATE-1.0.2.pkg?v=1788870531",
+    "win": "https://cdn.shopify.com/s/files/1/1011/9154/9254/files/CLEANSLATE-Setup-1.0.2.exe?v=1788871796"
   }
 }
