@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Activate CLEANSLATE — BADSCANDAL</title>
+<meta name="robots" content="noindex">
+<link rel="icon" type="image/png" sizes="48x48" href="assets/favicon-48-v2.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Figtree:wght@300..900&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+<style>
+  /* Browser activation for CLEANSLATE (8 Sep 2026). Stand-alone page on purpose: no site JS,
+     no loader, no CRT — it must work from any browser on any machine, including a phone.
+     The plug-in shows a MACHINE CODE; this page turns key + code into the signed licence text
+     the user pastes back. The request goes to /api/licence/activate, which Netlify proxies to
+     the licence Worker (see _redirects) so the browser talks to badscandal.com only. */
+  :root{--ink:#050505;--ink-2:#0C0C0C;--ink-3:#1F1F1F;--paper:#F2F2F2;--muted:#8a8a8a;--faint:#4a4a4a;--accent:#7C8CFF}
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--ink);color:var(--paper);font-family:Figtree,system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+  main{max-width:640px;margin:0 auto;padding:56px 24px 80px}
+  h1{font-family:"Instrument Serif",Georgia,serif;font-weight:400;font-size:clamp(32px,6vw,44px);margin:0 0 6px;letter-spacing:.01em}
+  h1 span{color:var(--muted)}
+  .cap{font-family:"DM Mono",monospace;font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--faint);margin:0 0 36px}
+  ol{margin:0 0 28px;padding-left:20px;color:var(--muted);line-height:1.6}
+  ol b{color:var(--paper);font-weight:600}
+  label{display:block;font-family:"DM Mono",monospace;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--faint);margin:18px 0 8px}
+  input,textarea{width:100%;background:var(--ink-2);border:1px solid var(--ink-3);border-radius:10px;color:var(--paper);font-family:"DM Mono",monospace;font-size:15px;padding:13px 14px;outline:none}
+  input:focus,textarea:focus{border-color:var(--accent)}
+  textarea{min-height:120px;resize:vertical;font-size:12px;line-height:1.5;word-break:break-all}
+  .row{display:flex;gap:10px;align-items:stretch}
+  .row input{flex:1}
+  button{background:var(--paper);color:var(--ink);border:0;border-radius:10px;font:600 13px/1 Figtree,system-ui,sans-serif;letter-spacing:.12em;text-transform:uppercase;padding:0 22px;cursor:pointer;min-height:48px}
+  button:disabled{opacity:.35;cursor:default}
+  button.ghost{background:transparent;color:var(--paper);border:1px solid var(--ink-3)}
+  .status{margin:18px 0 0;min-height:24px;font-size:14px;color:var(--muted);line-height:1.5}
+  .status.err{color:#FF5A6A}
+  .status.ok{color:#33D6C0}
+  #result{display:none;margin-top:28px;padding-top:24px;border-top:1px solid var(--ink-3)}
+  .small{font-size:12px;color:var(--faint);margin-top:28px;line-height:1.6}
+  .small a{color:var(--muted)}
+</style>
+</head>
+<body>
+<main>
+  <h1>CLEAN<span>SLATE</span></h1>
+  <p class="cap">Activate in your browser · for computers that cannot reach the licence server</p>
+  <ol>
+    <li>In the plug-in, click <b>Can't connect? Activate in your browser</b>, then <b>COPY</b> next to the machine code.</li>
+    <li>Enter your licence key and paste the machine code here, then click <b>Get licence</b>.</li>
+    <li>Copy the licence text this page gives you, paste it into the plug-in's <b>licence</b> field and click <b>APPLY</b>.</li>
+  </ol>
+  <form id="f" autocomplete="off">
+    <label for="key">Licence key</label>
+    <input id="key" placeholder="CLST-XXXXX-XXXXX-XXXXX" spellcheck="false" maxlength="28">
+    <label for="code">Machine code (from the plug-in)</label>
+    <input id="code" placeholder="64 characters, letters a–f and digits" spellcheck="false" maxlength="80">
+    <div class="row" style="margin-top:22px">
+      <button id="go" type="submit">Get licence</button>
+    </div>
+    <p id="status" class="status"></p>
+  </form>
+  <section id="result">
+    <label for="lic">Your licence for this computer</label>
+    <textarea id="lic" readonly spellcheck="false"></textarea>
+    <div class="row" style="margin-top:12px">
+      <button id="copy" type="button" class="ghost">Copy licence</button>
+    </div>
+    <p class="status">Paste it into the plug-in and click APPLY. This used one of your seats, exactly like a normal activation.</p>
+  </section>
+  <p class="small">The key came in your purchase email from keys@mail.badscandal.com. Lost it? Email <a href="mailto:contact@badscandal.com">contact@badscandal.com</a>. Each key works on two computers; deactivate one from the plug-in's footer to free a seat.</p>
+</main>
+<script>
+(function () {
+  var f = document.getElementById('f'), key = document.getElementById('key'), code = document.getElementById('code');
+  var go = document.getElementById('go'), status = document.getElementById('status'), result = document.getElementById('result');
+  var lic = document.getElementById('lic'), copy = document.getElementById('copy');
+  function say(msg, cls) { status.textContent = msg; status.className = 'status' + (cls ? ' ' + cls : ''); }
+  function normKey(s) {
+    s = String(s || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+    if (s.indexOf('CLST') === 0) s = s.slice(4);
+    s = s.replace(/[IL]/g, '1').replace(/O/g, '0');
+    return s.length === 15 ? 'CLST-' + s.slice(0, 5) + '-' + s.slice(5, 10) + '-' + s.slice(10, 15) : '';
+  }
+  f.addEventListener('submit', async function (e) {
+    e.preventDefault();
+    var k = normKey(key.value), m = String(code.value || '').trim().toLowerCase().replace(/[^0-9a-f]/g, '');
+    if (!k) return say('That does not look like a CLEANSLATE key (CLST-XXXXX-XXXXX-XXXXX).', 'err');
+    if (m.length !== 64) return say('The machine code is 64 characters; copy it from the plug-in with the COPY button.', 'err');
+    go.disabled = true; say('Contacting the licence server…');
+    try {
+      var r = await fetch('/api/licence/activate', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+        body: JSON.stringify({ key: k, machineHash: m, machineName: 'browser activation', os: navigator.platform || 'browser', version: 'web' }) });
+      var j = null; try { j = await r.json(); } catch (_) {}
+      if (r.ok && j && j.licence) {
+        lic.value = j.licence; result.style.display = 'block';
+        say('Licence issued (seat ' + j.seat + ' of ' + j.seatsMax + ').', 'ok');
+        lic.focus(); lic.select();
+      } else {
+        var err = j && j.error;
+        say(err === 'invalid_key' ? 'That key is not recognised. Check it against your purchase email.'
+          : err === 'revoked' ? 'This key has been deactivated. Contact contact@badscandal.com.'
+          : err === 'seats_exhausted' ? 'This key is already active on two computers. Deactivate one of them first.'
+          : (j && j.message) ? j.message : 'The licence server returned an error (' + r.status + '). Try again in a minute.', 'err');
+      }
+    } catch (ex) {
+      say('Could not reach badscandal.com from this browser. Check your connection and try again.', 'err');
+    }
+    go.disabled = false;
+  });
+  copy.addEventListener('click', async function () {
+    try { await navigator.clipboard.writeText(lic.value); copy.textContent = 'Copied'; }
+    catch (_) { lic.focus(); lic.select(); document.execCommand('copy'); copy.textContent = 'Copied'; }
+    setTimeout(function () { copy.textContent = 'Copy licence'; }, 1800);
+  });
+})();
+</script>
+</body>
+</html>

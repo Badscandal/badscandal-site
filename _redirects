@@ -1,3 +1,7 @@
+# Licence server behind our own domain: the CLEANSLATE plug-in (from build b3) and activate.html
+# talk to /api/licence/* when the Cloudflare workers.dev name is unreachable from a buyer's machine.
+/api/licence/*  https://cleanslate-licence.luke-86a.workers.dev/:splat  200
+
 # Old music-era URLs. Keep these: they are indexed and linked from
 # elsewhere, and Netlify serves this file before it 404s.
 /lukepower      /us      301
