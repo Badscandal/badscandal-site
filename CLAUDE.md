@@ -602,8 +602,48 @@ film** -> the eight module cards (real UI pages, `plugin-ui-*-v1.webp`)
   converted USD prices). Lesson: a catalog created via the API contains only
   what is published to it and briefly hid all 80 clothing products from US
   visitors — create catalogs in the admin UI (it includes everything).
-  Installer links (Shopify CDN, `-b2` builds) sit under the BUY perks
-  (`.buy-dl`) and in a fifth FAQ item; both are in i18n TEXT. The key
-  email itself carries the same two links (server repo, wrangler.toml).
+  Installer links (Shopify CDN) sit under the BUY perks (`.buy-dl`) and in
+  a fifth FAQ item, each `<a data-dl="mac|win">`; plugin.js rewrites their
+  hrefs from `cleanslate-version.json` (below), the hard-coded hrefs are the
+  no-JS fallback. The key email carries the same two links (server repo,
+  wrangler.toml).
 * Still open: ES/PT copy for the rest of the page body (nav labels, hero
   line and the key lines are translated).
+
+## Licence + update pages (activate.html 8 Sep 2026, updatecleanslate.html 8 Sep 2026)
+
+Two utility pages for people who already own CLEANSLATE, plus the one file
+that every version number on the site comes from.
+
+* **`cleanslate-version.json` — the version manifest, repo ROOT.** Read by
+  the plug-in's CHECK FOR UPDATE (Source/Licensing/UpdateChecker.cpp in the
+  plugin repo, once a day silently + on click) and by js/update.js and
+  js/plugin.js. Shape: `{product, latest, released, page, downloads:{mac,win}}`.
+  Root files are `no-store`, and `_headers` pins the type explicitly — it
+  must NEVER move under assets/ (immutable for a year = a stale update
+  notice on every machine). **A release = edit this file** (latest, released,
+  the two CDN URLs) + a card and a history row on updatecleanslate.html.
+  Publish it LAST: the moment `latest` goes up every installed plug-in
+  advertises it, so both installers must already be on the CDN and the key
+  email (wrangler.toml) already redeployed.
+* **`/updatecleanslate`** (pretty URL of updatecleanslate.html; the plug-in
+  opens it as `?v=<installed>&os=<mac|win>`). js/update.js fetches the
+  manifest and writes the headline: behind -> "Update to *X* now." + "YOU ARE
+  ON VERSION Y"; current -> "You're on the *latest* version."; no `?v` ->
+  "CLEANSLATE *X*". The visitor's OS (`?os=`, else UA) gets the white
+  `.buy-btn`, the other OS the outline `.cta-btn`; labels are static because
+  `.roll` rebuilds its text at load. Then the "What's new" `.mod-grid` —
+  cards ONLY for the modules/areas a release touched (`plugin-ui-activation-v1`,
+  `plugin-ui-update-v1` are UI screenshots, 3:2 like the module cards) —
+  a `.spec-list` release history, a four-item FAQ, the plugin footer. CSS
+  block "UPDATE PAGE" at the end of site.css. Runtime strings go through
+  `BS_T` and live in i18n TEXT (ES/PT); three headlines in HTML.
+* **`/activate`** (activate.html) is deliberately stand-alone — no site
+  CSS/JS, must work from any browser on any machine: key + machine code
+  -> POST `/api/licence/activate` -> licence text to paste into the plug-in.
+  `_redirects` proxies `/api/licence/*` to the Cloudflare Worker (200
+  rewrite) so machines that cannot reach workers.dev still activate.
+* Test: `node --check js/*.js`, `python3 -m http.server`, open
+  `/updatecleanslate.html?v=1.0.0&os=mac` (behind), `?v=<latest>` (current)
+  and no params; `curl -sI badscandal.com/cleanslate-version.json` must say
+  `no-store`.

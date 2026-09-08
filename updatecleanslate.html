@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CLEANSLATE updates — BADSCANDAL</title>
+<meta name="description" content="Update CLEANSLATE, the BADSCANDAL vocal chain plugin. See what's new, download the latest installer for macOS or Windows, and keep your licence — updating never asks for your key again.">
+<meta property="og:title" content="CLEANSLATE updates — what's new in the BADSCANDAL vocal chain">
+<meta property="og:description" content="Download the latest CLEANSLATE. Your licence stays. Install over the top, reopen your DAW, done.">
+<meta property="og:image" content="assets/plugin-still-hero-4k-v1.jpg">
+<link rel="icon" type="image/png" sizes="48x48" href="assets/favicon-48-v2.png">
+<link rel="icon" type="image/png" sizes="192x192" href="assets/favicon-192-v2.png">
+<link rel="apple-touch-icon" href="assets/favicon-180-v2.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,100..900&family=DM+Mono:wght@300;400;500&family=Figtree:wght@300..900&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/site.css">
+<noscript><style>
+/* no JS: reveals never get .in, the CRT canvas never draws — reset so the page reads top to bottom */
+.reveal{opacity:1 !important;transform:none !important}
+.crt canvas{display:none !important}
+.crt-fallback{display:block !important}
+[data-pop]{opacity:1 !important;transform:none !important}
+</style></noscript>
+</head>
+<body class="plug">
+
+<div class="grain" aria-hidden="true"></div>
+<div class="blur-veil" aria-hidden="true"></div>
+
+<!-- ==========================================================================================
+     CLEANSLATE UPDATE PAGE (8 Sep 2026)
+     The plug-in's footer button CHECK FOR UPDATE opens /updatecleanslate?v=<installed>&os=<mac|win>.
+     js/update.js reads /cleanslate-version.json (the ONLY place a version number lives on the
+     site) and writes the headline: behind -> "Update to X now" + "You are on version Y";
+     current -> "You're on the latest version"; no ?v -> "CLEANSLATE X".
+     A release edits cleanslate-version.json and adds a card + a history row here. The plug-in
+     never asks for the key again after an update: licences live outside the installers.
+     Same rules as plugin.html: monochrome furniture, the screenshots carry the colour, one
+     italic word per headline, .roll elements text-only.
+     ========================================================================================== -->
+<header class="nav">
+  <a class="nav-logo" href="index.html" aria-label="Badscandal — home">/</a>
+  <nav class="nav-links" aria-label="Primary">
+    <a class="nav-link roll" href="index.html">Home</a>
+    <a class="nav-link roll" href="plugin.html">Plugin store</a>
+  </nav>
+  <div class="lang" role="group" aria-label="Language">
+    <button type="button" data-lang="en">EN</button><button type="button" data-lang="es">ES</button><button type="button" data-lang="pt">PT</button>
+  </div>
+  <a class="nav-cta roll" data-mag href="#download">Download</a>
+</header>
+
+<main id="top" class="page-main">
+
+  <!-- 01 · STATE + DOWNLOAD — the headline is written by js/update.js ------------------- -->
+  <section class="upd-hero" id="download">
+    <p class="tag">CLEANSLATE · Updates</p>
+    <div class="crt crt-plug"><canvas role="img" aria-label="CLEANSLATE"></canvas><h1 class="crt-fallback" hidden>CLEANSLATE</h1></div>
+    <h2 class="upd-head" id="upd-head">CLEANSLATE <span class="em">updates</span>.</h2>
+    <p class="upd-sub" id="upd-sub">The latest installers are below.</p>
+    <div class="buy-row upd-dl">
+      <a class="buy-btn roll" id="dl-mac" data-mag href="https://cdn.shopify.com/s/files/1/1011/9154/9254/files/Install-CLEANSLATE-1.0.1.pkg?v=1788861774">Download for macOS</a>
+      <a class="cta-btn roll" id="dl-win" data-mag href="https://cdn.shopify.com/s/files/1/1011/9154/9254/files/CLEANSLATE-Setup-1.0.1.exe?v=1788862936">Download for Windows</a>
+    </div>
+    <p class="buy-note">Your licence stays. Install over the top, reopen your DAW, done.</p>
+    <p class="buy-perks"><span>macOS 11+ · Apple silicon &amp; Intel</span><span>Windows 10+ · 64-bit</span><span>AU · VST3 · Standalone</span><span>Presets untouched</span></p>
+  </section>
+
+  <!-- 02 · WHAT'S NEW — cards ONLY for the modules and areas a release touched. Same
+       .mod-card furniture as the plugin page; the screenshots carry the colour. ---------- -->
+  <section class="plug-mods upd-new reveal" id="updates">
+    <p class="tag">What's new · <span id="upd-latest">1.0.2</span></p>
+    <h2>Built to keep getting <span class="em">better</span>.</h2>
+    <p class="upd-lede">Every update is measured before it ships: the licensed output stays bit-identical unless a change is meant to be heard, and every module goes back through the same test battery it launched with. These are the parts that changed.</p>
+    <div class="mod-grid upd-grid">
+      <article class="mod-card" data-pop="up">
+        <img src="assets/plugin-ui-activation-v1.webp" alt="CLEANSLATE activation panel with the browser route" loading="lazy">
+        <div class="mod-body"><p class="mod-n">New in 1.0.2 · Activation</p><h3>A licence that stays put</h3>
+        <p>Your activation is now tied to the machine, not to the OS build it was made on. Update macOS, update Windows, update CLEANSLATE — the plugin opens licensed every time, and your two seats stay yours. Existing activations move over silently the first time they go online.</p></div>
+      </article>
+      <article class="mod-card" data-pop="up">
+        <img src="assets/plugin-ui-update-v1.webp" alt="CLEANSLATE footer showing UPDATE TO … NOW" loading="lazy">
+        <div class="mod-body"><p class="mod-n">New in 1.0.2 · Updates</p><h3>Check for update, in the footer</h3>
+        <p>One click at the bottom-right of the window asks badscandal.com whether there's a newer build and brings you here. It checks quietly once a day on its own; when something new is ready the footer says so, in green.</p></div>
+      </article>
+      <article class="mod-card" data-pop="up">
+        <img src="assets/plugin-ui-activation-v1.webp" alt="CLEANSLATE activation panel" loading="lazy">
+        <div class="mod-body"><p class="mod-n">New in 1.0.1 · Activation</p><h3>Activates from anywhere</h3>
+        <p>Two more routes to the licence server, and a browser fallback for the rare machine that blocks all of them: copy the machine code from the panel, paste the key at badscandal.com/activate, paste the licence back. Nobody stays stuck at the door.</p></div>
+      </article>
+    </div>
+  </section>
+
+  <!-- 03 · RELEASE HISTORY -------------------------------------------------------------- -->
+  <section class="upd-history reveal" id="history">
+    <p class="tag">Release history</p>
+    <h2>Every <span class="em">version</span>.</h2>
+    <dl class="spec-list upd-list">
+      <div>
+        <dt>1.0.2 · 8 Sep 2026</dt>
+        <dd>Machine fingerprint no longer moves with OS updates; existing activations migrate on their own. CHECK FOR UPDATE in the footer with a daily silent check. Cleaner OS reporting to the licence server. No change to the audio path.</dd>
+      </div>
+      <div>
+        <dt>1.0.1 · 8 Sep 2026</dt>
+        <dd>Licence server reachable through badscandal.com as well as the primary address, over two HTTP stacks. Browser activation for machines that block both. Clearer messages when a connection fails.</dd>
+      </div>
+      <div>
+        <dt>1.0.0 · 6 Sep 2026</dt>
+        <dd>Launch. Eight modules in one window: Noise, Cleanup, Spectral, Tape, De-ess, EQ, Catch, Level. AU, VST3 and standalone for macOS and Windows. Key by email, two machines, works offline.</dd>
+      </div>
+    </dl>
+  </section>
+
+  <!-- 04 · FAQ ----------------------------------------------------------------------------- -->
+  <section class="faq reveal" id="upd-faq">
+    <p class="tag">Updating</p>
+    <h2>Things you'd <span class="em">ask</span>.</h2>
+    <div class="faq-list">
+      <details>
+        <summary>Do I need my key again?</summary>
+        <p>No. Your licence is stored outside the plugin files, so an update never touches it. Download, install over the old version, reopen your DAW: it opens licensed.</p>
+      </details>
+      <details>
+        <summary>Will my presets and sessions survive?</summary>
+        <p>Yes. User presets live in your own folder and every parameter keeps its meaning between versions, so sessions recall exactly as saved.</p>
+      </details>
+      <details>
+        <summary>The footer says COULDN'T CHECK.</summary>
+        <p>That machine couldn't reach badscandal.com at that moment. Nothing is wrong with the licence — the check is just a lookup. Come back to this page in any browser and download from here.</p>
+      </details>
+      <details>
+        <summary>How do I know which version I have?</summary>
+        <p>It's printed at the bottom-right of the plugin window, next to the latency readout. Pressing CHECK FOR UPDATE there brings you to this page with your version filled in.</p>
+      </details>
+    </div>
+  </section>
+
+</main>
+
+<!-- FOOTER -------------------------------------------------------------------------------- -->
+<footer class="foot">
+  <div class="crt"><canvas role="img" aria-label="BADSCANDAL"></canvas><h2 class="crt-fallback" hidden>BADSCANDAL</h2></div>
+  <div class="foot-grid">
+    <div>
+      <p class="tag">Contact</p>
+      <p class="foot-addr">
+        <a class="roll" href="mailto:contact@badscandal.com?subject=CLEANSLATE%20update">contact@badscandal.com</a><br>
+        Key by email · Works offline
+      </p>
+    </div>
+    <div>
+      <p class="tag">Navigation</p>
+      <ul class="plain">
+        <li><a class="roll" href="index.html">Home</a></li>
+        <li><a class="roll" href="plugin.html">Plugin store</a></li>
+        <li><a class="roll" href="#download">Download</a></li>
+      </ul>
+    </div>
+    <div>
+      <p class="tag">Follow us</p>
+      <ul class="plain">
+        <li><a class="roll" href="https://instagram.com/iguessimlukepower" target="_blank" rel="noopener">Instagram</a></li>
+        <li><a class="roll" href="https://youtube.com/@iguessimlukepower" target="_blank" rel="noopener">YouTube</a></li>
+        <li><a class="roll" href="https://www.tiktok.com/@iguessimlukepower" target="_blank" rel="noopener">TikTok</a></li>
+      </ul>
+    </div>
+    <div>
+      <p class="tag">(Ask AI about BADSCANDAL)</p>
+      <ul class="plain ai-links">
+        <li><a class="roll" href="https://claude.ai/new?q=Tell%20me%20about%20CLEANSLATE%2C%20the%20vocal%20chain%20plugin%20by%20BADSCANDAL%20(badscandal.com)." target="_blank" rel="noopener">Ask Claude</a></li>
+        <li><a class="roll" href="https://chat.openai.com/?q=Tell%20me%20about%20CLEANSLATE%2C%20the%20vocal%20chain%20plugin%20by%20BADSCANDAL%20(badscandal.com)." target="_blank" rel="noopener">Ask ChatGPT</a></li>
+        <li><a class="roll" href="https://www.perplexity.ai/search/new?q=Tell%20me%20about%20CLEANSLATE%2C%20the%20vocal%20chain%20plugin%20by%20BADSCANDAL." target="_blank" rel="noopener">Ask Perplexity</a></li>
+      </ul>
+    </div>
+  </div>
+  <p class="foot-note">CLEANSLATE — the BADSCANDAL vocal chain. Eight modules, one window,
+  every DAW. Made by engineers and vocalists.</p>
+  <div class="foot-bar">
+    <span>&copy; <b id="year">2026</b> BADSCANDAL</span>
+    <span id="clock"></span>
+  </div>
+  <p class="foot-tag">『 No kings. No gods. No masters. 』</p>
+</footer>
+
+<script src="js/i18n.js"></script>
+<script src="js/main.js"></script>
+<script src="js/crt.js"></script>
+<script src="js/update.js"></script>
+</body>
+</html>

@@ -96,6 +96,23 @@
     document.addEventListener("keydown", function (e) { if (e.key === "Escape") close(); });
   })();
 
+  /* installer links follow the version manifest, so a release edits cleanslate-version.json
+     and nothing here; the hard-coded hrefs stay as the fallback */
+  (function () {
+    var links = document.querySelectorAll("[data-dl]");
+    if (!links.length || !window.fetch) return;
+    fetch("cleanslate-version.json", { cache: "no-store" })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (m) {
+        if (!m || !m.downloads) return;
+        Array.prototype.forEach.call(links, function (a) {
+          var u = m.downloads[a.getAttribute("data-dl")];
+          if (u) a.href = u;
+        });
+      })
+      .catch(function () {});
+  })();
+
   if (!buttons.length || !CONFIG.domain || !CONFIG.token) return;
 
   var API = "https://" + CONFIG.domain + "/api/" + CONFIG.apiVersion + "/graphql.json";

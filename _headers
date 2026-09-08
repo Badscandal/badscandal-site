@@ -5,3 +5,9 @@
 # Media cached hard
 /assets/*
   Cache-Control: public, max-age=31536000, immutable
+
+# The CLEANSLATE version manifest: the plug-in's CHECK FOR UPDATE and /updatecleanslate read it.
+# Root files are already no-store (above); this pins the type and documents the intent.
+/cleanslate-version.json
+  Cache-Control: no-store, no-cache, must-revalidate
+  Content-Type: application/json; charset=utf-8
