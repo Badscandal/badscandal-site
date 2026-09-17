@@ -1274,3 +1274,75 @@ video::-webkit-media-controls-panel{display:none !important}
   .upd-dl{flex-direction:column}
   .upd-grid{grid-template-columns:1fr}
 }
+
+/* ============================================================
+   LISTEN PAGE (listen.html, 17 Sep 2026) — the bio-link page.
+   One centred column over the FIXED brand film; every section
+   transparent (the one rule), the release card and the rows are
+   the only grey surfaces. Links/number arrive from js/listen.js.
+   ============================================================ */
+.listen main section{max-width:600px;padding:clamp(22px,4vh,40px) var(--pad)}
+/* the wordmark row is the one full-width section: the mark is wider than the column */
+.listen main section.listen-top{max-width:none;padding-left:0;padding-right:0;overflow:hidden}
+/* the film, fixed behind the column. Keeps class .hero for main.js's
+   video hooks, so undo the hero slab's own height + flow. */
+.hero.listen-bg{position:fixed;inset:0;height:auto;min-height:0;z-index:0}
+.listen-bg .hero-scrim{background:linear-gradient(180deg,rgba(var(--ink-rgb),.72),
+  rgba(var(--ink-rgb),.6) 40%,rgba(var(--ink-rgb),.78))}
+.listen .page-main{position:relative;z-index:1;padding-top:clamp(96px,14vh,140px)}
+.listen .foot{position:relative;z-index:1}
+.listen-top{text-align:center;padding-bottom:clamp(6px,1.5vh,14px)}
+.crt-listen{max-width:none;width:min(92vw,1100px);margin:0 auto 6px}
+.crt-listen canvas{height:clamp(52px,10.4vw,176px)}
+.crt-listen .crt-fallback{font-size:min(8vw,118px)}
+/* .music-line is the landing's absolutely-positioned tagline (and its
+   i18n selector); here it sits in flow under the mark */
+.music-line.listen-line{position:static;padding:0;margin-top:2px}
+/* release card: the cover is the colour, the body is grey */
+.rel-card{background:var(--ink-2);border:1px solid var(--ink-3);overflow:hidden;
+  box-shadow:0 30px 80px rgba(0,0,0,.5)}
+.rel-cover{display:block;width:100%;height:auto;aspect-ratio:1;object-fit:cover}
+.rel-body{padding:26px 22px 30px;text-align:center}
+.rel-body .tag{margin-bottom:10px}
+.rel-title{font-family:var(--font-display);font-weight:400;
+  font-size:clamp(36px,7vw,60px);line-height:1;letter-spacing:-.01em}
+.rel-body .buy-btn{margin-top:22px}
+.rel-links{margin-top:20px;display:flex;justify-content:center;flex-wrap:wrap;gap:8px 22px;
+  font-family:var(--font-mono);font-weight:400;font-size:11px;letter-spacing:.12em;
+  text-transform:uppercase;color:var(--muted)}
+.rel-links a:hover{color:var(--paper)}
+body.presave .rel-links{display:none}
+/* the rows: serif platform name left, mono verb right */
+.lk .tag{margin-bottom:12px}
+.lk-list{margin:0}
+.lk-list li{margin:0 0 10px}
+.lk-row{display:flex;align-items:center;justify-content:space-between;gap:16px;
+  border:1px solid var(--ink-3);background:rgba(var(--ink-rgb),.55);padding:19px 22px;
+  transition:border-color .3s ease,transform .3s var(--ease),background .3s ease}
+.lk-row:hover{border-color:var(--uv);background:rgba(var(--ink-rgb),.8);transform:translateY(-3px)}
+.lk-row .p{font-family:var(--font-display);font-weight:400;font-size:clamp(20px,2.2vw,25px)}
+.lk-row .h{font-family:var(--font-mono);font-weight:400;font-size:11px;letter-spacing:.12em;
+  text-transform:uppercase;color:var(--muted);text-align:right;white-space:nowrap}
+.lk-row .h i{font-style:normal}
+.lk-row:hover .h{color:var(--paper)}
+/* the number */
+.streams{text-align:center}
+.streams .tag{margin-bottom:10px}
+/* 12 characters (145,000,000+) must fit the 600px column at every width */
+.listen .stat-count{font-size:clamp(32px,8.6vw,58px);white-space:nowrap}
+.streams-as{margin-top:14px;font-family:var(--font-mono);font-weight:400;font-size:11px;
+  letter-spacing:.12em;text-transform:uppercase;color:var(--muted);line-height:1.8}
+.foot--slim{border-top:0;padding:clamp(24px,4vh,40px) var(--pad) 40px}
+.foot--slim .foot-bar,.foot--slim .foot-tag{max-width:600px}
+@media (max-width:640px){
+  .listen .nav-links{gap:14px}
+  .listen .nav-link{font-size:12px;letter-spacing:.03em}
+}
+/* narrow phones: three links + the language switcher don't fit; Plugin store yields */
+@media (max-width:430px){
+  .listen .nav-link[href="plugin.html"]{display:none}
+}
+@media (prefers-reduced-motion:reduce){
+  .lk-row{transition:none}
+  .lk-row:hover{transform:none}
+}

@@ -11,3 +11,9 @@
 /cleanslate-version.json
   Cache-Control: no-store, no-cache, must-revalidate
   Content-Type: application/json; charset=utf-8
+
+# The /listen manifest: js/listen.js reads it for every link + the stream total.
+# Root files are already no-store (above); this pins the type and documents the intent.
+/listen.json
+  Cache-Control: no-store, no-cache, must-revalidate
+  Content-Type: application/json; charset=utf-8

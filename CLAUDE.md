@@ -647,3 +647,60 @@ that every version number on the site comes from.
   `/updatecleanslate.html?v=1.0.0&os=mac` (behind), `?v=<latest>` (current)
   and no params; `curl -sI badscandal.com/cleanslate-version.json` must say
   `no-store`.
+
+## Listen page (listen.html, added 17 Sep 2026)
+
+The bio-link page — **badscandal.com/listen** is what goes in the Instagram
+bio. Feature.fm shape, one centred column over the fixed brand film: CRT
+wordmark + "Music that doesn't care." -> latest-release card (cover, kicker,
+title, one white LISTEN button, small Apple/Deezer/Amazon links) -> STREAM
+rows (Spotify, Apple Music, YouTube, SoundCloud) -> FOLLOW rows (Instagram,
+TikTok, Email) -> THE NUMBER (combined streams, main.js's `.stat-count`
+count-up) -> slim footer. Rows are text only: no platform logos, the cover
+and the film carry the colour. `<body class="plug listen">` (`.plug` keeps
+the nav links visible on phones; there is no burger). CSS block "LISTEN
+PAGE" at the end of site.css. Scripts: i18n -> main -> crt -> `js/listen.js`.
+
+* **`listen.json` (repo ROOT, no-store, pinned in `_headers`) is the single
+  source of truth** for every href, the release card and the stream total.
+  js/listen.js fetches it and overwrites the DOM; the HTML carries the same
+  values hard-coded as the no-JS / failed-fetch fallback — keep them in step.
+  Never move it under assets/ (immutable for a year).
+* **Updating the counter = edit `streams.total` + `streams.asOf`, push.** The
+  number is read off Songstats (artist Overview -> Streams) by hand for now.
+  Full digits on purpose: 145,000,000+ reads bigger than 145M.
+* **Announcing a single = `release.mode: "presave"`** + `title`, `kicker`,
+  `cover` (NEW `-vN` asset), `presave` = an external pre-save URL (Feature.fm
+  / DistroKid HyperFollow / Linkfire). listen.js flips `body.presave`, the
+  button reads PRE-SAVE and points there, the store links hide. Release day:
+  `mode: "out"`, `cta` = the Spotify track, `links` = the other stores.
+  Kicker strings are looked up in i18n TEXT, so a new kicker needs an entry
+  there to translate.
+* **Why no self-hosted pre-save (researched 17 Sep 2026):** Spotify
+  Development Mode apps are capped at 5 allow-listed users, Extended Quota
+  needs a registered business with 250K MAU, and refresh tokens expire after
+  6 months — dead for indies. Feature.fm/Linkfire/HyperFollow have
+  grandfathered access. Apple Music pre-add has no cap (MusicKit JS + $99/yr
+  developer account) if we ever want to own that half.
+* **Why the counter is manual:** no free live source exists. Songstats has
+  the exact figure (`GET https://api.songstats.com/enterprise/v1/artists/stats
+  ?spotify_artist_id=29kaubgb6Esvwu0idVndGy`, header `apikey`) but the API is
+  enterprise / contact api@songstats.com, artist-scoped keys exist, price
+  unknown. Spotify's Web API exposes no play counts at all; Apple none;
+  YouTube channel views are free (Data API v3, key only, 10K units/day);
+  SoundCloud needs Artist Pro to register an app; Soundcharts $50/mo is
+  Spotify-only per-track sums; Chartmetric/Viberate ~$300–350/mo. When a key
+  arrives: a GitHub Action cron (or the Cloudflare Worker) rewrites
+  listen.json and commits — the page needs no change.
+* Handles on this page are the artist accounts (`@badscandal` IG/TikTok,
+  youtube.com/badscandal, soundcloud.com/badscandal); the rest of the site
+  still points at `@iguessimlukepower`. JSON-LD here is the MusicGroup block
+  (the e1fa86a shape + these profiles); index.html's is still the old one.
+* Listen is in the nav/menu on index and in the menus + footers of store and
+  us. Plugin pages stay minimal.
+* Test: `node --check js/listen.js`, local server, open /listen.html: hrefs
+  match listen.json, count-up lands on 145,000,000+, nothing scrolls
+  sideways at 390px; rename listen.json -> page still whole; set
+  `mode:"presave"` -> button/href flip. Python's http.server has no Range
+  support so the film shows its poster locally — that's the server, not the
+  page.
