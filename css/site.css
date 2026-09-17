@@ -1314,7 +1314,8 @@ body.presave .rel-links{display:none}
 .lk-list{margin:0}
 .lk-list li{margin:0 0 10px}
 .lk-row{display:flex;align-items:center;justify-content:space-between;gap:16px;
-  border:1px solid var(--ink-3);background:rgba(var(--ink-rgb),.55);padding:19px 22px;
+  border:1px solid var(--ink-3);background:rgba(var(--ink-rgb),.55);padding:19px 30px;
+  border-radius:999px; /* pills, like the buttons */
   transition:border-color .3s ease,transform .3s var(--ease),background .3s ease}
 .lk-row:hover{border-color:var(--uv);background:rgba(var(--ink-rgb),.8);transform:translateY(-3px)}
 .lk-row .p{font-family:var(--font-display);font-weight:400;font-size:clamp(20px,2.2vw,25px)}
