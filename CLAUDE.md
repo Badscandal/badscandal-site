@@ -668,7 +668,7 @@ PAGE" at the end of site.css. Scripts: i18n -> main -> crt -> `js/listen.js`.
   Never move it under assets/ (immutable for a year).
 * **Updating the counter = edit `streams.total` + `streams.asOf`, push.** The
   number is read off Songstats (artist Overview -> Streams) by hand for now.
-  Full digits on purpose: 145,000,000+ reads bigger than 145M.
+  Full digits on purpose: 450,000,000+ reads bigger than 450M.
 * **Announcing a single = `release.mode: "presave"`** + `title`, `kicker`,
   `cover` (NEW `-vN` asset), `presave` = an external pre-save URL (Feature.fm
   / DistroKid HyperFollow / Linkfire). listen.js flips `body.presave`, the
@@ -699,7 +699,7 @@ PAGE" at the end of site.css. Scripts: i18n -> main -> crt -> `js/listen.js`.
 * Listen is in the nav/menu on index and in the menus + footers of store and
   us. Plugin pages stay minimal.
 * Test: `node --check js/listen.js`, local server, open /listen.html: hrefs
-  match listen.json, count-up lands on 145,000,000+, nothing scrolls
+  match listen.json, count-up lands on 450,000,000+, nothing scrolls
   sideways at 390px; rename listen.json -> page still whole; set
   `mode:"presave"` -> button/href flip. Python's http.server has no Range
   support so the film shows its poster locally — that's the server, not the
