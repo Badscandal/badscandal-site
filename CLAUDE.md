@@ -652,7 +652,7 @@ that every version number on the site comes from.
 
 The bio-link page — **badscandal.com/listen** is what goes in the Instagram
 bio. Feature.fm shape, one centred column over the fixed brand film: CRT
-wordmark + "Music that doesn't care." -> latest-release card (cover, kicker,
+wordmark (no tagline, removed 17 Sep) -> latest-release card (cover, kicker,
 title, one white LISTEN button, small Apple/Deezer/Amazon links) -> STREAM
 rows (Spotify, Apple Music, YouTube, SoundCloud) -> FOLLOW rows (Instagram,
 TikTok, Email) -> THE NUMBER (combined streams, main.js's `.stat-count`

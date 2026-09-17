@@ -1295,9 +1295,6 @@ video::-webkit-media-controls-panel{display:none !important}
 .crt-listen{max-width:none;width:min(92vw,1100px);margin:0 auto 6px}
 .crt-listen canvas{height:clamp(52px,10.4vw,176px)}
 .crt-listen .crt-fallback{font-size:min(8vw,118px)}
-/* .music-line is the landing's absolutely-positioned tagline (and its
-   i18n selector); here it sits in flow under the mark */
-.music-line.listen-line{position:static;padding:0;margin-top:2px}
 /* release card: the cover is the colour, the body is grey */
 .rel-card{background:var(--ink-2);border:1px solid var(--ink-3);overflow:hidden;
   box-shadow:0 30px 80px rgba(0,0,0,.5)}
