@@ -8,3 +8,14 @@
 /lukepower.html /us      301
 /live           /        301
 /live.html      /        301
+
+# Our own visit counter (js/track.js -> /api/hit, numbers at /stats). Put these in bios so the
+# source is certain: badscandal.com/ig in the Instagram bio, /tt on TikTok, /yt on YouTube.
+/ig  /listen?src=ig      302
+/tt  /listen?src=tiktok  302
+/yt  /listen?src=youtube 302
+
+# Server-side files that sit in the published root: never serve them.
+/package.json       /404  404!
+/package-lock.json  /404  404!
+/netlify/*          /404  404!

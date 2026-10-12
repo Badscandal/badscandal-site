@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<title>Stats — BADSCANDAL</title>
+<link rel="icon" href="favicon.ico">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,100..900&family=DM+Mono:wght@300;400;500&family=Figtree:wght@300..900&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+<!-- Private page for our own visit counter (11 Oct 2026). Data: GET /api/stats (netlify/functions/stats.mjs),
+     gated by the STATS_KEY env var on Netlify. Stand-alone on purpose: no site.css/main.js, nothing to break. -->
+<style>
+  :root { --ink:#050505; --ink-2:#0C0C0C; --ink-3:#1F1F1F; --paper:#F2F2F2; --muted:#8A8A8A; --silver:#6E6E6E; --uv:#B4B4B4;
+    --pad:clamp(16px,4vw,48px); --mono:"DM Mono",ui-monospace,monospace; --body:"Figtree",system-ui,sans-serif; }
+  * { box-sizing:border-box; }
+  html,body { margin:0; background:var(--ink); color:var(--paper); font:400 16px/1.45 var(--body); }
+  main { max-width:960px; margin:0 auto; padding:calc(var(--pad) + env(safe-area-inset-top)) var(--pad) 64px; }
+  .mark { font:900 clamp(28px,7vw,56px)/.9 "Archivo",sans-serif; font-variation-settings:"wdth" 125; letter-spacing:-.01em; margin:0; }
+  h1 { font:400 clamp(30px,6vw,48px)/1.05 "Instrument Serif",serif; margin:14px 0 4px; }
+  h1 i, h2 i { font-style:italic; }
+  h2 { font:400 26px/1.1 "Instrument Serif",serif; margin:44px 0 12px; }
+  .slate { font:400 12px/1.4 var(--mono); letter-spacing:.12em; text-transform:uppercase; color:var(--muted); }
+  form { display:flex; gap:10px; flex-wrap:wrap; margin-top:28px; }
+  input { flex:1 1 220px; min-width:0; background:var(--ink-2); color:var(--paper); border:1px solid var(--ink-3);
+    border-radius:999px; padding:14px 20px; font:inherit; }
+  input:focus { outline:none; border-color:var(--uv); }
+  button { background:var(--paper); color:var(--ink); border:0; border-radius:999px; padding:14px 26px;
+    font:600 15px var(--body); cursor:pointer; }
+  button.ghost { background:none; color:var(--paper); border:1px solid var(--uv); padding:9px 16px; font-size:13px; }
+  button.ghost[aria-pressed="true"] { background:var(--paper); color:var(--ink); border-color:var(--paper); }
+  .err { color:var(--uv); margin-top:12px; min-height:1.4em; }
+  .bar { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin:22px 0 6px; }
+  .bar .slate { margin-left:auto; }
+  .tiles { display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:10px; margin-top:16px; }
+  .tile { background:var(--ink-2); border:1px solid var(--ink-3); border-radius:14px; padding:18px; }
+  .tile.lead { border-color:var(--uv); }
+  .tile b { display:block; font:700 clamp(30px,6vw,40px)/1 var(--body); margin:10px 0 4px; font-variant-numeric:tabular-nums; }
+  .tile small { color:var(--muted); font-size:13px; }
+  table { width:100%; border-collapse:collapse; font-variant-numeric:tabular-nums; }
+  th, td { text-align:right; padding:9px 8px; border-bottom:1px solid var(--ink-3); white-space:nowrap; }
+  th:first-child, td:first-child { text-align:left; }
+  th { font:400 11px var(--mono); letter-spacing:.12em; text-transform:uppercase; color:var(--muted); }
+  td.vis { width:40%; padding-left:14px; }
+  .meter { position:relative; height:8px; background:var(--ink-3); border-radius:4px; overflow:hidden; }
+  .meter span { position:absolute; inset:0 auto 0 0; background:var(--silver); border-radius:4px; }
+  .meter span.ig { background:var(--paper); }
+  .scroll { overflow-x:auto; }
+  .legend { display:flex; gap:16px; margin:-4px 0 8px; }
+  .legend i { display:inline-block; width:10px; height:10px; border-radius:2px; margin-right:6px; vertical-align:-1px; }
+  .empty { color:var(--muted); padding:14px 0; }
+  .note { color:var(--muted); font-size:14px; margin-top:40px; max-width:62ch; }
+  .note code { font:13px var(--mono); color:var(--uv); }
+  [hidden] { display:none !important; }
+  @media (max-width:560px) { td.vis { display:none; } th.vis { display:none; } }
+</style>
+</head>
+<body>
+<main>
+  <p class="mark">BADSCANDAL</p>
+
+  <section id="gate">
+    <h1>Who <i>showed</i> up.</h1>
+    <p class="slate">Private · enter the code</p>
+    <form id="login" autocomplete="off">
+      <input id="code" type="password" placeholder="Stats code" aria-label="Stats code" required>
+      <button type="submit">Open</button>
+    </form>
+    <p class="err" id="err" role="alert"></p>
+  </section>
+
+  <section id="board" hidden>
+    <h1>Who <i>showed</i> up.</h1>
+    <p class="slate">badscandal.com/listen · <span id="range"></span></p>
+
+    <div class="bar" role="group" aria-label="Period">
+      <button class="ghost" data-days="1">Today</button>
+      <button class="ghost" data-days="7">7 days</button>
+      <button class="ghost" data-days="30">30 days</button>
+      <button class="ghost" data-days="90">90 days</button>
+      <button class="ghost" data-days="365">Year</button>
+      <span class="slate" id="updated"></span>
+    </div>
+
+    <div class="tiles">
+      <div class="tile lead"><span class="slate">From Instagram</span><b id="t-igv">0</b><small>visits</small></div>
+      <div class="tile lead"><span class="slate">From Instagram</span><b id="t-igu">0</b><small>unique people</small></div>
+      <div class="tile"><span class="slate">All sources</span><b id="t-v">0</b><small>visits</small></div>
+      <div class="tile"><span class="slate">All sources</span><b id="t-u">0</b><small>unique people</small></div>
+      <div class="tile"><span class="slate">IG people who tapped a link</span><b id="t-tap">0</b><small id="t-tap-pc">&nbsp;</small></div>
+    </div>
+
+    <h2>By <i>day</i></h2>
+    <div class="legend slate"><span><i style="background:var(--paper)"></i>Instagram</span><span><i style="background:var(--silver)"></i>All</span></div>
+    <div class="scroll"><table id="days"></table></div>
+
+    <h2>Where they <i>came</i> from</h2>
+    <div class="scroll"><table id="sources"></table></div>
+
+    <h2>What they <i>tapped</i></h2>
+    <div class="scroll"><table id="clicks"></table></div>
+
+    <h2>Where they <i>are</i></h2>
+    <div class="scroll"><table id="countries"></table></div>
+
+    <p class="note">
+      Visits = every time the page opened. Unique people = each phone or browser counted once in the period.
+      Put <code>badscandal.com/ig</code> in the Instagram bio (and <code>/tt</code> on TikTok, <code>/yt</code> on YouTube) so the source is certain;
+      visits from inside the Instagram app count as Instagram either way. Open <code>badscandal.com/listen?nostat=1</code> once on each of your own
+      phones so you don't count yourselves. Days are UTC.
+    </p>
+    <p><button class="ghost" id="logout">Lock this device</button></p>
+  </section>
+</main>
+
+<script>
+(function () {
+  "use strict";
+  var KEY = "bs_stats_code";
+  var $ = function (id) { return document.getElementById(id); };
+  var days = 30;
+  var esc = function (s) { return String(s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); };
+  var n = function (x) { return (x || 0).toLocaleString("en-IE"); };
+  function getCode() { try { return localStorage.getItem(KEY) || ""; } catch (e) { return ""; } }
+  function setCode(c) { try { c ? localStorage.setItem(KEY, c) : localStorage.removeItem(KEY); } catch (e) {} }
+
+  var LABEL = { ig: "Instagram", tiktok: "TikTok", youtube: "YouTube", facebook: "Facebook", x: "X / Twitter", google: "Google",
+    bing: "Bing", direct: "Direct / unknown", linktree: "Linktree", spotify: "Spotify",
+    release: "Latest release · Listen", "release-apple": "Latest release · Apple Music", "release-deezer": "Latest release · Deezer",
+    "release-amazon": "Latest release · Amazon", apple: "Apple Music", soundcloud: "SoundCloud", instagram: "Instagram",
+    email: "Email", xx: "Unknown" };
+  var label = function (k) { return LABEL[k] || k; };
+  var country = function (c) {
+    if (c === "xx") return "Unknown";
+    try { return new Intl.DisplayNames(["en"], { type: "region" }).of(c.toUpperCase()); } catch (e) { return c.toUpperCase(); }
+  };
+
+  function meter(v, max, cls) { return '<div class="meter"><span class="' + (cls || "") + '" style="width:' + (max ? Math.max(2, v / max * 100) : 0) + '%"></span></div>'; }
+
+  function table(el, head, rows, empty) {
+    if (!rows.length) { el.innerHTML = '<tr><td class="empty">' + esc(empty) + "</td></tr>"; return; }
+    el.innerHTML = "<thead><tr>" + head.map(function (h, i) { return '<th class="' + (i === 1 ? "vis" : "") + '">' + esc(h) + "</th>"; }).join("") + "</tr></thead><tbody>" + rows.join("") + "</tbody>";
+  }
+
+  function render(d) {
+    var t = d.totals;
+    $("range").textContent = d.from === d.to ? d.from : d.from + " → " + d.to;
+    $("updated").textContent = "Updated " + new Date(d.generated).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    $("t-igv").textContent = n(t.igViews); $("t-igu").textContent = n(t.igUnique);
+    $("t-v").textContent = n(t.views); $("t-u").textContent = n(t.unique);
+    $("t-tap").textContent = n(t.igTapped);
+    $("t-tap-pc").textContent = t.igUnique ? Math.round(t.igTapped / t.igUnique * 100) + "% of IG people" : " ";
+
+    var maxDay = Math.max.apply(null, d.days.map(function (x) { return x.views; }).concat(0));
+    var dayRows = d.days.slice().reverse().map(function (x) {
+      return "<tr><td>" + esc(x.day) + '</td><td class="vis">' + meter(x.igViews, maxDay, "ig") + meter(x.views, maxDay) +
+        "</td><td>" + n(x.igViews) + "</td><td>" + n(x.igUnique) + "</td><td>" + n(x.views) + "</td><td>" + n(x.unique) + "</td></tr>";
+    });
+    table($("days"), ["Day", "", "IG visits", "IG people", "All visits", "All people"], dayRows, "Nothing yet.");
+
+    function simple(el, rows, key, name, fmt, empty, unit) {
+      var max = rows.length ? rows[0].count : 0;
+      table(el, [name, "", unit, "People"], rows.map(function (r) {
+        return "<tr><td>" + esc(fmt(r[key])) + '</td><td class="vis">' + meter(r.count, max, r[key] === "ig" ? "ig" : "") +
+          "</td><td>" + n(r.count) + "</td><td>" + n(r.unique) + "</td></tr>";
+      }), empty);
+    }
+    simple($("sources"), d.sources, "src", "Source", label, "Nobody yet. Fix that.", "Visits");
+    simple($("clicks"), d.clicks, "target", "Link", label, "No taps yet.", "Taps");
+    simple($("countries"), d.countries, "country", "Country", country, "Nobody yet.", "Visits");
+  }
+
+  function load(code) {
+    $("err").textContent = "";
+    return fetch("/api/stats?days=" + days, { headers: { "x-stats-key": code }, cache: "no-store" })
+      .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, status: r.status, j: j }; }); })
+      .then(function (res) {
+        if (!res.ok) {
+          if (res.status === 401) setCode("");
+          throw new Error(res.j && res.j.error || "Couldn't load the numbers.");
+        }
+        setCode(code);
+        $("gate").hidden = true; $("board").hidden = false;
+        Array.prototype.forEach.call(document.querySelectorAll("[data-days]"), function (b) {
+          b.setAttribute("aria-pressed", String(+b.getAttribute("data-days") === days));
+        });
+        render(res.j);
+      })
+      .catch(function (e) {
+        $("board").hidden = true; $("gate").hidden = false;
+        $("err").textContent = e.message === "Wrong code" ? "Wrong code. Try again." : e.message || "Couldn't load the numbers.";
+      });
+  }
+
+  $("login").addEventListener("submit", function (e) { e.preventDefault(); load($("code").value.trim()); });
+  Array.prototype.forEach.call(document.querySelectorAll("[data-days]"), function (b) {
+    b.addEventListener("click", function () { days = +b.getAttribute("data-days"); load(getCode()); });
+  });
+  $("logout").addEventListener("click", function () { setCode(""); location.reload(); });
+  if (getCode()) load(getCode());
+})();
+</script>
+</body>
+</html>
