@@ -4,3 +4,9 @@
 [build]
   publish = "."
   command = ""
+
+# Server-side only: the visit counter (netlify/functions/hit.mjs + stats.mjs, added 11 Oct 2026).
+# Netlify installs @netlify/blobs from package.json for these; nothing reaches the browser.
+[functions]
+  directory = "netlify/functions"
+  node_bundler = "esbuild"
