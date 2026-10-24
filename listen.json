@@ -1,24 +1,20 @@
 {
   "artist": "BADSCANDAL",
-  "updated": "2026-09-17",
+  "updated": "2026-10-24",
   "streams": {
     "total": 450000000,
     "asOf": "September 2026",
     "source": "songstats"
   },
   "release": {
-    "mode": "out",
-    "title": "Body",
-    "kicker": "Latest · Magic Records · 2024",
-    "date": "2024-11-29",
-    "cover": "assets/listen-body-cover-v1.jpg",
-    "cta": "https://open.spotify.com/track/4BJ83GHwyDFvw0HQfjOK1s",
+    "mode": "upcoming",
+    "title": "Touch Me",
+    "kicker": "Upcoming · 2026",
+    "date": null,
+    "cover": "assets/listen-touchme-cover-v1.jpg",
+    "cta": "https://open.spotify.com/artist/29kaubgb6Esvwu0idVndGy",
     "presave": null,
-    "links": {
-      "apple": "https://music.apple.com/us/album/body-single/1779960653",
-      "deezer": "https://www.deezer.com/album/670713511",
-      "amazon": "https://www.amazon.com/dp/B0DNFV3QLB"
-    }
+    "links": {}
   },
   "links": {
     "spotify": "https://open.spotify.com/artist/29kaubgb6Esvwu0idVndGy",

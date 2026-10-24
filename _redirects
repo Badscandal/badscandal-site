@@ -4,7 +4,13 @@
 
 # Old music-era URLs. Keep these: they are indexed and linked from
 # elsewhere, and Netlify serves this file before it 404s.
-/lukepower      /us      301
-/lukepower.html /us      301
+/lukepower      /listen  301
+/lukepower.html /listen  301
+
 /live           /        301
 /live.html      /        301
+
+# The Story page (us.html, Luke & Lilian / Gibraltar) is TAKEN DOWN, not deleted (24 Oct 2026).
+# Forced (!) because the file still exists. Temporary 302 so it can come back: delete these two lines.
+/us       /  302!
+/us.html  /  302!

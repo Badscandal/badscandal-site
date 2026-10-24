@@ -648,6 +648,15 @@ that every version number on the site comes from.
   and no params; `curl -sI badscandal.com/cleanslate-version.json` must say
   `no-store`.
 
+## Story page TAKEN DOWN (24 Oct 2026)
+
+us.html (Luke & Lilian, married in Gibraltar) is offline but NOT deleted:
+`_redirects` 302s `/us` + `/us.html` to `/` (forced with `!`), every Story
+link is out of the nav/menus/footers of index, store and listen, and the
+store's story strip is removed. `/lukepower` now 301s to `/listen`. To bring
+it back: delete the two `/us` redirect lines and restore the links + strip
+from the commit before this one.
+
 ## Listen page (listen.html, added 17 Sep 2026)
 
 The bio-link page — **badscandal.com/listen** is what goes in the Instagram
@@ -669,6 +678,10 @@ PAGE" at the end of site.css. Scripts: i18n -> main -> crt -> `js/listen.js`.
 * **Updating the counter = edit `streams.total` + `streams.asOf`, push.** The
   number is read off Songstats (artist Overview -> Streams) by hand for now.
   Full digits on purpose: 450,000,000+ reads bigger than 450M.
+* **Upcoming single = `release.mode: "upcoming"`** (added 24 Oct 2026 for
+  Touch Me, no date / no pre-save link yet). Same `body.presave` look (store
+  links hidden); the button is FOLLOW ON SPOTIFY -> `cta` (the artist
+  profile) until a `presave` URL is set, then it becomes PRE-SAVE.
 * **Announcing a single = `release.mode: "presave"`** + `title`, `kicker`,
   `cover` (NEW `-vN` asset), `presave` = an external pre-save URL (Feature.fm
   / DistroKid HyperFollow / Linkfire). listen.js flips `body.presave`, the

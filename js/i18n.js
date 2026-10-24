@@ -50,6 +50,8 @@
     "Follow": { es: "Seguir", pt: "Seguir" },
     "Write to us": { es: "Escríbenos", pt: "Escreva pra gente" },
     "The number": { es: "La cifra", pt: "O número" },
+    "Follow on Spotify": { es: "Seguir en Spotify", pt: "Seguir no Spotify" },
+    "Upcoming · 2026": { es: "Próximamente · 2026", pt: "Em breve · 2026" },
     "Latest · Magic Records · 2024": { es: "Lo último · Magic Records · 2024", pt: "Mais recente · Magic Records · 2024" },
     "Streams across Spotify, Apple Music, YouTube and SoundCloud": { es: "Reproducciones en Spotify, Apple Music, YouTube y SoundCloud", pt: "Streams no Spotify, Apple Music, YouTube e SoundCloud" },
     "as of": { es: "a", pt: "em" },

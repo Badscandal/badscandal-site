@@ -6,6 +6,8 @@
 
    Counter: main.js's count-up reads data-count-to lazily, when .stat-count scrolls into view, so
    rewriting the attribute here is enough; if it already ran we set the text too.
+   Upcoming (24 Oct 2026): release.mode "upcoming" also flips body.presave (store links hide); with a
+   `presave` URL the button is PRE-SAVE, without one it is FOLLOW ON SPOTIFY -> release.cta.
    Pre-save: release.mode "presave" flips body.presave, the button label and its href. Self-hosted
    Spotify pre-saves are capped at 5 users for new apps (2026), so `presave` is an external URL
    (Feature.fm / HyperFollow / Linkfire). */
@@ -25,8 +27,9 @@
 
     var r = m.release;
     if (r) {
-      var presave = r.mode === "presave" && r.presave;
-      document.body.classList.toggle("presave", !!presave);
+      var upcoming = r.mode === "upcoming";
+      var presave = (r.mode === "presave" || upcoming) && r.presave;
+      document.body.classList.toggle("presave", !!presave || upcoming);
 
       var cover = document.querySelector("[data-rel=cover]");
       if (cover && r.cover) { cover.src = r.cover; if (r.title) cover.alt = r.title + " — cover"; }
@@ -40,6 +43,7 @@
       var cta = document.querySelector("[data-rel=cta]");
       if (cta) {
         if (presave) { cta.href = r.presave; cta.textContent = T("Pre-save"); }
+        else if (upcoming && r.cta) { cta.href = r.cta; cta.textContent = T("Follow on Spotify"); }
         else if (r.cta) { cta.href = r.cta; cta.textContent = T("Listen"); }
       }
 
