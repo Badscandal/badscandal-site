@@ -712,6 +712,18 @@ PAGE" at the end of site.css. Scripts: i18n -> main -> crt -> `js/listen.js`.
   flip just covers the gap. CSS block "countdown" after `.rel-links` in
   site.css; strings Days/Hours/Min/Sec/Out/Out now in i18n TEXT, the date
   is `toLocaleDateString` in the page language.
+* **Release week (25 Oct 2026):** for 7 days from `release.date` (any mode —
+  so KEEP `date` set when flipping to `"out"`) listen.js adds `.is-out` to
+  the card: an oversized conic square spins behind the children and shows
+  only in the card's 1.5px padding (a white light circling the edge), a
+  slow white glow breathes, the cover fades in through black, and OUT NOW
+  is a shimmering link under the title (same href as the button). The
+  cover fades via brightness, never opacity, and has a solid backing — a
+  transparent cover lets the spinning light show through as a searchlight.
+  Reduced motion: a still white edge, no glow/shine/fade. `RELEASE_WEEK`
+  in listen.js sets the length. Headless Chrome screenshots fire at load,
+  before CSS animations run: to see the settled state, hold the load event
+  open (a slow 1px image in a parent frame).
 * **Website bot guide:** Luke's Grok bot updates the release card from a
   PDF brief (Desktop/Claude Works/Website Bot/ — never inside this repo,
   the repo root is the public site). It may touch ONLY

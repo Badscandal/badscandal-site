@@ -14,13 +14,16 @@
    Countdown (25 Oct 2026): release.date "YYYY-MM-DD" + mode "upcoming"/"presave" shows the .cd block,
    counting to MIDNIGHT IN THE VISITOR'S OWN TIME ZONE on that date — stores release at local midnight
    per country, so Dublin and São Paulo each hit zero when the track is actually live for them. At zero
-   the page flips itself to OUT NOW + LISTEN (presave URL, else cta) without waiting for a JSON edit. */
+   the page flips itself to OUT NOW + LISTEN (presave URL, else cta) without waiting for a JSON edit.
+   Release week (25 Oct 2026): for 7 days from release.date (any mode, so keep `date` set on "out") the
+   card gets .is-out — a light circling its edge, the cover fading in, OUT NOW as a shimmering link. */
 (function () {
   "use strict";
   var T = window.BS_T || function (s) { return s; };
   var each = function (sel, fn) { Array.prototype.forEach.call(document.querySelectorAll(sel), fn); };
   var LOCALE = { en: "en-IE", es: "es-ES", pt: "pt-BR" }[window.BS_LANG] || "en-IE";
   var reduced = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  var RELEASE_WEEK = 7 * 86400000; /* how long after release.date the card keeps its OUT NOW ring */
 
   /* "2026-12-30" -> local midnight that day, or null. Built from parts, never Date.parse: a bare
      ISO date parses as UTC midnight, which is the wrong moment everywhere west of Greenwich. */
@@ -40,9 +43,24 @@
 
     function out() {
       if (timer) clearInterval(timer);
+      var href = r.mode === "out" ? r.cta : (r.presave || r.cta);
       box.querySelector(".cd-grid").hidden = true;
-      if (dateEl) { dateEl.textContent = T("Out now"); dateEl.classList.add("cd-now"); }
-      if (cta) { cta.href = r.presave || r.cta || cta.href; cta.textContent = T("Listen"); }
+      if (dateEl) {
+        var a = document.createElement("a");
+        a.className = "cd-now-link";
+        a.textContent = T("Out now");
+        if (href) { a.href = href; a.target = "_blank"; a.rel = "noopener"; }
+        dateEl.textContent = "";
+        dateEl.appendChild(a);
+        dateEl.classList.add("cd-now");
+      }
+      if (cta && href) { cta.href = href; cta.textContent = T("Listen"); }
+      /* release week: the light runs round the card (css "release week") */
+      if (Date.now() - at < RELEASE_WEEK) {
+        var card = box.closest(".rel-card");
+        if (card) card.classList.add("is-out");
+      }
+      box.hidden = false;
     }
 
     function tick() {
@@ -98,8 +116,11 @@
         else if (r.cta) { cta.href = r.cta; cta.textContent = T("Listen"); }
       }
 
-      var at = (upcoming || r.mode === "presave") && localMidnight(r.date);
-      if (at) countdown(r, at, cta);
+      var at = localMidnight(r.date);
+      var since = at ? Date.now() - at : -1;
+      if (at && (upcoming || r.mode === "presave" || (r.mode === "out" && since >= 0 && since < RELEASE_WEEK))) {
+        countdown(r, at, cta);
+      }
 
       var rl = r.links || {};
       each("[data-rel-link]", function (a) {

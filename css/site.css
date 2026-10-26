@@ -1330,6 +1330,36 @@ body.presave .rel-links{display:none}
 .cd-tick{animation:cdTick .6s var(--ease)}
 @keyframes cdTick{from{opacity:.35;transform:translateY(-3px)}to{opacity:1;transform:none}}
 @media (prefers-reduced-motion:reduce){.cd-tick{animation:none}}
+/* release week (js adds .is-out for 7 days from release.date). A white light circles the card's
+   edge: an oversized conic square spins BEHIND the children (isolation + z-index -1), the card's
+   1.5px padding is the only place it shows. Still monochrome — light, not colour. */
+.rel-card.is-out{position:relative;isolation:isolate;padding:1.5px;background:var(--ink-3);
+  border-color:transparent;animation:relGlow 3.2s ease-in-out infinite alternate}
+.rel-card.is-out::before{content:"";position:absolute;left:50%;top:50%;width:260%;aspect-ratio:1;
+  z-index:-1;transform:translate(-50%,-50%) rotate(0deg);
+  background:conic-gradient(from 0deg,transparent 0deg 230deg,rgba(255,255,255,.18) 290deg,
+    #fff 352deg,transparent 360deg);
+  animation:relSpin 4.5s linear infinite}
+.rel-card.is-out > *{position:relative}
+.rel-card.is-out .rel-body{background:var(--ink-2)}
+/* the cover sits on a solid backing and fades through BLACK, never transparency — the spinning
+   light behind must never show through it (it reads as a searchlight across the art) */
+.rel-card.is-out .rel-cover{background:var(--ink-2);animation:relIn 1.4s var(--ease) both}
+.cd-now-link{display:inline-block;
+  background:linear-gradient(100deg,var(--uv) 0%,var(--uv) 38%,#fff 50%,var(--uv) 62%,var(--uv) 100%);
+  background-size:260% 100%;-webkit-background-clip:text;background-clip:text;
+  -webkit-text-fill-color:transparent;color:transparent;animation:relShine 3.6s ease-in-out infinite}
+.cd-now-link:hover{-webkit-text-fill-color:var(--paper);color:var(--paper)}
+@keyframes relSpin{to{transform:translate(-50%,-50%) rotate(360deg)}}
+@keyframes relGlow{from{box-shadow:0 30px 80px rgba(0,0,0,.5),0 0 0 rgba(255,255,255,0)}
+  to{box-shadow:0 30px 80px rgba(0,0,0,.5),0 0 70px rgba(255,255,255,.14)}}
+@keyframes relIn{from{transform:scale(1.05);filter:blur(8px) brightness(0)}to{transform:none;filter:blur(0) brightness(1)}}
+@keyframes relShine{from{background-position:100% 0}to{background-position:0 0}}
+@media (prefers-reduced-motion:reduce){
+  .rel-card.is-out,.rel-card.is-out::before,.rel-card.is-out .rel-cover,.cd-now-link{animation:none}
+  .rel-card.is-out::before{background:rgba(255,255,255,.7)} /* a still white edge instead of the light */
+  .cd-now-link{background:none;-webkit-text-fill-color:var(--paper);color:var(--paper)}
+}
 /* the rows: serif platform name left, mono verb right */
 .lk .tag{margin-bottom:12px}
 .lk-list{margin:0}
