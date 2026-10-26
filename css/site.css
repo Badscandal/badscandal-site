@@ -1360,20 +1360,16 @@ body.presave .rel-links{display:none}
   .rel-card.is-out::before{background:rgba(255,255,255,.7)} /* a still white edge instead of the light */
   .cd-now-link{background:none;-webkit-text-fill-color:var(--paper);color:var(--paper)}
 }
-/* the rows: serif platform name left, mono verb right */
-.lk .tag{margin-bottom:12px}
+/* rows centred, platform name only (25 Oct 2026, Luke: "no need for that listen thing") */
+.lk .tag{margin-bottom:12px;text-align:center}
 .lk-list{margin:0}
 .lk-list li{margin:0 0 10px}
-.lk-row{display:flex;align-items:center;justify-content:space-between;gap:16px;
+.lk-row{display:flex;align-items:center;justify-content:center;gap:16px;
   border:1px solid var(--ink-3);background:rgba(var(--ink-rgb),.55);padding:19px 30px;
   border-radius:999px; /* pills, like the buttons */
   transition:border-color .3s ease,transform .3s var(--ease),background .3s ease}
 .lk-row:hover{border-color:var(--uv);background:rgba(var(--ink-rgb),.8);transform:translateY(-3px)}
 .lk-row .p{font-family:var(--font-display);font-weight:400;font-size:clamp(20px,2.2vw,25px)}
-.lk-row .h{font-family:var(--font-mono);font-weight:400;font-size:11px;letter-spacing:.12em;
-  text-transform:uppercase;color:var(--muted);text-align:right;white-space:nowrap}
-.lk-row .h i{font-style:normal}
-.lk-row:hover .h{color:var(--paper)}
 /* the number */
 .streams{text-align:center}
 .streams .tag{margin-bottom:10px}
