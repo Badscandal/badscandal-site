@@ -648,6 +648,17 @@ that every version number on the site comes from.
   and no params; `curl -sI badscandal.com/cleanslate-version.json` must say
   `no-store`.
 
+## Language follows the device (25 Oct 2026)
+
+js/i18n.js picks the language once per page load: a tapped EN/ES/PT
+(`localStorage.bs_lang`) always wins; otherwise the first supported entry
+of `navigator.languages` — the phone's system language order (iPhone
+Settings -> Language & Region; the Instagram/TikTok in-app browsers report
+the same list). pt-BR/pt-PT -> PT, es-ES/es-MX/... -> ES, anything else ->
+EN. The detected language is NOT stored, so it tracks the device. Sitewide:
+every page loads i18n.js. Tested in headless Chrome with `--accept-lang`
+pt-BR / es-ES / en-IE at a 390px frame.
+
 ## Story page TAKEN DOWN (24 Oct 2026)
 
 us.html (Luke & Lilian, married in Gibraltar) is offline but NOT deleted:
@@ -689,6 +700,24 @@ PAGE" at the end of site.css. Scripts: i18n -> main -> crt -> `js/listen.js`.
   `mode: "out"`, `cta` = the Spotify track, `links` = the other stores.
   Kicker strings are looked up in i18n TEXT, so a new kicker needs an entry
   there to translate.
+* **Countdown (25 Oct 2026) = `release.date: "YYYY-MM-DD"`** with mode
+  `upcoming` or `presave`. The `.cd` block in the card (hidden in the HTML)
+  counts DAYS / HOURS / MIN / SEC to **midnight in the visitor's own time
+  zone** on that date — stores drop at local midnight per country, so each
+  visitor hits zero when the track is live for them. Built from date parts,
+  never `Date.parse` (bare ISO dates parse as UTC). At zero the page flips
+  itself: grid hides, "Out now" in serif italic, button -> LISTEN ->
+  `presave` URL (smart links become release links) else `cta`. Release day
+  is still a JSON edit (`mode: "out"`, track `cta`, store `links`) — the
+  flip just covers the gap. CSS block "countdown" after `.rel-links` in
+  site.css; strings Days/Hours/Min/Sec/Out/Out now in i18n TEXT, the date
+  is `toLocaleDateString` in the page language.
+* **Website bot guide:** Luke's Grok bot updates the release card from a
+  PDF brief (Desktop/Claude Works/Website Bot/ — never inside this repo,
+  the repo root is the public site). It may touch ONLY
+  listen.json `release`, a new `assets/listen-<slug>-cover-vN.jpg`, the
+  release-card fallback in listen.html (+ og:image) and new i18n TEXT
+  entries. Keep that PDF in step if this flow changes.
 * **Why no self-hosted pre-save (researched 17 Sep 2026):** Spotify
   Development Mode apps are capped at 5 allow-listed users, Extended Quota
   needs a registered business with 250K MAU, and refresh tokens expire after

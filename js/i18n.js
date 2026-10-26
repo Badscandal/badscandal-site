@@ -23,9 +23,21 @@
   "use strict";
 
   var LANGS = ["en", "es", "pt"];
-  var lang = "en";
-  try { lang = localStorage.getItem("bs_lang") || "en"; } catch (e) {}
-  if (LANGS.indexOf(lang) < 0) lang = "en";
+  /* A tapped EN/ES/PT wins forever (localStorage). Otherwise follow the DEVICE language
+     (25 Oct 2026): navigator.languages is the phone's system list — iPhone Settings ->
+     Language & Region, also inside the Instagram/TikTok in-app browsers. First supported
+     entry wins, so pt-PT/pt-BR -> PT and es-ES/es-MX -> ES; anything else stays English.
+     Not stored, so changing the phone's language changes the site with it. */
+  var lang = null;
+  try { lang = localStorage.getItem("bs_lang"); } catch (e) {}
+  if (LANGS.indexOf(lang) < 0) {
+    lang = "en";
+    var prefs = navigator.languages && navigator.languages.length ? navigator.languages : [navigator.language || ""];
+    for (var i = 0; i < prefs.length; i++) {
+      var code = String(prefs[i] || "").toLowerCase().slice(0, 2);
+      if (LANGS.indexOf(code) >= 0) { lang = code; break; }
+    }
+  }
 
   /* ---------- plain text nodes (exact trimmed match) -------------------- */
   var TEXT = {
@@ -52,6 +64,14 @@
     "The number": { es: "La cifra", pt: "O número" },
     "Follow on Spotify": { es: "Seguir en Spotify", pt: "Seguir no Spotify" },
     "Upcoming · 2026": { es: "Próximamente · 2026", pt: "Em breve · 2026" },
+    /* /listen countdown (25 Oct 2026) — "Out" is followed by the date, formatted per language */
+    "New single": { es: "Nuevo single", pt: "Novo single" },
+    "Days": { es: "Días", pt: "Dias" },
+    "Hours": { es: "Horas", pt: "Horas" },
+    "Min": { es: "Min", pt: "Min" },
+    "Sec": { es: "Seg", pt: "Seg" },
+    "Out": { es: "Sale el", pt: "Sai em" },
+    "Out now": { es: "Ya disponible", pt: "Já disponível" },
     "Latest · Magic Records · 2024": { es: "Lo último · Magic Records · 2024", pt: "Mais recente · Magic Records · 2024" },
     "Streams across Spotify, Apple Music, YouTube and SoundCloud": { es: "Reproducciones en Spotify, Apple Music, YouTube y SoundCloud", pt: "Streams no Spotify, Apple Music, YouTube e SoundCloud" },
     "as of": { es: "a", pt: "em" },

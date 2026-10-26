@@ -1309,6 +1309,27 @@ video::-webkit-media-controls-panel{display:none !important}
   text-transform:uppercase;color:var(--muted)}
 .rel-links a:hover{color:var(--paper)}
 body.presave .rel-links{display:none}
+/* countdown (25 Oct 2026): serif numerals like the cover's title, mono labels like every slate.
+   Monochrome — the cover above it carries the colour. Four equal cells split by hairlines;
+   fixed cell widths so the proportional serif digits never make the row twitch. */
+.cd{margin:22px auto 4px}
+.cd[hidden],.cd-grid[hidden]{display:none}
+.cd-grid{display:grid;grid-template-columns:repeat(4,1fr);max-width:420px;margin:0 auto;
+  border-top:1px solid var(--ink-3);border-bottom:1px solid var(--ink-3)}
+.cd-u{display:flex;flex-direction:column;align-items:center;padding:14px 0 12px}
+.cd-u + .cd-u{border-left:1px solid var(--ink-3)}
+.cd-n{font-family:var(--font-display);font-weight:400;font-size:clamp(40px,11vw,64px);line-height:1;
+  font-variant-numeric:tabular-nums lining-nums;color:var(--paper)}
+.cd-l{margin-top:8px;font-family:var(--font-mono);font-weight:400;font-size:10px;letter-spacing:.12em;
+  text-transform:uppercase;color:var(--muted)}
+.cd-date{margin-top:14px;font-family:var(--font-mono);font-weight:400;font-size:11px;
+  letter-spacing:.12em;text-transform:uppercase;color:var(--uv)}
+.cd-date.cd-now{font-family:var(--font-display);font-style:italic;font-size:clamp(30px,7vw,44px);
+  letter-spacing:0;text-transform:none;color:var(--paper)}
+/* the seconds breathe in on every tick — the only motion, and reduced-motion never gets it (JS) */
+.cd-tick{animation:cdTick .6s var(--ease)}
+@keyframes cdTick{from{opacity:.35;transform:translateY(-3px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){.cd-tick{animation:none}}
 /* the rows: serif platform name left, mono verb right */
 .lk .tag{margin-bottom:12px}
 .lk-list{margin:0}

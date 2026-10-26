@@ -91,8 +91,19 @@
     <article class="rel-card">
       <img class="rel-cover" data-rel="cover" src="assets/listen-touchme-cover-v1.jpg" alt="Touch Me — cover" width="1000" height="1000">
       <div class="rel-body">
-        <p class="tag" data-rel="kicker">Upcoming · 2026</p>
+        <p class="tag" data-rel="kicker">New single</p>
         <h2 class="rel-title" data-rel="title">Touch Me</h2>
+        <!-- COUNTDOWN (25 Oct 2026) — js/listen.js shows it while release.date is in the future and
+             mode is "upcoming"/"presave". Hidden by default, so no-JS never sees a frozen 00. -->
+        <div class="cd" data-rel="countdown" hidden>
+          <div class="cd-grid" role="timer" aria-live="off">
+            <div class="cd-u"><span class="cd-n" data-cd="d">00</span><span class="cd-l">Days</span></div>
+            <div class="cd-u"><span class="cd-n" data-cd="h">00</span><span class="cd-l">Hours</span></div>
+            <div class="cd-u"><span class="cd-n" data-cd="m">00</span><span class="cd-l">Min</span></div>
+            <div class="cd-u"><span class="cd-n" data-cd="s">00</span><span class="cd-l">Sec</span></div>
+          </div>
+          <p class="cd-date" data-cd="date"></p>
+        </div>
         <a class="buy-btn" data-rel="cta" data-mag href="https://open.spotify.com/artist/29kaubgb6Esvwu0idVndGy" target="_blank" rel="noopener">Follow on Spotify</a>
         <p class="rel-links">
           <a data-rel-link="apple" href="https://music.apple.com/us/album/body-single/1779960653" target="_blank" rel="noopener">Apple Music</a>

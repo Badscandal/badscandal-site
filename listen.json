@@ -1,6 +1,6 @@
 {
   "artist": "BADSCANDAL",
-  "updated": "2026-10-24",
+  "updated": "2026-10-25",
   "streams": {
     "total": 450000000,
     "asOf": "September 2026",
@@ -9,8 +9,8 @@
   "release": {
     "mode": "upcoming",
     "title": "Touch Me",
-    "kicker": "Upcoming · 2026",
-    "date": null,
+    "kicker": "New single",
+    "date": "2026-12-30",
     "cover": "assets/listen-touchme-cover-v1.jpg",
     "cta": "https://open.spotify.com/artist/29kaubgb6Esvwu0idVndGy",
     "presave": null,

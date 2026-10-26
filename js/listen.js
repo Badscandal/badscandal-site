@@ -10,11 +10,62 @@
    `presave` URL the button is PRE-SAVE, without one it is FOLLOW ON SPOTIFY -> release.cta.
    Pre-save: release.mode "presave" flips body.presave, the button label and its href. Self-hosted
    Spotify pre-saves are capped at 5 users for new apps (2026), so `presave` is an external URL
-   (Feature.fm / HyperFollow / Linkfire). */
+   (Feature.fm / HyperFollow / Linkfire).
+   Countdown (25 Oct 2026): release.date "YYYY-MM-DD" + mode "upcoming"/"presave" shows the .cd block,
+   counting to MIDNIGHT IN THE VISITOR'S OWN TIME ZONE on that date — stores release at local midnight
+   per country, so Dublin and São Paulo each hit zero when the track is actually live for them. At zero
+   the page flips itself to OUT NOW + LISTEN (presave URL, else cta) without waiting for a JSON edit. */
 (function () {
   "use strict";
   var T = window.BS_T || function (s) { return s; };
   var each = function (sel, fn) { Array.prototype.forEach.call(document.querySelectorAll(sel), fn); };
+  var LOCALE = { en: "en-IE", es: "es-ES", pt: "pt-BR" }[window.BS_LANG] || "en-IE";
+  var reduced = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  /* "2026-12-30" -> local midnight that day, or null. Built from parts, never Date.parse: a bare
+     ISO date parses as UTC midnight, which is the wrong moment everywhere west of Greenwich. */
+  function localMidnight(s) {
+    var p = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s || "");
+    return p ? new Date(+p[1], +p[2] - 1, +p[3]) : null;
+  }
+
+  function countdown(r, at, cta) {
+    var box = document.querySelector("[data-rel=countdown]");
+    if (!box) return;
+    var dateEl = box.querySelector("[data-cd=date]");
+    var n = {};
+    each("[data-cd]", function (e) { n[e.getAttribute("data-cd")] = e; });
+    var pad = function (v) { return v < 10 ? "0" + v : String(v); };
+    var timer = null;
+
+    function out() {
+      if (timer) clearInterval(timer);
+      box.querySelector(".cd-grid").hidden = true;
+      if (dateEl) { dateEl.textContent = T("Out now"); dateEl.classList.add("cd-now"); }
+      if (cta) { cta.href = r.presave || r.cta || cta.href; cta.textContent = T("Listen"); }
+    }
+
+    function tick() {
+      var left = Math.floor((at - Date.now()) / 1000);
+      if (left <= 0) { out(); return; }
+      var d = Math.floor(left / 86400), h = Math.floor(left % 86400 / 3600),
+          m = Math.floor(left % 3600 / 60), s = left % 60;
+      n.d.textContent = d < 100 ? pad(d) : String(d);
+      n.h.textContent = pad(h); n.m.textContent = pad(m);
+      if (n.s.textContent !== pad(s)) {
+        n.s.textContent = pad(s);
+        if (!reduced) { n.s.classList.remove("cd-tick"); void n.s.offsetWidth; n.s.classList.add("cd-tick"); }
+      }
+    }
+
+    if (dateEl) {
+      var day = at.toLocaleDateString(LOCALE, { day: "numeric", month: "long" });
+      dateEl.textContent = T("Out") + " " + day;
+    }
+    box.hidden = false;
+    tick();
+    if (at - Date.now() > 0) timer = setInterval(tick, 1000);
+  }
 
   function render(m) {
     if (!m) return;
@@ -46,6 +97,9 @@
         else if (upcoming && r.cta) { cta.href = r.cta; cta.textContent = T("Follow on Spotify"); }
         else if (r.cta) { cta.href = r.cta; cta.textContent = T("Listen"); }
       }
+
+      var at = (upcoming || r.mode === "presave") && localMidnight(r.date);
+      if (at) countdown(r, at, cta);
 
       var rl = r.links || {};
       each("[data-rel-link]", function (a) {
