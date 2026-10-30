@@ -1,20 +1,23 @@
 {
   "artist": "BADSCANDAL",
-  "updated": "2026-10-25",
+  "updated": "2026-10-30",
   "streams": {
     "total": 450000000,
     "asOf": "September 2026",
     "source": "songstats"
   },
   "release": {
-    "mode": "upcoming",
+    "mode": "out",
     "title": "Touch Me",
-    "kicker": "New single",
+    "kicker": "Latest · 2026",
     "date": "2026-10-30",
     "cover": "assets/listen-touchme-cover-v1.jpg",
-    "cta": "https://open.spotify.com/artist/29kaubgb6Esvwu0idVndGy",
+    "cta": "https://open.spotify.com/track/6Y0BIHxJvTVIjOmk636Cw3",
     "presave": null,
-    "links": {}
+    "links": {
+      "apple": "https://music.apple.com/us/album/touch-me-single/6827592732",
+      "deezer": "https://www.deezer.com/album/1133075831"
+    }
   },
   "links": {
     "spotify": "https://open.spotify.com/artist/29kaubgb6Esvwu0idVndGy",

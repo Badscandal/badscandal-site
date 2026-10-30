@@ -66,6 +66,7 @@
     "Upcoming · 2026": { es: "Próximamente · 2026", pt: "Em breve · 2026" },
     /* /listen countdown (25 Oct 2026) — "Out" is followed by the date, formatted per language */
     "New single": { es: "Nuevo single", pt: "Novo single" },
+    "Latest · 2026": { es: "Lo último · 2026", pt: "Mais recente · 2026" },
     "Days": { es: "Días", pt: "Dias" },
     "Hours": { es: "Horas", pt: "Horas" },
     "Min": { es: "Min", pt: "Min" },
