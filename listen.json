@@ -1,6 +1,6 @@
 {
   "artist": "BADSCANDAL",
-  "updated": "2026-10-30",
+  "updated": "2026-10-31",
   "streams": {
     "total": 450000000,
     "asOf": "September 2026",
@@ -16,7 +16,8 @@
     "presave": null,
     "links": {
       "apple": "https://music.apple.com/us/album/touch-me-single/6827592732",
-      "deezer": "https://www.deezer.com/album/1133075831"
+      "deezer": "https://www.deezer.com/album/1133075831",
+      "amazon": "https://music.amazon.com/albums/B0HPGJZMRQ"
     }
   },
   "links": {
