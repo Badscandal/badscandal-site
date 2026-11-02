@@ -21,7 +21,11 @@ the name sit:
 **Site shape since 2 Nov 2026 (supersedes the paragraph below):** the
 LISTEN page IS the homepage — listen.html was moved to `index.html` (the old
 CRT-wordmark landing is gone; it's in git history). `/listen` and
-`/listen.html` 301 to `/`. The clothing store is HIDDEN: `/store` and
+`/listen.html` 302 to the Feature.fm bio page https://music.badscandal.com/listen
+(since 2 Nov 2026; music.badscandal.com is a GoDaddy CNAME to ffm.to, the
+Feature.fm custom subdomain; listen.badscandal.com also points at ffm.to but is
+held by a different Feature.fm account). The ads' own smart link is
+music.badscandal.com/touch-me; never use it in the bio or on the site. The clothing store is HIDDEN: `/store` and
 `/store.html` 302! to `/` (store.html still exists; delete the two
 _redirects lines and re-add the nav link to bring it back). Nav on home is
 just Home + Plugin store. Wherever this file says "listen.html" below, read

@@ -7,10 +7,11 @@
 /lukepower      /  301
 /lukepower.html /  301
 
-# The listen page IS the homepage since 2 Nov 2026 (listen.html became index.html).
-# /listen is in the Instagram bio and on Linktree-style links, so it lands on home, not a 404.
-/listen       /  301
-/listen.html  /  301
+# /listen is the Instagram bio link. Since 2 Nov 2026 it forwards to the Feature.fm bio page
+# (music.badscandal.com/listen) so bio clicks are tracked. Temporary 302 on purpose: browsers
+# don't cache it, so it can be pointed back at "/" any time (change these two lines to  /  302).
+/listen       https://music.badscandal.com/listen  302!
+/listen.html  https://music.badscandal.com/listen  302!
 
 /live           /        301
 /live.html      /        301
