@@ -18,7 +18,16 @@ the name sit:
 * **Luke & Lilian** — the couples/travel content; parked as a side lane
   (us.html still tells that story), no longer the front of the brand.
 
-**Site shape since the 24 Aug 2026 restructure:** badscandal.com is a
+**Site shape since 2 Nov 2026 (supersedes the paragraph below):** the
+LISTEN page IS the homepage — listen.html was moved to `index.html` (the old
+CRT-wordmark landing is gone; it's in git history). `/listen` and
+`/listen.html` 301 to `/`. The clothing store is HIDDEN: `/store` and
+`/store.html` 302! to `/` (store.html still exists; delete the two
+_redirects lines and re-add the nav link to bring it back). Nav on home is
+just Home + Plugin store. Wherever this file says "listen.html" below, read
+`index.html`.
+
+**Site shape since the 24 Aug 2026 restructure (historical):** badscandal.com is a
 one-screen landing — the CRT wordmark over the red film, "Music that
 doesn't *care*." — and the ENTIRE store-first page lives at /store.
 See "Where the site is at" under Open tasks for the current state.

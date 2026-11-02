@@ -4,8 +4,13 @@
 
 # Old music-era URLs. Keep these: they are indexed and linked from
 # elsewhere, and Netlify serves this file before it 404s.
-/lukepower      /listen  301
-/lukepower.html /listen  301
+/lukepower      /  301
+/lukepower.html /  301
+
+# The listen page IS the homepage since 2 Nov 2026 (listen.html became index.html).
+# /listen is in the Instagram bio and on Linktree-style links, so it lands on home, not a 404.
+/listen       /  301
+/listen.html  /  301
 
 /live           /        301
 /live.html      /        301
@@ -14,3 +19,8 @@
 # Forced (!) because the file still exists. Temporary 302 so it can come back: delete these two lines.
 /us       /  302!
 /us.html  /  302!
+
+# The clothing store (store.html) is HIDDEN, not deleted (2 Nov 2026). Forced because the file
+# still exists. Temporary 302 so it can come back: delete these two lines + restore the nav link.
+/store       /  302!
+/store.html  /  302!

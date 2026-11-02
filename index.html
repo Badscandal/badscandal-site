@@ -3,101 +3,161 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>BADSCANDAL</title>
-<meta name="description" content="Clothing for the ones who left. Statement tees and essentials for chasing the thing you actually want, out loud, in front of everybody. Wear the trouble.">
-<meta property="og:title" content="BADSCANDAL">
-<meta property="og:description" content="You get four thousand weeks. Clothing for spending them on the thing you actually want. Wear the trouble.">
-<meta property="og:image" content="assets/hero-film-poster-v6.jpg">
+<title>BADSCANDAL — Listen</title>
+<meta name="description" content="BADSCANDAL — electronic music from Dublin. Every platform, every link, one page. Music that doesn't care.">
+<meta property="og:title" content="BADSCANDAL — Listen">
+<meta property="og:description" content="Every platform, one page. Music that doesn't care.">
+<meta property="og:image" content="assets/listen-touchme-cover-v1.jpg">
 <link rel="icon" type="image/png" sizes="48x48" href="assets/favicon-48-v2.png">
 <link rel="icon" type="image/png" sizes="192x192" href="assets/favicon-192-v2.png">
 <link rel="apple-touch-icon" href="assets/favicon-180-v2.png">
 <script type="application/ld+json">
-{"@context":"https://schema.org","@type":"Organization","name":"BADSCANDAL",
+{"@context":"https://schema.org","@type":"MusicGroup","@id":"https://www.badscandal.com/#artist",
+ "name":"BADSCANDAL",
  "url":"https://www.badscandal.com/",
- "logo":"https://www.badscandal.com/assets/favicon-512-v2.png",
- "slogan":"Wear the trouble.",
- "description":"A clothing brand for the ones who left — statement tees and essentials for chasing what you actually want.",
- "founder":{"@type":"Person","name":"Luke Power",
-   "url":"https://www.badscandal.com/listen"},
- "sameAs":["https://instagram.com/lukeandlilian",
-   "https://www.tiktok.com/@lukeandlilian",
-   "https://youtube.com/@lukeandlilian"]}
+ "image":"https://www.badscandal.com/assets/favicon-512-v2.png",
+ "genre":["Electronic","Dance","Deep House"],
+ "description":"BADSCANDAL — Irish electronic music artist and producer from Dublin. Music that doesn't care.",
+ "foundingLocation":{"@type":"Place","name":"Dublin, Ireland"},
+ "member":{"@type":"Person","name":"Luke Power"},
+ "sameAs":["https://open.spotify.com/artist/29kaubgb6Esvwu0idVndGy",
+   "https://music.apple.com/us/artist/badscandal/1578748373",
+   "https://soundcloud.com/badscandal",
+   "https://youtube.com/badscandal",
+   "https://instagram.com/badscandal",
+   "https://www.tiktok.com/@badscandal",
+   "https://www.discogs.com/artist/9849655-Badscandal",
+   "https://genius.com/artists/Badscandal",
+   "https://www.viberate.com/artist/badscandal"]}
 </script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,100..900&family=DM+Mono:wght@300;400;500&family=Figtree:wght@300..900&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="css/site.css">
 <noscript><style>
-/* no JS: the CRT canvas never draws — show the live-text fallback */
+/* no JS: the CRT canvas never draws, the count-up never runs — show the live text, hide the 0 */
+.reveal{opacity:1 !important;transform:none !important}
 .crt canvas{display:none !important}
 .crt-fallback{display:block !important}
+.streams{display:none !important}
 </style></noscript>
 </head>
-<body>
+<body class="plug listen presave">
 
 <div class="grain" aria-hidden="true"></div>
-<div class="blur-veil" aria-hidden="true"></div>
 
-<!-- LANDING (24 Aug 2026 rework): badscandal.com is just the wordmark
-     over the film. The entire store-first page — nav taxonomy, shop,
-     story strip, marquee, About — lives on store.html now (About is a
-     story strip, marquee — lives on store.html now. Nav here is
-     Home + Store plus the burger menu; no cart, no footer, no store.js.
-     The tagline is .music-line, NOT .hero-line — i18n.js rewrites
-     .hero-line to the "Wear the trouble." translations, which belong to
-     the store page; .music-line has its own entry there. --------------- -->
+<!-- ==========================================================================================
+     THE HOMEPAGE since 2 Nov 2026 (was listen.html; /listen now 301s here).
+     LISTEN (17 Sep 2026) — the bio-link page, Feature.fm shape: latest release card, the
+     streaming platforms, the socials, and the combined stream counter at the foot. Every href
+     and the number are ALSO in /listen.json; js/listen.js overwrites what's here from that file,
+     so a new release / a new total is a JSON edit, not an HTML edit. The values below are the
+     no-JS / failed-fetch fallback — keep them in step when you edit the JSON.
+     Rows are text only, no platform logos: brand furniture is monochrome, the cover art and the
+     film carry the colour. Nothing here uses .roll except the footer link (it wipes child markup).
+     ========================================================================================== -->
 <header class="nav">
-  <a class="nav-logo" href="#top" aria-label="Badscandal — home">/</a>
+  <a class="nav-logo" href="index.html" aria-label="Badscandal — home">/</a>
   <nav class="nav-links" aria-label="Primary">
-    <a class="nav-link roll" href="#top">Home</a>
-    <a class="nav-link roll" href="listen.html">Listen</a>
-    <a class="nav-link roll" href="store.html">Clothing store</a>
+    <a class="nav-link roll" href="index.html">Home</a>
     <a class="nav-link roll" href="plugin.html">Plugin store</a>
   </nav>
   <div class="lang" role="group" aria-label="Language">
     <button type="button" data-lang="en">EN</button><button type="button" data-lang="es">ES</button><button type="button" data-lang="pt">PT</button>
   </div>
-  <button class="nav-burger" id="menu-btn" type="button" aria-expanded="false" aria-controls="menu"><span>Menu</span><span>Close</span></button>
 </header>
 
-<!-- FULLSCREEN MENU ---------------------------------------------------------- -->
-<div class="menu" id="menu" aria-hidden="true">
-  <a class="menu-item" href="#top"><i>01</i> Home</a>
-  <a class="menu-item" href="listen.html"><i>02</i> Listen</a>
-  <a class="menu-item" href="store.html"><i>03</i> Clothing store</a>
-  <a class="menu-item" href="plugin.html"><i>04</i> Plugin store</a>
-  <a class="menu-item" href="mailto:contact@badscandal.com?subject=Hello"><i>05</i> Contact</a>
+<!-- THE FILM, fixed behind everything. Carries class .hero so main.js's reduced-motion cancel
+     and the iOS Low-Power autoplay re-kick both apply (they select ".hero video"). Same v6
+     encodes as the landing; swap to -v7 for the B&W cut. New film = NEW -vN filename. -->
+<div class="hero listen-bg" aria-hidden="true">
+  <video class="hero-photo" autoplay muted loop playsinline preload="auto"
+         poster="assets/hero-film-poster-v6.jpg" tabindex="-1">
+    <source src="assets/hero-film-1080-v6.mp4" type="video/mp4" media="(max-width: 640px)">
+    <source src="assets/hero-film-4k-v6.mp4" type="video/mp4">
+  </video>
+  <div class="hero-scrim"></div>
 </div>
 
-<main id="top">
+<main id="top" class="page-main">
 
-  <!-- HERO — the film loop + CRT wordmark, full viewport. -----------------
-       CACHE RULE: any new hero film/poster needs a NEW filename (assets/*
-       is cached immutable for a year) — bump the -vN suffix, never reuse.
-       ENCODING RULE: the film must start at 0.000 on a keyframe (see
-       CLAUDE.md) or browsers paint a black first frame. Poster = the
-       sunset-viewpoint frame; it is what reduced-motion visitors keep
-       (main.js cancels autoplay for them). -->
-  <section class="hero hero--full" id="hero">
-    <video class="hero-photo" autoplay muted loop playsinline preload="auto"
-           poster="assets/hero-film-poster-v6.jpg"
-           aria-label="BADSCANDAL — the film">
-      <!-- phones get the 1080 encode; everything else the 4K -->
-      <source src="assets/hero-film-1080-v6.mp4" type="video/mp4"
-              media="(max-width: 640px)">
-      <source src="assets/hero-film-4k-v6.mp4" type="video/mp4">
-    </video>
-    <div class="hero-scrim" aria-hidden="true"></div>
-    <div class="hero-inner">
-      <div class="crt crt-hero"><canvas></canvas><h1 class="crt-fallback" hidden>BADSCANDAL</h1></div>
-    </div>
-    <p class="music-line">Music that doesn't <span class="em">care</span>.</p>
+  <!-- 01 · WORDMARK ----------------------------------------------------------------------- -->
+  <section class="listen-top">
+    <div class="crt crt-listen"><canvas role="img" aria-label="BADSCANDAL"></canvas><h1 class="crt-fallback" hidden>BADSCANDAL</h1></div>
+  </section>
+
+  <!-- 02 · LATEST RELEASE — becomes the pre-save card when listen.json says mode:"presave" ------ -->
+  <section class="rel" id="latest">
+    <article class="rel-card">
+      <img class="rel-cover" data-rel="cover" src="assets/listen-touchme-cover-v1.jpg" alt="Touch Me — cover" width="1000" height="1000">
+      <div class="rel-body">
+        <p class="tag" data-rel="kicker">Latest · 2026</p>
+        <h2 class="rel-title" data-rel="title">Touch Me</h2>
+        <!-- COUNTDOWN (25 Oct 2026) — js/listen.js shows it while release.date is in the future and
+             mode is "upcoming"/"presave". Hidden by default, so no-JS never sees a frozen 00. -->
+        <div class="cd" data-rel="countdown" hidden>
+          <div class="cd-grid" role="timer" aria-live="off">
+            <div class="cd-u"><span class="cd-n" data-cd="d">00</span><span class="cd-l">Days</span></div>
+            <div class="cd-u"><span class="cd-n" data-cd="h">00</span><span class="cd-l">Hours</span></div>
+            <div class="cd-u"><span class="cd-n" data-cd="m">00</span><span class="cd-l">Min</span></div>
+            <div class="cd-u"><span class="cd-n" data-cd="s">00</span><span class="cd-l">Sec</span></div>
+          </div>
+          <p class="cd-date" data-cd="date"></p>
+        </div>
+        <a class="buy-btn" data-rel="cta" data-mag href="https://open.spotify.com/track/6Y0BIHxJvTVIjOmk636Cw3" target="_blank" rel="noopener">Listen</a>
+        <p class="rel-links">
+          <a data-rel-link="apple" href="https://music.apple.com/us/album/touch-me-single/6827592732" target="_blank" rel="noopener">Apple Music</a>
+          <a data-rel-link="deezer" href="https://www.deezer.com/album/1133075831" target="_blank" rel="noopener">Deezer</a>
+          <a data-rel-link="amazon" href="https://music.amazon.com/albums/B0HPGJZMRQ" target="_blank" rel="noopener">Amazon Music</a>
+        </p>
+      </div>
+    </article>
+  </section>
+
+  <!-- 03 · STREAM — the artist profiles ------------------------------------------------------ -->
+  <section class="lk" id="stream">
+    <p class="tag">Stream</p>
+    <ul class="lk-list plain">
+      <li><a class="lk-row" data-link="spotify" href="https://open.spotify.com/artist/29kaubgb6Esvwu0idVndGy" target="_blank" rel="noopener"><span class="p">Spotify</span></a></li>
+      <li><a class="lk-row" data-link="apple" href="https://music.apple.com/us/artist/badscandal/1578748373" target="_blank" rel="noopener"><span class="p">Apple Music</span></a></li>
+      <li><a class="lk-row" data-link="youtube" href="https://youtube.com/badscandal" target="_blank" rel="noopener"><span class="p">YouTube</span></a></li>
+      <li><a class="lk-row" data-link="soundcloud" href="https://soundcloud.com/badscandal" target="_blank" rel="noopener"><span class="p">SoundCloud</span></a></li>
+    </ul>
+  </section>
+
+  <!-- 04 · FOLLOW ----------------------------------------------------------------------------- -->
+  <section class="lk" id="follow">
+    <p class="tag">Follow</p>
+    <ul class="lk-list plain">
+      <li><a class="lk-row" data-link="instagram" href="https://instagram.com/badscandal" target="_blank" rel="noopener"><span class="p">Instagram</span></a></li>
+      <li><a class="lk-row" data-link="tiktok" href="https://www.tiktok.com/@badscandal" target="_blank" rel="noopener"><span class="p">TikTok</span></a></li>
+      <li><a class="lk-row" data-link="email" href="mailto:contact@badscandal.com?subject=Music"><span class="p">Email</span></a></li>
+    </ul>
+  </section>
+
+  <!-- 05 · THE NUMBER — combined streams; the count-up is main.js's (.stat-count), the total is
+       listen.json's. Full digits on purpose: 145,000,000 reads bigger than 145M. ------------ -->
+  <section class="streams" id="streams-sec">
+    <p class="tag">The number</p>
+    <span class="stat-count" id="streams" data-count-to="450000000" data-suffix="+" aria-live="off">0</span>
+    <p class="streams-as">Streams across Spotify, Apple Music, YouTube and SoundCloud<br>
+      <span>as of</span> <span id="streams-as">September 2026</span></p>
   </section>
 
 </main>
 
+<!-- FOOTER — slim: one wordmark per page is enough on a one-column page --------------------- -->
+<footer class="foot foot--slim">
+  <div class="foot-bar">
+    <span>&copy; <b id="year">2026</b> BADSCANDAL</span>
+    <span id="clock"></span>
+  </div>
+  <p class="foot-tag">『 No kings. No gods. No masters. 』</p>
+</footer>
+
 <script src="js/i18n.js"></script>
 <script src="js/main.js"></script>
 <script src="js/crt.js"></script>
+<script src="js/listen.js"></script>
 </body>
 </html>
