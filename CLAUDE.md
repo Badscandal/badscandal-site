@@ -785,8 +785,9 @@ Brief: `../TOUCHME-LANDING-BUILD-BRIEF.md` (outside the repo on purpose).
 
 * **`touchme.html` + `js/touchme.js`** -> badscandal.com/touchme. One page for
   everyone (no cloaking): cover (`assets/touchme-cover-600-v1.webp`, 22 KB), title,
-  ONE green Spotify button (Spotify's mark, the deliberate colour exception), small
-  Apple/YouTube/Deezer/Amazon links, a one-line privacy notice. Speed rules: no web
+  ONE green Spotify button (Spotify's mark, the deliberate colour exception) and a
+  one-line privacy notice. Spotify ONLY: the other store links were removed at Luke's
+  request (9 Nov) — don't add them back. Speed rules: no web
   fonts, no site.css/main.js, CSS inline, the button paints before any JS. Measured
   locally (iPhone, 70 ms / 9 Mbit, 4x CPU): button 0.20 s after first byte, 21 KB +
   cover, 6 requests. Ads link to

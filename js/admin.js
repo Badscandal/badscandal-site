@@ -223,9 +223,10 @@
         '<span class="n num">' + fmt(n) + (base ? "<small>" + pct(v ? n / v : null) + "</small>" : "") + "</span></div>";
     };
     $("funnel").innerHTML = v || f.spotify
-      ? row("Visits", f.visits, "", false) + row("Unique", f.unique, "", true) + row("Spotify taps", f.spotify, "s", true) + row("Other stores", f.other, "o", true)
+      ? row("Visits", f.visits, "", false) + row("Unique", f.unique, "", true) + row("Spotify taps", f.spotify, "s", true) + (f.other ? row("Other stores", f.other, "o", true) : "")
       : '<p class="empty">No visits in this period yet.</p>';
     var names = { apple: "Apple", youtube: "YouTube", deezer: "Deezer", amazon: "Amazon" };
+    $("stores").hidden = !f.other; /* /touchme is Spotify-only since 9 Nov; old pages may still have store links */
     $("stores").innerHTML = Object.keys(names).map(function (k) { return names[k] + "<b>" + fmt(f.stores[k] || 0) + "</b>"; }).join("");
     $("ctr1").textContent = pct(data.kpis.ctr);
     $("ctr2").textContent = pct(data.kpis.ctrUnique);
