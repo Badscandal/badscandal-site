@@ -417,7 +417,11 @@ product description. `openModal()` splits the description at the words
 `github.com/Badscandal/badscandal-site` and publishes the repo root as-is.
 No build command, no CI. Measured push → live: ~10 seconds.
 
-    git add -A && git commit -m "..." && git push
+    git add <files by name> && git commit -m "..." && git push
+
+**Never `git add -A` / `git add .`** — the folder holds large untracked
+.mov/.mp4 files and zips. Stage files by name. Never `netlify deploy --dir .`
+from here either (it uploads untracked files). Deploy = push tracked files.
 
 ### READ THIS BEFORE TOUCHING assets/ — IMMUTABLE CACHING
 
@@ -550,7 +554,9 @@ music-era URLs keep their equity instead of 404ing.
 
 ## Testing
 
-No test suite. Verify by:
+`npm test` (= `node --test tests/*.test.mjs`) covers the server side: the
+counter keys, the Conversions API payload, the admin login/session and the
+portal's numbers. No dependencies needed to run it. For the pages, verify by:
 
     node --check js/store.js js/main.js js/flow.js js/crt.js
     python3 -m http.server 8000    # then open localhost:8000
@@ -771,3 +777,59 @@ PAGE" at the end of site.css. Scripts: i18n -> main -> crt -> `js/listen.js`.
   `mode:"presave"` -> button/href flip. Python's http.server has no Range
   support so the film shows its poster locally — that's the server, not the
   page.
+
+## /touchme smart link + Meta Pixel/CAPI + /admin portal (9 Nov 2026)
+
+Our own replacement for the Feature.fm smart link in the Touch Me Meta ads.
+Brief: `../TOUCHME-LANDING-BUILD-BRIEF.md` (outside the repo on purpose).
+
+* **`touchme.html` + `js/touchme.js`** -> badscandal.com/touchme. One page for
+  everyone (no cloaking): cover (`assets/touchme-cover-600-v1.webp`, 22 KB), title,
+  ONE green Spotify button (Spotify's mark, the deliberate colour exception), small
+  Apple/YouTube/Deezer/Amazon links, a one-line privacy notice. Speed rules: no web
+  fonts, no site.css/main.js, CSS inline, the button paints before any JS. Measured
+  locally (iPhone, 70 ms / 9 Mbit, 4x CPU): button 0.20 s after first byte, 21 KB +
+  cover, 6 requests. Ads link to
+  `/touchme?utm_source=meta&utm_campaign=br&utm_content={{ad.name}}`.
+* **Opening Spotify:** Android -> `intent://` (web fallback); iPhone inside
+  Instagram/Facebook/TikTok -> `spotify:` scheme, web player after 600 ms if the
+  page is still visible (TUNE HERE in touchme.js); iPhone Safari -> plain https
+  (universal link); desktop -> new tab. Only Luke's real phone inside the Instagram
+  app proves this works.
+* **Meta:** Pixel `1442285344656582` (dataset "Badscandal Touch Me") loads after
+  first paint; PageView + ViewContent on load, custom `SpotifyClick` on the tap.
+  The same events go server-side via `/api/capi` (`netlify/functions/capi.mjs`,
+  payload in `netlify/lib/capi.mjs`, Graph API version pinned there) with the SAME
+  event_id -> Meta deduplicates. user_data = IP, UA, fbp, fbc (cookie, else built
+  from fbclid), SHA-256 country. Nothing else, ever. Token: Netlify env
+  `META_CAPI_TOKEN`. `META_TEST_EVENT_CODE` (optional) routes events to Events
+  Manager -> Test events; deploy previews only send while it is set. Remove after
+  testing. The live ads optimise on the OLD custom conversion (FeatureFM_click);
+  ours needs a NEW custom conversion on `SpotifyClick` (Luke approves first).
+* **Consent:** `netlify/edge-functions/touchme-geo.js` stamps `<html data-geo
+  data-eu>` from Netlify geo (EU + EEA + UK list in `netlify/lib/geo.mjs`); no edge
+  -> phone time zone fallback. EU/UK: a small bar (same-size Allow / No), nothing
+  to Meta before Allow, and capi.mjs refuses EU events without consent as a second
+  lock. Elsewhere: on by default + notice; `/privacy` (privacy.html, EN + PT) has
+  the opt-out (`bs_meta_off`). No `preconnect` to Facebook (it would leak the IP
+  before consent).
+* **Counting:** `/api/hit` (hit.mjs, the 11 Oct counter, merged 9 Nov) with pages
+  `listen` + `touchme`. Blob keys grew from 9 to 21 parts (pv, campaign, ad, city,
+  device/os/browser/app, referrer, ms, meta, returning); old keys still parse. See
+  the header of `netlify/lib/stats.mjs`. `?nostat=1` once per device = don't count
+  yourself (the Pixel still fires). Deploy previews write to a throwaway store.
+* **`/admin`** (admin.html + js/admin.js, stand-alone like activate.html; `/stats`
+  301s here). Password = Netlify env `ADMIN_KEY` (STATS_KEY still accepted) ->
+  `__Host-bs_admin` HMAC-signed cookie, HttpOnly/Secure/SameSite=Strict, 30 days;
+  changing the password logs everyone out. 5 wrong tries per 10 min per hashed IP
+  (Blob store `admin-auth`). API: `netlify/functions/admin.mjs` (`/api/admin/
+  login|logout|data|csv`), numbers in `netlify/lib/admin.mjs` (São Paulo days).
+  New release page = one line in `LINKS` there + a copy of touchme.html/js.
+  Cost per tap is a Phase 2 placeholder (needs spend; Meta API only after Luke
+  approves a token).
+* **90-day rule:** `netlify/functions/rollup.mjs` (daily 06:00 UTC, production
+  only) folds raw keys older than 90 days into `daily/<day>.json` counts and
+  deletes them; the portal merges those back for old ranges.
+* `_redirects` 404s `/package*.json`, `/netlify/*`, `/tests/*`; robots.txt
+  disallows /admin, /stats, /api/.
+

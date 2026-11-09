@@ -25,3 +25,13 @@
 # still exists. Temporary 302 so it can come back: delete these two lines + restore the nav link.
 /store       /  302!
 /store.html  /  302!
+
+# The private stats page became the admin portal (9 Nov 2026): /admin, login required.
+/stats       /admin  301
+/stats.html  /admin  301
+
+# Server-side files that sit in the published root: never serve them.
+/package.json       /404  404!
+/package-lock.json  /404  404!
+/netlify/*          /404  404!
+/tests/*            /404  404!

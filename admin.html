@@ -1,0 +1,332 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<meta name="referrer" content="no-referrer">
+<meta name="theme-color" content="#050505">
+<title>BADSCANDAL Admin</title>
+<link rel="icon" href="/favicon.ico">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Figtree:wght@300..900&display=swap" rel="stylesheet">
+<!-- The private admin portal (9 Nov 2026; replaces /stats). Stand-alone on purpose: no site.css,
+     no main.js. Logic + charts: js/admin.js. Server: netlify/functions/admin.mjs. Password: the
+     Netlify env var ADMIN_KEY (never in this repo). -->
+<style>
+:root{
+  --ink:#050505;--ink-2:#0C0C0C;--ink-3:#1F1F1F;--ink-4:#2A2A2A;
+  --paper:#F2F2F2;--muted:#8A8A8A;--silver:#6E6E6E;--uv:#B4B4B4;
+  --spot:#1ED760;--grey-mark:#5A5A5A;
+  --mono:"DM Mono",ui-monospace,Menlo,monospace;
+  --sans:Figtree,system-ui,-apple-system,sans-serif;
+  --r:16px;--pad:16px;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--ink);color:var(--paper);font-family:var(--sans);-webkit-font-smoothing:antialiased}
+body{padding:0 0 calc(40px + env(safe-area-inset-bottom))}
+button,select,input{font:inherit;color:inherit}
+[hidden]{display:none !important}
+.lbl{font-family:var(--mono);font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.num{font-variant-numeric:tabular-nums}
+.swatch{display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:6px;vertical-align:1px}
+
+/* login */
+.login{min-height:100vh;min-height:100svh;display:flex;align-items:center;justify-content:center;padding:24px}
+.login form{width:100%;max-width:340px}
+.login h1{font-size:15px;font-weight:900;letter-spacing:.06em;margin:0 0 28px}
+.login h1 span{font-family:var(--mono);font-weight:400;font-size:10px;letter-spacing:.14em;color:var(--muted);margin-left:8px}
+.login label{display:block;margin-bottom:8px}
+.login input{width:100%;background:var(--ink-2);border:1px solid var(--ink-3);border-radius:12px;padding:14px;font-size:16px;outline:none}
+.login input:focus{border-color:var(--uv)}
+.login button{width:100%;margin-top:12px;background:var(--paper);color:var(--ink);border:0;border-radius:999px;padding:14px;font-weight:700;font-size:15px;cursor:pointer}
+.login button:disabled{opacity:.5}
+.login .err{min-height:20px;margin:12px 0 0;font-size:13px;color:var(--uv)}
+
+/* top bar */
+.top{position:sticky;top:0;z-index:5;background:rgba(5,5,5,.86);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border-bottom:1px solid var(--ink-3)}
+.top-in{max-width:1240px;margin:0 auto;padding:12px var(--pad);display:flex;flex-wrap:wrap;align-items:center;gap:10px 14px}
+.brand{font-weight:900;letter-spacing:.06em;font-size:15px}
+.brand span{font-family:var(--mono);font-weight:400;font-size:10px;letter-spacing:.14em;color:var(--muted);margin-left:8px}
+.picker{position:relative;display:flex;align-items:center;gap:10px;background:var(--ink-2);border:1px solid var(--ink-3);border-radius:999px;padding:4px 12px 4px 4px;font-weight:600;font-size:14px}
+.picker img{width:26px;height:26px;border-radius:50%;object-fit:cover;background:var(--ink-3)}
+.picker select{appearance:none;-webkit-appearance:none;background:transparent;border:0;padding:4px 16px 4px 0;font-weight:600;cursor:pointer;outline:none}
+.picker::after{content:"▾";position:absolute;right:12px;color:var(--muted);font-size:11px;pointer-events:none}
+.live{display:flex;align-items:center;gap:7px;margin-left:auto}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--spot);animation:pulse 2s infinite}
+.dot.off{background:var(--silver);animation:none}
+@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(30,215,96,.6)}70%{box-shadow:0 0 0 7px rgba(30,215,96,0)}100%{box-shadow:0 0 0 0 rgba(30,215,96,0)}}
+.chips{display:flex;gap:6px;overflow-x:auto;width:100%;scrollbar-width:none;align-items:center}
+.chips::-webkit-scrollbar{display:none}
+.chip{flex:none;font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;padding:8px 13px;border-radius:999px;border:1px solid var(--ink-3);color:var(--uv);background:transparent;cursor:pointer}
+.chip.on{background:var(--paper);color:var(--ink);border-color:var(--paper)}
+.custom{display:flex;gap:6px;align-items:center;flex:none}
+.custom input{background:var(--ink-2);border:1px solid var(--ink-3);border-radius:10px;padding:6px 8px;font-family:var(--mono);font-size:12px;color-scheme:dark}
+.iconbtn{flex:none;background:transparent;border:1px solid var(--ink-3);border-radius:999px;padding:7px 11px;font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);cursor:pointer}
+@media(min-width:900px){.chips{width:auto;margin-left:auto}.live{margin-left:0}.top-in{flex-wrap:nowrap}}
+
+main{max-width:1240px;margin:0 auto;padding:16px var(--pad);display:grid;gap:14px;grid-template-columns:minmax(0,1fr)}
+.card{background:var(--ink-2);border:1px solid var(--ink-3);border-radius:var(--r);padding:16px;min-width:0;position:relative}
+.card h2{margin:0 0 2px;font-size:15px;font-weight:700}
+.card .sub{color:var(--muted);font-size:12.5px;margin:0 0 14px}
+.head{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
+.empty{color:var(--silver);font-size:13px;padding:10px 0}
+.banner{grid-column:1/-1;border:1px dashed var(--silver);border-radius:12px;padding:12px 14px;font-size:13px;color:var(--uv)}
+
+/* skeleton */
+.skel .v,.skel .bd-list,.skel svg,.skel .fun,.skel .big{color:transparent !important;background:linear-gradient(90deg,var(--ink-3) 0,#2a2a2a 50%,var(--ink-3) 100%) 0 0/200% 100%;border-radius:8px;animation:shim 1.2s infinite linear}
+.skel .bd-list,.skel .fun{min-height:120px}
+@keyframes shim{to{background-position:-200% 0}}
+@media (prefers-reduced-motion:reduce){.dot,.skel *{animation:none !important}main{transition:none !important}}
+main{transition:opacity .25s ease}
+main.busy{opacity:.55}
+
+/* KPIs */
+.kpis{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px;grid-column:1/-1}
+.kpi{padding:14px 14px 10px;overflow:hidden}
+.kpi .v{font-size:30px;font-weight:700;letter-spacing:-.02em;margin:6px 0 2px;line-height:1;min-height:30px}
+.kpi .v small{font-size:16px;font-weight:600;color:var(--muted)}
+.kpi .d{font-size:12px;font-weight:600;min-height:16px}
+.kpi .d em{font-style:normal;color:var(--muted);font-weight:400}
+.up::before{content:"▲ ";font-size:9px;color:var(--spot)}
+.dn::before{content:"▼ ";font-size:9px;color:var(--muted)}
+.dn{color:var(--uv)}
+.kpi svg{display:block;width:100%;height:34px;margin-top:8px}
+.kpi.hero{grid-column:1/-1}
+.kpi.hero .v{font-size:44px;min-height:44px}
+.kpi.muted .v{color:var(--silver)}
+.phase{display:inline-block;margin-top:10px;font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;border:1px dashed var(--silver);border-radius:999px;padding:5px 9px;color:var(--muted)}
+@media(min-width:900px){.kpis{grid-template-columns:repeat(5,minmax(0,1fr))}.kpi.hero{grid-column:auto}.kpi.hero .v{font-size:30px;min-height:30px}}
+
+/* funnel */
+.fun-row{display:grid;grid-template-columns:92px minmax(0,1fr) 70px;align-items:center;gap:10px;margin:9px 0}
+.fun-row .bar{height:30px;border-radius:4px;background:var(--grey-mark);min-width:4px;transition:width .5s cubic-bezier(.22,.9,.24,1)}
+.fun-row .bar.s{background:var(--spot)}
+.fun-row .bar.o{background:var(--ink-4)}
+.fun-row .n{text-align:right;font-weight:700;font-size:15px}
+.fun-row .n small{display:block;font-weight:400;font-size:11px;color:var(--muted)}
+.fun-row .k{font-size:13px;color:var(--uv)}
+.stores{display:flex;flex-wrap:wrap;gap:6px 14px;margin:12px 0 0 102px;font-size:12px;color:var(--muted)}
+.stores b{color:var(--paper);font-weight:600;margin-left:4px}
+.ctrbox{display:flex;gap:10px;margin-top:16px}
+.ctrbox>div{flex:1;background:var(--ink);border:1px solid var(--ink-3);border-radius:12px;padding:12px;min-width:0}
+.ctrbox .big{font-size:24px;font-weight:700;margin-top:4px}
+.bench{font-size:12px;color:var(--muted);margin-top:4px}
+.bench b{color:var(--spot);font-weight:600}
+
+/* time series */
+.seg{display:flex;background:var(--ink);border:1px solid var(--ink-3);border-radius:999px;padding:3px;flex:none}
+.seg button{font:500 10.5px var(--mono);letter-spacing:.1em;text-transform:uppercase;border:0;background:transparent;color:var(--muted);padding:6px 11px;border-radius:999px;cursor:pointer}
+.seg button.on{background:var(--ink-3);color:var(--paper)}
+.legend{display:flex;gap:14px;font-size:12px;color:var(--uv);margin:-4px 0 6px}
+#ts{width:100%;height:auto;display:block;touch-action:pan-y}
+.tip{position:absolute;pointer-events:none;background:var(--paper);color:var(--ink);border-radius:10px;padding:8px 10px;font-size:12px;box-shadow:0 8px 24px rgba(0,0,0,.5);white-space:nowrap;z-index:3}
+.tip .lbl{color:#555}
+.tip b{font-weight:700}
+
+/* breakdowns */
+.bd-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 10px;padding:9px 0;border-top:1px solid var(--ink-3)}
+.bd-row:first-child{border-top:0}
+.bd-name{font-size:13.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bd-name small{font-weight:400;color:var(--muted);margin-left:6px}
+.bd-val{font-size:13px;text-align:right;color:var(--uv);white-space:nowrap}
+.bd-val b{color:var(--paper)}
+.bd-bars{grid-column:1/-1;display:flex;gap:2px;height:8px;margin-top:4px}
+.bd-bars i{display:block;height:100%;border-radius:3px;min-width:2px}
+.bd-bars .t{background:var(--spot)}
+.bd-bars .v{background:var(--grey-mark)}
+.bd-ctr{display:inline-block;min-width:46px;text-align:right;font-weight:700;color:var(--paper)}
+.best{font-family:var(--mono);font-size:9.5px;letter-spacing:.12em;color:var(--ink);background:var(--spot);border-radius:4px;padding:2px 5px;margin-left:6px;vertical-align:2px}
+.refs{margin-top:12px;font-size:12px;color:var(--muted);line-height:1.7}
+.refs b{color:var(--uv);font-weight:600}
+
+/* speed + meta */
+.split{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px}
+.mini{background:var(--ink);border:1px solid var(--ink-3);border-radius:12px;padding:12px;min-width:0}
+.mini .big{font-size:26px;font-weight:700;margin-top:4px}
+.mini .big small{font-size:14px;color:var(--muted);font-weight:500}
+.hist{display:flex;align-items:flex-end;gap:2px;height:64px;margin-top:14px}
+.hist i{flex:1;background:var(--grey-mark);border-radius:3px 3px 0 0;min-height:2px}
+.hist i.f{background:var(--uv)}
+.hist-ax{display:flex;justify-content:space-between;font-family:var(--mono);font-size:9.5px;color:var(--silver);margin-top:5px}
+.stack{display:flex;height:14px;gap:2px;margin:14px 0 8px}
+.stack i{display:block;height:100%;border-radius:3px}
+.keyrow{display:flex;justify-content:space-between;gap:10px;font-size:12.5px;color:var(--uv);padding:5px 0}
+.keyrow b{color:var(--paper)}
+
+/* log */
+.tools{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px;align-items:center}
+.tools select{background:transparent;border:1px solid var(--ink-3);border-radius:999px;padding:7px 10px;font-family:var(--mono);font-size:11px;letter-spacing:.06em;color:var(--uv);max-width:180px}
+.btn{font:600 12.5px var(--sans);border-radius:999px;padding:8px 14px;border:1px solid var(--paper);background:var(--paper);color:var(--ink);margin-left:auto;text-decoration:none;cursor:pointer}
+.log{width:100%;border-collapse:collapse;font-size:12.5px}
+.log th{text-align:left;font-family:var(--mono);font-weight:400;font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);padding:6px 8px;border-bottom:1px solid var(--ink-3)}
+.log td{padding:10px 8px;border-bottom:1px solid var(--ink-3);vertical-align:top}
+.yes{display:inline-flex;align-items:center;gap:6px;font-weight:600}
+.yes::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--spot)}
+.no{color:var(--silver)}
+.vid{font-family:var(--mono);font-size:11px;color:var(--uv)}
+.ret{font-family:var(--mono);font-size:9.5px;letter-spacing:.1em;border:1px solid var(--silver);border-radius:4px;padding:1px 4px;color:var(--uv);margin-left:4px}
+.mobile-log .lr{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 10px;padding:11px 0;border-top:1px solid var(--ink-3);font-size:13px}
+.mobile-log .lr .m{color:var(--muted);font-size:11.5px}
+@media(min-width:900px){.mobile-log{display:none}}
+@media(max-width:899px){.log{display:none}}
+.foot{font-size:11.5px;color:var(--silver);text-align:center;margin:10px 0 0}
+.more-btn{display:block;margin:10px auto 0;background:transparent;border:1px solid var(--ink-3);border-radius:999px;padding:8px 16px;color:var(--uv);font-size:12.5px;cursor:pointer}
+
+@media(min-width:900px){
+  main{grid-template-columns:repeat(12,minmax(0,1fr));gap:16px}
+  .c-fun{grid-column:span 5}.c-ts{grid-column:span 7}
+  .c-ad{grid-column:span 6}.c-geo{grid-column:span 6}
+  .c-app,.c-dev,.c-src{grid-column:span 4}
+  .c-speed,.c-meta{grid-column:span 6}
+  .c-log{grid-column:1/-1}
+}
+</style>
+</head>
+<body>
+
+<section class="login" id="login" hidden>
+  <form id="loginForm" autocomplete="on">
+    <h1>BADSCANDAL<span>ADMIN</span></h1>
+    <label class="lbl" for="pw">Password</label>
+    <input id="pw" name="password" type="password" autocomplete="current-password" required>
+    <button type="submit" id="go">Log in</button>
+    <p class="err" id="err" aria-live="polite"></p>
+  </form>
+</section>
+
+<div id="app" hidden>
+<header class="top"><div class="top-in">
+  <div class="brand">BADSCANDAL<span>ADMIN</span></div>
+  <label class="picker"><img id="pickImg" alt=""><select id="link" aria-label="Link"></select></label>
+  <div class="live"><span class="dot" id="dot"></span><span class="lbl" id="liveTxt">Live</span></div>
+  <div class="chips" id="chips">
+    <button class="chip" data-r="today">Today</button><button class="chip on" data-r="7d">7 days</button><button class="chip" data-r="30d">30 days</button><button class="chip" data-r="custom">Custom</button>
+    <span class="custom" id="custom" hidden><input type="date" id="from" aria-label="From"><input type="date" id="to" aria-label="To"></span>
+    <button class="iconbtn" id="logout">Log out</button>
+  </div>
+</div></header>
+
+<main id="main" class="skel">
+  <div class="banner" id="banner" hidden></div>
+
+  <section class="kpis">
+    <div class="card kpi hero">
+      <div class="lbl"><span class="swatch" style="background:var(--spot)"></span>Spotify taps</div>
+      <div class="v num" id="kTaps">0</div><div class="d" id="dTaps"></div>
+      <svg id="sTaps" aria-hidden="true"></svg>
+    </div>
+    <div class="card kpi">
+      <div class="lbl">Visits</div>
+      <div class="v num" id="kVisits">0</div><div class="d" id="dVisits"></div>
+      <svg id="sVisits" aria-hidden="true"></svg>
+    </div>
+    <div class="card kpi">
+      <div class="lbl">Unique visitors</div>
+      <div class="v num" id="kUnique">0</div><div class="d" id="dUnique"></div>
+      <svg id="sUnique" aria-hidden="true"></svg>
+    </div>
+    <div class="card kpi">
+      <div class="lbl">Click-through</div>
+      <div class="v num" id="kCtr">–</div><div class="d" id="dCtr"></div>
+      <svg id="sCtr" aria-hidden="true"></svg>
+    </div>
+    <div class="card kpi muted">
+      <div class="lbl">Cost per tap</div>
+      <div class="v num">—</div>
+      <div class="d" style="color:var(--muted);font-weight:400">needs ad spend (USD)</div>
+      <span class="phase">Phase 2</span>
+    </div>
+  </section>
+
+  <section class="card c-fun">
+    <h2>Funnel</h2>
+    <p class="sub">From landing on the link to tapping a store.</p>
+    <div class="fun" id="funnel"></div>
+    <div class="stores" id="stores"></div>
+    <div class="ctrbox">
+      <div><div class="lbl">Taps ÷ visits</div><div class="big num" id="ctr1">–</div><div class="bench">Feature.fm before: <b>~37%</b></div></div>
+      <div><div class="lbl">Taps ÷ unique</div><div class="big num" id="ctr2">–</div><div class="bench">people who tapped at least once</div></div>
+    </div>
+  </section>
+
+  <section class="card c-ts">
+    <div class="head">
+      <div><h2>Visits vs Spotify taps</h2><p class="sub" id="tsSub">Per day, São Paulo time.</p></div>
+      <div class="seg" id="seg"><button data-u="day" class="on">Day</button><button data-u="hour">Hour</button></div>
+    </div>
+    <div class="legend"><span><span class="swatch" style="background:var(--grey-mark)"></span>Visits</span><span><span class="swatch" style="background:var(--spot)"></span>Spotify taps</span></div>
+    <svg id="ts" role="img" aria-label="Visits and Spotify taps over time"></svg>
+    <div class="tip" id="tip" hidden></div>
+  </section>
+
+  <section class="card c-ad">
+    <div class="head"><div><h2>By ad</h2><p class="sub">utm_content. Which video sends people who actually tap.</p></div><span class="lbl">CTR</span></div>
+    <div class="bd-list" id="bAd"></div>
+  </section>
+
+  <section class="card c-geo">
+    <div class="head"><div><h2>Where</h2><p class="sub">Country, top city in each.</p></div><span class="lbl">CTR</span></div>
+    <div class="bd-list" id="bGeo"></div>
+  </section>
+
+  <section class="card c-app">
+    <h2>In-app browser</h2><p class="sub">Where the link was opened.</p>
+    <div class="bd-list" id="bApp"></div>
+  </section>
+
+  <section class="card c-dev">
+    <h2>Device</h2><p class="sub">Phone vs desktop.</p>
+    <div class="bd-list" id="bDev"></div>
+  </section>
+
+  <section class="card c-src">
+    <h2>Came from</h2><p class="sub">utm_source, else the app or site that sent them.</p>
+    <div class="bd-list" id="bSrc"></div>
+    <div class="refs" id="refs"></div>
+  </section>
+
+  <section class="card c-speed">
+    <h2>Speed</h2><p class="sub">Page start → Spotify button tappable, as measured on the visitor's phone.</p>
+    <div class="split">
+      <div class="mini"><div class="lbl">Median</div><div class="big num" id="spMed">–</div></div>
+      <div class="mini"><div class="lbl">Slowest 10%</div><div class="big num" id="spP90">–</div></div>
+    </div>
+    <div class="hist" id="hist"></div>
+    <div class="hist-ax"><span>0s</span><span>0.3s</span><span>0.6s</span><span>1s+</span></div>
+    <div class="keyrow" style="margin-top:10px"><span>CTR when under 0.3 s</span><b id="spFast">–</b></div>
+    <div class="keyrow"><span>CTR when over 0.6 s</span><b id="spSlow">–</b></div>
+  </section>
+
+  <section class="card c-meta">
+    <h2>Meta can see</h2><p class="sub" id="metaSub">Of our counted Spotify taps.</p>
+    <div class="mini"><div class="lbl">Sent to Meta</div><div class="big num" id="mSent">–</div></div>
+    <div class="stack" id="mStack"></div>
+    <div class="keyrow"><span><span class="swatch" style="background:var(--spot)"></span>Sent (Pixel + server)</span><b id="mS">–</b></div>
+    <div class="keyrow"><span><span class="swatch" style="background:var(--grey-mark)"></span>Not sent (EU/UK, no consent)</span><b id="mN">–</b></div>
+    <div class="keyrow"><span>EU/UK consent: allowed / declined</span><b id="mC">–</b></div>
+  </section>
+
+  <section class="card c-log">
+    <div class="head"><div><h2>Visit log</h2><p class="sub">People who went to the link. Anonymous: no names, no handles, no IPs.</p></div></div>
+    <div class="tools">
+      <button class="chip on" data-f="all">All</button><button class="chip" data-f="yes">Tapped</button><button class="chip" data-f="no">Didn't tap</button>
+      <select id="fAd" aria-label="Filter by ad"><option value="">Every ad</option></select>
+      <select id="fCc" aria-label="Filter by country"><option value="">Every country</option></select>
+      <a class="btn" id="csv" href="#" download>Export CSV</a>
+    </div>
+    <table class="log">
+      <thead><tr><th>Time (SP)</th><th>Visitor</th><th>Where</th><th>Device · browser</th><th>Ad</th><th>Spotify</th><th>Time to tap</th><th>Ready</th></tr></thead>
+      <tbody id="logBody"></tbody>
+    </table>
+    <div class="mobile-log" id="mlog"></div>
+    <button class="more-btn" id="more" hidden>Show more</button>
+    <p class="foot" id="logFoot"></p>
+  </section>
+</main>
+</div>
+
+<script src="js/admin.js" defer></script>
+</body>
+</html>

@@ -4,3 +4,12 @@
 [build]
   publish = "."
   command = ""
+
+# Server-side only (nothing here reaches the browser):
+#   netlify/functions/      hit.mjs (/api/hit, the visit counter), capi.mjs (/api/capi, Meta
+#                           Conversions API), admin.mjs (/api/admin/*), rollup.mjs (daily, 90-day rule)
+#   netlify/edge-functions/ touchme-geo.js (country flag for the /touchme consent bar)
+# Netlify installs @netlify/blobs from package.json for the functions.
+[functions]
+  directory = "netlify/functions"
+  node_bundler = "esbuild"

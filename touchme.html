@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en" data-geo="">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Touch Me · BADSCANDAL</title>
+<meta name="description" content="Touch Me by BADSCANDAL. Out now on Spotify, Apple Music, YouTube, Deezer and Amazon Music.">
+<meta name="theme-color" content="#050505">
+<link rel="icon" href="/favicon.ico">
+<meta property="og:type" content="music.song">
+<meta property="og:title" content="BADSCANDAL · Touch Me">
+<meta property="og:description" content="Out now. Listen on Spotify.">
+<meta property="og:url" content="https://badscandal.com/touchme">
+<meta property="og:image" content="https://badscandal.com/assets/listen-touchme-cover-v1.jpg">
+<meta property="og:image:width" content="1000">
+<meta property="og:image:height" content="1000">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="preload" as="image" href="assets/touchme-cover-600-v1.webp" fetchpriority="high">
+<!-- /touchme: the release smart link for the Meta ads (9 Nov 2026). One page for everyone.
+     Speed rules: no web fonts, no video, no site.css/main.js; the button paints before any JS runs.
+     Logic + Pixel + consent: js/touchme.js. Country flag: netlify/edge-functions/touchme-geo.js. -->
+<style>
+:root{--ink:#050505;--paper:#F2F2F2;--muted:#8A8A8A;--line:#1F1F1F;--spot:#1ED760}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--ink);color:var(--paper)}
+body{font:16px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;-webkit-font-smoothing:antialiased;min-height:100vh;min-height:100svh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:28px 20px calc(20px + env(safe-area-inset-bottom));overflow-x:hidden}
+.bg{position:fixed;inset:-20%;z-index:0;pointer-events:none;background:url(assets/touchme-cover-600-v1.webp) center/cover;filter:blur(60px) saturate(1.2);opacity:.32;transform:translateZ(0)}
+.bg::after{content:"";position:absolute;inset:0;background:radial-gradient(ellipse at 50% 40%,rgba(5,5,5,0) 0%,rgba(5,5,5,.75) 70%)}
+main{position:relative;z-index:1;width:100%;max-width:340px;display:flex;flex-direction:column;align-items:center;text-align:center}
+.cover{display:block;width:min(76vw,320px);height:auto;aspect-ratio:1;border-radius:6px;box-shadow:0 24px 60px rgba(0,0,0,.55);background:#1a1a1a}
+h1{margin:22px 0 2px;font-size:34px;line-height:1.05;font-weight:800;letter-spacing:-.01em}
+.artist{margin:0 0 22px;font-size:12px;letter-spacing:.32em;text-indent:.32em;color:var(--muted);font-weight:600}
+.sp{display:flex;align-items:center;justify-content:center;gap:12px;width:100%;height:58px;border-radius:999px;background:var(--spot);color:#000;text-decoration:none;font-weight:700;font-size:17px;letter-spacing:.005em;-webkit-tap-highlight-color:transparent;transition:transform .12s ease}
+.sp:active{transform:scale(.97)}
+.sp svg{width:26px;height:26px;flex:none}
+.more{display:flex;flex-wrap:wrap;justify-content:center;gap:6px 18px;margin-top:20px;font-size:14px}
+.more a{color:var(--paper);opacity:.72;text-decoration:none;padding:6px 2px}
+.more a:active,.more a:hover{opacity:1}
+.note{position:relative;z-index:1;margin:30px 0 0;max-width:340px;text-align:center;font-size:11px;line-height:1.5;color:var(--muted)}
+.note a{color:var(--muted)}
+.consent{position:fixed;left:12px;right:12px;bottom:calc(12px + env(safe-area-inset-bottom));z-index:5;max-width:460px;margin:0 auto;background:#141414;border:1px solid #2a2a2a;border-radius:14px;padding:12px 14px;font-size:13px;line-height:1.4;box-shadow:0 10px 30px rgba(0,0,0,.6)}
+.consent p{margin:0 0 10px}
+.consent a{color:var(--paper)}
+.consent div{display:flex;gap:8px}
+.consent button{flex:1;font:600 14px/1 inherit;font-family:inherit;padding:11px 10px;border-radius:999px;border:1px solid #555;background:transparent;color:var(--paper);cursor:pointer}
+.ask body{padding-bottom:150px}
+@media (prefers-reduced-motion:reduce){.sp{transition:none}.sp:active{transform:none}}
+@media (min-height:760px){h1{font-size:38px}}
+</style>
+</head>
+<body>
+<div class="bg" aria-hidden="true"></div>
+<main>
+  <img class="cover" src="assets/touchme-cover-600-v1.webp" width="600" height="600" alt="Touch Me by BADSCANDAL, cover art" fetchpriority="high" decoding="async">
+  <h1>Touch Me</h1>
+  <p class="artist">BADSCANDAL</p>
+  <a id="sp" class="sp" data-store="spotify" href="https://open.spotify.com/track/6Y0BIHxJvTVIjOmk636Cw3" rel="noopener">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#000" d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/></svg>
+    <span id="spt">Listen on Spotify</span>
+  </a>
+  <script>/* Button language + the moment it became tappable (reported to /admin as "speed"). */
+  (function(){var B={pt:"Ouvir no Spotify",es:"Escuchar en Spotify",de:"Auf Spotify anhören",fr:"Écouter sur Spotify",it:"Ascolta su Spotify",nl:"Luister op Spotify",pl:"Słuchaj w Spotify",cs:"Poslechnout na Spotify"},
+  l=String((navigator.languages&&navigator.languages[0])||navigator.language||"en").slice(0,2).toLowerCase();
+  window.__bsLang=l;document.documentElement.lang=B[l]?l:"en";if(B[l])document.getElementById("spt").textContent=B[l];
+  if(window.requestAnimationFrame)requestAnimationFrame(function(){setTimeout(function(){window.__bsReady=Math.round(performance.now())},0)});})();</script>
+  <nav class="more" aria-label="Other stores">
+    <a data-store="apple" href="https://music.apple.com/us/album/touch-me-single/6827592732" rel="noopener">Apple Music</a>
+    <a data-store="youtube" href="https://www.youtube.com/watch?v=LavNyasW0eA" rel="noopener">YouTube</a>
+    <a data-store="deezer" href="https://www.deezer.com/album/1133075831" rel="noopener">Deezer</a>
+    <a data-store="amazon" href="https://music.amazon.com/albums/B0HPGJZMRQ" rel="noopener">Amazon Music</a>
+  </nav>
+</main>
+<p class="note"><span id="note">We count visits and use the Meta Pixel to measure our ads.</span> <a id="pl" href="/privacy">Privacy</a></p>
+<div id="consent" class="consent" role="dialog" aria-live="polite" hidden>
+  <p id="ctext">Can we use the Meta Pixel to measure our ads? It shares this visit with Meta. <a id="cpl" href="/privacy">Privacy</a></p>
+  <div><button type="button" id="cyes">Allow</button><button type="button" id="cno">No thanks</button></div>
+</div>
+<script src="js/touchme.js" defer></script>
+</body>
+</html>
