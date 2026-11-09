@@ -81,3 +81,78 @@ export function graphRequest(events, token, testCode) {
     init: { method: "POST", body: form, headers: { "Content-Type": "application/x-www-form-urlencoded" } },
   };
 }
+
+/* ---------- proof that Meta got them (9 Nov 2026) ----------
+   Every call to Meta (and every one we refuse because it came from a bot) leaves ONE key-only
+   blob in the stats store, so /admin can show a "Meta health" card. Nothing personal: no IP,
+   no user agent, no ids, only what was sent and what Meta said.
+
+     mh/<utc day>/<ts>-<rand>/<events>/<sent>/<received>/<result>/<detail>/<test>
+
+   events    pv.vc (PageView + ViewContent) or sc (SpotifyClick)
+   sent      how many events we sent;  received  Meta's events_received ("-" if no answer)
+   result    ok | error | blocked (a bot or data centre: nothing sent)
+   detail    error: http-<status>[-code-<n>] or timeout/network; blocked: the bot reason
+   test      1 = went to Events Manager -> Test events (META_TEST_EVENT_CODE was set) */
+export const HEALTH_PREFIX = "mh/";
+const CODES = { PageView: "pv", ViewContent: "vc", SpotifyClick: "sc" };
+
+export function eventCodes(names) {
+  return names.map((n) => CODES[n] || "x").join(".") || "x";
+}
+
+function hslug(v, max = 40) {
+  return String(v == null ? "-" : v).toLowerCase().replace(/[^a-z0-9_.-]/g, "-").replace(/-{2,}/g, "-").slice(0, max) || "-";
+}
+
+export function healthKey(h, ts, rand) {
+  return [
+    "mh",
+    new Date(ts).toISOString().slice(0, 10),
+    ts + "-" + hslug(rand, 8),
+    hslug(h.events, 16),
+    Number.isFinite(h.sent) ? String(h.sent) : "0",
+    Number.isFinite(h.received) ? String(h.received) : "-",
+    ["ok", "error", "blocked"].includes(h.result) ? h.result : "error",
+    hslug(h.detail || "-", 40),
+    h.test ? "1" : "0",
+  ].join("/");
+}
+
+export function parseHealthKey(key) {
+  const p = String(key).split("/");
+  if (p.length !== 9 || p[0] !== "mh") return null;
+  return {
+    day: p[1], ts: parseInt(p[2], 10) || 0, events: p[3].split("."), sent: Number(p[4]) || 0,
+    received: p[5] === "-" ? null : Number(p[5]), result: p[6], detail: p[7], test: p[8] === "1",
+  };
+}
+
+/* Meta's answer -> what we log and store. Error text is trimmed and anything shaped like an IP
+   address is masked, so a log line can never carry a visitor's data. */
+export function readMetaAnswer(status, json) {
+  const ok = status >= 200 && status < 300 && json && Number.isFinite(json.events_received);
+  if (ok) return { result: "ok", received: json.events_received, detail: "-", note: "" };
+  const err = (json && json.error) || {};
+  const code = Number.isFinite(err.code) ? "-code-" + err.code + (Number.isFinite(err.error_subcode) ? "-" + err.error_subcode : "") : "";
+  const note = scrub(err.error_user_msg || err.message || (json ? "" : "no answer body"));
+  return { result: "error", received: null, detail: "http-" + status + code, note };
+}
+
+/* Meta's error text, safe to log and show: no access token (they start "EAA"), no IP, short. */
+export function scrub(msg) {
+  return String(msg || "")
+    .replace(/access_token=[^&\s]+/gi, "access_token=<hidden>")
+    .replace(/\bEAA[A-Za-z0-9]{10,}/g, "<token>")
+    .replace(/\b\d{1,3}(?:\.\d{1,3}){3}\b/g, "<ip>")
+    .replace(/\b[0-9a-f]{0,4}(?::[0-9a-f]{0,4}){2,7}\b/gi, "<ip>")
+    .slice(0, 200);
+}
+
+/* The "last call" record behind /admin's status line ("Meta: sending OK, last event 2 min ago").
+   One small JSON blob, overwritten on every real send (bots never touch it). */
+export const LAST_KEY = "health/last.json";
+export const LAST_ERROR_KEY = "health/last-error.json";
+export function lastRecord(h, names, ts) {
+  return { ok: h.result === "ok", ts, events: names, received: h.received ?? null, detail: h.detail || "-", message: h.result === "ok" ? "" : scrub(h.note || ""), test: !!h.test };
+}

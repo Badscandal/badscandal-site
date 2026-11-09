@@ -816,21 +816,76 @@ Brief: `../TOUCHME-LANDING-BUILD-BRIEF.md` (outside the repo on purpose).
   before consent).
 * **Counting:** `/api/hit` (hit.mjs, the 11 Oct counter, merged 9 Nov) with pages
   `listen` + `touchme`. Blob keys grew from 9 to 21 parts (pv, campaign, ad, city,
-  device/os/browser/app, referrer, ms, meta, returning); old keys still parse. See
-  the header of `netlify/lib/stats.mjs`. `?nostat=1` once per device = don't count
-  yourself (the Pixel still fires). Deploy previews write to a throwaway store.
+  device/os/browser/app, referrer, ms, meta, returning), then 23 (bot, fb); old keys
+  still parse. See the header of `netlify/lib/stats.mjs`. Deploy previews write to
+  a throwaway store.
+* **People only (the rule):** a page load counts as a PERSON only after a real
+  touch, pointer, wheel/scroll or key press while the page is on screen (the `act`
+  hit from `js/touchme.js`), a store tap or a consent answer, and nothing flags it.
+  No event goes to Meta (Pixel or CAPI) before that: the Pixel script loads after
+  first paint, but PageView/ViewContent fire on the first interaction, SpotifyClick
+  on the tap. So Meta's "landing page views" only count people who touched the page.
+  Everything else is stored but hidden in /admin (logic: `hardBot` / `classify` /
+  `sessions` in `netlify/lib/admin.mjs`; labels `BOT_LABELS`):
+  - `noact`: looked, never touched (scanners, speed tests, prefetches, and people
+    who left without touching: indistinguishable). Pre-9-Nov keys can only prove a
+    person by a tap.
+  - hard flags, always hidden even with a touch: data-centre IP (`dc-meta|aws|
+    google|azure|apple`, `netlify/lib/dc.mjs` + `dc-ranges.json`, also stamps
+    `data-dc` via the edge function so the Pixel never loads), crawler UA (`ua`,
+    list in `netlify/lib/ua.mjs`: facebookexternalhit, meta-externalagent, Facebot,
+    WhatsApp/, TelegramBot, Slackbot, Twitterbot, Discordbot, Googlebot, bingbot,
+    Lighthouse…), `webdriver`, `headless` (HeadlessChrome, zero screen, no
+    languages), `notouch` (phone UA, no touch screen), `hidden` (never on screen),
+    `fasttap` (<150 ms after the button), `synthetic` (script click), `me`, `test`
+    (deploycheck), `dc-town` (small towns that are only data centres: Prineville,
+    Luleå, Boardman, The Dalles, Forest City, Altoona, … list `DC_TOWNS`).
+  - `dc-city`: big data-centre cities (Ashburn, Kansas City, Fort Worth, Mesa,
+    Henrico, Huntsville, Odense…, `DC_CITIES`) only when there's NO interaction:
+    real people live there.
+  **Re-run `node tools/refresh-ip-ranges.mjs` about monthly** (and if "Show bots"
+  shows a data-centre place counted as a person); commit the JSON by name. `npm
+  test` fails once it's 120 days old, as a reminder. 9 Nov night (real keys, anonymised
+  in `tests/fixtures/2026-11-09-keys.txt`): 10 visits -> 1 person (Luke, 2 loads),
+  4 data-centre towns, 3 no-interaction (2 US iPhone speed tests + Luke's Mac), 1 test.
+* **Visits = sessions:** reloads by the same browser within 30 min of its previous
+  load are ONE visit (first load's ad/source and returning flag; ×N in the log),
+  one tap per visit per store. Time-to-tap stored and shown capped at 10 min.
+  "vs previous" compares the same stretch of time when the range ends today.
+* **Not counting Luke:** /admin "Don't count this device" sets a server cookie
+  `bs_nostat=1` (HttpOnly, ~400 days; Safari keeps server cookies) + localStorage
+  `bs_nostat`; `?nostat=1` sets just the localStorage (still works). Each browser
+  and each app's in-app browser has its own storage (open /admin on iPhone + Mac;
+  `?nostat=1` inside Instagram once). Those visits still send Meta events (tests
+  work) and are stored as bot `me`.
+* **Source labels (`adOf` / `adLabel`):** utm_content -> the ad name; fbclid but
+  no utm_content -> "Meta ad (untagged)" (Facebook adds fbclid to plain link clicks
+  too); Instagram app/referrer without fbclid (or IG's own `utm_content=
+  link_in_bio`) -> "Instagram (bio/DM/story)"; else "Direct". CSV columns: source,
+  ad_name, came_from, reloads_within_30_min, interacted, bot, bot_reason.
+* **Meta health:** capi.mjs logs one line per send ("capi: SpotifyClick -> Meta
+  received 1") or Meta's refusal (scrubbed: no token, no IP), writes a key-only
+  blob `mh/<day>/…` per call (counts; deleted after 90 days by rollup.mjs) and
+  overwrites `health/last.json` (+ `health/last-error.json` on errors) with the
+  last real send. /admin shows "Meta: sending OK, last event N min ago" or the
+  error at the top, and a card with sent / accepted / errors / bots blocked; warns
+  while `META_TEST_EVENT_CODE` is set. The token is never logged or stored. The
+  browser Pixel copy is only visible in Events Manager. Netlify function logs are
+  kept 24 h (project `profound-haupia-db7ffa`).
 * **`/admin`** (admin.html + js/admin.js, stand-alone like activate.html; `/stats`
   301s here). Password = Netlify env `ADMIN_KEY` (STATS_KEY still accepted) ->
   `__Host-bs_admin` HMAC-signed cookie, HttpOnly/Secure/SameSite=Strict, 30 days;
   changing the password logs everyone out. 5 wrong tries per 10 min per hashed IP
   (Blob store `admin-auth`). API: `netlify/functions/admin.mjs` (`/api/admin/
   login|logout|data|csv`), numbers in `netlify/lib/admin.mjs` (São Paulo days).
-  New release page = one line in `LINKS` there + a copy of touchme.html/js.
+  New release page = one line in `LINKS` there + a copy of touchme.html/js, plus
+  PAGES in hit.mjs, the edge function's path list and `content_name` in
+  `netlify/lib/capi.mjs` (hard-coded "Touch Me").
   Cost per tap is a Phase 2 placeholder (needs spend; Meta API only after Luke
   approves a token).
 * **90-day rule:** `netlify/functions/rollup.mjs` (daily 06:00 UTC, production
   only) folds raw keys older than 90 days into `daily/<day>.json` counts and
   deletes them; the portal merges those back for old ranges.
-* `_redirects` 404s `/package*.json`, `/netlify/*`, `/tests/*`; robots.txt
+* `_redirects` 404s `/package*.json`, `/netlify/*`, `/tests/*`, `/tools/*`; robots.txt
   disallows /admin, /stats, /api/.
 

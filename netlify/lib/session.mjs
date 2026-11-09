@@ -54,7 +54,9 @@ export async function verifySession(value, secret, now = Date.now()) {
 export function readCookie(header, name) {
   for (const part of String(header || "").split(/;\s*/)) {
     const i = part.indexOf("=");
-    if (i > 0 && part.slice(0, i) === name) return decodeURIComponent(part.slice(i + 1));
+    if (i > 0 && part.slice(0, i) === name) {
+      try { return decodeURIComponent(part.slice(i + 1)); } catch { return ""; }
+    }
   }
   return "";
 }

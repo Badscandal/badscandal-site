@@ -26,7 +26,7 @@ test("9 Nov fields: ad, city, device, speed, Meta flag, returning", () => {
     device: "mobile", os: "ios", browser: "webview", app: "instagram", ref: "l.instagram.com",
     ms: 2412.6, meta: 1, ret: 0,
   }, NOW, "r4nd");
-  assert.equal(key.split("/").length, 21);
+  assert.equal(key.split("/").length, 23);
   assert.ok(key.length < 300, "Blob keys must stay short");
   const e = parseKey(key);
   assert.equal(e.content, "tm-br-vocal-contatinho");
@@ -38,6 +38,25 @@ test("9 Nov fields: ad, city, device, speed, Meta flag, returning", () => {
   assert.equal(e.meta, "1");
   assert.equal(e.ret, "0");
   assert.equal(e.pv, "pv123456");
+  assert.equal(e.bot, "-", "a person unless something says otherwise");
+  assert.equal(e.fb, "-");
+});
+
+test("bot reason and fbclid flag ride in the key; junk bot values can't break it", () => {
+  const e = parseKey(eventKey({ type: "view", page: "touchme", visitor: "v", bot: "dc-meta", fb: 1 }, NOW, "r"));
+  assert.equal(e.bot, "dc-meta");
+  assert.equal(e.fb, "1");
+  assert.equal(e.parts, 23);
+  const junk = eventKey({ type: "view", page: "touchme", visitor: "v", bot: "../../x/y" }, NOW, "r");
+  assert.equal(junk.split("/").length, 23);
+});
+
+test("keys written before the bot flag (21 parts) still parse as people", () => {
+  const old = "ev/2026-11-09/view/touchme/ig/-/us/abc/1791990000000-x1/pv1/-/-/prineville/mobile/ios/webview/instagram/-/300/-/0";
+  const e = parseKey(old);
+  assert.equal(e.parts, 21);
+  assert.equal(e.bot, "-");
+  assert.equal(e.city, "prineville");
 });
 
 test("old 11 Oct keys still parse, with the new fields empty", () => {
@@ -59,8 +78,11 @@ test("slug never produces a path segment that could break a key", () => {
 test("bad numbers and unknown types are neutralised", () => {
   const e = parseKey(eventKey({ type: "drop table", page: "touchme", ms: "9e99", meta: "yes" }, NOW, "z"));
   assert.equal(e.type, "view");
-  assert.equal(e.ms, null);
+  assert.equal(e.ms, 600000, "anything over 10 minutes is stored as the 10-minute cap");
   assert.equal(e.meta, "-");
+  assert.equal(parseKey(eventKey({ type: "view", page: "touchme", ms: "abc" }, NOW, "z")).ms, null);
+  assert.equal(parseKey(eventKey({ type: "view", page: "touchme", ms: -5 }, NOW, "z")).ms, null);
+  assert.equal(parseKey(eventKey({ type: "act", page: "touchme", target: "touch" }, NOW, "z")).type, "act");
 });
 
 test("visits vs unique people, IG split, taps, days outside the range ignored", () => {

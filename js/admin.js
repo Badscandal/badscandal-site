@@ -3,7 +3,9 @@
      GET  /api/admin/data   -> everything on the page (401 -> the login screen)
      GET  /api/admin/csv    -> the visit log download
      POST /api/admin/login | /api/admin/logout
-   Refreshes every 60 s while the tab is visible. All times are São Paulo. */
+     POST /api/admin/exclude -> "Don't count this device" (server cookie + localStorage bs_nostat)
+   Refreshes every 60 s while the tab is visible. All times are São Paulo.
+   Bots are hidden by default ("Show bots" asks the server for bots=1; never remembered). */
 (function () {
   "use strict";
   var $ = function (id) { return document.getElementById(id); };
@@ -11,7 +13,7 @@
   var GREY = "#5A5A5A", GREEN = "#1ED760";
   var reduce = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-  var state = { link: "", range: "7d", from: "", to: "", unit: "day", filter: "all", fAd: "", fCc: "", shown: 50 };
+  var state = { link: "", range: "7d", from: "", to: "", unit: "day", filter: "all", fAd: "", fCc: "", shown: 50, bots: false };
   try { var saved = JSON.parse(localStorage.getItem("bs_admin_view") || "{}"); if (saved.range) state.range = saved.range; if (saved.link) state.link = saved.link; } catch (e) {}
   var data = null, timer = null, loading = false;
 
@@ -20,6 +22,13 @@
   function fmt(n) { return n == null ? "–" : Math.round(n).toLocaleString("en-US"); }
   function pct(r, digits) { return r == null || !isFinite(r) ? "–" : (r * 100).toFixed(digits == null ? 1 : digits) + "%"; }
   function secs(ms) { return ms == null ? "–" : (ms / 1000).toFixed(ms < 10000 ? 2 : 1); }
+  /* time to tap: seconds, minutes past one minute, "10+ min" at the cap */
+  function tapTime(ms) {
+    if (ms == null) return "";
+    if (ms >= 600000) return "10+ min";
+    if (ms >= 60000) return Math.floor(ms / 60000) + "m " + String(Math.round(ms % 60000 / 1000)).padStart(2, "0") + "s";
+    return secs(ms) + " s";
+  }
   function title(slug) { return String(slug || "").replace(/[-_.]+/g, " ").replace(/\b\w/g, function (c) { return c.toUpperCase(); }); }
   var regionNames = null;
   try { regionNames = new Intl.DisplayNames(["en"], { type: "region" }); } catch (e) {}
@@ -36,10 +45,15 @@
     linkedin: ["LinkedIn", "in-app"], whatsapp: ["WhatsApp", "in-app"], safari: ["Safari", ""], chrome: ["Chrome", ""],
     samsung: ["Samsung Internet", ""], firefox: ["Firefox", ""], edge: ["Edge", ""], opera: ["Opera", ""],
     webview: ["Other app", "in-app"], other: ["Other", ""], unknown: ["Unknown", ""] };
+  var BOTS = { "dc-meta": "Meta DC", "dc-aws": "Amazon DC", "dc-google": "Google DC", "dc-azure": "Microsoft DC", "dc-apple": "Apple preview",
+    "dc-town": "DC town", ua: "Bot UA", webdriver: "Script", headless: "Headless", notouch: "No touchscreen", hidden: "Never shown",
+    fasttap: "Too fast", synthetic: "Script click", me: "You", test: "Test", noact: "No interaction", "dc-city": "DC city" };
   var DEVICES = { iphone: ["iPhone", "iOS"], ipad: ["iPad", "iOS"], android: ["Android", "phone"], "android-tablet": ["Android", "tablet"],
     mac: ["Mac", "desktop"], windows: ["Windows", "desktop"], linux: ["Linux", "desktop"], chromeos: ["Chromebook", ""], other: ["Other", ""], unknown: ["Unknown", ""] };
-  var SOURCES = { meta: "Meta ads", ig: "Instagram", facebook: "Facebook", tiktok: "TikTok", direct: "Direct / unknown", google: "Google", x: "X" };
-  function adName(r) { return r.ad ? r.ad.replace(/-/g, " ") : "(no ad)"; }
+  var SOURCES = { meta: "Meta ads", ig: "Instagram app", facebook: "Facebook app", tiktok: "TikTok app", direct: "Direct (no app or site)", google: "Google", x: "X" };
+  function adName(r) { return r.adLabel || r.label || "Direct"; }
+  /* the visit-log filter value for a row's source: "~direct", "~instagram", "~untagged", or the ad name */
+  function adValue(r) { return r.adKind && r.adKind !== "ad" ? "~" + r.adKind : (r.ad || "~noname"); }
   function spNow() {
     try { return new Intl.DateTimeFormat("en-GB", { timeZone: "America/Sao_Paulo", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(new Date()); }
     catch (e) { return ""; }
@@ -55,6 +69,7 @@
   function query(extra) {
     var q = new URLSearchParams({ link: state.link || "", range: state.range });
     if (state.range === "custom") { if (state.from) q.set("from", state.from); if (state.to) q.set("to", state.to); }
+    if (state.bots) q.set("bots", "1");
     if (extra) for (var k in extra) q.set(k, extra[k]);
     return q.toString();
   }
@@ -103,7 +118,6 @@
         if (res.s !== 200) { banner("Couldn't load the numbers (" + res.s + "). Retrying in a minute."); $("dot").classList.add("off"); return; }
         $("login").hidden = true;
         $("app").hidden = false;
-        banner("");
         data = res.j;
         if (!state.link) state.link = data.link;
         render();
@@ -125,7 +139,7 @@
     timer = setInterval(function () { if (!document.hidden) load(false); }, REFRESH_MS);
   }
   document.addEventListener("visibilitychange", function () { if (!document.hidden && data) load(false); });
-  function banner(msg) { $("banner").hidden = !msg; $("banner").textContent = msg; }
+  function banner(msg, html) { $("banner").hidden = !msg; if (html) $("banner").innerHTML = msg; else $("banner").textContent = msg; }
 
   /* ---------- controls ---------- */
   function syncChips() {
@@ -161,6 +175,29 @@
   $("fAd").addEventListener("change", function () { state.fAd = $("fAd").value; state.shown = 50; drawLog(); });
   $("fCc").addEventListener("change", function () { state.fCc = $("fCc").value; state.shown = 50; drawLog(); });
   $("more").addEventListener("click", function () { state.shown += 50; drawLog(); });
+  function toggleBots(on) { state.bots = typeof on === "boolean" ? on : !state.bots; state.shown = 50; load(false); }
+  $("botsBtn").addEventListener("click", function () { toggleBots(); });
+  $("tHumans").addEventListener("click", function () { if (state.bots) toggleBots(false); });
+  $("tBots").addEventListener("click", function () { if (!state.bots) toggleBots(true); });
+  $("banner").addEventListener("click", function (ev) { if (ev.target.id === "hideBots") toggleBots(false); });
+
+  /* "Don't count this device": the server cookie is the durable part (Safari keeps it), the
+     localStorage flag makes /touchme mark the visit "me" before it even reaches the server. */
+  function localExcluded() { try { return localStorage.getItem("bs_nostat") === "1"; } catch (e) { return false; } }
+  $("meBtn").addEventListener("click", function () {
+    var on = !(data && (data.excluded || localExcluded()));
+    $("meBtn").disabled = true;
+    fetch("/api/admin/exclude", { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ on: on }) })
+      .then(function (r) {
+        $("meBtn").disabled = false;
+        if (r.status === 401) return showLogin("");
+        if (!r.ok) return;
+        try { if (on) localStorage.setItem("bs_nostat", "1"); else localStorage.removeItem("bs_nostat"); } catch (e) {}
+        data.excluded = on;
+        drawBots();
+      })
+      .catch(function () { $("meBtn").disabled = false; });
+  });
   window.addEventListener("resize", function () { if (data) { clearTimeout(window.__rs); window.__rs = setTimeout(drawSeries, 150); } });
 
   /* ---------- render ---------- */
@@ -171,12 +208,14 @@
     if (cur && cur.cover) $("pickImg").src = cur.cover;
     syncChips();
     if (state.range === "custom") { $("from").value = data.from; $("to").value = data.to; }
-    drawKpis(); drawFunnel(); drawSeries(); drawBreakdowns(); drawSpeed(); drawMeta(); fillFilters(); drawLog();
+    banner(data.bots ? "Showing bots too: every number below includes the " + fmt(data.hidden.visits) + " bot visits. <button class=\"ghost\" id=\"hideBots\" type=\"button\">Humans only</button>" : "", true);
+    drawStrip();
+    drawKpis(); drawFunnel(); drawSeries(); drawBreakdowns(); drawSpeed(); drawMeta(); drawHealth(); drawBots(); fillFilters(); drawLog();
   }
 
   function delta(cur, prev, isRate) {
     if (cur == null || prev == null) return "";
-    var vs = '<em> vs previous ' + (data.days === 1 ? "day" : data.days + " days") + "</em>";
+    var vs = "<em> vs " + (data.range === "today" ? "yesterday by this time" : "previous " + (data.days === 1 ? "day" : data.days + " days")) + "</em>";
     if (isRate) {
       var pts = (cur - prev) * 100;
       if (!prev && !cur) return "";
@@ -297,8 +336,8 @@
     var best = -1;
     if (opts.best) {
       var bestRate = -1;
-      rows.forEach(function (r, i) { if (r.ad && r.v >= 20 && r.t / r.v > bestRate) { bestRate = r.t / r.v; best = i; } });
-      if (rows.filter(function (r) { return r.ad && r.v >= 20; }).length < 2) best = -1;
+      rows.forEach(function (r, i) { if (r.kind === "ad" && r.v >= 20 && r.t / r.v > bestRate) { bestRate = r.t / r.v; best = i; } });
+      if (rows.filter(function (r) { return r.kind === "ad" && r.v >= 20; }).length < 2) best = -1;
     }
     el.innerHTML = rows.slice(0, opts.max || 8).map(function (r, i) {
       var n = name(r);
@@ -311,7 +350,7 @@
   }
 
   function drawBreakdowns() {
-    breakdown($("bAd"), data.byAd, function (r) { return [adName(r), r.campaign ? r.campaign.toUpperCase() : r.ad ? "" : "bio, DMs, direct"]; }, { best: true, max: 12 });
+    breakdown($("bAd"), data.byAd, function (r) { return [adName(r), r.campaign ? r.campaign.toUpperCase() : r.kind === "untagged" ? "Meta's click id, no utm tags" : ""]; }, { best: true, max: 12 });
     breakdown($("bGeo"), data.byCountry, function (r) { return [country(r.cc), r.city ? title(r.city) + (r.cities > 1 ? " +" + (r.cities - 1) : "") : ""]; }, { max: 10 });
     breakdown($("bApp"), data.byApp, function (r) { var a = APPS[r.k] || [title(r.k), ""]; return a; });
     breakdown($("bDev"), data.byDevice, function (r) { var a = DEVICES[r.k] || [title(r.k), ""]; return a; });
@@ -341,11 +380,67 @@
     $("mC").textContent = m.yes + m.no ? fmt(m.yes) + " / " + fmt(m.no) + " · " + pct(m.yes / (m.yes + m.no), 0) + " allow" : "–";
   }
 
+  function ago(ms) {
+    var m = Math.round(ms / 60000);
+    if (m < 1) return "just now";
+    if (m < 60) return m + " min ago";
+    var h = Math.round(m / 60);
+    return h < 48 ? h + " h ago" : Math.round(h / 24) + " days ago";
+  }
+  function drawStrip() {
+    $("tHumans").classList.toggle("on", !state.bots);
+    $("tBots").classList.toggle("on", state.bots);
+    $("botN").textContent = fmt((data.hidden || {}).visits || 0);
+    var last = data.health && data.health.last, el = $("mstat");
+    el.className = "mstat" + (last ? (last.ok ? " ok" : " bad") : "");
+    $("mstatTxt").textContent = !last ? "Meta: nothing sent yet"
+      : last.ok ? "Meta: sending OK, last event " + ago(last.agoMs) + (last.test ? " (test mode)" : "")
+      : "Meta: ERROR " + ago(last.agoMs) + ": " + (last.message || last.detail);
+    el.title = last ? last.time + " SP · " + last.events.join(" + ") : "";
+  }
+
+  function drawHealth() {
+    var h = data.health;
+    if (!h) { $("hPill").textContent = "No data"; $("hPill").className = "pill"; return; }
+    var t = h.today, g = h.range;
+    $("hSent").textContent = fmt(t.sent);
+    $("hRec").textContent = fmt(t.received);
+    $("hErr").textContent = fmt(t.errors);
+    $("hTaps").textContent = fmt(t.taps) + " / " + fmt(t.tapsReceived);
+    $("hRangeLbl").textContent = data.days === 1 ? "Today, calls to Meta" : "Last " + data.days + " days";
+    $("hRange").textContent = fmt(g.sent) + " sent · " + fmt(g.received) + " accepted · " + fmt(g.errors) + " errors";
+    $("hBlocked").textContent = fmt(t.blocked) + " today · " + fmt(g.blocked) + " this period";
+    $("hLastOk").textContent = h.lastOk ? h.lastOk.slice(5, 16).replace("-", "/") + " SP" : "none yet";
+    var le = h.lastErrorFull;
+    $("hLastErr").textContent = le ? le.time.slice(5, 16).replace("-", "/") + " SP · " + le.detail : h.lastError ? h.lastError.time.slice(5, 16).replace("-", "/") + " SP · " + h.lastError.detail : "none";
+    $("hErrMsg").hidden = !(le && le.message);
+    $("hErrMsg").textContent = le && le.message ? "Meta said: " + le.message : "";
+    $("hTest").hidden = !h.testMode;
+    var pill = $("hPill");
+    if (t.errors) { pill.textContent = t.errors + " error" + (t.errors > 1 ? "s" : "") + " today"; pill.className = "pill bad"; }
+    else if (t.calls) { pill.textContent = "Working"; pill.className = "pill ok"; }
+    else { pill.textContent = "Nothing sent today"; pill.className = "pill"; }
+  }
+
+  function drawBots() {
+    var hd = data.hidden || { visits: 0, reasons: [] };
+    $("bHidden").textContent = fmt(hd.visits);
+    $("bReasons").innerHTML = hd.reasons.length ? hd.reasons.map(function (r) {
+      return '<div class="keyrow"><span>' + esc(r.label) + "</span><b>" + fmt(r.n) + "</b></div>";
+    }).join("") : '<p class="empty" style="padding:4px 0">None in this period.</p>';
+    $("botsBtn").textContent = state.bots ? "Hide bots" : "Show bots";
+    $("botsBtn").classList.toggle("on", state.bots);
+    var ex = !!(data.excluded || localExcluded());
+    $("meState").textContent = ex ? "Not counted: your visits on this browser are left out" : "Counted like any visitor";
+    $("meState").classList.toggle("on", ex);
+    $("meBtn").textContent = ex ? "Count this device again" : "Don't count this device";
+  }
+
   function fillFilters() {
     var ads = {}, ccs = {};
-    data.log.forEach(function (r) { ads[r.ad] = 1; ccs[r.country] = 1; });
-    $("fAd").innerHTML = '<option value="">Every ad</option>' + Object.keys(ads).sort().map(function (a) {
-      return '<option value="' + esc(a || "-") + '"' + ((a || "-") === state.fAd ? " selected" : "") + ">" + esc(a ? a.replace(/-/g, " ") : "(no ad)") + "</option>";
+    data.log.forEach(function (r) { ads[adValue(r)] = adName(r); ccs[r.country] = 1; });
+    $("fAd").innerHTML = '<option value="">Every source</option>' + Object.keys(ads).sort().map(function (a) {
+      return '<option value="' + esc(a) + '"' + (a === state.fAd ? " selected" : "") + ">" + esc(ads[a]) + "</option>";
     }).join("");
     $("fCc").innerHTML = '<option value="">Every country</option>' + Object.keys(ccs).sort().map(function (c) {
       return '<option value="' + esc(c) + '"' + (c === state.fCc ? " selected" : "") + ">" + esc(country(c)) + "</option>";
@@ -357,14 +452,15 @@
     var rows = data.log.filter(function (r) {
       if (state.filter === "yes" && !r.spotify) return false;
       if (state.filter === "no" && r.spotify) return false;
-      if (state.fAd && (r.ad || "-") !== state.fAd) return false; /* "-" = visits with no ad */
+      if (state.fAd && adValue(r) !== state.fAd) return false;
       if (state.fCc && r.country !== state.fCc) return false;
       return true;
     });
     var show = rows.slice(0, state.shown), tb = "", mb = "";
     show.forEach(function (r) {
       var tap = r.spotify ? '<span class="yes">Yes</span>' : '<span class="no">No</span>';
-      var ret = r.returning ? '<span class="ret">BACK</span>' : "";
+      var ret = (r.returning ? '<span class="ret">BACK</span>' : "") + (r.reloads ? '<span class="ret" title="reloaded within 30 min: counted once">×' + (r.reloads + 1) + "</span>" : "") +
+        (r.bot ? '<span class="botTag">' + esc(BOTS[r.bot] || r.bot) + "</span>" : "");
       var where = (r.city ? title(r.city) + ", " : "") + (r.country && r.country !== "xx" ? r.country.toUpperCase() : "?");
       var dev = (DEVICES[r.device] || [title(r.device)])[0] + " · " + (APPS[r.app] || [title(r.app)])[0];
       var time = r.time.slice(5, 16).replace("-", "/");
@@ -372,9 +468,9 @@
       var other = r.other.length ? '<div class="m">also ' + esc(r.other.join(", ")) + "</div>" : "";
       tb += "<tr><td class=\"num\">" + esc(time) + '</td><td><span class="vid">' + esc(r.visitor.slice(0, 4) + "…" + r.visitor.slice(-2)) + "</span>" + ret +
         "</td><td>" + esc(where) + "</td><td>" + esc(dev) + "</td><td>" + esc(adName(r)) + "</td><td>" + tap + "<small class=\"no\">" + esc(meta) + "</small>" + other +
-        '</td><td class="num">' + (r.tapMs != null ? secs(r.tapMs) + " s" : '<span class="no">—</span>') + '</td><td class="num">' + (r.readyMs != null ? secs(r.readyMs) + " s" : "") + "</td></tr>";
+        '</td><td class="num">' + (r.tapMs != null ? tapTime(r.tapMs) : '<span class="no">—</span>') + '</td><td class="num">' + (r.readyMs != null ? secs(r.readyMs) + " s" : "") + "</td></tr>";
       mb += '<div class="lr"><div><b>' + esc(where) + "</b> " + ret + '<div class="m">' + esc(time + " · " + dev + " · " + adName(r)) + "</div>" + other + "</div>" +
-        '<div style="text-align:right">' + tap + '<div class="m">' + (r.tapMs != null ? secs(r.tapMs) + " s" : "") + "</div></div></div>";
+        '<div style="text-align:right">' + tap + '<div class="m">' + tapTime(r.tapMs) + "</div></div></div>";
     });
     $("logBody").innerHTML = tb || '<tr><td colspan="8" class="empty">No visits match.</td></tr>';
     $("mlog").innerHTML = mb || '<p class="empty">No visits match.</p>';

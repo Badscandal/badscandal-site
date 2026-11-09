@@ -1,0 +1,14 @@
+# 9 Nov 2026 /touchme keys from production, anonymised (ids replaced, home town -> recife).
+# Used by tests/admin.test.mjs. Times and everything else unchanged.
+ev/2026-11-09/click/touchme/ig/spotify/br/anon00aaaa/1794202287542-vffl87/anon01aaaa/-/-/recife/mobile/ios/webview/instagram/instagram.com/1542/1/-
+ev/2026-11-09/click/touchme/ig/spotify/br/anon00aaaa/1794202329984-pu5rqt/anon02aaaa/-/-/recife/mobile/ios/webview/instagram/l.instagram.com/14771/1/-
+ev/2026-11-09/view/touchme/deploycheck/-/br/anon03aaaa/1794202146056-habt5u/deploycheck2/-/-/recife/mobile/ios/webview/instagram/-/-/-/-
+ev/2026-11-09/view/touchme/direct/-/br/anon04aaaa/1794201993598-ple26q/anon05aaaa/-/-/recife/desktop/macos/safari/-/-/480/-/0
+ev/2026-11-09/view/touchme/direct/-/us/anon06aaaa/1794202195908-vexm9x/anon07aaaa/-/-/-/mobile/ios/safari/-/-/307/-/0
+ev/2026-11-09/view/touchme/direct/-/us/anon08aaaa/1794202193897-f96wht/anon09aaaa/-/-/-/mobile/ios/safari/-/-/494/-/0
+ev/2026-11-09/view/touchme/facebook/-/se/anon10aaaa/1794202315668-kor1d1/anon11aaaa/-/-/lulea/mobile/android/chrome/-/m.facebook.com/24150/-/0
+ev/2026-11-09/view/touchme/facebook/-/us/anon12aaaa/1794202316252-6vlyt8/anon13aaaa/-/-/boardman/desktop/windows/chrome/-/facebook.com/25045/-/0
+ev/2026-11-09/view/touchme/facebook/-/us/anon14aaaa/1794202319483-4x0xv4/anon15aaaa/-/-/boardman/desktop/windows/chrome/-/facebook.com/23836/-/0
+ev/2026-11-09/view/touchme/facebook/-/us/anon16aaaa/1794202315255-zp2hkr/anon17aaaa/-/-/prineville/mobile/android/chrome/-/m.facebook.com/23859/-/0
+ev/2026-11-09/view/touchme/ig/-/br/anon00aaaa/1794202286831-whsx77/anon01aaaa/-/-/recife/mobile/ios/webview/instagram/instagram.com/607/-/0
+ev/2026-11-09/view/touchme/ig/-/br/anon00aaaa/1794202328567-2i6ltr/anon02aaaa/-/-/recife/mobile/ios/webview/instagram/l.instagram.com/13202/-/1

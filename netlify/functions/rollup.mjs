@@ -2,9 +2,12 @@
    are folded into one daily-totals blob per UTC day (daily/<day>.json, counts only: no visitor
    ids, no visit log) and then deleted. The admin portal merges these back in for old ranges
    (netlify/functions/admin.mjs). Scheduled functions only run on the published production
-   deploy, so this never touches preview data. */
+   deploy, so this never touches preview data. Bots are left out of the daily totals (only their
+   count survives, under "hidden"). The Meta health keys (mh/…, netlify/functions/capi.mjs) are
+   simply deleted after 90 days. */
 import { getStore } from "@netlify/blobs";
 import { compact, LINKS, summarize, spDay } from "../lib/admin.mjs";
+import { HEALTH_PREFIX } from "../lib/capi.mjs";
 import { dayOf, parseKey, PREFIX } from "../lib/stats.mjs";
 
 const KEEP_DAYS = 90;
@@ -16,6 +19,10 @@ export default async () => {
   const now = Date.now();
   for (let i = KEEP_DAYS + 1; i <= KEEP_DAYS + SCAN_DAYS; i++) {
     const day = dayOf(now - i * 86400000);
+    const health = (await store.list({ prefix: HEALTH_PREFIX + day + "/" })).blobs;
+    for (let j = 0; j < health.length; j += 50) {
+      await Promise.all(health.slice(j, j + 50).map((b) => store.delete(b.key)));
+    }
     const { blobs } = await store.list({ prefix: PREFIX + day + "/" });
     if (!blobs.length) continue;
 

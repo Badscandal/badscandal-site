@@ -7,13 +7,16 @@
      ev/<day>/<type>/<page>/<src>/<target>/<country>/<visitor>/<ts>-<rand>          (11 Oct, 9 parts)
        /<pv>/<campaign>/<content>/<city>/<device>/<os>/<browser>/<app>/<ref>/<ms>/<meta>/<ret>
                                                                                  (9 Nov, +12 = 21 parts)
+       /<bot>/<fb>                                                               (9 Nov later, 23 parts)
 
-   type      view | click | consent
+   type      view | click | consent | act (the first real touch / pointer / scroll / key press
+             while the page was on screen: what makes a page load count as a person, see
+             netlify/lib/admin.mjs)
    page      touchme, listen, … (path without slashes)
    src       where the visit came from: utm_source (meta), else ig/facebook/tiktok from the
              in-app browser, else the referrer's site, else direct
    target    click: the store tapped (spotify, apple, youtube, deezer, amazon);
-             consent: yes | no; view: "-"
+             consent: yes | no; act: touch | pointer | scroll | key | tap; view: "-"
    visitor   random per-device id from the browser (hashed IP+UA+salt if storage is blocked)
    pv        random id of ONE page load: joins a visit to the taps made from it
    campaign  utm_campaign;  content  utm_content (= the Meta ad name)
@@ -21,16 +24,28 @@
    device/os/browser/app   labels from the user agent (netlify/lib/ua.mjs); the UA itself is
              never stored
    ref       referrer's host
-   ms        view: page start -> Spotify button tappable; click: page start -> the tap
+   ms        view: page start -> Spotify button tappable; click: page start -> the tap;
+             act: page start -> the first interaction. Capped at 10 min (600000)
    meta      click: 1 = also sent to Meta (Pixel + Conversions API), 0 = not (no consent)
    ret       1 = this browser had been to the site before
+   bot       "-" = a person. Anything else is kept for checking but left out of every number in
+             /admin (the "Show bots" switch brings it back): dc-meta / dc-aws / dc-google /
+             dc-azure / dc-apple (data-centre IP, netlify/lib/dc.mjs), ua (bot user agent),
+             webdriver, headless, notouch (phone UA without a touch screen), hidden (page never
+             on screen), fasttap (tap faster than a human), synthetic (script click), me (Luke's
+             own excluded device, ?nostat=1 or /admin "Don't count this device")
+   fb        1 = the link carried Meta's click id (fbclid). With no utm_content it's shown as
+             "Meta ad (untagged)" (see adOf in netlify/lib/admin.mjs)
 
    Days in the key are UTC (the portal regroups by São Paulo day). Nothing personal is stored:
    no IP, no user agent, no names. Keys older than 90 days are folded into daily totals and
    deleted by netlify/functions/rollup.mjs. */
 
 export const PREFIX = "ev/";
-export const TYPES = new Set(["view", "click", "consent"]);
+export const TYPES = new Set(["view", "click", "consent", "act"]);
+
+/* What the browser may report about itself (js/touchme.js); the server adds dc-* and ua. */
+export const CLIENT_BOT = new Set(["webdriver", "headless", "notouch", "hidden", "fasttap", "synthetic"]);
 
 const SLUG = /[^a-z0-9_.-]/g;
 export function slug(v, max = 32, fallback = "-") {
@@ -44,7 +59,7 @@ export function slug(v, max = 32, fallback = "-") {
 
 function num(v, max = 600000) {
   const n = Math.round(Number(v));
-  return Number.isFinite(n) && n >= 0 && n <= max ? String(n) : "-";
+  return Number.isFinite(n) && n >= 0 ? String(Math.min(n, max)) : "-";
 }
 
 function flag(v) {
@@ -79,20 +94,23 @@ export function eventKey(e, ts, rand) {
     num(e.ms),
     flag(e.meta),
     flag(e.ret),
+    slug(e.bot, 16),
+    flag(e.fb),
   ].join("/");
 }
 
-const EXTRA = ["pv", "campaign", "content", "city", "device", "os", "browser", "app", "ref", "ms", "meta", "ret"];
+const EXTRA = ["pv", "campaign", "content", "city", "device", "os", "browser", "app", "ref", "ms", "meta", "ret", "bot", "fb"];
 
 export function parseKey(key) {
   const p = String(key).split("/");
-  if ((p.length !== 9 && p.length !== 21) || p[0] !== "ev") return null;
+  if ((p.length !== 9 && p.length !== 21 && p.length !== 23) || p[0] !== "ev") return null;
   const e = {
     day: p[1], type: p[2], page: p[3], src: p[4], target: p[5], country: p[6], visitor: p[7],
     ts: parseInt(p[8], 10) || 0,
   };
-  EXTRA.forEach((name, i) => { e[name] = p.length === 21 ? p[9 + i] : "-"; });
+  EXTRA.forEach((name, i) => { e[name] = p.length > 9 && p[9 + i] !== undefined ? p[9 + i] : "-"; });
   e.ms = e.ms === "-" ? null : Number(e.ms);
+  e.parts = p.length; /* 9 / 21 = written before the bot filter existed (see hardBot in admin.mjs) */
   return e;
 }
 
@@ -127,6 +145,7 @@ export function aggregate(events, days, page = "listen") {
 
   for (const e of events) {
     if (!e || (page && e.page !== page)) continue;
+    if (e.bot && e.bot !== "-") continue;
     const day = byDay.get(e.day);
     if (!day) continue;
     if (e.type === "click") {

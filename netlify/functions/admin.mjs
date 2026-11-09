@@ -2,13 +2,16 @@
 
    POST /api/admin/login    {password} -> session cookie (netlify/lib/session.mjs)
    POST /api/admin/logout   clears it
-   GET  /api/admin/data     ?link=touchme&range=today|7d|30d|custom[&from=&to=]  -> dashboard JSON
+   GET  /api/admin/data     ?link=touchme&range=today|7d|30d|custom[&from=&to=][&bots=1]  -> dashboard JSON
    GET  /api/admin/csv      same query -> every visit in the range as a CSV download
+   POST /api/admin/exclude  {on:true|false} -> sets/clears the bs_nostat cookie on THIS browser:
+                            hit.mjs files its visits under "me", out of the numbers (9 Nov)
 
    The password is the Netlify env var ADMIN_KEY (secret; STATS_KEY still works as a fallback).
    Wrong passwords: 5 per 10 minutes per IP (hashed), counted in the "admin-auth" Blob store. */
 import { getDeployStore, getStore } from "@netlify/blobs";
-import { dashboard, LINKS, mergeSummary, resolveRange, summarize, toCSV, utcDaysFor, visitLog, addDays } from "../lib/admin.mjs";
+import { dashboard, healthSummary, LINKS, mergeSummary, resolveRange, spDay, spTime, summarize, toCSV, utcDaysFor, visitLog, addDays } from "../lib/admin.mjs";
+import { HEALTH_PREFIX, LAST_ERROR_KEY, LAST_KEY, parseHealthKey } from "../lib/capi.mjs";
 import { checkPassword, clearCookie, COOKIE, makeSession, readCookie, sessionCookie, verifySession } from "../lib/session.mjs";
 import { parseKey, PREFIX } from "../lib/stats.mjs";
 
@@ -55,11 +58,11 @@ async function listDay(store, utcDay) {
 }
 
 /* Raw events for these São Paulo days, plus any rolled-up (90+ days old) summaries. */
-async function load(store, spDays, page) {
+async function load(store, spDays, page, opts) {
   const utc = utcDaysFor(spDays);
   const lists = await Promise.all(utc.map((d) => listDay(store, d)));
   const events = lists.flat();
-  const s = summarize(events, spDays, page);
+  const s = summarize(events, spDays, page, opts);
 
   const cutoff = addDays(new Date().toISOString().slice(0, 10), -88);
   const old = utc.filter((d) => d < cutoff);
@@ -76,6 +79,27 @@ async function load(store, spDays, page) {
   return s;
 }
 
+async function loadHealth(store, spDays) {
+  const utc = utcDaysFor([...new Set([...spDays, spDay(Date.now())])]);
+  const lists = await Promise.all(utc.map((d) =>
+    store.list({ prefix: HEALTH_PREFIX + d + "/" }).then((r) => r.blobs.map((b) => parseHealthKey(b.key))).catch(() => [])));
+  const h = healthSummary(lists.flat(), spDays);
+  const [last, lastErr] = await Promise.all([LAST_KEY, LAST_ERROR_KEY].map((k) => store.get(k, { type: "json" }).catch(() => null)));
+  const show = (r) => r && { ok: r.ok, time: spTime(r.ts), agoMs: Date.now() - r.ts, events: r.events, message: r.message, detail: r.detail, test: r.test };
+  h.last = show(last);
+  h.lastErrorFull = show(lastErr);
+  return h;
+}
+
+/* Luke's "Don't count this device": a long-lived cookie set by the server (Safari keeps those; it
+   wipes script-set storage after 7 days without a visit). Sent with every /api/hit beacon. */
+const NOSTAT = "bs_nostat";
+function nostatCookie(on) {
+  return on
+    ? `${NOSTAT}=1; Path=/; Max-Age=34560000; Secure; HttpOnly; SameSite=Lax`
+    : `${NOSTAT}=; Path=/; Max-Age=0; Secure; HttpOnly; SameSite=Lax`;
+}
+
 export default async (req, context) => {
   const secret = Netlify.env.get("ADMIN_KEY") || Netlify.env.get("STATS_KEY");
   if (!secret) return json(503, { error: "ADMIN_KEY is not set on Netlify" });
@@ -89,6 +113,13 @@ export default async (req, context) => {
   if (!(await verifySession(readCookie(req.headers.get("cookie"), COOKIE), secret))) {
     return json(401, { error: "Not logged in" });
   }
+  if (route === "exclude" && req.method === "POST") {
+    const origin = req.headers.get("origin");
+    if (origin && origin !== url.origin) return json(403, { error: "Wrong origin" });
+    let on = true;
+    try { on = (await req.json()).on !== false; } catch {}
+    return json(200, { ok: true, excluded: on }, { "Set-Cookie": nostatCookie(on) });
+  }
   if (req.method !== "GET" || (route !== "data" && route !== "csv")) return json(404, { error: "Not found" });
 
   const link = LINKS.find((l) => l.id === url.searchParams.get("link")) || LINKS[0];
@@ -98,18 +129,29 @@ export default async (req, context) => {
     to: url.searchParams.get("to"),
   });
   const store = context.deploy?.context === "production" ? getStore("stats") : getDeployStore("stats");
+  const bots = url.searchParams.get("bots") === "1";
+  /* A range that ends today is only partly over: compare it with the same stretch of the
+     previous period, not the whole of it. */
+  const now = Date.now();
+  const until = r.days[r.days.length - 1] === spDay(now) ? now - r.days.length * 86400000 : undefined;
 
   try {
     if (route === "csv") {
-      const s = await load(store, r.days, link.id);
+      const s = await load(store, r.days, link.id, { bots });
       const name = `${link.id}-visits-${r.days[0]}-to-${r.days[r.days.length - 1]}.csv`;
       return new Response(toCSV(visitLog(s)), {
         status: 200,
         headers: { "Content-Type": "text/csv; charset=utf-8", "Content-Disposition": `attachment; filename="${name}"`, ...NO_STORE },
       });
     }
-    const [cur, prev] = await Promise.all([load(store, r.days, link.id), load(store, r.prev, link.id)]);
-    return json(200, { ...dashboard(cur, prev, r.days, link.id), range: r.range, generated: new Date().toISOString() });
+    const [cur, prev, health] = await Promise.all([
+      load(store, r.days, link.id, { bots }),
+      load(store, r.prev, link.id, { bots, until }),
+      loadHealth(store, r.days).catch(() => null),
+    ]);
+    if (health) health.testMode = !!Netlify.env.get("META_TEST_EVENT_CODE");
+    const extra = { health, bots, excluded: readCookie(req.headers.get("cookie"), NOSTAT) === "1" };
+    return json(200, { ...dashboard(cur, prev, r.days, link.id, extra), range: r.range, generated: new Date().toISOString() });
   } catch (e) {
     console.error("admin data failed", e);
     return json(500, { error: "Could not read the numbers" });

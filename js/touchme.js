@@ -13,8 +13,16 @@
       page is still showing; iPhone Safari -> the plain https link (a universal link, so iOS opens
       the app itself); desktop -> web player in a new tab.
 
-   Don't count yourself: open the page once with ?nostat=1 on each of your devices (?nostat=0
-   undoes it). The Pixel still fires with nostat, so Meta test events keep working. */
+   4. Real people only (9 Nov 2026): a page load is a person only after a real touch, pointer,
+      scroll or key press while it is on screen (sent as an "act" hit). Until then nothing goes
+      to Meta. A data-centre IP (data-dc from the edge function), a script-driven or headless
+      browser, a "phone" with no touch screen, a page never on screen, or a tap faster than a
+      human never gets Pixel or Conversions API events at all. Their visits still go to /api/hit
+      with the reason (b) so /admin can show them on request, never in the numbers.
+
+   Don't count yourself: open the page once with ?nostat=1 on each of your devices and in each
+   app's browser (?nostat=0 undoes it), or tap "Don't count this device" in /admin. Your visits are
+   then stored as "me" (hidden from the numbers). The Pixel still fires, so Meta tests work. */
 (function () {
   "use strict";
   /* >>> EDIT HERE <<< for a new release page: copy touchme.html + this file, change these. */
@@ -111,10 +119,24 @@
   var pv = rid(12);
 
   function hit(o) {
-    if (nostat) return;
+    if (nostat) o.x = 1; /* kept, but filed under "me" and left out of the numbers */
+    if (bot && !o.b) o.b = bot;
+    if (fbclid) o.fb = 1;
     o.p = PAGE; o.s = src; o.v = vid; o.pv = pv; o.uc = uc; o.ux = ux; o.rf = clean(ref, 40);
     beacon("/api/hit", o);
   }
+
+  /* ---- bots: decided before anything goes to Meta ---- */
+  var dc = html.getAttribute("data-dc") === "1"; /* the server re-checks the IP anyway */
+  var bot = "";
+  try {
+    var phoneUA = /iPhone|iPod|Android.*Mobile/i.test(ua);
+    if (navigator.webdriver === true) bot = "webdriver";
+    else if (/HeadlessChrome|PhantomJS|Electron\//.test(ua) || (navigator.languages && navigator.languages.length === 0) ||
+      (window.screen && (screen.width === 0 || screen.height === 0))) bot = "headless";
+    else if (phoneUA && !(navigator.maxTouchPoints > 0) && !("ontouchstart" in window)) bot = "notouch";
+  } catch (e) {}
+  var person = !bot && !dc;
 
   /* ---- consent: EU/EEA/UK are asked; everyone else sees the one-line notice ---- */
   var eu = html.getAttribute("data-eu");
@@ -125,10 +147,14 @@
   }
   var choice = get("localStorage", "bs_consent");
   /* bs_meta_off: "Turn off Meta on this browser" on /privacy (the opt-out outside the EU). */
-  var metaOK = get("localStorage", "bs_meta_off") !== "1" && (eu !== "1" || choice === "yes");
+  var metaOK = person && get("localStorage", "bs_meta_off") !== "1" && (eu !== "1" || choice === "yes");
 
-  /* ---- Meta Pixel (browser) + Conversions API (server) ---- */
-  var pixel = false;
+  /* ---- Meta Pixel (browser) + Conversions API (server) ----
+     The Pixel SCRIPT loads after first paint (so it's ready by the time anyone taps), but no
+     event goes to Meta until the visitor has proved to be a person: a real touch, pointer,
+     scroll or key press while the page is on screen (human() below). Link scanners and speed
+     tests never do that, so Meta never hears about them. */
+  var pixel = false, isHuman = false, tracked = false;
   function capi(events) {
     beacon("/api/capi", { ev: events, url: location.href, fbclid: fbclid, ft: ft, ux: utmContent, c: metaOK ? 1 : 0 });
   }
@@ -139,20 +165,41 @@
     if (!w._fbq) w._fbq = n;
     n.push = n; n.loaded = true; n.version = "2.0"; n.queue = [];
     fbq("set", "autoConfig", false, PIXEL); /* no automatic button-click events: only ours */
-    fbq("init", PIXEL);
-    var a = rid(16), b = rid(16);
-    fbq("track", "PageView", {}, { eventID: a });
-    fbq("track", "ViewContent", { content_name: TITLE }, { eventID: b });
-    var sent = false;
-    /* Server copy goes once fbevents.js has set the _fbp cookie (better match quality). */
-    function server() { if (!sent) { sent = true; capi([{ n: "PageView", id: a }, { n: "ViewContent", id: b }]); } }
+    fbq("init", PIXEL); /* sets Meta's _fbp cookie; sends no event */
     var s = d.createElement("script");
     s.async = true;
     s.src = "https://connect.facebook.net/en_US/fbevents.js";
-    s.onload = s.onerror = function () { setTimeout(server, 0); };
-    setTimeout(server, 3000);
     d.head.appendChild(s);
+    trackLoad();
   }
+  /* PageView + ViewContent: once per page load, only for a person, only with Meta allowed. */
+  function trackLoad() {
+    if (tracked || !pixel || !isHuman || !metaOK) return;
+    tracked = true;
+    var a = rid(16), b = rid(16);
+    fbq("track", "PageView", {}, { eventID: a });
+    fbq("track", "ViewContent", { content_name: TITLE }, { eventID: b });
+    capi([{ n: "PageView", id: a }, { n: "ViewContent", id: b }]);
+  }
+
+  /* ---- proof of a person: the first real interaction while the page is on screen ---- */
+  /* A scroll counts through the finger (touchstart) or the mouse wheel / trackpad (wheel), not
+     the bare "scroll" event: browsers fire that on their own when they restore a position. */
+  var ACT = { pointerdown: "pointer", touchstart: "touch", keydown: "key", wheel: "scroll", pointermove: "pointer" };
+  function human(kind) {
+    if (isHuman || d.visibilityState !== "visible") return;
+    isHuman = true;
+    for (var t in ACT) window.removeEventListener(t, onAct, true);
+    hit({ t: "act", k: kind, ms: Math.round(performance.now()) });
+    loadPixel(); /* no-op if already loaded; then trackLoad() */
+    trackLoad();
+  }
+  function onAct(ev) {
+    if (ev.isTrusted === false || !person) return;
+    if (ev.type === "pointermove" && ev.pointerType !== "mouse") return; /* phones: touch/scroll say it */
+    human(ACT[ev.type]);
+  }
+  for (var t in ACT) window.addEventListener(t, onAct, { capture: true, passive: true });
 
   var bar = d.getElementById("consent");
   if (eu === "1" && !choice && bar) {
@@ -162,23 +209,36 @@
       set("localStorage", "bs_consent", yes ? "yes" : "no");
       bar.hidden = true;
       html.classList.remove("ask");
-      metaOK = yes;
+      metaOK = yes && person;
       hit({ t: "consent", k: yes ? "yes" : "no" });
-      if (yes) loadPixel();
+      if (metaOK) loadPixel(); /* the Allow tap already proved a person: events go now */
     };
     d.getElementById("cyes").addEventListener("click", function () { answer(true); });
     d.getElementById("cno").addEventListener("click", function () { answer(false); });
   }
 
-  /* ---- after the first paint: count the view, then load the Pixel ---- */
+  /* ---- after the first paint, once the page is on screen: count the view, load the Pixel.
+     A page that is never shown (a scanner, a prerender) is filed as a bot when it closes. ---- */
+  var started = false;
   function afterPaint(fn) {
     if (window.requestAnimationFrame) requestAnimationFrame(function () { setTimeout(fn, 0); });
     else setTimeout(fn, 0);
   }
-  afterPaint(function () {
-    hit({ t: "view", ms: window.__bsReady || Math.round(performance.now()), r: ret });
-    loadPixel();
+  function start() {
+    if (started || d.visibilityState === "hidden") return;
+    started = true;
+    afterPaint(function () {
+      hit({ t: "view", ms: window.__bsReady || Math.round(performance.now()), r: ret });
+      loadPixel();
+    });
+  }
+  d.addEventListener("visibilitychange", start);
+  window.addEventListener("pagehide", function () {
+    if (started) return;
+    started = true;
+    hit({ t: "view", ms: Math.round(performance.now()), r: ret, b: "hidden" });
   });
+  start();
 
   /* ---- the taps ---- */
   var inApp = /Instagram|FBAN|FBAV|FB_IAB|musical_ly|TikTok|BytedanceWebview|Snapchat|Twitter|LinkedInApp|Line\//i.test(ua);
@@ -217,15 +277,18 @@
     if (!a) return;
     var store = a.getAttribute("data-store");
     var ms = Math.round(performance.now());
-    if (store !== "spotify") { hit({ t: "click", k: store, ms: ms }); return; }
+    /* a script's click, or a tap within 150 ms of the button appearing: no human does that */
+    var fake = ev.isTrusted === false ? "synthetic" : window.__bsReady && ms - window.__bsReady < 150 ? "fasttap" : "";
+    if (store !== "spotify") { hit({ t: "click", k: store, ms: ms, b: fake || undefined }); return; }
 
-    if (metaOK) {
-      loadPixel(); /* in case the tap beat the after-paint load: the call queues */
+    if (!fake) human("tap"); /* normally the touch before this click already did it */
+    if (metaOK && !fake) {
+      loadPixel(); /* in case the tap beat the after-paint load: the calls queue */
       var id = rid(16);
       fbq("trackCustom", "SpotifyClick", { content_name: TITLE, service: "spotify", utm_content: utmContent }, { eventID: id });
       capi([{ n: "SpotifyClick", id: id }]);
     }
-    hit({ t: "click", k: "spotify", ms: ms, m: metaOK ? 1 : 0 });
+    hit({ t: "click", k: "spotify", ms: ms, m: metaOK && !fake ? 1 : 0, b: fake || undefined });
     openSpotify(ev);
   }, true);
 })();

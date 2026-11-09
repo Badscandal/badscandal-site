@@ -1,8 +1,15 @@
 /* POST /api/hit: a page reports one view, one store tap or one consent choice. Stored as a
    key-only Blob (see netlify/lib/stats.mjs). Always answers 204 so a failure never shows on the
-   page. Pages: listen (11 Oct, js/track.js) and touchme (9 Nov, js/touchme.js). */
+   page. Pages: listen (11 Oct, js/track.js) and touchme (9 Nov, js/touchme.js).
+
+   Bots are KEPT but flagged (the `bot` part of the key, see stats.mjs) so /admin can leave them
+   out of every number yet still show them on request: data-centre IPs (lib/dc.mjs), bot user
+   agents (lib/ua.mjs), what the page noticed about itself (body.b), and Luke's own excluded
+   devices (body.x from ?nostat=1, or the bs_nostat cookie set by /admin "Don't count this device"). */
 import { getDeployStore, getStore } from "@netlify/blobs";
-import { eventKey } from "../lib/stats.mjs";
+import { datacenter } from "../lib/dc.mjs";
+import { readCookie } from "../lib/session.mjs";
+import { CLIENT_BOT, eventKey } from "../lib/stats.mjs";
 import { BOT, parseUA } from "../lib/ua.mjs";
 
 const PAGES = new Set(["listen", "touchme"]);
@@ -17,7 +24,7 @@ export default async (req, context) => {
   if (req.method !== "POST") return done;
 
   const ua = req.headers.get("user-agent") || "";
-  if (!ua || BOT.test(ua)) return done;
+  if (!ua) return done;
 
   let body;
   try {
@@ -37,6 +44,13 @@ export default async (req, context) => {
     visitor = "h" + (await hashId((context.ip || "") + "|" + ua + "|" + salt));
   }
 
+  const dc = datacenter(context.ip);
+  const bot = BOT.test(ua) ? "ua"
+    : dc ? "dc-" + dc
+    : body.x === 1 || readCookie(req.headers.get("cookie"), "bs_nostat") === "1" ? "me"
+    : CLIENT_BOT.has(body.b) ? body.b
+    : "-";
+
   const ts = Date.now();
   const key = eventKey(
     {
@@ -54,6 +68,8 @@ export default async (req, context) => {
       ms: body.ms,
       meta: body.m,
       ret: body.r,
+      bot,
+      fb: body.fb,
       ...parseUA(ua),
     },
     ts,

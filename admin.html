@@ -155,6 +155,38 @@ main.busy{opacity:.55}
 .keyrow{display:flex;justify-content:space-between;gap:10px;font-size:12.5px;color:var(--uv);padding:5px 0}
 .keyrow b{color:var(--paper)}
 
+/* status strip: humans/bots switch + Meta status */
+.strip{grid-column:1/-1;display:flex;flex-wrap:wrap;gap:8px 10px;align-items:center}
+.toggle{display:inline-flex;align-items:center;background:var(--ink-2);border:1px solid var(--ink-3);border-radius:999px;padding:3px}
+.toggle button{font:600 12.5px var(--sans);border:0;background:transparent;color:var(--muted);padding:7px 12px;border-radius:999px;cursor:pointer;white-space:nowrap}
+.toggle button.on{background:var(--paper);color:var(--ink)}
+.toggle button b{font-family:var(--mono);font-weight:500;margin-left:4px}
+.mstat{display:inline-flex;align-items:center;gap:8px;font-size:12.5px;color:var(--uv);background:var(--ink-2);border:1px solid var(--ink-3);border-radius:999px;padding:8px 12px;min-width:0}
+.mstat::before{content:"";flex:none;width:8px;height:8px;border-radius:50%;background:var(--grey-mark)}
+.mstat.ok::before{background:var(--spot)}
+.mstat.bad{border-color:var(--paper);color:var(--paper)}
+.mstat.bad::before{background:var(--paper)}
+.mstat span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* meta health + bots & you */
+.pill{flex:none;font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;border-radius:999px;padding:5px 9px;border:1px solid var(--ink-4);color:var(--uv)}
+.pill.ok{border-color:var(--spot);color:var(--spot)}
+.pill.bad{border-color:var(--paper);color:var(--ink);background:var(--paper)}
+.trio{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.trio .big{font-size:24px}
+.note{font-size:12px;color:var(--muted);line-height:1.5;margin:10px 0 0}
+.note b{color:var(--uv);font-weight:600}
+.warn{margin-top:10px;font-size:12.5px;border:1px dashed var(--uv);border-radius:10px;padding:8px 10px;color:var(--paper)}
+.row-btns{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+.ghost{font:600 12.5px var(--sans);border-radius:999px;padding:8px 14px;border:1px solid var(--ink-4);background:transparent;color:var(--paper);cursor:pointer}
+.ghost.on{background:var(--paper);color:var(--ink);border-color:var(--paper)}
+.me-state{display:flex;align-items:center;gap:8px;font-size:13.5px;font-weight:600;margin-top:4px}
+.me-state::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--grey-mark)}
+.me-state.on::before{background:var(--spot)}
+.divider{border-top:1px solid var(--ink-3);margin:14px 0}
+.botTag{font-family:var(--mono);font-size:9.5px;letter-spacing:.08em;text-transform:uppercase;border:1px dashed var(--uv);border-radius:4px;padding:1px 4px;color:var(--uv);margin-left:4px;white-space:nowrap}
+.banner button{margin-left:8px}
+
 /* log */
 .tools{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px;align-items:center}
 .tools select{background:transparent;border:1px solid var(--ink-3);border-radius:999px;padding:7px 10px;font-family:var(--mono);font-size:11px;letter-spacing:.06em;color:var(--uv);max-width:180px}
@@ -179,7 +211,7 @@ main.busy{opacity:.55}
   .c-fun{grid-column:span 5}.c-ts{grid-column:span 7}
   .c-ad{grid-column:span 6}.c-geo{grid-column:span 6}
   .c-app,.c-dev,.c-src{grid-column:span 4}
-  .c-speed,.c-meta{grid-column:span 6}
+  .c-speed,.c-meta,.c-health,.c-bots{grid-column:span 6}
   .c-log{grid-column:1/-1}
 }
 </style>
@@ -210,6 +242,13 @@ main.busy{opacity:.55}
 
 <main id="main" class="skel">
   <div class="banner" id="banner" hidden></div>
+
+  <div class="strip">
+    <div class="toggle" role="group" aria-label="Who to count">
+      <button type="button" id="tHumans" class="on">Humans only</button><button type="button" id="tBots">Show bots<b id="botN">0</b></button>
+    </div>
+    <div class="mstat" id="mstat"><span id="mstatTxt">Meta: no events yet</span></div>
+  </div>
 
   <section class="kpis">
     <div class="card kpi hero">
@@ -262,7 +301,7 @@ main.busy{opacity:.55}
   </section>
 
   <section class="card c-ad">
-    <div class="head"><div><h2>By ad</h2><p class="sub">utm_content. Which video sends people who actually tap.</p></div><span class="lbl">CTR</span></div>
+    <div class="head"><div><h2>By ad &amp; source</h2><p class="sub">Ads by name (utm_content), then Meta ads without tags, Instagram (bio, DMs, stories) and Direct.</p></div><span class="lbl">CTR</span></div>
     <div class="bd-list" id="bAd"></div>
   </section>
 
@@ -304,20 +343,50 @@ main.busy{opacity:.55}
     <div class="mini"><div class="lbl">Sent to Meta</div><div class="big num" id="mSent">–</div></div>
     <div class="stack" id="mStack"></div>
     <div class="keyrow"><span><span class="swatch" style="background:var(--spot)"></span>Sent (Pixel + server)</span><b id="mS">–</b></div>
-    <div class="keyrow"><span><span class="swatch" style="background:var(--grey-mark)"></span>Not sent (EU/UK, no consent)</span><b id="mN">–</b></div>
+    <div class="keyrow"><span><span class="swatch" style="background:var(--grey-mark)"></span>Not sent (no consent, or opted out)</span><b id="mN">–</b></div>
     <div class="keyrow"><span>EU/UK consent: allowed / declined</span><b id="mC">–</b></div>
+  </section>
+
+  <section class="card c-health">
+    <div class="head"><div><h2>Meta health</h2><p class="sub">Our server's copy of each event (Conversions API) and what Meta answered.</p></div><span class="pill" id="hPill">–</span></div>
+    <div class="lbl" style="margin-bottom:6px">Today</div>
+    <div class="trio">
+      <div class="mini"><div class="lbl">Events sent</div><div class="big num" id="hSent">–</div></div>
+      <div class="mini"><div class="lbl">Accepted</div><div class="big num" id="hRec">–</div></div>
+      <div class="mini"><div class="lbl">Errors</div><div class="big num" id="hErr">–</div></div>
+    </div>
+    <div class="keyrow" style="margin-top:10px"><span>Spotify taps sent today / accepted</span><b id="hTaps">–</b></div>
+    <div class="keyrow"><span id="hRangeLbl">This period</span><b id="hRange">–</b></div>
+    <div class="keyrow"><span>Bots stopped before Meta</span><b id="hBlocked">–</b></div>
+    <div class="keyrow"><span>Last accepted</span><b id="hLastOk">–</b></div>
+    <div class="keyrow"><span>Last error</span><b id="hLastErr">–</b></div>
+    <p class="note" id="hErrMsg" hidden></p>
+    <div class="warn" id="hTest" hidden>Test mode is ON: events go to Events Manager → Test events. Delete META_TEST_EVENT_CODE on Netlify when you're done.</div>
+    <p class="note">The browser copy (the Pixel) goes straight from the phone to Meta, so only Events Manager can show it. When both arrive, Meta lists the event as <b>Browser · Server</b> and counts it once.</p>
+  </section>
+
+  <section class="card c-bots">
+    <h2>Bots &amp; you</h2><p class="sub">A visit only counts as a person after a real touch, scroll, key press or tap while the page is on screen. Everything else is left out of every number, chart and the visit log.</p>
+    <div class="mini"><div class="lbl">Visits hidden this period</div><div class="big num" id="bHidden">–</div></div>
+    <div id="bReasons" style="margin-top:6px"></div>
+    <div class="row-btns"><button class="ghost" id="botsBtn" type="button">Show bots</button></div>
+    <div class="divider"></div>
+    <div class="lbl">This device</div>
+    <div class="me-state" id="meState">–</div>
+    <div class="row-btns"><button class="ghost" id="meBtn" type="button">Don't count this device</button></div>
+    <p class="note"><b>Open /admin once on your iPhone and once on your Mac and tap this button on each.</b> Each browser remembers it on its own. Instagram's built-in browser is separate too: to cover it, open <b>badscandal.com/touchme?nostat=1</b> inside Instagram once (send it to yourself in a DM). Your visits still send Meta its events, so tests keep working; here they sit under "Show bots" as <b>You</b>.</p>
   </section>
 
   <section class="card c-log">
     <div class="head"><div><h2>Visit log</h2><p class="sub">People who went to the link. Anonymous: no names, no handles, no IPs.</p></div></div>
     <div class="tools">
       <button class="chip on" data-f="all">All</button><button class="chip" data-f="yes">Tapped</button><button class="chip" data-f="no">Didn't tap</button>
-      <select id="fAd" aria-label="Filter by ad"><option value="">Every ad</option></select>
+      <select id="fAd" aria-label="Filter by ad"><option value="">Every source</option></select>
       <select id="fCc" aria-label="Filter by country"><option value="">Every country</option></select>
       <a class="btn" id="csv" href="#" download>Export CSV</a>
     </div>
     <table class="log">
-      <thead><tr><th>Time (SP)</th><th>Visitor</th><th>Where</th><th>Device · browser</th><th>Ad</th><th>Spotify</th><th>Time to tap</th><th>Ready</th></tr></thead>
+      <thead><tr><th>Time (SP)</th><th>Visitor</th><th>Where</th><th>Device · browser</th><th>Ad / source</th><th>Spotify</th><th>Time to tap</th><th>Button ready</th></tr></thead>
       <tbody id="logBody"></tbody>
     </table>
     <div class="mobile-log" id="mlog"></div>

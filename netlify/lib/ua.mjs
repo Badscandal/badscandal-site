@@ -7,9 +7,14 @@
    device   mobile | tablet | desktop
    browser  safari | chrome | samsung | firefox | edge | opera | webview | other */
 
-/* Crawlers, link-preview fetchers (incl. Meta's own ad reviewer fetch) and scripts: never
-   counted, never sent to Meta. Shared by hit.mjs and capi.mjs. */
-export const BOT = /bot|crawl|spider|slurp|preview|facebookexternalhit|meta-externalagent|headless|lighthouse|pingdom|curl|wget|python|node-fetch|axios|undici|go-http|okhttp|java\//i;
+/* Crawlers, link-preview fetchers and scripts: flagged "ua" by hit.mjs (hidden in /admin) and
+   refused by capi.mjs (never sent to Meta). Named on purpose (9 Nov 2026): facebookexternalhit,
+   meta-externalagent / meta-externalfetcher, Facebot (Meta + Instagram previews), WhatsApp's
+   preview fetcher (its UA STARTS with "WhatsApp/"; a phone browser that merely mentions WhatsApp
+   is not caught), TelegramBot, Slackbot, Twitterbot, Discordbot, Googlebot, bingbot, Applebot,
+   plus anything else calling itself a bot, crawler, spider or preview, headless browsers, speed
+   testers and plain HTTP libraries. */
+export const BOT = /facebookexternalhit|meta-external(agent|fetcher)|facebot|^whatsapp\/|telegrambot|slackbot|slack-imgproxy|twitterbot|discordbot|googlebot|bingbot|applebot|linkedinbot|pinterestbot|(?<!cu)bot|crawl|spider|slurp|preview|embedly|headless|lighthouse|chrome-lighthouse|pagespeed|gtmetrix|pingdom|webpagetest|ptst\/|curl|wget|python|node-fetch|axios|undici|go-http|okhttp|java\//i;
 
 const APPS = [
   ["instagram", /Instagram/i],
