@@ -1,25 +1,12 @@
 {
   "artist": "BADSCANDAL",
-  "updated": "2026-10-31",
+  "updated": "2026-11-10",
   "streams": {
     "total": 450000000,
     "asOf": "September 2026",
     "source": "songstats"
   },
-  "release": {
-    "mode": "out",
-    "title": "Touch Me",
-    "kicker": "Latest · 2026",
-    "date": "2026-10-30",
-    "cover": "assets/listen-touchme-cover-v1.jpg",
-    "cta": "https://open.spotify.com/track/6Y0BIHxJvTVIjOmk636Cw3",
-    "presave": null,
-    "links": {
-      "apple": "https://music.apple.com/us/album/touch-me-single/6827592732",
-      "deezer": "https://www.deezer.com/album/1133075831",
-      "amazon": "https://music.amazon.com/albums/B0HPGJZMRQ"
-    }
-  },
+  "release": {"mode": "upcoming", "title": "Me Dá Seu Body", "kicker": "New single", "date": "2026-11-24", "cover": "assets/listen-medaseubody-cover-v1.jpg", "cta": "https://open.spotify.com/artist/29kaubgb6Esvwu0idVndGy", "presave": null, "links": {}},
   "links": {
     "spotify": "https://open.spotify.com/artist/29kaubgb6Esvwu0idVndGy",
     "apple": "https://music.apple.com/us/artist/badscandal/1578748373",
