@@ -2,7 +2,8 @@
 
    POST /api/admin/login    {password} -> session cookie (netlify/lib/session.mjs)
    POST /api/admin/logout   clears it
-   GET  /api/admin/data     ?link=touchme&range=today|7d|30d|custom[&from=&to=][&bots=1]  -> dashboard JSON
+   GET  /api/admin/data     ?link=<song slug|home>&range=today|7d|30d|custom[&from=&to=][&bots=1]  -> dashboard JSON
+                            (+ Meta spend / cost per tap when META_ADS_TOKEN is set; read-only)
    GET  /api/admin/csv      same query -> every visit in the range as a CSV download
    POST /api/admin/exclude  {on:true|false} -> sets/clears the bs_nostat cookie on THIS browser:
                             hit.mjs files its visits under "me", out of the numbers (9 Nov)
@@ -10,8 +11,9 @@
    The password is the Netlify env var ADMIN_KEY (secret; STATS_KEY still works as a fallback).
    Wrong passwords: 5 per 10 minutes per IP (hashed), counted in the "admin-auth" Blob store. */
 import { getDeployStore, getStore } from "@netlify/blobs";
-import { dashboard, healthSummary, LINKS, mergeSummary, resolveRange, spDay, spTime, summarize, toCSV, utcDaysFor, visitLog, addDays } from "../lib/admin.mjs";
+import { adTaps, dashboard, defaultLink, healthSummary, LINKS, mergeSummary, resolveRange, spDay, spTime, summarize, toCSV, utcDaysFor, visitLog, addDays } from "../lib/admin.mjs";
 import { HEALTH_PREFIX, LAST_ERROR_KEY, LAST_KEY, parseHealthKey } from "../lib/capi.mjs";
+import { CACHE_MS, DEFAULT_ACCOUNT, fetchInsights, spendReport } from "../lib/metaspend.mjs";
 import { checkPassword, clearCookie, COOKIE, makeSession, readCookie, sessionCookie, verifySession } from "../lib/session.mjs";
 import { parseKey, PREFIX } from "../lib/stats.mjs";
 
@@ -57,11 +59,15 @@ async function listDay(store, utcDay) {
   return blobs.map((b) => parseKey(b.key)).filter(Boolean);
 }
 
+async function listEvents(store, spDays) {
+  const lists = await Promise.all(utcDaysFor(spDays).map((d) => listDay(store, d)));
+  return lists.flat();
+}
+
 /* Raw events for these São Paulo days, plus any rolled-up (90+ days old) summaries. */
-async function load(store, spDays, page, opts) {
+async function load(store, spDays, page, opts, preloaded) {
   const utc = utcDaysFor(spDays);
-  const lists = await Promise.all(utc.map((d) => listDay(store, d)));
-  const events = lists.flat();
+  const events = preloaded || (await listEvents(store, spDays));
   const s = summarize(events, spDays, page, opts);
 
   const cutoff = addDays(new Date().toISOString().slice(0, 10), -88);
@@ -89,6 +95,31 @@ async function loadHealth(store, spDays) {
   h.last = show(last);
   h.lastErrorFull = show(lastErr);
   return h;
+}
+
+/* Cost per tap: Meta spend for these days (READ-ONLY, see netlify/lib/metaspend.mjs), cached an
+   hour, matched to real (people-only) Spotify taps of every song. */
+async function loadSpend(context, spDays, events, current) {
+  const token = Netlify.env.get("META_ADS_TOKEN");
+  if (!token) return { connected: false };
+  const account = (Netlify.env.get("META_AD_ACCOUNT_ID") || DEFAULT_ACCOUNT).replace(/\D/g, "");
+  const since = spDays[0], until = spDays[spDays.length - 1];
+  const cache = context.deploy?.context === "production" ? getStore("meta-cache") : getDeployStore("meta-cache");
+  const key = `insights/${account}/${since}_${until}.json`;
+  let got = null;
+  try { got = await cache.get(key, { type: "json" }); } catch {}
+  if (!got || Date.now() - got.at > CACHE_MS) {
+    const fresh = await fetchInsights(token, account, since, until);
+    if (fresh.error) {
+      console.error("meta spend: " + fresh.error); /* scrubbed: never the token */
+      if (!got) return { connected: true, error: fresh.error };
+    } else {
+      got = { at: Date.now(), rows: fresh.rows };
+      try { await cache.setJSON(key, got); } catch {}
+    }
+  }
+  const songs = LINKS.filter((l) => l.date).map((l) => ({ id: l.id, title: l.title, ...adTaps(summarize(events, spDays, l.id)) }));
+  return { ...spendReport(got.rows, songs, current), fetched: spTime(got.at) };
 }
 
 /* Luke's "Don't count this device": a long-lived cookie set by the server (Safari keeps those; it
@@ -122,7 +153,7 @@ export default async (req, context) => {
   }
   if (req.method !== "GET" || (route !== "data" && route !== "csv")) return json(404, { error: "Not found" });
 
-  const link = LINKS.find((l) => l.id === url.searchParams.get("link")) || LINKS[0];
+  const link = LINKS.find((l) => l.id === url.searchParams.get("link")) || defaultLink();
   const r = resolveRange({
     range: url.searchParams.get("range") || "7d",
     from: url.searchParams.get("from"),
@@ -144,13 +175,15 @@ export default async (req, context) => {
         headers: { "Content-Type": "text/csv; charset=utf-8", "Content-Disposition": `attachment; filename="${name}"`, ...NO_STORE },
       });
     }
-    const [cur, prev, health] = await Promise.all([
-      load(store, r.days, link.id, { bots }),
+    const events = await listEvents(store, r.days);
+    const [cur, prev, health, spend] = await Promise.all([
+      load(store, r.days, link.id, { bots }, events),
       load(store, r.prev, link.id, { bots, until }),
       loadHealth(store, r.days).catch(() => null),
+      link.date ? loadSpend(context, r.days, events, link.id).catch((e) => { console.error("meta spend failed", e?.name || e); return { connected: true, error: "Couldn't read Meta spend" }; }) : null,
     ]);
     if (health) health.testMode = !!Netlify.env.get("META_TEST_EVENT_CODE");
-    const extra = { health, bots, excluded: readCookie(req.headers.get("cookie"), NOSTAT) === "1" };
+    const extra = { health, spend, bots, excluded: readCookie(req.headers.get("cookie"), NOSTAT) === "1" };
     return json(200, { ...dashboard(cur, prev, r.days, link.id, extra), range: r.range, generated: new Date().toISOString() });
   } catch (e) {
     console.error("admin data failed", e);

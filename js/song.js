@@ -1,14 +1,19 @@
-/* /touchme — the release smart link for the Meta ads (9 Nov 2026). Runs AFTER the button has
-   painted (defer); nothing in here can slow the page down.
+/* Every song page (badscandal.com/<slug>: /touchme since 9 Nov 2026, the shared script for all
+   songs since 10 Nov). Runs AFTER the button has painted (defer); nothing in here can slow the
+   page down. The page itself is generated from /songs.json by tools/new-song.mjs (template:
+   tools/song-template.html); the song's details sit on <main id="song" data-…>, and the inline
+   script under the button has already picked the language and the button (Follow before the
+   release date, Listen from midnight of release day in the visitor's own time zone).
 
    1. Counts the visit and every store tap on our own counter (/api/hit -> /admin), with the ad
       it came from (utm_campaign / utm_content), the speed the button appeared at, and whether
       the visitor has been here before. No cookies, no names: a random id in localStorage.
    2. Tells Meta: Pixel (browser) + /api/capi (server, Conversions API) with the SAME event_id,
       so Meta deduplicates them into one event. PageView + ViewContent on load, SpotifyClick on
-      the tap. EU/EEA/UK visitors (netlify/edge-functions/touchme-geo.js, else the phone's time
+      the tap. EU/EEA/UK visitors (netlify/edge-functions/song-geo.js, else the phone's time
       zone) are asked first and nothing goes to Meta unless they tap Allow.
-   3. Opens the Spotify APP where it can: Android -> intent:// with the web player as fallback;
+   3. Opens the Spotify APP where it can (track, or the artist profile before release / while the
+      track link is still empty): Android -> intent:// with the web player as fallback;
       iPhone inside Instagram/Facebook/TikTok -> spotify: scheme, web player after 600 ms if the
       page is still showing; iPhone Safari -> the plain https link (a universal link, so iOS opens
       the app itself); desktop -> web player in a new tab.
@@ -20,25 +25,33 @@
       human never gets Pixel or Conversions API events at all. Their visits still go to /api/hit
       with the reason (b) so /admin can show them on request, never in the numbers.
 
+   5. Countdown (songs not out yet): ticks every second and at zero flips the page to "Listen on
+      Spotify" by itself. It also re-reads /songs.json once, so a track link added on release day
+      reaches pages that were built before it.
+
    Don't count yourself: open the page once with ?nostat=1 on each of your devices and in each
    app's browser (?nostat=0 undoes it), or tap "Don't count this device" in /admin. Your visits are
    then stored as "me" (hidden from the numbers). The Pixel still fires, so Meta tests work. */
 (function () {
   "use strict";
-  /* >>> EDIT HERE <<< for a new release page: copy touchme.html + this file, change these. */
-  var PAGE = "touchme";
-  var TITLE = "Touch Me";
-  var TRACK = "6Y0BIHxJvTVIjOmk636Cw3";
-  var PIXEL = "1442285344656582";
-
-  var WEB = "https://open.spotify.com/track/" + TRACK;
+  var PIXEL = "1442285344656582"; /* ONE Meta dataset for every song; never add another */
   var d = document, html = d.documentElement, ua = navigator.userAgent;
-  if (!/^https?:$/.test(location.protocol)) return;
+  var M = d.getElementById("song"), btn = d.getElementById("sp");
+  if (!M || !btn || !/^https?:$/.test(location.protocol)) return;
+  var PAGE = M.getAttribute("data-slug"), TITLE = M.getAttribute("data-title");
+  var ARTIST = M.getAttribute("data-artist"), TRACK_URL = M.getAttribute("data-track") || "";
+  var S = window.__bsSong || { at: 0 }, flipped = false;
+  /* not out yet in the visitor's time zone (the countdown's last tick sets `flipped`) */
+  function before() { return !flipped && S.at > 0 && Date.now() < S.at; }
   var local = /^(localhost|127\.|0\.0\.0\.0)/.test(location.hostname);
 
   function get(store, k) { try { return window[store].getItem(k); } catch (e) { return null; } }
   function set(store, k, v) { try { window[store].setItem(k, v); } catch (e) {} }
-  function clean(v, n) { return String(v || "").toLowerCase().replace(/[^a-z0-9_.-]/g, "").slice(0, n || 24); }
+  function clean(v, n) {
+    v = String(v || "");
+    try { v = v.normalize("NFD").replace(/[\u0300-\u036f]/g, ""); } catch (e) {} /* Coração -> coracao, like the ad name */
+    return v.toLowerCase().replace(/[^a-z0-9_.-]/g, "").slice(0, n || 24);
+  }
   function rid(n) {
     var s = "", a = new Uint8Array(n);
     try { crypto.getRandomValues(a); } catch (e) { for (var i = 0; i < n; i++) a[i] = Math.random() * 256; }
@@ -245,10 +258,20 @@
   var iOS = /iPhone|iPad|iPod/.test(ua) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
   var android = /Android/i.test(ua);
 
+  /* What the button points at right now: the artist profile before release (or while the track
+     link is still empty), the track from release day. */
+  function target() {
+    var u = !before() && TRACK_URL ? TRACK_URL : ARTIST;
+    var m = /open\.spotify\.com\/(track|artist|album)\/([A-Za-z0-9]+)/.exec(u) || [];
+    return { web: u, kind: m[1] || "artist", id: m[2] || "" };
+  }
+
   function openSpotify(ev) {
+    var t = target(), WEB = t.web;
+    if (!t.id) return; /* odd link: let the browser follow it as it is */
     if (android) {
       ev.preventDefault();
-      location.href = "intent://track/" + TRACK + "#Intent;scheme=spotify;package=com.spotify.music;S.browser_fallback_url=" +
+      location.href = "intent://" + t.kind + "/" + t.id + "#Intent;scheme=spotify;package=com.spotify.music;S.browser_fallback_url=" +
         encodeURIComponent(WEB) + ";end";
       return;
     }
@@ -259,7 +282,7 @@
       window.addEventListener("blur", gone, { once: true });
       window.addEventListener("pagehide", gone, { once: true });
       d.addEventListener("visibilitychange", function () { if (d.hidden) gone(); }, { once: true });
-      location.href = "spotify:track:" + TRACK;
+      location.href = "spotify:" + t.kind + ":" + t.id;
       setTimeout(function () {
         /* still here 600 ms later = no app (or the app refused): the web player instead */
         if (!left && !d.hidden && Date.now() - start < 2500) location.href = WEB;
@@ -281,14 +304,53 @@
     var fake = ev.isTrusted === false ? "synthetic" : window.__bsReady && ms - window.__bsReady < 150 ? "fasttap" : "";
     if (store !== "spotify") { hit({ t: "click", k: store, ms: ms, b: fake || undefined }); return; }
 
+    var action = before() ? "follow" : "listen";
     if (!fake) human("tap"); /* normally the touch before this click already did it */
     if (metaOK && !fake) {
       loadPixel(); /* in case the tap beat the after-paint load: the calls queue */
       var id = rid(16);
-      fbq("trackCustom", "SpotifyClick", { content_name: TITLE, service: "spotify", utm_content: utmContent }, { eventID: id });
-      capi([{ n: "SpotifyClick", id: id }]);
+      fbq("trackCustom", "SpotifyClick", { content_name: TITLE, service: "spotify", action: action, utm_content: utmContent }, { eventID: id });
+      capi([{ n: "SpotifyClick", id: id, a: action }]);
     }
     hit({ t: "click", k: "spotify", ms: ms, m: metaOK && !fake ? 1 : 0, b: fake || undefined });
     openSpotify(ev);
   }, true);
+
+  /* ---- countdown + the flip at zero (songs not out yet) ---- */
+  var LISTEN = window.__bsListen || "Listen on Spotify";
+  function setButton() {
+    var t = target();
+    btn.href = t.web;
+    var label = d.getElementById("spt");
+    if (label && !before()) label.textContent = LISTEN;
+  }
+  var cd = d.getElementById("cd");
+  function pad(v) { return v < 10 ? "0" + v : String(v); }
+  function tick() {
+    var left = Math.floor((S.at - Date.now()) / 1000);
+    if (left <= 0) {
+      clearInterval(timer);
+      flipped = true;
+      if (cd) cd.hidden = true;
+      var out = d.getElementById("outnow");
+      if (out) out.hidden = false;
+      setButton();
+      return;
+    }
+    if (!cd) return;
+    var n = { d: Math.floor(left / 86400), h: Math.floor(left % 86400 / 3600), m: Math.floor(left % 3600 / 60), s: left % 60 };
+    for (var k in n) { var el = cd.querySelector('[data-cd="' + k + '"]'); if (el) el.textContent = k === "d" ? String(n[k]) : pad(n[k]); }
+  }
+  var timer = before() ? setInterval(tick, 1000) : null;
+  if (timer) tick();
+
+  /* ---- a track link added to /songs.json after this page was built ---- */
+  if (!TRACK_URL && window.fetch) {
+    afterPaint(function () {
+      fetch("/songs.json", { cache: "no-store" }).then(function (r) { return r.ok ? r.json() : null; }).then(function (j) {
+        var song = j && (j.songs || []).filter(function (x) { return x.slug === PAGE; })[0];
+        if (song && /^https:\/\/open\.spotify\.com\/track\//.test(song.spotifyTrack || "")) { TRACK_URL = song.spotifyTrack; setButton(); }
+      }).catch(function () {});
+    });
+  }
 })();

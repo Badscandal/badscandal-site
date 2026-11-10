@@ -5,9 +5,22 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>BADSCANDAL — Listen</title>
 <meta name="description" content="BADSCANDAL — electronic music from Dublin. Every platform, every link, one page. Music that doesn't care.">
+<!-- Link previews (WhatsApp / Instagram DM / Facebook): every URL ABSOLUTE, image a 1200x1200 JPG
+     under 200 KB (WhatsApp drops bigger ones). Shows the current release's share image; a new
+     release = point these two image lines at its assets/share-<slug>-1200-vN.jpg (made by
+     tools/new-song.mjs). -->
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="BADSCANDAL">
+<meta property="og:url" content="https://badscandal.com/">
 <meta property="og:title" content="BADSCANDAL — Listen">
 <meta property="og:description" content="Every platform, one page. Music that doesn't care.">
-<meta property="og:image" content="assets/listen-medaseubody-cover-v1.jpg">
+<meta property="og:image" content="https://badscandal.com/assets/share-medaseubody-1200-v1.jpg">
+<meta property="og:image:type" content="image/jpeg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="1200">
+<meta property="og:image:alt" content="BADSCANDAL — Me Dá Seu Body, cover art">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="https://badscandal.com/assets/share-medaseubody-1200-v1.jpg">
 <link rel="icon" type="image/png" sizes="48x48" href="assets/favicon-48-v2.png">
 <link rel="icon" type="image/png" sizes="192x192" href="assets/favicon-192-v2.png">
 <link rel="apple-touch-icon" href="assets/favicon-180-v2.png">
@@ -42,13 +55,13 @@
 .streams{display:none !important}
 </style></noscript>
 </head>
-<body class="plug listen presave">
+<body class="plug listen upcoming">
 
 <div class="grain" aria-hidden="true"></div>
 
 <!-- ==========================================================================================
      THE HOMEPAGE since 2 Nov 2026 (was listen.html; /listen now 301s here).
-     LISTEN (17 Sep 2026) — the bio-link page, Feature.fm shape: latest release card, the
+     LISTEN (17 Sep 2026) — the bio-link page: latest release card, the
      streaming platforms, the socials, and the combined stream counter at the foot. Every href
      and the number are ALSO in /listen.json; js/listen.js overwrites what's here from that file,
      so a new release / a new total is a JSON edit, not an HTML edit. The values below are the
@@ -86,7 +99,8 @@
     <div class="crt crt-listen"><canvas role="img" aria-label="BADSCANDAL"></canvas><h1 class="crt-fallback" hidden>BADSCANDAL</h1></div>
   </section>
 
-  <!-- 02 · LATEST RELEASE — becomes the pre-save card when listen.json says mode:"presave" ------ -->
+  <!-- 02 · LATEST RELEASE — listen.json "release": mode "upcoming" = countdown + FOLLOW ON SPOTIFY,
+       "out" = LISTEN. No pre-save links, ever (team rule since 10 Nov 2026). ------------------ -->
   <section class="rel" id="latest">
     <article class="rel-card">
       <img class="rel-cover" data-rel="cover" src="assets/listen-medaseubody-cover-v1.jpg" alt="Me Dá Seu Body — cover" width="1000" height="1000">
@@ -94,7 +108,7 @@
         <p class="tag" data-rel="kicker">New single</p>
         <h2 class="rel-title" data-rel="title">Me Dá Seu Body</h2>
         <!-- COUNTDOWN (25 Oct 2026) — js/listen.js shows it while release.date is in the future and
-             mode is "upcoming"/"presave". Hidden by default, so no-JS never sees a frozen 00. -->
+             mode is "upcoming". Hidden by default, so no-JS never sees a frozen 00. -->
         <div class="cd" data-rel="countdown" hidden>
           <div class="cd-grid" role="timer" aria-live="off">
             <div class="cd-u"><span class="cd-n" data-cd="d">00</span><span class="cd-l">Days</span></div>
@@ -159,5 +173,7 @@
 <script src="js/main.js"></script>
 <script src="js/crt.js"></script>
 <script src="js/listen.js"></script>
+<!-- our own anonymous visit counter (no Meta on this page): /admin -> "Home page" -->
+<script src="js/count.js" defer></script>
 </body>
 </html>

@@ -7,11 +7,10 @@
 /lukepower      /  301
 /lukepower.html /  301
 
-# /listen is the Instagram bio link. Since 2 Nov 2026 it forwards to the Feature.fm bio page
-# (music.badscandal.com/listen) so bio clicks are tracked. Temporary 302 on purpose: browsers
-# don't cache it, so it can be pointed back at "/" any time (change these two lines to  /  302).
-/listen       https://music.badscandal.com/listen  302!
-/listen.html  https://music.badscandal.com/listen  302!
+# /listen is an old bio link: it goes to the home page (the Listen page). Feature.fm is cancelled
+# and its smart-link subdomain is deleted (10 Nov 2026). Temporary 302 + forced (!) on purpose.
+/listen       /  302!
+/listen.html  /  302!
 
 /live           /        301
 /live.html      /        301

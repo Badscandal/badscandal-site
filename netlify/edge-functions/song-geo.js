@@ -1,12 +1,13 @@
-/* Runs at Netlify's edge in front of /touchme (9 Nov 2026). Writes the visitor's country into
-   the page's <html data-geo="" data-eu=""> so js/touchme.js knows, from the first frame, whether
+/* Runs at Netlify's edge in front of every song page (/touchme since 9 Nov 2026, every song in
+   /songs.json since 10 Nov). Writes the visitor's country into
+   the page's <html data-geo="" data-eu=""> so js/song.js knows, from the first frame, whether
    the Meta Pixel needs the consent bar (EU/EEA/UK, netlify/lib/geo.mjs) — no extra request.
    Every visitor gets the same page; only the consent bar differs, as the law requires.
-   Any failure passes the page through untouched: touchme.js then falls back to the phone's
+   Any failure passes the page through untouched: song.js then falls back to the phone's
    time zone (Europe/* -> ask first).
 
    Also stamps data-dc="1" when the visitor's IP is a data centre (Meta/Amazon/Google/Microsoft/
-   Apple link scanners, netlify/lib/dc.mjs), so touchme.js never loads the Meta Pixel for them.
+   Apple link scanners, netlify/lib/dc.mjs), so song.js never loads the Meta Pixel for them.
    The page itself is identical for everyone. */
 import { datacenter } from "../lib/dc.mjs";
 import { needsConsent } from "../lib/geo.mjs";
@@ -32,4 +33,10 @@ export default async (req, context) => {
   return new Response(out, { status: 200, headers });
 };
 
-export const config = { path: ["/touchme", "/touchme.html", "/touchme/"] };
+/* One line per song: the 3 URL shapes of each slug in /songs.json. Netlify reads this as a
+   literal, so it can't import the list: tools/new-song.mjs rewrites this line, and
+   tests/songs.test.mjs fails if it ever disagrees with songs.json. */
+export const config = { path: [
+  "/medaseubody", "/medaseubody.html", "/medaseubody/",
+  "/touchme", "/touchme.html", "/touchme/",
+] };

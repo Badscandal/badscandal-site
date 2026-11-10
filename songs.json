@@ -1,0 +1,27 @@
+{
+  "_readme": "THE song list (10 Nov 2026). One entry per release page (badscandal.com/<slug>). Read by the song pages (button link on release day), /admin, the visit counter, the Meta Conversions API and the edge function. Add a song with: node tools/new-song.mjs <slug> \"<Title>\" <YYYY-MM-DD>. On release day paste the track link into spotifyTrack and run: node tools/new-song.mjs --rebuild. Covers and share images are made by the tool; never reuse an asset filename (assets are cached for a year). No pre-save links, ever.",
+  "artist": "BADSCANDAL",
+  "spotifyArtist": "https://open.spotify.com/artist/29kaubgb6Esvwu0idVndGy",
+  "songs": [
+    {
+      "slug": "medaseubody",
+      "title": "Me Dá Seu Body",
+      "date": "2026-11-24",
+      "cover": "assets/listen-medaseubody-cover-v1.jpg",
+      "coverWeb": "assets/medaseubody-cover-600-v1.webp",
+      "share": "assets/share-medaseubody-1200-v1.jpg",
+      "spotifyTrack": "",
+      "spotifyArtist": "https://open.spotify.com/artist/29kaubgb6Esvwu0idVndGy"
+    },
+    {
+      "slug": "touchme",
+      "title": "Touch Me",
+      "date": "2026-10-30",
+      "cover": "assets/listen-touchme-cover-v1.jpg",
+      "coverWeb": "assets/touchme-cover-600-v1.webp",
+      "share": "assets/share-touchme-1200-v1.jpg",
+      "spotifyTrack": "https://open.spotify.com/track/6Y0BIHxJvTVIjOmk636Cw3",
+      "spotifyArtist": "https://open.spotify.com/artist/29kaubgb6Esvwu0idVndGy"
+    }
+  ]
+}

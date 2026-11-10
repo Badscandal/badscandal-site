@@ -12,14 +12,26 @@
    every number, chart and the visit log unless the portal asks for bots=1. Reloads by the same
    browser within 30 minutes are ONE visit (SESSION_GAP). */
 
-/* >>> EDIT HERE <<< One entry per release page. `id` is the page name the counter stores. */
+import { adKey as spendKey } from "./metaspend.mjs";
+import { SONGS } from "./songs.mjs";
+
+/* The link picker: every song in /songs.json (newest release first), then the home page. Nothing
+   to edit here for a new song. `id` is the page name the counter stores. */
 export const LINKS = [
-  { id: "touchme", title: "Touch Me", path: "/touchme", cover: "/assets/touchme-cover-600-v1.webp" },
+  ...SONGS.slice().sort((a, b) => (a.date < b.date ? 1 : -1))
+    .map((s) => ({ id: s.slug, title: s.title, path: s.path, cover: "/" + s.coverWeb, date: s.date })),
+  { id: "home", title: "Home page", path: "/", cover: "/assets/favicon-192-v2.png", date: "" },
 ];
+
+/* What /admin opens on: the newest song that is already out (its numbers are the busy ones). */
+export function defaultLink(now = Date.now()) {
+  const today = spDay(now);
+  return LINKS.find((l) => l.date && l.date <= today) || LINKS[0];
+}
 
 export const TZ = "America/Sao_Paulo";
 export const MAX_DAYS = 120;
-export const STORES = ["spotify", "apple", "youtube", "deezer", "amazon"];
+export const STORES = ["spotify", "apple", "youtube", "deezer", "amazon", "soundcloud", "instagram", "tiktok", "email"];
 
 const dayFmt = new Intl.DateTimeFormat("en-CA", { timeZone: TZ, year: "numeric", month: "2-digit", day: "2-digit" });
 const hourFmt = new Intl.DateTimeFormat("en-GB", { timeZone: TZ, hour: "2-digit", hourCycle: "h23" });
@@ -491,4 +503,18 @@ export function healthSummary(list, days, now = Date.now()) {
     lastOk: lastOk ? spTime(lastOk) : null,
     lastError: lastError ? { time: spTime(lastError.ts), detail: lastError.detail } : null,
   };
+}
+
+/* Real Spotify taps of one page, per ad (adKey of utm_content, the ad's name) and per São Paulo
+   day: what netlify/lib/metaspend.mjs divides the spend by. */
+export function adTaps(s) {
+  const tapsByAd = {}, tapsByDay = {};
+  for (const [k, r] of Object.entries(s.ads)) {
+    const [kind, , ad] = k.split("|");
+    if (kind !== "ad" || !ad) continue;
+    const key = spendKey(ad);
+    tapsByAd[key] = (tapsByAd[key] || 0) + (r.t || 0);
+  }
+  for (const [d, r] of Object.entries(s.days)) if (r.t) tapsByDay[d] = r.t;
+  return { taps: s.taps, tapsByAd, tapsByDay };
 }

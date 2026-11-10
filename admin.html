@@ -155,6 +155,17 @@ main.busy{opacity:.55}
 .keyrow{display:flex;justify-content:space-between;gap:10px;font-size:12.5px;color:var(--uv);padding:5px 0}
 .keyrow b{color:var(--paper)}
 
+/* ad spend */
+.c-spend{grid-column:1/-1}
+.sp-cols{display:grid;grid-template-columns:minmax(0,1fr);gap:0 18px}
+@media(min-width:900px){.sp-cols{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.mt{width:100%;border-collapse:collapse;font-size:12.5px}
+.mt th{text-align:right;font-family:var(--mono);font-weight:400;font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);padding:5px 6px;border-bottom:1px solid var(--ink-3)}
+.mt th:first-child,.mt td:first-child{text-align:left}
+.mt td{padding:7px 6px;border-bottom:1px solid var(--ink-3);text-align:right;font-variant-numeric:tabular-nums;color:var(--uv)}
+.mt td:first-child{color:var(--paper);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mt td b{color:var(--paper)}
+
 /* status strip: humans/bots switch + Meta status */
 .strip{grid-column:1/-1;display:flex;flex-wrap:wrap;gap:8px 10px;align-items:center}
 .toggle{display:inline-flex;align-items:center;background:var(--ink-2);border:1px solid var(--ink-3);border-radius:999px;padding:3px}
@@ -245,7 +256,7 @@ main.busy{opacity:.55}
 
   <div class="strip">
     <div class="toggle" role="group" aria-label="Who to count">
-      <button type="button" id="tHumans" class="on">Humans only</button><button type="button" id="tBots">Show bots<b id="botN">0</b></button>
+      <button type="button" id="tHumans" class="on">Humans only</button><button type="button" id="tBots">Show everyone (incl. bots)<b id="botN">0</b></button>
     </div>
     <div class="mstat" id="mstat"><span id="mstatTxt">Meta: no events yet</span></div>
   </div>
@@ -271,11 +282,10 @@ main.busy{opacity:.55}
       <div class="v num" id="kCtr">–</div><div class="d" id="dCtr"></div>
       <svg id="sCtr" aria-hidden="true"></svg>
     </div>
-    <div class="card kpi muted">
+    <div class="card kpi" id="cptCard">
       <div class="lbl">Cost per tap</div>
-      <div class="v num">—</div>
-      <div class="d" style="color:var(--muted);font-weight:400">needs ad spend (USD)</div>
-      <span class="phase">Phase 2</span>
+      <div class="v num" id="kCpt">–</div>
+      <div class="d" id="dCpt" style="color:var(--muted);font-weight:400">Meta spend not connected</div>
     </div>
   </section>
 
@@ -285,7 +295,7 @@ main.busy{opacity:.55}
     <div class="fun" id="funnel"></div>
     <div class="stores" id="stores"></div>
     <div class="ctrbox">
-      <div><div class="lbl">Taps ÷ visits</div><div class="big num" id="ctr1">–</div><div class="bench">Feature.fm before: <b>~37%</b></div></div>
+      <div><div class="lbl">Taps ÷ visits</div><div class="big num" id="ctr1">–</div><div class="bench">of all counted visits</div></div>
       <div><div class="lbl">Taps ÷ unique</div><div class="big num" id="ctr2">–</div><div class="bench">people who tapped at least once</div></div>
     </div>
   </section>
@@ -308,6 +318,25 @@ main.busy{opacity:.55}
   <section class="card c-geo">
     <div class="head"><div><h2>Where</h2><p class="sub">Country, top city in each.</p></div><span class="lbl">CTR</span></div>
     <div class="bd-list" id="bGeo"></div>
+  </section>
+
+  <section class="card c-spend" id="spendCard">
+    <div class="head"><div><h2>Ad spend &amp; cost per tap</h2><p class="sub" id="spSub">Meta ad spend (read-only) against real Spotify taps.</p></div><span class="lbl" id="spCur"></span></div>
+    <p class="empty" id="spOff">Meta spend not connected. To connect it, add META_ADS_TOKEN on Netlify (a read-only ads token); nothing else is needed.</p>
+    <div id="spOn" hidden>
+      <div class="trio">
+        <div class="mini"><div class="lbl">Spend</div><div class="big num" id="spSpend">–</div></div>
+        <div class="mini"><div class="lbl">Real Spotify taps</div><div class="big num" id="spTaps">–</div></div>
+        <div class="mini"><div class="lbl">Cost per tap</div><div class="big num" id="spCpt">–</div></div>
+      </div>
+      <div class="sp-cols">
+        <div><div class="lbl" style="margin:14px 0 4px">By ad</div><table class="mt" id="spAds"></table></div>
+        <div><div class="lbl" style="margin:14px 0 4px">By day, this song</div><table class="mt" id="spDays"></table></div>
+        <div><div class="lbl" style="margin:14px 0 4px">All songs</div><table class="mt" id="spSongs"></table></div>
+        <div><div class="lbl" style="margin:14px 0 4px">By day, all songs</div><table class="mt" id="spAll"></table></div>
+      </div>
+      <p class="note" id="spNote"></p>
+    </div>
   </section>
 
   <section class="card c-app">
@@ -369,12 +398,12 @@ main.busy{opacity:.55}
     <h2>Bots &amp; you</h2><p class="sub">A visit only counts as a person after a real touch, scroll, key press or tap while the page is on screen. Everything else is left out of every number, chart and the visit log.</p>
     <div class="mini"><div class="lbl">Visits hidden this period</div><div class="big num" id="bHidden">–</div></div>
     <div id="bReasons" style="margin-top:6px"></div>
-    <div class="row-btns"><button class="ghost" id="botsBtn" type="button">Show bots</button></div>
+    <div class="row-btns"><button class="ghost" id="botsBtn" type="button">Show everyone (incl. bots)</button></div>
     <div class="divider"></div>
     <div class="lbl">This device</div>
     <div class="me-state" id="meState">–</div>
     <div class="row-btns"><button class="ghost" id="meBtn" type="button">Don't count this device</button></div>
-    <p class="note"><b>Open /admin once on your iPhone and once on your Mac and tap this button on each.</b> Each browser remembers it on its own. Instagram's built-in browser is separate too: to cover it, open <b>badscandal.com/touchme?nostat=1</b> inside Instagram once (send it to yourself in a DM). Your visits still send Meta its events, so tests keep working; here they sit under "Show bots" as <b>You</b>.</p>
+    <p class="note"><b>Open /admin once on your iPhone and once on your Mac and tap this button on each.</b> Each browser remembers it on its own. Instagram's built-in browser is separate too: to cover it, open <b>badscandal.com/touchme?nostat=1</b> inside Instagram once (send it to yourself in a DM). Your visits still send Meta its events, so tests keep working; here they sit under "Show everyone" as <b>You</b>.</p>
   </section>
 
   <section class="card c-log">

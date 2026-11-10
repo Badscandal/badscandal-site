@@ -21,11 +21,11 @@ the name sit:
 **Site shape since 2 Nov 2026 (supersedes the paragraph below):** the
 LISTEN page IS the homepage — listen.html was moved to `index.html` (the old
 CRT-wordmark landing is gone; it's in git history). `/listen` and
-`/listen.html` 302 to the Feature.fm bio page https://music.badscandal.com/listen
-(since 2 Nov 2026; music.badscandal.com is a GoDaddy CNAME to ffm.to, the
-Feature.fm custom subdomain; listen.badscandal.com also points at ffm.to but is
-held by a different Feature.fm account). The ads' own smart link is
-music.badscandal.com/touch-me; never use it in the bio or on the site. The clothing store is HIDDEN: `/store` and
+`/listen.html` 302! to `/` (since 10 Nov 2026). **Feature.fm is cancelled and
+its subdomain music.badscandal.com is deleted (10 Nov 2026): never link to
+Feature.fm / ffm.to again. NO PRE-SAVE LINKS ANYWHERE, EVER (team rule since 10
+Nov 2026).** Release pages are our own: badscandal.com/<slug>, one per song, from
+`songs.json` (see "Song pages" below). The clothing store is HIDDEN: `/store` and
 `/store.html` 302! to `/` (store.html still exists; delete the two
 _redirects lines and re-add the nav link to bring it back). Nav on home is
 just Home + Plugin store. Wherever this file says "listen.html" below, read
@@ -690,7 +690,7 @@ from the commit before this one.
 ## Listen page (listen.html, added 17 Sep 2026)
 
 The bio-link page — **badscandal.com/listen** is what goes in the Instagram
-bio. Feature.fm shape, one centred column over the fixed brand film: CRT
+bio. One centred column over the fixed brand film: CRT
 wordmark (no tagline, removed 17 Sep) -> latest-release card (cover, kicker,
 title, one white LISTEN button, small Apple/Deezer/Amazon links) -> STREAM
 rows (Spotify, Apple Music, YouTube, SoundCloud) -> FOLLOW rows (Instagram,
@@ -708,25 +708,20 @@ PAGE" at the end of site.css. Scripts: i18n -> main -> crt -> `js/listen.js`.
 * **Updating the counter = edit `streams.total` + `streams.asOf`, push.** The
   number is read off Songstats (artist Overview -> Streams) by hand for now.
   Full digits on purpose: 450,000,000+ reads bigger than 450M.
-* **Upcoming single = `release.mode: "upcoming"`** (added 24 Oct 2026 for
-  Touch Me, no date / no pre-save link yet). Same `body.presave` look (store
-  links hidden); the button is FOLLOW ON SPOTIFY -> `cta` (the artist
-  profile) until a `presave` URL is set, then it becomes PRE-SAVE.
-* **Announcing a single = `release.mode: "presave"`** + `title`, `kicker`,
-  `cover` (NEW `-vN` asset), `presave` = an external pre-save URL (Feature.fm
-  / DistroKid HyperFollow / Linkfire). listen.js flips `body.presave`, the
-  button reads PRE-SAVE and points there, the store links hide. Release day:
-  `mode: "out"`, `cta` = the Spotify track, `links` = the other stores.
-  Kicker strings are looked up in i18n TEXT, so a new kicker needs an entry
-  there to translate.
+* **Upcoming single = `release.mode: "upcoming"`** + `title`, `kicker`,
+  `date`, `cover` (NEW `-vN` asset). listen.js adds `body.upcoming` (store
+  links hidden) and the button is FOLLOW ON SPOTIFY -> `cta` (the artist
+  profile). Release day: `mode: "out"`, `cta` = the Spotify track, `links` =
+  the other stores. Kicker strings are looked up in i18n TEXT, so a new kicker
+  needs an entry there to translate. **No pre-save mode and no pre-save links:
+  removed 10 Nov 2026, never add them back.**
 * **Countdown (25 Oct 2026) = `release.date: "YYYY-MM-DD"`** with mode
-  `upcoming` or `presave`. The `.cd` block in the card (hidden in the HTML)
+  `upcoming`. The `.cd` block in the card (hidden in the HTML)
   counts DAYS / HOURS / MIN / SEC to **midnight in the visitor's own time
   zone** on that date — stores drop at local midnight per country, so each
   visitor hits zero when the track is live for them. Built from date parts,
   never `Date.parse` (bare ISO dates parse as UTC). At zero the page flips
-  itself: grid hides, "Out now" in serif italic, button -> LISTEN ->
-  `presave` URL (smart links become release links) else `cta`. Release day
+  itself: grid hides, "Out now" in serif italic, button -> LISTEN -> `cta`. Release day
   is still a JSON edit (`mode: "out"`, track `cta`, store `links`) — the
   flip just covers the gap. CSS block "countdown" after `.rel-links` in
   site.css; strings Days/Hours/Min/Sec/Out/Out now in i18n TEXT, the date
@@ -743,18 +738,15 @@ PAGE" at the end of site.css. Scripts: i18n -> main -> crt -> `js/listen.js`.
   in listen.js sets the length. Headless Chrome screenshots fire at load,
   before CSS animations run: to see the settled state, hold the load event
   open (a slow 1px image in a parent frame).
-* **Website bot guide:** Luke's Grok bot updates the release card from a
-  PDF brief (Desktop/Claude Works/Website Bot/ — never inside this repo,
-  the repo root is the public site). It may touch ONLY
-  listen.json `release`, a new `assets/listen-<slug>-cover-vN.jpg`, the
-  release-card fallback in listen.html (+ og:image) and new i18n TEXT
-  entries. Keep that PDF in step if this flow changes.
-* **Why no self-hosted pre-save (researched 17 Sep 2026):** Spotify
-  Development Mode apps are capped at 5 allow-listed users, Extended Quota
-  needs a registered business with 250K MAU, and refresh tokens expire after
-  6 months — dead for indies. Feature.fm/Linkfire/HyperFollow have
-  grandfathered access. Apple Music pre-add has no cap (MusicKit JS + $99/yr
-  developer account) if we ever want to own that half.
+* **Website bot guide:** Luke's website bot works from a PDF brief
+  (Desktop/Claude Works/Website Bot/ — never inside this repo, the repo root is
+  the public site; updated 10 Nov 2026 with the new-song flow). It may touch
+  ONLY: listen.json `release`, new `assets/listen-<slug>-cover-vN.jpg` covers,
+  the release-card fallback in index.html + its og:image lines, new i18n TEXT
+  entries, and songs via `node tools/new-song.mjs` (+ `spotifyTrack` in
+  songs.json then `--rebuild`). Keep that PDF in step if this flow changes.
+* **Pre-saves: never (team rule, 10 Nov 2026).** Before release a song page and
+  the home card say FOLLOW ON SPOTIFY (the artist profile) with a countdown.
 * **Why the counter is manual:** no free live source exists. Songstats has
   the exact figure (`GET https://api.songstats.com/enterprise/v1/artists/stats
   ?spotify_artist_id=29kaubgb6Esvwu0idVndGy`, header `apikey`) but the API is
@@ -773,17 +765,61 @@ PAGE" at the end of site.css. Scripts: i18n -> main -> crt -> `js/listen.js`.
   us. Plugin pages stay minimal.
 * Test: `node --check js/listen.js`, local server, open /listen.html: hrefs
   match listen.json, count-up lands on 450,000,000+, nothing scrolls
-  sideways at 390px; rename listen.json -> page still whole; set
-  `mode:"presave"` -> button/href flip. Python's http.server has no Range
+  sideways at 390px; rename listen.json -> page still whole; set a past
+  `date` -> the countdown flips to OUT NOW + LISTEN. Python's http.server has no Range
   support so the film shows its poster locally — that's the server, not the
   page.
 
-## /touchme smart link + Meta Pixel/CAPI + /admin portal (9 Nov 2026)
+## Song pages (/touchme, /medaseubody, …) + Meta Pixel/CAPI + /admin portal (9–10 Nov 2026)
 
-Our own replacement for the Feature.fm smart link in the Touch Me Meta ads.
+Our own release pages for the Meta ads and the bio (Feature.fm is cancelled).
 Brief: `../TOUCHME-LANDING-BUILD-BRIEF.md` (outside the repo on purpose).
 
-* **`touchme.html` + `js/touchme.js`** -> badscandal.com/touchme. One page for
+* **ONE SONG LIST: `songs.json` (repo root, served no-store; pinned in
+  `_headers`).** Per song: `slug` (= the URL, badscandal.com/<slug>), `title`,
+  `date` (YYYY-MM-DD, release day), `cover` (the big JPG), `coverWeb` (600 px
+  webp for the page), `share` (1200x1200 JPG under 200 KB for link previews),
+  `spotifyTrack` (empty until release day), `spotifyArtist`. Everything reads
+  it: the pages (generated from it), `netlify/lib/songs.mjs` (server side:
+  hit.mjs pages, capi.mjs content_name BY PAGE PATH, admin.mjs LINKS) and the
+  edge function (its `config.path` must be a literal, so new-song.mjs rewrites
+  it and `tests/songs.test.mjs` fails if it disagrees). The tests also fail if
+  a page drifts from the list, an og:image isn't absolute, a share image is over
+  200 KB, or any served file links to Feature.fm / a pre-save.
+* **ADDING THE NEXT SONG (the whole flow):**
+  1. Put the cover in `assets/` as `listen-<slug>-cover-v1.jpg` (square JPG,
+     1000 px+; slug = lowercase letters/digits, no accents, e.g. `noitedj`).
+  2. `node tools/new-song.mjs <slug> "<Title>" <YYYY-MM-DD>` (on the Mac: uses
+     `sips` + Homebrew `cwebp`). It makes the 600 px webp + the share JPG (new
+     -vN names, never overwrites), adds the song to songs.json, writes
+     `<slug>.html` from `tools/song-template.html`, updates the edge path list,
+     and prints the exact `git add` line.
+  3. `npm test`, commit by file name, push. /admin, the counter and Meta pick
+     the song up by themselves. Ads link to
+     `/<slug>?utm_source=meta&utm_campaign=br&utm_content={{ad.name}}`.
+  4. Release day: paste the track link (`https://open.spotify.com/track/<id>`,
+     no `?si=`) into its `spotifyTrack`, run `node tools/new-song.mjs --rebuild`,
+     `npm test`, commit, push. (Even if the rebuild is forgotten, the page re-
+     reads songs.json and points the button at the track.)
+  Edit the look of every song page = edit `tools/song-template.html`, then
+  `--rebuild`. Never hand-edit a `<slug>.html` (the test catches it).
+* **Before / after release (each visitor's own time zone):** the inline script
+  under the button builds local midnight of `date` from its parts (never
+  Date.parse) BEFORE first paint: before it, "Follow on Spotify" (PT "Seguir no
+  Spotify", ES "Seguir en Spotify", + de/fr/it/nl/pl/cs) -> the artist profile,
+  with "OUT 24 NOVEMBER" and a d/h/m/s countdown; from midnight, "Listen on
+  Spotify" -> the track (or the artist profile while `spotifyTrack` is empty).
+  At zero the page flips itself (js/song.js) and shows "Out now". The Meta
+  SpotifyClick carries `action: follow|listen`.
+* **The home page counts too** (`js/count.js`, page `home`, /admin "Home page"):
+  views, the people-only `act`, and taps on every music/social link (target =
+  spotify/apple/youtube/soundcloud/instagram/tiktok/email). NO Meta on the home
+  page (no Pixel, no consent bar needed). Its link preview points at the current
+  release's `share-…-1200-vN.jpg` (change the two image lines in index.html on a
+  new release).
+* **Every og:image is absolute (https://badscandal.com/assets/…)**: Facebook and
+  WhatsApp ignore relative ones; WhatsApp drops images over ~300 KB.
+* **The song page** (`<slug>.html` + `js/song.js`, was touchme.html + js/touchme.js). One page for
   everyone (no cloaking): cover (`assets/touchme-cover-600-v1.webp`, 22 KB), title,
   ONE green Spotify button (Spotify's mark, the deliberate colour exception) and a
   one-line privacy notice. Spotify ONLY: the other store links were removed at Luke's
@@ -794,10 +830,17 @@ Brief: `../TOUCHME-LANDING-BUILD-BRIEF.md` (outside the repo on purpose).
   `/touchme?utm_source=meta&utm_campaign=br&utm_content={{ad.name}}`.
 * **Opening Spotify:** Android -> `intent://` (web fallback); iPhone inside
   Instagram/Facebook/TikTok -> `spotify:` scheme, web player after 600 ms if the
-  page is still visible (TUNE HERE in touchme.js); iPhone Safari -> plain https
+  page is still visible (TUNE HERE in song.js); iPhone Safari -> plain https
   (universal link); desktop -> new tab. Only Luke's real phone inside the Instagram
   app proves this works.
-* **Meta:** Pixel `1442285344656582` (dataset "Badscandal Touch Me") loads after
+  Inside Instagram on iPhone, Instagram shows its own "There was a problem
+  loading this website" screen for a moment while it hands over to Spotify (and
+  if you go back). That's Instagram's browser, not our page; counting and Meta
+  are unaffected (they go out before the hand-off).
+* **Meta:** ONE Pixel for every song, `1442285344656582` (dataset "Badscandal
+  Touch Me"; never make another). content_name = the song's title from
+  songs.json, looked up server-side by the page path (events from unknown pages
+  are dropped). Loads after
   first paint; PageView + ViewContent on load, custom `SpotifyClick` on the tap.
   The same events go server-side via `/api/capi` (`netlify/functions/capi.mjs`,
   payload in `netlify/lib/capi.mjs`, Graph API version pinned there) with the SAME
@@ -807,7 +850,7 @@ Brief: `../TOUCHME-LANDING-BUILD-BRIEF.md` (outside the repo on purpose).
   Manager -> Test events; deploy previews only send while it is set. Remove after
   testing. The live ads optimise on the OLD custom conversion (FeatureFM_click);
   ours needs a NEW custom conversion on `SpotifyClick` (Luke approves first).
-* **Consent:** `netlify/edge-functions/touchme-geo.js` stamps `<html data-geo
+* **Consent:** `netlify/edge-functions/song-geo.js` (every song path) stamps `<html data-geo
   data-eu>` from Netlify geo (EU + EEA + UK list in `netlify/lib/geo.mjs`); no edge
   -> phone time zone fallback. EU/UK: a small bar (same-size Allow / No), nothing
   to Meta before Allow, and capi.mjs refuses EU events without consent as a second
@@ -815,13 +858,13 @@ Brief: `../TOUCHME-LANDING-BUILD-BRIEF.md` (outside the repo on purpose).
   the opt-out (`bs_meta_off`). No `preconnect` to Facebook (it would leak the IP
   before consent).
 * **Counting:** `/api/hit` (hit.mjs, the 11 Oct counter, merged 9 Nov) with pages
-  `listen` + `touchme`. Blob keys grew from 9 to 21 parts (pv, campaign, ad, city,
+  `home`, `listen` (old keys) + every song slug. Blob keys grew from 9 to 21 parts (pv, campaign, ad, city,
   device/os/browser/app, referrer, ms, meta, returning), then 23 (bot, fb); old keys
   still parse. See the header of `netlify/lib/stats.mjs`. Deploy previews write to
   a throwaway store.
 * **People only (the rule):** a page load counts as a PERSON only after a real
   touch, pointer, wheel/scroll or key press while the page is on screen (the `act`
-  hit from `js/touchme.js`), a store tap or a consent answer, and nothing flags it.
+  hit from `js/song.js` / `js/count.js`), a store tap or a consent answer, and nothing flags it.
   No event goes to Meta (Pixel or CAPI) before that: the Pixel script loads after
   first paint, but PageView/ViewContent fire on the first interaction, SpotifyClick
   on the tap. So Meta's "landing page views" only count people who touched the page.
@@ -843,8 +886,8 @@ Brief: `../TOUCHME-LANDING-BUILD-BRIEF.md` (outside the repo on purpose).
   - `dc-city`: big data-centre cities (Ashburn, Kansas City, Fort Worth, Mesa,
     Henrico, Huntsville, Odense…, `DC_CITIES`) only when there's NO interaction:
     real people live there.
-  **Re-run `node tools/refresh-ip-ranges.mjs` about monthly** (and if "Show bots"
-  shows a data-centre place counted as a person); commit the JSON by name. `npm
+  **Re-run `node tools/refresh-ip-ranges.mjs` about monthly** (and if "Show
+  everyone (incl. bots)" shows a data-centre place counted as a person); commit the JSON by name. `npm
   test` fails once it's 120 days old, as a reminder. 9 Nov night (real keys, anonymised
   in `tests/fixtures/2026-11-09-keys.txt`): 10 visits -> 1 person (Luke, 2 loads),
   4 data-centre towns, 3 no-interaction (2 US iPhone speed tests + Luke's Mac), 1 test.
@@ -878,11 +921,23 @@ Brief: `../TOUCHME-LANDING-BUILD-BRIEF.md` (outside the repo on purpose).
   changing the password logs everyone out. 5 wrong tries per 10 min per hashed IP
   (Blob store `admin-auth`). API: `netlify/functions/admin.mjs` (`/api/admin/
   login|logout|data|csv`), numbers in `netlify/lib/admin.mjs` (São Paulo days).
-  New release page = one line in `LINKS` there + a copy of touchme.html/js, plus
-  PAGES in hit.mjs, the edge function's path list and `content_name` in
-  `netlify/lib/capi.mjs` (hard-coded "Touch Me").
-  Cost per tap is a Phase 2 placeholder (needs spend; Meta API only after Luke
-  approves a token).
+  The link picker = every song in songs.json (newest first) + "Home page"; it
+  opens on the newest song that is already out. The humans/bots switch reads
+  "Humans only" / "Show everyone (incl. bots)".
+* **Cost per tap (10 Nov 2026), READ-ONLY Meta reader** (`netlify/lib/
+  metaspend.mjs`): Netlify env `META_ADS_TOKEN` (Luke adds it; an ads_read
+  token) + `META_AD_ACCOUNT_ID` (default 230002830106369). ONE kind of call: GET
+  Ads Insights, level=ad, daily (time_increment=1), fields ad_name, adset_name,
+  campaign_name, spend, account_currency, Graph version = the one pinned in
+  `netlify/lib/capi.mjs`; token in the Authorization header, never in a URL,
+  never logged or stored. Cached an hour in the Blob store `meta-cache`. Matched
+  to real (people-only) Spotify taps by ad name = utm_content (both sides through
+  `adKey`: accents off, letters+digits only); an ad nobody visited from yet goes
+  to the song whose title/slug is in its campaign/ad set/ad name, else "not
+  matched". Shown per ad, per day, per song, all songs per day, in the account's
+  own currency (never converted; Meta's days are the ad account's days). No token
+  -> a quiet "Meta spend not connected" line. Nothing in the code can write to
+  Meta.
 * **90-day rule:** `netlify/functions/rollup.mjs` (daily 06:00 UTC, production
   only) folds raw keys older than 90 days into `daily/<day>.json` counts and
   deletes them; the portal merges those back for old ranges.

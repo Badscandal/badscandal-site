@@ -1308,7 +1308,7 @@ video::-webkit-media-controls-panel{display:none !important}
   font-family:var(--font-mono);font-weight:400;font-size:11px;letter-spacing:.12em;
   text-transform:uppercase;color:var(--muted)}
 .rel-links a:hover{color:var(--paper)}
-body.presave .rel-links{display:none}
+body.upcoming .rel-links{display:none} /* not out yet: no store rows (10 Nov 2026: no pre-saves, ever) */
 /* countdown (25 Oct 2026): serif numerals like the cover's title, mono labels like every slate.
    Monochrome — the cover above it carries the colour. Four equal cells split by hairlines;
    fixed cell widths so the proportional serif digits never make the row twitch. */

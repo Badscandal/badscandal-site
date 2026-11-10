@@ -6,11 +6,16 @@
      event_name, event_time (s), event_id, action_source "website", event_source_url
      user_data: client_ip_address, client_user_agent, fbp, fbc, country (SHA-256 of 2 lowercase
                 letters). NO names, emails, phones or ids of our own.
-     custom_data: content_name, service (SpotifyClick), utm_content
+     custom_data: content_name (the song title from /songs.json, looked up by the PAGE PATH of
+                  event_source_url, never taken from the browser), service + action (SpotifyClick:
+                  "listen" or "follow" before release day), utm_content
+   An event from a page that isn't a known song is dropped.
    Docs: developers.facebook.com/docs/marketing-api/conversions-api/parameters/fbp-and-fbc
          developers.facebook.com/documentation/ads-commerce/conversions-api/deduplicate-pixel-and-server-events */
 
-export const PIXEL_ID = "1442285344656582"; /* dataset "Badscandal Touch Me" (public id) */
+import { songFromPath } from "./songs.mjs";
+
+export const PIXEL_ID = "1442285344656582"; /* dataset "Badscandal Touch Me" (public id); ONE pixel for every song page */
 export const GRAPH_VERSION = "v27.0"; /* checked 9 Nov 2026 (v28 not out). Meta retires old versions ~2 years after release. */
 export const EVENTS = new Set(["PageView", "ViewContent", "SpotifyClick"]);
 
@@ -35,12 +40,15 @@ export function validFbp(v) {
 
 const ID = /^[A-Za-z0-9_-]{8,64}$/;
 
-/* body: what js/touchme.js beacons. req: { ip, ua, country, cookieFbp, cookieFbc, origin, now }. */
+/* body: what js/song.js beacons. req: { ip, ua, country, cookieFbp, cookieFbc, origin, now }. */
 export async function buildEvents(body, req) {
   if (!body || !Array.isArray(body.ev)) return [];
   const now = req.now || Date.now();
-  let url = typeof body.url === "string" ? body.url.slice(0, 500) : "";
-  if (!req.origin || !url.startsWith(req.origin + "/")) url = req.origin ? req.origin + "/touchme" : undefined;
+  const url = typeof body.url === "string" ? body.url.slice(0, 500) : "";
+  if (!req.origin || !url.startsWith(req.origin + "/")) return [];
+  let song = null;
+  try { song = songFromPath(new URL(url).pathname); } catch {}
+  if (!song) return [];
 
   const user = {
     client_ip_address: req.ip || undefined,
@@ -55,8 +63,11 @@ export async function buildEvents(body, req) {
   const out = [];
   for (const e of body.ev.slice(0, 3)) {
     if (!e || !EVENTS.has(e.n) || !ID.test(e.id || "")) continue;
-    const custom = { content_name: "Touch Me" };
-    if (e.n === "SpotifyClick") custom.service = "spotify";
+    const custom = { content_name: song.title };
+    if (e.n === "SpotifyClick") {
+      custom.service = "spotify";
+      custom.action = e.a === "follow" ? "follow" : "listen";
+    }
     if (utm) custom.utm_content = utm;
     out.push({
       event_name: e.n,

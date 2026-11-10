@@ -182,7 +182,7 @@
   $("banner").addEventListener("click", function (ev) { if (ev.target.id === "hideBots") toggleBots(false); });
 
   /* "Don't count this device": the server cookie is the durable part (Safari keeps it), the
-     localStorage flag makes /touchme mark the visit "me" before it even reaches the server. */
+     localStorage flag makes the song pages and the home page mark the visit "me" before it even reaches the server. */
   function localExcluded() { try { return localStorage.getItem("bs_nostat") === "1"; } catch (e) { return false; } }
   $("meBtn").addEventListener("click", function () {
     var on = !(data && (data.excluded || localExcluded()));
@@ -210,7 +210,7 @@
     if (state.range === "custom") { $("from").value = data.from; $("to").value = data.to; }
     banner(data.bots ? "Showing bots too: every number below includes the " + fmt(data.hidden.visits) + " bot visits. <button class=\"ghost\" id=\"hideBots\" type=\"button\">Humans only</button>" : "", true);
     drawStrip();
-    drawKpis(); drawFunnel(); drawSeries(); drawBreakdowns(); drawSpeed(); drawMeta(); drawHealth(); drawBots(); fillFilters(); drawLog();
+    drawKpis(); drawFunnel(); drawSeries(); drawBreakdowns(); drawSpeed(); drawMeta(); drawHealth(); drawBots(); drawSpend(); fillFilters(); drawLog();
   }
 
   function delta(cur, prev, isRate) {
@@ -264,8 +264,8 @@
     $("funnel").innerHTML = v || f.spotify
       ? row("Visits", f.visits, "", false) + row("Unique", f.unique, "", true) + row("Spotify taps", f.spotify, "s", true) + (f.other ? row("Other stores", f.other, "o", true) : "")
       : '<p class="empty">No visits in this period yet.</p>';
-    var names = { apple: "Apple", youtube: "YouTube", deezer: "Deezer", amazon: "Amazon" };
-    $("stores").hidden = !f.other; /* /touchme is Spotify-only since 9 Nov; old pages may still have store links */
+    var names = { apple: "Apple", youtube: "YouTube", deezer: "Deezer", amazon: "Amazon", soundcloud: "SoundCloud", instagram: "Instagram", tiktok: "TikTok", email: "Email" };
+    $("stores").hidden = !f.other; /* song pages are Spotify-only; the home page also has other links */
     $("stores").innerHTML = Object.keys(names).map(function (k) { return names[k] + "<b>" + fmt(f.stores[k] || 0) + "</b>"; }).join("");
     $("ctr1").textContent = pct(data.kpis.ctr);
     $("ctr2").textContent = pct(data.kpis.ctrUnique);
@@ -399,6 +399,47 @@
     el.title = last ? last.time + " SP · " + last.events.join(" + ") : "";
   }
 
+  /* ---------- cost per tap (Meta spend, read-only) ---------- */
+  function money(n, cur) {
+    if (n == null) return "–";
+    try { return new Intl.NumberFormat("en-US", { style: "currency", currency: cur || "USD", currencyDisplay: "code" }).format(n); }
+    catch (e) { return n.toFixed(2) + " " + (cur || ""); }
+  }
+  function mtable(el, head, rows) {
+    el.innerHTML = rows.length ? "<tr>" + head.map(function (h) { return "<th>" + esc(h) + "</th>"; }).join("") + "</tr>" +
+      rows.map(function (r) { return "<tr>" + r.map(function (c, i) { return "<td>" + (i === 3 ? "<b>" + esc(c) + "</b>" : esc(c)) + "</td>"; }).join("") + "</tr>"; }).join("")
+      : '<tr><td class="empty">Nothing in this period.</td></tr>';
+  }
+  function drawSpend() {
+    var sp = data.spend, card = $("spendCard");
+    card.hidden = !sp; /* the home page has no ads */
+    $("cptCard").classList.toggle("muted", !(sp && sp.connected && !sp.error));
+    if (!sp || !sp.connected || sp.error) {
+      $("kCpt").textContent = "–";
+      $("dCpt").textContent = !sp ? "no ads on this page" : sp.error ? "Meta spend: " + sp.error : "Meta spend not connected";
+      $("spOn").hidden = true; $("spOff").hidden = false;
+      $("spOff").textContent = sp && sp.error ? "Couldn't read Meta spend: " + sp.error : "Meta spend not connected. To connect it, add META_ADS_TOKEN on Netlify (a read-only ads token); nothing else is needed.";
+      $("spCur").textContent = "";
+      return;
+    }
+    var c = sp.currency;
+    $("spOff").hidden = true; $("spOn").hidden = false;
+    $("spCur").textContent = c ? "in " + c : "";
+    $("kCpt").innerHTML = sp.song.cpt == null ? "–" : esc(money(sp.song.cpt, c));
+    $("dCpt").textContent = money(sp.song.spend, c) + " spent · " + fmt(sp.song.taps) + " real taps";
+    $("spSpend").textContent = money(sp.song.spend, c);
+    $("spTaps").textContent = fmt(sp.song.taps);
+    $("spCpt").textContent = money(sp.song.cpt, c);
+    var head = ["", "Spend", "Taps", "Per tap"];
+    mtable($("spAds"), ["Ad"].concat(head.slice(1)), sp.ads.map(function (a) { return [a.ad, money(a.spend, c), fmt(a.taps), money(a.cpt, c)]; }));
+    mtable($("spDays"), ["Day"].concat(head.slice(1)), sp.days.map(function (r) { return [longDay(r.d), money(r.spend, c), fmt(r.taps), money(r.cpt, c)]; }));
+    mtable($("spSongs"), ["Song"].concat(head.slice(1)), sp.songs.map(function (r) { return [r.title, money(r.spend, c), fmt(r.taps), money(r.cpt, c)]; }));
+    mtable($("spAll"), ["Day"].concat(head.slice(1)), sp.allDays.map(function (r) { return [longDay(r.d), money(r.spend, c), fmt(r.taps), money(r.cpt, c)]; }));
+    $("spNote").textContent = "Spend is in the ad account's currency (" + (c || "?") + "), never converted, and Meta's days are the ad account's days. Taps are real people only. " +
+      (sp.unmatched ? money(sp.unmatched, c) + " of spend couldn't be matched to a song (an ad whose name nobody has visited from yet). " : "") +
+      "Read from Meta " + (sp.fetched ? sp.fetched.slice(11, 16) + " SP" : "") + ", refreshed hourly.";
+  }
+
   function drawHealth() {
     var h = data.health;
     if (!h) { $("hPill").textContent = "No data"; $("hPill").className = "pill"; return; }
@@ -428,7 +469,7 @@
     $("bReasons").innerHTML = hd.reasons.length ? hd.reasons.map(function (r) {
       return '<div class="keyrow"><span>' + esc(r.label) + "</span><b>" + fmt(r.n) + "</b></div>";
     }).join("") : '<p class="empty" style="padding:4px 0">None in this period.</p>';
-    $("botsBtn").textContent = state.bots ? "Hide bots" : "Show bots";
+    $("botsBtn").textContent = state.bots ? "Humans only" : "Show everyone (incl. bots)";
     $("botsBtn").classList.toggle("on", state.bots);
     var ex = !!(data.excluded || localExcluded());
     $("meState").textContent = ex ? "Not counted: your visits on this browser are left out" : "Counted like any visitor";

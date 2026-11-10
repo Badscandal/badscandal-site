@@ -56,7 +56,6 @@
     "Plugin store": { es: "Tienda de plugins", pt: "Loja de plugins" },
     /* /listen (17 Sep 2026) */
     "Listen": { es: "Escuchar", pt: "Ouvir" },
-    "Pre-save": { es: "Pre-guardar", pt: "Pré-salvar" },
     "Watch": { es: "Ver", pt: "Assistir" },
     "Stream": { es: "Escuchar en", pt: "Ouvir em" },
     "Follow": { es: "Seguir", pt: "Seguir" },

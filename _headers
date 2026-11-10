@@ -18,6 +18,11 @@
   Cache-Control: no-store, no-cache, must-revalidate
   Content-Type: application/json; charset=utf-8
 
+# The song list (10 Nov 2026): the song pages re-read it for a track link added on release day.
+/songs.json
+  Cache-Control: no-store, no-cache, must-revalidate
+  Content-Type: application/json; charset=utf-8
+
 # The admin portal (admin.html + /api/admin/*): never indexed, never framed, no referrer.
 /admin
   X-Robots-Tag: noindex, nofollow

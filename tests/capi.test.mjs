@@ -45,7 +45,7 @@ test("SpotifyClick: event_id passes through, country hashed, no personal data", 
   assert.equal(e.user_data.fbp, "fb.1.1794225600000.987654321");
   assert.equal(e.user_data.fbc, `fb.1.1794225600000.${FBCLID}`);
   assert.deepEqual(Object.keys(e.user_data).sort(), ["client_ip_address", "client_user_agent", "country", "fbc", "fbp"]);
-  assert.deepEqual(e.custom_data, { content_name: "Touch Me", service: "spotify", utm_content: "TM BR - vocal contatinho" });
+  assert.deepEqual(e.custom_data, { content_name: "Touch Me", service: "spotify", action: "listen", utm_content: "TM BR - vocal contatinho" });
 });
 
 test("country hash is SHA-256 of the lowercase code", async () => {
@@ -56,20 +56,30 @@ test("country hash is SHA-256 of the lowercase code", async () => {
 
 test("PageView + ViewContent on load; unknown events and bad ids dropped", async () => {
   const out = await buildEvents(
-    { ev: [{ n: "PageView", id: "aaaaaaaaaaaa" }, { n: "ViewContent", id: "bbbbbbbbbbbb" }, { n: "Purchase", id: "cccccccccccc" }, { n: "PageView", id: "x" }] },
+    { ev: [{ n: "PageView", id: "aaaaaaaaaaaa" }, { n: "ViewContent", id: "bbbbbbbbbbbb" }, { n: "Purchase", id: "cccccccccccc" }, { n: "PageView", id: "x" }], url: "https://badscandal.com/touchme" },
     REQ
   );
   assert.deepEqual(out.map((e) => e.event_name), ["PageView", "ViewContent"]);
   assert.equal(out[0].custom_data.service, undefined);
 });
 
-test("event_source_url must be on our own site", async () => {
-  const [e] = await buildEvents({ ev: [{ n: "PageView", id: "aaaaaaaaaaaa" }], url: "https://evil.example/touchme" }, REQ);
-  assert.equal(e.event_source_url, "https://badscandal.com/touchme");
+test("events from another site, or from a page that isn't a known song, are dropped", async () => {
+  assert.deepEqual(await buildEvents({ ev: [{ n: "PageView", id: "aaaaaaaaaaaa" }], url: "https://evil.example/touchme" }, REQ), []);
+  assert.deepEqual(await buildEvents({ ev: [{ n: "PageView", id: "aaaaaaaaaaaa" }] }, REQ), []);
+  assert.deepEqual(await buildEvents({ ev: [{ n: "PageView", id: "aaaaaaaaaaaa" }], url: "https://badscandal.com/admin" }, REQ), []);
+  assert.deepEqual(await buildEvents({ ev: [{ n: "PageView", id: "aaaaaaaaaaaa" }], url: "https://badscandal.com/" }, REQ), []);
+});
+
+test("content_name comes from the song list by page path, never from the browser", async () => {
+  const [m] = await buildEvents({ ev: [{ n: "SpotifyClick", id: "aaaaaaaaaaaa", a: "follow" }], url: "https://badscandal.com/medaseubody.html?utm_content=x",
+    content_name: "Something Else", title: "Hacked" }, REQ);
+  assert.deepEqual(m.custom_data, { content_name: "Me Dá Seu Body", service: "spotify", action: "follow" });
+  const [t] = await buildEvents({ ev: [{ n: "ViewContent", id: "aaaaaaaaaaaa" }], url: "https://badscandal.com/touchme/" }, REQ);
+  assert.equal(t.custom_data.content_name, "Touch Me");
 });
 
 test("no country, no fbc/fbp: fields left out rather than sent empty", async () => {
-  const [e] = await buildEvents({ ev: [{ n: "PageView", id: "aaaaaaaaaaaa" }] }, { ...REQ, country: "" });
+  const [e] = await buildEvents({ ev: [{ n: "PageView", id: "aaaaaaaaaaaa" }], url: "https://badscandal.com/touchme" }, { ...REQ, country: "" });
   assert.deepEqual(Object.keys(e.user_data).sort(), ["client_ip_address", "client_user_agent"]);
 });
 
@@ -81,4 +91,65 @@ test("Graph request: pinned version, dataset id, token + test code in the body, 
   assert.equal(init.body.get("test_event_code"), "TEST123");
   assert.deepEqual(JSON.parse(init.body.get("data")), [{ event_name: "PageView" }]);
   assert.equal(graphRequest([], "S", "").init.body.has("test_event_code"), false);
+});
+
+/* ---------- Meta spend reader (cost per tap), 10 Nov 2026 ---------- */
+import { adKey, fetchInsights, insightsRequest, spendReport } from "../netlify/lib/metaspend.mjs";
+
+test("spend reader: GET only, token in the header (never the URL), pinned Graph version, the right fields", async () => {
+  const url = insightsRequest("230002830106369", "2026-11-03", "2026-11-09");
+  assert.match(url, /^https:\/\/graph\.facebook\.com\/v27\.0\/act_230002830106369\/insights\?/);
+  const q = new URL(url).searchParams;
+  assert.equal(q.get("level"), "ad");
+  assert.equal(q.get("time_increment"), "1");
+  assert.equal(q.get("fields"), "ad_name,adset_name,campaign_name,spend,account_currency");
+  assert.deepEqual(JSON.parse(q.get("time_range")), { since: "2026-11-03", until: "2026-11-09" });
+  const calls = [];
+  const fake = async (u, init) => {
+    calls.push({ u, init });
+    const page2 = u.includes("after=");
+    return new Response(JSON.stringify(page2
+      ? { data: [{ date_start: "2026-11-04", ad_name: "TM BR - vocal", spend: "5.50", account_currency: "BRL" }] }
+      : { data: [{ date_start: "2026-11-03", ad_name: "TM BR - vocal", adset_name: "BR", campaign_name: "Touch Me BR", spend: "10.25", account_currency: "BRL" }],
+          paging: { next: "https://graph.facebook.com/v27.0/act_1/insights?access_token=SECRET&after=abc" } }), { status: 200 });
+  };
+  const { rows } = await fetchInsights("SECRET", "230002830106369", "2026-11-03", "2026-11-09", fake);
+  assert.equal(rows.length, 2);
+  for (const c of calls) {
+    assert.equal(c.init.method, "GET");
+    assert.equal(c.init.headers.Authorization, "Bearer SECRET");
+    assert.ok(!c.u.includes("SECRET"), "the token never goes in a URL: " + c.u);
+  }
+});
+
+test("spend reader errors are readable and never carry the token", async () => {
+  const fake = async () => new Response(JSON.stringify({ error: { message: "Invalid OAuth access token EAABwzLixnjYBO1234567890abc", code: 190 } }), { status: 400 });
+  const r = await fetchInsights("EAABwzLixnjYBO1234567890abc", "1", "2026-11-03", "2026-11-09", fake);
+  assert.match(r.error, /Invalid OAuth access token/);
+  assert.match(r.error, /code 190/);
+  assert.ok(!r.error.includes("EAABwz"), r.error);
+});
+
+test("cost per tap: ads matched to real taps by name, per song, per day, currency kept, unmatched shown", () => {
+  assert.equal(adKey("TM BR - Coração 🌙"), adKey("tm-br-coracao"));
+  const rows = [
+    { day: "2026-11-03", ad: "TM BR - vocal", adset: "BR", campaign: "Touch Me", spend: 30, currency: "BRL" },
+    { day: "2026-11-04", ad: "TM BR - vocal", adset: "BR", campaign: "Touch Me", spend: 20, currency: "BRL" },
+    { day: "2026-11-04", ad: "Me Dá Seu Body teaser", adset: "BR", campaign: "MDSB", spend: 12, currency: "BRL" },
+    { day: "2026-11-04", ad: "mystery", adset: "x", campaign: "y", spend: 8, currency: "BRL" },
+  ];
+  const songs = [
+    { id: "medaseubody", title: "Me Dá Seu Body", taps: 3, tapsByAd: {}, tapsByDay: { "2026-11-04": 3 } },
+    { id: "touchme", title: "Touch Me", taps: 25, tapsByAd: { [adKey("tm-br-vocal")]: 20 }, tapsByDay: { "2026-11-03": 15, "2026-11-04": 10 } },
+  ];
+  const r = spendReport(rows, songs, "touchme");
+  assert.equal(r.currency, "BRL");
+  assert.equal(r.total, 70);
+  assert.equal(r.unmatched, 8);
+  assert.deepEqual(r.song, { spend: 50, taps: 25, cpt: 2 });
+  assert.deepEqual(r.ads, [{ ad: "TM BR - vocal", spend: 50, taps: 20, cpt: 2.5 }]);
+  assert.deepEqual(r.days, [{ d: "2026-11-03", spend: 30, taps: 15, cpt: 2 }, { d: "2026-11-04", spend: 20, taps: 10, cpt: 2 }]);
+  assert.deepEqual(r.songs.find((s) => s.id === "medaseubody"), { id: "medaseubody", title: "Me Dá Seu Body", spend: 12, taps: 3, cpt: 4 });
+  assert.deepEqual(r.allDays.find((d) => d.d === "2026-11-04"), { d: "2026-11-04", spend: 40, taps: 13, cpt: 40 / 13 });
+  assert.equal(spendReport([], songs, "touchme").song.cpt, null, "no spend, no cost per tap");
 });

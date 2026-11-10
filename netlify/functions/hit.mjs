@@ -1,6 +1,7 @@
 /* POST /api/hit: a page reports one view, one store tap or one consent choice. Stored as a
    key-only Blob (see netlify/lib/stats.mjs). Always answers 204 so a failure never shows on the
-   page. Pages: listen (11 Oct, js/track.js) and touchme (9 Nov, js/touchme.js).
+   page. Pages: every song in /songs.json (js/song.js), "home" (the homepage, js/count.js) and
+   "listen" (the old 11 Oct counter's name, kept so its keys still read).
 
    Bots are KEPT but flagged (the `bot` part of the key, see stats.mjs) so /admin can leave them
    out of every number yet still show them on request: data-centre IPs (lib/dc.mjs), bot user
@@ -9,10 +10,11 @@
 import { getDeployStore, getStore } from "@netlify/blobs";
 import { datacenter } from "../lib/dc.mjs";
 import { readCookie } from "../lib/session.mjs";
+import { SONGS } from "../lib/songs.mjs";
 import { CLIENT_BOT, eventKey } from "../lib/stats.mjs";
 import { BOT, parseUA } from "../lib/ua.mjs";
 
-const PAGES = new Set(["listen", "touchme"]);
+const PAGES = new Set(["home", "listen", ...SONGS.map((s) => s.slug)]);
 
 async function hashId(s) {
   const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s));

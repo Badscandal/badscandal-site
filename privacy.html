@@ -7,8 +7,8 @@
 <meta name="description" content="What badscandal.com counts, what it shares with Meta, and how to say no.">
 <meta name="theme-color" content="#050505">
 <link rel="icon" href="/favicon.ico">
-<!-- Privacy notice (9 Nov 2026). Written for the /touchme smart link + our own visit counter.
-     Keep it in step with js/touchme.js, netlify/lib/capi.mjs and netlify/lib/stats.mjs. -->
+<!-- Privacy notice (9 Nov 2026, song pages + home counter 10 Nov). Keep it in step with js/song.js,
+     js/count.js, netlify/lib/capi.mjs and netlify/lib/stats.mjs. -->
 <style>
 :root{--ink:#050505;--paper:#F2F2F2;--muted:#8A8A8A;--line:#1F1F1F}
 *{box-sizing:border-box}
@@ -41,9 +41,9 @@ button{font:600 14px/1 inherit;font-family:inherit;padding:11px 16px;border-radi
 <p>badscandal.com is run by BADSCANDAL (Luke Power). Questions: <a href="mailto:contact@badscandal.com">contact@badscandal.com</a>.</p>
 
 <h2>Our own visit counter</h2>
-<p>When you open a page like badscandal.com/touchme, our server notes:</p>
+<p>When you open our home page or a song page (like badscandal.com/touchme), our server notes:</p>
 <ul>
-<li>that a visit happened, the time, and which store button you tapped (Spotify, Apple Music…);</li>
+<li>that a visit happened, the time, and which button or link you tapped (Spotify, Apple Music, Instagram…);</li>
 <li>a random id kept in your browser's storage, so a second visit isn't counted as a new person;</li>
 <li>your country and city, worked out from your connection;</li>
 <li>the type of device and browser (for example "iPhone, Instagram app");</li>
@@ -52,7 +52,7 @@ button{font:600 14px/1 inherit;font-family:inherit;padding:11px 16px;border-radi
 <p>We don't store your IP address or your browser's full identification string. We do look at the IP address for a moment, only to check it against public lists of data-centre networks, so automatic link scanners and bots aren't counted as people or reported to Meta. For the same reason the page notes whether it was touched, scrolled or tapped (not where or how), and nothing is sent to Meta before that. If your browser blocks storage, we use a scrambled (salted hash) version of your connection details instead, which can't be turned back into them. Visit details are kept for 90 days; after that only daily totals remain. Only we can see them, behind a password.</p>
 
 <h2>Meta Pixel and Conversions API</h2>
-<p>On our release links we use Meta's Pixel and Meta's Conversions API, so Meta (Facebook / Instagram) can tell whether our ads bring people who actually listen. When you open the page and when you tap Spotify, Meta receives: the event (page view, Spotify tap), the time, the page address, your IP address and browser details, Meta's own cookies (<code>_fbp</code>, <code>_fbc</code>), and your country in scrambled form. Your browser sends this directly through the Pixel, and our server sends the same event once more so Meta can count it correctly. Meta handles that data under its own <a href="https://www.facebook.com/privacy/policy/" rel="noopener">privacy policy</a>.</p>
+<p>On our song pages (not the home page) we use Meta's Pixel and Meta's Conversions API, so Meta (Facebook / Instagram) can tell whether our ads bring people who actually listen. When you open the page and when you tap Spotify, Meta receives: the event (page view, Spotify tap), the time, the page address, your IP address and browser details, Meta's own cookies (<code>_fbp</code>, <code>_fbc</code>), and your country in scrambled form. Your browser sends this directly through the Pixel, and our server sends the same event once more so Meta can count it correctly. Meta handles that data under its own <a href="https://www.facebook.com/privacy/policy/" rel="noopener">privacy policy</a>.</p>
 <p><strong>In the EU, the EEA and the UK</strong> none of this goes to Meta unless you tap <em>Allow</em> on the bar at the bottom of the page. <strong>Elsewhere</strong> (including Brazil) it is on by default, and you can turn it off below.</p>
 
 <h2>Your choices</h2>
@@ -75,9 +75,9 @@ button{font:600 14px/1 inherit;font-family:inherit;padding:11px 16px;border-radi
 <p>O badscandal.com é mantido por BADSCANDAL (Luke Power). Dúvidas: <a href="mailto:contact@badscandal.com">contact@badscandal.com</a>.</p>
 
 <h2>Nosso contador de visitas</h2>
-<p>Quando você abre uma página como badscandal.com/touchme, nosso servidor registra:</p>
+<p>Quando você abre nossa página inicial ou a página de uma música (como badscandal.com/touchme), nosso servidor registra:</p>
 <ul>
-<li>que houve uma visita, o horário e qual botão de loja você tocou (Spotify, Apple Music…);</li>
+<li>que houve uma visita, o horário e qual botão ou link você tocou (Spotify, Apple Music, Instagram…);</li>
 <li>um código aleatório guardado no seu navegador, para que uma segunda visita não conte como uma nova pessoa;</li>
 <li>seu país e cidade, estimados pela sua conexão;</li>
 <li>o tipo de aparelho e navegador (por exemplo "iPhone, app do Instagram");</li>
@@ -86,7 +86,7 @@ button{font:600 14px/1 inherit;font-family:inherit;padding:11px 16px;border-radi
 <p>Não guardamos seu endereço IP nem a identificação completa do seu navegador. Olhamos o IP só por um instante, para compará-lo com listas públicas de redes de data centers, para que robôs e leitores automáticos de links não sejam contados como pessoas nem enviados à Meta. Pelo mesmo motivo, a página registra se foi tocada, rolada ou clicada (não onde nem como), e nada vai para a Meta antes disso. Se o seu navegador bloquear o armazenamento, usamos uma versão embaralhada (hash com salt) dos dados da conexão, que não pode ser revertida. Os detalhes das visitas ficam guardados por 90 dias; depois disso, só os totais diários. Só nós vemos esses dados, com senha.</p>
 
 <h2>Pixel da Meta e API de Conversões</h2>
-<p>Nos links de lançamento usamos o Pixel da Meta e a API de Conversões da Meta, para que a Meta (Facebook / Instagram) saiba se nossos anúncios trazem pessoas que realmente ouvem. Quando você abre a página e quando toca em Spotify, a Meta recebe: o evento (visita, toque no Spotify), o horário, o endereço da página, seu endereço IP e dados do navegador, os cookies da própria Meta (<code>_fbp</code>, <code>_fbc</code>) e seu país de forma embaralhada. Seu navegador envia isso pelo Pixel, e nosso servidor envia o mesmo evento mais uma vez para a Meta contar corretamente. A Meta trata esses dados conforme a <a href="https://www.facebook.com/privacy/policy/" rel="noopener">política de privacidade</a> dela.</p>
+<p>Nas páginas das músicas (não na página inicial) usamos o Pixel da Meta e a API de Conversões da Meta, para que a Meta (Facebook / Instagram) saiba se nossos anúncios trazem pessoas que realmente ouvem. Quando você abre a página e quando toca em Spotify, a Meta recebe: o evento (visita, toque no Spotify), o horário, o endereço da página, seu endereço IP e dados do navegador, os cookies da própria Meta (<code>_fbp</code>, <code>_fbc</code>) e seu país de forma embaralhada. Seu navegador envia isso pelo Pixel, e nosso servidor envia o mesmo evento mais uma vez para a Meta contar corretamente. A Meta trata esses dados conforme a <a href="https://www.facebook.com/privacy/policy/" rel="noopener">política de privacidade</a> dela.</p>
 <p><strong>Na União Europeia, no EEE e no Reino Unido</strong> nada disso vai para a Meta sem você tocar em <em>Permitir</em> na barra no fim da página. <strong>Nos outros países</strong> (incluindo o Brasil) fica ligado por padrão, e você pode desligar abaixo. No Brasil, a base legal é o legítimo interesse (LGPD, art. 7º, IX), e você pode se opor a qualquer momento.</p>
 
 <h2>Suas escolhas</h2>
