@@ -28,7 +28,7 @@ Nov 2026).** Release pages are our own: badscandal.com/<slug>, one per song, fro
 `songs.json` (see "Song pages" below). The clothing store is HIDDEN: `/store` and
 `/store.html` 302! to `/` (store.html still exists; delete the two
 _redirects lines and re-add the nav link to bring it back). Nav on home is
-just Home + Plugin store. Wherever this file says "listen.html" below, read
+the small wordmark + Plugin store (the Home link went on 11 Nov 2026). Wherever this file says "listen.html" below, read
 `index.html`.
 
 **Site shape since the 24 Aug 2026 restructure (historical):** badscandal.com is a
@@ -738,6 +738,25 @@ PAGE" at the end of site.css. Scripts: i18n -> main -> crt -> `js/listen.js`.
   in listen.js sets the length. Headless Chrome screenshots fire at load,
   before CSS animations run: to see the settled state, hold the load event
   open (a slow 1px image in a parent frame).
+* **Released (11 Nov 2026):** mode `"out"` keeps "Out now" + "Released <date>" (`.cd-date` + `.cd-rel`)
+  after the release week; KEEP `date` set. At zero in `"upcoming"` mode LISTEN and the Out-now link go to
+  the song's `spotifyTrack` from `/songs.json`, else to our own `/<slug>` (never just the artist profile);
+  the card's song is matched by cover file, then title, then date; `body.upcoming` comes off. listen.js
+  fetches `listen.json` + `songs.json` together.
+* **"Out now" list** (`.outs` under the card): every song in `songs.json` whose day has come locally AND
+  has `spotifyTrack`; rows link to `/<slug>` with `data-link="<slug>"`, so `js/count.js` records the tap.
+  So pasting the track link into `songs.json` on release day also puts the song in this list.
+* **Layout (11 Nov 2026):** phones (640px and narrower) size the cover from the viewport height
+  (`100svh - 480px`, max 86%) so the button is on the first screen; if the card grows, retune that 480.
+  Desktop (900px and wider) is two columns (`.rel-card` grid, `#latest` 960px). The cover sits in
+  `.rel-art` (solid backing; keep the wrapper or the release-week light shows beside the cover).
+* **Nav on home:** a small wordmark logo (`.nav-logo--mark`, hidden at 640px and narrower) + Plugin store
+  + languages; no Home link any more. `.nav-logo` has a 44px tap area site-wide. New i18n TEXT key
+  `"Released"` (capital R; the lowercase `"released"` is the plugin update page's). "as of <Month YYYY>"
+  and the footer clock weekday follow the page language.
+* **`404.html` (11 Nov 2026):** branded not-found page, stand-alone, CSS-only film look, noindex, no
+  counter; every URL in it must be absolute. Netlify serves it for unknown paths and for the `/404 404!`
+  rules in `_redirects`.
 * **Website bot guide:** Luke's website bot works from a PDF brief
   (Desktop/Claude Works/Website Bot/ — never inside this repo, the repo root is
   the public site; updated 10 Nov 2026 with the new-song flow). It may touch
@@ -811,6 +830,14 @@ Brief: `../TOUCHME-LANDING-BUILD-BRIEF.md` (outside the repo on purpose).
   Spotify" -> the track (or the artist profile while `spotifyTrack` is empty).
   At zero the page flips itself (js/song.js) and shows "Out now". The Meta
   SpotifyClick carries `action: follow|listen`.
+* **Released state (11 Nov 2026):** from local midnight of `date` the page shows "Out now" +
+  "Released 30 October 2026" (`#outnow` / `#rel`, plain text, never a link) on EVERY load, in the
+  visitor's language (before this it only showed to someone who had the page open at midnight). Each
+  language row `B` in `tools/song-template.html` now has FIVE strings: Listen, Follow, "Out", "Out now",
+  "Released". The inline script sets `outnow.hidden = soon` before first paint; the no-JS HTML shows the
+  block only when `spotifyTrack` is set (`OUT_HIDDEN` / `RELEASED` in `tools/song-page.mjs`). The meta
+  description of a released song includes the date. Tests run the inline script against a stand-in page
+  with a set clock and language (`paint()` in `tests/songs.test.mjs`).
 * **The home page counts too** (`js/count.js`, page `home`, /admin "Home page"):
   views, the people-only `act`, and taps on every music/social link (target =
   spotify/apple/youtube/soundcloud/instagram/tiktok/email). NO Meta on the home
