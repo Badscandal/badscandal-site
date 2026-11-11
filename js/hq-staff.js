@@ -35,7 +35,9 @@
          and the line under a thread he answered on the board */
       landed: {}, tsent: {},
       /* the release pipeline: busy / error / the inline question per card, notes, open disclosures, the form */
-      rel: { busy: "", err: {}, ask: null, note: {}, open: {}, fold: {}, full: {}, loading: {} }, form: null };
+      rel: { busy: "", err: {}, ask: null, note: {}, open: {}, fold: {}, full: {}, loading: {} }, form: null,
+      /* In Spotify for Artists (v2): the question being answered, the label typed, what was answered */
+      spot: { k: "", answer: "", label: "", busy: "", err: {}, done: {} } };
   }
   var PEOPLE = ["Luke", "Claude", "HQ", "all"];
   var KEEP_MS = 10 * 60000; /* how long "Sent to Nova at 17:03" stays in the place of what was answered */
@@ -71,7 +73,7 @@
     $("msgText").value = ""; counter(); $("msgErr").textContent = ""; $("msgOk").textContent = "";
     $("waitList").innerHTML = $("threadList").innerHTML = $("dutyList").innerHTML = $("incomeBody").innerHTML = '<div class="ph"></div>';
     $("answeredList").innerHTML = ""; $("answeredCard").hidden = true;
-    $("relForm").hidden = true; $("relForm").innerHTML = ""; $("relDesk").innerHTML = $("relOut").innerHTML = ""; $("relMsg").textContent = "";
+    $("relForm").hidden = true; $("relForm").innerHTML = ""; $("relDesk").innerHTML = $("relOut").innerHTML = $("relPipe").innerHTML = $("relSpot").innerHTML = ""; $("relMsg").textContent = "";
     draw();
   }
   function draw() {
@@ -211,21 +213,23 @@
     return '<p class="landed" role="status" tabindex="-1" id="wait-' + esc(safe(x.m.id)) + '"><span>' + esc(x.line) +
       '<span class="lsub">' + esc(x.m.from + ": “" + first.slice(0, 80) + (first.length > 80 || String(x.m.text).indexOf("\n") >= 0 ? "…" : "") + "”") + "</span></span></p>";
   }
-  /* "Seen by Nova 17:10" / "Not read yet" on a message (nothing when nobody can see it) */
+  /* "Read by Nova 17:10" / "Not read yet" / "Read by 7 of 12" on a message (nothing when nobody can read it) */
   function seenMark(m) { var s = L.seenWords(m, board.today); return s ? '<span class="mseen' + (s.seen ? " yes" : "") + '">' + esc(s.text) + "</span>" : ""; }
   function head(m) {
     var lab = L.waitLabel(m);
     return '<p class="mhead"><span><b>' + esc(m.from) + '</b> <span class="arrow">→</span> <b>' + esc(m.to === "all" ? "Everyone" : m.to) + '</b></span><span class="mtime">' + esc(when(m)) + "</span>" +
       (lab ? '<span class="mlabel' + (lab.mine ? " mine" : lab.open ? " open" : "") + '">' + esc(lab.text) + "</span>" : "") + seenMark(m) + "</p>";
   }
-  /* "You answered": the last two days, each with whether the bot has looked at the desk since */
+  /* "You answered": the last two days, each with when it went and whether the bot has READ it since */
   function drawAnswered() {
     var list = L.answeredList(board);
     $("answeredCard").hidden = !list.length;
     $("answeredList").innerHTML = list.map(function (a) {
-      return '<li><p class="mhead"><span><b>' + esc(a.who) + "</b> " + esc(a.asked) + '</span><span class="mtime">' + esc(a.when) + "</span></p>" +
+      /* the time is in the "Sent 17:03 · …" line under it, not twice */
+      return '<li><p class="mhead"><span><b>' + esc(a.who) + "</b> " + esc(a.asked) + "</span>" + (a.status ? "" : '<span class="mtime">' + esc(a.when) + "</span>") + "</p>" +
         '<p class="aq">' + esc(a.their) + '</p><p class="ay">' + esc(a.say) + "</p>" +
-        (a.seen ? '<p class="aseen' + (a.seen.seen ? " yes" : "") + '">' + esc(a.seen.text) + "</p>" + (a.seen.note ? '<span class="anote">' + esc(a.seen.note) + "</span>" : "") : "") + "</li>";
+        /* "Sent 17:03 · Read by Ledger 17:10" (v2: read, from the bot's read marker) */
+        (a.status ? '<p class="aseen' + (a.seen && a.seen.seen ? " yes" : "") + '">' + esc(a.status) + "</p>" + (a.seen && a.seen.note ? '<span class="anote">' + esc(a.seen.note) + "</span>" : "") : "") + "</li>";
     }).join("");
   }
   function thread(th) {
@@ -492,17 +496,20 @@
       btn = '<button class="' + (sb.main ? "copybtn" : "linkbtn") + '"' + attrs + ">" + (busy ? "Saving…" : esc(sb.text)) + "</button>";
     }
     var lk = isLink(s.link) ? outLink(s.link, "Open the link", "rl") : "";
-    return '<li class="' + (st.done ? "done" : st.bad ? "bad" : "") + '"><i aria-hidden="true"></i><div class="rs"><b>' + esc(s.label) + "</b>" +
-      '<span class="ro">' + esc((mine ? "You" : s.owner) + (s.due ? " · due " + L.day(s.due) : "")) + "</span>" +
+    /* v2: a step that is not ours (skipped) or that waits for Spotify for Artists has no due date that
+       means anything: none is shown, and its note is already in its words */
+    var quiet = st.skipped || st.waiting;
+    return '<li class="' + (st.done ? "done" : st.bad ? "bad" : st.skipped ? "skip" : st.waiting ? "wait" : "") + '"><i aria-hidden="true"></i><div class="rs"><b>' + esc(s.label) + "</b>" +
+      '<span class="ro">' + esc((mine ? "You" : s.owner) + (s.due && !quiet ? " · due " + L.day(s.due) : "")) + "</span>" +
       '<span class="rline"><span class="rw">' + esc(cap(st.text)) + "</span>" + (lk || btn ? '<span class="racts2">' + lk + btn + "</span>" : "") + "</span>" +
-      (s.note && s.status !== "blocked" ? '<span class="rn">' + esc(s.note) + "</span>" : "") + "</div></li>";
+      (s.note && s.status !== "blocked" && !st.skipped ? '<span class="rn">' + esc(s.note) + "</span>" : "") + "</div></li>";
   }
   /* the inline questions under a card: a new release day, or cancelling */
   function relAsk(v) {
     var a = ui.rel.ask, busy = ui.rel.busy === "ask:" + v.id, dis = HQ.sample || busy ? " disabled" : "";
     if (!a || a.id !== v.id) return "";
     if (a.kind === "date") {
-      var dn = L.releaseDayNote(a.date, board.today), ok = a.date && !dn.bad && a.date !== v.date;
+      var dn = L.releaseDayNote(a.date, board.today, { move: true }), ok = a.date && !dn.bad && a.date !== v.date;
       return '<div class="confirm" role="group" aria-label="Change the release day"><label class="flbl" for="rd-' + esc(safe(v.id)) + '">New release day</label>' +
         '<input class="fld" type="date" id="rd-' + esc(safe(v.id)) + '" data-reldate="' + esc(v.id) + '" min="' + esc(board.today) + '" value="' + esc(a.date || "") + '"' + (busy ? " disabled" : "") + ">" +
         (dn.line ? '<p class="rdn' + (dn.bad ? " attn" : "") + '">' + esc([dn.line].concat(dn.notes).join(". ").replace(/\.\./g, ".")) + "</p>" : "") +
@@ -530,26 +537,45 @@
     return '<details class="bwhy" data-relopen="' + esc(v.id) + '"' + (ui.rel.open[v.id] ? " open" : "") + "><summary>See the files and details</summary>" + dl +
       (log.length ? '<p class="bsub">Latest changes</p><ul class="rlog">' + log.map(function (x) { return "<li><span>" + esc(L.spWhen(L.spStampOf(x.at), board.today)) + " · </span>" + esc(x.what) + "</li>"; }).join("") + "</ul>" : "") + "</details>";
   }
+  /* the card's line about the files and details (both kinds of card) */
+  function packHtml(v) {
+    var pk = L.packLine(v, board.today);
+    return '<div class="rpack"><b>Files and details</b><span>' + esc(pk.filled) + (pk.items.length ? " · still missing:" : "") + "</span>" +
+      (pk.items.length ? "<ul>" + pk.items.map(function (x) { return "<li" + (x.attn ? ' class="attn"' : "") + ">" + esc(x.text) + "</li>"; }).join("") + (pk.more ? "<li>+" + pk.more + " more (see " + (v.status === "draft" ? "Finish and send" : "Edit the details") + ")</li>" : "") + "</ul>" : "") + "</div>";
+  }
+  /* whose song it is, under the date (v2) */
+  function dealHtml(v) { var d = L.dealWords(v.deal); return '<p class="rdeal' + (d.known ? "" : " no") + '">' + esc(d.known ? d.text : "Whose release it is: not filled in yet") + "</p>"; }
+  /* In the pipeline: a draft Luke is still filling. Title, its day, whose it is, what is still missing,
+     "Finish and send". A draft whose day has passed says that sending records it as already out. */
+  function pipeCard(v) {
+    var today = board.today, off = HQ.sample ? " disabled" : "", asking = ui.rel.ask && ui.rel.ask.id === v.id, past = !!v.date && v.date < today;
+    return '<article class="tile relcard" id="releases-' + esc(safe(v.id)) + '"><div class="bhead"><div><h3>' + esc(v.title) + "</h3>" +
+      '<p class="rwhen">' + esc(L.releaseWhen(v.date, today, true)) + "</p>" + dealHtml(v) + "</div>" + '<span class="pill">Draft</span></div>' +
+      (ui.rel.note[v.id] ? '<p class="rdone" role="status">' + esc(ui.rel.note[v.id]) + "</p>" : "") +
+      (past ? '<p class="rwhere">' + esc(L.whereLine(v)) + "</p>" : "") + packHtml(v) +
+      (asking ? relAsk(v) : '<div class="racts"><button class="sendbtn" type="button" data-rel="edit" data-id="' + esc(v.id) + '">Finish and send</button>' +
+        '<button class="copybtn" type="button" data-rel="cancel" data-id="' + esc(v.id) + '"' + off + ">Cancel the draft</button></div>") +
+      '<p class="ferr" role="alert">' + esc(ui.rel.err[v.id] || "") + "</p>" + relPack(v) + "</article>";
+  }
+  /* Upcoming: a song sent to the team. Where it is at (one line), its warnings (red: each one a fact
+     with a consequence), every step, then the files and details. */
   function relCard(v) {
-    var today = board.today, pill = L.relPill(v, today), pk = L.packLine(v, today), live = v.status === "scheduled" && !v.released, off = HQ.sample ? " disabled" : "";
-    var acts = [];
-    if (v.status === "draft") acts.push('<button class="copybtn" type="button" data-rel="cancel" data-id="' + esc(v.id) + '"' + off + ">Cancel the draft</button>");
-    if (v.status === "scheduled") acts.push('<button class="copybtn" type="button" data-rel="edit" data-id="' + esc(v.id) + '">Edit the details</button>');
+    var today = board.today, pill = L.upcomingPill(v, today), live = v.status === "scheduled" && !v.released, off = HQ.sample ? " disabled" : "";
+    var acts = ['<button class="copybtn" type="button" data-rel="edit" data-id="' + esc(v.id) + '">Edit the details</button>'];
     if (live) acts.push('<button class="copybtn" type="button" data-rel="date" data-id="' + esc(v.id) + '"' + off + ">Change the date</button>",
       '<button class="copybtn" type="button" data-rel="cancel" data-id="' + esc(v.id) + '"' + off + ">Cancel release</button>");
-    var asking = ui.rel.ask && ui.rel.ask.id === v.id;
+    var asking = ui.rel.ask && ui.rel.ask.id === v.id, warn = v.warnings || [], where = L.whereLine(v);
     return '<article class="tile relcard" id="releases-' + esc(safe(v.id)) + '"><div class="bhead"><div><h3>' + esc(v.title) + "</h3>" +
-      '<p class="rwhen">' + esc(L.releaseWhen(v.date, today)) + (v.status === "draft" ? " · not sent yet" : "") + "</p></div>" +
+      '<p class="rwhen">' + esc(L.releaseWhen(v.date, today)) + "</p>" + dealHtml(v) + "</div>" +
       '<span class="' + (pill.bad ? "bstate late" : "pill" + (pill.rel ? " rel" : "")) + '">' + esc(pill.text) + "</span></div>" +
       (ui.rel.note[v.id] ? '<p class="rdone" role="status">' + esc(ui.rel.note[v.id]) + "</p>" : "") +
-      '<div class="rpack"><b>Files and details</b><span>' + esc(pk.filled) + (pk.items.length ? " · still missing:" : "") + "</span>" +
-        (pk.items.length ? "<ul>" + pk.items.map(function (x) { return "<li" + (x.attn ? ' class="attn"' : "") + ">" + esc(x.text) + "</li>"; }).join("") + (pk.more ? "<li>+" + pk.more + " more (see " + (v.status === "draft" ? "Finish and send" : "Edit the details") + ")</li>" : "") + "</ul>" : "") + "</div>" +
-      (v.tight && live ? '<p class="rnote">Sent fewer than 21 days before release, so the early steps were due straight away.</p>' : "") +
-      (v.status === "draft" ? '<button class="sendbtn" type="button" data-rel="edit" data-id="' + esc(v.id) + '">Finish and send</button>' : "") +
-      /* out, and every step done: one line instead of nine (the steps are history now) */
+      (where ? '<p class="rwhere">' + esc(where) + "</p>" : "") +
+      (warn.length ? '<ul class="rwarn" aria-label="Warnings">' + warn.map(function (w) { return "<li>" + esc(w) + "</li>"; }).join("") + "</ul>" : "") +
+      /* out, and every step done: one line instead of ten (the steps are history now) */
       (v.released && v.counts && v.counts.total && v.counts.done === v.counts.total ? '<p class="rnote">All ' + v.counts.total + " steps done.</p>"
         : (v.steps || []).length ? '<ol class="rsteps" aria-label="Steps">' + v.steps.map(function (s) { return relStep(v, s); }).join("") + "</ol>" : "") +
-      (asking ? relAsk(v) : acts.length ? '<div class="racts">' + acts.join("") + "</div>" : "") +
+      packHtml(v) +
+      (asking ? relAsk(v) : '<div class="racts">' + acts.join("") + "</div>") +
       '<p class="ferr" role="alert">' + esc(ui.rel.err[v.id] || "") + "</p>" + relPack(v) + "</article>";
   }
   /* -> true when the desk drew the tab (js/hq.js draws the sheet's list when it didn't) */
@@ -561,16 +587,102 @@
     $("relSub").textContent = L.stepsSummary(board.releaseSteps) || "Every song on its way out: its files and details, and each bot's step with its date.";
     /* a redraw must not take the caret out of the date field being picked */
     var act = document.activeElement, fk = act && act.getAttribute ? act.getAttribute("data-reldate") : null;
+    $("relPipe").innerHTML = lists.pipeline.length ? lists.pipeline.map(pipeCard).join("") : '<p class="empty2">Nothing is being prepared right now. Start one with New song.</p>';
     $("relDesk").innerHTML = lists.coming.map(relCard).join("");
     if (sheet && HQ.releasesBroken()) $("relList").innerHTML = '<p class="empty">See the note above.</p>';
-    else if (sheet || lists.coming.length || lists.out.length) $("relList").innerHTML = lists.sheetOnly.map(HQ.sheetReleaseCard).join("") ||
-      (lists.coming.length || lists.out.length ? "" : '<p class="empty">No releases yet. Start one with New release.</p>');
-    $("relOut").innerHTML = (lists.out.length ? '<details class="relfold" data-fold="out"' + (ui.rel.fold.out ? " open" : "") + "><summary>Out (" + lists.out.length + ')</summary><div class="relgrid">' + lists.out.map(relCard).join("") + "</div></details>" : "") +
+    else $("relList").innerHTML = lists.sheetOnly.map(HQ.sheetReleaseCard).join("") ||
+      (lists.coming.length ? "" : '<p class="empty2">Nothing has been sent to the team yet. A song moves here from “In the pipeline” when you send it.</p>');
+    /* the songs whose day has come leave Upcoming: one quiet line (they live in Songs); one that still has
+       a step open keeps its card, so the step can be finished */
+    var outs = lists.out.map(function (v) { return { title: v.title, date: v.date }; }).concat(lists.sheetOut.map(function (r) { return { title: r.song, date: r.date }; }))
+      .sort(function (a, b) { return (a.date || "") < (b.date || "") ? 1 : -1; });
+    var ol = L.outLine(outs);
+    $("relOut").innerHTML = (ol ? '<p class="routline">' + esc(ol) + ' <a href="#songs">See Songs</a></p>' : "") +
+      (lists.openOut.length ? '<h4 class="lblh">Out, with a step still open</h4><div class="relgrid">' + lists.openOut.map(relCard).join("") + "</div>" : "") +
       (lists.cancelled.length ? '<details class="relfold" data-fold="cancelled"' + (ui.rel.fold.cancelled ? " open" : "") + "><summary>Cancelled (" + lists.cancelled.length + ")</summary>" + lists.cancelled.map(function (v) {
         return '<p class="rcanc"><b>' + esc(v.title) + "</b> · " + esc(v.date ? L.day(v.date) : "no release day") + "</p>"; }).join("") + "</details>" : "");
+    drawSpotify();
     if (fk) { var el = $("releases").querySelector('[data-reldate="' + fk.replace(/[^a-z0-9]/gi, "") + '"]'); if (el) el.focus(); }
     return true;
   }
+
+  /* ---------- In Spotify for Artists (v2, 11 Nov 2026) ----------
+     What Atlas last saw there as upcoming (board.sightings). A song in the pipeline is listed quietly; a
+     song that didn't go through it is a QUESTION for Luke, on the page (not a message), with the four
+     answers. "With a label" asks the label's name in place; every answer is confirmed in place first.
+     The only write: POST /api/staff/sighting (Luke only; off in the sample). */
+  function spotQ(x, choices) {
+    var S = ui.spot, id = safe(x.key), q = L.sightQuestion(x), mine = S.k === x.key && S.answer, busy = S.busy === x.key;
+    var body;
+    if (mine) {
+      var dis = HQ.sample || busy ? " disabled" : "", self = S.answer === "self" || S.answer === "label";
+      body = '<div class="confirm" role="group" aria-label="Confirm your answer">' +
+        (S.answer === "label" ? '<label class="flbl" for="spl-' + esc(id) + '">The label\'s name</label><input class="fld" id="spl-' + esc(id) + '" data-splabel="' + esc(x.key) + '" maxlength="120" autocomplete="off" value="' + esc(S.label) + '"' + (busy ? " disabled" : "") + ">" : "") +
+        '<p id="spc-' + esc(id) + '">' + esc(L.sightConfirm(x, S.answer, S.label.trim())) + "</p>" +
+        '<div class="conn-acts"><button class="sendbtn" type="button" data-sp="yes" data-k="' + esc(x.key) + '"' + dis + ">" + (busy ? "Sending…" : self ? "Yes, start the draft" : "Yes, tell Nova") + "</button>" +
+        '<button class="copybtn" type="button" data-sp="no" data-k="' + esc(x.key) + '"' + (busy ? " disabled" : "") + ">Cancel</button></div></div>";
+    } else body = '<div class="mopts spopts">' + choices.map(function (c) {
+      return '<button class="copybtn" type="button" data-sp="pick" data-k="' + esc(x.key) + '" data-a="' + esc(c.answer) + '"' + (HQ.sample ? " disabled" : "") + ">" + esc(c.text) + "</button>"; }).join("") + "</div>";
+    return '<div class="spq" id="spq-' + esc(id) + '"><p class="spt"><b>' + esc(q.title) + "</b>" + esc(q.rest) + "</p>" + (x.shownAs ? '<p class="sps">Shown there as: ' + esc(x.shownAs) + "</p>" : "") +
+      body + '<p class="ferr" role="alert">' + esc(S.err[x.key] || "") + "</p></div>";
+  }
+  function spotRow(x) {
+    var r = L.sightRow(x), d = ui.spot.done[x.key], fresh = d && Date.now() - d.at < KEEP_MS;
+    return '<li class="' + (x.state === "answered" ? "q" : "") + '"><span class="spr"><b>' + esc(r.title) + "</b> · " + esc(r.when) + "</span>" +
+      '<span class="spw">' + (x.state === "pipeline" && r.id && relById[r.id] ? '<button class="linkbtn" type="button" data-sp="go" data-id="' + esc(r.id) + '">' + esc(r.text) + "</button>" : esc(r.text)) + "</span>" +
+      (r.shown ? '<span class="sps">Shown there as: ' + esc(r.shown) + "</span>" : "") +
+      (fresh ? '<p class="landed tsent" role="status"><span>' + esc(d.line) + "</span></p>" : "") + "</li>";
+  }
+  function drawSpotify() {
+    var el = $("relSpot"), sv = board && board.sightings;
+    if (!sv) { el.innerHTML = '<p class="empty2">Not read yet.</p>'; return; }
+    var h = L.sightingsHead(sv, Date.now(), board.today), items = sv.items || [];
+    var ask = items.filter(function (x) { return x.state === "unknown"; }), rest = items.filter(function (x) { return x.state !== "unknown"; });
+    var choices = sv.choices && sv.choices.length ? sv.choices : [];
+    el.innerHTML = '<div class="tile spotcard"><p class="sphead' + (h.attn ? " attn" : "") + '">' + esc(h.text) + "</p>" +
+      (sv.note ? '<p class="sps">' + esc((sv.by || "Atlas") + "’s note: " + sv.note) + "</p>" : "") + (h.empty ? '<p class="sps">' + esc(h.empty) + "</p>" : "") +
+      (ask.length ? '<div class="spasks">' + ask.map(function (x) { return spotQ(x, choices); }).join("") + "</div>" : "") +
+      (rest.length ? '<ul class="splist">' + rest.map(spotRow).join("") + "</ul>" : "") + "</div>";
+  }
+  $("relSpot").addEventListener("input", function (ev) {
+    var k = ev.target.getAttribute && ev.target.getAttribute("data-splabel"), S = ui.spot;
+    if (!k || S.k !== k) return;
+    S.label = ev.target.value;
+    if (S.err[k]) { delete S.err[k]; var fe = $("spq-" + safe(k)).querySelector(".ferr"); if (fe) fe.textContent = ""; }
+    var x = ((board && board.sightings && board.sightings.items) || []).filter(function (i) { return i.key === k; })[0], p = $("spc-" + safe(k));
+    if (x && p) p.textContent = L.sightConfirm(x, S.answer, S.label.trim());
+  });
+  $("relSpot").addEventListener("click", function (ev) {
+    var b = ev.target.closest && ev.target.closest("[data-sp]");
+    if (!b || !board || !board.sightings) return;
+    var act = b.getAttribute("data-sp"), k = b.getAttribute("data-k") || "", S = ui.spot, sk = safe(k);
+    if (act === "go") { jumpTo(b.getAttribute("data-id")); return; }
+    var x = (board.sightings.items || []).filter(function (i) { return i.key === k; })[0];
+    if (!x || S.busy) return;
+    var focus = function (sel) { var el = $("relSpot").querySelector(sel); if (el) el.focus(); };
+    if (act === "pick") {
+      if (HQ.sample) return;
+      S.k = k; S.answer = b.getAttribute("data-a"); S.label = ""; delete S.err[k]; drawSpotify();
+      focus(S.answer === "label" ? "#spl-" + sk : '[data-sp="no"][data-k]');
+      return;
+    }
+    if (act === "no") { S.k = ""; S.answer = ""; S.label = ""; drawSpotify(); focus("#spq-" + sk + " [data-sp=pick]"); return; }
+    if (act !== "yes" || S.k !== k || HQ.sample) return;
+    var answer = S.answer, label = S.label.trim();
+    if (answer === "label" && label.length < 2) { S.err[k] = "Write the label's name first."; drawSpotify(); focus("#spl-" + sk); return; }
+    S.busy = k; drawSpotify();
+    write("sighting", { key: k, answer: answer, label: answer === "label" ? label : "" }).then(function (r) {
+      S.busy = "";
+      if (!r.ok) { S.err[k] = r.error; drawSpotify(); return; }
+      delete S.err[k];
+      if (r.j.sightings) board.sightings = r.j.sightings;
+      if (r.j.release) putRelease(r.j.release);
+      S.done[k] = { at: Date.now(), line: L.sightDone(x.title, answer, !!r.j.told, Date.now()) };
+      S.k = ""; S.answer = ""; S.label = "";
+      draw();
+      reload();
+    });
+  });
   function jumpTo(id) {
     var el = $("releases-" + safe(id));
     if (!el) return;
@@ -641,16 +753,20 @@
   /* ---------- the form: start a release, finish a draft, or change one that went out ---------- */
   function keepForm() { if (HQ.sample || !ui.form) return; try { localStorage.setItem(L.formKey(ui.form.id), JSON.stringify({ id: ui.form.id, title: ui.form.title, date: ui.form.date, vals: ui.form.vals, at: Date.now() })); } catch (e) {} }
   function forgetForm(id) { try { localStorage.removeItem(L.formKey(id)); } catch (e) {} }
-  function openForm(id) {
+  /* preset (v2, Songs' "Add its details"): { title, date } for a new one, filled in already */
+  function openForm(id, preset) {
     if (!board || !relFields().length) { $("relMsg").textContent = "The form needs the team's desk, which couldn't be loaded. Try Refresh."; return; }
     var v = id ? fullOf(relById[id]) : null, vals = {};
     if (id && !v) { $("relMsg").textContent = "Couldn't open that release's details. Try again."; return; }
     relFields().forEach(function (f) { vals[f.key] = v && v.pack && v.pack[f.key] != null ? String(v.pack[f.key]) : ""; });
     var F = ui.form = { id: v ? v.id : "", status: v ? v.status : "draft", title: v ? v.title : "", date: (v && v.date) || "", orig: { title: v ? v.title : "", date: (v && v.date) || "", vals: JSON.parse(JSON.stringify(vals)) },
-      vals: vals, later: false, open: {}, miss: [], err: "", ok: "", busy: "", ask: false };
-    /* what Luke typed last time and didn't save comes back (this device only) */
+      vals: vals, later: false, open: {}, miss: [], err: "", ok: "", busy: "", ask: false, anyway: null };
+    if (!v && preset) { F.title = String(preset.title || ""); F.date = /^\d{4}-\d{2}-\d{2}$/.test(preset.date || "") ? preset.date : ""; }
+    /* what Luke typed last time and didn't save comes back (this device only; for another song's
+       "Add its details" it stays where it is) */
     var kept = null;
     if (!HQ.sample) try { kept = JSON.parse(localStorage.getItem(L.formKey(F.id)) || "null"); } catch (e) {}
+    if (kept && preset && !v && L.titleKey(kept.title) !== L.titleKey(F.title)) kept = null;
     if (kept && kept.id === F.id && kept.vals) {
       F.title = kept.title || F.title; if (F.status !== "scheduled") F.date = kept.date || ""; Object.keys(kept.vals).forEach(function (k) { if (k in F.vals) F.vals[k] = String(kept.vals[k] || ""); });
       F.ok = "What you typed last time is back. It isn't saved until you press Save or Send.";
@@ -666,13 +782,13 @@
     ui.form = null;
     $("relForm").hidden = true; $("relForm").innerHTML = ""; $("relNew").setAttribute("aria-expanded", "false");
   }
-  var NEED = function (f) {
-    if (f.required) return "needed to send";
-    var st = f.neededBy && (board.releaseSteps || []).filter(function (s) { return s.key === f.neededBy; })[0];
-    return st ? "needed for the " + L.shortStep(st.label) : "";
-  };
+  /* the release day has passed: a song already out, recorded for whose song it is (v2) */
+  var outNow = function (F) { return F.status !== "scheduled" && /^\d{4}-\d{2}-\d{2}$/.test(F.date || "") && F.date < board.today; };
+  /* "needed to send" follows the desk's rule: the label and the split only "With a label" (v2) */
+  var NEED = function (f) { return L.needWord(f, ui.form.vals, board.releaseSteps, outNow(ui.form)); };
   function fieldHtml(f) {
     var F = ui.form, id = "rf-" + safe(f.key), val = F.vals[f.key] || "", need = NEED(f), hint = f.hint ? '<p class="fhint" id="' + id + '-h">' + esc(f.hint) + "</p>" : "";
+    if (!L.fieldShown(f, F.vals)) return "";
     var desc = f.hint ? ' aria-describedby="' + id + '-h"' : "", miss = F.miss.indexOf(f.key) >= 0 ? " miss" : "";
     if (f.group === "later" && !F.later) /* the team fills these: read-only until Luke asks to change them */
       return '<div class="ff" data-ff="' + esc(f.key) + '"><p class="flbl">' + esc(f.label) + '</p><p class="ro-v' + (val ? "" : " none") + '">' + (val ? (f.kind === "link" ? outLink(val, val) : esc(val)) : esc(L.fillWho(f))) + "</p></div>";
@@ -688,22 +804,25 @@
   }
   function dayNoteHtml() {
     var F = ui.form;
-    if (F.status === "scheduled") return '<p class="dnote q">Already with the team. To move it, use Change the date on its card: that moves every open step and tells the team.</p>';
+    if (F.status === "scheduled") return '<p class="dnote q">' + (F.date && F.date <= board.today ? "Out already." : "Already with the team. To move it, use Change the date on its card: that moves every open step and tells the team.") + "</p>";
     var dn = L.releaseDayNote(F.date, board.today);
     return (dn.line ? '<p class="dnote' + (dn.bad ? " bad" : "") + '">' + esc(dn.line) + "</p>" : "") + dn.notes.map(function (n) { return '<p class="dnote' + (dn.bad ? " bad" : " q") + '">' + esc(n) + "</p>"; }).join("");
   }
   function drawForm() {
     var F = ui.form;
     if (!F) return;
-    var sched = F.status === "scheduled", miss = function (k) { return F.miss.indexOf(k) >= 0 ? " miss" : ""; };
-    var h = '<h3 id="rfTitleH">' + (F.id ? (sched ? "Edit " : "Finish ") + esc(F.orig.title || F.title) : "New release") + "</h3>" +
-      '<p class="rf-sub">' + (sched ? "It's already with the team: what you change here reaches every bot the next time it opens its day." : "Fill in what you have. Save it for later, or send it to the team once everything marked “needed to send” is in. The pitch details can wait.") + "</p>" +
-      '<div class="ffrow"><div class="ff' + miss("title") + '" data-ff="title"><label class="flbl" for="rf-title">Title <span class="req">needed to send</span></label><input class="fld" id="rf-title" data-rf="title" maxlength="120" autocomplete="off" value="' + esc(F.title) + '"></div>' +
-      '<div class="ff' + miss("date") + '" data-ff="date"><label class="flbl" for="rf-date">Release day <span class="req">needed to send</span></label><input class="fld" type="date" id="rf-date" data-rf="date" min="' + esc(board.today) + '" value="' + esc(F.date) + '"' + (sched ? " disabled" : "") + ' aria-describedby="rfDay"><div id="rfDay" aria-live="polite">' + dayNoteHtml() + "</div></div></div>";
+    var sched = F.status === "scheduled", out = outNow(F), need = out ? "needed to record it" : "needed to send", miss = function (k) { return F.miss.indexOf(k) >= 0 ? " miss" : ""; };
+    var h = '<h3 id="rfTitleH">' + (F.id ? (sched ? "Edit " : "Finish ") + esc(F.orig.title || F.title) : "New song") + "</h3>" +
+      '<p class="rf-sub">' + (sched ? "It's already with the team: what you change here reaches every bot the next time it opens its day."
+        : out ? "Already out: only “Whose release is it” is needed. Recording it keeps whose song it is, for Songs; there are no steps and nobody is told."
+        : "Fill in what you have. Save it for later, or send it to the team once everything marked “needed to send” is in. The pitch details can wait.") + "</p>" +
+      '<div class="ffrow"><div class="ff' + miss("title") + '" data-ff="title"><label class="flbl" for="rf-title">Title <span class="req">' + need + '</span></label><input class="fld" id="rf-title" data-rf="title" maxlength="120" autocomplete="off" value="' + esc(F.title) + '"></div>' +
+      /* no lower limit (v2): a day that has passed records a song that is already out */
+      '<div class="ff' + miss("date") + '" data-ff="date"><label class="flbl" for="rf-date">Release day <span class="req">' + need + '</span></label><input class="fld" type="date" id="rf-date" data-rf="date" value="' + esc(F.date) + '"' + (sched ? " disabled" : "") + ' aria-describedby="rfDay"><div id="rfDay" aria-live="polite">' + dayNoteHtml() + "</div></div></div>";
     L.formGroups(relFields()).forEach(function (g) {
       var body = g.fields.map(fieldHtml).join("") + (g.key === "later" && !F.later ? '<button class="linkbtn" type="button" data-rf-act="later">Change these yourself</button>' : "");
-      var wrap = g.key === "files" || g.key === "stores" ? "ffrow" : "";
-      if (g.key === "files" || g.key === "stores") { h += '<section class="fgroup"><h4>' + esc(g.title) + '</h4><div class="fbody ' + wrap + '">' + body + "</div></section>"; return; }
+      /* "Whose release is it", the files and the store details are always open; the rest fold */
+      if (g.key === "deal" || g.key === "files" || g.key === "stores") { h += '<section class="fgroup' + (g.key === "deal" ? " fdeal" : "") + '" data-fsec="' + g.key + '"><h4>' + esc(g.title) + '</h4><div class="fbody ffrow">' + body + "</div></section>"; return; }
       var n = g.fields.filter(function (f) { return F.vals[f.key]; }).length, want = g.fields.some(function (f) { return F.miss.indexOf(f.key) >= 0; });
       var open = F.open[g.key] != null ? F.open[g.key] : want || (g.key === "lyrics" && !!F.vals.lyrics);
       h += '<details class="fgroup" data-fg="' + g.key + '"' + (open || want ? " open" : "") + "><summary>" + esc(g.title) + '<span class="gs">' + n + " of " + g.fields.length + " filled</span></summary><div class=\"fbody\">" + body + "</div></details>";
@@ -714,10 +833,13 @@
   function drawFoot() {
     var F = ui.form, el = $("rfFoot");
     if (!F || !el) return;
-    var sched = F.status === "scheduled", dis = HQ.sample || F.busy ? " disabled" : "";
+    var sched = F.status === "scheduled", dis = HQ.sample || F.busy ? " disabled" : "", out = outNow(F);
     var h = (F.err ? '<p class="ferr" role="alert">' + esc(F.err) + "</p>" : "") + (F.ok ? '<p class="fok" role="status">' + esc(F.ok) + "</p>" : "");
-    if (F.ask) h += '<div class="confirm" role="group" aria-label="Confirm sending"><p>' + esc(L.sendQuestion(F.title, F.date)) + '</p><div class="conn-acts"><button class="sendbtn" type="button" data-rf-act="send-yes"' + dis + ">" + (F.busy === "send" ? "Sending…" : "Yes, send it") + '</button><button class="copybtn" type="button" data-rf-act="send-no"' + (F.busy ? " disabled" : "") + ">Not yet</button></div></div>";
-    else h += '<div class="conn-acts">' + (sched ? "" : '<button class="sendbtn" type="button" data-rf-act="send"' + dis + ">" + (F.busy === "send" ? "Saving…" : "Send to the team") + "</button>") +
+    if (F.anyway) /* refused with something missing (v2): fill it in, or send anyway (it stays on the card as a warning) */
+      h += '<div class="confirm" role="group" aria-label="Send anyway?"><p>' + esc(L.missingSentence(F.anyway, true) + " What you typed is saved.") + '</p><div class="conn-acts"><button class="sendbtn" type="button" data-rf-act="anyway-yes"' + dis + ">" +
+        (F.busy === "send" ? "Sending…" : out ? "Record it anyway" : "Send anyway") + '</button><button class="copybtn" type="button" data-rf-act="anyway-no"' + (F.busy ? " disabled" : "") + ">Not yet</button></div></div>";
+    else if (F.ask) h += '<div class="confirm" role="group" aria-label="Confirm sending"><p>' + esc(L.sendQuestion(F.title, F.date, board.today)) + '</p><div class="conn-acts"><button class="sendbtn" type="button" data-rf-act="send-yes"' + dis + ">" + (F.busy === "send" ? "Sending…" : out ? "Yes, record it" : "Yes, send it") + '</button><button class="copybtn" type="button" data-rf-act="send-no"' + (F.busy ? " disabled" : "") + ">Not yet</button></div></div>";
+    else h += '<div class="conn-acts">' + (sched ? "" : '<button class="sendbtn" type="button" data-rf-act="send"' + dis + ">" + (F.busy === "send" ? "Saving…" : esc(L.sendButton(F.date, board.today))) + "</button>") +
       '<button class="copybtn" type="button" data-rf-act="save"' + dis + ">" + (F.busy === "save" ? "Saving…" : sched ? "Save changes" : "Save for later") + "</button>" +
       '<button class="linkbtn" type="button" data-rf-act="close"' + (F.busy ? " disabled" : "") + ">Close</button></div>";
     if (HQ.sample) h += '<p class="fok" style="margin:12px 0 0">This is the sample: saving and sending are switched off here.</p>';
@@ -736,7 +858,7 @@
   function saveForm(thenSend) {
     var F = ui.form;
     if (!F || HQ.sample || F.busy) return;
-    F.title = F.title.trim(); F.ok = ""; F.err = "";
+    F.title = F.title.trim(); F.ok = ""; F.err = ""; F.anyway = null;
     if (!F.title) { F.err = "Give the release its title first."; F.miss = ["title"]; drawFoot(); markMiss(); focusFirstMiss(); return; }
     var body = { title: F.title, pack: L.packChanges(relFields(), F.orig.vals, F.vals) };
     if (F.id) body.id = F.id;
@@ -756,23 +878,40 @@
       }
       var miss = (v.missing || []).filter(function (m) { return m.required; });
       drawReleases();
-      if (miss.length) { F.err = L.missingSentence(miss) + " What you typed is saved."; F.miss = miss.map(function (m) { return m.key; }); drawFoot(); markMiss(); focusFirstMiss(); return; }
+      if (miss.length) {
+        F.miss = miss.map(function (m) { return m.key; });
+        /* v2: "Send anyway" is offered, except without a release day (nothing could be dated) */
+        if (L.canSendAnyway(miss)) { F.anyway = miss; F.err = ""; drawFoot(); markMiss(); var no = $("relForm").querySelector('[data-rf-act="anyway-no"]'); if (no) no.focus(); }
+        else { F.err = L.missingSentence(miss) + " What you typed is saved."; drawFoot(); markMiss(); focusFirstMiss(); }
+        return;
+      }
       F.miss = []; F.ask = true; markMiss(); drawFoot();
       var y = $("relForm").querySelector('[data-rf-act="send-yes"]'); if (y) y.focus();
     });
   }
-  function sendForm() {
+  /* anyway (v2): sent with what is still missing, which stays on the card as a warning */
+  function sendForm(anyway) {
     var F = ui.form;
     if (!F || !F.id || HQ.sample || F.busy) return;
     F.busy = "send"; drawFoot();
-    write("release/send", { id: F.id }).then(function (r) {
+    write("release/send", anyway ? { id: F.id, anyway: true } : { id: F.id }).then(function (r) {
       F.busy = "";
       if (ui.form !== F) return;
-      if (!r.ok) { F.ask = false; F.err = r.error; F.miss = r.j && Array.isArray(r.j.missing) ? r.j.missing : []; drawFoot(); markMiss(); focusFirstMiss(); return; }
+      if (!r.ok) {
+        var keys = r.j && Array.isArray(r.j.missing) ? r.j.missing : [];
+        F.ask = false; F.miss = keys;
+        var short = function (k) { var f = relFields().filter(function (x) { return x.key === k; })[0]; return { key: k, short: k === "date" ? "Release day" : f ? f.short || f.label : k, required: true }; };
+        if (r.j && r.j.canSendAnyway && keys.length && !anyway) { F.anyway = keys.map(short); F.err = ""; } else { F.anyway = null; F.err = r.error; }
+        drawFoot(); markMiss(); if (!F.anyway) focusFirstMiss();
+        return;
+      }
       putRelease(r.j.release);
-      var id = r.j.release.id;
-      ui.rel.note[id] = "Sent to the team at " + hhmm(Date.now()) + ". Every bot has its steps and dates." + (r.j.told ? " Everyone got a note on the board." : "");
-      closeForm(); drawReleases(); HQ.boardChanged(); jumpTo(id); reload();
+      var id = r.j.release.id, note = L.sentNote(r.j, Date.now(), relFields());
+      ui.rel.note[id] = note;
+      closeForm(); drawReleases(); HQ.boardChanged();
+      /* recorded as already out: it is in the "Out" line, not a card; say it at the top */
+      if (r.j.alreadyOut) { $("relMsg").textContent = r.j.release.title + ": " + note; $("relMsg").scrollIntoView({ block: "center" }); } else jumpTo(id);
+      reload();
     });
   }
   $("relNew").addEventListener("click", function () {
@@ -785,8 +924,16 @@
     var F = ui.form, el = ev.target, k = el.getAttribute && el.getAttribute("data-rf");
     if (!F || !k) return;
     if (el.type === "radio" && !el.checked) return;
+    var wasOut = outNow(F);
     if (k === "title" || k === "date") F[k] = el.value; else F.vals[k] = el.value;
     if (k === "date") $("rfDay").innerHTML = dayNoteHtml();
+    if (F.anyway) { F.anyway = null; drawFoot(); } /* changed after "Send anyway?": ask again with what's there now */
+    /* the label and the split come and go with "With a label"; a day in the past (a song already out)
+       changes what is needed: the form is drawn again, the caret kept where it was */
+    if ((k === "kind" && ev.type === "change") || (k === "date" && wasOut !== outNow(F))) {
+      drawForm(); markMiss();
+      var back = $("relForm").querySelector(k === "kind" ? 'input[data-rf="kind"]:checked' : "#rf-date"); if (back) back.focus({ preventScroll: true });
+    }
     if (F.miss.indexOf(k) >= 0 && String(el.value).trim()) { F.miss = F.miss.filter(function (x) { return x !== k; }); var w = el.closest("[data-ff]"); if (w) w.classList.remove("miss"); }
     if (F.ask) { F.ask = false; drawFoot(); } /* changed after "Send?": ask again with what's there now */
     keepForm();
@@ -799,10 +946,27 @@
     else if (act === "close") { var id = ui.form.id; closeForm(true); if (id) jumpTo(id); else $("relNew").focus(); }
     else if (act === "save") saveForm(false);
     else if (act === "send") saveForm(true);
-    else if (act === "send-yes") sendForm();
+    else if (act === "send-yes") sendForm(false);
+    else if (act === "anyway-yes") sendForm(true);
+    else if (act === "anyway-no") { ui.form.anyway = null; drawFoot(); focusFirstMiss(); }
     else if (act === "send-no") { ui.form.ask = false; drawFoot(); var s = $("relForm").querySelector('[data-rf-act="send"]'); if (s) s.focus(); }
   });
   $("relForm").addEventListener("submit", function (ev) { ev.preventDefault(); });
 
-  window.HQStaff = { reload: reload, clear: clear, drawWorkers: drawWorkers, drawReleases: drawReleases, board: function () { return board; }, problem: function () { return problem; } };
+  /* Songs' "Add its details" (v2, 11 Nov 2026): o = { id, title, date }. id = the desk already has the
+     song (recorded before whose release it was asked): its own form; else a new one with the title and
+     the day filled in. Upcoming is opened first, so the form is where Luke can see it. */
+  function addDetails(o) {
+    o = o || {};
+    if (location.hash.split("/")[0] !== "#releases") location.hash = "#releases";
+    setTimeout(function () {
+      if (!board) { $("relMsg").textContent = "The form needs the team's desk, which couldn't be loaded. Try Refresh."; return; }
+      var id = o.id && relById[o.id] ? o.id : "";
+      if (!id) { openForm("", { title: o.title, date: o.date }); return; }
+      if (fullOf(relById[id])) { openForm(id); return; }
+      loadFull(id).then(function (f) { if (f) openForm(id); });
+    }, 80);
+  }
+
+  window.HQStaff = { reload: reload, clear: clear, drawWorkers: drawWorkers, drawReleases: drawReleases, addDetails: addDetails, board: function () { return board; }, problem: function () { return problem; } };
 })();

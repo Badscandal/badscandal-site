@@ -442,6 +442,14 @@
       var rw = HQLib.releaseWords((s && s.released) || (p && p.date), (sheet && sheet.today) || spToday());
       var relPill = rw ? '<span class="pill ' + (rw.out ? "rel" : "") + '">' + esc(rw.pill) + "</span>" : "";
       var out = '<div class="tile" id="song-' + esc(p ? p.id : k) + '"><div class="songhead">' + (p && p.cover ? '<img class="cover" src="' + esc(p.cover) + '" alt="">' : "") + "<h3>" + esc(name) + "</h3>" + (relPill || pill ? '<span class="pills">' + relPill + pill + "</span>" : "") + "</div>";
+      /* whose song it is (v2, 11 Nov 2026, Luke: "the current songs section should include if the song is a
+         collaborative release with a label like magic and the split of the song"): from the team's desk;
+         not recorded yet = "Add its details", which opens the form in Upcoming with the title and day in */
+      var deal = HQLib.songDeal(name, s, staffBoard());
+      if (deal !== undefined) {
+        var dw = HQLib.dealWords(deal), rdate = (s && s.released) || (p && p.date) || "";
+        out += '<p class="sdeal' + (dw.known ? "" : " no") + '">' + esc(dw.text) + (dw.known ? "" : ' <button class="linkbtn" type="button" data-adddeal="' + esc(dw.id) + '" data-title="' + esc(name) + '" data-date="' + esc(String(rdate).slice(0, 10)) + '">Add its details</button>') + "</p>";
+      }
       if (s) out += '<div class="big num">' + fmt(s.streams) + " <small>streams · " + esc(day(s.lastDay)) + "</small></div>" +
         '<div class="d">' + signed(s.dayChange) + " vs the day before · " + fmt(s.week) + " in 7 days" + (s.prevWeek != null ? " (" + fmt(s.prevWeek) + " the 7 before)" : "") + "</div>" + spark(s.series) +
         '<div class="d">' + fmt(s.listeners) + " listeners · " + fmt(s.saves) + " saves · " + fmt(s.adds) + " playlist adds" + (s.stale > 3 ? ' · <b style="color:var(--paper)">not logged for ' + s.stale + " days</b>" : "") + "</div>";
@@ -567,8 +575,12 @@
      the sheet's list as before (it already carries the desk's scheduled releases, hq.mjs mergeReleases). */
   function drawReleases() {
     if (window.HQStaff && window.HQStaff.drawReleases()) return;
-    $("relDesk").innerHTML = ""; $("relOut").innerHTML = "";
-    $("relList").innerHTML = broken("Releases") ? '<p class="empty">See the note above.</p>' : sheet.releases.length ? sheet.releases.map(sheetReleaseCard).join("") : '<p class="empty">No releases in the sheet yet.</p>';
+    /* without the desk: the sheet's songs still to come, and one line for the ones that are out (v2) */
+    var l = window.HQLib.releaseLists(null, sheet), ol = window.HQLib.outLine(l.sheetOut.map(function (r) { return { title: r.song, date: r.date }; }));
+    $("relDesk").innerHTML = ""; $("relPipe").innerHTML = "";
+    $("relOut").innerHTML = ol ? '<p class="routline">' + esc(ol) + ' <a href="#songs">See Songs</a></p>' : "";
+    $("relSpot").innerHTML = '<p class="empty2">This shows once the team\'s desk is read.</p>';
+    $("relList").innerHTML = broken("Releases") ? '<p class="empty">See the note above.</p>' : l.sheetOnly.length ? l.sheetOnly.map(sheetReleaseCard).join("") : '<p class="empty">Nothing coming in the sheet yet.</p>';
   }
   function sheetReleaseCard(r) {
     var isOut = !!r.date && r.daysToGo <= 0;
@@ -576,7 +588,10 @@
     /* once it is out the card says Released; "On time" / "N late" are about getting there */
     return '<div class="tile"><div class="row"><h3>' + esc(r.song) + "</h3>" + (isOut ? '<span class="pill rel">Released</span>' : r.late ? '<span class="pill warn">' + r.late + " late</span>" : '<span class="pill">On time</span>') + "</div>" +
       '<div class="d" style="margin-top:6px">' + esc(day(r.date)) + " · " + when + (r.status && !(r.daysToGo <= 0 && /^(out|released|live)$/i.test(r.status)) ? " · " + esc(r.status) : "") + (r.weekday && r.weekday !== "Fri" && r.daysToGo > 0 ? " · not a Friday" : "") + "</div>" +
-      '<ul class="steps">' + r.steps.map(function (s) { return '<li class="' + (s.done ? "done" : s.late ? "late" : "") + '"><span class="dot"></span><span>' + esc(s.label) + ' <span class="lbl">' + esc(s.owner) + '</span></span><span class="w">' + (s.done ? "done" : esc(day(s.due)) + (s.late ? " · late" : "")) + "</span></li>"; }).join("") + "</ul>" +
+      /* v2: the pitch waits (never late) while the latest Spotify for Artists report doesn't show the song;
+         a step the label delivers is not ours */
+      '<ul class="steps">' + r.steps.map(function (s) { return '<li class="' + (s.done && !s.skipped ? "done" : s.late ? "late" : "") + '"><span class="dot"></span><span>' + esc(s.label) + ' <span class="lbl">' + esc(s.owner) + '</span></span><span class="w' + (s.waiting && !s.done ? " wait" : "") + '">' +
+        (s.skipped ? "not ours" : s.done ? "done" : s.waiting && !s.late ? esc(s.waitingText || "waiting") : esc(day(s.due)) + (s.late ? " · late" : "")) + "</span></li>"; }).join("") + "</ul>" +
       (r.notes ? '<div class="d" style="margin-top:8px">' + esc(r.notes) + "</div>" : "") +
       '<button class="rel-btn" type="button" data-release="' + esc(r.song) + '">See what\'s missing ›</button></div>';
   }
@@ -685,6 +700,11 @@
   }
   $("nextTile").addEventListener("click", function () { if (sheet && sheet.next) openRelease(sheet.next.song); });
   document.addEventListener("click", function (ev) { var b = ev.target.closest && ev.target.closest("[data-release]"); if (b) openRelease(b.getAttribute("data-release")); });
+  /* Songs: "Add its details" for a song whose deal isn't recorded (v2): the form in Upcoming */
+  document.addEventListener("click", function (ev) {
+    var b = ev.target.closest && ev.target.closest("[data-adddeal]");
+    if (b && window.HQStaff) window.HQStaff.addDetails({ id: b.getAttribute("data-adddeal"), title: b.getAttribute("data-title"), date: b.getAttribute("data-date") });
+  });
   $("detailClose").addEventListener("click", closeRelease);
   $("scrim").addEventListener("click", closeRelease);
   document.addEventListener("keydown", function (ev) { if (ev.key === "Escape") closeRelease(); });
@@ -696,7 +716,7 @@
     postJSON: postJSON, copyText: copyText, link: link, stack: stack, drawFeed: drawFeed, sheet: function () { return sheet; },
     sheetReleaseCard: sheetReleaseCard, releasesBroken: function () { return broken("Releases"); },
     /* the staff desk answered (or was cleared): Today's attention, the site-check line and Data health read it */
-    boardChanged: function () { if (sheet || ov) drawBriefing(); drawDataHealth(); if (!staffBoard()) drawLive(); } };
+    boardChanged: function () { if (sheet || ov) { drawBriefing(); drawSongs(); } drawDataHealth(); if (!staffBoard()) drawLive(); } };
   /* hq-pages.js is loaded with defer right after this file: start once both are in */
   document.addEventListener("DOMContentLoaded", start);
 })();
