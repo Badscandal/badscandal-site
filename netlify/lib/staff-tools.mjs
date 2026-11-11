@@ -54,7 +54,7 @@ export const TOOLS = [
       amount: { type: "number", description: "The amount as paid, for example 112.01. Positive. Not converted." },
       currency: str("Three-letter code of the currency it was paid in: EUR, USD, GBP, BRL..."),
       account: str('Where it landed: "Wise", "PayPal", "Revolut", "Bank", or "Statement only" when you only saw a statement.'),
-      status: str("received | pending | transfer. Default received.", { enum: S.INCOME_STATUS }),
+      status: str("received | pending | transfer. Default received.", { enum: ["received", "pending", "transfer"] }),
       category: str("Self-releases | Label deals | Publishing | Production | Salary | Other. Default Other.", { enum: S.CATEGORIES }),
       reference: str("The payment's own reference or transaction id from the account, if it shows one. This is what stops double counting. Not an account number."),
       period: str('Optional. What the payment covers, for example "2026-Q3" or "Sep 2026".'),
@@ -104,7 +104,16 @@ export const TOOLS = [
   { name: "read_guide", title: "Read the staff guide", readOnly: true,
     description: "The written guide to this desk: who does what, the daily times, how to log income, how messages work, the rules that never bend. Read it once when you are first connected, and again whenever Nova says it changed.",
     inputSchema: obj({ bot: BOT }, ["bot"]) },
+  { name: "sort_payment", title: "Say what a Revolut payment is", idempotent: true,
+    description: 'For Ledger (Sheet and Nova may too). The site reads Luke\'s personal Revolut every morning and puts every incoming payment on the desk. One it could not place has the status "unsorted": it is in the account, and nobody has said what it is, so it counts as nothing yet. Use this to say what ONE such payment is: received (it is income: give its category) or transfer (not income: Luke moving his own money, a refund, a gift, a friend paying him back). Find the id and month in income_status under "unsorted". Sort it ONLY when it is clear from the payer (a label, a distributor, a publisher, a known client = received; Luke\'s own name or his own account = transfer). When it is not clear, leave it unsorted and ask Luke with ONE send_message, needs decision, naming the payer, the date and the amount. Never guess. You can also correct a payment the site sorted itself; what Luke or another person decided cannot be changed here.',
+    inputSchema: obj({ bot: BOT, id: str("The payment's id from income_status (it starts with i)."), month: str("The month it is filed under, YYYY-MM (the first 7 characters of its date)."),
+      status: str("received | transfer", { enum: ["received", "transfer"] }), category: str("Only with received: Self-releases | Label deals | Publishing | Production | Salary | Other.", { enum: S.CATEGORIES }) }, ["bot", "id", "status"]) },
 ];
+
+/* Luke, 11 Nov 2026: "let them see my full revolut personal income to be able to actually see the
+   income". So the bots see EVERY incoming Revolut payment on the desk (sorted or not, transfers too),
+   and Ledger, Sheet and Nova can say what an unsorted one is. Nothing extra is Claude-only. */
+export const CLAUDE_TOOLS = [];
 
 const RULES = [
   "Never write a password, login code, key, card or bank account number anywhere on this desk.",
@@ -193,7 +202,13 @@ export async function callTool(tool, args, ctx) {
       return { month: i.month, received_this_month: cur(i.received), pending_this_month: cur(i.pending), payments_logged_this_month: i.count,
         accounts: i.accounts.map((a) => ({ name: a.name, owner: a.owner, checked_today: a.lastLook === today, last_checked: a.lastLook || "never", state: a.verdict })),
         sources: i.sources.map(line), problems: i.problems,
-        newest_payments: i.entries.slice(0, 15).map((e) => `${e.date} · ${e.payer} · ${e.currency} ${e.amount.toFixed(2)} · ${e.status} · ${e.account} · by ${e.by}`) };
+        newest_payments: i.entries.slice(0, 15).map((e) => `${e.date} · ${e.payer} · ${e.currency} ${e.amount.toFixed(2)} · ${e.status} · ${e.account} · by ${e.by}`),
+        /* in the account, not yet said what they are: counted as nothing until sorted (tool sort_payment) */
+        unsorted: i.unsorted.map((e) => ({ id: e.id, month: e.date.slice(0, 7), line: `${e.date} · ${e.payer} · ${e.currency} ${e.amount.toFixed(2)} · ${e.account}` })) };
+    }
+    case "sort_payment": {
+      const e = await S.sortIncome(store, now, roster, { by: me, id: args.id, month: args.month, status: args.status, category: args.category });
+      return { saved: true, id: e.id, status: e.status, category: e.category, recorded: `${e.arrived || e.date} · ${e.payer} · ${e.currency} ${e.amount.toFixed(2)} · ${e.status}` };
     }
     case "set_my_card": {
       if (me === "Claude") throw new S.StaffError("Cards are for the bots.");
