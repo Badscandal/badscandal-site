@@ -953,7 +953,11 @@ Brief: `../TOUCHME-LANDING-BUILD-BRIEF.md` (outside the repo on purpose).
   Luke asked for USD<->EUR at the month's average: converted figures are ESTIMATES shown NEXT TO the
   real amount and the rate used, never instead of it. The cap card shows the EUR estimate.
 * **BADSCANDAL HQ, `/hq` (11 Nov 2026; on branch `hq-dashboard` until Luke has seen it):** `hq.html`
-  + `js/hq.js`, stand-alone like admin.html, SAME login as /admin (no cookie -> sent to /admin).
+  + `js/hq.js`, stand-alone like admin.html, SAME login as /admin (no cookie -> sent to
+  `/admin?next=/hq…`; after the login js/admin.js sends them straight back. `next` only accepts
+  `/hq`, `/hq.html`, `?sample=1` and a `#section`, so it can't bounce anyone to another site).
+  On phones (<720 px) the Fans, Money and Team tables turn into one card per row, each value
+  labelled from the header row (`stack()` in js/hq.js + the `table.stack` CSS); desktop keeps tables.
   Server `netlify/functions/hq.mjs` (`/api/hq/data`, read-only). It reads the bots' Google Sheet
   "BADSCANDAL HQ" (tabs Growth, Songs, Fans, Releases, Tasks, Royalties, Spend, Income; exact
   columns in the header of `netlify/lib/hq.mjs`, spec in badscandal-hq

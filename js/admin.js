@@ -76,6 +76,14 @@
   function remember() { try { localStorage.setItem("bs_admin_view", JSON.stringify({ range: state.range, link: state.link })); } catch (e) {} }
 
   /* ---------- login ---------- */
+  /* /hq sends people here with ?next=/hq… when they aren't logged in; after the login they go
+     straight back. Only HQ addresses are accepted, so the link can't be used to send anyone
+     to another site. */
+  var BACK = (function () {
+    var n = new URLSearchParams(location.search).get("next") || "";
+    return /^\/hq(\.html)?(\?sample=1)?(#[a-z]+)?$/.test(n) ? n : "";
+  })();
+  if (BACK) document.querySelector(".login h1 span").textContent = "HQ";
   function showLogin(msg) {
     $("app").hidden = true;
     $("login").hidden = false;
@@ -93,7 +101,7 @@
       .then(function (r) { return r.json().catch(function () { return {}; }).then(function (j) { return { s: r.status, j: j }; }); })
       .then(function (res) {
         btn.disabled = false;
-        if (res.s === 200) { $("pw").value = ""; $("login").hidden = true; load(true); return; }
+        if (res.s === 200) { $("pw").value = ""; if (BACK) { location.replace(BACK); return; } $("login").hidden = true; load(true); return; }
         if (res.s === 401) $("err").textContent = "Wrong password." + (res.j.left != null ? " " + res.j.left + " tries left." : "");
         else $("err").textContent = res.j.error || "Couldn't log in (" + res.s + ").";
       })

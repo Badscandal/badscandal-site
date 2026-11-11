@@ -78,6 +78,17 @@ td.r,th.r{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
 .btn{background:var(--paper);color:var(--ink);border:0;border-radius:999px;padding:11px 18px;font-weight:700;font-size:14px;cursor:pointer}
 .ghost{background:transparent;border:1px solid var(--ink-3);border-radius:999px;padding:7px 11px;font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);cursor:pointer;text-decoration:none}
 @media(min-width:900px){.chips{width:auto}.top-in{flex-wrap:nowrap}.when{order:3}}
+/* phones: the wide tables (fans, money, team) become one small card per row, each value
+   labelled from the table's header row (js/hq.js stack()), so nothing hides off the right edge */
+@media(max-width:719px){
+.scroll table.stack{min-width:0}
+table.stack tr.hd{display:none}
+table.stack tr{display:block;padding:10px 0;border-bottom:1px solid var(--ink-3)}
+table.stack td{display:grid;grid-template-columns:96px minmax(0,1fr);gap:10px;border:0;padding:3px 0;text-align:left;white-space:normal;overflow-wrap:anywhere}
+table.stack td::before{content:attr(data-l);font-family:var(--mono);font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);padding-top:3px}
+table.stack td:first-child,table.stack td.empty{display:block;padding-bottom:4px}
+table.stack td:first-child::before,table.stack td.empty::before{content:none}
+}
 </style>
 </head>
 <body>
@@ -115,10 +126,10 @@ td.r,th.r{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
 
   <section class="card" id="songs"><h2>Songs</h2><p class="sub">Spotify, day by day. Momentum = the last 7 days against the 7 before. Spotify's numbers arrive about two days late.</p><div class="grid g3" id="songList"></div></section>
   <section class="card" id="growth"><h2>Growth</h2><p class="sub">Followers per platform, and the posts that went out on the days that grew most.</p><div class="grid g4" id="growthList"></div></section>
-  <section class="card" id="fans"><h2>Fans forming</h2><p class="sub" id="fansSub"></p><div class="scroll"><table id="fanTable"></table></div></section>
+  <section class="card" id="fans"><h2>Fans forming</h2><p class="sub" id="fansSub"></p><div class="scroll"><table class="stack" id="fanTable"></table></div></section>
   <section class="card" id="releases"><h2>Releases</h2><p class="sub">Counting back from release day: 28 days files, 21 RouteNote, 14 Spotify pitch, 10 lyrics, 7 video and page.</p><div class="grid g3" id="relList"></div></section>
-  <section class="card" id="money"><h2>Money</h2><p class="sub">Every amount in the currency it was billed or paid in. Totals in EUR are estimates at that month's average rate.</p><div class="scroll"><table id="moneyTable"></table></div><div id="moneyDetail"></div></section>
-  <section class="card" id="team"><h2>Team</h2><p class="sub" id="teamSub"></p><div class="scroll"><table id="teamTable"></table></div><div class="scroll" style="margin-top:14px"><table id="taskTable"></table></div></section>
+  <section class="card" id="money"><h2>Money</h2><p class="sub">Every amount in the currency it was billed or paid in. Totals in EUR are estimates at that month's average rate.</p><div class="scroll"><table class="stack" id="moneyTable"></table></div><div id="moneyDetail"></div></section>
+  <section class="card" id="team"><h2>Team</h2><p class="sub" id="teamSub"></p><div class="scroll"><table class="stack" id="teamTable"></table></div><div class="scroll" style="margin-top:14px"><table class="stack" id="taskTable"></table></div></section>
   </div>
 </main>
 <script src="js/hq.js"></script>

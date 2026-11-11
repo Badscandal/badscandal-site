@@ -32,6 +32,18 @@
     return t;
   }
 
+  function stack(id) { /* phones: hq.html turns each row into a card; label every cell from the header row */
+    var t = $(id), rows = t.rows, head = [], r, c;
+    if (!rows.length || !rows[0].querySelector("th")) return;
+    rows[0].className = "hd";
+    for (c = 0; c < rows[0].cells.length; c++) head.push(rows[0].cells[c].textContent);
+    for (r = 1; r < rows.length; r++) for (c = 0; c < rows[r].cells.length; c++) {
+      var td = rows[r].cells[c], v = document.createElement("div");
+      while (td.firstChild) v.appendChild(td.firstChild);
+      td.appendChild(v); td.setAttribute("data-l", head[c] || "");
+    }
+  }
+
   function drawToday() {
     var c = data.money.cap, t = $("capTile");
     $("capMonth").textContent = monthName(c.month);
@@ -81,13 +93,14 @@
     $("fanTable").innerHTML = f.people.length ? "<tr><th>Who</th><th>Where</th><th class='r'>Times</th><th>What they said</th><th>About them</th><th>How to reach them</th></tr>" + f.people.map(function (p) {
       return "<tr><td><b>" + link(p.profile, p.handle) + "</b><br><span class='lbl'>" + esc(p.signals.join(" · ").replace(/_/g, " ")) + "</span></td><td>" + esc(p.platform) + "<br><span class='lbl'>" + esc(day(p.last)) + "</span></td><td class='r'>" + (p.times >= 2 ? "<b>" + p.times + "</b>" : p.times) + "</td><td>" + (p.quote ? "“" + link(p.post, p.quote) + "”" : "–") + "</td><td>" + esc(p.about || "–") + "</td><td>" + esc(p.engage || "–") + "</td></tr>";
     }).join("") : '<tr><td class="empty">No fan signals logged yet.</td></tr>';
+    stack("fanTable");
   }
 
   function drawReleases() {
     $("relList").innerHTML = data.releases.length ? data.releases.map(function (r) {
-      var when = r.date ? (r.daysToGo > 0 ? r.daysToGo + " days to go" : r.daysToGo === 0 ? "Out today" : "Out " + (-r.daysToGo) + " days") : "No date yet";
+      var when = r.date ? (r.daysToGo > 0 ? r.daysToGo + " days to go" : r.daysToGo === 0 ? "Out today" : "Out " + (-r.daysToGo) + " day" + (r.daysToGo === -1 ? "" : "s") + " ago") : "No date yet";
       return '<div class="tile"><div class="row"><h3>' + esc(r.song) + "</h3>" + (r.late ? '<span class="pill warn">' + r.late + " late</span>" : '<span class="pill">On time</span>') + "</div>" +
-        '<div class="d" style="margin-top:6px">' + esc(day(r.date)) + " · " + when + (r.status ? " · " + esc(r.status) : "") + (r.weekday && r.weekday !== "Fri" && r.daysToGo > 0 ? " · not a Friday" : "") + "</div>" +
+        '<div class="d" style="margin-top:6px">' + esc(day(r.date)) + " · " + when + (r.status && !(r.daysToGo <= 0 && /^(out|released|live)$/i.test(r.status)) ? " · " + esc(r.status) : "") + (r.weekday && r.weekday !== "Fri" && r.daysToGo > 0 ? " · not a Friday" : "") + "</div>" +
         '<ul class="steps">' + r.steps.map(function (s) { return '<li class="' + (s.done ? "done" : s.late ? "late" : "") + '"><span class="dot"></span><span>' + esc(s.label) + ' <span class="lbl">' + esc(s.owner) + '</span></span><span class="w">' + (s.done ? "done" : esc(day(s.due)) + (s.late ? " · late" : "")) + "</span></li>"; }).join("") + "</ul>" +
         (r.notes ? '<div class="d" style="margin-top:8px">' + esc(r.notes) + "</div>" : "") + "</div>";
     }).join("") : '<p class="empty">No releases in the sheet yet.</p>';
@@ -98,6 +111,7 @@
     $("moneyTable").innerHTML = ms.length ? "<tr><th>Month</th><th>Ad spend (as billed)</th><th>Income received (as paid)</th><th class='r'>Spend ≈ EUR</th><th class='r'>Income ≈ EUR</th><th class='r'>Left over ≈ EUR</th></tr>" + ms.map(function (m) {
       return "<tr><td><b>" + esc(monthName(m.month)) + "</b>" + (m.rate ? "<br><span class='lbl'>1 EUR = " + m.rate + " USD</span>" : "") + "</td><td>" + esc(amounts(flat(m.spend))) + "</td><td>" + esc(amounts(flat(m.income))) + (Object.keys(m.pending).length ? "<br><span class='lbl'>pending: " + esc(amounts(flat(m.pending))) + "</span>" : "") + "</td><td class='r'>" + esc(money(m.spendEur.amount, "EUR")) + (m.spendEur.missing ? "*" : "") + "</td><td class='r'>" + esc(money(m.incomeEur.amount, "EUR")) + (m.incomeEur.missing ? "*" : "") + "</td><td class='r'><b>" + (m.netEur == null ? "–" : esc(money(m.netEur, "EUR"))) + "</b></td></tr>";
     }).join("") : '<tr><td class="empty">No spend or income rows yet.</td></tr>';
+    stack("moneyTable");
     var m0 = ms[0];
     if (!m0) { $("moneyDetail").innerHTML = ""; return; }
     var block = function (title, o) {
@@ -113,9 +127,11 @@
     $("teamTable").innerHTML = t.team.length ? "<tr><th>Who</th><th class='r'>Open</th><th class='r'>Late</th><th class='r'>Blocked</th><th>Last logged a number</th></tr>" + t.team.map(function (o) {
       return "<tr><td><b>" + esc(o.owner) + "</b></td><td class='r'>" + o.open + "</td><td class='r'>" + (o.late ? "<b>" + o.late + "</b>" : 0) + "</td><td class='r'>" + (o.blocked ? "<b>" + o.blocked + "</b>" : 0) + "</td><td>" + (o.lastLogged ? esc(day(o.lastLogged)) + (o.quiet > 2 ? " · <b>quiet " + o.quiet + " days</b>" : "") : "–") + "</td></tr>";
     }).join("") : '<tr><td class="empty">No tasks in the sheet yet.</td></tr>';
+    stack("teamTable");
     $("taskTable").innerHTML = t.tasks.length ? "<tr><th>Task</th><th>Owner</th><th>Deadline</th><th>Status</th></tr>" + t.tasks.map(function (x) {
       return "<tr><td>" + (x.late ? "<b>" + esc(x.task) + "</b>" : esc(x.task)) + (x.blocker ? "<br><span class='lbl'>blocked: " + esc(x.blocker) + "</span>" : "") + "</td><td>" + esc(x.owner) + "</td><td>" + esc(x.deadline ? day(x.deadline.slice(0, 10)) : "–") + (x.late ? " · <b>late</b>" : "") + "</td><td><span class='pill" + (x.status === "blocked" ? " warn" : "") + "'>" + esc(x.status) + "</span></td></tr>";
     }).join("") : "";
+    stack("taskTable");
   }
 
   function render() {
@@ -132,7 +148,7 @@
     fetch("/api/hq/data" + (sample ? "?sample=1" : ""), { credentials: "same-origin", cache: "no-store" })
       .then(function (r) { return r.json().catch(function () { return {}; }).then(function (j) { return { s: r.status, j: j }; }); })
       .then(function (res) {
-        if (res.s === 401) { location.href = "/admin"; return; }
+        if (res.s === 401) { location.replace("/admin?next=" + encodeURIComponent("/hq" + (sample ? "?sample=1" : "") + (/^#[a-z]+$/.test(location.hash) ? location.hash : ""))); return; }
         if (res.s !== 200) return off("Couldn't load the numbers (" + res.s + "). Try again in a minute.");
         if (res.j.error) return off("Couldn't read the sheet: " + res.j.error + ".");
         if (!res.j.connected) return off('The dashboard reads the bots\' "BADSCANDAL HQ" sheet. Still to add on Netlify: ' + (res.j.need || []).join(" and ") + ".");
