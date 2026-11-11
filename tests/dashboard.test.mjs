@@ -68,6 +68,14 @@ test("overview: login required; every song, yesterday, spend, cap, health and th
   assert.equal(j.cap.connected, true); assert.ok(j.health.today.sent > 0);
   assert.equal(j.metaKey.state, "ok");
   assert.ok(j.lastEventAt > Date.now() - 2 * 86400000, "Data health: the newest visit record");
+  /* Stage 2 (Today briefing): the period before, per day, the last 8 finished days and every ad over 7 */
+  assert.equal(j.prev.days, 7); assert.ok(j.prev.taps > 0 && j.prev.spend > 0);
+  assert.equal(j.series.length, 7); assert.ok(j.series.every((x) => x.d && x.taps != null && x.spend != null));
+  assert.equal(j.recent.days.length, 8); assert.equal(j.recent.days[7].d, j.yesterday.d, "ends yesterday (finished days)");
+  assert.equal(j.recent.days[7].taps, j.yesterday.taps);
+  const waste = j.recent.ads7.find((a) => a.ad === "TM EU - clip 3");
+  assert.ok(waste && waste.spend >= 10 && waste.taps === 0, "the made-up wasting ad");
+  assert.ok(j.recent.ads7.find((a) => a.ad === "TM BR - vocal contatinho").taps > 0);
 });
 
 test("overview: people only by default; bots don't count", async () => {

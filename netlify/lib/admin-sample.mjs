@@ -28,6 +28,8 @@ export const SAMPLE_ADS = [
   { ad: "TM BR - vermelho letra", content: "tm-br-vermelho-letra", page: "touchme", campaign: "Touch Me BR", adset: "BR 18-34", usd: 7.5, tapRate: 0.38 },
   { ad: "TM BR - noite DJ", content: "tm-br-noite-dj", page: "touchme", campaign: "Touch Me BR", adset: "BR 25-44", usd: 6, tapRate: 0.29 },
   { ad: "MDSB BR - teaser", content: "mdsb-br-teaser", page: "medaseubody", campaign: "Me Da Seu Body launch", adset: "BR 18-34", usd: 4, tapRate: 0.33 },
+  /* a made-up ad that spends and brings nobody: shows the "spent USD 10+ with 0 taps" warning */
+  { ad: "TM EU - clip 3", content: "tm-eu-clip-3", page: "none", campaign: "Touch Me EU", adset: "EU 18-34", usd: 2.5, tapRate: 0 },
 ];
 
 function rng(seed) { let r = seed % 2147483647 || 7; return () => (r = (r * 16807) % 2147483647) / 2147483647; }

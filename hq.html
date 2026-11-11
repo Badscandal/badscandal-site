@@ -437,6 +437,40 @@ a.t-card:hover{border-color:var(--ink-4)}
 /* small phones: the header must fit (wordmark, range, health, refresh) */
 @media(max-width:439px){.hdr{gap:8px;padding-left:12px;padding-right:12px}.hq-tag{display:none}.crt-hq{width:112px}.crt-hq .crt-fallback{font-size:16px}
   .rangebox select{padding:0 28px 0 12px;font-size:14px}.rangebox::after{right:12px}.hdr-tools{gap:6px}}
+
+/* ================= Stage 2: Today as a morning briefing ================= */
+.brief{margin:0 0 6px}
+.brief p{margin:0 0 8px;font-size:19px;line-height:1.45;color:var(--paper);letter-spacing:-.005em}
+.brief p:first-child{font-size:21px;font-weight:600}
+.brief-actions{display:flex;align-items:center;gap:12px;margin:6px 0 18px}
+.copybtn{min-height:44px;padding:0 18px;border-radius:999px;border:1px solid var(--ink-4);background:var(--ink-2);color:var(--paper);font:600 15px var(--sans);cursor:pointer}
+.copied{font-size:14px;color:var(--uv)}
+.attn-card{margin:0 0 12px}
+.attn-card.has{border-color:var(--red)}
+.attn-list,.since-list{list-style:none;margin:0;padding:0}
+.attn-list li{border-top:1px solid var(--ink-3)}
+.attn-list li:first-child{border-top:0}
+.attn-list a{display:flex;align-items:center;gap:12px;min-height:48px;padding:8px 0;color:var(--paper);text-decoration:none;font-size:16px;line-height:1.35}
+.attn-list a::before{content:"";flex:none;width:9px;height:9px;border-radius:50%;background:var(--red)}
+.attn-list a::after{content:"›";margin-left:auto;padding-left:8px;color:var(--muted);font-size:22px;line-height:1}
+.attn-list .calm{display:flex;align-items:center;gap:12px;min-height:44px;font-size:16px;color:var(--uv)}
+.attn-list .calm::before{content:"";width:9px;height:9px;border-radius:50%;background:var(--spot)}
+#sinceCard{margin:0 0 12px}
+#sinceWhen{text-transform:none;letter-spacing:0;font-family:var(--sans)}
+.since-list li{padding:9px 0;border-top:1px solid var(--ink-3);font-size:16px;color:var(--uv)}
+.since-list li:first-child{border-top:0}
+#today h2.t-lbl{font:500 13px var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--muted);line-height:1.4}
+#today h2.sect{margin:22px 0 10px}
+.sect span{text-transform:none;letter-spacing:0;font-family:var(--sans)}
+.htiles{display:grid;gap:10px;grid-template-columns:repeat(2,minmax(0,1fr));margin:0 0 22px}
+.htile{background:var(--ink-2);border:1px solid var(--ink-3);border-radius:18px;padding:14px 14px 10px;min-width:0}
+.htile .hl{margin:0;font-size:13px;color:var(--muted);font-weight:500}
+.htile .hv{margin:6px 0 2px;font-size:26px;line-height:1.1;font-weight:700;letter-spacing:-.02em;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.htile .hc{margin:0;font-size:13px;color:var(--uv)}
+.htile .hc b{color:var(--paper);font-weight:600}
+.htile svg{display:block;width:100%;height:30px;margin-top:8px}
+@media(min-width:720px){.htiles{grid-template-columns:repeat(3,minmax(0,1fr))}.brief p{font-size:20px}.brief p:first-child{font-size:23px}}
+@media(min-width:1100px){.htiles{grid-template-columns:repeat(4,minmax(0,1fr))}}
 @media (prefers-reduced-motion:reduce){.ph,.iconbtn.spin svg{animation:none}}
 
 </style>
@@ -485,6 +519,12 @@ a.t-card:hover{border-color:var(--ink-4)}
     <div class="vhead"><h1 id="todayTitle">Today</h1><p class="vsub" id="todaySub"></p></div>
     <span id="capMonth" hidden></span>
     <div class="sheeterr" id="errToday" hidden></div>
+    <div class="brief" id="brief" aria-live="polite"><p class="ph big"></p><p class="ph"></p><p class="ph"></p></div>
+    <div class="brief-actions"><button class="copybtn" id="copySummary" type="button">Copy today's summary</button><span class="copied" id="copied" role="status"></span></div>
+    <section class="t-card attn-card" id="attnCard" aria-labelledby="attnTitle"><h2 class="t-lbl" id="attnTitle">Needs attention</h2><ul class="attn-list" id="attnList"><li><span class="ph"></span></li></ul></section>
+    <section class="t-card" id="sinceCard" aria-labelledby="sinceTitle" hidden><h2 class="t-lbl" id="sinceTitle">Since you last looked <span id="sinceWhen"></span></h2><ul class="since-list" id="sinceList"></ul></section>
+    <h2 class="t-lbl sect">Headlines <span id="tilesRange"></span></h2>
+    <div class="htiles" id="tiles"><div class="htile"><span class="ph big"></span></div><div class="htile"><span class="ph big"></span></div></div>
     <div class="tgrid">
       <a class="t-card t-cap" id="capTile" href="#ads">
         <p class="t-lbl">Ad spend this month</p>
@@ -492,7 +532,6 @@ a.t-card:hover{border-color:var(--ink-4)}
         <div class="capbar" aria-hidden="true"><i id="capFill"></i><b id="capWarn"></b><b id="capStop"></b></div>
         <p class="t-line" id="capShort"><span class="ph"></span></p>
       </a>
-      <div class="t-card"><p class="t-lbl">Yesterday · all songs</p><div id="yday"><div class="ph big"></div><div class="ph"></div></div></div>
       <div class="t-card"><p class="t-lbl">Next release</p><p class="t-mid" id="nextSong"><span class="ph big"></span></p><p class="t-line" id="nextMsg"></p></div>
       <div class="t-card"><p class="t-lbl">Needs you</p><div id="forLuke"><div class="ph"></div><div class="ph"></div></div></div>
       <a class="t-card" href="#team"><p class="t-lbl">Today's duties</p><p class="t-big num" id="dutyBig"><span class="ph big"></span></p><p class="t-line" id="dutyMsg"></p></a>

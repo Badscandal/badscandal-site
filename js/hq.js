@@ -157,7 +157,8 @@
   document.addEventListener("visibilitychange", function () { if (!document.hidden && started && Date.now() - lastRefresh > EVERY) refresh(); });
   function refresh() {
     lastRefresh = Date.now();
-    return Promise.all([loadSheet(), loadOverview(), window.HQPages ? window.HQPages.reload() : null]).then(drawDataHealth, drawDataHealth);
+    var after = function () { drawDataHealth(); if (sheet || ov) drawSince(); };
+    return Promise.all([loadSheet(), loadOverview(), window.HQPages ? window.HQPages.reload() : null]).then(after, after);
   }
 
   /* ---------- the last good numbers, kept on this device for offline ("as of <time>") ---------- */
@@ -225,7 +226,6 @@
       if (res.s !== 200) {
         var old = kept("bs_hq_last_ov", q);
         if (old) { ov = old.j; drawOverview(); }
-        else $("yday").innerHTML = '<p class="empty2">Couldn\'t load the page numbers.</p>';
         netState("ov", "Couldn't load the page numbers (" + res.s + ").", old && old.at);
         return;
       }
@@ -240,7 +240,7 @@
       netState("ov", "offline", old && old.at);
     });
   }
-  function drawOverview() { drawYesterday(); drawSongs(); drawAds(); drawDataHealth(); }
+  function drawOverview() { drawBriefing(); drawSongs(); drawAds(); drawDataHealth(); }
 
   /* ---------- Data health: Sheet, Meta, page counter, exchange rate (one dot in the header) ---------- */
   function drawDataHealth() {
@@ -273,7 +273,7 @@
 
   function drawSheet() {
     drawSheetErrors();
-    drawToday(); drawSongs(); drawCapCard(); drawGrowth(); drawFans(); drawReleases(); drawMoney(); drawTeam(); drawDataHealth();
+    drawToday(); drawBriefing(); drawSongs(); drawCapCard(); drawGrowth(); drawFans(); drawReleases(); drawMoney(); drawTeam(); drawDataHealth();
   }
 
   /* ---------- Today ---------- */
@@ -309,13 +309,65 @@
     $("dutyMsg").innerHTML = broken("Tasks") ? '<span class="attn">The Tasks tab can\'t be read.</span>' : !du.total ? "No duties logged for today." :
       (du.blocked ? '<span class="attn">' + du.blocked + " blocked</span> · " : "") + (du.total - du.done - du.blocked) + " to do";
   }
-  function drawYesterday() {
-    var y = ov.yesterday;
-    $("yday").innerHTML = '<p class="t-big num green">' + fmt(y.taps) + ' <small>real Spotify taps</small></p>' +
-      '<ul class="t-rows"><li><span>People on the song pages</span><b>' + fmt(y.people) + "</b></li>" +
-      "<li><span>Meta spend</span><b>" + (y.spend == null ? "–" : esc(money(y.spend, y.currency))) + "</b></li>" +
-      "<li><span>Cost per tap</span><b>" + (y.cpt == null ? "–" : esc(money(y.cpt, y.currency))) + "</b></li></ul>";
+  /* ---------- Today as a morning briefing (Stage 2): the rules are in js/hq-lib.js ---------- */
+  var lastSummary = "";
+  function drawBriefing() {
+    if (!sheet && !ov) return;
+    var L = window.HQLib;
+    var att = L.attention({ sheet: sheet, ov: ov }), br = L.briefing({ sheet: sheet, ov: ov, attention: att }), ti = L.tiles({ sheet: sheet, ov: ov });
+    $("brief").innerHTML = br.map(function (x) { return "<p>" + esc(x) + "</p>"; }).join("");
+    $("attnCard").classList.toggle("has", att.length > 0);
+    $("attnList").innerHTML = att.length ? att.map(function (a) {
+      return '<li><a href="' + esc(a.href) + '"' + (a.href === "#health" ? " data-health" : "") + ">" + esc(a.text) + "</a></li>";
+    }).join("") : '<li class="calm">Nothing needs attention.</li>';
+    $("tilesRange").textContent = ov ? "· " + (ov.range === "today" ? "today" : ov.range === "custom" ? ov.from.slice(5).replace("-", "/") + " to " + ov.to.slice(5).replace("-", "/") : "last " + ov.days + " days") + " for ads and taps" : "";
+    $("tiles").innerHTML = ti.map(function (x) {
+      var arrow = x.change.dir === "up" ? "▲ " : x.change.dir === "down" ? "▼ " : "";
+      return '<div class="htile"><p class="hl">' + esc(x.label) + '</p><p class="hv' + (x.green ? " green" : "") + '">' + esc(x.value) + "</p>" +
+        '<p class="hc"><b>' + arrow + esc(x.change.text) + "</b> " + esc(x.vs) + "</p>" + trend(x.series, x.green) + "</div>";
+    }).join("");
+    lastSummary = L.summaryText({ date: sheet ? day(sheet.today) : day(spToday()), briefing: br, attention: att, tiles: ti });
   }
+  /* a small trend line; gaps (no taps that day) are left out, never drawn as 0 */
+  function trend(vals, green) {
+    var pts = (vals || []).map(function (v, i) { return v == null || !isFinite(v) ? null : [i, v]; }).filter(Boolean);
+    if (pts.length < 2) return "";
+    var n = vals.length - 1 || 1, lo = Math.min.apply(null, pts.map(function (p) { return p[1]; })), hi = Math.max.apply(null, pts.map(function (p) { return p[1]; })), sp = hi - lo || 1;
+    var d = pts.map(function (p, i) { return (i ? "L" : "M") + (p[0] / n * 100).toFixed(1) + " " + (28 - (p[1] - lo) / sp * 24).toFixed(1); }).join("");
+    return '<svg viewBox="0 0 100 30" preserveAspectRatio="none" aria-hidden="true"><path d="' + d + '" fill="none" stroke="' + (green ? "#1ED760" : "#B4B4B4") + '" stroke-width="2" vector-effect="non-scaling-stroke" stroke-linejoin="round" stroke-linecap="round"/></svg>';
+  }
+  /* "Since you last looked": compared with the picture saved when the last visit ended (this device) */
+  var SEEN = "bs_hq_seen", sinceShown = false;
+  function drawSince() {
+    var L = window.HQLib, cur = L.snapshot({ sheet: sheet, ov: ov }), prev = null;
+    if (sample) { /* made-up: as if the last visit was 9 hours ago */
+      prev = JSON.parse(JSON.stringify(cur)); prev.at = Date.now() - 9 * 3600000;
+      var song = Object.keys(prev.streams || {})[0], plat = Object.keys(prev.followers || {})[0];
+      if (song) prev.streams[song] -= 1240; if (plat) prev.followers[plat] -= 21;
+      if (prev.capSpent != null) prev.capSpent = Math.round((prev.capSpent - 27.48) * 100) / 100; if (prev.fans != null) prev.fans -= 2;
+    } else { try { prev = JSON.parse(localStorage.getItem(SEEN) || "null"); } catch (e) {} }
+    if (!sinceShown || sample) {
+      var list = L.changesSince(prev, cur);
+      $("sinceCard").hidden = !prev;
+      if (prev) {
+        $("sinceWhen").textContent = "· " + L.ago(Date.now() - prev.at);
+        $("sinceList").innerHTML = list.length ? list.map(function (x) { return "<li>" + esc(x) + "</li>"; }).join("") : "<li>Nothing new since then.</li>";
+      }
+      sinceShown = true;
+    }
+    curSeen = cur;
+  }
+  var curSeen = null;
+  function saveSeen() { if (curSeen && !sample) try { localStorage.setItem(SEEN, JSON.stringify(curSeen)); } catch (e) {} }
+  document.addEventListener("visibilitychange", function () { if (document.hidden) saveSeen(); });
+  window.addEventListener("pagehide", saveSeen);
+  $("copySummary").addEventListener("click", function () {
+    if (!lastSummary) return;
+    var done = function () { $("copied").textContent = "Copied. Paste it into WhatsApp."; setTimeout(function () { $("copied").textContent = ""; }, 4000); };
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(lastSummary).then(done, fallback); else fallback();
+    function fallback() { var t = document.createElement("textarea"); t.value = lastSummary; t.setAttribute("readonly", ""); t.style.position = "fixed"; t.style.opacity = "0"; document.body.appendChild(t); t.select(); try { document.execCommand("copy"); done(); } catch (e) {} document.body.removeChild(t); }
+  });
+
   /* ---------- Songs: the sheet's Spotify numbers + our page + Meta + royalties, one card each ---------- */
   function drawSongs() {
     var bySheet = {}, order = [];

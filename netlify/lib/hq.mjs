@@ -124,6 +124,7 @@ export function songsReport(rows, royalties, releases, today) {
       trend: pct == null ? "new" : pct >= 10 ? "rising" : pct <= -10 ? "cooling" : "steady",
       total: sum(read.map((x) => x.streams)),
       series: read.slice(-30).map((x) => ({ d: x.d, v: x.streams })),
+      listenersSeries: read.filter((x) => x.listeners != null).slice(-30).map((x) => ({ d: x.d, v: x.listeners })),
       royalties: earned[song] || {},
     };
   }).sort((a, b) => (b.week || 0) - (a.week || 0));

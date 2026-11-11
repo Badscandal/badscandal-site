@@ -19,7 +19,7 @@
 import { getDeployStore, getStore } from "@netlify/blobs";
 import { adTaps, dashboard, defaultLink, healthSummary, LINKS, mergeSummary, resolveRange, spDay, spTime, summarize, toCSV, utcDaysFor, visitLog, addDays } from "../lib/admin.mjs";
 import { HEALTH_PREFIX, LAST_ERROR_KEY, LAST_KEY, parseHealthKey } from "../lib/capi.mjs";
-import { DEFAULT_ACCOUNT, capReport, spendReport } from "../lib/metaspend.mjs";
+import { DEFAULT_ACCOUNT, adKey, capReport, songOf, spendReport } from "../lib/metaspend.mjs";
 import { keyHealth, readKeyHealth, readMeta } from "../lib/metaread.mjs";
 import { sampleEnv } from "../lib/admin-sample.mjs";
 import { convert, fetchMonthAverage, FX_TTL_MS } from "../lib/fx.mjs";
@@ -169,35 +169,74 @@ async function loadFx(env, month, today) {
 
 /* /hq's Today, Songs and Ads in one go: every song for the range, yesterday across all songs, Meta
    spend + cost per tap per ad / day / song (read-only, cached an hour), the Meta-only cap, events
-   health and the key line. People-only, exactly like the per-link numbers. */
+   health and the key line. People-only, exactly like the per-link numbers.
+   Stage 2 (11 Nov 2026) adds, for the Today briefing, whatever range is picked:
+     prev    the period before (same length; a range ending today is compared with the same stretch
+             of time for taps/people, whole days for spend because Meta only has whole days),
+     series  per day in the range: taps, people (all songs) and spend,
+     recent  the last 8 finished days (spend, taps, people per day) and every ad over the last 7.
+   One Meta read covers all of it (cached an hour). */
+const daysFrom = (a, b) => { const out = []; for (let d = a; d <= b && out.length < 400; d = addDays(d, 1)) out.push(d); return out; };
 async function overview(env, r, now) {
   const today = spDay(now), yday = addDays(today, -1);
+  const d8 = daysFrom(addDays(yday, -7), yday), d7 = d8.slice(1);
   const songs = LINKS.filter((l) => l.date);
-  const events = await listEvents(env.stats, [...new Set([...r.days, yday])].sort());
+  const all = [...new Set([...r.days, ...r.prev, ...d8])].sort();
+  const events = await listEvents(env.stats, all);
+  const until = r.days[r.days.length - 1] === today ? now - r.days.length * 86400000 : undefined;
   const per = await Promise.all(songs.map(async (l) => {
     const s = await load(env.stats, r.days, l.id, {}, events);
+    const pv = summarize(events, r.prev, l.id, { until });
     const y = summarize(events, [yday], l.id);
-    return { id: l.id, title: l.title, date: l.date, cover: l.cover, path: l.path, visits: s.visits, people: s.unique, taps: s.taps, y: { people: y.unique, taps: y.taps }, ...adTaps(s) };
+    const rec = summarize(events, d8, l.id);
+    const w = adTaps(summarize(events, d7, l.id));
+    return { id: l.id, title: l.title, date: l.date, cover: l.cover, path: l.path, visits: s.visits, people: s.unique, taps: s.taps,
+      y: { people: y.unique, taps: y.taps }, pv: { visits: pv.visits, people: pv.unique, taps: pv.taps }, days: s.days, rec: rec.days, tapsByAd7: w.tapsByAd, ...adTaps(s) };
   }));
-  const yesterday = { d: yday, people: per.reduce((n, s) => n + s.y.people, 0), taps: per.reduce((n, s) => n + s.y.taps, 0), spend: null, cpt: null, currency: "" };
+  const sum = (f) => per.reduce((n, s) => n + (f(s) || 0), 0);
+  const yesterday = { d: yday, people: sum((s) => s.y.people), taps: sum((s) => s.y.taps), spend: null, cpt: null, currency: "" };
+  const prev = { days: r.prev.length, visits: sum((s) => s.pv.visits), people: sum((s) => s.pv.people), taps: sum((s) => s.pv.taps), spend: null };
+  const series = r.days.map((d) => ({ d, taps: sum((s) => (s.days[d] || {}).t), people: sum((s) => (s.days[d] || {}).u), spend: null }));
+  const recent = { days: d8.map((d) => ({ d, taps: sum((s) => (s.rec[d] || {}).t), people: sum((s) => (s.rec[d] || {}).u), spend: null })), ads7: [] };
   let spend = { connected: false };
   if (env.token) {
-    const since = r.days[0] < yday ? r.days[0] : yday, until = r.days[r.days.length - 1] > yday ? r.days[r.days.length - 1] : yday;
-    const got = await adRows(env, since, until);
+    const since = all[0], last = r.days[r.days.length - 1] > yday ? r.days[r.days.length - 1] : yday;
+    const got = await adRows(env, since, last);
     if (got.error) spend = { connected: true, error: got.error };
     else {
-      const keep = new Set(r.days);
-      const rows = got.rows.filter((x) => keep.has(x.day));
+      const inRange = new Set(r.days);
+      const rows = got.rows.filter((x) => inRange.has(x.day));
       const forSpend = per.map((s) => ({ id: s.id, title: s.title, taps: s.taps, tapsByAd: s.tapsByAd, tapsByDay: s.tapsByDay }));
       const reps = per.map((s) => spendReport(rows, forSpend, s.id));
       const base = reps[0] || spendReport(rows, forSpend, "");
       spend = { connected: true, currency: base.currency, total: base.total, unmatched: base.unmatched, fetched: spTime(got.at),
         ads: reps.flatMap((x, i) => x.ads.map((a) => ({ song: per[i].title, ...a }))).sort((a, b) => b.spend - a.spend),
         days: base.allDays, songs: base.songs };
-      const ys = got.rows.filter((x) => x.day === yday).reduce((n, x) => n + x.spend, 0);
-      yesterday.spend = Math.round(ys * 100) / 100;
-      yesterday.currency = (got.rows.find((x) => x.currency) || {}).currency || "";
-      yesterday.cpt = yesterday.taps && ys ? ys / yesterday.taps : null;
+      const byDay = {};
+      for (const x of got.rows) byDay[x.day] = (byDay[x.day] || 0) + x.spend;
+      const r2 = (n) => Math.round(n * 100) / 100;
+      const cur = (got.rows.find((x) => x.currency) || {}).currency || "";
+      yesterday.spend = r2(byDay[yday] || 0); yesterday.currency = cur;
+      yesterday.cpt = yesterday.taps && yesterday.spend ? yesterday.spend / yesterday.taps : null;
+      prev.spend = r2(r.prev.reduce((n, d) => n + (byDay[d] || 0), 0)); prev.currency = cur;
+      for (const x of series) x.spend = r2(byDay[x.d] || 0);
+      for (const x of recent.days) x.spend = r2(byDay[x.d] || 0);
+      /* every ad over the last 7 finished days, with its people-only taps and its song */
+      const w7 = new Set(d7), ads = {};
+      const forSong = per.map((s) => ({ id: s.id, title: s.title, tapsByAd: s.tapsByAd7 }));
+      for (const x of got.rows) {
+        if (!w7.has(x.day)) continue;
+        const k = adKey(x.ad);
+        const a = ads[k] || (ads[k] = { ad: x.ad, campaign: x.campaign, spend: 0, taps: 0, currency: x.currency || cur, song: "" });
+        a.spend += x.spend;
+      }
+      for (const [k, a] of Object.entries(ads)) {
+        a.spend = r2(a.spend);
+        a.taps = per.reduce((n, s) => n + (s.tapsByAd7[k] || 0), 0);
+        const id = songOf({ ad: a.ad, campaign: a.campaign, adset: "" }, forSong);
+        a.song = id ? (per.find((s) => s.id === id) || {}).title || "" : "";
+      }
+      recent.ads7 = Object.values(ads).sort((a, b) => b.spend - a.spend);
     }
   }
   const [cap, health, keyRec] = await Promise.all([
@@ -210,7 +249,7 @@ async function overview(env, r, now) {
     range: r.range, days: r.days.length, from: r.days[0], to: r.days[r.days.length - 1],
     /* for /hq's "Data health": the newest visit record the counter wrote (any page, bots too) */
     lastEventAt: events.reduce((m, e) => (e && e.ts > m ? e.ts : m), 0) || null,
-    songs: per.map(({ y, tapsByAd, tapsByDay, ...s }) => s), yesterday, spend, cap, health,
+    songs: per.map(({ y, pv, days, rec, tapsByAd, tapsByDay, tapsByAd7, ...s }) => s), yesterday, prev, series, recent, spend, cap, health,
     metaKey: keyHealth(keyRec, !!env.token, now), sample: env.sample || undefined, generated: new Date(now).toISOString(),
   };
 }
@@ -261,7 +300,7 @@ export default async (req, context) => {
   const until = r.days[r.days.length - 1] === spDay(now) ? now - r.days.length * 86400000 : undefined;
 
   try {
-    if (route === "overview") return json(200, await overview(env, r, now));
+    if (route === "overview") return json(200, await overview(env, { ...r, prev: r.prev }, now));
     if (route === "csv") {
       const s = await load(store, r.days, link.id, { bots });
       const name = `${link.id}-visits-${r.days[0]}-to-${r.days[r.days.length - 1]}.csv`;

@@ -1089,6 +1089,32 @@ Brief: `../TOUCHME-LANDING-BUILD-BRIEF.md` (outside the repo on purpose).
     app opens without signal; never `/api/*`, never anything outside /hq (tested in a sandbox).
     Bump its `CACHE` name if the list of files changes.
   - `js/hq-lib.js` is the home for every rule the page shows from now on (Stage 2/3 add theirs).
+* **/hq Stage 2: Today as a morning briefing (11 Nov 2026).** Every rule is in `js/hq-lib.js` and tested
+  in `tests/hq-today.test.mjs`; js/hq.js only draws (`drawBriefing()`, `drawSince()`).
+  - **Briefing** (`briefing()`): 3–5 sentences: yesterday's spend / real taps / cost per tap (or taps and
+    people when nothing was spent), what's left of the cap (or the warn/stop/over line), the next
+    release with its late steps in short words (`shortStep()`), the song rising/cooling most, and how
+    many things need Luke.
+  - **Needs attention** (`attention()`), each item linking to its tab (Meta key items open Data health
+    via `data-health`): cap at 750/900/over; late release steps (not yet out); sheet tabs showing an
+    error; Meta key expired/failing; a bot quiet for 3+ days (2 is normal: Spotify's numbers are 2 days
+    late) and blocked duties; an ad with USD 10+ spent over the last 7 finished days and 0 real taps;
+    yesterday spend USD 10+ with 0 taps, or cost per tap above 2x the median of the 7 days before (needs
+    3+ such days); the sheet's Meta spend disagreeing with Meta.
+  - **Since you last looked** (`snapshot()` / `changesSince()`): a picture of the numbers saved on this
+    device (`bs_hq_seen`) when a visit ends (page hidden / closed), compared on the next visit: streams
+    logged per song, followers per platform, ad spend this month, new fans, late steps, duties done, a
+    new day closed. Drawn once both answers are back. Sample mode fakes "9 h ago".
+  - **Headline tiles** (`tiles()`): ad spend, real taps (green), cost per tap for the header range vs
+    the period before; Spotify streams (7 days vs the 7 before) and listeners (vs 7 days earlier); and
+    followers per platform (7 days). Small trend lines; days without taps are gaps, never 0. No Meta ->
+    no spend tiles at all (never "USD 0").
+  - **Copy today's summary** (`summaryText()`): plain text for WhatsApp (clipboard, with a fallback).
+  - New `/api/admin/overview` fields for it: `prev` (the period before; taps/people for the same
+    stretch when the range ends today, spend in whole days), `series` (per day: taps, people, spend),
+    `recent` (last 8 finished days + `ads7`: every ad over the last 7 with its taps and song). One Meta
+    read covers it (cached an hour). The sheet model gains `songs[].listenersSeries`.
+  - The sample has a made-up ad "TM EU - clip 3" that spends and brings nobody, so the warnings show.
 * **90-day rule:** `netlify/functions/rollup.mjs` (daily 06:00 UTC, production
   only) folds raw keys older than 90 days into `daily/<day>.json` counts and
   deletes them; the portal merges those back for old ranges.
