@@ -8,13 +8,14 @@
    READ-ONLY towards Meta: GET requests to Ads Insights only (netlify/lib/metaspend.mjs via
    netlify/lib/metaread.mjs, one-hour "meta-cache"). If Meta answers with an error: HTTP 502 and one
    plain, scrubbed line; never a file of zeros for days that couldn't be read. Shapes, range and
-   matching: netlify/lib/feed.mjs. */
+   matching: netlify/lib/feed.mjs. The finished file is cached an hour too (meta-cache,
+   feed/file/<name>/<since>_<until>.json). */
 import { getDeployStore, getStore } from "@netlify/blobs";
 import { adTaps, LINKS, summarize, utcDaysFor } from "../lib/admin.mjs";
 import { scrub } from "../lib/capi.mjs";
 import { ADS_HEAD, adsRows, csv, DAILY_HEAD, dailyRows, daysBetween, feedRange, keyOk, tapsByDayAd } from "../lib/feed.mjs";
 import { readMeta } from "../lib/metaread.mjs";
-import { DEFAULT_ACCOUNT, MONTHLY_CAP } from "../lib/metaspend.mjs";
+import { CACHE_MS, DEFAULT_ACCOUNT, MONTHLY_CAP } from "../lib/metaspend.mjs";
 import { parseKey, PREFIX } from "../lib/stats.mjs";
 
 const HEAD = { "Cache-Control": "no-store", "X-Robots-Tag": "noindex, nofollow" };
@@ -38,7 +39,14 @@ export default async (req, context) => {
   const prod = context.deploy?.context === "production";
   const cache = prod ? getStore("meta-cache") : getDeployStore("meta-cache");
   const { since, until } = feedRange();
+  const csvOut = (body) => new Response(body, { status: 200, headers: { "Content-Type": "text/csv; charset=utf-8", ...HEAD } });
+  /* The finished file is kept an hour (meta-ads.csv re-reads up to two months of visit records):
+     only good files are kept, never an error. */
+  const fileKey = `feed/file/${name}/${since}_${until}.json`;
   try {
+    let kept = null;
+    try { kept = await cache.get(fileKey, { type: "json" }); } catch {}
+    if (kept && typeof kept.body === "string" && Date.now() - kept.at < CACHE_MS) return csvOut(kept.body);
     const r = await readMeta({ cache, token, account, since, until, level, key: `feed/${account}/${level}/${since}_${until}.json` });
     if (r.error) {
       console.error("feed " + name + ": Meta " + r.error); /* scrubbed by fetchInsights; never the URL or the key */
@@ -52,7 +60,8 @@ export default async (req, context) => {
       const songs = LINKS.filter((l) => l.date).map((l) => ({ id: l.id, title: l.title, ...adTaps(summarize(events, days, l.id)) }));
       body = csv(ADS_HEAD, adsRows(r.rows, songs, tapsByDayAd(events, days, songs.map((s) => s.id), summarize, adTaps)));
     }
-    return new Response(body, { status: 200, headers: { "Content-Type": "text/csv; charset=utf-8", ...HEAD } });
+    try { await cache.setJSON(fileKey, { at: Date.now(), body }); } catch {}
+    return csvOut(body);
   } catch (e) {
     console.error("feed " + name + " failed", e?.name || "error");
     return text(500, "Could not build the file");

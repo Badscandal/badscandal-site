@@ -25,9 +25,12 @@
 /store       /  302!
 /store.html  /  302!
 
-# The private stats page became the admin portal (9 Nov 2026): /admin, login required.
-/stats       /admin  301
-/stats.html  /admin  301
+# One dashboard (11 Nov 2026): /admin (the old portal, 9 Nov) and /stats (older still) are part of
+# /hq now; login is on /hq itself. admin.html is gone; forced (!) anyway so nothing can shadow it.
+/admin       /hq  301!
+/admin.html  /hq  301!
+/stats       /hq  301!
+/stats.html  /hq  301!
 
 # Server-side files that sit in the published root: never serve them.
 /package.json       /404  404!

@@ -11,9 +11,11 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Figtree:wght@300..900&display=swap" rel="stylesheet">
-<!-- BADSCANDAL HQ (11 Nov 2026): money, songs, growth, fans, releases and the bot team on one page.
-     Stand-alone like admin.html (no site.css, no main.js). Same login as /admin. Logic: js/hq.js.
-     Server: netlify/functions/hq.mjs (read-only). Numbers come from the bots' "BADSCANDAL HQ" sheet. -->
+<!-- BADSCANDAL HQ: THE one dashboard (11 Nov 2026; /admin, /admin.html and /stats 301 here). Stand-alone
+     (no site.css, no main.js). Login here: the same password, cookie and lockout as before
+     (/api/admin/login). Sheet side: js/hq.js + /api/hq/data. Page-visit side: js/hq.js (Today, Songs,
+     Ads via /api/admin/overview) + js/hq-pages.js (Pages via /api/admin/data). Read-only everywhere:
+     nothing on this page changes ads, posts, sheets or money. ?sample=1 = made-up numbers. -->
 <style>
 :root{--ink:#050505;--ink-2:#0C0C0C;--ink-3:#1F1F1F;--ink-4:#2A2A2A;--paper:#F2F2F2;--muted:#8A8A8A;--silver:#6E6E6E;--uv:#B4B4B4;--spot:#1ED760;--grey-mark:#5A5A5A;
   --mono:"DM Mono",ui-monospace,Menlo,monospace;--sans:Figtree,system-ui,-apple-system,sans-serif;--r:16px;--pad:16px}
@@ -83,7 +85,7 @@ td.r,th.r{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
 .keyline.bad::before{background:var(--paper)}
 .says{color:var(--paper)}
 .btn{background:var(--paper);color:var(--ink);border:0;border-radius:999px;padding:11px 18px;font-weight:700;font-size:14px;cursor:pointer}
-.ghost{background:transparent;border:1px solid var(--ink-3);border-radius:999px;padding:7px 11px;font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);cursor:pointer;text-decoration:none}
+.navbtn{flex:none;background:transparent;border:1px solid var(--ink-3);border-radius:999px;padding:7px 11px;font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);cursor:pointer;text-decoration:none}
 @media(min-width:900px){.chips{width:auto}.top-in{flex-wrap:nowrap}.when{order:3}}
 /* phones: the wide tables (fans, money, team) become one small card per row, each value
    labelled from the table's header row (js/hq.js stack()), so nothing hides off the right edge */
@@ -96,51 +98,371 @@ table.stack td::before{content:attr(data-l);font-family:var(--mono);font-size:9.
 table.stack td:first-child,table.stack td.empty{display:block;padding-bottom:4px}
 table.stack td:first-child::before,table.stack td.empty::before{content:none}
 }
+
+/* ---------- the one dashboard (11 Nov 2026): login, section notes, Today extras ---------- */
+.login{min-height:100vh;min-height:100svh;display:flex;align-items:center;justify-content:center;padding:24px}
+.login form{width:100%;max-width:340px}
+.login h1{font-size:15px;font-weight:900;letter-spacing:.06em;margin:0 0 28px}
+.login h1 span{font-family:var(--mono);font-weight:400;font-size:10px;letter-spacing:.14em;color:var(--muted);margin-left:8px}
+.login label{display:block;margin-bottom:8px}
+.login input{width:100%;background:var(--ink-2);border:1px solid var(--ink-3);border-radius:12px;padding:14px;font-size:16px;outline:none;color:var(--paper)}
+.login input:focus{border-color:var(--uv)}
+.login button{width:100%;margin-top:12px;background:var(--paper);color:var(--ink);border:0;border-radius:999px;padding:14px;font-weight:700;font-size:15px;cursor:pointer}
+.login button:disabled{opacity:.5}
+.login .err{min-height:20px;margin:12px 0 0;font-size:13px;color:var(--uv)}
+.banner{border:1px dashed var(--silver);border-radius:12px;padding:12px 14px;font-size:13px;color:var(--uv)}
+.banner .btn{margin-top:10px}
+.sheeterr{border:1px dashed var(--paper);border-radius:10px;padding:8px 10px;font-size:12.5px;color:var(--paper);margin:0 0 12px}
+.loading{color:var(--muted);font-size:13px}
+.livedot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--spot);margin-right:6px;vertical-align:0}
+.livedot.off{background:var(--silver)}
+.rangesel{background:var(--ink);border:1px solid var(--ink-3);border-radius:999px;padding:6px 10px;font-family:var(--mono);font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--uv);color-scheme:dark}
+.kv{display:flex;justify-content:space-between;gap:10px;font-size:12.5px;color:var(--uv);padding:5px 0;border-top:1px solid var(--ink-3)}
+.kv:first-of-type{border-top:0}
+.kv b{color:var(--paper);font-variant-numeric:tabular-nums;text-align:right}
+.duty{display:flex;gap:10px;align-items:baseline;padding:6px 0;border-top:1px solid var(--ink-3);font-size:13px;color:var(--uv)}
+.duty .w{margin-left:auto;font-family:var(--mono);font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;white-space:nowrap}
+.duty.done .w{color:var(--spot)} .duty.blocked{color:var(--paper);font-weight:600} .duty.blocked .w{color:var(--paper)}
+.duty small{display:block;font-weight:400;color:var(--muted)}
+.cover{width:36px;height:36px;border-radius:8px;object-fit:cover;background:var(--ink-3);flex:none}
+.songhead{display:flex;gap:10px;align-items:center}
+.songhead h3{flex:1;min-width:0}
+
+/* ---------- Ads + Pages: the components that came from /admin, scoped under .pg ---------- */
+.pg .pgrid{display:grid;gap:10px;grid-template-columns:minmax(0,1fr)}
+.pg .tile{position:relative}
+.pg .tile h3{margin:0 0 2px}
+.pg .tile .sub{margin:0 0 12px}
+.pg .head{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
+.pg .empty{padding:8px 0}
+.pg .swatch{display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:6px;vertical-align:1px}
+.pg .controls{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:0 0 12px}
+.pg .picker{position:relative;display:flex;align-items:center;gap:10px;background:var(--ink);border:1px solid var(--ink-3);border-radius:999px;padding:4px 12px 4px 4px;font-weight:600;font-size:14px}
+.pg .picker img{width:26px;height:26px;border-radius:50%;object-fit:cover;background:var(--ink-3)}
+.pg .picker select{appearance:none;-webkit-appearance:none;background:transparent;border:0;padding:4px 16px 4px 0;font:600 14px var(--sans);color:var(--paper);cursor:pointer;outline:none}
+.pg .picker::after{content:"▾";position:absolute;right:12px;color:var(--muted);font-size:11px;pointer-events:none}
+.pg .rchips{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.pg .rchips .chip.on,.pg .tools .chip.on{background:var(--paper);color:var(--ink);border-color:var(--paper)}
+.pg .custom{display:flex;gap:6px;align-items:center;flex:none}
+.pg .custom input{background:var(--ink);border:1px solid var(--ink-3);border-radius:10px;padding:6px 8px;font-family:var(--mono);font-size:16px;color:var(--paper);color-scheme:dark}
+.pg .toggle{display:inline-flex;align-items:center;background:var(--ink);border:1px solid var(--ink-3);border-radius:999px;padding:3px}
+.pg .toggle button{font:600 12.5px var(--sans);border:0;background:transparent;color:var(--muted);padding:7px 12px;border-radius:999px;cursor:pointer;white-space:nowrap}
+.pg .toggle button.on{background:var(--paper);color:var(--ink)}
+.pg .toggle button b{font-family:var(--mono);font-weight:500;margin-left:4px}
+.pg .mstat{display:inline-flex;align-items:center;gap:8px;font-size:12.5px;color:var(--uv);background:var(--ink);border:1px solid var(--ink-3);border-radius:999px;padding:8px 12px;min-width:0;max-width:100%}
+.pg .mstat::before{content:"";flex:none;width:8px;height:8px;border-radius:50%;background:var(--grey-mark)}
+.pg .mstat.ok::before{background:var(--spot)}
+.pg .mstat.bad{border-color:var(--paper);color:var(--paper)}
+.pg .mstat.bad::before{background:var(--paper)}
+.pg .mstat span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pg .busy{opacity:.55;transition:opacity .25s ease}
+/* KPIs */
+.pg .kpis{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px}
+.pg .kpi{padding:14px 14px 10px;overflow:hidden}
+.pg .kpi .v{font-size:30px;font-weight:700;letter-spacing:-.02em;margin:6px 0 2px;line-height:1;min-height:30px}
+.pg .kpi .v small{font-size:16px;font-weight:600;color:var(--muted)}
+.pg .kpi .d{font-size:12px;font-weight:600;min-height:16px}
+.pg .kpi .d em{font-style:normal;color:var(--muted);font-weight:400}
+.pg .up::before{content:"▲ ";font-size:9px;color:var(--spot)}
+.pg .dn::before{content:"▼ ";font-size:9px;color:var(--muted)}
+.pg .dn{color:var(--uv)}
+.pg .kpi svg{display:block;width:100%;height:34px;margin-top:8px}
+.pg .kpi.hero{grid-column:1/-1}
+.pg .kpi.hero .v{font-size:44px;min-height:44px}
+.pg .kpi.muted .v{color:var(--silver)}
+/* funnel */
+.pg .fun-row{display:grid;grid-template-columns:92px minmax(0,1fr) 70px;align-items:center;gap:10px;margin:9px 0}
+.pg .fun-row .bar{height:30px;border-radius:4px;background:var(--grey-mark);min-width:4px;margin:0;overflow:visible}
+.pg .fun-row .bar.s{background:var(--spot)}
+.pg .fun-row .bar.o{background:var(--ink-4)}
+.pg .fun-row .n{text-align:right;font-weight:700;font-size:15px}
+.pg .fun-row .n small{display:block;font-weight:400;font-size:11px;color:var(--muted)}
+.pg .fun-row .k{font-size:13px;color:var(--uv)}
+.pg .stores{display:flex;flex-wrap:wrap;gap:6px 14px;margin:12px 0 0 102px;font-size:12px;color:var(--muted)}
+.pg .stores b{color:var(--paper);font-weight:600;margin-left:4px}
+.pg .ctrbox{display:flex;gap:10px;margin-top:16px}
+.pg .ctrbox>div{flex:1;background:var(--ink-2);border:1px solid var(--ink-3);border-radius:12px;padding:12px;min-width:0}
+.pg .ctrbox .big{font-size:24px;font-weight:700;margin-top:4px}
+.pg .bench{font-size:12px;color:var(--muted);margin-top:4px}
+/* time series */
+.pg .seg{display:flex;background:var(--ink-2);border:1px solid var(--ink-3);border-radius:999px;padding:3px;flex:none}
+.pg .seg button{font:500 10.5px var(--mono);letter-spacing:.1em;text-transform:uppercase;border:0;background:transparent;color:var(--muted);padding:6px 11px;border-radius:999px;cursor:pointer}
+.pg .seg button.on{background:var(--ink-3);color:var(--paper)}
+.pg .legend{display:flex;gap:14px;font-size:12px;color:var(--uv);margin:-4px 0 6px}
+.pg #ts{width:100%;height:auto;display:block;touch-action:pan-y}
+.pg .tip{position:absolute;pointer-events:none;background:var(--paper);color:var(--ink);border-radius:10px;padding:8px 10px;font-size:12px;box-shadow:0 8px 24px rgba(0,0,0,.5);white-space:nowrap;z-index:3}
+.pg .tip .lbl{color:#555}
+/* breakdowns */
+.pg .bd-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 10px;padding:9px 0;border-top:1px solid var(--ink-3)}
+.pg .bd-row:first-child{border-top:0}
+.pg .bd-name{font-size:13.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pg .bd-name small{font-weight:400;color:var(--muted);margin-left:6px}
+.pg .bd-val{font-size:13px;text-align:right;color:var(--uv);white-space:nowrap}
+.pg .bd-val b{color:var(--paper)}
+.pg .bd-bars{grid-column:1/-1;display:flex;gap:2px;height:8px;margin-top:4px}
+.pg .bd-bars i{display:block;height:100%;border-radius:3px;min-width:2px}
+.pg .bd-bars .t{background:var(--spot)}
+.pg .bd-bars .v{background:var(--grey-mark)}
+.pg .bd-ctr{display:inline-block;min-width:46px;text-align:right;font-weight:700;color:var(--paper)}
+.pg .best{font-family:var(--mono);font-size:9.5px;letter-spacing:.12em;color:var(--ink);background:var(--spot);border-radius:4px;padding:2px 5px;margin-left:6px;vertical-align:2px}
+.pg .refs{margin-top:12px;font-size:12px;color:var(--muted);line-height:1.7}
+.pg .refs b{color:var(--uv);font-weight:600}
+/* speed, Meta can see, health, bots */
+.pg .split{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px}
+.pg .mini{background:var(--ink-2);border:1px solid var(--ink-3);border-radius:12px;padding:12px;min-width:0}
+.pg .mini .big{font-size:24px;font-weight:700;margin-top:4px}
+.pg .mini .big small{font-size:14px;color:var(--muted);font-weight:500}
+.pg .hist{display:flex;align-items:flex-end;gap:2px;height:64px;margin-top:14px}
+.pg .hist i{flex:1;background:var(--grey-mark);border-radius:3px 3px 0 0;min-height:2px}
+.pg .hist i.f{background:var(--uv)}
+.pg .hist-ax{display:flex;justify-content:space-between;font-family:var(--mono);font-size:9.5px;color:var(--silver);margin-top:5px}
+.pg .stackbar{display:flex;height:14px;gap:2px;margin:14px 0 8px}
+.pg .stackbar i{display:block;height:100%;border-radius:3px}
+.pg .keyrow{display:flex;justify-content:space-between;gap:10px;font-size:12.5px;color:var(--uv);padding:5px 0}
+.pg .keyrow b{color:var(--paper);text-align:right}
+.pg .pill.ok{border-color:var(--spot);color:var(--spot)}
+.pg .pill.bad{border-color:var(--paper);color:var(--ink);background:var(--paper)}
+.pg .trio{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.pg .note{font-size:12px;color:var(--muted);line-height:1.5;margin:10px 0 0}
+.pg .note b{color:var(--uv);font-weight:600}
+.pg .warnbox{margin-top:10px;font-size:12.5px;border:1px dashed var(--uv);border-radius:10px;padding:8px 10px;color:var(--paper)}
+.pg .row-btns{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+.pg .ghost{font:600 12.5px var(--sans);border-radius:999px;padding:9px 14px;border:1px solid var(--ink-4);background:transparent;color:var(--paper);cursor:pointer}
+.pg .ghost.on{background:var(--paper);color:var(--ink);border-color:var(--paper)}
+.pg .me-state{display:flex;align-items:center;gap:8px;font-size:13.5px;font-weight:600;margin-top:4px}
+.pg .me-state::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--grey-mark)}
+.pg .me-state.on::before{background:var(--spot)}
+.pg .divider{border-top:1px solid var(--ink-3);margin:14px 0}
+.pg .botTag{font-family:var(--mono);font-size:9.5px;letter-spacing:.08em;text-transform:uppercase;border:1px dashed var(--uv);border-radius:4px;padding:1px 4px;color:var(--uv);margin-left:4px;white-space:nowrap}
+/* tables: cost per tap */
+.pg .sp-cols{display:grid;grid-template-columns:minmax(0,1fr);gap:0 18px}
+.pg .mt{width:100%;border-collapse:collapse;font-size:12.5px}
+.pg .mt th{text-align:right;font-family:var(--mono);font-weight:400;font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);padding:5px 6px;border-bottom:1px solid var(--ink-3)}
+.pg .mt th:first-child,.pg .mt td:first-child{text-align:left}
+.pg .mt td{padding:7px 6px;border-bottom:1px solid var(--ink-3);text-align:right;font-variant-numeric:tabular-nums;color:var(--uv);white-space:nowrap}
+.pg .mt td:first-child{color:var(--paper);max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pg .mt td small{display:block;color:var(--muted);font-size:11px}
+.pg .mt td b{color:var(--paper)}
+/* the cap card (one, combined) */
+.pg .cap-row{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:6px 16px}
+.pg .cap-ax{display:flex;justify-content:space-between;font-family:var(--mono);font-size:9.5px;color:var(--silver)}
+.pg .tile.stop,.pg .tile.over{border-color:var(--paper)}
+.pg .metaonly{margin-top:12px;padding-top:10px;border-top:1px solid var(--ink-3)}
+/* visit log */
+.pg .tools{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px;align-items:center}
+.pg .tools select{background:transparent;border:1px solid var(--ink-3);border-radius:999px;padding:7px 10px;font-family:var(--mono);font-size:11px;letter-spacing:.06em;color:var(--uv);max-width:180px}
+.pg .btn{font:600 12.5px var(--sans);border-radius:999px;padding:8px 14px;border:1px solid var(--paper);background:var(--paper);color:var(--ink);margin-left:auto;text-decoration:none;cursor:pointer}
+.pg .log{width:100%;border-collapse:collapse;font-size:12.5px}
+.pg .log th{text-align:left;font-family:var(--mono);font-weight:400;font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);padding:6px 8px;border-bottom:1px solid var(--ink-3)}
+.pg .log td{padding:10px 8px;border-bottom:1px solid var(--ink-3);vertical-align:top}
+.pg .yes{display:inline-flex;align-items:center;gap:6px;font-weight:600;color:var(--paper)}
+.pg .yes::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--spot)}
+.pg .no{color:var(--silver)}
+.pg .vid{font-family:var(--mono);font-size:11px;color:var(--uv)}
+.pg .ret{font-family:var(--mono);font-size:9.5px;letter-spacing:.1em;border:1px solid var(--silver);border-radius:4px;padding:1px 4px;color:var(--uv);margin-left:4px}
+.pg .mobile-log .lr{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 10px;padding:11px 0;border-top:1px solid var(--ink-3);font-size:13px}
+.pg .mobile-log .lr .m{color:var(--muted);font-size:11.5px}
+.pg .foot{font-size:11.5px;color:var(--silver);text-align:center;margin:10px 0 0}
+.pg .more-btn{display:block;margin:10px auto 0;background:transparent;border:1px solid var(--ink-3);border-radius:999px;padding:8px 16px;color:var(--uv);font-size:12.5px;cursor:pointer}
+@media(min-width:900px){.pg .mobile-log{display:none}.pg .kpis{grid-template-columns:repeat(5,minmax(0,1fr))}.pg .kpi.hero{grid-column:auto}.pg .kpi.hero .v{font-size:30px;min-height:30px}
+  .pg .sp-cols{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .pg .pgrid{grid-template-columns:repeat(12,minmax(0,1fr))}
+  .pg .w5{grid-column:span 5}.pg .w7{grid-column:span 7}.pg .w6{grid-column:span 6}.pg .w4{grid-column:span 4}.pg .w12{grid-column:1/-1}}
+@media(max-width:899px){.pg .log{display:none}}
+/* phones: the cost-per-tap tables fit the screen (no hidden columns), the big trio numbers fit */
+.pg .scroll table.mt{min-width:0}
+@media(max-width:599px){.pg .mt td:first-child{white-space:normal;max-width:none;overflow-wrap:anywhere}.pg .mt td,.pg .mt th{padding:7px 4px}
+  .pg #spendCard .trio{grid-template-columns:minmax(0,1fr)}.pg .trio .big{font-size:20px}}
+@media (prefers-reduced-motion:reduce){*{scroll-behavior:auto !important}}
 </style>
 </head>
 <body>
+
+<section class="login" id="login" hidden>
+  <form id="loginForm" autocomplete="on">
+    <h1>BADSCANDAL<span>HQ</span></h1>
+    <label class="lbl" for="pw">Password</label>
+    <input id="pw" name="password" type="password" autocomplete="current-password" required>
+    <button type="submit" id="go">Log in</button>
+    <p class="err" id="err" aria-live="polite"></p>
+  </form>
+</section>
+
+<div id="shell" hidden>
 <header class="top"><div class="top-in">
   <div class="brand">BADSCANDAL<span>HQ</span></div>
   <nav class="chips" aria-label="Sections">
-    <a class="chip" href="#today">Today</a><a class="chip" href="#songs">Songs</a><a class="chip" href="#growth">Growth</a><a class="chip" href="#fans">Fans</a><a class="chip" href="#releases">Releases</a><a class="chip" href="#money">Money</a><a class="chip" href="#team">Team</a>
-    <a class="ghost" href="/admin">Links &amp; ads</a>
+    <a class="chip" href="#today">Today</a><a class="chip" href="#songs">Songs</a><a class="chip" href="#ads">Ads</a><a class="chip" href="#pages">Pages</a><a class="chip" href="#growth">Growth</a><a class="chip" href="#fans">Fans</a><a class="chip" href="#releases">Releases</a><a class="chip" href="#money">Money</a><a class="chip" href="#team">Team</a>
+    <button class="navbtn" id="logout" type="button">Log out</button>
   </nav>
-  <div class="lbl when" id="when"></div>
+  <div class="lbl when"><span class="livedot" id="dot"></span><span id="when"></span></div>
 </div></header>
 
 <main id="main">
-  <div class="sample" id="sample" hidden>SAMPLE NUMBERS<small>Everything below is made up so you can see the layout. Nothing here is real yet.</small></div>
-  <section class="card" id="off" hidden>
-    <h2>Not connected yet</h2>
-    <p class="note" id="offMsg">The dashboard reads the bots' "BADSCANDAL HQ" sheet. That needs two settings on Netlify.</p>
-    <p style="margin:14px 0 0"><button class="btn" id="showSample" type="button">Show it with sample numbers</button></p>
-  </section>
+  <div class="sample" id="sample" hidden>SAMPLE NUMBERS<small>Everything below is made up so you can see the layout. Nothing here is real.</small></div>
+  <div class="banner" id="sheetOff" hidden><span id="sheetOffMsg"></span><br><button class="btn" id="showSample" type="button">Show it with sample numbers</button></div>
 
-  <div id="app" hidden>
   <section class="card" id="today">
     <div class="row"><div><h2>Today</h2><p class="sub" id="todaySub"></p></div><span class="lbl" id="capMonth"></span></div>
     <p class="keyline" id="metaKey" hidden></p>
+    <div class="sheeterr" id="errToday" hidden></div>
     <div class="grid g3">
-      <div class="tile" id="capTile">
+      <a class="tile" id="capTile" href="#ads" style="text-decoration:none">
         <div class="lbl">Ad spend this month · all platforms</div>
         <div class="big num" id="capSpent">–</div>
         <div class="bar" aria-hidden="true"><i id="capFill"></i><b id="capWarn"></b><b id="capStop"></b></div>
-        <div class="d" id="capMsg"></div>
-        <div class="d" id="capMeta" style="margin-top:8px"></div>
-      </div>
+        <div class="d" id="capShort"></div>
+      </a>
+      <div class="tile"><div class="lbl">Yesterday · all songs</div><div id="yday"><p class="loading">Loading the page numbers…</p></div></div>
       <div class="tile"><div class="lbl">Next release</div><div class="big" id="nextSong">–</div><div class="d" id="nextMsg"></div></div>
       <div class="tile"><div class="lbl">Needs you, Luke</div><div id="forLuke"></div></div>
+      <a class="tile" href="#team" style="text-decoration:none"><div class="lbl">Today's duties</div><div class="big num" id="dutyBig">–</div><div class="d" id="dutyMsg"></div></a>
     </div>
   </section>
 
-  <section class="card" id="songs"><h2>Songs</h2><p class="sub">Spotify, day by day. Momentum = the last 7 days against the 7 before. Spotify's numbers arrive about two days late.</p><div class="grid g3" id="songList"></div></section>
-  <section class="card" id="growth"><h2>Growth</h2><p class="sub">Followers per platform, and the posts that went out on the days that grew most.</p><div class="grid g4" id="growthList"></div></section>
-  <section class="card" id="fans"><h2>Fans forming</h2><p class="sub" id="fansSub"></p><div class="scroll"><table class="stack" id="fanTable"></table></div></section>
-  <section class="card" id="releases"><h2>Releases</h2><p class="sub">Counting back from release day: 28 days files, 21 RouteNote, 14 Spotify pitch, 10 lyrics, 7 video and page.</p><div class="grid g3" id="relList"></div></section>
-  <section class="card" id="money"><h2>Money</h2><p class="sub">Every amount in the currency it was billed or paid in. Totals in EUR are estimates at that month's average rate.</p><div class="scroll"><table class="stack" id="moneyTable"></table></div><div id="moneyDetail"></div></section>
-  <section class="card" id="team"><h2>Team</h2><p class="sub" id="teamSub"></p><div class="scroll"><table class="stack" id="teamTable"></table></div><div class="scroll" style="margin-top:14px"><table class="stack" id="taskTable"></table></div></section>
-  </div>
+  <section class="card" id="songs">
+    <div class="row"><div><h2>Songs</h2><p class="sub">Everything we know per song: Spotify (from the sheet; about two days late), our page, Meta ads and royalties.</p></div>
+      <select class="rangesel" data-range aria-label="Range for the page and ad numbers"><option value="today">Today</option><option value="7d">7 days</option><option value="30d">30 days</option><option value="custom" hidden>Custom</option></select></div>
+    <div class="sheeterr" id="errSongs" hidden></div>
+    <div class="grid g3" id="songList"><p class="loading">Loading…</p></div>
+  </section>
+
+  <section class="card pg" id="ads">
+    <div class="row"><div><h2>Ads</h2><p class="sub">The monthly cap, what the ads cost per real Spotify tap, and whether Meta gets our events. Read-only: nothing here changes an ad.</p></div>
+      <select class="rangesel" data-range aria-label="Range for the ad numbers"><option value="today">Today</option><option value="7d">7 days</option><option value="30d">30 days</option><option value="custom" hidden>Custom</option></select></div>
+    <p class="keyline" id="metaKey2" hidden></p>
+    <div class="sheeterr" id="errAds" hidden></div>
+    <div class="pgrid">
+      <div class="tile w12" id="capCard">
+        <div class="head"><div><h3>Monthly ad cap · all platforms</h3><p class="sub">Meta + Google + TikTok against USD 1,000. Warn at 750, every ad off at 900. Display only: this page never pauses anything.</p></div><span class="lbl" id="capMonth2"></span></div>
+        <div class="cap-row"><div class="big num" id="capSpent2">–</div><div class="lbl" id="capLeft"></div></div>
+        <div class="bar" aria-hidden="true"><i id="capFill2"></i><b id="capWarn2"></b><b id="capStop2"></b></div>
+        <div class="cap-ax"><span>0</span><span>750 warn · 900 everything off · 1,000</span></div>
+        <p class="d" id="capMsg" style="margin:10px 0 0"></p>
+        <p class="d" id="capMeta" style="margin:8px 0 0"></p>
+        <div class="metaonly"><div class="lbl">Meta only · the whole ad account</div><p class="d" id="capMetaOnly" style="margin:6px 0 0">Loading…</p></div>
+      </div>
+      <div class="tile w12" id="spendCard">
+        <div class="head"><div><h3>Cost per real Spotify tap</h3><p class="sub" id="spSub">Meta ad spend (read-only) against people's Spotify taps on our pages.</p></div><span class="lbl" id="spCur"></span></div>
+        <p class="empty" id="spOff">Loading…</p>
+        <div id="spOn" hidden>
+          <div class="trio">
+            <div class="mini"><div class="lbl">Spend</div><div class="big num" id="spSpend">–</div></div>
+            <div class="mini"><div class="lbl">Real Spotify taps</div><div class="big num" id="spTaps">–</div></div>
+            <div class="mini"><div class="lbl">Cost per tap</div><div class="big num" id="spCpt">–</div></div>
+          </div>
+          <div class="sp-cols">
+            <div><div class="lbl" style="margin:14px 0 4px">By ad</div><div class="scroll"><table class="mt" id="spAds"></table></div></div>
+            <div><div class="lbl" style="margin:14px 0 4px">By song</div><div class="scroll"><table class="mt" id="spSongs"></table></div></div>
+            <div><div class="lbl" style="margin:14px 0 4px">By day, all songs</div><div class="scroll"><table class="mt" id="spAll"></table></div></div>
+          </div>
+          <p class="note" id="spNote"></p>
+        </div>
+      </div>
+      <div class="tile w12" id="healthCard">
+        <div class="head"><div><h3>Meta events health</h3><p class="sub">Our server's copy of each event (Conversions API) and what Meta answered.</p></div><span class="pill" id="hPill">–</span></div>
+        <div class="mstat" id="mstat" style="margin-bottom:12px"><span id="mstatTxt">Meta: no events yet</span></div>
+        <div class="lbl" style="margin-bottom:6px">Today</div>
+        <div class="trio">
+          <div class="mini"><div class="lbl">Events sent</div><div class="big num" id="hSent">–</div></div>
+          <div class="mini"><div class="lbl">Accepted</div><div class="big num" id="hRec">–</div></div>
+          <div class="mini"><div class="lbl">Errors</div><div class="big num" id="hErr">–</div></div>
+        </div>
+        <div class="keyrow" style="margin-top:10px"><span>Spotify taps sent today / accepted</span><b id="hTaps">–</b></div>
+        <div class="keyrow"><span id="hRangeLbl">This period</span><b id="hRange">–</b></div>
+        <div class="keyrow"><span>Bots stopped before Meta</span><b id="hBlocked">–</b></div>
+        <div class="keyrow"><span>Last accepted</span><b id="hLastOk">–</b></div>
+        <div class="keyrow"><span>Last error</span><b id="hLastErr">–</b></div>
+        <p class="note" id="hErrMsg" hidden></p>
+        <div class="warnbox" id="hTest" hidden>Test mode is ON: events go to Events Manager → Test events. Delete META_TEST_EVENT_CODE on Netlify when you're done.</div>
+        <p class="note">The browser copy (the Pixel) goes straight from the phone to Meta, so only Events Manager can show it. When both arrive, Meta lists the event as <b>Browser · Server</b> and counts it once.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="card pg" id="pages">
+    <h2>Pages</h2><p class="sub">Our own pages, people only. Pick a page and a range.</p>
+    <div class="controls">
+      <label class="picker"><img id="pickImg" alt=""><select id="link" aria-label="Page"></select></label>
+      <div class="rchips" id="chips">
+        <button class="chip" type="button" data-r="today">Today</button><button class="chip on" type="button" data-r="7d">7 days</button><button class="chip" type="button" data-r="30d">30 days</button><button class="chip" type="button" data-r="custom">Custom</button>
+        <span class="custom" id="custom" hidden><input type="date" id="from" aria-label="From"><input type="date" id="to" aria-label="To"></span>
+      </div>
+    </div>
+    <div class="controls">
+      <div class="toggle" role="group" aria-label="Who to count">
+        <button type="button" id="tHumans" class="on">Humans only</button><button type="button" id="tBots">Show everyone (incl. bots)<b id="botN">0</b></button>
+      </div>
+    </div>
+    <div class="banner" id="banner" hidden style="margin-bottom:12px"></div>
+    <p class="loading" id="pgLoading">Loading the page numbers…</p>
+    <div class="pgrid" id="pgBody" hidden>
+      <div class="w12"><div class="kpis">
+        <div class="tile kpi hero"><div class="lbl"><span class="swatch" style="background:var(--spot)"></span>Spotify taps</div><div class="v num" id="kTaps">0</div><div class="d" id="dTaps"></div><svg id="sTaps" aria-hidden="true"></svg></div>
+        <div class="tile kpi"><div class="lbl">Visits</div><div class="v num" id="kVisits">0</div><div class="d" id="dVisits"></div><svg id="sVisits" aria-hidden="true"></svg></div>
+        <div class="tile kpi"><div class="lbl">People</div><div class="v num" id="kUnique">0</div><div class="d" id="dUnique"></div><svg id="sUnique" aria-hidden="true"></svg></div>
+        <div class="tile kpi"><div class="lbl">Click-through</div><div class="v num" id="kCtr">–</div><div class="d" id="dCtr"></div><svg id="sCtr" aria-hidden="true"></svg></div>
+        <div class="tile kpi" id="cptCard"><div class="lbl">Cost per tap</div><div class="v num" id="kCpt">–</div><div class="d" id="dCpt" style="color:var(--muted);font-weight:400"></div></div>
+      </div></div>
+      <div class="tile w5"><h3>Funnel</h3><p class="sub">From landing on the page to tapping a store.</p>
+        <div id="funnel"></div><div class="stores" id="stores"></div>
+        <div class="ctrbox"><div><div class="lbl">Taps ÷ visits</div><div class="big num" id="ctr1">–</div><div class="bench">of all counted visits</div></div><div><div class="lbl">Taps ÷ people</div><div class="big num" id="ctr2">–</div><div class="bench">people who tapped at least once</div></div></div>
+      </div>
+      <div class="tile w7"><div class="head"><div><h3>Visits vs Spotify taps</h3><p class="sub" id="tsSub">Per day, São Paulo time.</p></div><div class="seg" id="seg"><button type="button" data-u="day" class="on">Day</button><button type="button" data-u="hour">Hour</button></div></div>
+        <div class="legend"><span><span class="swatch" style="background:var(--grey-mark)"></span>Visits</span><span><span class="swatch" style="background:var(--spot)"></span>Spotify taps</span></div>
+        <svg id="ts" role="img" aria-label="Visits and Spotify taps over time"></svg><div class="tip" id="tip" hidden></div>
+      </div>
+      <div class="tile w6"><div class="head"><div><h3>Sources</h3><p class="sub">Ads by name (utm_content), then Meta ads without tags, Instagram (bio, DMs, stories) and Direct.</p></div><span class="lbl">CTR</span></div><div id="bAd"></div></div>
+      <div class="tile w6"><div class="head"><div><h3>Places</h3><p class="sub">Country, top city in each.</p></div><span class="lbl">CTR</span></div><div id="bGeo"></div></div>
+      <div class="tile w4"><h3>In-app browser</h3><p class="sub">Where the link was opened.</p><div id="bApp"></div></div>
+      <div class="tile w4"><h3>Devices</h3><p class="sub">Phone vs desktop.</p><div id="bDev"></div></div>
+      <div class="tile w4"><h3>Came from</h3><p class="sub">utm_source, else the app or site that sent them.</p><div id="bSrc"></div><div class="refs" id="refs"></div></div>
+      <div class="tile w6"><h3>Speed</h3><p class="sub">Page start → Spotify button tappable, measured on the visitor's phone.</p>
+        <div class="split"><div class="mini"><div class="lbl">Median</div><div class="big num" id="spMed">–</div></div><div class="mini"><div class="lbl">Slowest 10%</div><div class="big num" id="spP90">–</div></div></div>
+        <div class="hist" id="hist"></div><div class="hist-ax"><span>0s</span><span>0.3s</span><span>0.6s</span><span>1s+</span></div>
+        <div class="keyrow" style="margin-top:10px"><span>CTR when under 0.3 s</span><b id="spFast">–</b></div><div class="keyrow"><span>CTR when over 0.6 s</span><b id="spSlow">–</b></div>
+      </div>
+      <div class="tile w6"><h3>Meta can see</h3><p class="sub" id="metaSub">Of our counted Spotify taps.</p>
+        <div class="mini"><div class="lbl">Sent to Meta</div><div class="big num" id="mSent">–</div></div>
+        <div class="stackbar" id="mStack"></div>
+        <div class="keyrow"><span><span class="swatch" style="background:var(--spot)"></span>Sent (Pixel + server)</span><b id="mS">–</b></div>
+        <div class="keyrow"><span><span class="swatch" style="background:var(--grey-mark)"></span>Not sent (no consent, or opted out)</span><b id="mN">–</b></div>
+        <div class="keyrow"><span>EU/UK consent: allowed / declined</span><b id="mC">–</b></div>
+      </div>
+      <div class="tile w12"><h3>Bots &amp; you</h3><p class="sub">A visit only counts as a person after a real touch, scroll, key press or tap while the page is on screen. Everything else is left out of every number, chart and the visit log.</p>
+        <div class="split"><div class="mini"><div class="lbl">Visits hidden this period</div><div class="big num" id="bHidden">–</div></div><div id="bReasons"></div></div>
+        <div class="row-btns"><button class="ghost" id="botsBtn" type="button">Show everyone (incl. bots)</button></div>
+        <div class="divider"></div>
+        <div class="lbl">This device</div>
+        <div class="me-state" id="meState">–</div>
+        <div class="row-btns"><button class="ghost" id="meBtn" type="button">Don't count this device</button></div>
+        <p class="note"><b>Open /hq once on your iPhone and once on your Mac and tap this button on each.</b> Each browser remembers it on its own. Instagram's built-in browser is separate too: to cover it, open <b>badscandal.com/touchme?nostat=1</b> inside Instagram once (send it to yourself in a DM). Your visits still send Meta its events, so tests keep working; they sit under "Show everyone" as <b>You</b>.</p>
+      </div>
+      <div class="tile w12"><div class="head"><div><h3>Visit log</h3><p class="sub">People who went to the page. Anonymous: no names, no handles, no IPs.</p></div></div>
+        <div class="tools" id="logTools">
+          <button class="chip on" type="button" data-f="all">All</button><button class="chip" type="button" data-f="yes">Tapped</button><button class="chip" type="button" data-f="no">Didn't tap</button>
+          <select id="fAd" aria-label="Filter by source"><option value="">Every source</option></select>
+          <select id="fCc" aria-label="Filter by country"><option value="">Every country</option></select>
+          <a class="btn" id="csv" href="#" download>Download CSV</a>
+        </div>
+        <table class="log"><thead><tr><th>Time (SP)</th><th>Visitor</th><th>Where</th><th>Device · browser</th><th>Ad / source</th><th>Spotify</th><th>Time to tap</th><th>Button ready</th></tr></thead><tbody id="logBody"></tbody></table>
+        <div class="mobile-log" id="mlog"></div>
+        <button class="more-btn" id="more" type="button" hidden>Show more</button>
+        <p class="foot" id="logFoot"></p>
+      </div>
+    </div>
+  </section>
+
+  <section class="card" id="growth"><h2>Growth</h2><p class="sub">Followers per platform, and the posts that went out on the days that grew most.</p><div class="sheeterr" id="errGrowth" hidden></div><div class="grid g4" id="growthList"></div></section>
+  <section class="card" id="fans"><h2>Fans forming</h2><p class="sub" id="fansSub"></p><div class="sheeterr" id="errFans" hidden></div><div class="scroll"><table class="stack" id="fanTable"></table></div></section>
+  <section class="card" id="releases"><h2>Releases</h2><p class="sub">Counting back from release day: 28 days files, 21 RouteNote, 14 Spotify pitch, 10 lyrics, 7 video and page.</p><div class="sheeterr" id="errReleases" hidden></div><div class="grid g3" id="relList"></div></section>
+  <section class="card" id="money"><h2>Money</h2><p class="sub">Every amount in the currency it was billed or paid in. Totals in EUR are estimates at that month's average rate.</p><div class="sheeterr" id="errMoney" hidden></div><div class="scroll"><table class="stack" id="moneyTable"></table></div><div id="moneyDetail"></div></section>
+  <section class="card" id="team"><h2>Team</h2><p class="sub" id="teamSub"></p><div class="sheeterr" id="errTeam" hidden></div>
+    <div class="lbl" style="margin:0 0 8px">Today's duties</div><div class="grid g3" id="dutyList"></div>
+    <div class="scroll" style="margin-top:14px"><table class="stack" id="teamTable"></table></div><div class="scroll" style="margin-top:14px"><table class="stack" id="taskTable"></table></div></section>
 </main>
-<script src="js/hq.js"></script>
+</div>
+<script src="js/hq.js" defer></script>
+<script src="js/hq-pages.js" defer></script>
 </body>
 </html>

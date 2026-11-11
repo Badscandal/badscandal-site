@@ -1,24 +1,20 @@
-/* The admin portal (admin.html, 9 Nov 2026). Hand-rolled on purpose: no libraries, charts are
-   plain SVG/HTML. Talks to netlify/functions/admin.mjs:
-     GET  /api/admin/data   -> everything on the page (401 -> the login screen)
-     GET  /api/admin/csv    -> the visit log download
-     POST /api/admin/login | /api/admin/logout
-     POST /api/admin/exclude -> "Don't count this device" (server cookie + localStorage bs_nostat)
-   Refreshes every 60 s while the tab is visible. All times are São Paulo.
-   Bots are hidden by default ("Show bots" asks the server for bots=1; never remembered). */
+/* BADSCANDAL HQ · the Pages section (11 Nov 2026): everything /admin used to show per page. Moved here
+   from js/admin.js when /admin became part of /hq (/admin now 301s to /hq). Talks to the SAME,
+   unchanged endpoints: GET /api/admin/data (the numbers), GET /api/admin/csv (the visit log
+   download), POST /api/admin/exclude ("Don't count this device"). The login, the range shared with
+   Songs and Ads, and the helpers come from js/hq.js (window.HQ). Hand-rolled: no libraries, charts
+   are plain SVG. Bots are hidden by default ("Show everyone" asks for bots=1; never remembered). */
 (function () {
   "use strict";
+  var HQ = window.HQ;
   var $ = function (id) { return document.getElementById(id); };
-  var REFRESH_MS = 60000;
+  var esc = HQ.esc, REFRESH_MS = 60000;
   var GREY = "#5A5A5A", GREEN = "#1ED760";
-  var reduce = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
-
-  var state = { link: "", range: "7d", from: "", to: "", unit: "day", filter: "all", fAd: "", fCc: "", shown: 50, bots: false };
-  try { var saved = JSON.parse(localStorage.getItem("bs_admin_view") || "{}"); if (saved.range) state.range = saved.range; if (saved.link) state.link = saved.link; } catch (e) {}
-  var data = null, timer = null, loading = false;
+  var state = { link: "", unit: "day", filter: "all", fAd: "", fCc: "", shown: 50, bots: false };
+  try { var saved = JSON.parse(localStorage.getItem("bs_admin_view") || "{}"); if (saved.link) state.link = saved.link; } catch (e) {}
+  var data = null, timer = null, loading = false, again = false;
 
   /* ---------- helpers ---------- */
-  function esc(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); }
   function fmt(n) { return n == null ? "–" : Math.round(n).toLocaleString("en-US"); }
   function pct(r, digits) { return r == null || !isFinite(r) ? "–" : (r * 100).toFixed(digits == null ? 1 : digits) + "%"; }
   function secs(ms) { return ms == null ? "–" : (ms / 1000).toFixed(ms < 10000 ? 2 : 1); }
@@ -67,105 +63,65 @@
     return new Date(d + "T12:00:00Z").toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" });
   }
   function query(extra) {
-    var q = new URLSearchParams({ link: state.link || "", range: state.range });
-    if (state.range === "custom") { if (state.from) q.set("from", state.from); if (state.to) q.set("to", state.to); }
+    var q = HQ.rangeQuery();
+    q.set("link", state.link || "");
     if (state.bots) q.set("bots", "1");
     if (extra) for (var k in extra) q.set(k, extra[k]);
     return q.toString();
   }
-  function remember() { try { localStorage.setItem("bs_admin_view", JSON.stringify({ range: state.range, link: state.link })); } catch (e) {} }
-
-  /* ---------- login ---------- */
-  /* /hq sends people here with ?next=/hq… when they aren't logged in; after the login they go
-     straight back. Only HQ addresses are accepted, so the link can't be used to send anyone
-     to another site. */
-  var BACK = (function () {
-    var n = new URLSearchParams(location.search).get("next") || "";
-    return /^\/hq(\.html)?(\?sample=1)?(#[a-z]+)?$/.test(n) ? n : "";
-  })();
-  if (BACK) document.querySelector(".login h1 span").textContent = "HQ";
-  function showLogin(msg) {
-    $("app").hidden = true;
-    $("login").hidden = false;
-    $("err").textContent = msg || "";
-    clearInterval(timer);
-    setTimeout(function () { $("pw").focus(); }, 50);
-  }
-  $("loginForm").addEventListener("submit", function (ev) {
-    ev.preventDefault();
-    var btn = $("go");
-    btn.disabled = true;
-    $("err").textContent = "";
-    fetch("/api/admin/login", { method: "POST", headers: { "Content-Type": "application/json" }, credentials: "same-origin",
-      body: JSON.stringify({ password: $("pw").value }) })
-      .then(function (r) { return r.json().catch(function () { return {}; }).then(function (j) { return { s: r.status, j: j }; }); })
-      .then(function (res) {
-        btn.disabled = false;
-        if (res.s === 200) { $("pw").value = ""; if (BACK) { location.replace(BACK); return; } $("login").hidden = true; load(true); return; }
-        if (res.s === 401) $("err").textContent = "Wrong password." + (res.j.left != null ? " " + res.j.left + " tries left." : "");
-        else $("err").textContent = res.j.error || "Couldn't log in (" + res.s + ").";
-      })
-      .catch(function () { btn.disabled = false; $("err").textContent = "No connection. Try again."; });
-  });
-  $("logout").addEventListener("click", function () {
-    fetch("/api/admin/logout", { method: "POST", credentials: "same-origin" }).finally(function () { showLogin(""); });
-  });
+  function remember() { try { var v = JSON.parse(localStorage.getItem("bs_admin_view") || "{}"); v.link = state.link; localStorage.setItem("bs_admin_view", JSON.stringify(v)); } catch (e) {} }
 
   /* ---------- loading ---------- */
   function load(first) {
-    if (loading) return;
+    if (loading) { again = true; return; }
     loading = true;
-    if (!first && data) $("main").classList.add("busy");
-    fetch("/api/admin/data?" + query(), { credentials: "same-origin", cache: "no-store" })
-      .then(function (r) { return r.json().catch(function () { return {}; }).then(function (j) { return { s: r.status, j: j }; }); })
-      .then(function (res) {
-        loading = false;
-        $("main").classList.remove("busy");
-        if (res.s === 401) return showLogin("");
-        if (res.s === 503) return showLogin("The admin password isn't set on Netlify yet (ADMIN_KEY).");
-        if (res.s !== 200) { banner("Couldn't load the numbers (" + res.s + "). Retrying in a minute."); $("dot").classList.add("off"); return; }
-        $("login").hidden = true;
-        $("app").hidden = false;
-        data = res.j;
-        if (!state.link) state.link = data.link;
-        render();
-        $("main").classList.remove("skel");
-        $("dot").classList.remove("off");
-        $("liveTxt").textContent = "Live · " + spNow() + " SP";
-        armRefresh();
-      })
-      .catch(function () {
-        loading = false;
-        $("main").classList.remove("busy");
-        $("dot").classList.add("off");
-        $("liveTxt").textContent = "Offline";
-        if (!data) showLogin("No connection.");
-      });
+    if (!first && data) $("pgBody").classList.add("busy");
+    HQ.getJSON("/api/admin/data?" + query()).then(function (res) {
+      loading = false;
+      $("pgBody").classList.remove("busy");
+      if (HQ.authFail(res)) return;
+      if (res.s !== 200) { $("pgLoading").hidden = false; $("pgLoading").textContent = "Couldn't load the page numbers (" + res.s + "). Retrying in a minute."; return; }
+      HQ.showShell();
+      data = res.j;
+      if (!state.link) state.link = data.link;
+      $("pgLoading").hidden = true; $("pgBody").hidden = false;
+      render();
+      armRefresh();
+      if (again) { again = false; load(false); }
+    }).catch(function () {
+      loading = false;
+      $("pgBody").classList.remove("busy");
+      if (!data) { $("pgLoading").hidden = false; $("pgLoading").textContent = "No connection. Retrying in a minute."; }
+      armRefresh();
+    });
   }
-  function armRefresh() {
-    clearInterval(timer);
-    timer = setInterval(function () { if (!document.hidden) load(false); }, REFRESH_MS);
-  }
-  document.addEventListener("visibilitychange", function () { if (!document.hidden && data) load(false); });
+  function armRefresh() { clearInterval(timer); timer = setInterval(function () { if (!document.hidden) load(false); }, REFRESH_MS); }
   function banner(msg, html) { $("banner").hidden = !msg; if (html) $("banner").innerHTML = msg; else $("banner").textContent = msg; }
 
   /* ---------- controls ---------- */
   function syncChips() {
-    [].forEach.call(document.querySelectorAll("#chips .chip"), function (c) { c.classList.toggle("on", c.getAttribute("data-r") === state.range); });
-    $("custom").hidden = state.range !== "custom";
+    var r = HQ.state.range;
+    [].forEach.call(document.querySelectorAll("#chips .chip"), function (c) { c.classList.toggle("on", c.getAttribute("data-r") === r); });
+    $("custom").hidden = r !== "custom";
   }
   $("chips").addEventListener("click", function (ev) {
     var c = ev.target.closest(".chip");
     if (!c) return;
-    state.range = c.getAttribute("data-r");
-    if (state.range === "custom" && data) { state.from = state.from || data.from; state.to = state.to || data.to; $("from").value = state.from; $("to").value = state.to; }
+    var r = c.getAttribute("data-r");
     state.shown = 50;
-    syncChips(); remember(); load(false);
+    if (r === "custom") {
+      var from = HQ.state.from || (data && data.from) || "", to = HQ.state.to || (data && data.to) || "";
+      $("from").value = from; $("to").value = to;
+      HQ.state.range = "custom"; syncChips();
+      if (from && to) HQ.setRange("custom", from, to);
+      return;
+    }
+    HQ.setRange(r);
   });
   ["from", "to"].forEach(function (id) {
-    $(id).addEventListener("change", function () { state[id] = $(id).value; if (state.from && state.to) load(false); });
+    $(id).addEventListener("change", function () { var f = $("from").value, t = $("to").value; if (f && t) HQ.setRange("custom", f, t); });
   });
-  $("link").addEventListener("change", function () { state.link = $("link").value; state.fAd = ""; state.fCc = ""; remember(); load(false); });
+  $("link").addEventListener("change", function () { state.link = $("link").value; state.fAd = ""; state.fCc = ""; state.shown = 50; remember(); load(false); });
   $("seg").addEventListener("click", function (ev) {
     var b = ev.target.closest("button");
     if (!b) return;
@@ -173,11 +129,11 @@
     [].forEach.call($("seg").children, function (x) { x.classList.toggle("on", x === b); });
     drawSeries();
   });
-  document.querySelector(".c-log .tools").addEventListener("click", function (ev) {
+  $("logTools").addEventListener("click", function (ev) {
     var c = ev.target.closest(".chip");
     if (!c) return;
     state.filter = c.getAttribute("data-f");
-    [].forEach.call(document.querySelectorAll(".c-log .chip"), function (x) { x.classList.toggle("on", x === c); });
+    [].forEach.call(document.querySelectorAll("#logTools .chip"), function (x) { x.classList.toggle("on", x === c); });
     state.shown = 50; drawLog();
   });
   $("fAd").addEventListener("change", function () { state.fAd = $("fAd").value; state.shown = 50; drawLog(); });
@@ -194,11 +150,12 @@
   function localExcluded() { try { return localStorage.getItem("bs_nostat") === "1"; } catch (e) { return false; } }
   $("meBtn").addEventListener("click", function () {
     var on = !(data && (data.excluded || localExcluded()));
+    if (HQ.sample) return; /* the sample never changes this browser */
     $("meBtn").disabled = true;
     fetch("/api/admin/exclude", { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ on: on }) })
       .then(function (r) {
         $("meBtn").disabled = false;
-        if (r.status === 401) return showLogin("");
+        if (r.status === 401) return HQ.showLogin("");
         if (!r.ok) return;
         try { if (on) localStorage.setItem("bs_nostat", "1"); else localStorage.removeItem("bs_nostat"); } catch (e) {}
         data.excluded = on;
@@ -215,10 +172,25 @@
     var cur = data.links.filter(function (l) { return l.id === data.link; })[0];
     if (cur && cur.cover) $("pickImg").src = cur.cover;
     syncChips();
-    if (state.range === "custom") { $("from").value = data.from; $("to").value = data.to; }
+    if (HQ.state.range === "custom") { $("from").value = data.from; $("to").value = data.to; }
+    $("tHumans").classList.toggle("on", !state.bots);
+    $("tBots").classList.toggle("on", state.bots);
+    $("botN").textContent = fmt((data.hidden || {}).visits || 0);
     banner(data.bots ? "Showing bots too: every number below includes the " + fmt(data.hidden.visits) + " bot visits. <button class=\"ghost\" id=\"hideBots\" type=\"button\">Humans only</button>" : "", true);
-    drawStrip();
-    drawKpis(); drawFunnel(); drawSeries(); drawBreakdowns(); drawSpeed(); drawMeta(); drawHealth(); drawBots(); drawSpend(); drawCap(); fillFilters(); drawLog();
+    drawKpis(); drawFunnel(); drawSeries(); drawBreakdowns(); drawSpeed(); drawMeta(); drawBots(); drawCpt(); fillFilters(); drawLog();
+  }
+
+  /* the cost per tap KPI for the picked page (the full cost-per-tap tables are in Ads) */
+  function drawCpt() {
+    var sp = data.spend;
+    $("cptCard").classList.toggle("muted", !(sp && sp.connected && !sp.error));
+    if (!sp || !sp.connected || sp.error) {
+      $("kCpt").textContent = "–";
+      $("dCpt").textContent = !sp ? "no ads on this page" : sp.error ? "Meta spend: " + sp.error : "Meta spend not connected";
+      return;
+    }
+    $("kCpt").innerHTML = sp.song.cpt == null ? "–" : esc(HQ.money(sp.song.cpt, sp.currency));
+    $("dCpt").textContent = HQ.money(sp.song.spend, sp.currency) + " spent · " + fmt(sp.song.taps) + " real taps";
   }
 
   function delta(cur, prev, isRate) {
@@ -317,7 +289,7 @@
     });
     svg.innerHTML = out;
 
-    var card = svg.closest(".card");
+    var card = svg.closest(".tile");
     function show(i) {
       var r = rows[i];
       if (!r) return;
@@ -388,136 +360,6 @@
     $("mC").textContent = m.yes + m.no ? fmt(m.yes) + " / " + fmt(m.no) + " · " + pct(m.yes / (m.yes + m.no), 0) + " allow" : "–";
   }
 
-  function ago(ms) {
-    var m = Math.round(ms / 60000);
-    if (m < 1) return "just now";
-    if (m < 60) return m + " min ago";
-    var h = Math.round(m / 60);
-    return h < 48 ? h + " h ago" : Math.round(h / 24) + " days ago";
-  }
-  function drawStrip() {
-    $("tHumans").classList.toggle("on", !state.bots);
-    $("tBots").classList.toggle("on", state.bots);
-    $("botN").textContent = fmt((data.hidden || {}).visits || 0);
-    var last = data.health && data.health.last, el = $("mstat");
-    el.className = "mstat" + (last ? (last.ok ? " ok" : " bad") : "");
-    $("mstatTxt").textContent = !last ? "Meta: nothing sent yet"
-      : last.ok ? "Meta: sending OK, last event " + ago(last.agoMs) + (last.test ? " (test mode)" : "")
-      : "Meta: ERROR " + ago(last.agoMs) + ": " + (last.message || last.detail);
-    el.title = last ? last.time + " SP · " + last.events.join(" + ") : "";
-    /* the read-only Meta ads key (personal, can expire after ~60 days): "reading OK" or "expired" */
-    var k = data.metaKey, ks = $("kstat");
-    ks.hidden = !k;
-    if (k) {
-      ks.className = "mstat" + (k.state === "ok" ? " ok" : k.state === "expired" || k.state === "error" ? " bad" : "");
-      $("kstatTxt").textContent = k.text;
-      ks.title = k.state === "expired" ? "Make a new read-only token in Meta and replace META_ADS_TOKEN on Netlify" : "";
-    }
-  }
-
-  /* ---------- cost per tap (Meta spend, read-only) ---------- */
-  function money(n, cur) {
-    if (n == null) return "–";
-    try { return new Intl.NumberFormat("en-US", { style: "currency", currency: cur || "USD", currencyDisplay: "code" }).format(n); }
-    catch (e) { return n.toFixed(2) + " " + (cur || ""); }
-  }
-  function mtable(el, head, rows) {
-    el.innerHTML = rows.length ? "<tr>" + head.map(function (h) { return "<th>" + esc(h) + "</th>"; }).join("") + "</tr>" +
-      rows.map(function (r) { return "<tr>" + r.map(function (c, i) { return "<td>" + (i === 3 ? "<b>" + esc(c) + "</b>" : esc(c)) + "</td>"; }).join("") + "</tr>"; }).join("")
-      : '<tr><td class="empty">Nothing in this period.</td></tr>';
-  }
-  function drawSpend() {
-    var sp = data.spend, card = $("spendCard");
-    card.hidden = !sp; /* the home page has no ads */
-    $("cptCard").classList.toggle("muted", !(sp && sp.connected && !sp.error));
-    if (!sp || !sp.connected || sp.error) {
-      $("kCpt").textContent = "–";
-      $("dCpt").textContent = !sp ? "no ads on this page" : sp.error ? "Meta spend: " + sp.error : "Meta spend not connected";
-      $("spOn").hidden = true; $("spOff").hidden = false;
-      $("spOff").textContent = sp && sp.error ? "Couldn't read Meta spend: " + sp.error : "Meta spend not connected. To connect it, add META_ADS_TOKEN on Netlify (a read-only ads token); nothing else is needed.";
-      $("spCur").textContent = "";
-      return;
-    }
-    var c = sp.currency;
-    $("spOff").hidden = true; $("spOn").hidden = false;
-    $("spCur").textContent = c ? "in " + c : "";
-    $("kCpt").innerHTML = sp.song.cpt == null ? "–" : esc(money(sp.song.cpt, c));
-    $("dCpt").textContent = money(sp.song.spend, c) + " spent · " + fmt(sp.song.taps) + " real taps";
-    $("spSpend").textContent = money(sp.song.spend, c);
-    $("spTaps").textContent = fmt(sp.song.taps);
-    $("spCpt").textContent = money(sp.song.cpt, c);
-    var head = ["", "Spend", "Taps", "Per tap"];
-    mtable($("spAds"), ["Ad"].concat(head.slice(1)), sp.ads.map(function (a) { return [a.ad, money(a.spend, c), fmt(a.taps), money(a.cpt, c)]; }));
-    mtable($("spDays"), ["Day"].concat(head.slice(1)), sp.days.map(function (r) { return [longDay(r.d), money(r.spend, c), fmt(r.taps), money(r.cpt, c)]; }));
-    mtable($("spSongs"), ["Song"].concat(head.slice(1)), sp.songs.map(function (r) { return [r.title, money(r.spend, c), fmt(r.taps), money(r.cpt, c)]; }));
-    mtable($("spAll"), ["Day"].concat(head.slice(1)), sp.allDays.map(function (r) { return [longDay(r.d), money(r.spend, c), fmt(r.taps), money(r.cpt, c)]; }));
-    $("spNote").textContent = "Spend is in the ad account's currency (" + (c || "?") + "), never converted, and Meta's days are the ad account's days. Taps are real people only. " +
-      (sp.unmatched ? money(sp.unmatched, c) + " of spend couldn't be matched to a song (an ad whose name nobody has visited from yet). " : "") +
-      "Read from Meta " + (sp.fetched ? sp.fetched.slice(11, 16) + " SP" : "") + ", refreshed hourly.";
-  }
-
-  /* ---------- monthly ad cap (display only; the bots and Luke switch ads off, not this page) ---------- */
-  function drawCap() {
-    var k = data.cap, card = $("capCard");
-    card.className = "card c-cap";
-    if (!k || !k.connected || k.error) {
-      $("capOn").hidden = true; $("capOff").hidden = false;
-      $("capOff").textContent = k && k.error ? "Couldn't read Meta spend: " + k.error : "Meta spend not connected. To connect it, add META_ADS_TOKEN on Netlify (a read-only ads token).";
-      $("capMonth").textContent = "";
-      return;
-    }
-    $("capOff").hidden = true; $("capOn").hidden = false;
-    var cc = k.capCurrency, months = ["January","February","March","April","May","June","July","August","September","October","November","December"];
-    $("capMonth").textContent = months[Number(k.month.slice(5, 7)) - 1] + " " + k.month.slice(0, 4);
-    if (k.status === "currency") {
-      $("capSpent").textContent = money(k.spent, k.currency);
-      $("capLeft").textContent = "";
-      $("capMsg").textContent = "The ad account bills in " + k.currency + ", the cap is in " + cc + ". Never converted, so this can't be compared here.";
-      $("capFill").style.width = "0"; $("capNote").textContent = "";
-      return;
-    }
-    card.className = "card c-cap " + k.status;
-    var pct = function (n) { return Math.min(100, (n / k.cap) * 100) + "%"; };
-    $("capSpent").innerHTML = esc(money(k.spent, cc)) + " <small>of " + esc(money(k.cap, cc)) + " · " + k.pct + "%</small>";
-    $("capLeft").textContent = k.left >= 0 ? money(k.left, cc) + " left" : money(-k.left, cc) + " over";
-    $("capFill").style.width = pct(k.spent);
-    $("capWarn").style.left = pct(k.warn); $("capStop").style.left = pct(k.stop);
-    $("capAx").textContent = fmt(k.warn) + " warn · " + fmt(k.stop) + " everything off · " + fmt(k.cap);
-    var msg = {
-      ok: "Under the warning line.",
-      warn: "Getting close: past " + money(k.warn, cc) + ". Alfred is warning Luke.",
-      stop: "Past " + money(k.stop, cc) + ": every ad should be OFF for the rest of the month (Luke's standing order).",
-      over: "OVER the " + money(k.cap, cc) + " cap. Every ad must be off now; tell Luke.",
-    }[k.status];
-    if (k.status === "ok" && k.perDay > 0) msg += " At the last days' pace (" + money(k.perDay, cc) + "/day) " + (k.stopDay ? "the " + money(k.stop, cc) + " line is reached around day " + k.stopDay + "." : "the month ends under the line.");
-    if (k.fx) msg += " About " + money(k.fx.eur, "EUR") + " at this month's average rate (1 EUR = " + k.fx.rate + " " + cc + ").";
-    $("capMsg").textContent = msg;
-    $("capNote").textContent = "Meta only (the ad account's days). Google and TikTok bill in EUR and are logged by the bots in the Ads Tracker. EUR figures are estimates at the month's average ECB rate. Read from Meta " + (k.fetched ? k.fetched.slice(11, 16) + " SP" : "") + ", refreshed hourly. This page never pauses anything.";
-  }
-
-  function drawHealth() {
-    var h = data.health;
-    if (!h) { $("hPill").textContent = "No data"; $("hPill").className = "pill"; return; }
-    var t = h.today, g = h.range;
-    $("hSent").textContent = fmt(t.sent);
-    $("hRec").textContent = fmt(t.received);
-    $("hErr").textContent = fmt(t.errors);
-    $("hTaps").textContent = fmt(t.taps) + " / " + fmt(t.tapsReceived);
-    $("hRangeLbl").textContent = data.days === 1 ? "Today, calls to Meta" : "Last " + data.days + " days";
-    $("hRange").textContent = fmt(g.sent) + " sent · " + fmt(g.received) + " accepted · " + fmt(g.errors) + " errors";
-    $("hBlocked").textContent = fmt(t.blocked) + " today · " + fmt(g.blocked) + " this period";
-    $("hLastOk").textContent = h.lastOk ? h.lastOk.slice(5, 16).replace("-", "/") + " SP" : "none yet";
-    var le = h.lastErrorFull;
-    $("hLastErr").textContent = le ? le.time.slice(5, 16).replace("-", "/") + " SP · " + le.detail : h.lastError ? h.lastError.time.slice(5, 16).replace("-", "/") + " SP · " + h.lastError.detail : "none";
-    $("hErrMsg").hidden = !(le && le.message);
-    $("hErrMsg").textContent = le && le.message ? "Meta said: " + le.message : "";
-    $("hTest").hidden = !h.testMode;
-    var pill = $("hPill");
-    if (t.errors) { pill.textContent = t.errors + " error" + (t.errors > 1 ? "s" : "") + " today"; pill.className = "pill bad"; }
-    else if (t.calls) { pill.textContent = "Working"; pill.className = "pill ok"; }
-    else { pill.textContent = "Nothing sent today"; pill.className = "pill"; }
-  }
-
   function drawBots() {
     var hd = data.hidden || { visits: 0, reasons: [] };
     $("bHidden").textContent = fmt(hd.visits);
@@ -576,8 +418,9 @@
       " · raw visits kept 90 days, then daily totals only";
   }
 
-  /* ---------- go ---------- */
-  syncChips();
-  if (reduce) document.documentElement.classList.add("reduce");
-  load(true);
+  window.HQPages = {
+    load: function (first) { syncChips(); load(first); },
+    reload: function () { state.shown = 50; syncChips(); load(false); },
+    stop: function () { clearInterval(timer); },
+  };
 })();

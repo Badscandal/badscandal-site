@@ -915,8 +915,12 @@ Brief: `../TOUCHME-LANDING-BUILD-BRIEF.md` (outside the repo on purpose).
   while `META_TEST_EVENT_CODE` is set. The token is never logged or stored. The
   browser Pixel copy is only visible in Events Manager. Netlify function logs are
   kept 24 h (project `profound-haupia-db7ffa`).
-* **`/admin`** (admin.html + js/admin.js, stand-alone like activate.html; `/stats`
-  301s here). Password = Netlify env `ADMIN_KEY` (STATS_KEY still accepted) ->
+* **THE ONE DASHBOARD IS `/hq` (11 Nov 2026).** /admin's page (admin.html + js/admin.js) is GONE (in
+  git history); `/admin`, `/admin.html`, `/stats` and `/stats.html` 301! to `/hq` (`_redirects`). The
+  login is on /hq itself and uses the very same endpoint, password, cookie and lockout described here;
+  every `/api/admin/*` endpoint is unchanged (plus `/api/admin/overview`, see the HQ entry below).
+  Where this file says "/admin" for a feature, read "/hq" (Pages / Ads sections).
+* **The login + `/api/admin/*`** (formerly the /admin portal). Password = Netlify env `ADMIN_KEY` (STATS_KEY still accepted) ->
   `__Host-bs_admin` HMAC-signed cookie, HttpOnly/Secure/SameSite=Strict, 30 days;
   changing the password logs everyone out. 5 wrong tries per 10 min per hashed IP
   (Blob store `admin-auth`). API: `netlify/functions/admin.mjs` (`/api/admin/
@@ -952,10 +956,45 @@ Brief: `../TOUCHME-LANDING-BUILD-BRIEF.md` (outside the repo on purpose).
   daily rates so far; `convert(amount, from, to, avg)`. Cached 12 h (`meta-cache`, `fx/<month>.json`).
   Luke asked for USD<->EUR at the month's average: converted figures are ESTIMATES shown NEXT TO the
   real amount and the rate used, never instead of it. The cap card shows the EUR estimate.
-* **BADSCANDAL HQ, `/hq` (11 Nov 2026; on branch `hq-dashboard` until Luke has seen it):** `hq.html`
-  + `js/hq.js`, stand-alone like admin.html, SAME login as /admin (no cookie -> sent to
-  `/admin?next=/hq…`; after the login js/admin.js sends them straight back. `next` only accepts
-  `/hq`, `/hq.html`, `?sample=1` and a `#section`, so it can't bounce anyone to another site).
+* **BADSCANDAL HQ, `/hq` = the one dashboard (11 Nov 2026).** `hq.html` (stand-alone: no site.css /
+  main.js) + `js/hq.js` + `js/hq-pages.js`. Sections, in Luke's order, with the sticky chip nav:
+  **Today · Songs · Ads · Pages · Growth · Fans · Releases · Money · Team**.
+  - **Login** on the page (`#login`): POST `/api/admin/login`, same password / cookie / 5-tries lockout.
+    Any 401 from any answer shows it; "Log out" in the header.
+  - **Three answers, asked at once, each section drawn as its own answer lands (Today first):**
+    `/api/hq/data` (the sheet: Today, Growth, Fans, Releases, Money, Team, the combined cap),
+    `/api/admin/overview?range=` (NEW, same cookie, read-only: every song's visits / people / real
+    Spotify taps for the range, yesterday across all songs (people, taps, Meta spend, cost per tap),
+    Meta spend + cost per tap per ad / day / song, the Meta-only cap, Meta events health, the key
+    line) -> Today's "Yesterday" tile, Songs, Ads; and `/api/admin/data` (unchanged) -> Pages.
+    Overview + Pages refresh every 60 s, the sheet every 5 min.
+  - **Today:** the cap (short; details in Ads), Yesterday · all songs, next release, needs Luke,
+    "Today's duties: X of Y done", the Meta key line.
+  - **Songs:** one card per song joining the sheet (streams, listeners, saves, momentum, royalties)
+    with our page (visits, people, real taps for the range) and Meta (spend, cost per tap). Songs
+    without a page of ours say "no song page for this one".
+  - **Ads:** ONE cap card (the combined Meta + Google + TikTok USD 1,000 cap from the sheet, "sheet
+    says X" lines, and the Meta-only account detail under it; the old separate /admin cap card is
+    gone), cost per tap by ad (with its song) / by song / by day, the Meta key line, Meta events
+    health + "Meta: sending OK" line.
+  - **Pages:** everything else /admin had, unchanged in behaviour: page picker, range chips (+
+    custom), Humans only / Show everyone, KPIs, funnel, chart, sources, places, in-app browser,
+    devices, came from, speed, Meta can see, Bots & you with "Don't count this device", visit log +
+    CSV (`/api/admin/csv`). The range is SHARED with Songs and Ads (the selects there and the chips
+    here are one setting, `bs_admin_view` in localStorage).
+  - **Team:** "Today's duties" per bot from Tasks rows whose id starts with `D-` (today's = deadline
+    today or no date; done / todo / blocked + the blocker; `dutiesReport()` in netlify/lib/hq.mjs).
+    D- rows are NOT ordinary tasks (never "late", not in the open count).
+  - **Sheet errors are visible:** `sheetErrors()` finds cells like #REF!, #N/A, #ERROR!, #VALUE! per
+    tab; each affected section says "<Tab> can't be read: the sheet shows an error (#REF!)" (or "Part
+    of the tab…" when some rows still read) instead of looking empty. Tab -> section map is
+    `TAB_SECTIONS` in js/hq.js (Income/Spend/Royalties -> Money, Tasks -> Team + Today, …).
+  - **Sample:** `/hq?sample=1` = made-up numbers in EVERY section under the SAMPLE banner: the sheet
+    from `hq-sample.mjs` (incl. D- duties), the page side from `netlify/lib/admin-sample.mjs`
+    (`sampleEnv()`: an in-memory stats store with invented visit keys in the real key format + an
+    in-memory meta-cache answering every Meta read; `?sample=1` on data / csv / overview). The sample
+    still needs the login and never opens a real store or calls Meta (tested).
+  - The old `?next=/hq` hand-back from /admin is gone with /admin.
   On phones (<720 px) the Fans, Money and Team tables turn into one card per row, each value
   labelled from the header row (`stack()` in js/hq.js + the `table.stack` CSS); desktop keeps tables.
   Server `netlify/functions/hq.mjs` (`/api/hq/data`, read-only). It reads the bots' Google Sheet
@@ -1007,9 +1046,15 @@ Brief: `../TOUCHME-LANDING-BUILD-BRIEF.md` (outside the repo on purpose).
     `money.metaSource` carries it. `/hq?sample=1` uses a made-up Meta read (`sampleMeta()`).
   - Tests: `tests/feed.test.mjs` (CSV shapes, the 404 key check, the Dublin cut-off, the Meta-error
     path, people-only taps, key health, the /hq rule).
+  - **The finished feed file is cached an hour** too (`meta-cache`, `feed/file/<name>/<since>_<until>
+    .json`): meta-ads.csv re-reads up to two months of visit records, so a sheet refresh within the
+    hour costs nothing. Only good files are kept, never an error.
+  - Tests for the one dashboard: `tests/dashboard.test.mjs` (redirects, unchanged login + lockout,
+    overview auth + people-only, sample never touching real stores or Meta, sheet errors, duties,
+    the cached feed file).
 * **90-day rule:** `netlify/functions/rollup.mjs` (daily 06:00 UTC, production
   only) folds raw keys older than 90 days into `daily/<day>.json` counts and
   deletes them; the portal merges those back for old ranges.
 * `_redirects` 404s `/package*.json`, `/netlify/*`, `/tests/*`, `/tools/*`; robots.txt
-  disallows /admin, /stats, /api/.
+  disallows /admin, /hq, /stats, /api/.
 

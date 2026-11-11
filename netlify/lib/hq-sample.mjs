@@ -38,7 +38,15 @@ export function sampleSheets(today) {
     ["T-103", "Forge", "Log yesterday's spend per platform", today, "doing", "", today],
     ["T-104", "Kevin", "Find the official Touch Me sound on TikTok", day(today, 3), "blocked", "Needs Luke's phone code", day(today, 2)],
     ["T-105", "Laura", "Schedule the lyric video for 00:00 release day", day(today, -6), "todo", "", day(today, 1)],
-    ["T-100", "Webmaster", "Song page for Me Dá Seu Body", day(today, 2), "done", "", day(today, 2)]];
+    ["T-100", "Webmaster", "Song page for Me Dá Seu Body", day(today, 2), "done", "", day(today, 2)],
+    /* today's duties (ids starting "D-") */
+    ["D-atlas-1", "Atlas", "Log yesterday's Spotify numbers", today, "done", "", today],
+    ["D-steve-1", "Steve", "Log Instagram followers + best post", today, "done", "", today],
+    ["D-kevin-1", "Kevin", "Log TikTok followers + best post", today, "blocked", "TikTok login expired", today],
+    ["D-laura-1", "Laura", "Log YouTube subscribers", today, "todo", "", today],
+    ["D-forge-1", "Forge", "Log yesterday's ad spend per platform", today, "done", "", today],
+    ["D-forge-2", "Forge", "Check the monthly ad cap", today, "todo", "", today],
+    ["D-atlas-0", "Atlas", "Log Spotify numbers (yesterday's duty)", day(today, 1), "done", "", day(today, 1)]];
   const Royalties = [["month", "song", "store", "streams", "amount", "currency", "logged_by"],
     [prev, "Love You", "Spotify", "61000", "152.40", "EUR", "Drop"], [prev, "Love You", "Apple Music", "9000", "41.10", "EUR", "Drop"],
     [m, "Touch Me", "Spotify", "14000", "38.20", "EUR", "Drop"]];

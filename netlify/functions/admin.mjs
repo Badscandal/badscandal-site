@@ -1,10 +1,16 @@
-/* /api/admin/* — the private admin portal's server (9 Nov 2026). Page: admin.html + js/admin.js.
+/* /api/admin/* — the dashboard's page-visit server (9 Nov 2026). Page since 11 Nov: /hq (hq.html + js/hq.js + js/hq-pages.js); /admin 301s there.
 
    POST /api/admin/login    {password} -> session cookie (netlify/lib/session.mjs)
    POST /api/admin/logout   clears it
    GET  /api/admin/data     ?link=<song slug|home>&range=today|7d|30d|custom[&from=&to=][&bots=1]  -> dashboard JSON
                             (+ Meta spend / cost per tap when META_ADS_TOKEN is set; read-only)
    GET  /api/admin/csv      same query -> every visit in the range as a CSV download
+   GET  /api/admin/overview ?range=…  -> every song at once for /hq's Today, Songs and Ads (11 Nov 2026):
+                            visits, people and real Spotify taps per song, yesterday across all songs,
+                            Meta spend + cost per tap per ad / day / song, the Meta-only cap, Meta
+                            events health and the Meta key line. Same login, read-only.
+   ?sample=1 on data / csv / overview -> MADE-UP numbers from netlify/lib/admin-sample.mjs (in memory,
+                            never Meta, never the real stores), for /hq?sample=1.
    POST /api/admin/exclude  {on:true|false} -> sets/clears the bs_nostat cookie on THIS browser:
                             hit.mjs files its visits under "me", out of the numbers (9 Nov)
 
@@ -15,6 +21,7 @@ import { adTaps, dashboard, defaultLink, healthSummary, LINKS, mergeSummary, res
 import { HEALTH_PREFIX, LAST_ERROR_KEY, LAST_KEY, parseHealthKey } from "../lib/capi.mjs";
 import { DEFAULT_ACCOUNT, capReport, spendReport } from "../lib/metaspend.mjs";
 import { keyHealth, readKeyHealth, readMeta } from "../lib/metaread.mjs";
+import { sampleEnv } from "../lib/admin-sample.mjs";
 import { convert, fetchMonthAverage, FX_TTL_MS } from "../lib/fx.mjs";
 import { checkPassword, clearCookie, COOKIE, makeSession, readCookie, sessionCookie, verifySession } from "../lib/session.mjs";
 import { parseKey, PREFIX } from "../lib/stats.mjs";
@@ -101,41 +108,55 @@ async function loadHealth(store, spDays) {
 
 /* Cost per tap: Meta spend for these days (READ-ONLY, see netlify/lib/metaspend.mjs), cached an
    hour, matched to real (people-only) Spotify taps of every song. */
-async function loadSpend(context, spDays, events, current) {
-  const token = Netlify.env.get("META_ADS_TOKEN");
-  if (!token) return { connected: false };
-  const account = (Netlify.env.get("META_AD_ACCOUNT_ID") || DEFAULT_ACCOUNT).replace(/\D/g, "");
-  const since = spDays[0], until = spDays[spDays.length - 1];
-  const cache = context.deploy?.context === "production" ? getStore("meta-cache") : getDeployStore("meta-cache");
-  const r = await readMeta({ cache, token, account, since, until, level: "ad", key: `insights/${account}/${since}_${until}.json` });
+/* Where the numbers come from: the real Blob stores and Meta settings, or (sample) the made-up ones. */
+function envFor(context, sample) {
+  if (sample) return sampleEnv();
+  const prod = context.deploy?.context === "production";
+  return {
+    sample: false,
+    stats: prod ? getStore("stats") : getDeployStore("stats"),
+    cache: prod ? getStore("meta-cache") : getDeployStore("meta-cache"),
+    token: Netlify.env.get("META_ADS_TOKEN") || "",
+    account: (Netlify.env.get("META_AD_ACCOUNT_ID") || DEFAULT_ACCOUNT).replace(/\D/g, ""),
+    testMode: !!Netlify.env.get("META_TEST_EVENT_CODE"),
+  };
+}
+
+/* Ad-level Meta rows for since..until (read-only, cached an hour). -> { rows, at } | { error } */
+async function adRows(env, since, until) {
+  const r = await readMeta({ cache: env.cache, token: env.token, account: env.account, since, until, level: "ad", key: `insights/${env.account}/${since}_${until}.json` });
   if (r.error) console.error("meta spend: " + r.error); /* scrubbed: never the token */
-  const got = r.error ? r.stale : r;
-  if (!got) return { connected: true, error: r.error };
+  return r.error ? (r.stale || { error: r.error }) : r;
+}
+
+async function loadSpend(env, spDays, events, current) {
+  if (!env.token) return { connected: false };
+  const since = spDays[0], until = spDays[spDays.length - 1];
+  const r = await adRows(env, since, until);
+  if (r.error) return { connected: true, error: r.error };
+  const got = r;
   const songs = LINKS.filter((l) => l.date).map((l) => ({ id: l.id, title: l.title, ...adTaps(summarize(events, spDays, l.id)) }));
   return { ...spendReport(got.rows, songs, current), fetched: spTime(got.at) };
 }
 
 /* The monthly ad cap: the whole Meta ad account, 1st of this month .. today (São Paulo), cached an
    hour. READ-ONLY, display only. */
-async function loadCap(context) {
-  const token = Netlify.env.get("META_ADS_TOKEN");
-  if (!token) return { connected: false };
-  const account = (Netlify.env.get("META_AD_ACCOUNT_ID") || DEFAULT_ACCOUNT).replace(/\D/g, "");
+async function loadCap(env) {
+  if (!env.token) return { connected: false };
   const today = spDay(Date.now()), since = today.slice(0, 8) + "01";
-  const cache = context.deploy?.context === "production" ? getStore("meta-cache") : getDeployStore("meta-cache");
-  const r = await readMeta({ cache, token, account, since, until: today, level: "account", key: `cap/${account}/${today}.json` });
+  const r = await readMeta({ cache: env.cache, token: env.token, account: env.account, since, until: today, level: "account", key: `cap/${env.account}/${today}.json` });
   if (r.error) console.error("meta cap: " + r.error); /* scrubbed: never the token */
   const got = r.error ? r.stale : r;
   if (!got) return { connected: true, error: r.error };
   const rep = capReport(got.rows, today);
-  const fx = await loadFx(context, rep.month, today).catch(() => null);
+  const fx = await loadFx(env, rep.month, today).catch(() => null);
   const eur = fx && !fx.error ? convert(rep.spent, rep.currency, "EUR", fx) : null;
   return { connected: true, ...rep, fetched: spTime(got.at), fx: eur == null ? null : { eur, rate: fx[rep.currency], days: fx.days } };
 }
 
 /* This month's average exchange rates (ECB), cached 12 h. Estimates for reading only. */
-async function loadFx(context, month, today) {
-  const cache = context.deploy?.context === "production" ? getStore("meta-cache") : getDeployStore("meta-cache");
+async function loadFx(env, month, today) {
+  const cache = env.cache;
   const key = `fx/${month}.json`;
   let got = null;
   try { got = await cache.get(key, { type: "json" }); } catch {}
@@ -144,6 +165,52 @@ async function loadFx(context, month, today) {
   if (fx.error) return got ? got.fx : fx;
   try { await cache.setJSON(key, { at: Date.now(), fx }); } catch {}
   return fx;
+}
+
+/* /hq's Today, Songs and Ads in one go: every song for the range, yesterday across all songs, Meta
+   spend + cost per tap per ad / day / song (read-only, cached an hour), the Meta-only cap, events
+   health and the key line. People-only, exactly like the per-link numbers. */
+async function overview(env, r, now) {
+  const today = spDay(now), yday = addDays(today, -1);
+  const songs = LINKS.filter((l) => l.date);
+  const events = await listEvents(env.stats, [...new Set([...r.days, yday])].sort());
+  const per = await Promise.all(songs.map(async (l) => {
+    const s = await load(env.stats, r.days, l.id, {}, events);
+    const y = summarize(events, [yday], l.id);
+    return { id: l.id, title: l.title, date: l.date, cover: l.cover, path: l.path, visits: s.visits, people: s.unique, taps: s.taps, y: { people: y.unique, taps: y.taps }, ...adTaps(s) };
+  }));
+  const yesterday = { d: yday, people: per.reduce((n, s) => n + s.y.people, 0), taps: per.reduce((n, s) => n + s.y.taps, 0), spend: null, cpt: null, currency: "" };
+  let spend = { connected: false };
+  if (env.token) {
+    const since = r.days[0] < yday ? r.days[0] : yday, until = r.days[r.days.length - 1] > yday ? r.days[r.days.length - 1] : yday;
+    const got = await adRows(env, since, until);
+    if (got.error) spend = { connected: true, error: got.error };
+    else {
+      const keep = new Set(r.days);
+      const rows = got.rows.filter((x) => keep.has(x.day));
+      const forSpend = per.map((s) => ({ id: s.id, title: s.title, taps: s.taps, tapsByAd: s.tapsByAd, tapsByDay: s.tapsByDay }));
+      const reps = per.map((s) => spendReport(rows, forSpend, s.id));
+      const base = reps[0] || spendReport(rows, forSpend, "");
+      spend = { connected: true, currency: base.currency, total: base.total, unmatched: base.unmatched, fetched: spTime(got.at),
+        ads: reps.flatMap((x, i) => x.ads.map((a) => ({ song: per[i].title, ...a }))).sort((a, b) => b.spend - a.spend),
+        days: base.allDays, songs: base.songs };
+      const ys = got.rows.filter((x) => x.day === yday).reduce((n, x) => n + x.spend, 0);
+      yesterday.spend = Math.round(ys * 100) / 100;
+      yesterday.currency = (got.rows.find((x) => x.currency) || {}).currency || "";
+      yesterday.cpt = yesterday.taps && ys ? ys / yesterday.taps : null;
+    }
+  }
+  const [cap, health, keyRec] = await Promise.all([
+    loadCap(env).catch((e) => { console.error("meta cap failed", e?.name || e); return { connected: true, error: "Couldn't read Meta spend" }; }),
+    loadHealth(env.stats, r.days).catch(() => null),
+    readKeyHealth(env.cache),
+  ]);
+  if (health) health.testMode = env.testMode;
+  return {
+    range: r.range, days: r.days.length, from: r.days[0], to: r.days[r.days.length - 1],
+    songs: per.map(({ y, tapsByAd, tapsByDay, ...s }) => s), yesterday, spend, cap, health,
+    metaKey: keyHealth(keyRec, !!env.token, now), sample: env.sample || undefined, generated: new Date(now).toISOString(),
+  };
 }
 
 /* Luke's "Don't count this device": a long-lived cookie set by the server (Safari keeps those; it
@@ -175,7 +242,7 @@ export default async (req, context) => {
     try { on = (await req.json()).on !== false; } catch {}
     return json(200, { ok: true, excluded: on }, { "Set-Cookie": nostatCookie(on) });
   }
-  if (req.method !== "GET" || (route !== "data" && route !== "csv")) return json(404, { error: "Not found" });
+  if (req.method !== "GET" || (route !== "data" && route !== "csv" && route !== "overview")) return json(404, { error: "Not found" });
 
   const link = LINKS.find((l) => l.id === url.searchParams.get("link")) || defaultLink();
   const r = resolveRange({
@@ -183,7 +250,8 @@ export default async (req, context) => {
     from: url.searchParams.get("from"),
     to: url.searchParams.get("to"),
   });
-  const store = context.deploy?.context === "production" ? getStore("stats") : getDeployStore("stats");
+  const env = envFor(context, url.searchParams.get("sample") === "1");
+  const store = env.stats;
   const bots = url.searchParams.get("bots") === "1";
   /* A range that ends today is only partly over: compare it with the same stretch of the
      previous period, not the whole of it. */
@@ -191,6 +259,7 @@ export default async (req, context) => {
   const until = r.days[r.days.length - 1] === spDay(now) ? now - r.days.length * 86400000 : undefined;
 
   try {
+    if (route === "overview") return json(200, await overview(env, r, now));
     if (route === "csv") {
       const s = await load(store, r.days, link.id, { bots });
       const name = `${link.id}-visits-${r.days[0]}-to-${r.days[r.days.length - 1]}.csv`;
@@ -204,14 +273,13 @@ export default async (req, context) => {
       load(store, r.days, link.id, { bots }, events),
       load(store, r.prev, link.id, { bots, until }),
       loadHealth(store, r.days).catch(() => null),
-      link.date ? loadSpend(context, r.days, events, link.id).catch((e) => { console.error("meta spend failed", e?.name || e); return { connected: true, error: "Couldn't read Meta spend" }; }) : null,
-      loadCap(context).catch((e) => { console.error("meta cap failed", e?.name || e); return { connected: true, error: "Couldn't read Meta spend" }; }),
+      link.date ? loadSpend(env, r.days, events, link.id).catch((e) => { console.error("meta spend failed", e?.name || e); return { connected: true, error: "Couldn't read Meta spend" }; }) : null,
+      loadCap(env).catch((e) => { console.error("meta cap failed", e?.name || e); return { connected: true, error: "Couldn't read Meta spend" }; }),
     ]);
-    if (health) health.testMode = !!Netlify.env.get("META_TEST_EVENT_CODE");
+    if (health) health.testMode = env.testMode;
     /* after the reads above, so it reflects them */
-    const metaCache = context.deploy?.context === "production" ? getStore("meta-cache") : getDeployStore("meta-cache");
-    const metaKey = keyHealth(await readKeyHealth(metaCache), !!Netlify.env.get("META_ADS_TOKEN"));
-    const extra = { health, spend, cap, bots, metaKey, excluded: readCookie(req.headers.get("cookie"), NOSTAT) === "1" };
+    const metaKey = keyHealth(await readKeyHealth(env.cache), !!env.token);
+    const extra = { health, spend, cap, bots, metaKey, sample: env.sample || undefined, excluded: readCookie(req.headers.get("cookie"), NOSTAT) === "1" };
     return json(200, { ...dashboard(cur, prev, r.days, link.id, extra), range: r.range, generated: new Date().toISOString() });
   } catch (e) {
     console.error("admin data failed", e);
