@@ -30,6 +30,8 @@ export const INCOME_STATUS = ["received", "pending", "transfer"];
 export const CADENCE = ["daily", "monthly", "quarterly", "irregular"];
 export const SOURCE_STATE = ["active", "blocked", "unknown", "not_tracked"];
 export const PEOPLE = ["Luke", "Claude", "HQ"]; /* not bots; HQ = the site's own twice-daily check */
+/* nobody needs more than this in a day; past it something is looping, and the answer is "stop" */
+export const LIMITS = { updatesPerBotPerDay: 60, messagesPerSenderPerDay: 40, messagesPerMonth: 1500, paymentsPerMonth: 3000, checksPerBotPerDay: 40 };
 
 /* The team as the repo may show it: names and one public line each. The full roster (why each bot
    is needed, its tools, its times) is seeded into the store and replaces this. */
@@ -99,19 +101,39 @@ export function cleanText(v, max = 1500) {
 }
 export const httpsLink = (v) => { const s = clean(v, 400); return /^https:\/\/[^\s"'<>]+$/.test(s) ? s : ""; };
 
-/* Things that must never be written on the desk: passwords, keys, cards, bank account numbers. */
-const SECRETS = [
-  /* "password: hunter2x" yes; "token: expired" / "the key is missing" no (the value must carry a digit) */
-  [/\b(pass(word|code)?|senha|pwd|otp|2fa code|verification code|login code|api[ _-]?key|secret|token)\b\s*(is|=|:)\s*(?=\S*\d)\S{4,}/i, "a password, code or key"],
+/* Things that must never be written on the desk: passwords, keys, cards, bank account numbers.
+   A guard rail, not a lock: it has to let ordinary work through (ISRCs, UPCs, 15-digit ad account
+   ids, payment references, "token: expired", "the OTP is 6-digit", "my job card"), so each rule asks
+   for the real shape of the secret, not just the word. */
+const SAID = /\b(pass(?:word|code)?|senha|pwd|otp|2fa code|verification code|login code|api[ _-]?key|secret|token)\b\s*(?:is|=|:)\s*(\S{4,})/gi;
+const KEYS = [
   [/\b(sk|pk|rk)[-_](live|test|proj)?[-_]?[A-Za-z0-9]{16,}/, "an API key"],
   [/\b(gh[pousr]_[A-Za-z0-9]{20,}|xox[abpr]-[A-Za-z0-9-]{10,}|EAA[A-Za-z0-9]{30,}|AKIA[A-Z0-9]{16}|AIza[0-9A-Za-z_-]{30,})/, "an access key"],
   [/-----BEGIN [A-Z ]*PRIVATE KEY-----/, "a private key"],
-  [/\b[A-Z]{2}\d{2}[ ]?(?:[A-Z0-9]{4}[ ]?){3,7}[A-Z0-9]{1,4}\b/, "a bank account number (IBAN)"],
-  [/\b(card|cart[aã]o|cvv|cvc)\b[^\n]{0,24}\d{3,}/i, "a card number"],
+  [/\b(card|cart[aã]o)\b[^\n]{0,24}?(?:\d[ -]?){13,19}/i, "a card number"],
+  [/\b(cvv|cvc)\b\D{0,6}\d{3,4}\b/i, "a card code"],
 ];
-export function secretIn(text) {
+/* a real IBAN passes the mod-97 check; a payment reference that merely looks like one doesn't */
+function ibanIn(text) {
+  for (const m of String(text).matchAll(/\b[A-Z]{2}\d{2}(?: ?[A-Z0-9]{4}){2,7}(?: ?[A-Z0-9]{1,4})?\b/g)) {
+    const v = m[0].replace(/ /g, "");
+    if (v.length < 15 || v.length > 34) continue;
+    const digits = (v.slice(4) + v.slice(0, 4)).replace(/[A-Z]/g, (c) => String(c.charCodeAt(0) - 55));
+    let r = 0;
+    for (const ch of digits) r = (r * 10 + Number(ch)) % 97;
+    if (r === 1) return true;
+  }
+  return false;
+}
+export function secretIn(text, { reference = false } = {}) {
   const s = String(text || "");
-  for (const [re, what] of SECRETS) if (re.test(s)) return what;
+  for (const m of s.matchAll(SAID)) {
+    const v = m[2];
+    /* the value has to look like the secret itself: a digit in it, and not "6-digit", "60-day" or a date */
+    if (/\d/.test(v) && !/^\d{1,3}-[A-Za-z]/.test(v) && !/^\d{4}-\d{2}-\d{2}\b/.test(v)) return "a password, code or key";
+  }
+  for (const [re, what] of KEYS) if (re.test(s)) return what;
+  if (!reference && ibanIn(s)) return "a bank account number (IBAN)";
   return "";
 }
 
@@ -128,6 +150,7 @@ export function amountOf(v) {
   if (typeof v === "number") return Number.isFinite(v) ? round(v) : null;
   let s = String(v == null ? "" : v).trim().replace(/[^\d.,-]/g, "");
   if (!/\d/.test(s)) return null;
+  if (/^-?\d{1,3}(\.\d{3})+$/.test(s)) return null; /* "1.234": one point two, or one thousand? never guessed */
   if (s.includes(",") && s.includes(".")) s = s.lastIndexOf(",") > s.lastIndexOf(".") ? s.replace(/\./g, "").replace(",", ".") : s.replace(/,/g, "");
   else if (s.includes(",")) s = /,\d{1,2}$/.test(s) ? s.replace(",", ".") : s.replace(/,/g, "");
   const n = Number(s);
@@ -149,8 +172,9 @@ export function monthOfId(id) {
 
 /* ---------- the store: one JSON document per key, written only if unchanged ---------- */
 export async function readDoc(store, key, fallback) {
-  let got = null;
-  try { got = await store.getWithMetadata(key, { type: "json", consistency: "strong" }); } catch { got = null; }
+  /* absent -> the fallback. A store that fails THROWS: "couldn't read" must never look like "empty"
+     (an empty roster, or the bots' switch reading as on). */
+  const got = await store.getWithMetadata(key, { type: "json", consistency: "strong" });
   return got && got.data != null ? { data: got.data, etag: got.etag || null } : { data: fallback, etag: null };
 }
 export async function mutate(store, key, fallback, fn, tries = 12) {
@@ -161,9 +185,16 @@ export async function mutate(store, key, fallback, fn, tries = 12) {
     const out = await fn(base);
     if (out && out.skip) return out.value;
     const res = await store.setJSON(key, base, cur.etag ? { onlyIfMatch: cur.etag } : { onlyIfNew: true });
-    if (!res || res.modified !== false) return out ? out.value : undefined;
+    if (res && res.modified === false) continue; /* changed under us */
+    /* The store's client answers "modified" for ANY reply that isn't "changed under you", a failed
+       write included. A write counts only with the new version's tag, or when reading it back
+       shows exactly what was written. */
+    if (res && res.etag) return out ? out.value : undefined;
+    const back = await readDoc(store, key, fallback).catch(() => null);
+    if (back && JSON.stringify(back.data) === JSON.stringify(base)) return out ? out.value : undefined;
+    fail("The desk could not save that. Nothing was saved. Try again in a moment.", "busy");
   }
-  fail("The desk is busy. Try again in a moment.", "busy");
+  fail("The desk is busy. Nothing was saved. Try again in a moment.", "busy");
 }
 
 /* ---------- who is who ---------- */
@@ -209,7 +240,12 @@ export async function postUpdate(store, now, roster, a) {
   if (message.length < 3) fail("message is empty. Say what you did or what is in the way, with the number if there is one.");
   noSecrets(message, a.link);
   const u = { id: newId("u", now), at: new Date(now).toISOString(), sp: spStamp(now), bot, status, message, link: httpsLink(a.link), duty: /^[Dd]-[\w-]{1,30}$/.test(clean(a.duty, 40)) ? clean(a.duty, 40) : "" };
-  await mutate(store, `upd/${spDay(now)}.json`, [], (list) => { list.push(u); if (list.length > 600) list.splice(0, list.length - 600); return { value: u }; });
+  await mutate(store, `upd/${spDay(now)}.json`, [], (list) => {
+    /* a looping bot is told to stop; it never pushes the others' lines out */
+    if (list.filter((x) => x.bot === bot).length >= LIMITS.updatesPerBotPerDay) fail(`${bot} has already posted ${LIMITS.updatesPerBotPerDay} updates today, which is the limit. Something is repeating: stop, and tell Nova.`, "limit");
+    list.push(u);
+    return { value: u };
+  });
   return u;
 }
 export async function listUpdates(store, now, days = 2) {
@@ -219,13 +255,16 @@ export async function listUpdates(store, now, days = 2) {
 }
 /* rows for the sheet-shaped live log: time | bot | status | message | link */
 export const updateRows = (updates) => updates.map((u) => [u.sp, u.bot, u.status, u.message, u.link || ""]);
-/* today's word from each bot on its duty: { byDuty: {"d-atlas-1": {...}}, byBot: {"atlas": {...}} } (newest wins) */
+/* today's word from each bot on its duty: { byDuty: {"d-atlas-1": {...}}, byBot: {"atlas": {...}} }.
+   Each keeps who said it and when, so the reader can take the NEWER of the two and ignore a bot
+   speaking about another bot's duty. */
 export function dutyOverlay(updates, today) {
   const byDuty = {}, byBot = {};
   for (const u of [...updates].sort((a, b) => (a.at < b.at ? -1 : 1))) {
     if (!u.sp || u.sp.slice(0, 10) !== today || !["done", "blocked", "working", "error"].includes(u.status)) continue;
-    const v = { status: u.status === "error" ? "blocked" : u.status, message: u.message, at: u.sp };
-    if (u.duty) byDuty[low(u.duty)] = v; else byBot[low(u.bot)] = v;
+    const v = { status: u.status === "error" ? "blocked" : u.status, message: u.message, at: u.sp, iso: u.at, bot: low(u.bot) };
+    if (u.duty) byDuty[low(u.duty)] = v;
+    byBot[low(u.bot)] = v; /* the bot's latest word, with or without a duty id */
   }
   return { byDuty, byBot };
 }
@@ -237,7 +276,7 @@ export async function sendMessage(store, now, roster, a) {
   const to = low(a.to) === "all" || low(a.to) === "everyone" || low(a.to) === "team" ? "all" : whoIs(a.to, roster, { people: true });
   const text = cleanText(a.text, 1500);
   if (text.length < 2) fail("text is empty");
-  noSecrets(text);
+  if (from !== "HQ") noSecrets(text); /* the site's own report is scrubbed line by line in checkReport() */
   let needs = low(a.needs) || "none";
   if (!NEEDS.includes(needs)) fail(`needs must be one of: ${NEEDS.join(", ")}`);
   if (to === "all" && needs !== "none") needs = "none"; /* a note to everyone can't wait on everyone */
@@ -257,7 +296,13 @@ export async function sendMessage(store, now, roster, a) {
       return { skip: true, value: p };
     });
   }
-  await mutate(store, msgKey(m.at.slice(0, 7)), [], (list) => { list.push(m); return { value: m }; });
+  await mutate(store, msgKey(m.at.slice(0, 7)), [], (list) => {
+    const day = m.sp.slice(0, 10);
+    if (list.filter((x) => x.from === from && x.sp.slice(0, 10) === day).length >= LIMITS.messagesPerSenderPerDay) fail(`${from} has already sent ${LIMITS.messagesPerSenderPerDay} messages today, which is the limit. Something is repeating: stop, and tell Nova.`, "limit");
+    if (list.length >= LIMITS.messagesPerMonth) fail("The board is full for this month. Tell Claude.", "limit");
+    list.push(m);
+    return { value: m };
+  });
   return { message: m, parent };
 }
 export async function resolveMessage(store, now, roster, a) {
@@ -270,19 +315,22 @@ export async function resolveMessage(store, now, roster, a) {
     const p = list.find((x) => x.id === id);
     if (!p) fail("There is no message with that id", "not_found");
     if (p.needs === "decision" && by !== "Luke" && p.to === "Luke") fail("Only Luke can settle a decision that is waiting on Luke.", "not_allowed");
+    /* Luke may close anything; anyone else only what was sent to them, or what they sent themselves */
+    if (by !== "Luke" && p.to !== by && p.from !== by) fail(`That message is waiting on ${p.to}, not on you. Only ${p.to}, ${p.from} or Luke can close it.`, "not_allowed");
     p.resolved = { by, at: new Date(now).toISOString(), note };
     return { value: p };
   });
 }
-/* newest first; this month and the one before (older open items are still found by listOpen) */
-export async function listMessages(store, now, months = 2) {
+/* newest first: everything from this month and the one before, plus anything STILL OPEN from the
+   two months before that (a decision asked on the 30th must not vanish on the 1st of the month after) */
+export async function listMessages(store, now, months = 2, openMonths = 2) {
   let m = new Date(now).toISOString().slice(0, 7);
   const keys = [];
-  for (let i = 0; i < months; i++) { keys.push(msgKey(m)); m = prevMonth(m); }
+  for (let i = 0; i < months + openMonths; i++) { keys.push(msgKey(m)); m = prevMonth(m); }
   const docs = await Promise.all(keys.map((k) => readDoc(store, k, [])));
-  return docs.flatMap((d) => (Array.isArray(d.data) ? d.data : [])).sort((a, b) => (a.at < b.at ? 1 : -1));
+  return docs.flatMap((d, i) => { const list = Array.isArray(d.data) ? d.data : []; return i < months ? list : list.filter(isOpen); }).sort((a, b) => (a.at < b.at ? 1 : -1));
 }
-export const isOpen = (m) => m.needs !== "none" && !m.resolved;
+export function isOpen(m) { return m.needs !== "none" && !m.resolved; }
 /* what is waiting on one name, oldest first */
 export const waitingOn = (messages, name) => messages.filter((m) => isOpen(m) && low(m.to) === low(name)).sort((a, b) => (a.at < b.at ? -1 : 1));
 export function threads(messages) {
@@ -295,16 +343,23 @@ export function threads(messages) {
 /* ---------- income: one record per payment, and "checked, nothing new" ---------- */
 const incKey = (month) => `inc/${month}.json`;
 const chkKey = (month) => `chk/${month}.json`;
+const sameMoney = (x, e) => low(x.payer) === low(e.payer) && x.amount === e.amount && x.currency === e.currency;
+/* Is x the payment e? Same account + reference; or the same day, payer and amount, unless both carry
+   a reference and the references differ (two real payments of the same size on one day). */
+export function samePayment(x, e) {
+  if (x.reference && e.reference) return low(x.account) === low(e.account) && low(x.reference) === low(e.reference);
+  return x.date === e.date && sameMoney(x, e);
+}
 export const dedupeKey = (e) => (e.reference ? low(e.account) + "|ref|" + low(e.reference) : [e.date, low(e.payer), e.amount, e.currency].join("|"));
 export async function submitIncome(store, now, roster, a) {
   const by = whoIs(a.bot, roster, { people: true });
   const date = clean(a.date, 10);
-  if (!DAY.test(date) || Number.isNaN(Date.parse(date + "T12:00:00Z"))) fail("date must be the day the money arrived (or the statement date), as YYYY-MM-DD");
+  if (!DAY.test(date) || Number.isNaN(Date.parse(date + "T12:00:00Z")) || new Date(date + "T12:00:00Z").toISOString().slice(0, 10) !== date) fail("date must be the day the money arrived (or the statement date), as YYYY-MM-DD");
   if (date > addDays(spDay(now), 1)) fail("date is in the future");
   const payer = clean(a.payer, 80);
   if (payer.length < 2) fail("payer is empty. Write who paid, exactly as the account or statement shows it.");
   const amount = amountOf(a.amount);
-  if (amount == null || amount === 0) fail('amount must be a number, for example 112.01. If you could not see the amount, do not submit: post an update with status "blocked" instead.');
+  if (amount == null || amount <= 0) fail('amount must be a positive number, written like 112.01 (a point for the cents, no thousands separator). If you could not see the amount, do not submit: post an update with status "blocked" instead.');
   const currency = clean(a.currency, 12).toUpperCase();
   if (!/^[A-Z]{3}$/.test(currency)) fail("currency must be the three-letter code the money was paid in (EUR, USD, GBP, BRL...). Never convert.");
   const status = low(a.status) || "received";
@@ -315,18 +370,45 @@ export async function submitIncome(store, now, roster, a) {
   if (!account) fail("account is empty. Write where the money landed (Wise, PayPal, Revolut, Bank) or \"Statement only\" if you only saw a statement.");
   const e = { id: newId("i", now), at: new Date(now).toISOString(), by, date, payer, amount, currency, status, category, account,
     reference: clean(a.reference, 80), period: clean(a.period, 40), source: clean(a.source, 40), note: clean(a.note, 240) };
-  noSecrets(e.payer, e.reference, e.note, e.period);
-  const key = dedupeKey(e);
+  noSecrets(e.payer, e.note, e.period);
+  { const what = secretIn(e.reference, { reference: true }); if (what) fail(`reference looks like ${what}. It must be the payment's own transaction id, nothing else.`, "secret"); }
+
+  /* A statement logged as pending, whose money now shows on a LATER day: that is the same payment
+     arriving, not a second one. Look for one pending entry with the same payer, amount and currency
+     in this month and the three before, and turn it into received (it keeps its statement date and
+     gains the day it arrived, which is the day it counts on). */
+  if (status === "received") {
+    let m = date.slice(0, 7);
+    for (let i = 0; i < 4; i++, m = prevMonth(m)) {
+      const hit = await mutate(store, incKey(m), [], (list) => {
+        if (list.some((x) => samePayment(x, e))) return { skip: true, value: null }; /* the exact payment is there: the normal path below handles it */
+        const old = list.find((x) => x.status === "pending" && sameMoney(x, e) && x.date <= date && !(x.reference && e.reference && low(x.reference) !== low(e.reference)));
+        if (!old) return { skip: true, value: null };
+        old.history = (old.history || []).concat({ at: e.at, by, from: "pending", to: "received" }).slice(-10);
+        old.status = "received"; old.arrived = date; old.account = account; old.updatedAt = e.at;
+        if (e.reference && !old.reference) old.reference = e.reference;
+        if (e.note) old.note = e.note;
+        return { value: { entry: old, added: false, updated: true } };
+      });
+      if (hit) return hit;
+      if (i === 0) { const cur = await readDoc(store, incKey(m), []); if ((cur.data || []).some((x) => samePayment(x, e))) break; }
+    }
+  }
   return mutate(store, incKey(date.slice(0, 7)), [], (list) => {
-    const old = list.find((x) => dedupeKey(x) === key);
+    const old = list.find((x) => samePayment(x, e));
     if (old) {
-      /* the same payment again: nothing is added twice; a pending one may become received */
-      const changed = old.status !== e.status || (e.note && e.note !== old.note);
-      if (!changed) return { skip: true, value: { entry: old, added: false, updated: false } };
-      old.history = (old.history || []).concat({ at: e.at, by, from: old.status, to: e.status }).slice(-10);
-      old.status = e.status; if (e.note) old.note = e.note; old.updatedAt = e.at;
+      /* the same payment again: never added twice. It may gain its reference; pending may become
+         received; received never goes back to pending (a statement email read again). */
+      const gainsRef = !!e.reference && !old.reference;
+      const moves = old.status !== e.status && !(old.status === "received" && e.status === "pending");
+      if (!moves && !gainsRef && !(e.note && e.note !== old.note)) return { skip: true, value: { entry: old, added: false, updated: false } };
+      if (moves) { old.history = (old.history || []).concat({ at: e.at, by, from: old.status, to: e.status }).slice(-10); old.status = e.status; }
+      if (gainsRef) old.reference = e.reference;
+      if (e.note) old.note = e.note;
+      old.updatedAt = e.at;
       return { value: { entry: old, added: false, updated: true } };
     }
+    if (list.length >= LIMITS.paymentsPerMonth) fail("This month's list of payments is full. Tell Claude.", "limit");
     list.push(e);
     return { value: { entry: e, added: true, updated: false } };
   });
@@ -340,7 +422,11 @@ export async function incomeCheck(store, now, roster, a) {
   const note = clean(a.note, 240);
   noSecrets(note);
   const c = { at: new Date(now).toISOString(), day: spDay(now), by, account, new: n, note };
-  await mutate(store, chkKey(c.day.slice(0, 7)), [], (list) => { list.push(c); if (list.length > 2000) list.splice(0, list.length - 2000); return { value: c }; });
+  await mutate(store, chkKey(c.day.slice(0, 7)), [], (list) => {
+    if (list.filter((x) => x.by === by && x.day === c.day).length >= LIMITS.checksPerBotPerDay) fail(`${by} has already recorded ${LIMITS.checksPerBotPerDay} checks today, which is the limit. Something is repeating: stop, and tell Nova.`, "limit");
+    list.push(c);
+    return { value: c };
+  });
   return c;
 }
 export async function getSources(store) {
@@ -371,6 +457,8 @@ export function incomeReport(entries, checks, sources, today) {
   const month = today.slice(0, 7);
   const add = (o, cur, a) => { o[cur] = round((o[cur] || 0) + a); };
   const received = {}, pending = {}, byCat = {};
+  /* a payment counts on the day it arrived (a pending statement that later landed keeps both dates) */
+  entries = entries.map((e) => (e.arrived && e.arrived !== e.date ? { ...e, statement: e.date, date: e.arrived } : e));
   for (const e of entries) {
     if (e.date.slice(0, 7) !== month || e.status === "transfer") continue;
     add(e.status === "pending" ? pending : received, e.currency, e.amount);
@@ -382,7 +470,8 @@ export function incomeReport(entries, checks, sources, today) {
     const mine = entries.filter((e) => (s.kind === "account" ? low(e.account) === low(s.name) || srcMatches(s, e.account) : low(e.source) === s.id || srcMatches(s, e.payer)));
     const last = mine.reduce((a, e) => (!a || e.date > a.date ? e : a), null);
     const chk = s.kind === "account" ? lastCheck[low(s.name)] || Object.values(lastCheck).find((c) => srcMatches(s, c.account)) || null : null;
-    const lastLook = [last && last.at.slice(0, 10), chk && chk.day].filter(Boolean).sort().pop() || null;
+    const lastLogged = mine.reduce((a, e) => (!a || e.at > a ? e.at : a), null); /* the last time anything was logged for it, as a São Paulo day */
+    const lastLook = [lastLogged && spDay(Date.parse(lastLogged)), chk && chk.day].filter(Boolean).sort().pop() || null;
     const monthTotal = {};
     for (const e of mine) if (e.date.slice(0, 7) === month && e.status !== "transfer") add(monthTotal, e.currency, e.amount);
     let verdict = "ok", why = "";
@@ -471,8 +560,8 @@ export function workers(roster, { hq, updates, messages, cards, seen, today, now
     else if (items.some((d) => d.status === "blocked") || (last && last.status === "blocked" && last.sp.slice(0, 10) === today)) state = "blocked";
     else if (items.some((d) => d.late)) state = "late";
     else if (items.length && items.every((d) => d.status === "done")) state = "done";
-    else if (todays.some((u) => u.status === "working")) state = "working";
-    else if (todays.some((u) => u.status === "done") && !items.length) state = "done";
+    else if (todays.length && todays[0].status === "working") state = "working"; /* updates are newest first */
+    else if (todays.length && todays[0].status === "done" && !items.length) state = "done";
     else if (items.length) state = "todo";
     else if (b.time && nowHM && nowHM > b.time && !todays.length) state = "quiet";
     const s = seen[b.name] || null;
@@ -518,7 +607,8 @@ export function checkReport({ desk, hq, hqState, now }) {
   const withDuty = b.staff.filter((w) => w.duties.length);
   const d = hq && hq.team ? hq.team.duties : null;
   if (d && d.total) say(d.late === 0 && d.blocked === 0, `Duties: ${d.done} of ${d.total} done` + (d.late ? `, ${d.late} late` : "") + (d.blocked ? `, ${d.blocked} blocked` : ""));
-  else problems.push("Duties: the Tasks tab has no duty rows for today (Nova resets them at 08:05)");
+  else if (hq) problems.push("Duties: the Tasks tab has no duty rows for today (Nova resets them at 08:05)");
+  else problems.push("Duties: not read (the team's sheet could not be read)");
   for (const w of withDuty) for (const x of w.duties) {
     if (x.status === "blocked") problems.push(`${w.name} is blocked: ${x.blocker || x.task}`);
     else if (x.late) problems.push(`${w.name} is late (due ${x.due}): ${x.task}`);
@@ -550,6 +640,10 @@ export function checkReport({ desk, hq, hqState, now }) {
     const next = hq && hq.next;
     if (next) say(!next.late, `Next release: ${next.song}, ${next.date} (${next.daysToGo} days)` + (next.late ? `, ${next.late} step${next.late === 1 ? "" : "s"} late: ${next.steps.filter((s) => s.late).map((s) => s.label + " (" + s.owner + ")").join("; ")}` : ", nothing late"));
   }
+  /* the report quotes cells from the sheet and lines from the bots: anything that looks like a
+     password or an account number is left out here, so the report itself always goes through */
+  const scrub = (list) => list.map((t) => (secretIn(t) ? "(one line left out: it looked like a password, a code or an account number)" : t));
+  problems.splice(0, problems.length, ...scrub(problems)); lines.splice(0, lines.length, ...scrub(lines));
   const title = `HQ check, ${today} ${morning ? "morning" : "evening"}: ` + (problems.length ? `${problems.length} thing${problems.length === 1 ? "" : "s"} to look at` : "all running");
   const text = [title, ...(problems.length ? ["", "Needs a look:", ...problems.map((p) => "- " + p)] : []), "", "Running:", ...lines.map((l) => "- " + l)].join("\n").slice(0, 1500);
   return { title, problems, lines, text, part: morning ? "am" : "pm", day: today };

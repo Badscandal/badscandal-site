@@ -220,7 +220,10 @@ export function dutiesReport(tasks, today, nowHM = "", overlay = null) {
       const m = /(\d{1,2}):(\d{2})/.exec(norm(t.deadline).slice(10)), due = m ? m[1].padStart(2, "0") + ":" + m[2] : "";
       let status = /^(done|yes|ok|✓|✔)$/i.test(norm(t.status)) ? "done" : /block/i.test(norm(t.status)) ? "blocked" : "todo";
       let blocker = norm(t.blocker), via = "", working = false;
-      const said = overlay ? (overlay.byDuty || {})[key(t.id)] || (perOwner[key(t.owner)] === 1 ? (overlay.byBot || {})[key(t.owner)] : null) : null;
+      /* by duty id only from the duty's OWN bot; a bot with one duty may leave the id out; the newer word wins */
+      const byId = overlay ? (overlay.byDuty || {})[key(t.id)] : null, byBot = overlay && perOwner[key(t.owner)] === 1 ? (overlay.byBot || {})[key(t.owner)] : null;
+      const mine = byId && (!byId.bot || byId.bot === key(t.owner)) ? byId : null;
+      const said = mine && byBot ? ((byBot.iso || "") > (mine.iso || "") ? byBot : mine) : mine || byBot;
       if (said && status !== "done") {
         if (said.status === "done") { status = "done"; via = "connector"; }
         else if (said.status === "blocked") { status = "blocked"; blocker = blocker || said.message; via = "connector"; }
@@ -375,13 +378,11 @@ export function metaSpend(spendRows, meta) {
 /* staff (optional, from the staff desk): { updates: [{sp, bot, status, message, link}], overlay } — the
    connector's updates join the sheet's Updates tab in ONE live log, and finish/block today's duties. */
 export function mergeUpdates(sheetRows, staffUpdates) {
-  const seen = new Set(), out = [];
-  for (const r of (sheetRows || []).concat((staffUpdates || []).map((u) => ({ time: u.sp, bot: u.bot, status: u.status, message: u.message, link: u.link || "" })))) {
-    const k = [norm(r.time).slice(0, 10), key(r.bot), key(r.status), key(r.message)].join("|");
-    if (seen.has(k)) continue;
-    seen.add(k); out.push(r);
-  }
-  return out;
+  /* every sheet row stays as it is; a connector update is dropped only when the sheet already has
+     the very same line from the same bot on the same day (a bot that wrote both) */
+  const k = (r) => [norm(r.time).slice(0, 10), key(r.bot), key(r.status), key(r.message)].join("|");
+  const inSheet = new Set((sheetRows || []).map(k));
+  return (sheetRows || []).concat((staffUpdates || []).map((u) => ({ time: u.sp, bot: u.bot, status: u.status, message: u.message, link: u.link || "" })).filter((r) => !inSheet.has(k(r))));
 }
 export function hqModel(sheets, today, fx = {}, meta, nowHM = "", staff = null) {
   const t = Object.fromEntries(HQ_TABS.map((n) => [n, rowsToObjects(sheets[n])]));

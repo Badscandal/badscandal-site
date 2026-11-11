@@ -21,6 +21,8 @@ export default async () => {
     console.log(`staff check ${r.day} ${r.part}: ${r.problems.length} to look at`);
   } catch (e) {
     console.error("staff check failed", e?.name || e);
+    /* the board must never keep showing an old report as if it were today's */
+    try { await S.sendMessage(desk, now, S.DEFAULT_ROSTER, { from: "HQ", to: "Luke", text: `HQ check, ${S.spDay(now)} ${S.spHM(now) < "15:00" ? "morning" : "evening"}: the check itself could not run. Open the dashboard's Data health.`, needs: "none", kind: "report" }); } catch {}
   }
 };
 

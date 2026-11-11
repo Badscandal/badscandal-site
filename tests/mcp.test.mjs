@@ -86,7 +86,8 @@ test("connector: no key, no entry; the key rides in the header only; browsers an
   assert.equal((await post(rpc("tools/list"), "Bearer wrong-key")).status, 401);
   assert.equal((await staff(new Request("https://badscandal.com/mcp?key=" + ENV.STAFF_BOT_KEY, { method: "POST", body: JSON.stringify(rpc("tools/list")) }), ctx)).status, 401, "never from the address");
   assert.equal((await post(rpc("tools/list"), ENV.STAFF_BOT_KEY)).status, 200, "a bare key works too");
-  assert.equal((await post(rpc("tools/list"), "Bearer " + ENV.STAFF_BOT_KEY, { origin: "https://evil.example" })).status, 403);
+  assert.equal((await post(rpc("tools/list"), "Bearer " + ENV.STAFF_BOT_KEY, { origin: "https://app.example" })).status, 200, "the key is the lock: a client that sends an Origin is not turned away");
+  assert.equal((await post(rpc("tools/list"), undefined, { origin: "https://evil.example", cookie })).status, 401, "Luke's login cookie never opens the connector");
   const get = await staff(new Request("https://badscandal.com/mcp", { method: "GET", headers: { authorization: "Bearer " + ENV.STAFF_BOT_KEY } }), ctx);
   assert.equal(get.status, 405); assert.equal(get.headers.get("allow"), "POST, OPTIONS");
   assert.equal((await staff(new Request("https://badscandal.com/mcp", { method: "DELETE", headers: { authorization: "Bearer " + ENV.STAFF_BOT_KEY } }), ctx)).status, 405);
@@ -111,7 +112,7 @@ test("connector: a bot's whole day, end to end (the sheet isn't connected in thi
   assert.equal((await tool("submit_income", pay)).structuredContent.saved, true);
   const again = (await tool("submit_income", pay)).structuredContent;
   assert.deepEqual([again.saved, again.duplicate], [false, true]);
-  assert.match((await tool("submit_income", { ...pay, amount: "not read" })).content[0].text, /amount must be a number/);
+  assert.match((await tool("submit_income", { ...pay, amount: "not read" })).content[0].text, /amount must be a positive number/);
   assert.equal((await tool("income_check", { bot: "Ledger", account: "Wise", new_payments: 0 })).structuredContent.saved, true);
   const inc = (await tool("income_status", { bot: "Alfred" })).structuredContent;
   assert.equal(inc.received_this_month, "USD 104.04"); assert.equal(inc.payments_logged_this_month, 1); assert.match(inc.newest_payments[0], /Sample Distro · USD 104\.04 · received · PayPal · by Ledger/);
@@ -121,6 +122,7 @@ test("connector: a bot's whole day, end to end (the sheet isn't connected in thi
   assert.equal((await tool("read_messages", { bot: "Ledger" })).structuredContent.waiting_on_you.length, 1);
   assert.equal((await tool("send_message", { bot: "Ledger", to: "Nova", text: "Yes.", reply_to: ask.id })).structuredContent.answered, ask.id);
   assert.match((await tool("resolve_message", { bot: "Nova", id: sent.id })).content[0].text, /Only Luke/);
+  assert.match((await tool("resolve_message", { bot: "Atlas", id: ask.id })).content[0].text, /waiting on Ledger, not on you/, "a bot can't close what isn't its own");
   assert.equal((await tool("set_my_card", { bot: "Atlas", working_on: "Backfilling Touch Me" })).structuredContent.saved, true);
   const team = (await tool("team_board", { bot: "Nova" })).structuredContent;
   assert.equal(team.team.length, 12); assert.equal(team.duties, "not read"); assert.equal(team.waiting_on_luke.length, 1);

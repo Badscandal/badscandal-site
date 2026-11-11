@@ -58,9 +58,9 @@ function stores(context) {
 const hqLoader = (st) => { let p = null; return () => p || (p = loadHq({ cache: st.cache, desk: st.desk, env: (k) => Netlify.env.get(k) })); };
 
 async function mcp(req, context) {
-  const origin = req.headers.get("origin");
-  /* browsers have no business here: a page on another site must not be able to drive the desk */
-  if (origin && origin !== new URL(req.url).origin) return json(403, { error: "Forbidden" });
+  /* No Origin gate here: the key travels in a header that a page on another site cannot forge (no
+     cookie is ever accepted on /mcp), and a bot platform's client that happens to send an Origin
+     must not be turned away with something that isn't a protocol answer. */
   if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: { Allow: "POST, OPTIONS", ...NO_STORE } });
   if (!Netlify.env.get("STAFF_BOT_KEY") && !Netlify.env.get("STAFF_CLAUDE_KEY")) return json(503, { error: "The connector's keys are not set on Netlify" });
   const role = await keyRole(req);
