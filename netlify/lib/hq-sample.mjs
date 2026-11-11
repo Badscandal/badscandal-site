@@ -2,7 +2,9 @@
    figure and every fan here is invented; the page shows a SAMPLE banner whenever this is used. */
 const day = (today, back) => new Date(Date.parse(today + "T12:00:00Z") - back * 86400000).toISOString().slice(0, 10);
 
-export function sampleSheets(today) {
+const spStamp = (ms) => { const p = Object.fromEntries(new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).formatToParts(ms).map((x) => [x.type, x.value])); return `${p.year}-${p.month}-${p.day} ${p.hour}:${p.minute}`; };
+
+export function sampleSheets(today, now = Date.now()) {
   const m = today.slice(0, 7);
   const prev = day(m + "-01", 1).slice(0, 7);
   const Growth = [["date", "platform", "account", "followers", "change", "views", "best_post", "best_post_link", "logged_by", "note"]];
@@ -40,12 +42,12 @@ export function sampleSheets(today) {
     ["T-105", "Laura", "Schedule the lyric video for 00:00 release day", day(today, -6), "todo", "", day(today, 1)],
     ["T-100", "Webmaster", "Song page for Me Dá Seu Body", day(today, 2), "done", "", day(today, 2)],
     /* today's duties (ids starting "D-") */
-    ["D-atlas-1", "Atlas", "Log yesterday's Spotify numbers", today, "done", "", today],
-    ["D-steve-1", "Steve", "Log Instagram followers + best post", today, "done", "", today],
-    ["D-kevin-1", "Kevin", "Log TikTok followers + best post", today, "blocked", "TikTok login expired", today],
-    ["D-laura-1", "Laura", "Log YouTube subscribers", today, "todo", "", today],
-    ["D-forge-1", "Forge", "Log yesterday's ad spend per platform", today, "done", "", today],
-    ["D-forge-2", "Forge", "Check the monthly ad cap", today, "todo", "", today],
+    ["D-atlas-1", "Atlas", "Log yesterday's Spotify numbers", today + " 09:15", "done", "", today],
+    ["D-steve-1", "Steve", "Log Instagram followers + best post", today + " 09:10", "done", "", today],
+    ["D-kevin-1", "Kevin", "Log TikTok followers + best post", today + " 09:10", "blocked", "TikTok login expired", today],
+    ["D-laura-1", "Laura", "Log YouTube subscribers", today + " 00:30", "todo", "", today],
+    ["D-forge-1", "Forge", "Log yesterday's ad spend per platform", today + " 09:30", "done", "", today],
+    ["D-forge-2", "Forge", "Check the monthly ad cap", today + " 23:30", "todo", "", today],
     ["D-atlas-0", "Atlas", "Log Spotify numbers (yesterday's duty)", day(today, 1), "done", "", day(today, 1)]];
   const Royalties = [["month", "song", "store", "streams", "amount", "currency", "logged_by"],
     [prev, "Love You", "Spotify", "61000", "152.40", "EUR", "Drop"], [prev, "Love You", "Apple Music", "9000", "41.10", "EUR", "Drop"],
@@ -55,7 +57,17 @@ export function sampleSheets(today) {
     [prev, "RouteNote", "Self-releases", "193.50", "EUR", "received"], [prev, "Jeff", "Production", "4388.43", "EUR", "received"],
     [m, "RouteNote", "Self-releases", "112.01", "EUR", "received"], [m, "Liu Holdings", "Afro house salary", "1753.42", "EUR", "received"],
     [m, "Cheerful Music", "Production", "1300.00", "USD", "pending"]];
-  return { Growth, Songs, Fans, Releases, Tasks, Royalties, Spend, Income };
+  /* the bots' live log (made up), newest a few minutes ago */
+  const ago = (min) => spStamp(now - min * 60000);
+  const Updates = [["time", "bot", "status", "message", "link"],
+    [ago(4), "Forge", "working", "Checking the monthly ad cap in the Ads Tracker", ""],
+    [ago(11), "Forge", "done", "Yesterday's spend logged: Google EUR 9.00, TikTok EUR 12.50", ""],
+    [ago(26), "Atlas", "done", "Touch Me row for Mon 9 Nov written: 3,540 streams", "https://artists.spotify.com/"],
+    [ago(38), "Steve", "done", "Instagram row written: 13,509 followers (+21)", "https://www.instagram.com/badscandal/"],
+    [ago(41), "Kevin", "blocked", "TikTok login expired: needs Luke's phone code", ""],
+    [ago(55), "Nova", "info", "Standup: 3 logged, 1 blocked (Kevin), Laura not yet", ""],
+    [ago(190), "Drop", "done", "Me Dá Seu Body: RouteNote status still In Review", ""]];
+  return { Growth, Songs, Fans, Releases, Tasks, Royalties, Spend, Income, Updates };
 }
 
 /* A MADE-UP Meta read for /hq?sample=1 (11 Nov 2026): Meta's "own" numbers = the sample sheet's Meta

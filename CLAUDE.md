@@ -1089,6 +1089,55 @@ Brief: `../TOUCHME-LANDING-BUILD-BRIEF.md` (outside the repo on purpose).
     app opens without signal; never `/api/*`, never anything outside /hq (tested in a sandbox).
     Bump its `CACHE` name if the list of files changes.
   - `js/hq-lib.js` is the home for every rule the page shows from now on (Stage 2/3 add theirs).
+* **/hq Stage 2: Today as a morning briefing (11 Nov 2026).** Every rule is in `js/hq-lib.js` and tested
+  in `tests/hq-today.test.mjs`; js/hq.js only draws (`drawBriefing()`, `drawSince()`).
+  - **Briefing** (`briefing()`): 3–5 sentences: yesterday's spend / real taps / cost per tap (or taps and
+    people when nothing was spent), what's left of the cap (or the warn/stop/over line), the next
+    release with its late steps in short words (`shortStep()`), the song rising/cooling most, and how
+    many things need Luke.
+  - **Needs attention** (`attention()`), each item linking to its tab (Meta key items open Data health
+    via `data-health`): cap at 750/900/over; late release steps (not yet out); sheet tabs showing an
+    error; Meta key expired/failing; a bot quiet for 3+ days (2 is normal: Spotify's numbers are 2 days
+    late) and blocked duties; an ad with USD 10+ spent over the last 7 finished days and 0 real taps;
+    yesterday spend USD 10+ with 0 taps, or cost per tap above 2x the median of the 7 days before (needs
+    3+ such days); the sheet's Meta spend disagreeing with Meta.
+  - **Since you last looked** (`snapshot()` / `changesSince()`): a picture of the numbers saved on this
+    device (`bs_hq_seen`) when a visit ends (page hidden / closed), compared on the next visit: streams
+    logged per song, followers per platform, ad spend this month, new fans, late steps, duties done, a
+    new day closed. Drawn once both answers are back. Sample mode fakes "9 h ago".
+  - **Headline tiles** (`tiles()`): ad spend, real taps (green), cost per tap for the header range vs
+    the period before; Spotify streams (7 days vs the 7 before) and listeners (vs 7 days earlier); and
+    followers per platform (7 days). Small trend lines; days without taps are gaps, never 0. No Meta ->
+    no spend tiles at all (never "USD 0").
+  - **Copy today's summary** (`summaryText()`): plain text for WhatsApp (clipboard, with a fallback).
+  - New `/api/admin/overview` fields for it: `prev` (the period before; taps/people for the same
+    stretch when the range ends today, spend in whole days), `series` (per day: taps, people, spend),
+    `recent` (last 8 finished days + `ads7`: every ad over the last 7 with its taps and song). One Meta
+    read covers it (cached an hour). The sheet model gains `songs[].listenersSeries`.
+  - The sample has a made-up ad "TM EU - clip 3" that spends and brings nobody, so the warnings show.
+* **Glass, the release panel, the bots' live log (11 Nov 2026, Luke's follow-up on Stage 2).**
+  - **Glass** ("like me and Lilian's app", i.e. LDashboard's Liquid Glass): frosted panels (`--glass`,
+    blur 22px, a light top edge) over a fixed wash taken from the red film (`body::before`: faint
+    #8D060C glows + a soft white one). Panels stay >= .62 opaque and dark so every number keeps its
+    contrast; nested tiles get lighter glass WITHOUT a second blur (phones stay fast). The desktop rail
+    floats as a glass capsule. Reduced transparency or no blur support -> near-solid panels, no wash.
+    The wash is atmosphere only: red as a MEANING is still just "needs attention" and the active tab.
+  - **Release panel** (`#detailSheet`, `openRelease()` in js/hq.js, rule `releaseDetail()` in
+    js/hq-lib.js): Today's "Next release" card is a button, and every Releases card has "See what's
+    missing ›". It lists what's missing first (late on top, "late by N days" / "due in N days", owner,
+    due date, the sheet cell's note e.g. "blocked: not in Spotify for Artists yet"), then what's done.
+    Bottom sheet on phones, centred dialog on desktop; Escape / scrim / ✕ close it and focus returns.
+  - **Live updates** (brief `briefs/2026-11-11-live-updates.md` in badscandal-hq, pushed 11 Nov; also
+    in its STAFF-MANUAL.md): a new HQ sheet tab `Updates` (time | bot | status | message | link;
+    status done/working/blocked/error/info; append-only; Nova creates it). `liveReport()` in
+    netlify/lib/hq.mjs -> `team.live` { ready, feed (newest 40), bots (last update each), lastAt }. The
+    tab is read with its OWN request (a missing tab makes Google answer 400 for the whole batch): no
+    tab -> `ready:false` and Team says so; nothing else breaks. Duty rows may carry a time in
+    `deadline` ("YYYY-MM-DD HH:MM", Nova writes it at 08:05): `dutiesReport(tasks, today, nowHM)`
+    marks a duty `late` once that São Paulo time has passed. Team -> Live: one card per bot (duty,
+    state Done/Working/Blocked/Late/To do, latest update + age) and the latest 20 updates; Today ->
+    Needs attention lists late duties; Data health gains a "Bots" row. The sheet cache is now 2
+    minutes (was 10) so updates show quickly. The sample has made-up updates timed relative to now.
 * **90-day rule:** `netlify/functions/rollup.mjs` (daily 06:00 UTC, production
   only) folds raw keys older than 90 days into `daily/<day>.json` counts and
   deletes them; the portal merges those back for old ranges.

@@ -437,6 +437,125 @@ a.t-card:hover{border-color:var(--ink-4)}
 /* small phones: the header must fit (wordmark, range, health, refresh) */
 @media(max-width:439px){.hdr{gap:8px;padding-left:12px;padding-right:12px}.hq-tag{display:none}.crt-hq{width:112px}.crt-hq .crt-fallback{font-size:16px}
   .rangebox select{padding:0 28px 0 12px;font-size:14px}.rangebox::after{right:12px}.hdr-tools{gap:6px}}
+
+/* ================= Stage 2: Today as a morning briefing ================= */
+.brief{margin:0 0 6px}
+.brief p{margin:0 0 8px;font-size:19px;line-height:1.45;color:var(--paper);letter-spacing:-.005em}
+.brief p:first-child{font-size:21px;font-weight:600}
+.brief-actions{display:flex;align-items:center;gap:12px;margin:6px 0 18px}
+.copybtn{min-height:44px;padding:0 18px;border-radius:999px;border:1px solid var(--ink-4);background:var(--ink-2);color:var(--paper);font:600 15px var(--sans);cursor:pointer}
+.copied{font-size:14px;color:var(--uv)}
+.attn-card{margin:0 0 12px}
+.attn-card.has{border-color:var(--red)}
+.attn-list,.since-list{list-style:none;margin:0;padding:0}
+.attn-list li{border-top:1px solid var(--ink-3)}
+.attn-list li:first-child{border-top:0}
+.attn-list a{display:flex;align-items:center;gap:12px;min-height:48px;padding:8px 0;color:var(--paper);text-decoration:none;font-size:16px;line-height:1.35}
+.attn-list a::before{content:"";flex:none;width:9px;height:9px;border-radius:50%;background:var(--red)}
+.attn-list a::after{content:"›";margin-left:auto;padding-left:8px;color:var(--muted);font-size:22px;line-height:1}
+.attn-list .calm{display:flex;align-items:center;gap:12px;min-height:44px;font-size:16px;color:var(--uv)}
+.attn-list .calm::before{content:"";width:9px;height:9px;border-radius:50%;background:var(--spot)}
+#sinceCard{margin:0 0 12px}
+#sinceWhen{text-transform:none;letter-spacing:0;font-family:var(--sans)}
+.since-list li{padding:9px 0;border-top:1px solid var(--ink-3);font-size:16px;color:var(--uv)}
+.since-list li:first-child{border-top:0}
+#today h2.t-lbl{font:500 13px var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--muted);line-height:1.4}
+#today h2.sect{margin:22px 0 10px}
+.sect span{text-transform:none;letter-spacing:0;font-family:var(--sans)}
+.htiles{display:grid;gap:10px;grid-template-columns:repeat(2,minmax(0,1fr));margin:0 0 22px}
+.htile{background:var(--ink-2);border:1px solid var(--ink-3);border-radius:18px;padding:14px 14px 10px;min-width:0}
+.htile .hl{margin:0;font-size:13px;color:var(--muted);font-weight:500}
+.htile .hv{margin:6px 0 2px;font-size:26px;line-height:1.1;font-weight:700;letter-spacing:-.02em;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.htile .hc{margin:0;font-size:13px;color:var(--uv)}
+.htile .hc b{color:var(--paper);font-weight:600}
+.htile svg{display:block;width:100%;height:30px;margin-top:8px}
+@media(min-width:720px){.htiles{grid-template-columns:repeat(3,minmax(0,1fr))}.brief p{font-size:20px}.brief p:first-child{font-size:23px}}
+@media(min-width:1100px){.htiles{grid-template-columns:repeat(4,minmax(0,1fr))}}
+
+/* ================= the release panel, the live board ================= */
+.t-btn{width:100%;text-align:left;font:inherit;color:inherit;cursor:pointer}
+.t-more{margin:12px 0 0;font-size:14px;font-weight:600;color:var(--paper)}
+.detail{max-height:88vh;overflow:auto;padding-bottom:calc(20px + env(safe-area-inset-bottom))}
+.moresheet .dclose{position:absolute;top:14px;right:14px;z-index:2;display:grid;place-items:center;width:44px;min-height:44px;height:44px;padding:0;border-radius:50%;border:.5px solid var(--glass-line,#333);background:rgba(255,255,255,.08);color:var(--paper);font:500 16px var(--sans);cursor:pointer}
+.d-title{margin:6px 52px 4px 6px;font-size:26px;font-weight:800;letter-spacing:-.02em;line-height:1.15}
+.d-sub{margin:0 6px 4px;font-size:16px;color:var(--uv)}
+.d-sum{margin:12px 6px 16px;font-size:15px;font-weight:600}
+.d-h{margin:18px 6px 6px;font:500 13px var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.d-steps{list-style:none;margin:0;padding:0}
+.d-steps li{display:grid;grid-template-columns:16px minmax(0,1fr) auto;gap:4px 12px;align-items:baseline;padding:12px 6px;border-top:1px solid var(--ink-3)}
+.d-steps li:first-child{border-top:0}
+.d-steps i{width:11px;height:11px;border-radius:50%;border:1.5px solid var(--grey-mark);transform:translateY(1px)}
+.d-steps li.done i{background:var(--spot);border-color:var(--spot)}
+.d-steps li.late i{background:var(--red);border-color:var(--red)}
+.d-steps b{font-size:16px;font-weight:600}
+.d-steps .w{font-size:14px;color:var(--uv);white-space:nowrap}
+.d-steps li.late .w{color:var(--red);font-weight:600}
+.d-steps .o{grid-column:2/-1;font-size:14px;color:var(--muted)}
+.d-steps .n{grid-column:2/-1;font-size:14px;color:var(--paper);background:rgba(255,255,255,.05);border-radius:10px;padding:8px 10px;margin-top:4px}
+.d-notes{margin:16px 6px 0;font-size:15px;color:var(--uv)}
+@media(min-width:900px){.detail{left:50%;right:auto;bottom:auto;top:50%;transform:translate(-50%,-50%);width:600px;border-radius:22px;border:1px solid var(--ink-3)}.detail .grab{display:none}}
+#shell .rel-btn{all:unset;display:block;cursor:pointer;margin-top:12px;font-size:14px;font-weight:600;color:var(--paper)}
+#shell .rel-btn:focus-visible{outline:2px solid var(--paper);outline-offset:2px;border-radius:6px}
+.lblh{margin:0 0 10px;font:500 13px var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.note2{margin:0 0 12px;font-size:14px;color:var(--uv);border:1px dashed var(--ink-4);border-radius:12px;padding:10px 12px}
+.botcard .row{align-items:center}
+.bstate{font:600 13px var(--sans);border-radius:999px;padding:4px 10px;border:1px solid var(--ink-4);color:var(--uv);white-space:nowrap}
+.bstate.done{color:var(--spot);border-color:rgba(30,215,96,.45)}
+.bstate.late,.bstate.blocked,.bstate.error{color:var(--paper);background:var(--red-deep);border-color:var(--red-deep)}
+.bstate.working{color:var(--paper);border-color:var(--uv)}
+.blast{margin:10px 0 0;font-size:14px;color:var(--uv)}
+.blast b{color:var(--paper);font-weight:600}
+#shell .duty.blocked .w{color:var(--red);font-weight:600}
+.feed{list-style:none;margin:0;padding:0}
+.feed li{display:grid;grid-template-columns:56px minmax(0,1fr);gap:2px 12px;padding:11px 0;border-top:1px solid var(--ink-3);font-size:15px}
+.feed li:first-child{border-top:0}
+.feed .t{font:500 13px var(--mono);color:var(--muted);padding-top:2px}
+.feed .m b{font-weight:700}
+.feed .m .s{font-size:13px;color:var(--muted);margin-left:6px}
+.feed li.blocked .m .s,.feed li.error .m .s{color:var(--red);font-weight:600}
+.feed a{color:var(--paper)}
+
+/* ================= Glass (Luke, 11 Nov 2026: "like me and Lilian's app") =================
+   Frosted panels over a fixed wash taken from the red film. The panels stay dark and at least
+   .62 opaque so every number keeps its contrast. Reduced transparency, or no blur support:
+   near-solid panels, no wash. Red still means only "needs attention" and the active tab: the
+   wash is a faint, out-of-focus glow behind the glass, never on a number. */
+:root{--glass:rgba(20,20,22,.62);--glass-2:rgba(255,255,255,.045);--glass-edge:rgba(255,255,255,.11);--glass-line:rgba(255,255,255,.08);
+  --glass-shadow:0 12px 34px rgba(0,0,0,.5);--glass-blur:blur(22px) saturate(160%);
+  --wash-red:rgba(141,6,12,.30);--wash-red-2:rgba(141,6,12,.16);--wash-white:rgba(255,255,255,.05)}
+body::before{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;
+  background:radial-gradient(60% 42% at 8% 4%,var(--wash-red),transparent 70%),radial-gradient(55% 40% at 100% 38%,var(--wash-white),transparent 70%),
+    radial-gradient(70% 50% at 18% 100%,var(--wash-red-2),transparent 72%),var(--ink)}
+html,body{background:var(--ink)}
+body{background:transparent}
+.t-card,.htile,#shell .tile,#shell .pg .tile,.netbar,.sheeterr,.sample,.moresheet{
+  background:var(--glass);-webkit-backdrop-filter:var(--glass-blur);backdrop-filter:var(--glass-blur);
+  border:.5px solid var(--glass-line);box-shadow:inset 0 1px 0 var(--glass-edge),var(--glass-shadow)}
+.t-cap.warn,.t-cap.stop,.t-cap.over,.attn-card.has,#shell .tile.pulse{border:1px solid var(--red)}
+.netbar{border:1px solid var(--red)} .netbar.offline{border:1px solid var(--uv)}
+.sheeterr{border:1px dashed var(--red)} .sample{border:1px dashed var(--uv)}
+/* tiles inside tiles: lighter glass, no second blur (keeps phones fast) */
+#shell .pg .tile .tile,#shell .pg .mini,#shell .pg .ctrbox>div,#shell .tile .tile{background:var(--glass-2);-webkit-backdrop-filter:none;backdrop-filter:none;box-shadow:inset 0 1px 0 rgba(255,255,255,.06);border:.5px solid var(--glass-line)}
+.hdr{background:rgba(8,8,10,.62);-webkit-backdrop-filter:blur(26px) saturate(170%);backdrop-filter:blur(26px) saturate(170%);border-bottom:.5px solid var(--glass-line)}
+.nav{background:rgba(12,12,14,.66);-webkit-backdrop-filter:blur(26px) saturate(170%);backdrop-filter:blur(26px) saturate(170%);border-top:.5px solid var(--glass-line)}
+.rangebox select,.iconbtn,.copybtn,.hp-refresh{background:rgba(255,255,255,.06);border:.5px solid var(--glass-line);box-shadow:inset 0 1px 0 rgba(255,255,255,.08)}
+.moresheet{background:rgba(22,22,24,.82);border-radius:26px 26px 0 0}
+@media(min-width:900px){
+  .nav{top:var(--hdr);left:12px;bottom:12px;width:206px;border:.5px solid var(--glass-line);border-radius:22px;padding:12px 8px;box-shadow:inset 0 1px 0 var(--glass-edge),var(--glass-shadow)}
+  .nav [aria-current="page"]{background:rgba(255,255,255,.08);box-shadow:inset 0 1px 0 rgba(255,255,255,.08)}
+  main,.rangecustom{margin-left:230px}
+  .hpanel,.detail{border-radius:22px}
+}
+@supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){
+  :root{--glass:rgba(18,18,20,.96)}
+  .hdr,.nav{background:rgba(8,8,10,.97)}
+}
+@media (prefers-reduced-transparency:reduce){
+  :root{--glass:var(--ink-2);--glass-2:var(--ink)}
+  body::before{display:none}
+  .t-card,.htile,#shell .tile,#shell .pg .tile,.hdr,.nav,.moresheet{-webkit-backdrop-filter:none;backdrop-filter:none}
+  .hdr,.nav{background:var(--ink)}
+}
 @media (prefers-reduced-motion:reduce){.ph,.iconbtn.spin svg{animation:none}}
 
 </style>
@@ -467,6 +586,10 @@ a.t-card:hover{border-color:var(--ink-4)}
 <div class="rangecustom" id="rangeCustom" hidden><label class="sr" for="rFrom">From</label><input type="date" id="rFrom"><label class="sr" for="rTo">To</label><input type="date" id="rTo"></div>
 <nav class="nav" id="nav" aria-label="Sections"><a href="#today" data-tab="today" class="t"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2.5M12 19v2.5M4.6 4.6l1.8 1.8M17.6 17.6l1.8 1.8M2.5 12H5M19 12h2.5M4.6 19.4l1.8-1.8M17.6 6.4l1.8-1.8"/></svg><span>Today</span></a><a href="#songs" data-tab="songs" class="t"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18V5.5l11-2.5v12.5"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="17.5" cy="15.5" r="2.5"/></svg><span>Songs</span></a><a href="#ads" data-tab="ads" class="t"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 10v4h3l7 4V6l-7 4H4z"/><path d="M17.5 9.5a3.5 3.5 0 0 1 0 5"/></svg><span>Ads</span></a><a href="#pages" data-tab="pages" class="t x"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="3.5" width="16" height="17" rx="2.5"/><path d="M8 8.5h8M8 12.5h8M8 16.5h5"/></svg><span>Pages</span></a><a href="#growth" data-tab="growth" class="t x"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 17l5.5-5.5 4 4 7.5-7.5"/><path d="M15 8h5.5v5.5"/></svg><span>Growth</span></a><a href="#fans" data-tab="fans" class="t x"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8.5" r="3.5"/><path d="M2.5 20c.8-3.6 3.4-5.5 6.5-5.5s5.7 1.9 6.5 5.5"/><path d="M16 5.2a3.5 3.5 0 0 1 0 6.6M18 14.8c1.9.7 3.1 2.4 3.5 5.2"/></svg><span>Fans</span></a><a href="#releases" data-tab="releases" class="t x"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15.5" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg><span>Releases</span></a><a href="#money" data-tab="money" class="t"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="6" width="19" height="12" rx="2.5"/><circle cx="12" cy="12" r="2.8"/></svg><span>Money</span></a><a href="#team" data-tab="team" class="t x"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 20v-1.5A3.5 3.5 0 0 1 8.5 15h7a3.5 3.5 0 0 1 3.5 3.5V20"/><circle cx="12" cy="8.5" r="3.5"/></svg><span>Team</span></a><button class="nav-more" id="moreBtn" type="button" aria-haspopup="dialog" aria-expanded="false"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5.5" cy="12" r="1.4"/><circle cx="12" cy="12" r="1.4"/><circle cx="18.5" cy="12" r="1.4"/></svg><span>More</span></button><button class="railfoot" id="logout" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4h4.5A1.5 1.5 0 0 1 20 5.5v13a1.5 1.5 0 0 1-1.5 1.5H14"/><path d="M10 16l-4-4 4-4M6 12h10"/></svg><span>Log out</span></button></nav>
 <div class="scrim" id="scrim" hidden></div>
+<div class="moresheet detail" id="detailSheet" role="dialog" aria-modal="true" aria-labelledby="detailTitle" hidden><div class="grab"></div>
+  <button class="dclose" id="detailClose" type="button" aria-label="Close">✕</button>
+  <div id="detailBody"></div>
+</div>
 <div class="moresheet hpanel" id="healthSheet" role="dialog" aria-labelledby="healthTitle" hidden><div class="grab"></div>
   <h2 class="hp-title" id="healthTitle">Data health</h2>
   <ul class="hp-rows" id="healthRows"><li><span class="ph"></span></li></ul>
@@ -485,6 +608,12 @@ a.t-card:hover{border-color:var(--ink-4)}
     <div class="vhead"><h1 id="todayTitle">Today</h1><p class="vsub" id="todaySub"></p></div>
     <span id="capMonth" hidden></span>
     <div class="sheeterr" id="errToday" hidden></div>
+    <div class="brief" id="brief" aria-live="polite"><p class="ph big"></p><p class="ph"></p><p class="ph"></p></div>
+    <div class="brief-actions"><button class="copybtn" id="copySummary" type="button">Copy today's summary</button><span class="copied" id="copied" role="status"></span></div>
+    <section class="t-card attn-card" id="attnCard" aria-labelledby="attnTitle"><h2 class="t-lbl" id="attnTitle">Needs attention</h2><ul class="attn-list" id="attnList"><li><span class="ph"></span></li></ul></section>
+    <section class="t-card" id="sinceCard" aria-labelledby="sinceTitle" hidden><h2 class="t-lbl" id="sinceTitle">Since you last looked <span id="sinceWhen"></span></h2><ul class="since-list" id="sinceList"></ul></section>
+    <h2 class="t-lbl sect">Headlines <span id="tilesRange"></span></h2>
+    <div class="htiles" id="tiles"><div class="htile"><span class="ph big"></span></div><div class="htile"><span class="ph big"></span></div></div>
     <div class="tgrid">
       <a class="t-card t-cap" id="capTile" href="#ads">
         <p class="t-lbl">Ad spend this month</p>
@@ -492,8 +621,7 @@ a.t-card:hover{border-color:var(--ink-4)}
         <div class="capbar" aria-hidden="true"><i id="capFill"></i><b id="capWarn"></b><b id="capStop"></b></div>
         <p class="t-line" id="capShort"><span class="ph"></span></p>
       </a>
-      <div class="t-card"><p class="t-lbl">Yesterday · all songs</p><div id="yday"><div class="ph big"></div><div class="ph"></div></div></div>
-      <div class="t-card"><p class="t-lbl">Next release</p><p class="t-mid" id="nextSong"><span class="ph big"></span></p><p class="t-line" id="nextMsg"></p></div>
+      <button class="t-card t-btn" id="nextTile" type="button" aria-haspopup="dialog"><p class="t-lbl">Next release</p><p class="t-mid" id="nextSong"><span class="ph big"></span></p><p class="t-line" id="nextMsg"></p><p class="t-more">See what's missing ›</p></button>
       <div class="t-card"><p class="t-lbl">Needs you</p><div id="forLuke"><div class="ph"></div><div class="ph"></div></div></div>
       <a class="t-card" href="#team"><p class="t-lbl">Today's duties</p><p class="t-big num" id="dutyBig"><span class="ph big"></span></p><p class="t-line" id="dutyMsg"></p></a>
     </div>
@@ -630,7 +758,11 @@ a.t-card:hover{border-color:var(--ink-4)}
   <section class="card view" id="releases"><h2>Releases</h2><p class="sub">Counting back from release day: 28 days files, 21 RouteNote, 14 Spotify pitch, 10 lyrics, 7 video and page.</p><div class="sheeterr" id="errReleases" hidden></div><div class="grid g3" id="relList"><div class="ph big"></div><div class="ph"></div></div></section>
   <section class="card view" id="money"><h2>Money</h2><p class="sub">Every amount in the currency it was billed or paid in. Totals in EUR are estimates at that month's average rate.</p><div class="sheeterr" id="errMoney" hidden></div><div class="scroll"><table class="stack" id="moneyTable"></table></div><div id="moneyDetail"></div></section>
   <section class="card view" id="team"><h2>Team</h2><p class="sub" id="teamSub"></p><div class="sheeterr" id="errTeam" hidden></div>
-    <div class="lbl" style="margin:0 0 8px">Today's duties</div><div class="grid g3" id="dutyList"><div class="ph big"></div><div class="ph"></div></div>
+    <h3 class="lblh">Live · today's duties and the bots' latest updates</h3>
+    <p class="note2" id="liveNote" hidden></p>
+    <div class="grid g3" id="dutyList"><div class="ph big"></div><div class="ph"></div></div>
+    <h3 class="lblh" style="margin-top:22px">Latest updates</h3>
+    <ul class="feed" id="liveFeed"><li><span class="ph"></span></li></ul>
     <div class="scroll" style="margin-top:14px"><table class="stack" id="teamTable"></table></div><div class="scroll" style="margin-top:14px"><table class="stack" id="taskTable"></table></div></section>
 </main>
 </div>

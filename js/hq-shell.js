@@ -61,6 +61,8 @@
   $("scrim").addEventListener("click", closeHealth);
   document.addEventListener("keydown", function (ev) { if (ev.key === "Escape" && !$("healthSheet").hidden) { closeHealth(); $("healthBtn").focus(); } });
   $("healthRefresh").addEventListener("click", function () { $("refresh").click(); });
+  /* "Needs attention" items about the Meta key open this panel instead of a tab */
+  document.addEventListener("click", function (ev) { var a = ev.target.closest && ev.target.closest("[data-health]"); if (a) { ev.preventDefault(); openHealth(); } });
 
   /* refresh: spins until all three answers are back */
   $("refresh").addEventListener("click", function () {

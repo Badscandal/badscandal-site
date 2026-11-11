@@ -124,6 +124,7 @@ export function songsReport(rows, royalties, releases, today) {
       trend: pct == null ? "new" : pct >= 10 ? "rising" : pct <= -10 ? "cooling" : "steady",
       total: sum(read.map((x) => x.streams)),
       series: read.slice(-30).map((x) => ({ d: x.d, v: x.streams })),
+      listenersSeries: read.filter((x) => x.listeners != null).slice(-30).map((x) => ({ d: x.d, v: x.listeners })),
       royalties: earned[song] || {},
     };
   }).sort((a, b) => (b.week || 0) - (a.week || 0));
@@ -205,14 +206,39 @@ export function releasesReport(rows, today) {
    Today's = deadline today, or no date at all (a standing duty). done / todo / blocked + blocker.
    They are NOT counted as ordinary tasks (no "late", no open count). */
 export const isDuty = (t) => /^d-/i.test(norm(t.id));
-export function dutiesReport(tasks, today) {
+/* nowHM: São Paulo "HH:MM" now. A duty's deadline may carry its time ("2026-11-12 09:15"): once that
+   time has passed and the duty isn't done, it is late (live updates brief, 11 Nov 2026). */
+export function dutiesReport(tasks, today, nowHM = "") {
   const list = tasks.filter((t) => isDuty(t) && t.task && (!DAY.test(norm(t.deadline).slice(0, 10)) || norm(t.deadline).slice(0, 10) === today))
-    .map((t) => ({ id: norm(t.id), owner: norm(t.owner) || "?", task: t.task, blocker: norm(t.blocker),
-      status: /^(done|yes|ok|✓|✔)$/i.test(norm(t.status)) ? "done" : /block/i.test(norm(t.status)) ? "blocked" : "todo" }));
+    .map((t) => {
+      const m = /(\d{1,2}):(\d{2})/.exec(norm(t.deadline).slice(10)), due = m ? m[1].padStart(2, "0") + ":" + m[2] : "";
+      const status = /^(done|yes|ok|✓|✔)$/i.test(norm(t.status)) ? "done" : /block/i.test(norm(t.status)) ? "blocked" : "todo";
+      return { id: norm(t.id), owner: norm(t.owner) || "?", task: t.task, blocker: norm(t.blocker), status, due,
+        late: status === "todo" && !!due && !!nowHM && nowHM > due, updated: norm(t.updated) };
+    });
   const owners = {};
-  for (const d of list) (owners[d.owner] || (owners[d.owner] = { owner: d.owner, done: 0, todo: 0, blocked: 0, items: [] })).items.push(d), owners[d.owner][d.status]++;
-  return { today, total: list.length, done: list.filter((d) => d.status === "done").length, blocked: list.filter((d) => d.status === "blocked").length,
+  for (const d of list) { const o = owners[d.owner] || (owners[d.owner] = { owner: d.owner, done: 0, todo: 0, blocked: 0, late: 0, items: [] }); o.items.push(d); o[d.status]++; if (d.late) o.late++; }
+  return { today, total: list.length, done: list.filter((d) => d.status === "done").length, blocked: list.filter((d) => d.status === "blocked").length, late: list.filter((d) => d.late).length,
     byOwner: Object.values(owners).sort((a, b) => b.blocked - a.blocked || b.todo - a.todo || (a.owner < b.owner ? -1 : 1)) };
+}
+
+/* ---------- live updates (11 Nov 2026): the bots' running log, the sheet tab "Updates" ----------
+     Updates   time | bot | status | message | link
+   time = "YYYY-MM-DD HH:MM" São Paulo; status = done | working | blocked | error | info. Bots append one
+   row whenever they start or finish a duty or hit a blocker (brief 2026-11-11-live-updates.md in
+   badscandal-hq). rows === null means the tab doesn't exist yet: the page says so, nothing breaks. */
+export const UPDATE_STATUS = ["done", "working", "blocked", "error", "info"];
+export function liveReport(rows) {
+  if (rows == null) return { ready: false, feed: [], bots: [] };
+  const feed = rows.map((r) => {
+    const m = /^(\d{4}-\d{2}-\d{2})[ T](\d{1,2}):(\d{2})/.exec(norm(r.time));
+    const st = key(r.status);
+    return m && norm(r.bot) ? { at: m[1] + " " + m[2].padStart(2, "0") + ":" + m[3], bot: norm(r.bot), status: UPDATE_STATUS.includes(st) ? st : "info",
+      message: norm(r.message).slice(0, 240), link: /^https:\/\//.test(norm(r.link)) ? norm(r.link) : "" } : null;
+  }).filter(Boolean).sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0));
+  const by = {};
+  for (const u of feed) if (!by[u.bot]) by[u.bot] = { bot: u.bot, lastAt: u.at, status: u.status, message: u.message, link: u.link };
+  return { ready: true, feed: feed.slice(0, 40), bots: Object.values(by).sort((a, b) => (a.bot < b.bot ? -1 : 1)), lastAt: feed.length ? feed[0].at : null };
 }
 
 export function teamReport(tasks, sheets, today) {
@@ -331,9 +357,9 @@ export function metaSpend(spendRows, meta) {
     total: round(Object.values(api).reduce((x, y) => x + y, 0)), mismatch } };
 }
 
-/* sheets: { Growth: [[...cells]], ... } straight from the sheet. today: São Paulo "YYYY-MM-DD".
-   meta: see metaSpend() (optional). */
-export function hqModel(sheets, today, fx = {}, meta) {
+/* sheets: { Growth: [[...cells]], ... } straight from the sheet (Updates: optional, null = no tab).
+   today: São Paulo "YYYY-MM-DD". meta: see metaSpend() (optional). nowHM: São Paulo "HH:MM" (duty times). */
+export function hqModel(sheets, today, fx = {}, meta, nowHM = "") {
   const t = Object.fromEntries(HQ_TABS.map((n) => [n, rowsToObjects(sheets[n])]));
   const ms = metaSpend(t.Spend, meta);
   t.Spend = ms.rows;
@@ -344,7 +370,8 @@ export function hqModel(sheets, today, fx = {}, meta) {
   const team = teamReport(t.Tasks, [t.Growth, t.Songs, t.Fans, t.Royalties], today);
   const money = { ...moneyReport(t.Spend, t.Income, t.Royalties, today, fx), metaSource: ms.source };
   const empty = HQ_TABS.filter((n) => !t[n].length);
-  team.duties = dutiesReport(t.Tasks, today);
+  team.duties = dutiesReport(t.Tasks, today, nowHM);
+  team.live = liveReport(sheets.Updates == null ? null : rowsToObjects(sheets.Updates));
   return { today, songs, growth, fans, releases, team, money, empty, sheetErrors: sheetErrors(sheets),
     next: releases.find((r) => r.date && r.date >= today) || null };
 }
