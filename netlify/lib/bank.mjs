@@ -366,8 +366,8 @@ export function normName(s) {
     .filter((w) => w && !["mr", "mrs", "ms", "dr"].includes(w)).sort().join(" ");
 }
 /* Luke himself, as another bank writes him: his full name in any order, or (two words or more, no
-   company word) his first and last name with at most one word more ("LUKE POWER" for "Luke James
-   Power", "Luke J Power" for "Luke Power"). "Luke Power Music Ltd" is not him. */
+   company word) his first and last name with at most one word more ("SAM EXAMPLE" for "Sam Alex
+   Example", "Sam A Example" for "Sam Example"). "Sam Example Music Ltd" is not him. */
 const TITLES = ["mr", "mrs", "ms", "miss", "mx", "dr"];
 const COMPANY = /\b(?:ltd|limited|llc|llp|inc|plc|gmbh|ltda|eireli|sa|sas|srl|bv|co|company|corp|music|records|recordings|publishing|productions?|studios?|label|group|holdings|media|entertainment|agency|management|services|trust|foundation)\b/;
 const nameWords = (s) => String(s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim().split(" ").filter((w) => w && !TITLES.includes(w));
