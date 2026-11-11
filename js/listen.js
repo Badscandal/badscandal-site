@@ -14,7 +14,14 @@
    per country, so Dublin and São Paulo each hit zero when the track is actually live for them. At zero
    the page flips itself to OUT NOW + LISTEN (-> cta) without waiting for a JSON edit.
    Release week (25 Oct 2026): for 7 days from release.date (any mode, so keep `date` set on "out") the
-   card gets .is-out — a light circling its edge, the cover fading in, OUT NOW as a shimmering link. */
+   card gets .is-out — a light circling its edge, the cover fading in, OUT NOW as a shimmering link.
+   Out (11 Nov 2026): once a release is out the card keeps saying "Out now", after the release week
+   too (no "Released <date>" line on the public page: Luke wants that wording in /hq only). At zero in "upcoming" mode the button and the
+   OUT NOW link go to the song's Spotify track when /songs.json has one, else to our own song page
+   (/<slug>), never just the artist profile; body.upcoming comes off. Under the card, "Out now"
+   lists every released song in /songs.json (date reached in the visitor's time zone AND
+   spotifyTrack set), each linking to our own page with data-link="<slug>" so js/count.js counts
+   the tap (/hq -> Pages -> Home page). */
 (function () {
   "use strict";
   var T = window.BS_T || function (s) { return s; };
@@ -30,7 +37,45 @@
     return p ? new Date(+p[1], +p[2] - 1, +p[3]) : null;
   }
 
-  function countdown(r, at, cta) {
+  function longDate(at, month) {
+    try { return at.toLocaleDateString(LOCALE, { day: "numeric", month: month || "long", year: "numeric" }); } catch (e) { return ""; }
+  }
+  function isTrack(u) { return /^https:\/\/open\.spotify\.com\/track\/[A-Za-z0-9]+/.test(u || ""); }
+
+  /* The card's song in /songs.json: same cover file, else same title, else same release day. */
+  function songOf(r, songs) {
+    var low = function (v) { return String(v || "").trim().toLowerCase(); };
+    var by = function (fn) { return songs.filter(fn)[0]; };
+    return by(function (x) { return r.cover && x.cover === r.cover; }) ||
+      by(function (x) { return r.title && low(x.title) === low(r.title); }) ||
+      by(function (x) { return r.date && x.date === r.date; }) || null;
+  }
+
+  /* Where LISTEN goes once the song is out. Mode "out": release.cta (set by hand on release day).
+     Still "upcoming" in the JSON (the flip at zero): the track from /songs.json, else our own
+     song page; the artist profile only when the song isn't in the list at all. */
+  function outLink(r, song) {
+    if (r.mode !== "upcoming" || !song) return { href: r.cta };
+    if (isTrack(song.spotifyTrack)) return { href: song.spotifyTrack };
+    return { href: "/" + song.slug, own: song.slug };
+  }
+  function point(a, l) {
+    a.href = l.href;
+    if (l.own) { a.removeAttribute("target"); a.removeAttribute("rel"); a.setAttribute("data-link", l.own); }
+    else { a.target = "_blank"; a.rel = "noopener"; }
+  }
+
+  /* out for more than the release week: no ring, no shimmer, but it still says so */
+  function settled(at) {
+    var box = document.querySelector("[data-rel=countdown]");
+    if (!box) return;
+    var grid = box.querySelector(".cd-grid"), dateEl = box.querySelector("[data-cd=date]");
+    if (grid) grid.hidden = true;
+    if (dateEl) dateEl.textContent = T("Out now");
+    box.hidden = false;
+  }
+
+  function countdown(r, at, cta, song) {
     var box = document.querySelector("[data-rel=countdown]");
     if (!box) return;
     var dateEl = box.querySelector("[data-cd=date]");
@@ -41,18 +86,19 @@
 
     function out() {
       if (timer) clearInterval(timer);
-      var href = r.cta;
+      var l = outLink(r, song);
       box.querySelector(".cd-grid").hidden = true;
       if (dateEl) {
         var a = document.createElement("a");
         a.className = "cd-now-link";
         a.textContent = T("Out now");
-        if (href) { a.href = href; a.target = "_blank"; a.rel = "noopener"; }
+        if (l.href) point(a, l);
         dateEl.textContent = "";
         dateEl.appendChild(a);
         dateEl.classList.add("cd-now");
       }
-      if (cta && href) { cta.href = href; cta.textContent = T("Listen"); }
+      if (cta && l.href) { point(cta, l); cta.textContent = T("Listen"); }
+      document.body.classList.remove("upcoming"); /* it's out: the whole page says so, not half of it */
       /* release week: the light runs round the card (css "release week") */
       if (Date.now() - at < RELEASE_WEEK) {
         var card = box.closest(".rel-card");
@@ -83,7 +129,50 @@
     if (at - Date.now() > 0) timer = setInterval(tick, 1000);
   }
 
-  function render(m) {
+  /* "Out now" under the card: every song in /songs.json whose day has come here and that has
+     its Spotify track link. Each row goes to OUR page (/<slug>), which has the Spotify button. */
+  function outList(songs) {
+    var box = document.querySelector("[data-outs]"), ul = box && box.querySelector("ul");
+    if (!ul) return;
+    var now = Date.now();
+    var live = songs.filter(function (x) {
+      var at = localMidnight(x.date);
+      return at && at <= now && isTrack(x.spotifyTrack) && /^[a-z0-9]+$/.test(x.slug || "") && x.title;
+    }).sort(function (a, b) { return a.date < b.date ? 1 : a.date > b.date ? -1 : 0; });
+    if (!live.length) return;
+    ul.textContent = "";
+    live.forEach(function (x) {
+      var li = document.createElement("li"), a = document.createElement("a");
+      a.className = "out-row";
+      a.href = "/" + x.slug;
+      a.setAttribute("data-link", x.slug);
+      var art = x.coverWeb || x.cover;
+      if (art) {
+        var img = document.createElement("img");
+        img.className = "out-art"; img.src = art; img.alt = ""; img.width = 48; img.height = 48;
+        img.loading = "lazy"; img.decoding = "async";
+        a.appendChild(img);
+      }
+      var t = document.createElement("span"); t.className = "out-t"; t.textContent = x.title; a.appendChild(t);
+      var d = document.createElement("span"); d.className = "out-d"; d.textContent = longDate(localMidnight(x.date), "short"); a.appendChild(d);
+      li.appendChild(a); ul.appendChild(li);
+    });
+    box.hidden = false;
+  }
+
+  /* "September 2026" (listen.json, English) -> the page language */
+  var MONTHS = ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"];
+  function monthYear(v) {
+    var p = /^\s*([A-Za-z]+)\s+(\d{4})\s*$/.exec(v || ""), i = p ? MONTHS.indexOf(p[1].toLowerCase()) : -1;
+    if (i < 0 || !window.BS_LANG || window.BS_LANG === "en") return v;
+    try { return new Date(+p[2], i, 1).toLocaleDateString(LOCALE, { month: "long", year: "numeric" }); } catch (e) { return v; }
+  }
+
+  function render(m, songs) {
+    outList(songs);
+    var asOf = document.getElementById("streams-as");
+    var as = (m && m.streams && m.streams.asOf) || (asOf && asOf.textContent);
+    if (asOf && as) asOf.textContent = monthYear(as);
     if (!m) return;
 
     var links = m.links || {};
@@ -112,18 +201,21 @@
         else if (r.cta) { cta.href = r.cta; cta.textContent = T("Listen"); }
       }
 
-      var at = localMidnight(r.date);
-      var since = at ? Date.now() - at : -1;
-      if (at && (upcoming || (r.mode === "out" && since >= 0 && since < RELEASE_WEEK))) {
-        countdown(r, at, cta);
-      }
-
       var rl = r.links || {};
       each("[data-rel-link]", function (a) {
         var u = rl[a.getAttribute("data-rel-link")];
         if (u) a.href = u;
         else if (a.parentNode) a.parentNode.removeChild(a); /* no link for this store = no row */
       });
+      each(".rel-links", function (p) { if (!p.querySelector("a")) p.hidden = true; }); /* and no empty gap */
+
+      var at = localMidnight(r.date);
+      var since = at ? Date.now() - at : -1;
+      if (at && (upcoming || (r.mode === "out" && since >= 0 && since < RELEASE_WEEK))) {
+        countdown(r, at, cta, songOf(r, songs));
+      } else if (at && r.mode === "out" && since >= RELEASE_WEEK) {
+        settled(at);
+      }
     }
 
     var s = m.streams || {};
@@ -135,13 +227,14 @@
         el.textContent = total.toLocaleString("en-IE") + (el.getAttribute("data-suffix") || "");
       }
     }
-    var asOf = document.getElementById("streams-as");
-    if (asOf && s.asOf) asOf.textContent = s.asOf;
   }
 
   if (!window.fetch) return;
-  fetch("listen.json", { cache: "no-store" })
-    .then(function (r) { return r.ok ? r.json() : null; })
-    .then(render)
-    .catch(function () {});
+  /* both files are tiny, same-origin and no-store; a missing one just leaves its part as it is */
+  function get(u) {
+    return fetch(u, { cache: "no-store" }).then(function (r) { return r.ok ? r.json() : null; }).catch(function () { return null; });
+  }
+  Promise.all([get("listen.json"), get("songs.json")]).then(function (a) {
+    render(a[0], (a[1] && Array.isArray(a[1].songs) && a[1].songs) || []);
+  }).catch(function () {});
 })();

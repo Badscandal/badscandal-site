@@ -146,7 +146,13 @@ body::before{content:"";position:fixed;inset:0;z-index:-1;
   padding:18px var(--pad);
   background:linear-gradient(180deg,rgba(var(--ink-rgb),.9),rgba(var(--ink-rgb),.6) 70%,transparent)}
 .nav-logo{font-family:var(--font-display);font-weight:400;font-size:22px;
-  line-height:1}
+  line-height:1;
+  /* a real tap target (the "/" alone is 6px wide): 44px square, layout unchanged */
+  display:inline-block;padding:11px 19px;margin:-11px -19px}
+/* the home page's logo: the wordmark, small (Archivo is wordmark-only type) */
+.nav-logo--mark{font-family:var(--font-mark);font-weight:900;
+  font-variation-settings:"wdth" 125,"wght" 900;font-size:12px;letter-spacing:.01em;
+  color:var(--paper);padding:16px 8px;margin:-16px -8px}
 .nav-links{display:flex;gap:24px;margin-left:auto}
 .nav-link{background:none;border:0;cursor:pointer;font:inherit;font-size:13px;
   letter-spacing:.05em;color:var(--paper);padding:2px 0}
@@ -1298,6 +1304,7 @@ video::-webkit-media-controls-panel{display:none !important}
 /* release card: the cover is the colour, the body is grey */
 .rel-card{background:var(--ink-2);border:1px solid var(--ink-3);overflow:hidden;
   box-shadow:0 30px 80px rgba(0,0,0,.5)}
+.rel-art{background:var(--ink-2)} /* solid: the release-week light must never show beside the cover */
 .rel-cover{display:block;width:100%;height:auto;aspect-ratio:1;object-fit:cover}
 .rel-body{padding:26px 22px 30px;text-align:center}
 .rel-body .tag{margin-bottom:10px}
@@ -1322,8 +1329,8 @@ body.upcoming .rel-links{display:none} /* not out yet: no store rows (10 Nov 202
   font-variant-numeric:tabular-nums lining-nums;color:var(--paper)}
 .cd-l{margin-top:8px;font-family:var(--font-mono);font-weight:400;font-size:10px;letter-spacing:.12em;
   text-transform:uppercase;color:var(--muted)}
-.cd-date{margin-top:14px;font-family:var(--font-mono);font-weight:400;font-size:11px;
-  letter-spacing:.12em;text-transform:uppercase;color:var(--uv)}
+.cd-date{margin-top:14px;font-family:var(--font-mono);font-weight:400;font-size:13px;
+  letter-spacing:.12em;text-transform:uppercase;color:var(--paper)}
 .cd-date.cd-now{font-family:var(--font-display);font-style:italic;font-size:clamp(30px,7vw,44px);
   letter-spacing:0;text-transform:none;color:var(--paper)}
 /* the seconds breathe in on every tick — the only motion, and reduced-motion never gets it (JS) */
@@ -1360,6 +1367,22 @@ body.upcoming .rel-links{display:none} /* not out yet: no store rows (10 Nov 202
   .rel-card.is-out::before{background:rgba(255,255,255,.7)} /* a still white edge instead of the light */
   .cd-now-link{background:none;-webkit-text-fill-color:var(--paper);color:var(--paper)}
 }
+/* "Out now" under the card (11 Nov 2026): the songs already released, each a quiet row to our own
+   song page. The small cover is the only colour; everything else is ink. */
+.rel-links[hidden],.outs[hidden]{display:none}
+.outs{margin-top:22px}
+.outs .tag{margin-bottom:10px;text-align:center}
+.outs-list li{margin:0}
+.outs-list li + li{margin-top:8px}
+.out-row{display:flex;align-items:center;gap:14px;padding:7px 18px 7px 7px;
+  border:1px solid var(--ink-3);background:rgba(var(--ink-rgb),.55);
+  transition:border-color .3s ease,background .3s ease}
+.out-row:hover{border-color:var(--uv);background:rgba(var(--ink-rgb),.8)}
+.out-art{display:block;flex:none;width:48px;height:48px;object-fit:cover;background:var(--ink-3)}
+.out-t{flex:1;min-width:0;font-family:var(--font-display);font-weight:400;
+  font-size:clamp(20px,2.2vw,24px);line-height:1.1;text-align:left}
+.out-d{flex:none;font-family:var(--font-mono);font-weight:400;font-size:11px;letter-spacing:.12em;
+  text-transform:uppercase;color:var(--muted);white-space:nowrap}
 /* rows centred, platform name only (25 Oct 2026, Luke: "no need for that listen thing") */
 .lk .tag{margin-bottom:12px;text-align:center}
 .lk-list{margin:0}
@@ -1382,12 +1405,41 @@ body.upcoming .rel-links{display:none} /* not out yet: no store rows (10 Nov 202
 @media (max-width:640px){
   .listen .nav-links{gap:14px}
   .listen .nav-link{font-size:12px;letter-spacing:.03em}
+  /* phones: the big wordmark sits right under the nav, so the small one steps aside (and the
+     link + the three languages always fit, in every language, down to 320px) */
+  .listen .nav-logo--mark{display:none}
+  /* phones (11 Nov 2026): the button belongs on the FIRST screen. Less air above the card, a
+     tighter countdown, and the cover sized from the screen's height (small viewport units, so
+     Safari's and Instagram's toolbars count) instead of filling the card's width. */
+  .listen .page-main{padding-top:72px}
+  .listen main section.listen-top{padding-top:10px;padding-bottom:4px}
+  .listen main section.rel{padding-top:14px}
+  .rel-art{padding-top:16px}
+  .rel-cover{margin:0 auto;width:clamp(150px,calc(100vh - 480px),86%);
+    width:clamp(150px,calc(100svh - 480px),86%);box-shadow:0 14px 40px rgba(0,0,0,.5)}
+  .rel-body{padding:18px 18px 26px}
+  .cd{margin-top:16px}
+  .cd-u{padding:11px 0 10px}
+  .cd-n{font-size:34px}
+  .rel-body .buy-btn{margin-top:20px}
+  /* the footer lines sit centred under a centred page */
+  .foot--slim .foot-bar{flex-direction:column;align-items:center;gap:8px;text-align:center}
 }
-/* narrow phones: three links + the language switcher don't fit; Plugin store yields */
-@media (max-width:430px){
-  .listen .nav-link[href="plugin.html"]{display:none}
+/* the narrowest phones: the button must fit inside the card's padding */
+@media (max-width:360px){
+  .rel-body .buy-btn{padding-left:24px;padding-right:24px}
+}
+/* desktop (11 Nov 2026): cover left, words + button right, so the first screen has something to
+   press. The card is wider than the 600px column below it; the rows stay as they were. */
+@media (min-width:900px){
+  .listen main section.rel{max-width:960px}
+  .rel-card{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+  .rel-body{display:flex;flex-direction:column;align-items:center;justify-content:center;
+    padding:30px 34px}
+  .rel-body .cd{width:100%}
+  .rel-body .buy-btn{font-size:16px;padding:22px 40px} /* must fit the half-width column */
 }
 @media (prefers-reduced-motion:reduce){
-  .lk-row{transition:none}
+  .lk-row,.out-row{transition:none}
   .lk-row:hover{transform:none}
 }

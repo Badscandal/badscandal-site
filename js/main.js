@@ -627,11 +627,13 @@
     var tz = Intl.DateTimeFormat().resolvedOptions().timeZone || "";
     zoneLabel = (tz.split("/").pop() || "LOCAL").replace(/_/g, " ").toUpperCase();
   } catch (e) {}
+  /* the weekday follows the page language (js/i18n.js sets BS_LANG before this file runs) */
+  var clockLocale = { es: "es-ES", pt: "pt-BR" }[window.BS_LANG] || "en-IE";
   function tickClock() {
     if (!clock) return;
     try {
       var now = new Date();
-      var day = new Intl.DateTimeFormat("en-IE", { weekday: "long" }).format(now).toUpperCase();
+      var day = new Intl.DateTimeFormat(clockLocale, { weekday: "long" }).format(now).toUpperCase();
       var time = new Intl.DateTimeFormat("en-IE", {
         hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false
       }).format(now);

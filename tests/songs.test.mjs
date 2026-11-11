@@ -58,6 +58,33 @@ test("the visit counter accepts every song, the home page and the old listen pag
   assert.match(hit, /new Set\(\["home", "listen", \.\.\.SONGS\.map/);
 });
 
+
+test("the home page lists what's out from /songs.json, counts the taps, and translates the new text", () => {
+  const home = read("index.html"), js = read("js/listen.js"), i18n = read("js/i18n.js");
+  assert.match(home, /<div class="outs" data-outs hidden>\s*<p class="tag">Out now<\/p>/);
+  assert.match(js, /songs\.json/);
+  assert.match(js, /setAttribute\("data-link", x\.slug\)/, "js/count.js counts a[data-link] taps");
+  assert.match(js, /a\.href = "\/" \+ x\.slug/, "rows go to our own song page");
+  assert.match(read("js/count.js"), /a\[data-link\]/);
+  assert.ok(!/Released|Lançamento|Lanzamiento/.test(home) && !/T\("Released"\)|cd-rel/.test(js), "no 'Released' wording on the public home page (that lives in /hq)");
+  assert.match(i18n, /"Out now": \{ es: "[^"]+", pt: "[^"]+" \}/);
+});
+
+test("the not-found page: branded, tiny, noindex, no visit counter, a way home", () => {
+  assert.ok(existsSync(join(ROOT, "404.html")), "404.html is missing");
+  const h = read("404.html");
+  assert.match(h, /<meta name="robots" content="noindex/);
+  assert.match(h, /BADSCANDAL/);
+  assert.match(h, /<a class="btn" id="go" href="\/">/);
+  assert.doesNotMatch(h, /<script[^>]*\ssrc=|\/api\/hit|fbq\(|<img|<video/, "no outside scripts, no counter, no Meta, no media");
+  const sheets = [...h.matchAll(/<link[^>]*rel="stylesheet"[^>]*>/g)].map((m) => m[0]);
+  assert.equal(sheets.length, 1);
+  assert.match(sheets[0], /href="https:\/\/fonts\.googleapis\.com\/css2\?family=Archivo[^"]*text=BADSCANDAL/, "only the ten-letter wordmark font");
+  assert.doesNotMatch(h, /(src|href)="(?!\/|https:\/\/fonts\.g)/, "every URL absolute: the page is shown at any path");
+  assert.ok(statSync(join(ROOT, "404.html")).size < 8 * 1024, "keep it tiny");
+  assert.match(read("_redirects"), /^\/tools\/\*\s+\/404\s+404!$/m);
+});
+
 /* ---------- link previews ---------- */
 
 const PAGES = readdirSync(ROOT).filter((f) => f.endsWith(".html"));
