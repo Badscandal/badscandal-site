@@ -79,10 +79,10 @@ export const TOOLS = [
     description: "Every release Luke has sent to the team that is coming up or came out in the last 14 days: the song, its release day, how many days to go, what is still missing from its pack, and YOUR steps for it with their due dates and state (to do, working, late, blocked, done). Call it when my_day lists release steps for you, or when Nova asks about a release.",
     inputSchema: obj({ bot: BOT }, ["bot"]) },
   { name: "release_pack", title: "Everything about one release", readOnly: true,
-    description: "The whole pack of ONE release: every field with its label (the master WAV link, the artwork link, the lyrics in full, the writers, the details for RouteNote, the pitch notes, ISRC, UPC...) and every step with its owner, due date and state. Use it before you work on a release step: everything you need should be here. If something you need is missing, send Luke a message saying exactly which field.",
+    description: "The whole pack of ONE release: every field with its label (the master WAV link, the artwork link, the lyrics in full, the writers, the details for RouteNote, the pitch notes, ISRC, UPC...) and every step with its owner, due date and state. Use it before you work on a release step: everything you need should be here. If something you need is missing: mark your step blocked with release_step, naming the field, and send Luke ONE message naming the field (only once, not every run).",
     inputSchema: obj({ bot: BOT, song: str('The song\'s title or its id, for example "Me Dá Seu Body" or "medaseubody". Accents and capitals do not matter.') }, ["bot", "song"]) },
   { name: "release_step", title: "Mark one of my release steps",
-    description: "Mark ONE of YOUR OWN steps of a release (from my_day or releases). status working = you started it. status done = it is really done in the store or on the platform (uploaded, approved, pitched, live), NOT \"started\" and NOT \"I asked someone\"; put the link that proves it in link when there is one. status blocked = you cannot go on: say in note exactly what is needed and from whom. status todo = undo a mistake. Never mark another bot's step. This also writes a line in the live log Luke sees.",
+    description: "Mark ONE of YOUR OWN steps of a release (from my_day or releases). status working = you started it. status done = it is really done in the store or on the platform (uploaded, approved, pitched, live), NOT \"started\" and NOT \"I asked someone\"; put the link that proves it in link when there is one. status blocked = you cannot go on: say in note exactly what is needed and from whom. status todo = undo a mistake. Never mark another bot's step (Nova only: when the owner told you it is done and cannot reach the desk; say so in the note). Luke's own step (teasers) is his approval: only Luke marks it done. This also writes a line in the live log Luke sees.",
     inputSchema: obj({ bot: BOT, song: str("The song's title or its id."),
       step: str(`Which step: ${S.RELEASE_STEPS.map((s) => `${s.key} (${s.label}, ${s.owner})`).join("; ")}.`, { enum: S.RELEASE_STEPS.map((s) => s.key) }),
       status: str("working | done | blocked | todo", { enum: S.STEP_STATUS }),
@@ -193,7 +193,7 @@ export async function callTool(tool, args, ctx) {
         pack: S.PACK_FIELDS.map((f) => ({ field: f.key, label: f.label, value: pack[f.key] || "", ...(pack[f.key] ? {} : { state: f.required ? "missing (required)" : f.neededBy ? `missing (needed for "${S.RELEASE_STEPS.find((x) => x.key === f.neededBy).label}")` : "not filled yet" }),
           filled_by: f.fill.length ? f.fill.join(" or ") + " (or Luke)" : "Luke" })),
         missing: v.missing.map(missingOut), steps: v.steps.map(stepOut),
-        how: "Everything you need for your step should be here. If a field you need is missing, send Luke a message naming the field. Mark your step with release_step." };
+        how: "Everything you need for your step should be here. If a field you need is missing: mark your step blocked with release_step, naming the field, and send Luke ONE message naming the field (only once). Mark your step with release_step." };
     }
     case "release_step": {
       const r = await S.setStep(store, now, roster, { by: me, id: args.song, step: args.step, status: args.status, note: args.note, link: args.link });
@@ -254,6 +254,8 @@ export async function callTool(tool, args, ctx) {
       /* the merged list (sheet + desk) when the sheet was read; else the desk's own next release */
       const deskNext = rel.filter((v) => v.status === "scheduled" && v.date && v.date >= today).sort((a, x) => (a.date < x.date ? -1 : 1))[0];
       const next = hq ? hq.next : deskNext ? { song: deskNext.title, date: deskNext.date, daysToGo: deskNext.daysToGo, steps: deskNext.steps.map((s) => ({ label: s.label, owner: s.owner, late: s.late })) } : null;
+      /* "none planned" only when the sheet WAS read (11 Nov 2026): with it unread, an earlier release in
+         its Releases tab can't be ruled out, so the desk's own next release says so, and nothing is "not read" */
       const note = desk.messages.find((m) => m.from === "Claude" && m.to === "Luke" && now - Date.parse(m.at) < 36 * 3600000) || null;
       const quiet = b.staff.filter((w) => !w.paused && w.duties.length && w.duties.some((d) => d.status !== "done")).map((w) => `${w.name} (${w.duties.filter((d) => d.status !== "done").map((d) => (d.late ? "late" : d.status)).join(", ")})`);
       return { today, now_sao_paulo: b.now,
@@ -261,7 +263,8 @@ export async function callTool(tool, args, ctx) {
         claude_note: note ? { at: note.sp, text: note.text } : "none",
         decisions_waiting_on_luke: b.waiting.luke.map(short),
         ad_spend: cap ? { month: cap.month, spent: `${cap.currency} ${cap.spent.toFixed(2)}`, cap: `${cap.currency} ${cap.amount}`, left: `${cap.currency} ${cap.left.toFixed(2)}`, status: cap.status, estimated: cap.estimated } : "not read",
-        next_release: next ? { song: next.song, date: next.date, days_to_go: next.daysToGo, late_steps: next.steps.filter((s) => s.late).map((s) => `${s.label} (${s.owner})`) } : hq || rel.length ? "none planned" : "not read",
+        next_release: next ? { song: next.song, date: next.date, days_to_go: next.daysToGo, late_steps: next.steps.filter((s) => s.late).map((s) => `${s.label} (${s.owner})`),
+          ...(hq ? {} : { source: "the desk only: the sheet's Releases tab was not read, so an earlier release there can't be ruled out" }) } : hq ? "none planned" : "not read",
         income_this_month: { received: cur(b.income.received), pending: cur(b.income.pending), problems: b.income.problems },
         duties_not_done: hq ? quiet : "not read",
         how_to_report: "One message, 8 lines at most. Numbers exactly as given here, with their currency. \"not read\" is said as not read, never as 0. Decisions: say the question and the options.", ...(sheetNote ? { note: sheetNote } : {}) };

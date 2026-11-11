@@ -447,6 +447,20 @@
     return hit ? hit.id : m.id;
   }
 
+  /* Which message Luke's answer goes to (11 Nov 2026, Luke: "when i reply to a message right now nothing
+     happens"). From "Waiting on you" it is the message itself (the desk files an answer under any message,
+     however deep in its thread). From a thread's Reply button on the board it is the newest question in
+     that thread still waiting on Luke from the one he is answering, so that question is closed and leaves
+     "Waiting on you"; when nothing there waits on him, the thread's first message. th = a board thread. */
+  function answerTarget(th) {
+    if (!th) return null;
+    var who = th.from === "Luke" ? th.to : th.from;
+    var open = [th].concat(th.replies || []).filter(function (x) {
+      return x && !x.resolved && x.needs && x.needs !== "none" && x.to === "Luke" && x.from !== "Luke" && (who === "all" || x.from === who);
+    }).sort(function (a, b) { return a.at < b.at ? -1 : a.at > b.at ? 1 : 0; });
+    return open.length ? open[open.length - 1] : th;
+  }
+
   /* ---- Today ---- */
   /* "Needs attention" from the staff desk: messages waiting on Luke, income problems (3 at most,
      then "+N more"), the bots' connector switched off. */
@@ -601,6 +615,17 @@
     if (n < 0) return { text: pre + "late by " + plural(-n, "day"), bad: true, done: false };
     return { text: pre + (n === 0 ? "due today" : n === 1 ? "due tomorrow" : "due in " + n + " days"), bad: false, done: false };
   }
+  /* the button on one step of a release card, or null (11 Nov 2026). Every step of a release that went
+     out keeps its button, also after its release day: the site's check keeps naming an unfinished step
+     as late, so Luke must be able to finish (or reopen) it. Luke's own step gets the main button. */
+  function stepButton(v, s) {
+    if (!v || !s || v.status !== "scheduled") return null;
+    var done = s.status === "done", mine = s.owner === "Luke";
+    return { to: done ? "todo" : "done", text: done ? "Reopen" : mine ? "Mark as done" : "Mark done", main: mine && !done };
+  }
+  /* where the form keeps what Luke typed and hasn't saved, on this device: one copy PER RELEASE, so
+     opening another release's form never wipes it (11 Nov 2026). Logout clears every bs_hq_last_*. */
+  function formKey(id) { return "bs_hq_last_relform:" + (String(id || "").replace(/[^a-z0-9]/gi, "") || "new"); }
   /* a release card's date line: "Tue 24 Nov · 13 days to go" / "Release day" / "Released 12 days ago" */
   function releaseWhen(date, today) {
     if (!isDay(date)) return "No release day yet";
@@ -681,7 +706,7 @@
     snapshot: snapshot, changesSince: changesSince, tiles: tiles, summaryText: summaryText, shortStep: shortStep, day: day,
     slug: slug, workerLabel: workerLabel, sortWorkers: sortWorkers, workerView: workerView, dutyWhen: dutyWhen, workerCounts: workerCounts, seenLine: seenLine, connectorLine: connectorLine,
     novaMessage: novaMessage, liveFeed: liveFeed, spWhen: spWhen, waitLabel: waitLabel, needWords: needWords, reportParts: reportParts, siteCheckLine: siteCheckLine, composeNames: composeNames,
-    threadRoot: threadRoot, staffAttention: staffAttention, staffHealth: staffHealth, curList: curList, cadenceWord: cadenceWord, accountLine: accountLine, sourceState: sourceState, payLine: payLine,
+    threadRoot: threadRoot, answerTarget: answerTarget, stepButton: stepButton, formKey: formKey, staffAttention: staffAttention, staffHealth: staffHealth, curList: curList, cadenceWord: cadenceWord, accountLine: accountLine, sourceState: sourceState, payLine: payLine,
     incomeEmpty: incomeEmpty, incomeProblems: incomeProblems,
     /* replies that visibly land + the release pipeline (11 Nov 2026) */
     spStampOf: spStampOf, seenWords: seenWords, sentLine: sentLine, answeredList: answeredList, CLAUDE_ROUNDS: CLAUDE_ROUNDS,

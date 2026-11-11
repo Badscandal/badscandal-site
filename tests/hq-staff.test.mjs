@@ -314,7 +314,7 @@ test("releases: what's missing, the card's pill, and the same sentence the desk 
   assert.match(mdsb.filled, /^\d+ of 17 filled$/);
   assert.equal(mdsb.items[0].text, "Lyrics (needed for the lyrics, Sat 14 Nov)");
   assert.equal(mdsb.attn, true, "the lyrics are needed within 3 days");
-  assert.deepEqual(mdsb.items.map((x) => x.attn), [true, true, false], "lyrics soon, the pitch is late, the video can wait");
+  assert.deepEqual(mdsb.items.map((x) => x.text.split(" ")[0] + ":" + x.attn), ["Lyrics:true", "The:true"], "lyrics soon, the pitch is late; the video link is Laura's to fill, never missing");
   const draft = L.packLine(v("survivors"), b.today);
   assert.equal(draft.attn, false, "a draft is not late"); assert.equal(draft.items.length, 4); assert.ok(draft.more > 0);
   assert.equal(L.packLine(v("touchme"), b.today).text, v("touchme").packFilled + " of 17 filled");
@@ -392,4 +392,42 @@ test("the page: the Releases tab, its form and 'You answered' are there; no deve
   assert.doesNotMatch(code, /setTimeout\(function \(\) \{ \$\("msgOk"\)/, "'Sent to …' stays until the next message is started");
   /* every write is off in the sample */
   assert.match(code, /function write\(path, body\) \{\s*if \(HQ\.sample\) return Promise\.resolve\(\{ ok: false/);
+});
+
+/* ---------- fixes after review (11 Nov 2026) ---------- */
+test("replies: a thread's Reply answers the question in it that waits on Luke, not the first message", () => {
+  const root = msg("m1", "Luke", "Nova", "action", { at: iso(60), text: "Upload Night Drive" });
+  const q = msg("m2", "Nova", "Luke", "reply", { at: iso(30), re: "m1", text: "Which cover, v1 or v2?" });
+  const done = msg("m0", "Nova", "Luke", "reply", { at: iso(40), re: "m1", resolved: { by: "Luke", at: iso(35), note: "answered" } });
+  assert.equal(L.answerTarget({ ...root, replies: [done, q] }).id, "m2", "the newest open question to Luke from the one he is answering");
+  assert.equal(L.answerTarget({ ...root, replies: [done] }).id, "m1", "nothing waits on Luke: the thread's first message");
+  assert.equal(L.answerTarget({ ...root, replies: [msg("m3", "Claude", "Luke", "reply", { re: "m1" })] }).id, "m1", "someone else's question is not answered by a reply to Nova");
+  const top = msg("m5", "Nova", "Luke", "action", { at: iso(90), text: "Please fill the lyrics" });
+  const deep = msg("m6", "Nova", "Luke", "decision", { at: iso(20), re: "m5", options: ["Teaser A", "Teaser B"] });
+  assert.equal(L.answerTarget({ ...top, replies: [deep] }).id, "m6", "the newest of two open ones");
+  assert.equal(L.answerTarget({ ...msg("m7", "Luke", "all", "none"), replies: [msg("m8", "Atlas", "Luke", "reply", { re: "m7" })] }).id, "m8", "a note to everyone: any bot's question in it");
+  assert.equal(L.answerTarget(null), null);
+  /* the page files the answer under the message itself and never closes a second one by hand */
+  const staff = readFileSync(new URL("../js/hq-staff.js", import.meta.url), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
+  assert.match(staff, /re: m\.id/);
+  assert.doesNotMatch(staff, /re: L\.threadRoot/);
+  assert.doesNotMatch(staff, /write\("resolve", \{ id: m\.id, note/, "no second write that can fail without a word");
+});
+
+test("releases: every step of a release that went out keeps its button, also after release day", () => {
+  const v = (o) => ({ id: "x", status: "scheduled", released: false, ...o });
+  assert.deepEqual(L.stepButton(v({ released: true }), { owner: "Luke", status: "todo" }), { to: "done", text: "Mark as done", main: true }, "released, and Luke's teasers step still open: he can still finish it");
+  assert.deepEqual(L.stepButton(v({ released: true }), { owner: "Webmaster", status: "todo" }), { to: "done", text: "Mark done", main: false });
+  assert.deepEqual(L.stepButton(v(), { owner: "Drop", status: "done" }), { to: "todo", text: "Reopen", main: false });
+  assert.equal(L.stepButton(v({ status: "draft" }), { owner: "Drop", status: "todo" }), null);
+  assert.equal(L.stepButton(v({ status: "cancelled" }), { owner: "Drop", status: "todo" }), null);
+});
+
+test("releases: what Luke typed is kept per release, so another form never wipes it", () => {
+  assert.equal(L.formKey(""), "bs_hq_last_relform:new");
+  assert.equal(L.formKey("survivors"), "bs_hq_last_relform:survivors");
+  assert.notEqual(L.formKey(""), L.formKey("survivors"));
+  assert.match(L.formKey("x"), /^bs_hq_last_/, "logout still clears it");
+  const staff = readFileSync(new URL("../js/hq-staff.js", import.meta.url), "utf8");
+  assert.doesNotMatch(staff, /localStorage\.(setItem|getItem|removeItem)\(FORM_KEY/);
 });

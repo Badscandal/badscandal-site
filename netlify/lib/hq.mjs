@@ -221,14 +221,16 @@ export function mergeReleases(sheetReleases, deskReleases, today) {
       desk: true, id: v.id, missing: v.missing || [], tight: !!v.tight };
   };
   const desk = deskReleases.filter((v) => v && v.title && v.status === "scheduled").map(fromDesk);
-  const byKey = new Map(desk.map((d) => [songKey(d.song), d]));
+  /* every desk release keeps its own slot (by id): two with the same name are never folded into one
+     (11 Nov 2026); a sheet row takes the first desk release of its name that no other row took */
+  const used = new Set();
   const out = sheetReleases.map((r) => {
-    const d = byKey.get(songKey(r.song));
+    const d = desk.find((x) => !used.has(x.id) && songKey(x.song) === songKey(r.song));
     if (!d) return r;
-    byKey.delete(songKey(r.song));
+    used.add(d.id);
     return { ...d, status: r.status || d.status, slug: r.slug || d.slug };
   });
-  return out.concat([...byKey.values()]).sort((a, b) => ((a.date || "9") < (b.date || "9") ? -1 : (a.date || "9") > (b.date || "9") ? 1 : 0));
+  return out.concat(desk.filter((d) => !used.has(d.id))).sort((a, b) => ((a.date || "9") < (b.date || "9") ? -1 : (a.date || "9") > (b.date || "9") ? 1 : 0));
 }
 
 /* ---------- team: tasks per owner and who last logged ---------- */

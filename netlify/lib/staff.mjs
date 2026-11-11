@@ -128,12 +128,16 @@ function ibanIn(text) {
   }
   return false;
 }
-export function secretIn(text, { reference = false } = {}) {
+/* lyric: a song's words (11 Nov 2026). "the password is 2night", "my secret is 4ever yours", "pass: 24/7
+   on my mind" and "token: 1000 kisses" are lines of a song, not secrets: in lyrics the value must look
+   like a made-up secret (letters AND digits, 6 or more, no "/", not a word like 2night or 4ever). */
+const lyricSecret = (v) => /[A-Za-z]/.test(v) && v.length >= 6 && !v.includes("/") && !/^\d+[A-Za-z]+[.,!?'"]*$/.test(v);
+export function secretIn(text, { reference = false, lyric = false } = {}) {
   const s = String(text || "");
   for (const m of s.matchAll(SAID)) {
     const v = m[2];
     /* the value has to look like the secret itself: a digit in it, and not "6-digit", "60-day" or a date */
-    if (/\d/.test(v) && !/^\d{1,3}-[A-Za-z]/.test(v) && !/^\d{4}-\d{2}-\d{2}\b/.test(v)) return "a password, code or key";
+    if (/\d/.test(v) && !/^\d{1,3}-[A-Za-z]/.test(v) && !/^\d{4}-\d{2}-\d{2}\b/.test(v) && (!lyric || lyricSecret(v))) return "a password, code or key";
   }
   for (const [re, what] of KEYS) if (re.test(s)) return what;
   if (!reference && ibanIn(s)) return "a bank account number (IBAN)";
@@ -290,21 +294,17 @@ export async function sendMessage(store, now, roster, a) {
   const options = (Array.isArray(a.options) ? a.options : []).map((o) => clean(o, 80)).filter(Boolean).slice(0, 4);
   const kind = ["report", "note"].includes(low(a.kind)) ? low(a.kind) : "note";
   const m = { id: newId("m", now), at: new Date(now).toISOString(), sp: spStamp(now), from, to, text, needs, re, options, kind, resolved: null };
-  let parent = null;
+  /* what Luke's answer settles the message with (an option he picked); "answered" otherwise */
+  const settleNote = from === "Luke" ? clean(a.note, 240) : "";
+  if (settleNote) noSecrets(settleNote);
+  const pm = re ? monthOfId(re) : null;
   if (re) {
-    const pm = monthOfId(re);
     if (!pm) fail("re must be the id of the message you are answering");
-    parent = await mutate(store, msgKey(pm), [], (list) => {
-      const p = list.find((x) => x.id === re);
-      if (!p) fail("There is no message with that id", "not_found");
-      /* an answer from the person it was waiting on settles a "reply". Luke's answer settles ANYTHING
-         that waits on him (11 Nov 2026, Luke: "when i reply to a message right now nothing happens"):
-         a plain reply to an action or a decision used to leave it sitting in "Waiting on you". */
-      if (!p.resolved && from === "Luke" && isOpen(p) && p.to === "Luke") { p.resolved = { by: "Luke", at: m.at, note: "answered" }; return { value: p }; }
-      if (p.needs === "reply" && !p.resolved && (p.to === from || p.to === "all")) { p.resolved = { by: from, at: m.at, note: "answered" }; return { value: p }; }
-      return { skip: true, value: p };
-    });
+    const cur = await readDoc(store, msgKey(pm), []);
+    if (!(Array.isArray(cur.data) ? cur.data : []).some((x) => x.id === re)) fail("There is no message with that id", "not_found");
   }
+  /* The answer is saved FIRST, and only then is the message it answers settled (fixed 11 Nov 2026): a
+     full board or a busy desk must never close the question while losing the answer to it. */
   await mutate(store, msgKey(m.at.slice(0, 7)), [], (list) => {
     const day = m.sp.slice(0, 10);
     if (list.filter((x) => x.from === from && x.sp.slice(0, 10) === day).length >= LIMITS.messagesPerSenderPerDay) fail(`${from} has already sent ${LIMITS.messagesPerSenderPerDay} messages today, which is the limit. Something is repeating: stop, and tell Nova.`, "limit");
@@ -312,7 +312,26 @@ export async function sendMessage(store, now, roster, a) {
     list.push(m);
     return { value: m };
   });
-  return { message: m, parent };
+  let parent = null;
+  if (re) {
+    try {
+      parent = await mutate(store, msgKey(pm), [], (list) => {
+        const p = list.find((x) => x.id === re);
+        if (!p) return { skip: true, value: null };
+        /* an answer from the person it was waiting on settles a "reply". Luke's answer settles ANYTHING
+           that waits on him (11 Nov 2026, Luke: "when i reply to a message right now nothing happens"):
+           a plain reply to an action or a decision used to leave it sitting in "Waiting on you". */
+        if (!p.resolved && from === "Luke" && isOpen(p) && p.to === "Luke") { p.resolved = { by: "Luke", at: m.at, note: settleNote || "answered" }; return { value: p }; }
+        if (p.needs === "reply" && !p.resolved && (p.to === from || p.to === "all")) { p.resolved = { by: from, at: m.at, note: "answered" }; return { value: p }; }
+        return { skip: true, value: p };
+      });
+    } catch {
+      /* the answer is on the board; the question just stays open (the caller sees settled: false). Never
+         throw here: the sender would think nothing was sent and send the answer twice. */
+      parent = null;
+    }
+  }
+  return { message: m, parent, settled: !!(parent && parent.resolved && parent.resolved.at === m.at) };
 }
 export async function resolveMessage(store, now, roster, a) {
   const by = whoIs(a.by, roster, { people: true });
@@ -594,7 +613,9 @@ export const PACK_FIELDS = [
   F("producers", "Producers", "Producers", "line", "stores", { hint: "Optional. As they should be credited." }),
   F("featuring", "Featured artists", "Featured artists", "line", "stores", { hint: "Only artists credited in the title." }),
   F("copyright", "Copyright line (℗ and ©)", "Copyright line", "line", "stores", { neededBy: "upload", hint: 'For example "℗ 2026 BADSCANDAL · © 2026 BADSCANDAL". Drop needs it for the upload.' }),
-  F("lyrics", "Lyrics, full text", "Lyrics", "text", "lyrics", { neededBy: "lyrics", max: 8000, fill: ["Verse"], hint: "The whole text, line by line, as sung. Verse puts them live in the stores." }),
+  /* Luke's words only (11 Nov 2026): Verse puts them live, it never writes them (the guide: "never write,
+     guess or copy lyrics"), so no bot fills this field */
+  F("lyrics", "Lyrics, full text", "Lyrics", "text", "lyrics", { neededBy: "lyrics", max: 8000, hint: "The whole text, line by line, as sung. Verse puts them live in the stores." }),
   F("mood", "Mood (for the pitch)", "Mood", "line", "pitch", { neededBy: "pitch", hint: 'Can wait. For example "late night, euphoric".' }),
   F("instruments", "Instruments (for the pitch)", "Instruments", "line", "pitch", { neededBy: "pitch", hint: 'Can wait. For example "synths, drum machine, vocal chops".' }),
   F("story", "The song in two lines (for the pitch)", "The song in two lines", "text", "pitch", { neededBy: "pitch", max: 400, hint: "Can wait. What the song is about and why it matters, for Atlas's Spotify pitch." }),
@@ -602,11 +623,14 @@ export const PACK_FIELDS = [
   F("upc", "UPC", "UPC", "line", "later", { fill: ["Drop"], max: 40, hint: "Drop fills it from RouteNote." }),
   F("storeStatus", "Status at the distributor", "Status at the distributor", "line", "later", { fill: ["Drop"], hint: 'Drop keeps it current, for example "in review at RouteNote".' }),
   F("spotifyTrack", "Spotify track link", "Spotify track link", "link", "later", { fill: ["Atlas", "Webmaster"], hint: "https://open.spotify.com/track/... once the song is out." }),
-  F("video", "Video (link)", "Video", "link", "later", { neededBy: "video", fill: ["Laura"], hint: "Laura fills it once the video is scheduled." }),
+  /* Laura's RESULT, not her input (11 Nov 2026): never "missing" before her step, like the ISRC */
+  F("video", "Video (link)", "Video", "link", "later", { fill: ["Laura"], hint: "Laura fills it once the video is scheduled." }),
   F("page", "Song page (link)", "Song page", "link", "later", { fill: ["Webmaster"], hint: "Webmaster fills it once the page is live: https://badscandal.com/<slug>" }),
   F("notes", "Anything else the team should know", "Notes", "text", "notes", { max: 1000, hint: "Optional." }),
 ];
-const FIELD = Object.fromEntries(PACK_FIELDS.map((f) => [f.key, f]));
+/* null prototype (11 Nov 2026): "constructor", "toString" or "__proto__" sent as a pack key must be an
+   unknown field, not something every plain object already has */
+const FIELD = Object.assign(Object.create(null), Object.fromEntries(PACK_FIELDS.map((f) => [f.key, f])));
 /* days = how many days before the release day the step is due */
 export const RELEASE_STEPS = [
   { key: "upload", label: "Uploaded to RouteNote with the release date", owner: "Drop", days: 21 },
@@ -619,7 +643,7 @@ export const RELEASE_STEPS = [
   { key: "ads", label: "Ad drafts ready, inside the cap", owner: "Forge", days: 1 },
   { key: "live", label: "Release day: Spotify link on the song page and the home card", owner: "Webmaster", days: 0 },
 ];
-const STEP = Object.fromEntries(RELEASE_STEPS.map((s) => [s.key, s]));
+const STEP = Object.assign(Object.create(null), Object.fromEntries(RELEASE_STEPS.map((s) => [s.key, s])));
 export const STEP_STATUS = ["todo", "working", "done", "blocked"];
 export const RELEASE_STATUS = ["draft", "scheduled", "cancelled"];
 const REL_KEY = "releases.json";
@@ -655,8 +679,20 @@ export function packValue(key, v) {
     out = f.choices.find((c) => low(c) === low(s));
     if (!out) fail(`${f.short} must be one of: ${f.choices.join(", ")}.`);
   } else out = f.kind === "text" ? cleanText(v, f.max) : clean(v, f.max);
-  noSecrets(out);
+  packSecrets(f, out);
   return out;
+}
+/* The refusal says WHICH line, its digits hidden, and what to do: whoever filled it (Luke, Claude or a
+   bot) can act on it. "Ask Luke" is no use to Verse (fixed 11 Nov 2026). */
+function packSecrets(f, out) {
+  const lines = String(out).split("\n");
+  for (let i = 0; i < lines.length; i++) {
+    const what = secretIn(lines[i], { lyric: f.key === "lyrics" });
+    if (!what) continue;
+    const q = clean(lines[i], 60).replace(/\d/g, "•");
+    fail(`${f.short}${lines.length > 1 ? `, line ${i + 1}` : ""} ("${q}${lines[i].trim().length > 60 ? "…" : ""}") looks like ${what}. Nothing was saved. Passwords, codes, keys, card and bank account numbers never go in the release pack: take that out and save again.`, "secret");
+  }
+  if (secretIn(out, { lyric: f.key === "lyrics" })) noSecrets(out);
 }
 
 /* The steps, dated back from the release day. A due date already past becomes TODAY: a release sent
@@ -709,9 +745,11 @@ export function findRelease(list, song, { drafts = true } = {}) {
   fail(`There is no release called "${clean(song, 60)}". ` + (names.length ? `The releases on the desk are: ${names.join(", ")}.` : "There are no releases on the desk yet."));
 }
 const logIt = (r, at, by, what) => { r.log = (r.log || []).concat({ at, by, what: clean(what, 240) }).slice(-LIMITS.releaseLog); }; /* the last 30 changes */
-/* one note to the whole team; a full board must not undo the release change that was already saved */
-async function tellTeam(store, now, roster, from, text) {
-  try { return (await sendMessage(store, now, roster, { from, to: "all", text, needs: "none" })).message.id; } catch { return null; }
+/* one note to the whole team; a full board must not undo the release change that was already saved.
+   Sent by "HQ", the site itself (11 Nov 2026): it names who did it, and it is not a message Luke typed,
+   so it doesn't read as one on his own board. */
+async function tellTeam(store, now, roster, text) {
+  try { return (await sendMessage(store, now, roster, { from: "HQ", to: "all", text, needs: "none" })).message.id; } catch { return null; }
 }
 
 /* Luke or Claude: start a draft, or change one. pack = only the fields being set ("" clears one);
@@ -738,7 +776,13 @@ export async function saveRelease(store, now, roster, a) {
       if (!r) fail(`There is no release with the id "${id}".`);
       if (r.status === "cancelled") fail(`${r.title} was cancelled. Start a new release instead.`);
       const changes = [];
-      if (title && title !== r.title) { changes.push(`renamed it from "${r.title}" to "${title}"`); r.title = title; }
+      if (title && title !== r.title) {
+        /* two live releases with one name: the bots could only ever reach one of them, and /hq's merged
+           list would drop the other (fixed 11 Nov 2026) */
+        const k = songKey(title), other = k && list.find((x) => x !== r && x.status !== "cancelled" && (x.id === k || songKey(x.title) === k));
+        if (other) fail(`There is already a release called "${other.title}"${other.status === "draft" ? " (a draft)" : ""}. Pick another title, or cancel that one first. Nothing was saved.`, "exists");
+        changes.push(`renamed it from "${r.title}" to "${title}"`); r.title = title;
+      }
       if (dateGiven && date !== (r.date || "")) {
         if (r.status === "scheduled") fail(`${r.title} has already gone to the team. Use "Change the date" instead: it moves every open step and tells the team.`);
         if (date && date < today) fail(past(date));
@@ -755,15 +799,19 @@ export async function saveRelease(store, now, roster, a) {
       return { value: r };
     }
     if (!title) fail("A release needs its title.");
-    const base = releaseId(title);
-    if (!base) fail("The title needs at least one letter or digit.");
     if (date && date < today) fail(past(date));
-    const clash = list.find((x) => x.id === base);
-    /* the same form sent twice must not make two releases; a cancelled one may be started again */
-    if (clash && clash.status !== "cancelled") fail(`There is already a release called "${clash.title}" (${clash.status === "draft" ? "a draft" : "sent to the team"}). Open it and edit it instead of starting a second one.`, "exists");
+    /* the same form sent twice must not make two releases; a cancelled one may be started again. The
+       whole name is compared (not the 40-character id), so two long titles that only start alike are two
+       releases. */
+    const k = songKey(title), clash = k && list.find((x) => x.status !== "cancelled" && (x.id === k || songKey(x.title) === k));
+    if (clash) fail(`There is already a release called "${clash.title}" (${clash.status === "draft" ? "a draft" : "sent to the team"}). Open it and edit it instead of starting a second one.`, "exists");
+    /* a title with no Latin letter or digit ("Ночь") still gets an address of its own */
+    const base = releaseId(title) || "r" + Number(now).toString(36);
     let nid = base;
     for (let n = 2; list.some((x) => x.id === nid); n++) nid = base + n;
-    if (list.length >= LIMITS.releases) fail(`The desk holds ${LIMITS.releases} releases, which is the limit. Nothing was saved. Ask Claude to clear out old ones.`, "limit");
+    if (list.length >= LIMITS.releases) fail(`The desk holds ${LIMITS.releases} releases, which is the limit. Nothing was saved. ` + (by === "Claude"
+      ? "Remove old ones first (POST /api/staff/release/remove with the id): a cancelled release, or one that came out more than 90 days ago."
+      : "Ask Claude to remove old ones: a cancelled release, or one that came out more than 90 days ago, can be removed."), "limit");
     const r = { id: nid, title, date, status: "draft", createdAt: at, createdBy: by, updatedAt: at, sentAt: null, tight: false,
       pack: Object.fromEntries(Object.entries(values).filter(([, v]) => v)), steps: [], log: [] };
     logIt(r, at, by, `${by} started the pack` + (date ? ` for ${dayWords(date)}` : ""));
@@ -792,7 +840,7 @@ export async function sendRelease(store, now, roster, a) {
   });
   if (out.already) return { ...out, told: null };
   const r = out.release;
-  const told = await tellTeam(store, now, roster, by, `New release: ${r.title}, out ${dayWords(r.date)}. The pack is on the desk (tool release_pack). Your steps and their dates are in my_day.` +
+  const told = await tellTeam(store, now, roster, `New release from ${by}: ${r.title}, out ${dayWords(r.date)}. The pack is on the desk (tool release_pack). Your steps and their dates are in my_day.` +
     (r.tight ? ` It is ${daysBetween(today, r.date)} days away, so the steps that should already be done are due today.` : ""));
   return { ...out, told };
 }
@@ -814,14 +862,14 @@ export async function moveRelease(store, now, roster, a) {
     if (r.status === "scheduled") {
       const s = scheduleSteps(date, today);
       for (const st of r.steps) if (st.status !== "done") { const n = s.steps.find((x) => x.key === st.key); if (n) st.due = n.due; }
-      r.tight = r.tight || s.tight;
+      r.tight = s.tight; /* moved months out, every open step has its full time again: no longer "sent late" */
     }
     r.date = date; r.updatedAt = at;
     logIt(r, at, by, from ? `${by} moved the date from ${dayWords(from)} to ${dayWords(date)}` : `${by} set the release day to ${dayWords(date)}`);
     return { value: { release: r, moved: true, from } };
   });
   if (!out.moved || out.release.status !== "scheduled") return { ...out, told: null };
-  const told = await tellTeam(store, now, roster, by, `${out.release.title} moved from ${dayWords(out.from)} to ${dayWords(date)}. Every step that is not done has a new date: see my_day.`);
+  const told = await tellTeam(store, now, roster, `${by} moved ${out.release.title} from ${dayWords(out.from)} to ${dayWords(date)}. Every step that is not done has a new date: see my_day.`);
   return { ...out, told };
 }
 
@@ -840,8 +888,25 @@ export async function cancelRelease(store, now, roster, a) {
     return { value: { release: r, was } };
   });
   if (out.was !== "scheduled") return { ...out, told: null };
-  const told = await tellTeam(store, now, roster, by, `${out.release.title} (out ${dayWords(out.release.date)}) is cancelled. Stop working on its steps.`);
+  const told = await tellTeam(store, now, roster, `${by} cancelled ${out.release.title} (out ${dayWords(out.release.date)}). Stop working on its steps.`);
   return { ...out, told };
+}
+
+/* Luke or Claude: take an old release off the desk for good (11 Nov 2026), so the 60-release limit
+   never locks the desk. Only a cancelled release, or one that came out more than 90 days ago. */
+export async function removeRelease(store, now, roster, a) {
+  const by = whoIs(a.by, roster, { people: true });
+  lukeOrClaude(by, "remove a release");
+  const today = spDay(now);
+  return mutate(store, REL_KEY, [], (list) => {
+    const i = list.findIndex((x) => x.id === clean(a.id, 60));
+    if (i < 0) fail(`There is no release with the id "${clean(a.id, 60)}".`);
+    const r = list[i];
+    const old = r.status === "scheduled" && isDay(r.date) && daysBetween(r.date, today) > 90;
+    if (r.status !== "cancelled" && !old) fail(`${r.title} can't be removed: only a cancelled release, or one that came out more than 90 days ago, can be. Cancel it first if it is not happening.`, "not_allowed");
+    list.splice(i, 1);
+    return { value: { removed: true, id: r.id, title: r.title, left: list.length } };
+  });
 }
 
 /* who may fill a field: Luke and Claude anything; Nova whatever any bot may fill; a bot its own */
@@ -889,6 +954,8 @@ export async function setStep(store, now, roster, a) {
     const st = (r.steps || []).find((s) => s.key === want || low(s.label) === want);
     if (!st) fail(`"${clean(a.step, 60)}" is not a step of this release. The steps are: ${r.steps.map((s) => s.key).join(", ")}.`);
     if (by !== st.owner && !["Nova", "Claude", "Luke"].includes(by)) fail(`"${st.label}" is ${st.owner}'s step. Only ${st.owner}, Nova, Claude or Luke can mark it. Mark only your own steps.`, "not_allowed");
+    /* Luke's own step is his approval ("Only Luke approves ... public posts"): nobody else marks it done */
+    if (st.owner === "Luke" && status === "done" && by !== "Luke") fail(`"${st.label}" is Luke's own approval: only Luke can mark it done, on his dashboard. If it is ready for him, send Luke ONE message.`, "not_allowed");
     if (st.status === status && st.note === note && (!link || st.link === link)) return { skip: true, value: { release: r, st, changed: false } };
     Object.assign(st, { status, note, ...(link ? { link } : {}), at, by });
     r.updatedAt = at;
@@ -976,6 +1043,13 @@ function releaseOrder(views) {
   const rank = (v) => (v.status === "cancelled" ? 2 : v.released ? 1 : 0);
   return views.slice().sort((a, b) => rank(a) - rank(b) || (rank(a) === 1 ? ((a.date || "") < (b.date || "") ? 1 : -1) : ((a.date || "9") < (b.date || "9") ? -1 : (a.date || "9") > (b.date || "9") ? 1 : 0)));
 }
+/* A release as the board sends it (11 Nov 2026): without the lyrics (their length instead) and without
+   the change log, so a refresh of /hq doesn't carry every song's full text each time. The page asks for
+   ONE whole release (GET /api/staff/release?id=) when Luke opens its details or its form. */
+export function slimRelease(v) {
+  const { lyrics, ...pack } = v.pack || {};
+  return { ...v, pack, lyricsChars: lyrics ? String(lyrics).length : 0, log: [], logCount: (v.log || []).length, slim: true };
+}
 /* what the page needs to build the form and the pipeline without hard-coding either */
 export const packFieldsOut = () => PACK_FIELDS.map((f) => ({ key: f.key, label: f.label, short: f.short, kind: f.kind, required: f.required, neededBy: f.neededBy, choices: f.choices, hint: f.hint, fill: f.fill, group: f.group, max: f.max }));
 export const releaseStepsOut = () => RELEASE_STEPS.map((s) => ({ key: s.key, label: s.label, owner: s.owner, days: s.days }));
@@ -995,7 +1069,7 @@ export function board(desk, now, hq) {
     updates: updates.slice(0, 60),
     messages: threads(desk.messages).slice(0, 80).map((t) => ({ ...mark(t), replies: t.replies.map(mark) })),
     answered: answeredByLuke(desk.messages, desk.seen, now),
-    releases: releaseOrder(views).slice(0, 20), packFields: packFieldsOut(), releaseSteps: releaseStepsOut(),
+    releases: releaseOrder(views).slice(0, 20).map(slimRelease), packFields: packFieldsOut(), releaseSteps: releaseStepsOut(),
     waiting: { luke: waitingOn(desk.messages, "Luke"), claude: waitingOn(desk.messages, "Claude"), bots: desk.messages.filter((m) => isOpen(m) && !PEOPLE.includes(m.to)).length },
     income: desk.income,
     connector: { botsOn: desk.config.botsOn, changedAt: desk.config.changedAt, lastUsed: lastSeen ? { bot: lastSeen[0], at: lastSeen[1].at, tool: lastSeen[1].tool } : null,
@@ -1040,11 +1114,13 @@ export function checkReport({ desk, hq, hqState, now }) {
   const stale = desk.messages.filter((m) => isOpen(m) && m.to !== "Luke" && age(m) >= 24);
   for (const m of stale.slice(0, 5)) problems.push(`${m.to} has not answered ${m.from} for ${age(m)} h: "${m.text.slice(0, 70)}"`);
   /* 4. the releases on the desk: late and blocked steps, and a pack field a step needs within 3 days */
+  /* ONE line per release for its late steps (11 Nov 2026): four releases sent late made 31 lines and
+     pushed the rest of the report past its cut */
   for (const v of (desk.releases || []).map((r) => releaseView(r, today)).filter(releaseActive)) {
-    for (const st of v.steps) {
-      if (st.status === "blocked") problems.push(`${v.title}: ${st.label} is blocked (${st.owner})` + (st.note ? `: ${st.note.replace(/\s+/g, " ").slice(0, 120)}` : ""));
-      else if (st.late) problems.push(`${v.title}: ${st.label} is late (${st.owner}, due ${dayWords(st.due)})`);
-    }
+    for (const st of v.steps) if (st.status === "blocked") problems.push(`${v.title}: ${st.label} is blocked (${st.owner})` + (st.note ? `: ${st.note.replace(/\s+/g, " ").slice(0, 120)}` : ""));
+    const late = v.steps.filter((st) => st.late && st.status !== "blocked");
+    if (late.length === 1) problems.push(`${v.title}: ${late[0].label} is late (${late[0].owner}, due ${dayWords(late[0].due)})`);
+    else if (late.length) problems.push(`${v.title}: ${late.length} steps late: ` + late.map((st) => `${st.key} (${st.owner}, due ${dayWords(st.due)})`).join(", "));
     if (v.released) continue;
     const soon = {};
     for (const m of v.missing) {
@@ -1065,13 +1141,26 @@ export function checkReport({ desk, hq, hqState, now }) {
     const cap = hq && hq.money && hq.money.cap;
     if (cap) say(cap.status === "ok", `Ad spend this month: ${cap.currency} ${cap.spent.toFixed(2)} of ${cap.amount}` + (cap.status === "ok" ? "" : cap.status === "warn" ? " (past the 750 warning)" : " (at or past 900: every ad must be off)"));
     const next = hq && hq.next;
-    if (next) say(!next.late, `Next release: ${next.song}, ${next.date} (${next.daysToGo} days)` + (next.late ? `, ${next.late} step${next.late === 1 ? "" : "s"} late: ${next.steps.filter((s) => s.late).map((s) => s.label + " (" + s.owner + ")").join("; ")}` : ", nothing late"));
+    /* a desk release's late steps are already listed above, so they are not said twice */
+    if (next) say(!next.late, `Next release: ${next.song}, ${next.date} (${next.daysToGo} days)` + (next.late ? `, ${next.late} step${next.late === 1 ? "" : "s"} late` + (next.desk ? " (listed above)" : `: ${next.steps.filter((s) => s.late).map((s) => s.label + " (" + s.owner + ")").join("; ")}`) : ", nothing late"));
   }
   /* the report quotes cells from the sheet and lines from the bots: anything that looks like a
      password or an account number is left out here, so the report itself always goes through */
   const scrub = (list) => list.map((t) => (secretIn(t) ? "(one line left out: it looked like a password, a code or an account number)" : t));
   problems.splice(0, problems.length, ...scrub(problems)); lines.splice(0, lines.length, ...scrub(lines));
   const title = `HQ check, ${today} ${part}: ` + (problems.length ? `${problems.length} thing${problems.length === 1 ? "" : "s"} to look at` : "all running");
-  const text = [title, ...(problems.length ? ["", "Needs a look:", ...problems.map((p) => "- " + p)] : []), "", "Running:", ...lines.map((l) => "- " + l)].join("\n").slice(0, 1500);
-  return { title, problems, lines, text, part, day: today };
+  return { title, problems, lines, text: reportText(title, problems, lines), part, day: today };
+}
+/* The message is at most 1500 characters, cut by WHOLE lines (11 Nov 2026): what doesn't fit is
+   counted ("+N more on /hq"), never cut mid-word, and "Running:" keeps at least its first lines. */
+export function reportText(title, problems, lines, max = 1500) {
+  const one = (t) => "- " + (t.length > 300 ? t.slice(0, 299) + "…" : t);
+  const build = (np, nl) => [title, ...(problems.length ? ["", "Needs a look:", ...problems.slice(0, np).map(one), ...(np < problems.length ? [`- +${problems.length - np} more on /hq`] : [])] : []),
+    "", "Running:", ...lines.slice(0, nl).map(one), ...(nl < lines.length ? [`- +${lines.length - nl} more on /hq`] : [])].join("\n");
+  let np = problems.length, nl = lines.length;
+  while (build(np, nl).length > max && nl > 2) nl--;
+  while (build(np, nl).length > max && np > 0) np--;
+  while (build(np, nl).length > max && nl > 0) nl--;
+  const out = build(np, nl);
+  return out.length > max ? out.slice(0, out.lastIndexOf("\n", max)) : out;
 }

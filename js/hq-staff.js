@@ -35,7 +35,7 @@
          and the line under a thread he answered on the board */
       landed: {}, tsent: {},
       /* the release pipeline: busy / error / the inline question per card, notes, open disclosures, the form */
-      rel: { busy: "", err: {}, ask: null, note: {}, open: {}, fold: {} }, form: null };
+      rel: { busy: "", err: {}, ask: null, note: {}, open: {}, fold: {}, full: {}, loading: {} }, form: null };
   }
   var PEOPLE = ["Luke", "Claude", "HQ", "all"];
   var KEEP_MS = 10 * 60000; /* how long "Sent to Nova at 17:03" stays in the place of what was answered */
@@ -272,18 +272,23 @@
     if (fk) { var el = $("messages").querySelector('[data-f="' + fk.replace(/[^a-z0-9:]/gi, "") + '"]'); if (el) { el.focus(); try { el.setSelectionRange(s0, s1); } catch (e) {} } }
   }
   /* what still waits on Luke: the board's list without what he has just answered (the board may not
-     have caught up yet) */
-  function waitingNow() { return ((board && board.waiting && board.waiting.luke) || []).filter(function (m) { return !ui.landed[m.id]; }); }
+     have caught up yet). Only for 10 minutes: after that the board's own word counts again, so the badge,
+     this list and Today's "Needs attention" can never disagree for good. */
+  function waitingNow() { return ((board && board.waiting && board.waiting.luke) || []).filter(function (m) { var x = ui.landed[m.id]; return !(x && Date.now() - x.at < KEEP_MS); }); }
   function drawBadges() {
     var n = board ? waitingNow().length : 0;
     ["msgBadge", "msgBadge2", "waitN"].forEach(function (id) { $(id).hidden = !n; $(id).textContent = n; $(id).setAttribute("aria-label", n + " waiting on you"); });
     $("moreDot").hidden = !n;
   }
   function focusIn(sel) { var el = $("messages").querySelector(sel); if (el) el.focus(); }
-  /* answer a message: under the message that starts its thread (so the board shows it), to whoever wrote it */
-  function answer(m, text) {
-    return write("message", { to: m.from === "Luke" ? m.to : m.from, text: text, needs: "none", re: L.threadRoot(board, m) });
+  /* answer a message, to whoever wrote it, filed under THAT message (11 Nov 2026: it used to be filed under
+     the first message of its thread, which closed an unrelated request at the top of the thread). The desk
+     shows answers at any depth in their thread, and settles the message itself: the answer says
+     settled: true when it did. note = the option Luke picked, kept with the closed message. */
+  function answer(m, text, note) {
+    return write("message", { to: m.from === "Luke" ? m.to : m.from, text: text, needs: "none", re: m.id, note: note || "" });
   }
+  var waitsOnLuke = function (x) { return !!x && !x.resolved && x.to === "Luke" && !!x.needs && x.needs !== "none"; };
   $("messages").addEventListener("input", function (ev) { var k = ev.target.getAttribute && ev.target.getAttribute("data-f"); if (k) ui.drafts[k] = ev.target.value; });
   $("messages").addEventListener("click", function (ev) {
     var b = ev.target.closest && ev.target.closest("[data-act]");
@@ -295,15 +300,20 @@
     var sel = function (a) { return '[data-act="' + a + '"][data-k="' + k.replace(/[^a-z0-9:]/gi, "") + '"]'; };
     /* it landed: the item leaves "Waiting on you" at once, a line takes its place, and "You answered"
        lists it before the board has even caught up */
-    var land = function (kind, text) {
+    var land = function (x, kind, text) { /* x = the message that was answered or settled */
       var now = Date.now(), iso = new Date(now).toISOString();
-      ui.landed[m.id] = { m: m, at: now, line: L.sentLine(kind, m.from, now, text) };
-      if (board.waiting && board.waiting.luke) board.waiting.luke = board.waiting.luke.filter(function (x) { return x.id !== m.id; });
-      var rep = { by: "Luke", kind: kind === "reply" ? "reply" : "settled", text: kind === "done" ? "Marked as done" : text, at: iso, sp: L.spStampOf(now), seen: PEOPLE.indexOf(m.from) >= 0 ? null : false, seenAt: null };
-      board.answered = [{ id: m.id, from: m.from, to: m.to, text: m.text, needs: m.needs, at: m.at, sp: m.sp, reply: rep }].concat((board.answered || []).filter(function (a) { return a.id !== m.id; })).slice(0, 10);
+      ui.landed[x.id] = { m: x, at: now, line: L.sentLine(kind, x.from, now, text) };
+      if (board.waiting && board.waiting.luke) board.waiting.luke = board.waiting.luke.filter(function (y) { return y.id !== x.id; });
+      var rep = { by: "Luke", kind: kind === "reply" ? "reply" : "settled", text: kind === "done" ? "Marked as done" : text, at: iso, sp: L.spStampOf(now), seen: PEOPLE.indexOf(x.from) >= 0 ? null : false, seenAt: null };
+      board.answered = [{ id: x.id, from: x.from, to: x.to, text: x.text, needs: x.needs, at: x.at, sp: x.sp, reply: rep }].concat((board.answered || []).filter(function (a) { return a.id !== x.id; })).slice(0, 10);
       ui.reply = ""; ui.ask = null;
       draw(); /* the badge, Today's attention and the list, all at once */
-      var el = $("wait-" + safe(m.id)); if (el && k.charAt(0) === "w") el.focus();
+      var el = $("wait-" + safe(x.id)); if (el && k.charAt(0) === "w") el.focus();
+    };
+    /* sent, but the desk couldn't close what it answers: said in the same place, never hidden */
+    var stillWaiting = function (x, what) {
+      ui.err[k] = what + " went to " + x.from + " at " + L.spStampOf(Date.now()).slice(11, 16) + ", but it is still waiting on you: the desk couldn't close it. Press Mark as done when it's finished.";
+      drawMessages();
     };
     var settle = function (r, after) { /* one write came back */
       ui.busy = "";
@@ -318,22 +328,21 @@
     else if (act === "opt-no") { ui.ask = null; drawMessages(); }
     else if (act === "done") {
       ui.busy = k; drawMessages();
-      write("resolve", { id: m.id }).then(function (r) { if (settle(r)) { land("done"); reload(); } });
+      write("resolve", { id: m.id }).then(function (r) { if (settle(r)) { land(m, "done"); reload(); } });
     }
     else if (act === "send") {
       var text = String(ui.drafts[k] || "").trim();
       if (text.length < 2) { ui.err[k] = "Write your reply first."; drawMessages(); focusIn('[data-f="' + k.replace(/[^a-z0-9:]/gi, "") + '"]'); return; }
       ui.busy = k; drawMessages();
-      var root = L.threadRoot(board, m), waits = !m.resolved && m.to === "Luke" && m.needs && m.needs !== "none";
-      answer(m, text).then(function (r) {
+      /* from a thread on the board: the question in it that waits on Luke, else its first message */
+      var target = k.charAt(0) === "b" ? L.answerTarget(m) : m, waits = waitsOnLuke(target);
+      answer(target, text).then(function (r) {
         if (!settle(r, function () { delete ui.drafts[k]; ui.reply = ""; })) return;
-        var to = m.from === "Luke" ? m.to : m.from;
-        if (waits) land("reply", text);
-        if (k.charAt(0) === "b") { ui.tsent[k] = { at: Date.now(), line: L.sentLine("reply", to, Date.now()) }; drawMessages(); }
-        /* the desk settles what Luke answers when the answer points at it (11 Nov 2026: whatever it
-           needed); ours points at the start of the thread, so a message deeper in a thread that was
-           waiting on him is settled here */
-        if (waits && root !== m.id) return write("resolve", { id: m.id, note: "answered" }).then(function () { reload(); });
+        var to = target.from === "Luke" ? target.to : target.from;
+        if (k.charAt(0) === "b") ui.tsent[k] = { at: Date.now(), line: L.sentLine("reply", to, Date.now()) };
+        if (waits && r.j.settled) land(target, "reply", text);
+        else if (waits) stillWaiting(target, "Your reply");
+        else drawMessages();
         reload();
       });
     }
@@ -341,14 +350,15 @@
       var choice = (m.options || [])[ui.ask.i];
       if (choice == null) return;
       ui.busy = k; drawMessages();
-      answer(m, choice).then(function (r) {
-        if (!r.ok) { settle(r); return; }
-        return write("resolve", { id: m.id, note: String(choice).slice(0, 240) }).then(function (r2) {
-          ui.busy = ""; ui.ask = null;
-          if (!r2.ok) { ui.err[k] = "Your answer was sent, but it couldn't be marked as done: " + r2.error; drawMessages(); }
-          else { delete ui.err[k]; land("option", choice); }
-          reload();
-        });
+      /* one write: the answer, and the desk closes the decision with the option as its note. A one-letter
+         option ("A") is sent as "Answer: A" (the board takes nothing shorter than 2 characters). */
+      var said = String(choice).trim().length < 2 ? "Answer: " + choice : String(choice);
+      answer(m, said, String(choice).slice(0, 240)).then(function (r) {
+        if (!settle(r)) return;
+        ui.ask = null;
+        if (r.j.settled) land(m, "option", choice);
+        else stillWaiting(m, "Your answer “" + choice + "”");
+        reload();
       });
     }
   });
@@ -440,13 +450,33 @@
      (save), release/send, release/date, release/cancel, release/step. The sheet's own release rows
      keep their card (HQ.sheetReleaseCard) when the desk doesn't have that song. */
   var relById = {};
-  var FORM_KEY = "bs_hq_last_relform"; /* what Luke typed and hasn't saved, on this device (logout clears every bs_hq_last_*) */
+  /* what Luke typed and hasn't saved stays on this device, one copy per release (L.formKey); logout
+     clears every bs_hq_last_* */
   function relFields() { return (board && board.packFields) || []; }
   function hhmm(ms) { return L.spStampOf(ms).slice(11, 16); }
   var isLink = function (v) { return /^https:\/\//.test(String(v || "")); };
   function outLink(url, text, cls) { return isLink(url) ? '<a' + (cls ? ' class="' + cls + '"' : "") + ' href="' + esc(url) + '" target="_blank" rel="noopener noreferrer">' + esc(text) + "</a>" : esc(text); }
+  /* The board's copy of a release has no lyrics and no change log (11 Nov 2026: they made every refresh
+     heavy). The whole release is asked for when Luke opens its details or its form, and kept while it is
+     current (same updatedAt as the board's copy). */
+  function fullOf(v) { var f = v && ui.rel.full[v.id]; return v && !v.slim ? v : f && f.updatedAt === v.updatedAt ? f : null; }
+  function loadFull(id) {
+    var v = relById[id];
+    if (!v || fullOf(v)) return Promise.resolve(fullOf(v));
+    if (ui.rel.loading[id]) return ui.rel.loading[id];
+    var p = ui.rel.loading[id] = HQ.getJSON("/api/staff/release?id=" + encodeURIComponent(id) + (HQ.sample ? "&sample=1" : "")).then(function (res) {
+      delete ui.rel.loading[id];
+      if (HQ.authFail(res)) return null;
+      if (res.s !== 200 || !res.j || !res.j.release) { ui.rel.err[id] = "Couldn't open the details (" + res.s + "). Try again."; drawReleases(); return null; }
+      ui.rel.full[id] = res.j.release; delete ui.rel.err[id];
+      drawReleases();
+      return res.j.release;
+    }, function () { delete ui.rel.loading[id]; ui.rel.err[id] = "No connection: couldn't open the details. Try again."; drawReleases(); return null; });
+    return p;
+  }
   function putRelease(v) {
     if (!board || !v) return;
+    if (!v.slim) ui.rel.full[v.id] = v; /* a write answers with the whole release */
     var list = board.releases || (board.releases = []), i = list.map(function (x) { return x.id; }).indexOf(v.id);
     if (i >= 0) list[i] = v; else list.unshift(v);
     relById[v.id] = v;
@@ -456,11 +486,10 @@
      has "Mark as done", every other one a small "Mark done" / "Reopen" for Luke */
   function relStep(v, s) {
     var st = L.stepState(s, board.today), mine = s.owner === "Luke", k = v.id + ":" + s.key, busy = ui.rel.busy === "step:" + k, dis = HQ.sample || busy ? " disabled" : "";
-    var btn = "";
-    if (v.status === "scheduled" && !v.released) {
-      var to = st.done ? "todo" : "done", attrs = ' type="button" data-rel="step" data-id="' + esc(v.id) + '" data-step="' + esc(s.key) + '" data-to="' + to + '"' + dis;
-      btn = mine && !st.done ? '<button class="copybtn"' + attrs + ">" + (busy ? "Saving…" : "Mark as done") + "</button>"
-        : '<button class="linkbtn"' + attrs + ">" + (busy ? "Saving…" : st.done ? "Reopen" : "Mark done") + "</button>";
+    var btn = "", sb = L.stepButton(v, s);
+    if (sb) {
+      var attrs = ' type="button" data-rel="step" data-id="' + esc(v.id) + '" data-step="' + esc(s.key) + '" data-to="' + sb.to + '"' + dis;
+      btn = '<button class="' + (sb.main ? "copybtn" : "linkbtn") + '"' + attrs + ">" + (busy ? "Saving…" : esc(sb.text)) + "</button>";
     }
     var lk = isLink(s.link) ? outLink(s.link, "Open the link", "rl") : "";
     return '<li class="' + (st.done ? "done" : st.bad ? "bad" : "") + '"><i aria-hidden="true"></i><div class="rs"><b>' + esc(s.label) + "</b>" +
@@ -488,6 +517,10 @@
   /* "See the files and details": every filled field, read-only (lyrics in their own scrolling box,
      links only when https://), then the latest changes */
   function relPack(v) {
+    var whole = fullOf(v), open = !!ui.rel.open[v.id];
+    if (open && !whole && !ui.rel.err[v.id]) loadFull(v.id); /* after a failure, only a new tap asks again */
+    if (!whole) return '<details class="bwhy" data-relopen="' + esc(v.id) + '"' + (open ? " open" : "") + "><summary>See the files and details</summary><p>" + (ui.rel.err[v.id] ? "Close and open it again to retry." : "Opening…") + "</p></details>";
+    v = whole;
     var filled = relFields().filter(function (f) { return v.pack && v.pack[f.key] != null && String(v.pack[f.key]) !== ""; });
     var dl = filled.length ? '<dl class="rpackdl">' + filled.map(function (f) {
       var val = String(v.pack[f.key]);
@@ -559,7 +592,12 @@
     var act = b.getAttribute("data-rel"), id = b.getAttribute("data-id") || "", v = relById[id];
     var focusSel = function (sel) { var el = $("releases").querySelector(sel); if (el) el.focus(); };
     var sid = id.replace(/[^a-z0-9]/gi, "");
-    if (act === "edit") { openForm(id); return; }
+    if (act === "edit") {
+      if (ui.rel.loading[id]) return;
+      /* the form needs the whole release (the lyrics too), or saving it would look like clearing them */
+      if (relById[id] && !fullOf(relById[id])) { b.disabled = true; b.textContent = "Opening…"; loadFull(id).then(function (f) { if (f) openForm(id); else drawReleases(); }); return; }
+      openForm(id); return;
+    }
     if (!v || ui.rel.busy) return;
     if (act === "no") { ui.rel.ask = null; drawReleases(); focusSel('[data-rel="date"][data-id="' + sid + '"], [data-rel="cancel"][data-id="' + sid + '"]'); return; }
     if (HQ.sample) return;
@@ -595,23 +633,24 @@
   /* remember which disclosures are open (toggle doesn't bubble: listen on the way down) */
   $("releases").addEventListener("toggle", function (ev) {
     var t = ev.target, id = t.getAttribute && t.getAttribute("data-relopen"), fold = t.getAttribute && t.getAttribute("data-fold"), fg = t.getAttribute && t.getAttribute("data-fg");
-    if (id) ui.rel.open[id] = t.open;
+    if (id) { ui.rel.open[id] = t.open; if (t.open && relById[id] && !fullOf(relById[id])) { delete ui.rel.err[id]; loadFull(id); } }
     if (fold) ui.rel.fold[fold] = t.open;
     if (fg && ui.form) ui.form.open[fg] = t.open;
   }, true);
 
   /* ---------- the form: start a release, finish a draft, or change one that went out ---------- */
-  function keepForm() { if (HQ.sample || !ui.form) return; try { localStorage.setItem(FORM_KEY, JSON.stringify({ id: ui.form.id, title: ui.form.title, date: ui.form.date, vals: ui.form.vals, at: Date.now() })); } catch (e) {} }
-  function forgetForm() { try { localStorage.removeItem(FORM_KEY); } catch (e) {} }
+  function keepForm() { if (HQ.sample || !ui.form) return; try { localStorage.setItem(L.formKey(ui.form.id), JSON.stringify({ id: ui.form.id, title: ui.form.title, date: ui.form.date, vals: ui.form.vals, at: Date.now() })); } catch (e) {} }
+  function forgetForm(id) { try { localStorage.removeItem(L.formKey(id)); } catch (e) {} }
   function openForm(id) {
     if (!board || !relFields().length) { $("relMsg").textContent = "The form needs the team's desk, which couldn't be loaded. Try Refresh."; return; }
-    var v = id ? relById[id] : null, vals = {};
+    var v = id ? fullOf(relById[id]) : null, vals = {};
+    if (id && !v) { $("relMsg").textContent = "Couldn't open that release's details. Try again."; return; }
     relFields().forEach(function (f) { vals[f.key] = v && v.pack && v.pack[f.key] != null ? String(v.pack[f.key]) : ""; });
     var F = ui.form = { id: v ? v.id : "", status: v ? v.status : "draft", title: v ? v.title : "", date: (v && v.date) || "", orig: { title: v ? v.title : "", date: (v && v.date) || "", vals: JSON.parse(JSON.stringify(vals)) },
       vals: vals, later: false, open: {}, miss: [], err: "", ok: "", busy: "", ask: false };
     /* what Luke typed last time and didn't save comes back (this device only) */
     var kept = null;
-    if (!HQ.sample) try { kept = JSON.parse(localStorage.getItem(FORM_KEY) || "null"); } catch (e) {}
+    if (!HQ.sample) try { kept = JSON.parse(localStorage.getItem(L.formKey(F.id)) || "null"); } catch (e) {}
     if (kept && kept.id === F.id && kept.vals) {
       F.title = kept.title || F.title; if (F.status !== "scheduled") F.date = kept.date || ""; Object.keys(kept.vals).forEach(function (k) { if (k in F.vals) F.vals[k] = String(kept.vals[k] || ""); });
       F.ok = "What you typed last time is back. It isn't saved until you press Save or Send.";
@@ -623,7 +662,7 @@
     var t = $("rf-title"); if (t) t.focus({ preventScroll: true });
   }
   function closeForm(keep) {
-    if (!keep) forgetForm();
+    if (!keep && ui.form) forgetForm(ui.form.id);
     ui.form = null;
     $("relForm").hidden = true; $("relForm").innerHTML = ""; $("relNew").setAttribute("aria-expanded", "false");
   }
@@ -709,7 +748,7 @@
       if (ui.form !== F) return;
       if (!r.ok) { F.err = r.error; drawFoot(); return; }
       var v = r.j.release;
-      putRelease(v); forgetForm();
+      putRelease(v); forgetForm(F.id); /* the copy under its old key ("new" for a release just started) */
       F.id = v.id; F.status = v.status; F.orig = { title: v.title, date: v.date || "", vals: JSON.parse(JSON.stringify(F.vals)) };
       if (!thenSend) {
         ui.rel.note[v.id] = "Saved at " + hhmm(Date.now()) + "." + (v.status === "draft" ? " Not sent to the team yet." : "");

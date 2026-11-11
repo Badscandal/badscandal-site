@@ -150,7 +150,7 @@ test("staff api: Luke's login reads the board, writes and settles; he can switch
   const send = (body, headers = {}) => api("message", { method: "POST", headers: { cookie, "content-type": "application/json", ...headers }, body: JSON.stringify(body) });
   assert.equal((await send({ to: "Nova", text: "Yes to Survivors." }, { origin: "https://evil.example" })).status, 403);
   const m = await (await send({ to: "Nova", text: "Yes to Survivors.", re: b.waiting.luke[0].id }, { origin: "https://badscandal.com" })).json();
-  assert.equal(m.message.from, "Luke");
+  assert.equal(m.message.from, "Luke"); assert.equal(m.settled, true, "the page is told the answer closed what it answers");
   assert.equal((await send({ to: "Nobody", text: "x y" })).status, 400);
   assert.equal((await api("resolve", { method: "POST", headers: { cookie }, body: JSON.stringify({ id: b.waiting.luke[0].id, note: "Yes" }) })).status, 200);
   assert.equal((await (await api("board", { headers: { cookie } })).json()).waiting.luke.length, 0);
@@ -217,6 +217,7 @@ test("release pipeline: Luke's routes, the bots' four tools, refusals as sentenc
   const made = await rel("release", { title: "Night Drive", date: day(30), pack: { wav: "https://example.com/n.wav", genre: "Dance" } });
   assert.equal(made.status, 200);
   const id = made.body.release.id;
+  assert.equal((await tool("luke_briefing", { bot: "Alfred" })).structuredContent.next_release, "not read", "only a draft on the desk and the sheet unread: never \"none planned\"");
   assert.deepEqual([id, made.body.release.status, made.body.release.packTotal, made.body.release.daysToGo], ["nightdrive", "draft", 17, 30]);
   const badLink = await rel("release", { id, pack: { artwork: "http://example.com/c.jpg" } });
   assert.deepEqual([badLink.status, badLink.body.error], [400, "Artwork must be a link that starts with https:// (copy it from the browser's address bar). Nothing was saved."]);
@@ -229,6 +230,12 @@ test("release pipeline: Luke's routes, the bots' four tools, refusals as sentenc
   const sent = await rel("release/send", { id });
   assert.deepEqual([sent.status, sent.body.release.status, sent.body.release.steps.length, sent.body.already, sent.body.told], [200, "scheduled", 9, false, true]);
   assert.equal((await rel("release/send", { id })).body.already, true);
+  /* ONE whole release for the page (the board's copy has no lyrics and no log) */
+  const whole = await api("release?id=" + id, { headers: { cookie } });
+  assert.equal(whole.status, 200); const wj = await whole.json();
+  assert.deepEqual([wj.release.id, wj.release.slim, wj.release.log.length > 0], [id, undefined, true]);
+  assert.equal((await api("release?id=nope", { headers: { cookie } })).status, 404);
+  assert.equal((await api("release?id=" + id, { headers: bots })).status, 403);
   await rel("release", { title: "Hidden Draft", date: day(40) }); /* a draft is Luke's, never shown to the bots */
 
   /* the bots, through /mcp */
@@ -248,14 +255,16 @@ test("release pipeline: Luke's routes, the bots' four tools, refusals as sentenc
   const done = (await tool("release_step", { bot: "Drop", song: "nightdrive", step: "upload", status: "done", link: "https://example.com/rn" })).structuredContent;
   assert.deepEqual([done.saved, done.step, done.state], [true, "upload", "done"]);
   assert.equal((await tool("release_fill", { bot: "Drop", song: "Night Drive", field: "isrc", value: "SAMPLE0000009" })).structuredContent.value, "SAMPLE0000009");
-  assert.match((await tool("release_fill", { bot: "Drop", song: "Night Drive", field: "lyrics", value: "la la" })).content[0].text, /Lyrics is filled by Verse \(or Nova, Luke or Claude\), not by you/);
+  assert.match((await tool("release_fill", { bot: "Drop", song: "Night Drive", field: "lyrics", value: "la la" })).content[0].text, /Lyrics is filled by Luke or Claude only, not by you/);
   assert.match((await tool("release_step", { bot: "Drop", song: "Night Drive" })).content[0].text, /^Missing: step, status\./);
   const myDay = (await tool("my_day", { bot: "Drop" })).structuredContent;
   assert.deepEqual(myDay.release_steps.map((s) => s.step), ["approved"]);
   assert.match(myDay.next, /^You have 1 open release step; the soonest is "Approved by RouteNote \(nothing waiting\)" for Night Drive/);
   assert.ok(!/release step/.test((await tool("my_day", { bot: "Steve" })).structuredContent.next));
   assert.deepEqual((await tool("team_board", { bot: "Nova" })).structuredContent.releases, [{ song: "Night Drive", date: (await tool("releases", { bot: "Nova" })).structuredContent.releases[0].release_day, done: "1 of 9", late: 0, blocked: 0 }]);
-  assert.equal((await tool("luke_briefing", { bot: "Alfred" })).structuredContent.next_release.song, "Night Drive", "with the sheet unread, the desk's own next release");
+  const nr = (await tool("luke_briefing", { bot: "Alfred" })).structuredContent.next_release;
+  assert.equal(nr.song, "Night Drive", "with the sheet unread, the desk's own next release…");
+  assert.match(nr.source, /^the desk only: the sheet's Releases tab was not read/, "…saying the sheet's own list could not be checked");
 
   /* Luke marks a step, moves the date, cancels */
   const step = await rel("release/step", { id, step: "teasers", status: "done" });
@@ -265,16 +274,22 @@ test("release pipeline: Luke's routes, the bots' four tools, refusals as sentenc
   assert.deepEqual([moved.body.moved, moved.body.release.date, moved.body.release.steps[0].due], [true, day(37), done.due.slice(-11, -1)]);
   const b = await (await api("board", { headers: { cookie } })).json();
   assert.equal(b.packFields.length, 23); assert.equal(b.releaseSteps.length, 9); assert.ok(Array.isArray(b.answered));
-  assert.equal(b.releases[0].id, "nightdrive"); assert.equal(b.staff.find((w) => w.name === "Drop").releaseSteps[0].key, "approved");
-  assert.ok(b.messages.some((m) => m.to === "all" && m.from === "Luke" && /^New release: Night Drive/.test(m.text) && m.seen === null));
+  assert.equal(b.releases[0].id, "nightdrive"); assert.deepEqual([b.releases[0].slim, b.releases[0].log], [true, []]); assert.equal(b.staff.find((w) => w.name === "Drop").releaseSteps[0].key, "approved");
+  assert.ok(b.messages.some((m) => m.to === "all" && m.from === "HQ" && /^New release from Luke: Night Drive/.test(m.text) && m.seen === null));
   const gone = await rel("release/cancel", { id }, claude);
   assert.deepEqual([gone.status, gone.body.release.status, gone.body.told], [200, "cancelled", true]);
   assert.match((await tool("release_step", { bot: "Drop", song: "Night Drive", step: "approved", status: "done" })).content[0].text, /was cancelled/);
+  assert.equal((await rel("release/remove", { id }, bots)).status, 403);
+  const rm = await rel("release/remove", { id });
+  assert.deepEqual([rm.status, rm.body.removed, rm.body.title], [200, true, "Night Drive"]);
+  assert.equal((await rel("release/remove", { id })).status, 400);
 
   /* the sample: the login, no store, no write */
   globalThis.__asked.length = 0;
   for (const p of ["release", "release/send", "release/date", "release/cancel", "release/step"]) assert.deepEqual((await rel(p + "?sample=1", { id: "x", title: "y" })).body, { ok: true, sample: true }, p);
   const sb = await (await api("board?sample=1", { headers: { cookie } })).json();
   assert.equal(sb.releases.length, 3); assert.equal(sb.answered.length, 2); assert.equal(sb.packFields.length, 23);
+  const sw = await (await api("release?id=touchme&sample=1", { headers: { cookie } })).json();
+  assert.deepEqual([sw.sample, sw.release.id, /^\(sample\)/.test(sw.release.pack.lyrics)], [true, "touchme", true]);
   assert.deepEqual(globalThis.__asked, [], "the sample never opened a store");
 });

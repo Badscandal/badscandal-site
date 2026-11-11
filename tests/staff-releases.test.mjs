@@ -59,14 +59,19 @@ test("releases: Luke or Claude start a draft; unknown fields, bad links and bots
   assert.equal((await S.listReleases(d)).length, 1);
 });
 
-test("releases: lyrics with ordinary words pass the secrets guard; a real secret does not", async () => {
+test("releases: lyrics with ordinary words pass the secrets guard; a real secret does not, and the refusal names the line", async () => {
   const d = memoryDesk();
   const r = await S.saveRelease(d, NOW, R, { by: "Luke", title: "Lyric test", date: "2026-12-11" });
   const lyrics = "You know the password, baby\nThe password is forever\nMe liga 11 98765-4321 tonight\n\n\n\nOne more time";
   const ok = await S.saveRelease(d, NOW, R, { by: "Luke", id: r.id, pack: { lyrics } });
   assert.equal(ok.pack.lyrics, "You know the password, baby\nThe password is forever\nMe liga 11 98765-4321 tonight\n\nOne more time", "lines kept, a long gap cut to one empty line");
-  await fails(S.saveRelease(d, NOW, R, { by: "Luke", id: r.id, pack: { lyrics: "La la la\npassword: hunter42x" } }), /Never write passwords/);
+  /* lines of a song with a digit in them (11 Nov 2026: each of these used to be refused as a password) */
+  const sung = ["the password is 2night", "my secret is 4ever yours", "pass: 24/7 on my mind", "token: 1000 kisses", "Secret: 2getha!"];
+  for (const line of sung) assert.equal(S.packValue("lyrics", "La la\n" + line), "La la\n" + line, line);
+  await fails(S.saveRelease(d, NOW, R, { by: "Luke", id: r.id, pack: { lyrics: "La la la\npassword: hunter42x" } }), /^Lyrics, line 2 \("password: hunter••x"\) looks like a password, code or key\. Nothing was saved\. .*take that out and save again\.$/);
+  await fails(S.saveRelease(d, NOW, R, { by: "Luke", id: r.id, pack: { notes: "pass: 24/7 on my mind" } }), /^Notes \("pass: ••\/• on my mind"\) looks like a password/, "outside the lyrics the guard is as strict as everywhere");
   await fails(S.saveRelease(d, NOW, R, { by: "Luke", id: r.id, pack: { notes: "card 4242 4242 4242 4242" } }), /card number/);
+  assert.throws(() => S.packValue("storeStatus", "pass: 2fa9x8"), (e) => /^Status at the distributor \("pass: •fa•x•"\) looks like a password/.test(e.message) && !/ask Luke/i.test(e.message), "a bot is never told to ask Luke for this");
   assert.equal((await S.listReleases(d))[0].pack.lyrics, ok.pack.lyrics, "a refused save changes nothing");
 });
 
@@ -84,13 +89,13 @@ test("releases: sending refuses with the list of what is missing; then schedules
   assert.deepEqual([again.already, again.told], [true, null]);
   const notes = (await all(d)).filter((m) => m.to === "all");
   assert.equal(notes.length, 1, "ONE message, however many times it is sent");
-  assert.equal(notes[0].from, "Luke");
-  assert.equal(notes[0].text, "New release: Survivors, out Fri 11 Dec. The pack is on the desk (tool release_pack). Your steps and their dates are in my_day.");
+  assert.equal(notes[0].from, "HQ", "the site's note, not a message in Luke's name on his own board");
+  assert.equal(notes[0].text, "New release from Luke: Survivors, out Fri 11 Dec. The pack is on the desk (tool release_pack). Your steps and their dates are in my_day.");
   /* a late one says so */
   const t = await S.saveRelease(d, NOW, R, { by: "Claude", title: "Quick One", date: "2026-11-20", pack: FULL });
   const quick = await S.sendRelease(d, NOW, R, { by: "Claude", id: t.id });
   assert.equal(quick.release.tight, true);
-  assert.match((await all(d)).find((m) => m.from === "Claude" && m.to === "all").text, /8 days away, so the steps that should already be done are due today/);
+  assert.match((await all(d)).find((m) => m.from === "HQ" && /^New release from Claude: Quick One/.test(m.text)).text, /8 days away, so the steps that should already be done are due today/);
   await fails(S.saveRelease(d, NOW, R, { by: "Luke", id: r.id, date: "2026-12-18" }), /already gone to the team.*Change the date/);
 });
 
@@ -105,7 +110,7 @@ test("releases: moving the date moves only the open steps, logs it and tells eve
   assert.deepEqual([by.approved, by.pitch, by.live], ["2026-12-02", "2026-12-04", "2026-12-18"]);
   assert.equal(m.release.date, "2026-12-18");
   assert.equal(m.release.log.at(-1).what, "Luke moved the date from Fri 11 Dec to Fri 18 Dec");
-  assert.equal((await all(d)).filter((x) => /moved from Fri 11 Dec to Fri 18 Dec\. Every step that is not done has a new date/.test(x.text)).length, 1);
+  assert.equal((await all(d)).filter((x) => /^Luke moved Survivors from Fri 11 Dec to Fri 18 Dec\. Every step that is not done has a new date/.test(x.text)).length, 1);
   assert.equal((await S.moveRelease(d, NOW + 2, R, { by: "Luke", id: r.id, date: "2026-12-18" })).moved, false, "the same date again does nothing");
   await fails(S.moveRelease(d, NOW, R, { by: "Atlas", id: r.id, date: "2026-12-25" }), /Only Luke or Claude/);
   await fails(S.moveRelease(d, NOW, R, { by: "Luke", id: r.id, date: "2026-11-01" }), /already passed/);
@@ -114,7 +119,7 @@ test("releases: moving the date moves only the open steps, logs it and tells eve
   assert.equal(c.release.status, "cancelled"); assert.ok(c.told);
   const draft = await S.saveRelease(d, NOW, R, { by: "Luke", title: "Never Out" });
   assert.equal((await S.cancelRelease(d, NOW, R, { by: "Luke", id: draft.id })).told, null);
-  assert.equal((await all(d)).filter((x) => /is cancelled/.test(x.text)).length, 1);
+  assert.equal((await all(d)).filter((x) => /^Claude cancelled Survivors/.test(x.text)).length, 1);
   await fails(S.setStep(d, NOW, R, { by: "Drop", id: r.id, step: "approved", status: "done" }), /was cancelled/);
   /* a cancelled title can be started again: it gets its own id */
   assert.equal((await S.saveRelease(d, NOW, R, { by: "Luke", title: "Survivors" })).id, "survivors2");
@@ -154,17 +159,18 @@ test("releases: a bot fills only the fields it is responsible for; Nova what any
   const d = memoryDesk();
   const r = await sent(d);
   assert.equal((await S.fillRelease(d, NOW, R, { by: "Drop", id: "survivors", field: "isrc", value: " SAMPLE0000003 " })).pack.isrc, "SAMPLE0000003");
-  await fails(S.fillRelease(d, NOW, R, { by: "Drop", id: r.id, field: "lyrics", value: "la la" }), /Lyrics is filled by Verse \(or Nova, Luke or Claude\), not by you/);
+  /* the lyrics are Luke's words: Verse puts them live, it never writes them (the guide), so no bot fills them */
+  for (const by of ["Drop", "Verse", "Nova"]) await fails(S.fillRelease(d, NOW, R, { by, id: r.id, field: "lyrics", value: "la la" }), /Lyrics is filled by Luke or Claude only, not by you/);
   await fails(S.fillRelease(d, NOW, R, { by: "Verse", id: r.id, field: "wav", value: "https://example.com/x.wav" }), /Master WAV is filled by Luke or Claude only, not by you/);
   await fails(S.fillRelease(d, NOW, R, { by: "Nova", id: r.id, field: "artwork", value: "https://example.com/x.jpg" }), /Luke or Claude only/);
   await fails(S.fillRelease(d, NOW, R, { by: "Drop", id: r.id, field: "bpm", value: "124" }), /"bpm" is not a field of the release pack\. You can fill: isrc, upc, storeStatus/);
   await fails(S.fillRelease(d, NOW, R, { by: "Atlas", id: r.id, field: "spotifyTrack", value: "open.spotify.com/track/1" }), /must be a link that starts with https/);
-  await fails(S.fillRelease(d, NOW, R, { by: "Verse", id: r.id, field: "lyrics", value: "  " }), /value is empty/);
-  assert.equal((await S.fillRelease(d, NOW, R, { by: "Nova", id: r.id, field: "lyrics", value: "Line one\nLine two" })).pack.lyrics, "Line one\nLine two");
+  await fails(S.fillRelease(d, NOW, R, { by: "Drop", id: r.id, field: "upc", value: "  " }), /value is empty/);
+  assert.equal((await S.fillRelease(d, NOW, R, { by: "Nova", id: r.id, field: "upc", value: "0000000000009" })).pack.upc, "0000000000009");
   const v = await S.fillRelease(d, NOW, R, { by: "Webmaster", id: r.id, field: "spotifyTrack", value: "https://open.spotify.com/track/sample" });
   assert.equal(v.log.at(-1).what, "Webmaster filled Spotify track link");
   assert.deepEqual(S.fieldsFor("Drop"), ["isrc", "upc", "storeStatus"]);
-  assert.equal(S.fieldsFor("Nova").length, 7); assert.equal(S.fieldsFor("Luke").length, 23);
+  assert.equal(S.fieldsFor("Nova").length, 6); assert.equal(S.fieldsFor("Luke").length, 23); assert.deepEqual(S.fieldsFor("Verse"), []);
 });
 
 test("releases: the view says what is missing (required first), what is late, and what is next", () => {
@@ -174,7 +180,8 @@ test("releases: the view says what is missing (required first), what is late, an
   r.steps[0].status = "done"; r.steps[1].status = "blocked"; r.steps[1].note = "needs a new cover";
   const v = S.releaseView(r, today);
   assert.deepEqual([v.daysToGo, v.weekday, v.dateWords, v.released], [13, "Wed", "Wed 25 Nov", false]);
-  assert.deepEqual(v.missing.map((m) => [m.key, m.required, m.neededBy]), [["copyright", false, "upload"], ["lyrics", false, "lyrics"], ["instruments", false, "pitch"], ["story", false, "pitch"], ["video", false, "video"]]);
+  assert.deepEqual(v.missing.map((m) => [m.key, m.required, m.neededBy]), [["copyright", false, "upload"], ["lyrics", false, "lyrics"], ["instruments", false, "pitch"], ["story", false, "pitch"]],
+    "the video link is Laura's result, not her input: never missing, like the ISRC");
   assert.deepEqual([v.missing[1].step, v.missing[1].owner, v.missing[1].due], ["Lyrics live", "Verse", "2026-11-15"]);
   assert.deepEqual([v.packFilled, v.packTotal], [7, 17], "the team's 'later' fields are not counted");
   assert.deepEqual(v.counts, { done: 1, total: 9, late: 2, blocked: 1 });
@@ -298,4 +305,148 @@ test("releases: the sample is made up: example links, placeholder words, one of 
   assert.ok(links.every((l) => /^https:\/\/(example\.com\/sample|badscandal\.com\/|open\.spotify\.com\/track\/sample)/.test(l)), links.join(" "));
   assert.match(list[2].pack.lyrics, /^\(sample\)/);
   assert.ok(!S.secretIn(JSON.stringify(list)));
+});
+
+/* ---------- fixes after review (11 Nov 2026) ---------- */
+test("replies: an answer that can't be saved never closes the question (the board is full)", async () => {
+  const d = memoryDesk();
+  const q = (await S.sendMessage(d, NOW, R, { from: "Nova", to: "Luke", text: "Please fill the lyrics for Survivors.", needs: "action" })).message;
+  const key = "msg/" + q.at.slice(0, 7) + ".json", got = await d.getWithMetadata(key, { type: "json" });
+  const filler = Array.from({ length: S.LIMITS.messagesPerMonth - 1 }, (_, i) => ({ ...q, id: "mfill" + String(i).padStart(7, "0"), from: "Kevin", to: "Nova", needs: "none", sp: "2026-11-01 09:00" }));
+  await d.setJSON(key, got.data.concat(filler));
+  await fails(S.sendMessage(d, NOW + 1000, R, { from: "Luke", to: "Nova", text: "Yes, approved", re: q.id }), /The board is full for this month/);
+  const list = await S.listMessages(d, NOW + 2000);
+  assert.equal(list.find((m) => m.id === q.id).resolved, null, "the question is still open");
+  assert.equal(S.waitingOn(list, "Luke").length, 1);
+  assert.equal(S.answeredByLuke(list, {}, NOW + 2000).length, 0, "nothing reads 'Marked as done'");
+});
+
+test("replies: the answer is saved first; if the question can't be closed after that, the answer stays and says settled: false", async () => {
+  const d = memoryDesk();
+  const old = NOW - 20 * 86400000; /* a question from last month: its own document */
+  const q = (await S.sendMessage(d, old, R, { from: "Atlas", to: "Luke", text: "Pitch as Dance?", needs: "decision", options: ["Yes", "No"] })).message;
+  const qKey = "msg/" + q.at.slice(0, 7) + ".json";
+  let reads = 0;
+  const flaky = { ...d, getWithMetadata: (k, o) => (k === qKey && ++reads > 1 ? Promise.reject(new Error("store down")) : d.getWithMetadata(k, o)) };
+  const r = await S.sendMessage(flaky, NOW, R, { from: "Luke", to: "Atlas", text: "Yes", re: q.id, note: "Yes" });
+  assert.deepEqual([r.settled, r.parent], [false, null]);
+  assert.ok((await S.listMessages(d, NOW)).some((m) => m.id === r.message.id), "Luke's answer is on the board");
+  /* and when it can: a decision closes with the option Luke picked as its note */
+  const ok = await S.sendMessage(d, NOW + 1000, R, { from: "Luke", to: "Atlas", text: "Yes", re: q.id, note: "Yes" });
+  assert.deepEqual([ok.settled, ok.parent.resolved.by, ok.parent.resolved.note], [true, "Luke", "Yes"]);
+  /* an unknown id is refused before anything is written */
+  const before = (await S.listMessages(d, NOW + 2000)).length;
+  await fails(S.sendMessage(d, NOW + 2000, R, { from: "Luke", to: "Atlas", text: "Hello", re: "m" + (NOW - 1000).toString(36) + "zzzz" }), /There is no message with that id/);
+  assert.equal((await S.listMessages(d, NOW + 3000)).length, before);
+});
+
+test("replies: Luke answering a message deep in a thread closes THAT message, never the request at the top", async () => {
+  const d = memoryDesk();
+  const top = (await S.sendMessage(d, NOW, R, { from: "Nova", to: "Luke", text: "Please fill the lyrics for Survivors", needs: "action" })).message;
+  const deep = (await S.sendMessage(d, NOW + 1000, R, { from: "Nova", to: "Luke", text: "Also: teaser A or B?", needs: "decision", options: ["Teaser A", "Teaser B"], re: top.id })).message;
+  const ans = await S.sendMessage(d, NOW + 2000, R, { from: "Luke", to: "Nova", text: "Teaser A", re: deep.id, note: "Teaser A" });
+  assert.equal(ans.settled, true);
+  const list = await S.listMessages(d, NOW + 3000);
+  assert.deepEqual(S.waitingOn(list, "Luke").map((m) => m.id), [top.id], "the lyrics request still waits on Luke");
+  const b = S.board(await S.loadDesk(d, NOW + 3000), NOW + 3000, null);
+  assert.deepEqual(b.answered.map((a) => [a.id, a.reply.kind, a.reply.text]), [[deep.id, "reply", "Teaser A"]]);
+  assert.deepEqual(b.messages.find((t) => t.id === top.id).replies.map((m) => m.id), [deep.id, ans.message.id], "the answer shows in its thread");
+});
+
+test("releases: Luke's own step is his approval: no bot (not even Nova) and not Claude marks it done", async () => {
+  const d = memoryDesk();
+  const r = await sent(d);
+  await fails(S.setStep(d, NOW, R, { by: "Nova", id: r.id, step: "teasers", status: "done" }), /is Luke's own approval: only Luke can mark it done/);
+  await fails(S.setStep(d, NOW, R, { by: "Claude", id: r.id, step: "teasers", status: "done" }), /only Luke can mark it done/);
+  assert.equal((await S.setStep(d, NOW, R, { by: "Nova", id: r.id, step: "teasers", status: "working", note: "Clips ready for Luke" })).steps[6].status, "working", "Nova may still say it is moving");
+  assert.equal((await S.setStep(d, NOW, R, { by: "Luke", id: r.id, step: "teasers", status: "done" })).steps[6].by, "Luke");
+});
+
+test("releases: two live releases never share a name; the merged list keeps both even if they did", async () => {
+  const d = memoryDesk();
+  await S.saveRelease(d, NOW, R, { by: "Luke", title: "Survivors", date: "2026-12-11" });
+  const demo = await S.saveRelease(d, NOW, R, { by: "Luke", title: "Demo", date: "2026-12-18" });
+  await fails(S.saveRelease(d, NOW, R, { by: "Luke", id: demo.id, title: "SURVIVORS" }), /^There is already a release called "Survivors" \(a draft\)\. Pick another title, or cancel that one first\. Nothing was saved\.$/);
+  assert.equal((await S.listReleases(d)).find((x) => x.id === "demo").title, "Demo");
+  const view = (id, title, date) => S.releaseView({ id, title, date, status: "scheduled", pack: {}, steps: S.scheduleSteps(date, TODAY).steps }, TODAY);
+  const both = mergeReleases([], [view("survivors", "Survivors", "2026-12-11"), view("demo", "Survivors", "2026-12-18")], TODAY);
+  assert.deepEqual(both.map((x) => [x.id, x.date]), [["survivors", "2026-12-11"], ["demo", "2026-12-18"]]);
+  const withSheet = mergeReleases([{ song: "Survivors", slug: "survivors", date: "2026-12-11", status: "planned", steps: [] }], [view("survivors", "Survivors", "2026-12-11"), view("demo", "Survivors", "2026-12-18")], TODAY);
+  assert.deepEqual(withSheet.map((x) => [x.id, x.status]), [["survivors", "planned"], ["demo", ""]], "the sheet's row joins one of them; the other keeps its own slot");
+  /* a title with no Latin letters gets an address; two long titles alike for 40 letters are two releases */
+  const night = await S.saveRelease(d, NOW, R, { by: "Luke", title: "Ночь" });
+  assert.match(night.id, /^r[0-9a-z]+$/); assert.equal(night.title, "Ночь");
+  const long = "A Very Long Song Title That Goes On And On Forever";
+  const one = await S.saveRelease(d, NOW, R, { by: "Luke", title: long + " Part One" });
+  const two = await S.saveRelease(d, NOW, R, { by: "Luke", title: long + " Part Two" });
+  assert.notEqual(one.id, two.id);
+});
+
+test("releases: a pack key that every object has (constructor, toString, __proto__) is an unknown field", async () => {
+  const d = memoryDesk();
+  const r = await S.saveRelease(d, NOW, R, { by: "Luke", title: "Proto" });
+  for (const pack of [{ constructor: "x" }, { toString: "y" }, JSON.parse('{"__proto__": "z"}'), { hasOwnProperty: "w" }])
+    await fails(S.saveRelease(d, NOW, R, { by: "Luke", id: r.id, pack }), /is not a field|are not fields/);
+  assert.throws(() => S.packValue("constructor", "x"), /"constructor" is not a field of the release pack/);
+  await fails(S.fillRelease(d, NOW, R, { by: "Luke", id: r.id, field: "toString", value: "x" }), /is not a field/);
+  assert.deepEqual((await S.listReleases(d))[0].pack, {});
+});
+
+test("releases: a release moved months out is no longer 'sent late'", async () => {
+  const d = memoryDesk();
+  const r = await sent(d, "Late One", "2026-11-20"); /* 8 days out */
+  assert.equal(r.tight, true);
+  const m = await S.moveRelease(d, NOW, R, { by: "Luke", id: r.id, date: "2027-02-05" });
+  assert.equal(m.release.tight, false);
+  assert.equal(m.release.steps[0].due, "2027-01-15", "every open step has its full time again");
+});
+
+test("releases: the desk's limit names what really frees room, and old releases can be removed", async () => {
+  const d = memoryDesk();
+  const old = (i, status, date) => ({ id: "old" + i, title: "Old " + i, date, status, createdAt: "2026-01-01T00:00:00Z", createdBy: "Luke", updatedAt: "2026-01-01T00:00:00Z", sentAt: null, tight: false, pack: {}, steps: [], log: [] });
+  await d.setJSON("releases.json", Array.from({ length: S.LIMITS.releases }, (_, i) => old(i, i === 0 ? "cancelled" : i === 1 ? "scheduled" : "draft", i === 1 ? "2026-07-01" : "2026-12-01")));
+  await fails(S.saveRelease(d, NOW, R, { by: "Luke", title: "New One" }), /limit\. Nothing was saved\. Ask Claude to remove old ones: a cancelled release, or one that came out more than 90 days ago, can be removed\./);
+  await fails(S.saveRelease(d, NOW, R, { by: "Claude", title: "New One" }), /POST \/api\/staff\/release\/remove/);
+  await fails(S.removeRelease(d, NOW, R, { by: "Luke", id: "old2" }), /can't be removed: only a cancelled release, or one that came out more than 90 days ago/);
+  await fails(S.removeRelease(d, NOW, R, { by: "Nova", id: "old0" }), /Only Luke or Claude/);
+  await fails(S.removeRelease(d, NOW, R, { by: "Luke", id: "nope" }), /no release with the id "nope"/);
+  assert.deepEqual(await S.removeRelease(d, NOW, R, { by: "Claude", id: "old1" }), { removed: true, id: "old1", title: "Old 1", left: 59 }, "out 134 days ago");
+  assert.equal((await S.removeRelease(d, NOW, R, { by: "Luke", id: "old0" })).left, 58, "cancelled");
+  assert.equal((await S.saveRelease(d, NOW, R, { by: "Luke", title: "New One" })).id, "newone");
+});
+
+test("releases: the site's check gives one line per release for late steps and is cut by whole lines", async () => {
+  const d = memoryDesk(), sentAt = Date.parse("2026-11-04T12:00:00Z");
+  for (const t of ["Alpha Song", "Beta Song", "Gamma Song", "Delta Song"]) {
+    const r = await S.saveRelease(d, sentAt, R, { by: "Luke", title: t, date: "2026-11-12", pack: FULL });
+    await S.sendRelease(d, sentAt, R, { by: "Luke", id: r.id });
+  }
+  const at = Date.parse("2026-11-09T12:40:00Z"); /* five days later */
+  const rep = S.checkReport({ desk: await S.loadDesk(d, at), hq: null, hqState: null, now: at });
+  const late = rep.problems.filter((p) => /steps late/.test(p));
+  assert.equal(late.length, 4, "one line per release");
+  assert.match(late[0], /^\w+ Song: \d steps late: upload \(Drop, due Wed 4 Nov\), approved \(Drop, due Wed 4 Nov\), pitch \(Atlas, due Wed 4 Nov\)/);
+  assert.ok(rep.text.length <= 1500, String(rep.text.length));
+  assert.match(rep.text, /\nRunning:\n- /, "the Running section survives");
+  /* the text is cut by whole lines and says how many are left out */
+  const many = Array.from({ length: 40 }, (_, i) => `Song ${i}: something long enough to fill the message quickly, line number ${i} of forty`);
+  const t = S.reportText("HQ check, today morning: 40 things to look at", many, ["Income logged this month: nothing yet received", "Second running line"]);
+  assert.ok(t.length <= 1500);
+  const lines = t.split("\n");
+  assert.match(lines.find((l) => /more on \/hq$/.test(l)), /^- \+\d+ more on \/hq$/);
+  for (const l of lines.filter((x) => /^- Song/.test(x))) assert.match(l, /of forty$/, "never cut mid-line");
+  assert.ok(lines.includes("Running:") && lines.includes("- Income logged this month: nothing yet received"));
+});
+
+test("releases: the board sends no lyrics and no change log (a refresh stays small); the page asks for one whole release", async () => {
+  const d = memoryDesk(), lyr = Array.from({ length: 200 }, (_, i) => "Made-up sample line number " + i + " la la la").join("\n").slice(0, 8000);
+  for (let i = 0; i < 20; i++) {
+    const r = await S.saveRelease(d, NOW, R, { by: "Luke", title: "Sample " + i, date: "2026-12-11", pack: { ...FULL, lyrics: lyr, notes: "n".repeat(900), story: "s".repeat(390) } });
+    for (let j = 0; j < 12; j++) await S.saveRelease(d, NOW + j + 1, R, { by: "Luke", id: r.id, pack: { genre: "Dance " + j } });
+  }
+  const b = S.board(await S.loadDesk(d, NOW), NOW, null);
+  const v = b.releases[0];
+  assert.ok(!("lyrics" in v.pack)); assert.equal(v.lyricsChars, lyr.length); assert.deepEqual(v.log, []); assert.equal(v.logCount, 13); assert.equal(v.slim, true);
+  assert.ok(JSON.stringify(b.releases).length < 60000, String(JSON.stringify(b.releases).length));
+  assert.equal(S.releaseView((await S.listReleases(d))[0], TODAY).pack.lyrics, lyr, "the whole release still has everything");
 });
