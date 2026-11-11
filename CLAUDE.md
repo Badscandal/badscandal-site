@@ -556,7 +556,19 @@ music-era URLs keep their equity instead of 404ing.
 
 `npm test` (= `node --test tests/*.test.mjs`) covers the server side: the
 counter keys, the Conversions API payload, the admin login/session and the
-portal's numbers. No dependencies needed to run it. For the pages, verify by:
+portal's numbers. No dependencies needed to run it. **263 tests, all passing,
+on branch `release-pipeline` (11 Nov 2026 evening; 153 on main before it).**
+Since 9–11 Nov it also covers /hq's rules (`tests/hq-lib`, `hq-today`,
+`hq-staff`: every `HQLib` function the page draws with, `bankLine` checked
+case by case against the server's), the dashboard and feed, the staff desk
+and its connector (`staff`, `mcp`: the handlers run against
+`tests/fixtures/fake-blobs.mjs`), the release pipeline (`staff-releases`,
+`staff-sightings`) and the Revolut reader (`bank`: a fake Enable Banking
+with a throwaway key made in memory; no real bank is ever called). No test
+reads this file. `tests/mcp.test.mjs` is ORDER-DEPENDENT in one place: its
+bank test relies on the roster an earlier test leaves (Nova and Echo) and
+must run before the release tests, which reseed the full roster. For the
+pages, verify by:
 
     node --check js/store.js js/main.js js/flow.js js/crt.js
     python3 -m http.server 8000    # then open localhost:8000
@@ -979,7 +991,9 @@ Brief: `../TOUCHME-LANDING-BUILD-BRIEF.md` (outside the repo on purpose).
   real amount and the rate used, never instead of it. The cap card shows the EUR estimate.
 * **BADSCANDAL HQ, `/hq` = the one dashboard (11 Nov 2026).** `hq.html` (stand-alone: no site.css /
   main.js) + `js/hq.js` + `js/hq-pages.js`. Sections, in Luke's order, with the sticky chip nav:
-  **Today · Songs · Ads · Pages · Growth · Fans · Releases · Money · Team**.
+  **Today · Songs · Ads · Pages · Growth · Fans · Releases · Money · Team** (Releases is shown as
+  **Upcoming** since 11 Nov 2026 evening; its id, `#releases` and the tests stay `releases`; Messages
+  joined as a tenth tab).
   - **Login** on the page (`#login`): POST `/api/admin/login`, same password / cookie / 5-tries lockout.
     Any 401 from any answer shows it; "Log out" in the header.
   - **Three answers, asked at once, each section drawn as its own answer lands (Today first):**
@@ -1086,8 +1100,8 @@ Brief: `../TOUCHME-LANDING-BUILD-BRIEF.md` (outside the repo on purpose).
   - **Tabs:** `js/hq-shell.js`. Each section is a `.view`, one shown at a time, address `#today`,
     `#songs`, … plus `#songs/<slug>` (scrolls to that song's card, `id="song-<slug>"`); the back
     button works; last tab in localStorage `bs_hq_tab`. Phone: bottom bar Today, Songs, Ads, Money,
-    More (More = a sheet with Pages, Growth, Fans, Releases, Team, Log out). Desktop (>=900 px): left
-    rail with all nine + Log out.
+    More (More = a sheet with Pages, Growth, Fans, Upcoming (was "Releases", id `releases`), Team,
+    Messages, Log out). Desktop (>=900 px): left rail with all ten + Log out.
   - **One date range** in the header (`#rangeSel`: Today, 7 days, 30 days, This month, Custom with
     two date fields). "This month" is a custom range (1st .. today, São Paulo) under the hood. Every
     tab follows it; the per-section pickers are gone. Remembered (`bs_admin_view`: range + page),
@@ -1144,7 +1158,7 @@ Brief: `../TOUCHME-LANDING-BUILD-BRIEF.md` (outside the repo on purpose).
     floats as a glass capsule. Reduced transparency or no blur support -> near-solid panels, no wash.
     The wash is atmosphere only: red as a MEANING is still just "needs attention" and the active tab.
   - **Release panel** (`#detailSheet`, `openRelease()` in js/hq.js, rule `releaseDetail()` in
-    js/hq-lib.js): Today's "Next release" card is a button, and every Releases card has "See what's
+    js/hq-lib.js): Today's "Next release" card is a button, and every sheet release card (Upcoming tab) has "See what's
     missing ›". It lists what's missing first (late on top, "late by N days" / "due in N days", owner,
     due date, the sheet cell's note e.g. "blocked: not in Spotify for Artists yet"), then what's done.
     Bottom sheet on phones, centred dialog on desktop; Escape / scrim / ✕ close it and focus returns.
@@ -1173,17 +1187,22 @@ what the team, Claude and Luke share ON THE SITE, kept in the Netlify Blob store
 write the sheets and shouldn't). Nothing here can touch ads, posts, sheets or money.
 
 * **Files:** `netlify/lib/staff.mjs` (the desk: every rule, pure, store + clock passed in),
-  `netlify/lib/mcp.mjs` (the connector's protocol), `netlify/lib/staff-tools.mjs` (its twelve tools),
+  `netlify/lib/mcp.mjs` (the connector's protocol), `netlify/lib/staff-tools.mjs` (its eighteen tools
+  since the evening of 11 Nov 2026: twelve, + five for the release pipeline, + `sort_payment`),
   `netlify/lib/staff-sample.mjs` (made-up desk for `?sample=1` + `memoryDesk()`, the in-memory store the
   tests use), `netlify/lib/hq-load.mjs` (the sheet/Meta/FX loader, moved out of functions/hq.mjs so the
   connector and the check read the same picture), `netlify/functions/staff.mjs` (`/mcp`, `/api/staff/*`),
   `netlify/functions/staffcheck.mjs` (scheduled). Tests: `tests/staff.test.mjs`, `tests/mcp.test.mjs`
-  (handler tests swap `@netlify/blobs` for `tests/fixtures/fake-blobs.mjs`).
+  (handler tests swap `@netlify/blobs` for `tests/fixtures/fake-blobs.mjs`), and since 11 Nov evening
+  `tests/staff-releases.test.mjs`, `tests/staff-sightings.test.mjs`, `tests/bank.test.mjs`. The release
+  pipeline and the Revolut reader have their own sections below.
 * **What is on the desk** (one JSON document per key; every write to a shared document goes through
   `mutate()`: read with its etag, write only if unchanged, retry; so two bots writing in the same second
   both land): `upd/<SP day>.json` updates · `msg/<UTC month>.json` messages · `inc/<month>.json` payments ·
   `chk/<month>.json` "I checked this account" · `roster.json` · `sources.json` · `cards.json` ·
-  `seen/<bot>.json` · `config.json` · `guide.json`. Deploy previews use their own throwaway store.
+  `seen/<bot>.json` · `config.json` · `guide.json`; since 11 Nov evening also `releases.json` (the
+  release pipeline), `sightings.json` (what Spotify for Artists shows as upcoming) and `read/<name>.json`
+  (the read markers, below). Deploy previews use their own throwaway store.
 * **Who is calling:** Luke = the /hq login cookie (POSTs must come from our own origin). The bots =
   Netlify env `STAFF_BOT_KEY`: ONE key for the whole team, because the bots' app ("Grok Bot": Add a custom
   connector, Remote HTTPS, one HTTP header) shares one connector between all bots; so every call names
@@ -1202,36 +1221,66 @@ write the sheets and shouldn't). Nothing here can touch ads, posts, sheets or mo
   says what to do; only an unknown tool is a protocol error. Checked with the official inspector client:
   `npx @modelcontextprotocol/inspector --cli <url> --transport http --header "Authorization: Bearer …"
   --method tools/list`.
-* **The twelve tools:** `my_day` (start of every run) · `post_update` (working/done/blocked/error/info;
+* **The tools (eighteen; the first twelve from the morning of 11 Nov 2026):** `my_day` (start of every
+  run; since 11 Nov evening it also hands over `messages_for_you`, see "Read" below, and `release_steps`)
+  · `post_update` (working/done/blocked/error/info;
   a `done` or `blocked` also finishes/blocks today's duty on /hq) · `send_message` / `read_messages` /
   `resolve_message` · `submit_income` (ONE payment per call; idempotent by account+reference, else
   date+payer+amount+currency; pending -> received updates in place; `transfer` is never income) ·
   `income_check` ("I looked at Wise today, 0 new": tells "nothing came in" from "nobody looked") ·
   `income_status` · `team_board` · `luke_briefing` (for Alfred's 10:00 message) · `set_my_card` ·
-  `read_guide`. Descriptions are written for bots that follow instructions literally.
+  `read_guide` · then `releases`, `release_pack`, `release_step`, `release_fill`, `spotify_upcoming` (the
+  release pipeline section) and `sort_payment` (the Revolut section). Descriptions are written for bots
+  that follow instructions literally. `tests/mcp.test.mjs` asserts the count (18) in four places.
 * **Guard rails in `staff.mjs`:** names only from the roster; every text cleaned and cut; links only
   `https://`; `secretIn()` refuses passwords, login codes, API keys, private keys, IBANs and card numbers
   (it must NOT refuse ISRCs, UPCs, 15-digit ad account ids or "token: expired": tested); an amount that
   can't be read is refused, never 0; currency = the three-letter code as paid, never converted; only
   Luke can settle a decision that waits on Luke.
+* **Luke's reply settles what waits on him (11 Nov 2026, Luke: "when i reply to a message right now
+  nothing happens").** In `sendMessage`, a message from Luke with `re` settles the message it answers
+  whatever it needed (`resolved: {by:"Luke", note: <his pick> || "answered"}`); for everyone else only a
+  `needs: reply` is settled by an answer. The answer is SAVED FIRST and the question closed in a second
+  write (a full board must never close the question and lose the answer); the result carries `settled`.
+  The page answers the message itself (`re: m.id`, never the thread's root) and a thread's Reply button
+  answers the newest open question to Luke from that person (`HQLib.answerTarget`).
+* **"Read", not "active" (11 Nov 2026, Luke: "i want to know when i've replied to a message and that
+  reply has been read").** `read/<name>.json` {at} is written ONLY by what hands a reader its messages:
+  `my_day`, `read_messages`, `luke_briefing` for Alfred, and `GET /api/staff/board` with Claude's key
+  (`touchRead`; the old marker is read first with `lastRead`). `my_day` (bots and Claude) and Alfred's
+  `luke_briefing` hand over `messages_for_you` = `S.messagesFor()`: everything to the reader, to all, or
+  answering one of its own since its last read, newest 30, plus `more_messages` when more did not fit.
+  `seen/<name>.json` stays "last used the desk". Every board message carries `seen`/`seenAt` from the
+  read markers (`seenBy`; null for "all", Luke, HQ); a note to all carries `read: {by, of, names}`
+  (`readCount`, the roster bots minus the sender). The page says "Read by Nova 17:10" / "Not read yet" /
+  "Read by 7 of 12", never "Seen by". The markers started empty on deploy, so older messages read "Not
+  read yet" until each bot's next `my_day`. Known gap: `read_messages` moves the marker while returning
+  at most `limit` (20) messages.
 * **How it meets the sheet:** `hqModel(sheets, today, fx, meta, nowHM, staff)`: the connector's updates
   and the sheet's `Updates` tab are ONE live log (`mergeUpdates`, no doubles), and `dutiesReport(…,
   overlay)` lets a connector `done`/`blocked` finish or block a `D-` duty the sheet still shows as to do
   (the sheet's `done` always wins; a bot with two duties must name the duty id; yesterday's word doesn't
   count). The Tasks tab stays Nova's; there is no second task board (a message with `needs: action` is
   the light version).
-* **The site's own check** (`staffcheck.mjs`, `35 0,12 * * *` UTC = 09:35 and 21:35 São Paulo, production
-  only): `checkReport()` = facts only (duties done/late/blocked, bots that said nothing, bots that never
-  connected, accounts not checked, overdue/blocked sources, new payers, messages nobody answered, the
-  sheet, the Meta key, the cap, the next release) posted as ONE message from "HQ" to Luke. Alfred reads it
-  through `luke_briefing`; Claude reads it on its own two rounds (09:40 / 21:40, a local launchd job on
-  Luke's Mac: `~/.badscandal-hq/claude-rounds.sh`, Claude Code with ONLY the desk's tools allowed).
+* **The site's own check** (`staffcheck.mjs`, three times a day since 11 Nov 2026: `35 0,12,18 * * *` UTC =
+  09:35, 15:35 and 21:35 São Paulo, production only): `checkReport()` = facts only (duties done/late/blocked,
+  bots that said nothing, bots that never connected, accounts not checked, overdue/blocked sources, new
+  payers, payments nobody has sorted, messages nobody answered, the sheet, the Meta key, the cap, the next
+  release, and the release pipeline's late/blocked steps, warnings and Spotify for Artists questions)
+  posted as ONE message from "HQ" to Luke. Its title says morning / afternoon / evening (`dayPart()`:
+  before 13:00 / before 19:00 / after). The text is at most 1500 characters cut by WHOLE lines
+  (`reportText()`: "+N more on /hq", never mid-word). Alfred reads it through `luke_briefing`; Claude
+  reads it on its own three rounds (09:40 / 15:40 / 21:40, five minutes after each check; a local launchd
+  job on Luke's Mac, `com.badscandal.claude-rounds`, running `~/.badscandal-hq/claude-rounds.sh`, Claude
+  Code with ONLY the desk's tools allowed).
 * **`/api/staff/*`** (cookie = Luke, or Claude's key): `GET board` (everything /hq draws: `board()`),
   `POST message`, `POST resolve`, `POST config {botsOn}` (Luke only), `PUT seed {roster, sources, guide}`
   (the private roster notes, the list of income sources and the bots' guide live in the PRIVATE repo
   badscandal-hq under `staff-desk/` and are loaded onto the desk; this public repo carries only the
   built-in job cards in `DEFAULT_ROSTER` and made-up sample data). `?sample=1` = the made-up desk, needs
-  the login, never opens a store, never writes.
+  the login, never opens a store, never writes. Since 11 Nov evening also `POST sort` and the
+  `release*` / `sighting` routes (listed in their sections below). Claude's key reading `GET board`
+  marks Claude's messages read. A `StaffError` answers 400 with its sentence (404 `not_found`, 503 `busy`).
 * **/hq screens for the desk (11 Nov 2026):** `js/hq-staff.js` (loaded after js/hq.js, before
   js/hq-shell.js; `window.HQStaff`: `reload`, `clear`, `drawWorkers`, `board`, `problem`) holds the page's
   ONLY writes: Luke's messages / answers / "mark as done" (`POST /api/staff/message|resolve`) and the bots'
@@ -1245,7 +1294,12 @@ write the sheets and shouldn't). Nothing here can touch ads, posts, sheets or mo
     or late cards, and a "Why this bot" disclosure (why, daily times, what it writes, access, blockers).
     Deep link `#team/<bot lowercase>`. Then the merged live log, Open tasks, Tasks per person.
   - **Messages** (tenth tab, `#messages`, in the rail and the More sheet, AFTER the nine pinned by
-    tests/dashboard.test.mjs): "Waiting on you" on top (a decision's options ask "Send this answer?"
+    tests/dashboard.test.mjs; since 11 Nov evening an answer visibly lands: the button says "Sending…",
+    the item leaves "Waiting on you" at once and a line takes its place for 10 minutes, "Sent to Kevin at
+    17:42." (Claude's adds "Claude reads the desk at 09:40, 15:40 and 21:40.", `HQLib.CLAUDE_ROUNDS`); a
+    "You answered" block lists `board.answered` (`answeredByLuke`: the last 10 in 48 h) with "Sent 17:03 ·
+    Read by Ledger 17:10"; every message carries the Read mark; a reply that went out but didn't close
+    the question says so in place): "Waiting on you" on top (a decision's options ask "Send this answer?"
     inline before sending: a mis-tap can't be undone; Reply; Mark as done), a compose box (To / What you
     need / text, 16px so iOS doesn't zoom, the draft is kept if sending fails), then the board as threads;
     the site's check is a calmer card that folds after 8 lines. Count badge on the nav item, red dot on
@@ -1255,7 +1309,9 @@ write the sheets and shouldn't). Nothing here can touch ads, posts, sheets or mo
     line; "Needs you" is now "Your tasks".
   - **Money → "Money coming in"** above the monthly tables: account tiles, received / pending per
     currency (never added across currencies), problems, "Where money comes from", latest payments.
-  - **Data health:** Connector and Site check rows (`HQLib.staffHealth`; a check older than 26 h is red).
+    Since 11 Nov evening: the Revolut tile and "To sort" (the Revolut section below).
+  - **Data health:** Connector and Site check rows (`HQLib.staffHealth`; since the check runs three times
+    a day a check older than 14 h is red, it was 26 h), and a Revolut row (`HQLib.bankHealth`).
   - New `HQLib` rules (all tested in tests/hq-staff.test.mjs): `workerLabel`, `sortWorkers`, `workerView`,
     `dutyWhen`, `workerCounts`, `seenLine`, `connectorLine`, `novaMessage`, `liveFeed`, `spWhen`,
     `waitLabel`, `needWords`, `reportParts`, `siteCheckLine`, `composeNames`, `threadRoot`,
@@ -1273,8 +1329,10 @@ write the sheets and shouldn't). Nothing here can touch ads, posts, sheets or mo
     with Retry.
   - **Released, said in /hq (Luke, 11 Nov 2026):** a song that is out carries a "Released" pill on its
     Songs card and a row "Released | Fri 30 Oct · 12 days ago" (before release: "Out in 13 days" /
-    "Release day"); its Releases card says "Released" instead of "On time" / "N late" and "Released N days
-    ago". Rule: `HQLib.releaseWords(date, today)` (the sheet's release date, else our song page's date).
+    "Release day"); its release card said "Released" instead of "On time" / "N late" and "Released N days
+    ago" (since the v2 pipeline a song whose day has come leaves the Upcoming tab for Songs, with one
+    quiet "Out: …" line). Rule: `HQLib.releaseWords(date, today)` (the sheet's release date, else our song
+    page's date).
     The PUBLIC song page never says Released: it stays cover, title, Spotify button.
 * **Not served any more:** `/CLAUDE.md`, `/HANDOFF-README.md`, `/README.txt`, `/README-STORE.txt` now
   404 (`_redirects`): this file was readable at badscandal.com/CLAUDE.md. The repo itself is still public,
@@ -1282,3 +1340,418 @@ write the sheets and shouldn't). Nothing here can touch ads, posts, sheets or mo
 * **Also fixed while moving the loader:** a past month's exchange rate cached mid-month is re-read once
   the month has ended; a failed sheet read that falls back to the cached copy now says so
   (`staleBecause`).
+
+## The release pipeline (11 Nov 2026)
+
+Luke, 11 Nov: "when a new song is ready we want all the info every bot needs, high quality wav link,
+artwork, lyrics, information for routenote everything, and that they auto schedule it and everything and
+the pitch is handled later". The evening (v2): "the song pipeline can include releases … say where we're
+at" · "it says spotify pitch sent [late] but it didn't get sent because the song hasn't shown in spotify
+for artists yet" · "if it's self release or released with label; for instance touch me: [the label] own
+50% of that" · "the word releases should be changed to upcoming" · "warnings about lateness on upcoming
+releases" · "flag ones that haven't gone through the pipeline and ask me what it is". Built on branch
+`release-pipeline` (specs v1 + v2 and two review rounds each; NOT merged, NOT deployed as of 11 Nov).
+All the rules are pure functions in `netlify/lib/staff.mjs` (store + clock passed in), tested in
+`tests/staff-releases.test.mjs` and `tests/staff-sightings.test.mjs` with `memoryDesk()`.
+
+* **The release document:** `releases.json` on the desk (array, newest first, at most 60, written only
+  through `mutate()`): `{ id, title, date, status, createdAt, createdBy, updatedAt, sentAt, tight,
+  alreadyOut?, sentWithout?, pack: {…}, steps: [{ key, label, owner, due, status, note, link, at, by }],
+  log: [{ at, by, what }] }`. `status` = `draft` (Luke still filling) | `scheduled` (sent; steps dated) |
+  `cancelled`. "Released" is NEVER stored: scheduled + date <= today. `id` = `releaseId(title)` (the
+  `songKey`: accents, case, spaces, signs out; "Me Dá Seu Body" -> `medaseubody`; a title with no Latin
+  letter gets `"r" + base36 time`); a rename keeps the id. The log keeps the last 30 lines (it drops,
+  never refuses); 60 releases refuse, and `removeRelease` takes off a cancelled one or one out more than
+  90 days (no button on /hq: Luke asks Claude).
+* **`PACK_FIELDS` is THE single list** of what a bot needs (the /hq form, the `missing` list, the refusal
+  sentence and the connector's tools are all built from it; add a field in ONE place). Each field
+  `{ key, label, short, kind: link|line|text|choice, group, required, requiredWhen, showWhen, neededBy,
+  choices, hint, fill, max }`. Groups (the form's order): `deal` (kind, label, split, distributor, deal)
+  · `files` (wav, artwork, folder) · `stores` (language, explicit, genre, subgenre, version, writers,
+  producers, featuring, copyright) · `lyrics` · `pitch` (mood, instruments, story: "can wait") · `later`
+  (isrc, upc, storeStatus, spotifyTrack, video, page: the team's) · `notes`.
+  - `required`: kind, wav, artwork, language, explicit, genre, writers. `requiredWhen {field, equals}`:
+    label and split only "With a label"; copyright only for a Self-release (it also has `neededBy:
+    "upload"`, and `showWhen: null` so the form shows it whatever the kind). `requiredNow(f, pack)`.
+  - `neededBy` = a step that needs it: shown as missing (with that step, its owner and due date) but not
+    needed to send. lyrics -> `lyrics`; mood / instruments / story -> `pitch`. `video` is Laura's RESULT,
+    not her input: no neededBy (review: it made her block every release).
+  - `fill` = which bots may fill it through the connector: isrc/upc/storeStatus Drop; spotifyTrack Atlas
+    or Webmaster; video Laura; page Webmaster. Nova may fill whatever any bot may; Luke and Claude fill
+    everything. NOBODY but Luke and Claude fills the lyrics (`fill: []`).
+  - Every value goes through `packValue()`: `clean`/`cleanText`, links https only (refused with a
+    sentence), choices matched, then `packSecrets()` line by line (the refusal quotes the field and line
+    number with the digits hidden). `FIELD` / `STEP` are null-prototype maps ("constructor" is unknown).
+* **`RELEASE_STEPS` (ten), dated back from the release day** (`scheduleSteps(date, today, o)`):
+  `upload` Uploaded to RouteNote with the release date (Drop, 21) · `approved` Approved by RouteNote
+  (Drop, 16) · `spotify` Showing as upcoming in Spotify for Artists (Atlas, 15) · `pitch` Spotify pitch
+  sent (Atlas, 14, `after: "spotify"`) · `lyrics` Lyrics live (Verse, 10) · `page` Song page live (Webmaster,
+  7) · `video` Video scheduled on YouTube (Laura, 7) · `teasers` Teaser clips approved for posting (Luke, 3)
+  · `ads` Ad drafts ready, inside the cap (Forge, 1) · `live` Release day: Spotify link on the song page
+  and the home card (Webmaster, 0).
+  - A due date already past becomes TODAY: a release sent late is compressed, never born late; `tight`
+    = sent fewer than 21 days out (recomputed by `moveRelease`).
+  - Step `status`: `STEP_STATUS` = todo | working | done | blocked | skipped. **Waiting**: a step whose
+    `after` step isn't done or skipped (the pitch before the song shows in Spotify for Artists) has
+    `waiting: true`, `waitingText` "waiting: the song is not in Spotify for Artists yet", is NEVER late,
+    and the moment it is freed its due date is no earlier than today (`freeWaiting`). **Skipped**: a step
+    that doesn't apply, with a note (`LABEL_NOTE` "The label delivers this one", `OUT_NOTE` "Already out
+    when it was recorded", `PITCHED_NOTE` "The pitch was sent before this step existed"): never late,
+    never open, not counted in `total`. Only Luke, Claude and Nova skip, always with a note.
+  - A release sent before the spotify step existed gets it when Luke moves its date (skipped if its
+    pitch already went out); it has no `after`, so its pitch never waits.
+* **The operations and who may call them** (all in staff.mjs):
+  - `saveRelease` (Luke/Claude): start a draft or change one; `pack` = only the keys being set, `""`
+    clears one; unknown keys refused by name; a title clashing with another live release refused; the
+    date of a SCHEDULED release can't change here ("use Change the date"); a deal change on a sent
+    release re-applies the deal (`applyDeal`) and tells Drop ONCE from "HQ" (`dealNews`, needs action).
+  - `sendRelease` (Luke/Claude): refuses with "Still missing: … Fill them in, then send again. Or send
+    anyway: …" + `missing` keys + `canSendAnyway`; `anyway: true` sends with required fields missing
+    (kept as `sentWithout`), never without a release day. Sets the steps, logs, and posts ONE note from
+    "HQ" to all ("New release from Luke: …"). Sending twice does nothing. A release already showing in
+    Atlas's last report gets its spotify step done at once, in Atlas's name.
+  - `moveRelease` (Luke/Claude): open steps get new dates, done ones keep theirs; ONE note to all naming
+    any step already done with the old date outside the desk (upload, video, page, live).
+  - `cancelRelease` (Luke/Claude; the team is told only if it was sent) · `removeRelease` (Luke/Claude).
+  - `fillRelease` (a bot fills ONE field it may fill; the refusal says who can).
+  - `setStep` (the step's owner, Nova, Claude or Luke): blocked and skipped need a note; ONLY Luke marks
+    his own step (teasers) done or skipped (his approval of public posts; Claude is refused too); no bot,
+    Nova included, marks a WAITING step done (Luke and Claude may record what they know). A bot's mark
+    also writes a live-log line through `postUpdate(…, {release: id})`, which `dutyOverlay` ignores (a
+    release step never finishes a daily duty).
+  - `releaseView(r, today, {sightings})` adds `dateWords`, `daysToGo`, `released`, `deal`, `missing`
+    (required first), `packFilled`/`packTotal` (the deal and "later" groups not counted: "N of 17"),
+    each step's `late`/`dueIn`/`waiting`/`skipped`, `counts {done, total, late, blocked, skipped,
+    waiting}`, `next` (the first open step someone can work on now), `warnings`, `where`.
+    `releaseActive(v)` = scheduled, not alreadyOut, not out for more than 14 days.
+* **The deal: self-release or with a label** (group `deal`, first on the form under "Whose release is
+  it"): `LABEL_KIND` "With a label" / `SELF_KIND` "Self-release". `distributorOf(pack)`: the pack's value,
+  else `SELF_DISTRIBUTOR` (RouteNote + the account name) for a self-release, else the label's name.
+  `labelDelivers(pack)` = a label release whose distributor isn't RouteNote: `upload` and `approved` are
+  born `skipped`. `dealOf(r)` -> `{ kind, label, split, distributor, id }` (kind "" = a desk record from
+  before the deal was asked). **Already out:** a release day in the past is allowed; sending it records the
+  song for its deal only (every step skipped, no dates, nobody told; only the deal fields needed); a
+  draft whose day has passed is recorded this way when sent (`where` says so first).
+* **Spotify for Artists reports** (`sightings.json`): `{ at, sp, by, note, list: [{ key, title, date,
+  shownAs, firstSeen }], answers: { <key>: { answer, label, id?, note, by, at, msg } } }`. key =
+  `sightKey(title, date)` (songKey, or `"t"` + an FNV hash for a title with no Latin letter, so keys stay
+  ASCII). Each report REPLACES the list (at most 20; `firstSeen` kept); answers kept 180 days, newest 200.
+  - Reporters: `SIGHT_REPORTERS` Atlas, Nova (for him), Claude. An EMPTY list is a real report ("I looked;
+    nothing is upcoming"); a bot that could not open Spotify for Artists must NOT report (post blocked).
+  - Matching (`sightMatch`): the same song (`sameSong`: songKeys equal; titles with no Latin letter by
+    their own words; empty never matches), not cancelled, not recorded-after-it-came-out, release day
+    within ONE day of the date shown (a dateless draft matches on title), or the release Luke named
+    ("It is …"). `sightNear` offers that fifth answer: the same song under a longer/shorter title, the same
+    title on another day, else the ONE live not-yet-out release on that day.
+  - A report that lists a song in the pipeline marks its spotify step done, once, by the reporter, with
+    "Showing in Spotify for Artists [as "<title shown>"] since <day>"; the pitch opens.
+  - `sightingsView(doc, releases, today, now)`: each item `state` pipeline | unknown | answered | retry,
+    a `question` for unknown ones, `near`, plus `never`, `stale` (> 48 h), `unknown`, `retry`,
+    `waitingOnLuke` (= unknown + retry), `choices`.
+  - **The five answers** (`answerSighting`, Luke ONLY): `self` and `label` (asks the label's name) start a
+    DRAFT in "In the pipeline" with the kind filled; `notmine` ("Not mine, or on the wrong account") and
+    `mistake` record the answer and send ONE message from Luke to Nova, needs action ("'<title>' is
+    upcoming in our Spotify for Artists for <day> (shown as: …). Luke says: … Find out who delivered it
+    and from which account, say what has to be done, and report back on the desk."); `it` + `id` ("It is
+    <song>") marks that release's spotify step done in Luke's name. The message to Nova is CLAIMED
+    (`msg: "sending:<iso>"`) in the same write that records the answer, so two taps send it once; a
+    claim older than a minute counts as failed, and a message that never went shows "Send it to Nova
+    again" (state `retry`).
+* **Warnings** (`warningsOf(v, sightings, today)` -> `[{kind, text}]`, most urgent first;
+  `releaseWarnings` = the sentences; only on scheduled, not-already-out releases with a date). Kinds:
+  `today` "Out today and the Spotify link is not on the song page yet" · `blocked` "<label> is blocked
+  (<owner>): <note>" · `twice` "A label release, but <upload> is working/done (Drop): one song must not
+  be delivered twice" · `late` "<label> is N days late (<owner>)" · `pitch` "Too late for a Spotify pitch:
+  Spotify needs it 7 days before release" · `spotify` "Not showing in Spotify for Artists yet, N days
+  before release: the pitch cannot be sent until it does" (14 days or fewer, pitch not done; no "until it
+  does" once the pitch is too late) · `date` "Spotify for Artists shows <day>, the pack says <day>" ·
+  `soon` "<fields> are missing and <step> is due <day>" (a step due within 3 days, not waiting) ·
+  `without` "Sent without …: fill it in under Edit the details" (only from `sentWithout`) · `unrecorded`
+  "Not recorded yet: self-release or label" (older releases; kept OUT of the site check) · `split` "A
+  label release with no split recorded" · `tight` "Sent N days before release: the usual 21 days for the
+  stores could not be kept". **`where`** (`whereWords`) is the one line "where it is at": "4 of 10 steps
+  done · next: Lyrics live, Verse, Fri 14 Nov" (blocked before late; "waiting: not in Spotify for Artists
+  yet"), "In the pipeline: 9 of 17 filled · still missing: …", "Already out (…): recorded for its deal",
+  "Out since …".
+* **The site check** (`checkReport`): per active release one line per blocked step, ONE line for its late
+  steps ("Song: 3 steps late: upload (Drop, due …), …"; a late step a warning already explains is not
+  repeated), the warnings of kind today/twice/pitch/spotify/date/without/split, and the `soon` fields; then
+  one line per unknown song in Spotify for Artists ("… Luke has to say what it is") and one when Atlas's
+  report is missing or older than 48 h while something is coming. A desk release's "Next release" line
+  says "(listed above)" instead of repeating its steps.
+* **The board's slim copy:** `board().releases` = `releaseOrder()` (coming soonest first, then out newest
+  first, cancelled last), 20 at most, each through `slimRelease()`: no lyrics (`lyricsChars` instead), `log:
+  []` + `logCount`, `slim: true` (20 releases with full lyrics made the board 235 KB, saved to localStorage
+  on every refresh). `GET /api/staff/release?id=` returns ONE whole release (works with `?sample=1`): the
+  page loads it before showing the details or opening a form, so a save can't wipe the lyrics. The board
+  also carries `packFields` (`packFieldsOut()`), `releaseSteps` (`releaseStepsOut()`), `sightings`
+  (`sightingsView`) and `answered`. `loadDesk` still reads all of releases.json on every tool call.
+* **Desk releases meet the sheet's** (`netlify/lib/hq.mjs` `mergeReleases(sheetReleases, deskReleases,
+  today, sightings, now)`, called in `hqModel`; `hq-load.mjs` `staffSide()` passes every non-cancelled
+  `releaseView`, Atlas's report and `now`): a scheduled desk release is mapped to the sheet's shape `{ song,
+  slug, date, status, daysToGo, weekday, steps: [{label, owner, due, done, late, note, skipped?, waiting?}],
+  late, notes }` + `desk: true, id, missing, tight, deal, warnings, where`, so Today, the release panel,
+  attention and the briefing work unchanged. A song in both (`sameSong`) is ONE entry: the desk's steps
+  and dates, the sheet's status text; each desk release keeps its own slot by id. Skipped counts as done;
+  waiting is never late. `songs[].deal` = the desk release of the same name (a sent one before a draft),
+  null when the desk has none; the song's release date is the desk's first, then the sheet's.
+  **The sheet-only pitch rule:** a sheet row's late "Spotify pitch sent" reads "waiting: not in Spotify for
+  Artists yet" ONLY while a report exists, is under 48 h old, doesn't list the song (same title within a
+  day) and the song is not out yet; with no report, an old one, or the song out, late is late.
+* **The connector** (`netlify/lib/staff-tools.mjs`): `releases` (every active release + Claude sees
+  drafts: where, deal, warnings, missing, YOUR steps, `all_steps` for Nova and Claude,
+  `spotify_for_artists: {reported_at, stale?, unknown, waiting_on_luke}`) · `release_pack` (the whole pack
+  with each field's state and who fills it, every step) · `release_step` (working/done/blocked/todo,
+  skipped for Nova and Claude only; the description says what "done" means and that the spotify step is done by the
+  report, not by this tool) · `release_fill` (its `field` enum lists only bot-fillable fields) ·
+  `spotify_upcoming` (the report; returns in_the_pipeline / not_in_the_pipeline / answered_by_luke /
+  steps_done). `my_day` gains `release_steps` (state words: to do, working, late, blocked, waiting,
+  skipped; the spotify step carries `how`), and its `next` sentence names the soonest step you can work on
+  (or tells Atlas to report); Claude's `my_day` gains `releases` lines and `unknown_in_spotify`.
+  `team_board` gains `releases` (done/total, late, blocked, `late_steps`, warnings) and
+  `spotify_for_artists`. `luke_briefing` gains `unknown_in_spotify`, and its `next_release` uses the merged
+  list; with the sheet unread it gives the desk's next release with `source: "the desk only: …"`, or "not
+  read", and says "none planned" only when the sheet WAS read. `INSTRUCTIONS` has a line about releases and
+  one telling Atlas to report every day (Spotify for Artists -> Music -> Upcoming, after his Songs rows;
+  the routine is spelled out in the bots' guide, private repo badscandal-hq `staff-desk/GUIDE.md`, loaded
+  with `PUT seed`).
+* **`/api/staff` routes added** (Luke's cookie or Claude's key; bots 403; `?sample=1` never writes):
+  `POST release` {id?, title, date, pack} · `POST release/send` {id, anyway?} -> `{ok, release, already,
+  told, alreadyOut, sentWithout}` · `POST release/date` {id, date} · `POST release/cancel` {id} · `POST
+  release/remove` {id} · `POST release/step` {id, step, status, note, link} · `GET release?id=` · `POST
+  sighting` {key, answer, label?, note?, id?} (Luke ONLY: Claude's key gets 403). Every answer carries
+  `release: releaseView`; a refusal is 400 `{error}` in a plain sentence (an unknown release id on a
+  POST is 400, not 404; `GET release?id=` and a song no longer in the report are 404).
+* **The page** (`hq.html`, `js/hq-staff.js` `drawReleases`, rules in `js/hq-lib.js`):
+  - **Upcoming** (the tab once called Releases; id `releases`) in three parts: **In the pipeline**
+    (`#relPipe`: "New song" + the drafts: whose release, "N of 17 filled", what's missing, "Finish and
+    send", "Cancel the draft") · **Upcoming** (`#relDesk`, then the sheet-only cards `#relList` via
+    `HQ.sheetReleaseCard` for songs the desk doesn't have: the `where` line, a red warnings box, the steps,
+    "See the files and details"; the pill counts warnings) · **In Spotify for Artists** (`#relSpot`, deep
+    link `#releases/spotify`: when Atlas looked, each unknown song as a question with the four answers plus
+    "It is <song>" when `near`, inline confirms, answered ones listed quietly). A song whose day has come
+    leaves Upcoming (`#relOut`: "Out: Touch Me (30 Oct). See Songs", 6 at most), except one out at most 14
+    days with a step still open ("Out, with a step still open"); cancelled ones fold.
+  - **The form** is built from `board.packFields` (`HQLib.formGroups`, `fieldShown`, `fieldRequired`,
+    `needWord`): "Whose release is it" first (label and split appear and are "needed to send" only with a
+    label), inputs 16px, 44px targets; "later" fields read-only until "Change these yourself". A past day
+    switches the button to "Record it as already out" (`sendButton`). "Send to the team" saves first, then
+    asks inline ("Send X to the team for Fri 11 Dec? Every bot gets its steps and dates."); a refusal shows
+    the server's sentence, marks the fields, and offers "Send anyway" / "Not yet" (never without a day).
+    The page never says "pack": "Files and details", "Edit the details".
+  - **Steps:** state in words (`stepState`: "Done 12 Nov by Drop", "Late by 2 days", "Blocked: …",
+    "waiting: the song is not in Spotify for Artists yet" never red, "not ours: the label delivers it");
+    Luke's own step has "Mark as done", others a small "Mark done" / "Reopen" (`stepButton`: none on a
+    waiting or skipped step, and they stay after release day). "Change the date" asks "Move X from … to
+    …? Every step that isn't done moves with it, and the team is told."
+  - **Songs** says whose song it is under each title (`dealWords`, `songDeal`: "Self-release" or "With
+    <label> · <split>"), or "Not recorded yet: self-release or label?" with "Add its details"
+    (`HQStaff.addDetails`, opens the form in Upcoming with the title and day). Songs redraw when the board
+    arrives.
+  - **Team** cards list each bot's "Release steps"; "Copy message for Nova" adds the late/blocked ones.
+    **Today**'s Needs attention lists release warnings ("<title>: <warning>", 4 then "+N more", linking to
+    `#releases/<id>`, right after the cap; `releaseAttention`) and the Spotify question with the messages
+    in the first group; desk releases' bare late steps are not listed twice.
+  - **localStorage:** `bs_hq_last_relform:<id|new>` (`HQLib.formKey`: one unsaved form per release, never
+    in sample mode; logout's `bs_hq_last_*` sweep clears it). `hq-sw.js` unchanged (no new file).
+  - **New `HQLib` functions:** `spStampOf`, `seenWords`, `sentLine`, `answeredList`, `CLAUDE_ROUNDS`,
+    `answerTarget`, `formGroups`, `releaseDayNote`, `releaseWhen`, `stepState`, `stepButton`, `formKey`,
+    `missingWords`, `packLine`, `missingSentence`, `canSendAnyway`, `packChanges`, `fillWho`, `relPill`,
+    `releaseLists`, `stepsSummary`, `sendQuestion`, `sendButton`, `moveQuestion`, `cancelQuestion`,
+    `titleKey`, `outLine`, `dealWords`, `songDeal`, `fieldShown`, `fieldRequired`, `needWord`,
+    `upcomingPill`, `whereLine`, `releaseAttention`, `sentNote`, `sightingsHead`, `sightRow`,
+    `sightQuestion`, `sightConfirm`, `sightDone`; changed: `shortStep` (the ten labels), `novaMessage`,
+    `staffHealth`, `staffAttention`, `attention`, `releaseDetail`. New `window.HQ`: `sheetReleaseCard`,
+    `releasesBroken`; `window.HQStaff`: `drawReleases`, `addDetails`. Tests in `tests/hq-staff.test.mjs`
+    (`missingSentence` is checked against the server's own refusal through `S.sendRelease`).
+  - **Sample** (`staff-sample.mjs` `sampleReleases()` / `sampleSightings()`, all made up, links on
+    example.com): Survivors (a draft), Me Dá Seu Body (self-release 13 days out with a blocked step, no
+    lyrics, a waiting pitch), Slow Burn (an invented label release the label delivers, in the report), Touch
+    Me (out 12 days ago, with an invented deal), and an unknown "Velvet Night" in the report.
+* **Rules paid for in review (11 Nov 2026):** the reply is saved BEFORE the question is closed, and a
+  failed close never throws (the sender would send twice) · the page answers the message itself, never the
+  thread's root (it closed an unrelated request) · only Luke marks his own step done (Nova could "approve"
+  his teasers) · lyrics only by Luke or Claude (the tools invited Verse to write them) · team notes come
+  from "HQ" naming who acted, not in Luke's name · the secrets guard in lyrics wants a made-up-secret shape
+  (letters AND digits, 6+, no "/", not 2night/4ever: "the password is 2night" is a lyric) and its refusal
+  quotes the line with digits hidden · two live releases can't share a name · the board carries no lyrics
+  or logs · the check is cut by whole lines · `luke_briefing` never says "none planned" without the sheet
+  · a waiting step is never late and is never shown a "Mark done" · `sightMatch` needs the date within a
+  day (another artist's "Love You" is not ours) · the message to Nova is claimed in the same write ·
+  "Sent without" only from `sentWithout` · a reopened or freed step is never born late · "Read" means
+  handed over (`messages_for_you`), and Claude's board read marks read.
+* **Outside the repo** (done 11 Nov): the bots' guide (badscandal-hq `staff-desk/GUIDE.md`, re-seeded with
+  `build-seed`, not committed there at the time of writing) and Nova's PDF ("Staff Desk/BADSCANDAL HQ -
+  Staff Desk Guide for Nova (v2, 11 Nov 2026).pdf") describe the steps, `spotify_upcoming` and
+  `messages_for_you`; Claude's rounds run at 09:40, 15:40 and 21:40. Screenshots: "HQ release pipeline -
+  screenshots/" next to the repo.
+
+## The Revolut reader (11 Nov 2026)
+
+Why: income can land in Luke's PERSONAL Revolut, and Revolut has no API for personal accounts, so nothing
+that landed there was seen (the bots log Wise, PayPal and statement emails; a statement paid into Revolut
+stayed "pending", and the desk's Revolut account source was "blocked"). The site now
+reads it by itself once a day and puts every incoming payment on the staff desk. Luke, 11 Nov 2026, on
+who sees it: "let them see my full revolut personal income to be able to actually see the income".
+Built on branch `bank-reader` (worktree `.claude/worktrees/bank-reader`), two reviews (money, security),
+merged into `release-pipeline` (`fe3ab68`), the page in `5f5b444`. NOT deployed, and it has NEVER talked
+to the real bank (see the end).
+
+* **How:** PSD2 open banking through **Enable Banking** (a licensed reader; its free "own accounts" mode,
+  `services: ["AIS"]` = account information only). NOTHING here can move money: every call is a read,
+  except `POST /auth` + `POST /sessions` (asking for and finishing Luke's read-only approval) and `DELETE
+  /sessions/{id}` (giving it back). Every request carries a fresh RS256 JWT signed with `node:crypto`
+  (`signJwt`: header `{typ, alg: RS256, kid: <application id>}`, iss `enablebanking.com`, aud
+  `api.enablebanking.com`, one hour); there is no token to store or refresh. What expires is Luke's
+  APPROVAL ("consent"), at most 180 days (`consentUntil`: the bank's maximum minus an hour), and only Luke
+  renews it, in Revolut. The redirect registered with Enable Banking must be exactly
+  `https://badscandal.com/api/bank/callback` (`REDIRECT_URL`), so connecting works ONLY on the live site
+  (a preview answers 409 `SAY.preview`).
+* **Files:** `netlify/lib/bank.mjs` (everything, with stores, env, clock and fetch passed in),
+  `netlify/functions/bank.mjs` (`/api/bank/*`), `netlify/functions/banksync.mjs` (scheduled),
+  `tests/bank.test.mjs` (a fake Enable Banking with a throwaway key made in memory). Sorting lives on the
+  desk (`netlify/lib/staff.mjs` `sortIncome`, `SORTERS`).
+* **Netlify env (names only; Luke sets them):** `ENABLE_BANKING_APPLICATION_ID`, `ENABLE_BANKING_PRIVATE_KEY`
+  (the PEM, raw, base64 on one line, or with its line breaks pasted as `\n`: `decodePem`), optional
+  `ENABLE_BANKING_ASPSP_NAME` / `ENABLE_BANKING_ASPSP_COUNTRY` (default Revolut / IE), optional
+  `BANK_OWN_NAMES` (Luke's name as other banks write it, comma-separated: money from those names is his
+  own transfer). `readConfig(env)`.
+* **Blob store `bank`** (strong consistency; previews get a throwaway deploy store):
+  `conn.json` {sessionId, validUntil, aspsp, connectedAt, accounts: [{uid, name, currency, idHash,
+  holder}], gone?} · `state/<nonce>.json` {at, validUntil, used?} (one Connect press, single use, 10
+  minutes; stored BEFORE the browser leaves; unfinished ones pruned) · `sync.json` {lastRunAt, lastOkAt,
+  lastError, perAccount: {<idHash>: {lastDate, cursor?: {key, dateFrom}}}, lastAdded, totals, last,
+  connectedAt}. The session id is never answered by any endpoint and never logged; logs carry only
+  `logLine(e)` (kind, HTTP status, the reader's error word). **Never stored:** IBANs or account numbers
+  (`noNumbers` strips IBAN-shaped text in any case and runs of 6+ digits from labels and payer names),
+  balances (never even asked for). `holder` (the account holder's name, for the own-name rule) is kept.
+* **The endpoints** (`netlify/functions/bank.mjs`; Luke = the /hq cookie with the Origin check on POSTs,
+  Claude = `STAFF_CLAUDE_KEY`; the bots' key gets 403 everywhere here):
+  `POST /api/bank/connect` (Luke only) -> `{url}` of Revolut's approval page (503 settings missing / key
+  unreadable, 409 on a preview, 502 when Enable Banking refuses the key or doesn't list the bank) ·
+  `GET /api/bank/callback` (public; the lock is below) -> 302 `/hq?bank=connected|device|failed#money` ·
+  `GET /api/bank/status` (Luke or Claude; `?sample=1` = `sampleBankStatus()`, no store opened) ·
+  `POST /api/bank/sync` (Luke or Claude; one read now with an 8 s budget; always HTTP 200, check `ok` /
+  `error`) · `POST /api/bank/disconnect` (Luke only: gives the approval back, forgets it and every
+  account's place; the payments already read stay on the desk).
+* **The callback's lock** (`finishCallback`): the `state` nonce must exist, be unused and under 10 minutes
+  old (else nothing is read, written or called), AND the browser must carry the cookie Connect set:
+  `__Host-bs_bank_state=<sha of the state>; Max-Age=600; Path=/; Secure; HttpOnly; SameSite=Lax` (Lax: the
+  bank comes back with a top-level GET), checked in constant time (`bindingOk`). Without it, whoever
+  opened Luke's approval link could approve THEIR account onto his dashboard. Another browser -> `device`,
+  nothing touched, the nonce left for Luke's browser (finishing on a phone via a QR code lands there too).
+  The nonce is claimed with a write-if-unchanged (two copies can't both go on) and always deleted; the
+  cookie is always cleared. The whole callback keeps inside 8 s (`callbackMs`; `POST /sessions` 5 s, the
+  account details fetched together); a session that can't be stored is given back at once (`DELETE`). A
+  reconnect gives the previous session back.
+* **Status** (`bankStatus`): `{configured, connected, needsApproval, aspsp, validUntil, daysLeft,
+  expiring (<= 14 days), accounts: [{name, currency}], lastRunAt, lastOkAt, lastError, lastAdded,
+  partial, canConnectHere (production only)}`. `needsApproval` = a stored approval that ended or was
+  marked gone. Only a reader answer that SAYS the session ended (`GONE_WORDS`) means "approve again"; a
+  bare 401/403 is kind `refused` (the site's key or application), said as `SAY.keyRefused`, and the
+  connection is NOT marked gone.
+* **The daily read** (`banksync.mjs`, `50 9 * * *` UTC = 06:50 São Paulo, published site only: before
+  Ledger 07:30, the site check 09:35 and Alfred 10:00) = `syncBank()`:
+  - Each account from its saved `lastDate` minus 7 days (`overlapDays`: banks backdate bookings; the desk
+    never counts a payment twice). An account with nothing saved (first run, new account, a new approval)
+    starts at the EARLIER of the 1st of last month and a week before the last full read, so a lapsed
+    approval or Disconnect-then-Connect leaves no gap. Places are kept by the account's identification
+    hash (`idHash`), because the uid changes with every approval.
+  - Caps: 12 pages per account per run; no new read starts after 60% of the budget and none is still
+    running after 75% (`readShare`; the rest is the desk's); budget 20 s scheduled, 8 s for `POST sync`.
+    A cap saves `cursor {key, dateFrom}` and the next run carries on (`more: true`); a continuation key the
+    reader no longer knows restarts that account; our own deadline counts as the cap, not an error.
+  - Only BOOKED credits (`readTx`: no status, or not pending/cancelled/rejected/on hold/scheduled/INFO/
+    OTHR). The same id twice in one read is one payment; rows without an id are never merged (equal
+    look-alikes are numbered in the bank's order).
+  - Each goes on the desk through `submitIncome` as bot `HQ`, account `Revolut`, note "Read from Revolut",
+    reference = the transaction id (else entry reference, else a hash of date|amount|currency|payer|text +
+    idHash + its look-alike number; an id over 80 characters is hashed, never cut). Already there =
+    `findKnown`: account Revolut and the same reference or `bankRef`. One odd row (a StaffError other than
+    busy) is skipped and counted; the run goes on.
+  - **Pending-statement upgrade** (`pendingFor`): an income credit from a known source finds the OLDEST
+    pending entry of that source with the same amount and currency, dated on or before it, in its month or
+    the three before, and upgrades THAT one (`pending_id`) under its payer name; the statement keeps its
+    reference and the bank's id is kept beside it as `bankRef` (two equal same-day payments stay two).
+  - `incomeCheck` ("Revolut: checked today", note "Read from Revolut: N new, N to sort, …") ONLY when
+    every account was read to the end. `lastOkAt` only after a full read with no error; a capped run is
+    `partial` and "N payments in" adds up across it and the run that finishes it.
+* **`classify(tx, ctx)`, in this order:** (1) **own name** -> transfer: the payer is an account holder
+  (`ownName`: the full name in any order, accents/case/dots/titles ignored, or first + last name with at
+  most one extra word and no company word like Ltd/Music/Records; never one word) or in `BANK_OWN_NAMES` ·
+  (2) **Revolut's own wording** -> transfer (`OWN_MOVES`, line by line from the line's start, so "Payment
+  from Savings & Co" is not a savings move): `^exchanged? (to|from) XXX`, `^(to|from) (pocket|vault|
+  savings)`, `^(pocket|vault|savings) (withdrawal|top-up|transfer)`, `^withdrawing savings`, `top-up by
+  *dddd`, `^(apple|google) pay (top-up|deposit)` · (3) **refund** -> left out, counted (`REFUND`: refund(ed|s),
+  reversal, reversed, reverted, chargeback, cashback, also inside CARD_REFUND / REFUND-0042) · (4) **known
+  source** -> income, `received` with that source's category (`sourceFor`: the source's name or match
+  words as WHOLE words of the payer, never its id; payer sources only) · (5) **the pair** -> transfer: a
+  booked debit in ANOTHER of his accounts, same currency and amount, within 3 days, used once, and only for
+  a credit that names nobody (no payer, "Revolut…", or one of his accounts' own labels: a friend's 50 is
+  never hidden by a 50 he paid elsewhere) · (6) anything else -> **`unsorted`**. A known source is checked
+  BEFORE the pair on purpose. "Payment from X" and "Top-up" alone are deliberately NOT transfers (money
+  moved in from PayPal or Wise lands as unsorted, or as income if listed as a source).
+* **"unsorted"** (`INCOME_STATUS`): in the account, nobody has said what it is: in NO total (received,
+  pending, a source's month), not in "new payers", listed apart (`incomeReport().unsorted` newest 40 +
+  `unsortedCount`) with one problems line "N payments in Revolut that nobody has sorted yet". Only the
+  reader (`HQ`) files a payment as unsorted; a later unsorted never overwrites a decided status.
+  - **Who sees it:** the bots see EVERYTHING the reader puts on the desk, unsorted rows and own transfers
+    included (`income_status`, with `unsorted: [{id, month, line}]`). Luke's decision of 11 Nov 2026
+    (commit `e8c8b6e`); it reverses the review fix that had hidden personal rows from the bots.
+  - **Who sorts:** `SORTERS` = Luke, Claude, Ledger, Sheet, Nova. `sortIncome(store, now, roster, {by, id,
+    month, status: "received" (+ category, one of the six CATEGORIES) | "transfer" (not income)})`: only an
+    unsorted entry, or one whose last decision was the reader's own (HQ); never a pending one; what a person
+    or a bot decided stays. `submitIncome` refuses to move an unsorted entry to a decided status for anyone
+    else. The connector tool `sort_payment` (listed for every bot, refused for anyone not in `SORTERS`; its description: sort ONLY when the
+    payer makes it clear, else ONE `send_message` to Luke, needs decision; never guess) and `POST
+    /api/staff/sort` {id, month, status, category} (Luke's cookie or Claude's key). `CLAUDE_TOOLS` is now
+    empty: nothing is Claude-only.
+* **The sentences:** `SAY` in bank.mjs (again, missing, notConnected, preview, keyBad, keyRefused,
+  noBank, readerDown, unreachable, someAccounts, desk; keyBad / keyRefused / noBank name the Netlify
+  settings) and `bankLine(status, now)`, the one line: "Revolut: read today at 06:50 · 2 payments in ·
+  approval ends in 86 days" / "… the last read failed …" / "… the last read stopped part way, the rest
+  comes at the next read …" / "Revolut is not connected" / "Revolut has to be approved again" / "The
+  site is missing its Revolut settings". `HQLib.bankLine` is the same function, tested case by case
+  against the server's.
+* **The page** (`js/hq-staff.js`, rules in `js/hq-lib.js`): `GET /api/bank/status` is asked with the board
+  and refreshed with it; its state is kept in memory only (no localStorage key; offline the tile says it
+  couldn't be read). Money -> "Money coming in":
+  - **The Revolut tile** among the account tiles (the desk's own "Revolut" account tile is dropped, one
+    tile per account): `bankLine` word for word, "Reads Current · EUR, … Read only: it can never move
+    money.", and the buttons `bankView` picks: Read now + Disconnect when connected (Approve again first and
+    a red border with 14 days or fewer); Approve again + Disconnect when the approval is gone (red); Connect
+    Revolut when not connected; on a preview no Connect, just `SAY.preview`; not configured: "Connecting
+    needs the Revolut settings on Netlify first." A failed read shows the reader's sentence; a status that
+    can't be read says "Couldn't read Revolut's state just now. The rest of Money is fine." + Try again.
+    Read now -> "Reading…" -> "Read at HH:MM: N new payments came in." and everything reloads. Connect goes
+    to the returned address only if it starts with https://. Disconnect asks inline first.
+  - **`?bank=` flags** (`bankFlag`): connected / failed / device say their line in the tile and are taken
+    out of the address with `history.replaceState`; `connected` runs ONE automatic Read now (not in the
+    sample).
+  - **To sort · N** below Received / Pending: "It's income" asks which of the six kinds (`SORT_TYPES`) then
+    confirms ("Sort X's EUR 60.00 (Wed 11 Nov) as income (Production)? … can't be changed here."); "Not
+    income" asks once; afterwards "Sorted as income (Production)" takes the row's place for 10 minutes,
+    focus moves to it, and the totals are read again. Off in the sample.
+  - **Latest payments** say "To sort", "Your own transfer" or "Not income" (`payStatus`), amounts greyed.
+  - **Today:** "N payments in Revolut to sort", "Revolut has to be approved again", "Revolut's approval ends
+    in N days", all to `#money` (`bankAttention`); the desk's "…nobody has sorted yet" line is not repeated
+    as an income problem. **Data health:** a "Revolut" row (`bankHealth`), red after 26 h without a full read.
+  - New `HQLib`: `bankLine`, `bankView`, `bankButton`, `bankFlag`, `syncWords`, `payStatus`, `sortQuestion`,
+    `sortedLine`, `toSortWords`, `bankAttention`, `bankHealth`, `SORT_TYPES`; `attention()` takes `o.bank`,
+    `healthRows()` adds the row when `bank` is passed; `window.HQStaff` gains `bank()`, `bankProblem()`.
+    Fixed on the way: the red line on an attention account tile never matched (`:first-of-type`).
+  - **Sample:** `sampleBankStatus()` (connected, read 06:50, 2 in, 86 days), a made-up Revolut account
+    source checked by HQ, two made-up rows to sort and one own transfer, none in the totals.
+* **To switch it on (Luke, once):** add `https://badscandal.com/api/bank/callback` to the Enable Banking
+  application's redirect URLs (the old one pointed at the bookkeeping app); put the two env values on
+  Netlify with the helper OUTSIDE this repo, "Staff Desk/4 - Put the Revolut reader's settings on the site
+  (run once).command" (next to the repo's folder), then redeploy; in the private seed (badscandal-hq
+  `staff-desk/`) set the Revolut account source from blocked to active; merge and deploy; press Connect
+  Revolut on /hq (on badscandal.com, in the browser he will finish in).
+* **NOT proven yet (no real bank call has ever been made):** Revolut's actual wording for exchanges,
+  pockets and top-ups in this feed (the patterns come from an older CSV importer's tests); whether
+  `/accounts/{uid}/details` `name` really is the holder (if not, the own-name rule never fires: the safe
+  direction); what an ended or revoked approval looks like (if it is a bare 401, Luke sees the key
+  message, though the expiry date still says "approve again"); whether a continuation key works the next
+  day; whether `POST /sessions` gives `accounts` as strings or objects (both handled); whether the daily
+  read fits the scheduled function's time on a long history.
