@@ -277,3 +277,37 @@ export function hqModel(sheets, today, fx = {}) {
   return { today, songs, growth, fans, releases, team, money, empty,
     next: releases.find((r) => r.date && r.date >= today) || null };
 }
+
+/* ---------- the phone summary (/api/hq/summary, for the LDashboard app's BADSCANDAL tab) ----------
+   The same numbers as /hq, trimmed for a phone on a bad connection: no series longer than 14 days,
+   no full task list, 10 fans. Built ONLY from hqModel() so the two can never disagree. */
+const flatCur = (block) => { /* {cat: {cur: n}} -> {cur: n} */
+  const t = {};
+  for (const cur of Object.values(block || {})) for (const [c, a] of Object.entries(cur)) t[c] = round((t[c] || 0) + a);
+  return t;
+};
+export function hqSummary(m) {
+  const c = m.money.cap;
+  const month = m.money.months.find((x) => x.month === m.today.slice(0, 7)) || null;
+  const n = m.next;
+  return {
+    v: 1, today: m.today,
+    cap: { month: c.month, amount: c.amount, warn: c.warn, stop: c.stop, currency: c.currency, spent: c.spent, left: c.left, pct: c.pct,
+      status: c.status, perDay: c.perDay, stopDay: c.stopDay, native: c.native, estimated: c.estimated, missingRate: c.missingRate, rate: c.rate, lastDay: c.lastDay },
+    next: n ? { song: n.song, date: n.date, daysToGo: n.daysToGo, weekday: n.weekday, status: n.status, late: n.late,
+      lateSteps: n.steps.filter((s) => s.late).map((s) => ({ label: s.label, owner: s.owner, due: s.due })) } : null,
+    songs: m.songs.map((s) => ({ song: s.song, streams: s.streams, lastDay: s.lastDay, stale: s.stale, dayChange: s.dayChange,
+      week: s.week, prevWeek: s.prevWeek, momentum: s.momentum, trend: s.trend, daysOut: s.daysOut, spark: s.series.slice(-14).map((p) => p.v) })),
+    growth: m.growth.map((g) => ({ platform: g.platform, account: g.account, followers: g.followers, day: g.day, week: g.week, lastDay: g.lastDay, stale: g.stale })),
+    fans: [...m.fans.people].sort((a, b) => (a.last < b.last ? 1 : a.last > b.last ? -1 : b.times - a.times)).slice(0, 10)
+      .map((p) => ({ handle: p.handle, platform: p.platform, last: p.last, times: p.times, signals: p.signals, quote: p.quote, engage: p.engage, profile: p.profile })),
+    fansTotal: m.fans.total, fansRepeat: m.fans.repeat,
+    money: month ? { month: month.month, spend: flatCur(month.spend), income: flatCur(month.income), pending: flatCur(month.pending),
+      spendEur: month.spendEur.amount, incomeEur: month.incomeEur.amount, netEur: month.netEur, missingRate: month.spendEur.missing || month.incomeEur.missing, rate: month.rate }
+      : { month: m.today.slice(0, 7), spend: {}, income: {}, pending: {}, spendEur: null, incomeEur: null, netEur: null, missingRate: false, rate: null },
+    tasks: { open: m.team.tasks.length, late: m.team.late, blocked: m.team.blocked,
+      forLuke: m.team.forLuke.slice(0, 8).map((t) => ({ task: t.task, deadline: t.deadline, late: t.late, status: t.status, blocker: t.blocker })),
+      lateList: m.team.tasks.filter((t) => t.late || t.status === "blocked").slice(0, 6).map((t) => ({ task: t.task, owner: t.owner, deadline: t.deadline, late: t.late, status: t.status })) },
+    empty: m.empty,
+  };
+}

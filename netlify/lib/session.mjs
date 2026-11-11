@@ -68,3 +68,14 @@ export function sessionCookie(value) {
 export function clearCookie() {
   return `${COOKIE}=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=Strict`;
 }
+
+/* Bearer token for machine callers (/api/hq/summary, 11 Nov 2026). Both sides are hashed first,
+   so the comparison is constant-time whatever length the caller sends. No token set -> false. */
+export async function bearerOk(header, token) {
+  if (!token) return false;
+  const m = /^Bearer\s+(\S{1,512})\s*$/i.exec(String(header || ""));
+  if (!m) return false;
+  const h = async (s) => b64url(await crypto.subtle.digest("SHA-256", enc.encode("bs-hq-app|" + s)));
+  const [a, b] = await Promise.all([h(m[1]), h(token)]);
+  return sameString(a, b);
+}
