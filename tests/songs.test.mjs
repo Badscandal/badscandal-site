@@ -95,5 +95,5 @@ test("no Feature.fm, music.badscandal.com or pre-save links in anything the site
   }
   assert.match(read("_redirects"), /^\/listen\s+\/\s+302!$/m);
   assert.match(read("_redirects"), /^\/listen\.html\s+\/\s+302!$/m);
-  for (const f of ["admin.html", "index.html", "js/listen.js"]) assert.doesNotMatch(read(f), /Feature\.fm/i, f);
+  for (const f of ["hq.html", "js/hq.js", "js/hq-pages.js", "index.html", "js/listen.js"]) assert.doesNotMatch(read(f), /Feature\.fm/i, f);
 });

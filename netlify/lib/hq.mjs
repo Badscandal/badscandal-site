@@ -41,6 +41,27 @@ export function rowsToObjects(values) {
     .map((r) => Object.fromEntries(head.map((h, i) => [h, norm(r[i])]).filter(([h]) => h)));
 }
 
+/* ---------- spreadsheet errors (11 Nov 2026) ----------
+   A tab whose cells are spreadsheet errors (#REF!, #N/A, #ERROR!, …) must not look empty: the page
+   says "can't be read: the sheet shows an error". -> { Tab: { cells, first, readable } } for every
+   tab with at least one error cell (readable = rows that still have no error in them). */
+export const SHEET_ERROR = /^#(REF!|N\/A|ERROR!|VALUE!|DIV\/0!|NAME\?|NUM!|NULL!|SPILL!|CALC!)/i;
+export function sheetErrors(sheets) {
+  const out = {};
+  for (const tab of HQ_TABS) {
+    const values = Array.isArray(sheets[tab]) ? sheets[tab] : [];
+    let cells = 0, first = "", readable = 0;
+    values.forEach((row, i) => {
+      const bad = (Array.isArray(row) ? row : []).filter((c) => SHEET_ERROR.test(norm(c)));
+      cells += bad.length;
+      if (bad.length && !first) first = norm(bad[0]);
+      if (i > 0 && !bad.length && Array.isArray(row) && row.some((c) => norm(c))) readable++;
+    });
+    if (cells) out[tab] = { cells, first, readable };
+  }
+  return out;
+}
+
 /* "1,234" / "1.234,50" / "USD 12.30" -> number; "", "not read", "#REF!" -> null (never 0) */
 export function num(v) {
   let s = norm(v);
@@ -180,8 +201,22 @@ export function releasesReport(rows, today) {
 }
 
 /* ---------- team: tasks per owner and who last logged ---------- */
+/* Today's duties (11 Nov 2026): Tasks rows whose id starts with "D-" are the bots' daily duties.
+   Today's = deadline today, or no date at all (a standing duty). done / todo / blocked + blocker.
+   They are NOT counted as ordinary tasks (no "late", no open count). */
+export const isDuty = (t) => /^d-/i.test(norm(t.id));
+export function dutiesReport(tasks, today) {
+  const list = tasks.filter((t) => isDuty(t) && t.task && (!DAY.test(norm(t.deadline).slice(0, 10)) || norm(t.deadline).slice(0, 10) === today))
+    .map((t) => ({ id: norm(t.id), owner: norm(t.owner) || "?", task: t.task, blocker: norm(t.blocker),
+      status: /^(done|yes|ok|✓|✔)$/i.test(norm(t.status)) ? "done" : /block/i.test(norm(t.status)) ? "blocked" : "todo" }));
+  const owners = {};
+  for (const d of list) (owners[d.owner] || (owners[d.owner] = { owner: d.owner, done: 0, todo: 0, blocked: 0, items: [] })).items.push(d), owners[d.owner][d.status]++;
+  return { today, total: list.length, done: list.filter((d) => d.status === "done").length, blocked: list.filter((d) => d.status === "blocked").length,
+    byOwner: Object.values(owners).sort((a, b) => b.blocked - a.blocked || b.todo - a.todo || (a.owner < b.owner ? -1 : 1)) };
+}
+
 export function teamReport(tasks, sheets, today) {
-  const open = tasks.filter((t) => t.task && !/^done$/i.test(t.status));
+  const open = tasks.filter((t) => t.task && !isDuty(t) && !/^done$/i.test(t.status));
   const row = (t) => ({ id: t.id || "", owner: t.owner || "?", task: t.task, deadline: t.deadline || "", status: key(t.status) || "todo", blocker: t.blocker || "",
     late: DAY.test((t.deadline || "").slice(0, 10)) && (t.deadline || "").slice(0, 10) < today && !/^done$/i.test(t.status) });
   const list = open.map(row).sort((a, b) => (b.late - a.late) || ((a.deadline || "9") < (b.deadline || "9") ? -1 : 1));
@@ -309,6 +344,7 @@ export function hqModel(sheets, today, fx = {}, meta) {
   const team = teamReport(t.Tasks, [t.Growth, t.Songs, t.Fans, t.Royalties], today);
   const money = { ...moneyReport(t.Spend, t.Income, t.Royalties, today, fx), metaSource: ms.source };
   const empty = HQ_TABS.filter((n) => !t[n].length);
-  return { today, songs, growth, fans, releases, team, money, empty,
+  team.duties = dutiesReport(t.Tasks, today);
+  return { today, songs, growth, fans, releases, team, money, empty, sheetErrors: sheetErrors(sheets),
     next: releases.find((r) => r.date && r.date >= today) || null };
 }
