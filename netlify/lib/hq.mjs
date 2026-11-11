@@ -31,6 +31,13 @@ export const STEPS = [
 const norm = (s) => String(s == null ? "" : s).trim();
 const key = (s) => norm(s).toLowerCase().replace(/\s+/g, " ");
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
+/* a song's name without accents, case, spaces or signs ("Me Dá Seu Body" = "me da seu body") */
+const songKey = (s) => norm(s).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]/g, "");
+/* the same song? (11 Nov 2026, review) A title with no Latin letter or digit ("Ночь") has an EMPTY songKey;
+   "" === "" made every such title the same song. Those compare by their own words; empty never matches.
+   The same rule as sameSong() in staff.mjs. */
+const ownWords = (s) => norm(s).normalize("NFC").toLowerCase().replace(/\s+/g, " ");
+const sameSong = (a, b) => { const ka = songKey(a), kb = songKey(b); return ka || kb ? ka === kb : ownWords(a) !== "" && ownWords(a) === ownWords(b); };
 
 /* values: a tab as rows of cells (first row = headers) -> [{header: cell}] with lowercase headers */
 export function rowsToObjects(values) {
@@ -106,7 +113,7 @@ export function songsReport(rows, royalties, releases, today) {
     const s1 = sum(w1.map((x) => x.streams)), s0 = sum(w0.map((x) => x.streams));
     /* momentum needs two full-ish weeks; fewer days = "new" (no percentage is invented) */
     const pct = w0.length >= 4 && w1.length >= 4 && s0 > 0 ? Math.round(((s1 - s0) / s0) * 1000) / 10 : null;
-    const rel = releases.find((x) => key(x.song) === key(song));
+    const rel = releases.find((x) => sameSong(x.song, song) && DAY.test(x.release_date || ""));
     const relDate = rel && DAY.test(rel.release_date) ? rel.release_date : null;
     return {
       song,
@@ -199,6 +206,60 @@ export function releasesReport(rows, today) {
       steps, late: steps.filter((s) => s.late).length, notes: r.notes || "",
     };
   }).sort((a, b) => ((a.date || "9") < (b.date || "9") ? -1 : 1));
+}
+
+/* ---------- one list of releases: the sheet's and the staff desk's (11 Nov 2026) ----------
+   The desk's release pipeline (netlify/lib/staff.mjs releaseView) is mapped to the sheet's shape, so
+   everything that reads `releases` / `next` (Today, the release panel, attention, the briefing) works
+   for a desk release unchanged. A song in both (titles compared without accents, case and spaces) is
+   ONE entry: the desk's steps and dates, the sheet's status text kept. deskReleases: releaseView()s
+   (only the scheduled ones join). A desk step that is skipped (the label delivers it) counts as done;
+   one that is waiting (the pitch before the song shows in Spotify for Artists) is never late.
+   sightings (11 Nov 2026, V5): Atlas's last Spotify for Artists report (null = none yet; undefined =
+   the desk was not read). A sheet-only release whose "Spotify pitch sent" is late while that report
+   does not show the song reads "waiting: not in Spotify for Artists yet" instead of late (Luke saw it
+   on Me Dá Seu Body: the pitch could not be sent, the song wasn't there yet). Only while the report is
+   less than 48 hours old (now: ms, optional) and the song is not out yet; else late is late. */
+const PITCH = STEPS.find((s) => s.key === "t-14 pitched").label;
+const reportList = (s) => (s && Array.isArray(s.list || s.items) ? s.list || s.items : null);
+const reportHas = (sightings, r) => reportList(sightings).some((x) => sameSong(x.title, r.song) && (!r.date || !DAY.test(x.date || "") || Math.abs(daysBetween(x.date, r.date)) <= 1));
+/* A report counts only while it is CURRENT (fixed 11 Nov 2026, review): none at all (null), or one older than
+   48 hours, says nothing about today, and a late pitch is late. now = ms (optional; else by São Paulo day). */
+const reportCurrent = (s, today, now) => !!reportList(s) && !!s.at && (now != null ? now - Date.parse(s.at) < 48 * 3600000 : daysBetween(String(s.sp || s.at).slice(0, 10), today) <= 1);
+export function mergeReleases(sheetReleases, deskReleases, today, sightings, now) {
+  /* the sheet's own rows: a late pitch waits while a CURRENT report does not show the song, and only
+     before its release day (a song that is out never shows under Upcoming there, so it would wait forever) */
+  const sheetRow = (r) => {
+    if (!reportCurrent(sightings, today, now) || !(r.date && r.date > today) || reportHas(sightings, r) || !(r.steps || []).some((s) => s.label === PITCH && s.late)) return r;
+    const steps = r.steps.map((s) => (s.label === PITCH && s.late ? { ...s, late: false, waiting: true, waitingText: "waiting: not in Spotify for Artists yet" } : s));
+    return { ...r, steps, late: steps.filter((s) => s.late).length };
+  };
+  if (!deskReleases || !deskReleases.length) return sheetReleases.map(sheetRow);
+  const fromDesk = (v) => {
+    const date = DAY.test(v.date || "") ? v.date : null;
+    const steps = (v.steps || []).map((s) => {
+      const skipped = s.status === "skipped";
+      const late = typeof s.late === "boolean" ? s.late : !skipped && s.status !== "done" && !!s.due && s.due < today;
+      return { label: s.label, owner: s.owner, due: s.due || null, done: s.status === "done" || skipped, late,
+        note: s.status === "blocked" ? "blocked: " + (s.note || "") : s.note || "", ...(skipped ? { skipped: true } : {}), ...(s.waiting ? { waiting: true, waitingText: s.waitingText || "waiting" } : {}) };
+    });
+    return { song: v.title, slug: v.id, date, status: (v.pack && v.pack.storeStatus) || "",
+      daysToGo: date ? daysBetween(today, date) : null,
+      weekday: date ? ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][new Date(date + "T12:00:00Z").getUTCDay()] : null,
+      steps, late: steps.filter((s) => s.late).length, notes: (v.pack && v.pack.notes) || "",
+      desk: true, id: v.id, missing: v.missing || [], tight: !!v.tight, deal: v.deal || null, warnings: v.warnings || [], where: v.where || "" };
+  };
+  const desk = deskReleases.filter((v) => v && v.title && v.status === "scheduled").map(fromDesk);
+  /* every desk release keeps its own slot (by id): two with the same name are never folded into one
+     (11 Nov 2026); a sheet row takes the first desk release of its name that no other row took */
+  const used = new Set();
+  const out = sheetReleases.map((r) => {
+    const d = desk.find((x) => !used.has(x.id) && sameSong(x.song, r.song));
+    if (!d) return sheetRow(r);
+    used.add(d.id);
+    return { ...d, status: r.status || d.status, slug: r.slug || d.slug };
+  });
+  return out.concat(desk.filter((d) => !used.has(d.id))).sort((a, b) => ((a.date || "9") < (b.date || "9") ? -1 : (a.date || "9") > (b.date || "9") ? 1 : 0));
 }
 
 /* ---------- team: tasks per owner and who last logged ---------- */
@@ -375,8 +436,11 @@ export function metaSpend(spendRows, meta) {
 
 /* sheets: { Growth: [[...cells]], ... } straight from the sheet (Updates: optional, null = no tab).
    today: São Paulo "YYYY-MM-DD". meta: see metaSpend() (optional). nowHM: São Paulo "HH:MM" (duty times). */
-/* staff (optional, from the staff desk): { updates: [{sp, bot, status, message, link}], overlay } — the
-   connector's updates join the sheet's Updates tab in ONE live log, and finish/block today's duties. */
+/* staff (optional, from the staff desk): { updates: [{sp, bot, status, message, link}], overlay, releases } — the
+   connector's updates join the sheet's Updates tab in ONE live log, and finish/block today's duties;
+   releases (releaseView()s that aren't cancelled: the scheduled ones join the sheet's Releases tab,
+   mergeReleases; all of them give songs[].deal); sightings (Atlas's last Spotify for Artists report,
+   null = none yet; left out = not read). */
 export function mergeUpdates(sheetRows, staffUpdates) {
   /* every sheet row stays as it is; a connector update is dropped only when the sheet already has
      the very same line from the same bot on the same day (a bot that wrote both) */
@@ -388,10 +452,20 @@ export function hqModel(sheets, today, fx = {}, meta, nowHM = "", staff = null) 
   const t = Object.fromEntries(HQ_TABS.map((n) => [n, rowsToObjects(sheets[n])]));
   const ms = metaSpend(t.Spend, meta);
   t.Spend = ms.rows;
-  const songs = songsReport(t.Songs, t.Royalties, t.Releases, today);
+  const deskReleases = staff && Array.isArray(staff.releases) ? staff.releases : [];
+  /* a song's release date: the desk's first (it is the one the team works to), then the sheet's */
+  const relDates = deskReleases.filter((v) => v.status === "scheduled" && v.date).map((v) => ({ song: v.title, release_date: v.date }));
+  const songs = songsReport(t.Songs, t.Royalties, relDates.concat(t.Releases), today);
+  /* whose song it is (V3, 11 Nov 2026): the desk release with the same name (a sent one before a draft),
+     null when the desk has no record of it */
+  for (const s of songs) {
+    const same = deskReleases.filter((v) => v && v.status !== "cancelled" && v.deal && sameSong(v.title, s.song));
+    const v = same.find((x) => x.status === "scheduled") || same[0];
+    s.deal = v ? v.deal : null;
+  }
   const growth = growthReport(t.Growth, today);
   const fans = fansReport(t.Fans);
-  const releases = releasesReport(t.Releases, today);
+  const releases = mergeReleases(releasesReport(t.Releases, today), deskReleases, today, staff && "sightings" in staff ? staff.sightings : undefined, staff && staff.now != null ? staff.now : undefined);
   const team = teamReport(t.Tasks, [t.Growth, t.Songs, t.Fans, t.Royalties], today);
   const money = { ...moneyReport(t.Spend, t.Income, t.Royalties, today, fx), metaSource: ms.source };
   const empty = HQ_TABS.filter((n) => !t[n].length);

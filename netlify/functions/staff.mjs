@@ -4,10 +4,23 @@
      POST /mcp                 the connector the bots add in their app ("Remote HTTPS", one header:
                                Authorization: Bearer <key>). Claude Code connects the same way.
      GET  /api/staff/board     everything /hq shows about the team, the messages and the money in
-     POST /api/staff/message   Luke (or Claude) writes on the board        { to, text, needs, re, options }
+     POST /api/staff/message   Luke (or Claude) writes on the board        { to, text, needs, re, options, note }
+                               (-> settled: did the answer close the message it answers; note = Luke's pick)
      POST /api/staff/resolve   …or settles a message                        { id, note }
      POST /api/staff/config    Luke switches the bots' key off / on         { botsOn }
      PUT  /api/staff/seed      Claude loads the roster, the income sources and the guide
+     POST /api/staff/release         a release pack: start a draft or change one { id?, title, date, pack }
+     POST /api/staff/release/send    …send it to the team (steps get dates)       { id }
+     POST /api/staff/release/date    …move its release day                         { id, date }
+     POST /api/staff/release/cancel  …cancel it                                    { id }
+     POST /api/staff/release/step    …mark one step (Luke may mark any)            { id, step, status, note, link }
+     POST /api/staff/release/remove  …take a cancelled or long-out one off the desk { id }
+     GET  /api/staff/release?id=     ONE whole release (the board's copy has no lyrics and no log)
+     (the release pipeline, 11 Nov 2026: every answer is { ok, release: releaseView } or 400 { error }
+      in a plain sentence; a refused send also carries missing: [field keys] and canSendAnyway: true.
+      release/send takes anyway: true (Luke or Claude): sent with required fields missing)
+     POST /api/staff/sighting        Luke answers what a song Spotify for Artists shows is  { key, answer, label?, note? }
+                                     answer: self | label | notmine | mistake (Luke only, 11 Nov 2026)
 
    Who is calling:
      Luke   = the /hq login cookie (same as every /api/admin/* call; POSTs must come from our own page)
@@ -23,7 +36,7 @@ import { loadHq } from "../lib/hq-load.mjs";
 import { handle } from "../lib/mcp.mjs";
 import { COOKIE, readCookie, verifySession } from "../lib/session.mjs";
 import * as S from "../lib/staff.mjs";
-import { sampleBoard } from "../lib/staff-sample.mjs";
+import { sampleBoard, sampleReleases, sampleSightings } from "../lib/staff-sample.mjs";
 import { callTool, INSTRUCTIONS, TOOLS } from "../lib/staff-tools.mjs";
 
 const NO_STORE = { "Cache-Control": "no-store", "X-Robots-Tag": "noindex, nofollow" };
@@ -117,10 +130,20 @@ async function api(req, context, path) {
     if (sample) return json(200, { sample: true, ...sampleBoard(now) });
     const st = stores(context);
     const [desk, hqAns] = await Promise.all([S.loadDesk(st.desk, now), hqLoader(st)().catch(() => null)]);
-    if (role === "claude") await S.touchSeen(st.desk, now, "Claude", "board");
+    /* the board hands Claude every message, so it counts as Claude having READ them (11 Nov 2026, review:
+       a round that reads the desk this way left Luke's answers to Claude "Not read yet" for good) */
+    if (role === "claude") await Promise.all([S.touchSeen(st.desk, now, "Claude", "board"), S.touchRead(st.desk, now, "Claude")]);
     return json(200, { ...S.board(desk, now, hqAns && hqAns.team ? hqAns : null), hqRead: !!(hqAns && hqAns.team), keys: { bots: !!Netlify.env.get("STAFF_BOT_KEY"), claude: !!Netlify.env.get("STAFF_CLAUDE_KEY") } });
   }
   if (path === "trace" && req.method === "GET") return sample ? json(200, { sample: true, trace: [] }) : json(200, { trace: await S.getTrace(stores(context).desk) });
+  if (path === "release" && req.method === "GET") {
+    /* one whole release, lyrics and log included (11 Nov 2026: the board no longer carries them) */
+    const id = String(url.searchParams.get("id") || "").slice(0, 60);
+    const desk = sample ? null : stores(context).desk;
+    const [list, sightings] = sample ? [sampleReleases(now), sampleSightings(now)] : await Promise.all([S.listReleases(desk), S.getSightings(desk)]);
+    const r = list.find((x) => x.id === id);
+    return r ? json(200, { ok: true, ...(sample ? { sample: true } : {}), release: S.releaseView(r, S.spDay(now), { sightings }) }) : json(404, { error: "There is no release with that id. Refresh the page." });
+  }
   if (sample) return json(200, { ok: true, sample: true }); /* the sample never writes */
 
   const st = stores(context);
@@ -131,10 +154,28 @@ async function api(req, context, path) {
   const a = b.value;
   try {
     if (path === "message" && req.method === "POST") {
-      const r = await S.sendMessage(st.desk, now, roster, { from: me, to: a.to, text: a.text, needs: a.needs, re: a.re, options: a.options });
-      return json(200, { ok: true, message: r.message });
+      const r = await S.sendMessage(st.desk, now, roster, { from: me, to: a.to, text: a.text, needs: a.needs, re: a.re, options: a.options, note: a.note });
+      return json(200, { ok: true, message: r.message, settled: r.settled });
     }
     if (path === "resolve" && req.method === "POST") return json(200, { ok: true, message: await S.resolveMessage(st.desk, now, roster, { id: a.id, by: me, note: a.note }) });
+    if (path.startsWith("release") && req.method === "POST") {
+      const sightings = await S.getSightings(st.desk).catch(() => null);
+      const view = (r) => S.releaseView(r, S.spDay(now), { sightings });
+      if (path === "release") return json(200, { ok: true, release: view(await S.saveRelease(st.desk, now, roster, { by: me, id: a.id, title: a.title, date: a.date, pack: a.pack })) });
+      if (path === "release/send") {
+        const r = await S.sendRelease(st.desk, now, roster, { by: me, id: a.id, anyway: a.anyway === true });
+        return json(200, { ok: true, release: view(r.release), already: r.already, told: !!r.told, alreadyOut: !!r.alreadyOut, sentWithout: r.without || [] });
+      }
+      if (path === "release/date") { const r = await S.moveRelease(st.desk, now, roster, { by: me, id: a.id, date: a.date }); return json(200, { ok: true, release: view(r.release), moved: r.moved, told: !!r.told }); }
+      if (path === "release/cancel") { const r = await S.cancelRelease(st.desk, now, roster, { by: me, id: a.id }); return json(200, { ok: true, release: view(r.release), told: !!r.told }); }
+      if (path === "release/remove") return json(200, { ok: true, ...(await S.removeRelease(st.desk, now, roster, { by: me, id: a.id })) });
+      if (path === "release/step") return json(200, { ok: true, release: view(await S.setStep(st.desk, now, roster, { by: me, id: a.id, step: a.step, status: a.status, note: a.note, link: a.link })) });
+    }
+    if (path === "sighting" && req.method === "POST") {
+      if (role !== "luke") return json(403, { error: "Only Luke answers what a song in Spotify for Artists is" });
+      const r = await S.answerSighting(st.desk, now, roster, { by: me, key: a.key, answer: a.answer, label: a.label, note: a.note, id: a.id });
+      return json(200, { ok: true, answer: r.answer, release: r.release ? S.releaseView(r.release, S.spDay(now), { sightings: r.sightings }) : null, told: !!(r.told || r.sending), sightings: r.sightings });
+    }
     if (path === "config" && req.method === "POST") {
       if (role !== "luke") return json(403, { error: "Only Luke switches the bots' key" });
       return json(200, { ok: true, config: await S.setConfig(st.desk, now, { botsOn: a.botsOn }) });
@@ -147,7 +188,7 @@ async function api(req, context, path) {
       return json(200, { ok: true, done });
     }
   } catch (e) {
-    if (e && e.name === "StaffError") return json(e.code === "not_found" ? 404 : e.code === "busy" ? 503 : 400, { error: e.message });
+    if (e && e.name === "StaffError") return json(e.code === "not_found" ? 404 : e.code === "busy" ? 503 : 400, { error: e.message, ...(e.missing ? { missing: e.missing } : {}), ...(e.anyway ? { canSendAnyway: true } : {}) });
     console.error("staff api failed", e?.name || e);
     return json(500, { error: "Could not save that" });
   }

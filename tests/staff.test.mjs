@@ -134,7 +134,7 @@ test("staff: the roster, the sources and the guide are checked before they are s
   assert.equal((await S.setConfig(d, NOW, { botsOn: false })).botsOn, false);
 });
 
-test("staff: the board and the twice-daily check say what is wrong in plain lines", async () => {
+test("staff: the board and the site's own check say what is wrong in plain lines", async () => {
   const b = sampleBoard(NOW);
   assert.equal(b.staff.length, S.DEFAULT_ROSTER.length);
   const st = Object.fromEntries(b.staff.map((w) => [w.name, w.state]));
@@ -148,7 +148,11 @@ test("staff: the board and the twice-daily check say what is wrong in plain line
   assert.ok(r.problems.some((p) => /waiting on Luke/.test(p)));
   assert.ok(r.problems.some((p) => /Never used the connector/.test(p)));
   assert.ok(r.text.length <= 1500);
-  assert.equal(S.checkReport({ desk, hq: null, hqState: null, now: NOW + 9 * 3600000 }).part, "pm");
+  /* three checks a day since 11 Nov 2026: 09:35, 15:35, 21:35 São Paulo */
+  assert.equal(r.part, "morning");
+  assert.equal(S.checkReport({ desk, hq: null, hqState: null, now: NOW + 6 * 3600000 }).part, "afternoon");
+  assert.match(S.checkReport({ desk, hq: null, hqState: null, now: NOW + 6 * 3600000 }).title, /^HQ check, 2026-11-12 afternoon: /);
+  assert.equal(S.checkReport({ desk, hq: null, hqState: null, now: NOW + 12 * 3600000 }).part, "evening");
 });
 
 /* ---- added after the independent review (11 Nov 2026) ---- */
@@ -239,7 +243,7 @@ test("staff: the duty overlay takes the newer word and only from the duty's own 
   assert.equal(mergeUpdates(sheet, []).length, 2, "the sheet's own rows are never collapsed");
 });
 
-test("staff: the twice-daily report always goes on the board, even when the sheet holds something it shouldn't", async () => {
+test("staff: the site's report always goes on the board, even when the sheet holds something it shouldn't", async () => {
   const d = memoryDesk();
   const hq = hqModel({ Tasks: [["id", "owner", "task", "deadline", "status", "blocker", "updated"], ["D-kevin-1", "Kevin", "Log TikTok", "2026-11-12 09:10", "blocked", "TikTok login code: 482913 expired", ""]] }, "2026-11-12", {}, undefined, "09:20");
   const desk = await S.loadDesk(d, NOW);
