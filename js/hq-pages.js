@@ -76,7 +76,7 @@
     if (loading) { again = true; return; }
     loading = true;
     if (!first && data) $("pgBody").classList.add("busy");
-    HQ.getJSON("/api/admin/data?" + query()).then(function (res) {
+    return HQ.getJSON("/api/admin/data?" + query()).then(function (res) {
       loading = false;
       $("pgBody").classList.remove("busy");
       if (HQ.authFail(res)) return;
@@ -420,7 +420,7 @@
 
   window.HQPages = {
     load: function (first) { syncChips(); load(first); },
-    reload: function () { state.shown = 50; syncChips(); load(false); },
+    reload: function () { state.shown = 50; syncChips(); return load(false); },
     stop: function () { clearInterval(timer); },
   };
 })();

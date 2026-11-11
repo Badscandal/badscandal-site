@@ -43,6 +43,7 @@
     var h = Math.round(m / 60);
     return h < 48 ? h + " h ago" : Math.round(h / 24) + " days ago";
   }
+  function ordinal(n) { var x = ["th", "st", "nd", "rd"], v = n % 100; return n + (x[(v - 20) % 10] || x[v] || x[0]); }
   function adKey(s) { var v = String(s || ""); try { v = v.normalize("NFD").replace(/[̀-ͯ]/g, ""); } catch (e) {} return v.toLowerCase().replace(/[^a-z0-9]/g, ""); }
   /* phones: each wide-table row becomes a card, every value labelled from the header row */
   function stack(id) {
@@ -62,8 +63,15 @@
   }
 
   /* ---------- the range shared by Songs, Ads and Pages ---------- */
+  /* São Paulo "today" and the 1st of its month, for "This month" (a custom range under the hood) */
+  function spToday() { try { return new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date()); } catch (e) { return new Date().toISOString().slice(0, 10); } }
   var state = { range: "7d", from: "", to: "" };
-  try { var saved = JSON.parse(localStorage.getItem("bs_admin_view") || "{}"); if (/^(today|7d|30d)$/.test(saved.range)) state.range = saved.range; } catch (e) {}
+  try {
+    var saved = JSON.parse(localStorage.getItem("bs_admin_view") || "{}");
+    if (/^(today|7d|30d)$/.test(saved.range)) state.range = saved.range;
+    if (saved.range === "month") { state.range = "custom"; state.to = spToday(); state.from = state.to.slice(0, 8) + "01"; }
+  } catch (e) {}
+  function isMonth() { var t = spToday(); return state.range === "custom" && state.to === t && state.from === t.slice(0, 8) + "01"; }
   function rangeQuery() {
     var q = new URLSearchParams({ range: state.range });
     if (state.range === "custom") { if (state.from) q.set("from", state.from); if (state.to) q.set("to", state.to); }
@@ -71,20 +79,28 @@
     return q;
   }
   function syncRangeSelects() {
-    [].forEach.call(document.querySelectorAll("[data-range]"), function (s) {
-      s.querySelector('option[value="custom"]').hidden = state.range !== "custom";
-      s.value = state.range;
-    });
+    var v = isMonth() ? "month" : state.range;
+    [].forEach.call(document.querySelectorAll("[data-range]"), function (s) { s.value = v; });
+    var c = $("rangeCustom");
+    if (c) { c.hidden = v !== "custom"; if (state.from) $("rFrom").value = state.from; if (state.to) $("rTo").value = state.to; }
   }
+  /* range: today | 7d | 30d | month | custom (from, to) */
   function setRange(range, from, to) {
-    state.range = range; state.from = from || state.from; state.to = to || state.to;
+    if (range === "month") { to = spToday(); from = to.slice(0, 8) + "01"; }
+    state.range = range === "month" ? "custom" : range; state.from = from || state.from; state.to = to || state.to;
     try { var v = JSON.parse(localStorage.getItem("bs_admin_view") || "{}"); v.range = range; localStorage.setItem("bs_admin_view", JSON.stringify(v)); } catch (e) {}
     syncRangeSelects();
     loadOverview();
     if (window.HQPages) window.HQPages.reload();
   }
   document.addEventListener("change", function (ev) {
-    if (ev.target.matches && ev.target.matches("[data-range]")) setRange(ev.target.value);
+    if (!ev.target.matches) return;
+    if (ev.target.matches("[data-range]")) {
+      var v = ev.target.value;
+      if (v === "custom") { $("rangeCustom").hidden = false; $("rFrom").value = state.from || spToday().slice(0, 8) + "01"; $("rTo").value = state.to || spToday(); $("rFrom").focus(); return; }
+      setRange(v);
+    }
+    if (ev.target.id === "rFrom" || ev.target.id === "rTo") { var f = $("rFrom").value, t = $("rTo").value; if (f && t) setRange("custom", f <= t ? f : t, f <= t ? t : f); }
   });
 
   /* ---------- login (same endpoint, password, cookie and lockout as before) ---------- */
@@ -97,7 +113,12 @@
     if (window.HQPages) window.HQPages.stop();
     setTimeout(function () { $("pw").focus(); }, 50);
   }
-  function showShell() { $("login").hidden = true; $("shell").hidden = false; }
+  function showShell() {
+    var was = $("shell").hidden;
+    $("login").hidden = true; $("shell").hidden = false;
+    /* the CRT wordmark (js/crt.js) measured itself while the shell was hidden: let it measure again */
+    if (was) setTimeout(function () { window.dispatchEvent(new Event("resize")); }, 0);
+  }
   $("loginForm").addEventListener("submit", function (ev) {
     ev.preventDefault();
     var btn = $("go");
@@ -136,8 +157,11 @@
   }
   document.addEventListener("visibilitychange", function () { if (!document.hidden && started) { loadOverview(); if (window.HQPages) window.HQPages.reload(); } });
 
+  function refresh() {
+    return Promise.all([loadSheet(), loadOverview(), window.HQPages ? window.HQPages.reload() : null]);
+  }
   function loadSheet() {
-    getJSON("/api/hq/data" + (sample ? "?sample=1" : "")).then(function (res) {
+    return getJSON("/api/hq/data" + (sample ? "?sample=1" : "")).then(function (res) {
       if (authFail(res)) return;
       showShell();
       $("sample").hidden = !sample;
@@ -161,7 +185,7 @@
   $("showSample").addEventListener("click", function () { location.search = "?sample=1"; });
 
   function loadOverview() {
-    getJSON("/api/admin/overview?" + rangeQuery()).then(function (res) {
+    return getJSON("/api/admin/overview?" + rangeQuery()).then(function (res) {
       if (authFail(res)) return;
       showShell();
       if (res.s !== 200) { $("yday").innerHTML = '<p class="empty">Couldn\'t load the page numbers (' + res.s + ").</p>"; return; }
@@ -206,30 +230,34 @@
     $(fill).style.width = p(c.spent); $(warn).style.left = p(c.warn); $(stop).style.left = p(c.stop);
   }
   function drawToday() {
-    var c = sheet.money.cap;
+    var c = sheet.money.cap, attn = c.status !== "ok";
     $("capMonth").textContent = monthName(c.month);
-    $("todaySub").textContent = day(sheet.today) + " · São Paulo";
-    $("capTile").className = "tile " + c.status;
-    $("capSpent").innerHTML = esc(money(c.spent, c.currency)) + " <small>of " + esc(money(c.amount, c.currency)) + " · " + c.pct + "%</small>";
+    $("todaySub").textContent = day(sheet.today);
+    $("capTile").className = "t-card t-cap " + c.status;
+    $("capSpent").innerHTML = esc(money(c.spent, c.currency)) + " <small>of " + esc(fmt(c.amount)) + "</small>";
     paintBar(c, "capFill", "capWarn", "capStop");
-    $("capShort").textContent = capMessage(c) + " Details in Ads.";
+    var line = { ok: money(c.left, c.currency) + " left", warn: "Past " + fmt(c.warn) + ": getting close", stop: "Past " + fmt(c.stop) + ": every ad should be off", over: "Over the cap: every ad must be off now" }[c.status] || "";
+    var pace = c.status === "ok" && c.perDay > 0 ? (c.stopDay ? "At this pace the " + fmt(c.stop) + " line comes on the " + ordinal(c.stopDay) + "." : "On pace to stay under " + fmt(c.stop) + ".") : "";
+    $("capShort").innerHTML = '<b class="' + (attn ? "attn" : "") + '">' + esc(line) + "</b>" + (pace ? " · " + esc(pace) : "");
     var n = sheet.next;
     $("nextSong").textContent = broken("Releases") ? "Can't be read" : n ? n.song : "None set";
-    $("nextMsg").textContent = broken("Releases") ? "The Releases tab shows an error." : n ? (n.daysToGo === 0 ? "Out today" : n.daysToGo + " days to go") + " · " + day(n.date) + (n.late ? " · " + n.late + " step" + (n.late > 1 ? "s" : "") + " late" : " · on time") : "Tell Nova the next song and a Friday.";
+    $("nextMsg").innerHTML = broken("Releases") ? '<span class="attn">The Releases tab shows an error.</span>' : n ? "<b>" + (n.daysToGo === 0 ? "Out today" : n.daysToGo + " day" + (n.daysToGo === 1 ? "" : "s")) + "</b> · " + esc(day(n.date)) +
+      (n.late ? ' · <span class="attn">' + n.late + " step" + (n.late > 1 ? "s" : "") + " late</span>" : " · on time") : "Tell Nova the next song and a Friday.";
     var mine = sheet.team.forLuke;
-    $("forLuke").innerHTML = broken("Tasks") ? '<p class="empty" style="margin-top:8px">The Tasks tab can\'t be read (sheet error).</p>' : mine.length ? '<ul class="steps">' + mine.slice(0, 5).map(function (x) {
-      return '<li class="' + (x.late ? "late" : "") + '"><span class="dot"></span><span>' + esc(x.task) + '</span><span class="w">' + esc(x.deadline ? day(x.deadline.slice(0, 10)) : "") + "</span></li>"; }).join("") + "</ul>"
-      : '<p class="empty" style="margin-top:8px">Nothing waiting on you.</p>';
+    $("forLuke").innerHTML = broken("Tasks") ? '<p class="empty2 attn">The Tasks tab can\'t be read.</p>' : mine.length ? '<ul class="t-list">' + mine.slice(0, 4).map(function (x) {
+      return '<li class="' + (x.late ? "late" : "") + '"><span>' + esc(x.task) + '</span><span class="when">' + (x.late ? "late · " : "") + esc(x.deadline ? day(x.deadline.slice(0, 10)) : "") + "</span></li>"; }).join("") + "</ul>"
+      : '<p class="empty2">Nothing waiting on you.</p>';
     var du = sheet.team.duties;
     $("dutyBig").innerHTML = broken("Tasks") ? "–" : du.total ? du.done + " <small>of " + du.total + " done</small>" : "–";
-    $("dutyMsg").textContent = broken("Tasks") ? "The Tasks tab can't be read." : !du.total ? "No duties (D- rows) for today in the sheet." : (du.blocked ? du.blocked + " blocked · " : "") + (du.total - du.done - du.blocked) + " still to do. Per bot in Team.";
+    $("dutyMsg").innerHTML = broken("Tasks") ? '<span class="attn">The Tasks tab can\'t be read.</span>' : !du.total ? "No duties logged for today." :
+      (du.blocked ? '<span class="attn">' + du.blocked + " blocked</span> · " : "") + (du.total - du.done - du.blocked) + " to do";
   }
   function drawYesterday() {
     var y = ov.yesterday;
-    $("yday").innerHTML = '<div class="big num">' + fmt(y.taps) + ' <small>real Spotify taps · ' + esc(day(y.d)) + "</small></div>" +
-      '<div class="kv"><span>People on the song pages</span><b>' + fmt(y.people) + "</b></div>" +
-      '<div class="kv"><span>Meta spend</span><b>' + (y.spend == null ? "–" : esc(money(y.spend, y.currency))) + "</b></div>" +
-      '<div class="kv"><span>Cost per tap</span><b>' + (y.cpt == null ? "–" : esc(money(y.cpt, y.currency))) + "</b></div>";
+    $("yday").innerHTML = '<p class="t-big num green">' + fmt(y.taps) + ' <small>real Spotify taps</small></p>' +
+      '<ul class="t-rows"><li><span>People on the song pages</span><b>' + fmt(y.people) + "</b></li>" +
+      "<li><span>Meta spend</span><b>" + (y.spend == null ? "–" : esc(money(y.spend, y.currency))) + "</b></li>" +
+      "<li><span>Cost per tap</span><b>" + (y.cpt == null ? "–" : esc(money(y.cpt, y.currency))) + "</b></li></ul>";
   }
   function drawKeyLines() {
     var k = (ov && ov.metaKey) || (sheet && sheet.metaKey);
@@ -419,7 +447,7 @@
     stack("taskTable");
   }
 
-  window.HQ = { sample: sample, state: state, setRange: setRange, showLogin: showLogin, showShell: showShell, rangeQuery: rangeQuery,
+  window.HQ = { sample: sample, state: state, setRange: setRange, refresh: refresh, showLogin: showLogin, showShell: showShell, rangeQuery: rangeQuery,
     esc: esc, fmt: fmt, money: money, day: day, ago: ago, getJSON: getJSON, authFail: authFail };
   /* hq-pages.js is loaded with defer right after this file: start once both are in */
   document.addEventListener("DOMContentLoaded", start);

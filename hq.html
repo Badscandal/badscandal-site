@@ -11,6 +11,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Figtree:wght@300..900&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@125,900&text=BADSCANDAL&display=swap" rel="stylesheet">
 <!-- BADSCANDAL HQ: THE one dashboard (11 Nov 2026; /admin, /admin.html and /stats 301 here). Stand-alone
      (no site.css, no main.js). Login here: the same password, cookie and lockout as before
      (/api/admin/login). Sheet side: js/hq.js + /api/hq/data. Page-visit side: js/hq.js (Today, Songs,
@@ -274,6 +275,119 @@ table.stack td:first-child::before,table.stack td.empty::before{content:none}
 @media(max-width:599px){.pg .mt td:first-child{white-space:normal;max-width:none;overflow-wrap:anywhere}.pg .mt td,.pg .mt th{padding:7px 4px}
   .pg #spendCard .trio{grid-template-columns:minmax(0,1fr)}.pg .trio .big{font-size:20px}}
 @media (prefers-reduced-motion:reduce){*{scroll-behavior:auto !important}}
+/* ================= The new look (11 Nov 2026, Step 0: shell + Today) =================
+   Black base, bigger and calmer type (nothing under 13 px on a phone), more air, fewer words.
+   ONE red, from the BADSCANDAL red film (#8D060C): --red-deep as a fill (white text on it, 8.7:1),
+   --red for red text/dots on black (5.8:1). Red = "needs attention" and the active tab ONLY.
+   Green (--spot) = Spotify taps only. */
+:root{--red:#FF3B45;--red-deep:#8D060C;--hdr:64px}
+body{font-size:15px;line-height:1.45}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+:focus-visible{outline:2px solid var(--paper);outline-offset:2px}
+/* header: the CRT wordmark, the one range control, refresh */
+.hdr{position:sticky;top:0;z-index:30;display:flex;align-items:center;gap:10px;min-height:var(--hdr);padding:8px 16px;padding-top:calc(8px + env(safe-area-inset-top));
+  background:rgba(5,5,5,.92);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);border-bottom:1px solid var(--ink-3)}
+.mark{display:flex;align-items:center;gap:8px;text-decoration:none;min-width:0;flex:none}
+.crt-hq{width:132px}
+.crt-hq canvas{display:block;width:100%;height:26px}
+.crt-hq .crt-fallback{display:block;margin:0;font-family:"Archivo",Helvetica,Arial,sans-serif;font-weight:900;font-variation-settings:"wdth" 125,"wght" 900;font-size:19px;line-height:26px;letter-spacing:-.01em;color:var(--paper)}
+.crt-hq .crt-fallback[hidden]{display:none}
+.hq-tag{font:500 13px var(--mono);letter-spacing:.14em;color:var(--muted)}
+.hdr-tools{margin-left:auto;display:flex;align-items:center;gap:8px}
+.rangebox{position:relative}
+.rangebox select{appearance:none;-webkit-appearance:none;height:44px;padding:0 34px 0 16px;border-radius:999px;background:var(--ink-2);border:1px solid var(--ink-3);
+  font:600 15px var(--sans);color:var(--paper);cursor:pointer;color-scheme:dark}
+.rangebox::after{content:"";position:absolute;right:15px;top:50%;width:7px;height:7px;border-right:2px solid var(--muted);border-bottom:2px solid var(--muted);transform:translateY(-70%) rotate(45deg);pointer-events:none}
+.iconbtn{width:44px;height:44px;flex:none;display:grid;place-items:center;border-radius:50%;background:var(--ink-2);border:1px solid var(--ink-3);color:var(--paper);cursor:pointer}
+.iconbtn svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+.iconbtn.spin svg{animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.rangecustom{display:flex;gap:8px;padding:10px 16px 0;max-width:1100px;margin:0 auto}
+.rangecustom input{flex:1;min-width:0;height:44px;border-radius:12px;background:var(--ink-2);border:1px solid var(--ink-3);color:var(--paper);font:500 16px var(--sans);padding:0 10px;color-scheme:dark}
+/* navigation: a bottom bar on phones (Today, Songs, Ads, Money, More), a left rail on desktop */
+.nav{position:fixed;left:0;right:0;bottom:0;z-index:30;display:flex;background:rgba(5,5,5,.95);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);
+  border-top:1px solid var(--ink-3);padding-bottom:env(safe-area-inset-bottom)}
+.nav a,.nav button{flex:1;min-width:0;min-height:60px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;position:relative;
+  font:600 13px var(--sans);color:var(--muted);text-decoration:none;background:none;border:0;cursor:pointer;padding:6px 2px}
+.nav svg{width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.nav [aria-current="page"],.nav .on{color:var(--paper)}
+.nav [aria-current="page"]::before,.nav .on::before{content:"";position:absolute;top:0;left:26%;right:26%;height:3px;border-radius:0 0 3px 3px;background:var(--red)}
+.nav .x{display:none}
+.nav [data-tab="money"]{order:4}.nav .nav-more{order:5}
+.nav .railfoot{display:none}
+.moresheet{position:fixed;left:0;right:0;bottom:0;z-index:40;background:var(--ink-2);border-top:1px solid var(--ink-3);border-radius:22px 22px 0 0;
+  padding:10px 16px calc(16px + env(safe-area-inset-bottom));box-shadow:0 -20px 50px rgba(0,0,0,.6)}
+.moresheet .grab{width:40px;height:4px;border-radius:2px;background:var(--ink-4);margin:4px auto 10px}
+.moresheet a,.moresheet button{display:flex;align-items:center;gap:14px;width:100%;min-height:52px;padding:0 6px;border:0;background:none;color:var(--paper);
+  font:600 17px var(--sans);text-decoration:none;border-bottom:1px solid var(--ink-3);cursor:pointer;text-align:left}
+.moresheet a:last-of-type{border-bottom:0}
+.moresheet svg{width:22px;height:22px;fill:none;stroke:var(--muted);stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.moresheet a[aria-current="page"]{color:var(--red)}
+.moresheet .out{color:var(--muted);font-weight:500;font-size:15px;margin-top:6px;border-bottom:0}
+.scrim{position:fixed;inset:0;z-index:35;background:rgba(0,0,0,.55)}
+main{max-width:1100px;padding:20px 16px calc(96px + env(safe-area-inset-bottom))}
+.livebar{display:flex;justify-content:flex-end;align-items:center;gap:6px;font-size:13px;color:var(--muted);margin:-6px 0 0}
+.livebar .lbl{font-size:13px;letter-spacing:.06em}
+/* views: one tab at a time */
+.view[hidden]{display:none !important}
+/* ---------- Today, the new look ---------- */
+#today{background:none;border:0;padding:0}
+.vhead{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin:2px 0 14px}
+.vhead h1{margin:0;font-size:30px;line-height:1.1;font-weight:800;letter-spacing:-.02em}
+.vsub{margin:0;font-size:15px;color:var(--muted)}
+#today .keyline{font-size:14px;margin:0 0 16px}
+#today .keyline.bad{color:var(--red)}
+#today .keyline.bad::before{background:var(--red)}
+#today .sheeterr{border-color:var(--red);color:var(--paper);font-size:14px;margin:0 0 16px;padding:12px 14px}
+.tgrid{display:grid;gap:12px;grid-template-columns:minmax(0,1fr);align-items:start}
+.sample{background:none;color:var(--paper);border:1px dashed var(--uv);font-size:15px;padding:12px 16px}
+.sample small{font-size:14px;color:var(--uv)}
+.t-card{display:block;background:var(--ink-2);border:1px solid var(--ink-3);border-radius:20px;padding:18px;min-width:0;color:inherit;text-decoration:none}
+a.t-card:hover{border-color:var(--ink-4)}
+.t-lbl{margin:0 0 8px;font:500 13px var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.t-big{margin:0;font-size:38px;line-height:1.05;font-weight:700;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+.t-big small{font-size:16px;font-weight:500;color:var(--muted);letter-spacing:0}
+.t-mid{margin:0;font-size:24px;line-height:1.2;font-weight:700;letter-spacing:-.01em}
+.t-line{margin:8px 0 0;font-size:15px;color:var(--uv)}
+.t-line b{color:var(--paper);font-weight:600}
+.attn{color:var(--red) !important;font-weight:600}
+.green{color:var(--spot)}
+.capbar{position:relative;height:12px;border-radius:999px;background:var(--ink-3);margin:14px 0 4px;overflow:hidden}
+.capbar i{position:absolute;left:0;top:0;bottom:0;border-radius:999px;background:var(--uv)}
+.capbar b{position:absolute;top:0;bottom:0;width:2px;background:var(--paper);opacity:.5}
+.t-cap.warn,.t-cap.stop,.t-cap.over{border-color:var(--red)}
+.t-cap.warn .capbar i,.t-cap.stop .capbar i,.t-cap.over .capbar i{background:var(--red)}
+.t-rows{margin:14px 0 0;padding:0;list-style:none}
+.t-rows li{display:flex;justify-content:space-between;gap:12px;padding:10px 0;border-top:1px solid var(--ink-3);font-size:15px;color:var(--uv)}
+.t-rows li b{color:var(--paper);font-weight:600;font-variant-numeric:tabular-nums;text-align:right}
+.t-list{margin:0;padding:0;list-style:none}
+.t-list li{display:flex;gap:12px;align-items:baseline;padding:10px 0;border-top:1px solid var(--ink-3);font-size:15px}
+.t-list li:first-child{border-top:0;padding-top:2px}
+.t-list .when{margin-left:auto;font-size:13px;color:var(--muted);white-space:nowrap}
+.t-list .late .when{color:var(--red)}
+.empty2{margin:0;font-size:15px;color:var(--muted)}
+/* loading placeholders, never blank cards */
+.ph{height:18px;border-radius:8px;margin:10px 0;background:linear-gradient(90deg,var(--ink-3) 0,#262626 50%,var(--ink-3) 100%) 0 0/200% 100%;animation:shim 1.2s infinite linear}
+.ph.big{height:40px;width:55%}
+@keyframes shim{to{background-position:-200% 0}}
+@media(min-width:720px){.tgrid{grid-template-columns:repeat(2,minmax(0,1fr))}.t-cap{grid-column:1/-1}}
+@media(min-width:1100px){.tgrid{grid-template-columns:repeat(3,minmax(0,1fr))}.t-cap{grid-column:span 2}}
+/* desktop: the left rail */
+@media(min-width:900px){
+  .crt-hq{width:164px}.crt-hq canvas{height:30px}.crt-hq .crt-fallback{font-size:23px;line-height:30px}
+  .nav{top:var(--hdr);bottom:0;right:auto;width:220px;flex-direction:column;justify-content:flex-start;gap:2px;padding:14px 10px;border-top:0;border-right:1px solid var(--ink-3);background:var(--ink)}
+  .nav a,.nav button{flex:none;flex-direction:row;justify-content:flex-start;gap:12px;min-height:46px;padding:0 14px;border-radius:12px;font-size:15px}
+  .nav .x{display:flex}.nav .nav-more{display:none}
+  .nav [data-tab="money"]{order:0}
+  .nav [aria-current="page"]{background:var(--ink-2)}
+  .nav [aria-current="page"]::before{top:10px;bottom:10px;left:0;right:auto;width:3px;height:auto;border-radius:0 3px 3px 0}
+  .nav .railfoot{display:flex;margin-top:auto;color:var(--muted);font-weight:500}
+  main,.rangecustom{margin-left:220px;max-width:none;padding-left:32px;padding-right:32px}
+  main{padding-bottom:40px}
+  .hdr{padding-left:24px;padding-right:24px}
+}
+@media (prefers-reduced-motion:reduce){.ph,.iconbtn.spin svg{animation:none}}
+
 </style>
 </head>
 <body>
@@ -289,47 +403,52 @@ table.stack td:first-child::before,table.stack td.empty::before{content:none}
 </section>
 
 <div id="shell" hidden>
-<header class="top"><div class="top-in">
-  <div class="brand">BADSCANDAL<span>HQ</span></div>
-  <nav class="chips" aria-label="Sections">
-    <a class="chip" href="#today">Today</a><a class="chip" href="#songs">Songs</a><a class="chip" href="#ads">Ads</a><a class="chip" href="#pages">Pages</a><a class="chip" href="#growth">Growth</a><a class="chip" href="#fans">Fans</a><a class="chip" href="#releases">Releases</a><a class="chip" href="#money">Money</a><a class="chip" href="#team">Team</a>
-    <button class="navbtn" id="logout" type="button">Log out</button>
-  </nav>
-  <div class="lbl when"><span class="livedot" id="dot"></span><span id="when"></span></div>
-</div></header>
+<header class="hdr">
+  <a class="mark" href="#today" aria-label="BADSCANDAL HQ: Today">
+    <div class="crt crt-hq"><canvas role="img" aria-label="BADSCANDAL"></canvas><span class="crt-fallback" hidden>BADSCANDAL</span></div><span class="hq-tag">HQ</span>
+  </a>
+  <div class="hdr-tools">
+    <label class="rangebox"><span class="sr">Date range</span><select id="rangeSel" data-range><option value="today">Today</option><option value="7d">7 days</option><option value="30d">30 days</option><option value="month">This month</option><option value="custom">Custom</option></select></label>
+    <button class="iconbtn" id="refresh" type="button" aria-label="Refresh the numbers"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11.5A8 8 0 1 0 17.7 17.3"/><path d="M20.5 5v6.5H14"/></svg></button>
+  </div>
+</header>
+<div class="rangecustom" id="rangeCustom" hidden><label class="sr" for="rFrom">From</label><input type="date" id="rFrom"><label class="sr" for="rTo">To</label><input type="date" id="rTo"></div>
+<nav class="nav" id="nav" aria-label="Sections"><a href="#today" data-tab="today" class="t"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2.5M12 19v2.5M4.6 4.6l1.8 1.8M17.6 17.6l1.8 1.8M2.5 12H5M19 12h2.5M4.6 19.4l1.8-1.8M17.6 6.4l1.8-1.8"/></svg><span>Today</span></a><a href="#songs" data-tab="songs" class="t"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18V5.5l11-2.5v12.5"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="17.5" cy="15.5" r="2.5"/></svg><span>Songs</span></a><a href="#ads" data-tab="ads" class="t"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 10v4h3l7 4V6l-7 4H4z"/><path d="M17.5 9.5a3.5 3.5 0 0 1 0 5"/></svg><span>Ads</span></a><a href="#pages" data-tab="pages" class="t x"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="3.5" width="16" height="17" rx="2.5"/><path d="M8 8.5h8M8 12.5h8M8 16.5h5"/></svg><span>Pages</span></a><a href="#growth" data-tab="growth" class="t x"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 17l5.5-5.5 4 4 7.5-7.5"/><path d="M15 8h5.5v5.5"/></svg><span>Growth</span></a><a href="#fans" data-tab="fans" class="t x"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8.5" r="3.5"/><path d="M2.5 20c.8-3.6 3.4-5.5 6.5-5.5s5.7 1.9 6.5 5.5"/><path d="M16 5.2a3.5 3.5 0 0 1 0 6.6M18 14.8c1.9.7 3.1 2.4 3.5 5.2"/></svg><span>Fans</span></a><a href="#releases" data-tab="releases" class="t x"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15.5" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg><span>Releases</span></a><a href="#money" data-tab="money" class="t"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="6" width="19" height="12" rx="2.5"/><circle cx="12" cy="12" r="2.8"/></svg><span>Money</span></a><a href="#team" data-tab="team" class="t x"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 20v-1.5A3.5 3.5 0 0 1 8.5 15h7a3.5 3.5 0 0 1 3.5 3.5V20"/><circle cx="12" cy="8.5" r="3.5"/></svg><span>Team</span></a><button class="nav-more" id="moreBtn" type="button" aria-haspopup="dialog" aria-expanded="false"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5.5" cy="12" r="1.4"/><circle cx="12" cy="12" r="1.4"/><circle cx="18.5" cy="12" r="1.4"/></svg><span>More</span></button><button class="railfoot" id="logout" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4h4.5A1.5 1.5 0 0 1 20 5.5v13a1.5 1.5 0 0 1-1.5 1.5H14"/><path d="M10 16l-4-4 4-4M6 12h10"/></svg><span>Log out</span></button></nav>
+<div class="scrim" id="scrim" hidden></div>
+<div class="moresheet" id="moreSheet" role="dialog" aria-label="More sections" hidden><div class="grab"></div><a href="#pages" data-tab="pages"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="3.5" width="16" height="17" rx="2.5"/><path d="M8 8.5h8M8 12.5h8M8 16.5h5"/></svg><span>Pages</span></a><a href="#growth" data-tab="growth"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 17l5.5-5.5 4 4 7.5-7.5"/><path d="M15 8h5.5v5.5"/></svg><span>Growth</span></a><a href="#fans" data-tab="fans"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8.5" r="3.5"/><path d="M2.5 20c.8-3.6 3.4-5.5 6.5-5.5s5.7 1.9 6.5 5.5"/><path d="M16 5.2a3.5 3.5 0 0 1 0 6.6M18 14.8c1.9.7 3.1 2.4 3.5 5.2"/></svg><span>Fans</span></a><a href="#releases" data-tab="releases"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15.5" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg><span>Releases</span></a><a href="#team" data-tab="team"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 20v-1.5A3.5 3.5 0 0 1 8.5 15h7a3.5 3.5 0 0 1 3.5 3.5V20"/><circle cx="12" cy="8.5" r="3.5"/></svg><span>Team</span></a><button class="out" id="logout2" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4h4.5A1.5 1.5 0 0 1 20 5.5v13a1.5 1.5 0 0 1-1.5 1.5H14"/><path d="M10 16l-4-4 4-4M6 12h10"/></svg><span>Log out</span></button></div>
 
 <main id="main">
   <div class="sample" id="sample" hidden>SAMPLE NUMBERS<small>Everything below is made up so you can see the layout. Nothing here is real.</small></div>
   <div class="banner" id="sheetOff" hidden><span id="sheetOffMsg"></span><br><button class="btn" id="showSample" type="button">Show it with sample numbers</button></div>
 
-  <section class="card" id="today">
-    <div class="row"><div><h2>Today</h2><p class="sub" id="todaySub"></p></div><span class="lbl" id="capMonth"></span></div>
+  <p class="livebar"><span class="livedot" id="dot"></span><span class="lbl" id="when"></span></p>
+  <section class="card view" id="today" aria-labelledby="todayTitle">
+    <div class="vhead"><h1 id="todayTitle">Today</h1><p class="vsub" id="todaySub"></p></div>
+    <span id="capMonth" hidden></span>
     <p class="keyline" id="metaKey" hidden></p>
     <div class="sheeterr" id="errToday" hidden></div>
-    <div class="grid g3">
-      <a class="tile" id="capTile" href="#ads" style="text-decoration:none">
-        <div class="lbl">Ad spend this month · all platforms</div>
-        <div class="big num" id="capSpent">–</div>
-        <div class="bar" aria-hidden="true"><i id="capFill"></i><b id="capWarn"></b><b id="capStop"></b></div>
-        <div class="d" id="capShort"></div>
+    <div class="tgrid">
+      <a class="t-card t-cap" id="capTile" href="#ads">
+        <p class="t-lbl">Ad spend this month</p>
+        <p class="t-big num" id="capSpent"><span class="ph big"></span></p>
+        <div class="capbar" aria-hidden="true"><i id="capFill"></i><b id="capWarn"></b><b id="capStop"></b></div>
+        <p class="t-line" id="capShort"><span class="ph"></span></p>
       </a>
-      <div class="tile"><div class="lbl">Yesterday · all songs</div><div id="yday"><p class="loading">Loading the page numbers…</p></div></div>
-      <div class="tile"><div class="lbl">Next release</div><div class="big" id="nextSong">–</div><div class="d" id="nextMsg"></div></div>
-      <div class="tile"><div class="lbl">Needs you, Luke</div><div id="forLuke"></div></div>
-      <a class="tile" href="#team" style="text-decoration:none"><div class="lbl">Today's duties</div><div class="big num" id="dutyBig">–</div><div class="d" id="dutyMsg"></div></a>
+      <div class="t-card"><p class="t-lbl">Yesterday · all songs</p><div id="yday"><div class="ph big"></div><div class="ph"></div></div></div>
+      <div class="t-card"><p class="t-lbl">Next release</p><p class="t-mid" id="nextSong"><span class="ph big"></span></p><p class="t-line" id="nextMsg"></p></div>
+      <div class="t-card"><p class="t-lbl">Needs you</p><div id="forLuke"><div class="ph"></div><div class="ph"></div></div></div>
+      <a class="t-card" href="#team"><p class="t-lbl">Today's duties</p><p class="t-big num" id="dutyBig"><span class="ph big"></span></p><p class="t-line" id="dutyMsg"></p></a>
     </div>
   </section>
 
-  <section class="card" id="songs">
-    <div class="row"><div><h2>Songs</h2><p class="sub">Everything we know per song: Spotify (from the sheet; about two days late), our page, Meta ads and royalties.</p></div>
-      <select class="rangesel" data-range aria-label="Range for the page and ad numbers"><option value="today">Today</option><option value="7d">7 days</option><option value="30d">30 days</option><option value="custom" hidden>Custom</option></select></div>
+  <section class="card view" id="songs">
+    <div class="row"><div><h2>Songs</h2><p class="sub">Everything we know per song: Spotify (from the sheet; about two days late), our page, Meta ads and royalties.</p></div></div>
     <div class="sheeterr" id="errSongs" hidden></div>
     <div class="grid g3" id="songList"><p class="loading">Loading…</p></div>
   </section>
 
-  <section class="card pg" id="ads">
-    <div class="row"><div><h2>Ads</h2><p class="sub">The monthly cap, what the ads cost per real Spotify tap, and whether Meta gets our events. Read-only: nothing here changes an ad.</p></div>
-      <select class="rangesel" data-range aria-label="Range for the ad numbers"><option value="today">Today</option><option value="7d">7 days</option><option value="30d">30 days</option><option value="custom" hidden>Custom</option></select></div>
+  <section class="card view pg" id="ads">
+    <div class="row"><div><h2>Ads</h2><p class="sub">The monthly cap, what the ads cost per real Spotify tap, and whether Meta gets our events. Read-only: nothing here changes an ad.</p></div></div>
     <p class="keyline" id="metaKey2" hidden></p>
     <div class="sheeterr" id="errAds" hidden></div>
     <div class="pgrid">
@@ -380,7 +499,7 @@ table.stack td:first-child::before,table.stack td.empty::before{content:none}
     </div>
   </section>
 
-  <section class="card pg" id="pages">
+  <section class="card view pg" id="pages">
     <h2>Pages</h2><p class="sub">Our own pages, people only. Pick a page and a range.</p>
     <div class="controls">
       <label class="picker"><img id="pickImg" alt=""><select id="link" aria-label="Page"></select></label>
@@ -453,16 +572,18 @@ table.stack td:first-child::before,table.stack td.empty::before{content:none}
     </div>
   </section>
 
-  <section class="card" id="growth"><h2>Growth</h2><p class="sub">Followers per platform, and the posts that went out on the days that grew most.</p><div class="sheeterr" id="errGrowth" hidden></div><div class="grid g4" id="growthList"></div></section>
-  <section class="card" id="fans"><h2>Fans forming</h2><p class="sub" id="fansSub"></p><div class="sheeterr" id="errFans" hidden></div><div class="scroll"><table class="stack" id="fanTable"></table></div></section>
-  <section class="card" id="releases"><h2>Releases</h2><p class="sub">Counting back from release day: 28 days files, 21 RouteNote, 14 Spotify pitch, 10 lyrics, 7 video and page.</p><div class="sheeterr" id="errReleases" hidden></div><div class="grid g3" id="relList"></div></section>
-  <section class="card" id="money"><h2>Money</h2><p class="sub">Every amount in the currency it was billed or paid in. Totals in EUR are estimates at that month's average rate.</p><div class="sheeterr" id="errMoney" hidden></div><div class="scroll"><table class="stack" id="moneyTable"></table></div><div id="moneyDetail"></div></section>
-  <section class="card" id="team"><h2>Team</h2><p class="sub" id="teamSub"></p><div class="sheeterr" id="errTeam" hidden></div>
+  <section class="card view" id="growth"><h2>Growth</h2><p class="sub">Followers per platform, and the posts that went out on the days that grew most.</p><div class="sheeterr" id="errGrowth" hidden></div><div class="grid g4" id="growthList"></div></section>
+  <section class="card view" id="fans"><h2>Fans forming</h2><p class="sub" id="fansSub"></p><div class="sheeterr" id="errFans" hidden></div><div class="scroll"><table class="stack" id="fanTable"></table></div></section>
+  <section class="card view" id="releases"><h2>Releases</h2><p class="sub">Counting back from release day: 28 days files, 21 RouteNote, 14 Spotify pitch, 10 lyrics, 7 video and page.</p><div class="sheeterr" id="errReleases" hidden></div><div class="grid g3" id="relList"></div></section>
+  <section class="card view" id="money"><h2>Money</h2><p class="sub">Every amount in the currency it was billed or paid in. Totals in EUR are estimates at that month's average rate.</p><div class="sheeterr" id="errMoney" hidden></div><div class="scroll"><table class="stack" id="moneyTable"></table></div><div id="moneyDetail"></div></section>
+  <section class="card view" id="team"><h2>Team</h2><p class="sub" id="teamSub"></p><div class="sheeterr" id="errTeam" hidden></div>
     <div class="lbl" style="margin:0 0 8px">Today's duties</div><div class="grid g3" id="dutyList"></div>
     <div class="scroll" style="margin-top:14px"><table class="stack" id="teamTable"></table></div><div class="scroll" style="margin-top:14px"><table class="stack" id="taskTable"></table></div></section>
 </main>
 </div>
+<script src="js/crt.js" defer></script>
 <script src="js/hq.js" defer></script>
+<script src="js/hq-shell.js" defer></script>
 <script src="js/hq-pages.js" defer></script>
 </body>
 </html>
