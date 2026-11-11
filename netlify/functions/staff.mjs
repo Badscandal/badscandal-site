@@ -8,6 +8,13 @@
      POST /api/staff/resolve   …or settles a message                        { id, note }
      POST /api/staff/config    Luke switches the bots' key off / on         { botsOn }
      PUT  /api/staff/seed      Claude loads the roster, the income sources and the guide
+     POST /api/staff/release         a release pack: start a draft or change one { id?, title, date, pack }
+     POST /api/staff/release/send    …send it to the team (steps get dates)       { id }
+     POST /api/staff/release/date    …move its release day                         { id, date }
+     POST /api/staff/release/cancel  …cancel it                                    { id }
+     POST /api/staff/release/step    …mark one step (Luke may mark any)            { id, step, status, note, link }
+     (the release pipeline, 11 Nov 2026: every answer is { ok, release: releaseView } or 400 { error }
+      in a plain sentence; a refused send also carries missing: [field keys])
 
    Who is calling:
      Luke   = the /hq login cookie (same as every /api/admin/* call; POSTs must come from our own page)
@@ -135,6 +142,14 @@ async function api(req, context, path) {
       return json(200, { ok: true, message: r.message });
     }
     if (path === "resolve" && req.method === "POST") return json(200, { ok: true, message: await S.resolveMessage(st.desk, now, roster, { id: a.id, by: me, note: a.note }) });
+    if (path.startsWith("release") && req.method === "POST") {
+      const view = (r) => S.releaseView(r, S.spDay(now));
+      if (path === "release") return json(200, { ok: true, release: view(await S.saveRelease(st.desk, now, roster, { by: me, id: a.id, title: a.title, date: a.date, pack: a.pack })) });
+      if (path === "release/send") { const r = await S.sendRelease(st.desk, now, roster, { by: me, id: a.id }); return json(200, { ok: true, release: view(r.release), already: r.already, told: !!r.told }); }
+      if (path === "release/date") { const r = await S.moveRelease(st.desk, now, roster, { by: me, id: a.id, date: a.date }); return json(200, { ok: true, release: view(r.release), moved: r.moved, told: !!r.told }); }
+      if (path === "release/cancel") { const r = await S.cancelRelease(st.desk, now, roster, { by: me, id: a.id }); return json(200, { ok: true, release: view(r.release), told: !!r.told }); }
+      if (path === "release/step") return json(200, { ok: true, release: view(await S.setStep(st.desk, now, roster, { by: me, id: a.id, step: a.step, status: a.status, note: a.note, link: a.link })) });
+    }
     if (path === "config" && req.method === "POST") {
       if (role !== "luke") return json(403, { error: "Only Luke switches the bots' key" });
       return json(200, { ok: true, config: await S.setConfig(st.desk, now, { botsOn: a.botsOn }) });
@@ -147,7 +162,7 @@ async function api(req, context, path) {
       return json(200, { ok: true, done });
     }
   } catch (e) {
-    if (e && e.name === "StaffError") return json(e.code === "not_found" ? 404 : e.code === "busy" ? 503 : 400, { error: e.message });
+    if (e && e.name === "StaffError") return json(e.code === "not_found" ? 404 : e.code === "busy" ? 503 : 400, { error: e.message, ...(e.missing ? { missing: e.missing } : {}) });
     console.error("staff api failed", e?.name || e);
     return json(500, { error: "Could not save that" });
   }

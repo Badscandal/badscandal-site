@@ -4,6 +4,7 @@ import { registerHooks } from "node:module";
 import { handle, headerText, LEGACY, MODERN, toolList } from "../netlify/lib/mcp.mjs";
 import { TOOLS, INSTRUCTIONS } from "../netlify/lib/staff-tools.mjs";
 import { makeSession, sessionCookie } from "../netlify/lib/session.mjs";
+import { DEFAULT_ROSTER, spDay } from "../netlify/lib/staff.mjs";
 
 /* the handler under test talks to @netlify/blobs: swap it for the in-memory stand-in */
 const FAKE = new URL("./fixtures/fake-blobs.mjs", import.meta.url).href;
@@ -21,7 +22,7 @@ const rpc = (method, params, id = 1) => ({ jsonrpc: "2.0", id, method, ...(param
 
 test("mcp: the tools are short, described and flat, so any client can list them", () => {
   const list = toolList(TOOLS);
-  assert.equal(list.length, 12);
+  assert.equal(list.length, 16, "twelve, plus the four release tools (11 Nov 2026)");
   for (const t of list) {
     assert.match(t.name, /^[a-z][a-z_]{2,30}$/, t.name);
     assert.ok(t.title && t.description.length > 60, t.name + " needs a real description");
@@ -31,7 +32,7 @@ test("mcp: the tools are short, described and flat, so any client can list them"
     assert.ok(!JSON.stringify(t.inputSchema).includes("$ref"));
     assert.equal(t.annotations.destructiveHint, false);
   }
-  assert.equal(new Set(list.map((t) => t.name)).size, 12);
+  assert.equal(new Set(list.map((t) => t.name)).size, 16);
   assert.equal(list.find((t) => t.name === "my_day").annotations.readOnlyHint, true);
   assert.equal(list.find((t) => t.name === "post_update").annotations.readOnlyHint, false);
 });
@@ -44,7 +45,7 @@ test("mcp legacy: initialize, the 202 for notifications, ping, tools/list, tools
   assert.deepEqual(await handle({ jsonrpc: "2.0", method: "notifications/initialized" }, {}, deps), { status: 202, body: null });
   assert.deepEqual((await handle(rpc("ping"), {}, deps)).body, { jsonrpc: "2.0", id: 1, result: {} });
   const list = await handle(rpc("tools/list", {}, "abc"), { "mcp-protocol-version": "2025-06-18" }, deps);
-  assert.equal(list.body.id, "abc"); assert.equal(list.body.result.tools.length, 12); assert.equal(list.body.result.resultType, undefined);
+  assert.equal(list.body.id, "abc"); assert.equal(list.body.result.tools.length, 16); assert.equal(list.body.result.resultType, undefined);
   const call = await handle(rpc("tools/call", { name: "my_day", arguments: { bot: "Nova" } }), {}, deps);
   assert.equal(call.body.result.isError, false); assert.deepEqual(call.body.result.structuredContent, { tool: "my_day", args: { bot: "Nova" } });
   assert.equal(call.body.result.content[0].type, "text"); assert.match(call.body.result.content[0].text, /"my_day"/);
@@ -64,7 +65,7 @@ test("mcp 2026-07-28: no handshake; discover; version and header checks; resultT
   assert.equal(disc.status, 200); assert.deepEqual(disc.body.result.supportedVersions, [MODERN]); assert.equal(disc.body.result.resultType, "complete");
   assert.equal(disc.body.result._meta["io.modelcontextprotocol/serverInfo"].name, "badscandal-hq");
   const list = await handle(rpc("tools/list", meta), { "mcp-protocol-version": MODERN }, deps);
-  assert.deepEqual([list.body.result.resultType, list.body.result.cacheScope, list.body.result.tools.length], ["complete", "private", 12]);
+  assert.deepEqual([list.body.result.resultType, list.body.result.cacheScope, list.body.result.tools.length], ["complete", "private", 16]);
   const call = await handle(rpc("tools/call", { ...meta, name: "my_day", arguments: { bot: "Nova" } }), { "mcp-protocol-version": MODERN, "mcp-method": "tools/call", "mcp-name": "=?base64?" + btoa("my_day") + "?=" }, deps);
   assert.equal(call.body.result.resultType, "complete"); assert.equal(call.body.result.isError, false);
   const badV = await handle(rpc("tools/list", { _meta: { "io.modelcontextprotocol/protocolVersion": "2030-01-01" } }), {}, deps);
@@ -183,6 +184,7 @@ test("/api/hq/data still answers as before through the shared loader (login, sam
   globalThis.__asked.length = 0;
   const s = await (await get("/api/hq/data?sample=1", { cookie })).json();
   assert.equal(s.sample, true); assert.equal(s.team.duties.total, 6); assert.equal(s.team.live.ready, true); assert.ok(s.money.cap.spent > 0); assert.ok(s.health && s.metaKey);
+  assert.deepEqual(s.releases.map((r) => [r.song, !!r.desk]), [["Touch Me", true], ["Me Dá Seu Body", true], ["Survivors", false]], "the made-up desk releases join the made-up sheet, one entry per song");
   assert.ok(!globalThis.__asked.includes("staff"), "the sample never opens the staff desk");
   assert.equal((await get("/api/hq/summary", { cookie })).status, 404);
 });
@@ -200,4 +202,79 @@ test("connector: requests that were turned away are noted (never the key), and C
   assert.ok(trace.some((t) => t.method === "initialize" && t.status === 200 && t.key === "bots"));
   assert.ok(!JSON.stringify(trace).includes(ENV.STAFF_BOT_KEY) && !JSON.stringify(trace).includes("definitely-wrong"), "no key is ever written down");
   assert.equal((await api("trace", { headers: { authorization: "Bearer " + ENV.STAFF_BOT_KEY } })).status, 403);
+});
+
+/* ---- the release pipeline (11 Nov 2026): the four tools and /api/staff/release*, end to end ---- */
+test("release pipeline: Luke's routes, the bots' four tools, refusals as sentences, the sample never writes", async () => {
+  const claude = { authorization: "Bearer " + ENV.STAFF_CLAUDE_KEY }, bots = { authorization: "Bearer " + ENV.STAFF_BOT_KEY };
+  await api("seed", { method: "PUT", headers: claude, body: JSON.stringify({ roster: DEFAULT_ROSTER }) }); /* an earlier test left only Nova and Echo */
+  const day = (n) => new Date(Date.parse(spDay(Date.now()) + "T12:00:00Z") + n * 86400000).toISOString().slice(0, 10);
+  const rel = async (path, body, headers = { cookie }) => { const r = await api(path, { method: "POST", headers: { "content-type": "application/json", ...headers }, body: JSON.stringify(body) }); return { status: r.status, body: await r.json() }; };
+
+  assert.equal((await rel("release", { title: "Night Drive" }, {})).status, 401);
+  assert.equal((await rel("release", { title: "Night Drive" }, bots)).status, 403, "the bots use the connector, never these routes");
+  assert.equal((await rel("release", { title: "Night Drive" }, { cookie, origin: "https://evil.example" })).status, 403);
+  const made = await rel("release", { title: "Night Drive", date: day(30), pack: { wav: "https://example.com/n.wav", genre: "Dance" } });
+  assert.equal(made.status, 200);
+  const id = made.body.release.id;
+  assert.deepEqual([id, made.body.release.status, made.body.release.packTotal, made.body.release.daysToGo], ["nightdrive", "draft", 17, 30]);
+  const badLink = await rel("release", { id, pack: { artwork: "http://example.com/c.jpg" } });
+  assert.deepEqual([badLink.status, badLink.body.error], [400, "Artwork must be a link that starts with https:// (copy it from the browser's address bar). Nothing was saved."]);
+  const early = await rel("release/send", { id });
+  assert.equal(early.status, 400); assert.equal(early.body.error, "Still missing: Artwork, Language, Explicit, Writers. Fill them in, then send again.");
+  assert.deepEqual(early.body.missing, ["artwork", "language", "explicit", "writers"]);
+  /* Claude's key fills the rest (as Claude), Luke sends */
+  const filled = await rel("release", { id, pack: { artwork: "https://example.com/c.jpg", language: "English", explicit: "No", writers: "Sample Writer: music and lyrics" } }, claude);
+  assert.equal(filled.body.release.log[0].by, "Claude");
+  const sent = await rel("release/send", { id });
+  assert.deepEqual([sent.status, sent.body.release.status, sent.body.release.steps.length, sent.body.already, sent.body.told], [200, "scheduled", 9, false, true]);
+  assert.equal((await rel("release/send", { id })).body.already, true);
+  await rel("release", { title: "Hidden Draft", date: day(40) }); /* a draft is Luke's, never shown to the bots */
+
+  /* the bots, through /mcp */
+  const list = (await tool("releases", { bot: "Drop" })).structuredContent;
+  assert.deepEqual(list.releases.map((r) => r.song), ["Night Drive"]);
+  assert.deepEqual(list.releases[0].your_steps.map((s) => s.step), ["upload", "approved"]);
+  assert.ok(!list.releases[0].all_steps, "only Nova and Claude see every step");
+  assert.equal((await tool("releases", { bot: "Nova" })).structuredContent.releases[0].all_steps.length, 9);
+  assert.deepEqual((await tool("releases", { bot: "x" }, "Bearer " + ENV.STAFF_CLAUDE_KEY)).structuredContent.releases.map((r) => r.song).sort(), ["Hidden Draft", "Night Drive"]);
+  const pack = (await tool("release_pack", { bot: "Verse", song: "night drive" })).structuredContent;
+  assert.equal(pack.pack.length, 23); assert.equal(pack.pack.find((f) => f.field === "wav").value, "https://example.com/n.wav");
+  assert.match(pack.pack.find((f) => f.field === "lyrics").state, /missing \(needed for "Lyrics live"\)/);
+  assert.match((await tool("release_pack", { bot: "Drop", song: "Hidden Draft" })).content[0].text, /There is no release called "Hidden Draft"\. The releases on the desk are: Night Drive \(nightdrive\)\./);
+  const wrongBot = await tool("release_step", { bot: "Atlas", song: "Night Drive", step: "upload", status: "done" });
+  assert.equal(wrongBot.isError, true); assert.match(wrongBot.content[0].text, /is Drop's step\. Only Drop, Nova, Claude or Luke can mark it/);
+  assert.match((await tool("release_step", { bot: "Drop", song: "Night Drive", step: "approved", status: "blocked" })).content[0].text, /needs a note: say exactly what is needed and from whom/);
+  const done = (await tool("release_step", { bot: "Drop", song: "nightdrive", step: "upload", status: "done", link: "https://example.com/rn" })).structuredContent;
+  assert.deepEqual([done.saved, done.step, done.state], [true, "upload", "done"]);
+  assert.equal((await tool("release_fill", { bot: "Drop", song: "Night Drive", field: "isrc", value: "SAMPLE0000009" })).structuredContent.value, "SAMPLE0000009");
+  assert.match((await tool("release_fill", { bot: "Drop", song: "Night Drive", field: "lyrics", value: "la la" })).content[0].text, /Lyrics is filled by Verse \(or Nova, Luke or Claude\), not by you/);
+  assert.match((await tool("release_step", { bot: "Drop", song: "Night Drive" })).content[0].text, /^Missing: step, status\./);
+  const myDay = (await tool("my_day", { bot: "Drop" })).structuredContent;
+  assert.deepEqual(myDay.release_steps.map((s) => s.step), ["approved"]);
+  assert.match(myDay.next, /^You have 1 open release step; the soonest is "Approved by RouteNote \(nothing waiting\)" for Night Drive/);
+  assert.ok(!/release step/.test((await tool("my_day", { bot: "Steve" })).structuredContent.next));
+  assert.deepEqual((await tool("team_board", { bot: "Nova" })).structuredContent.releases, [{ song: "Night Drive", date: (await tool("releases", { bot: "Nova" })).structuredContent.releases[0].release_day, done: "1 of 9", late: 0, blocked: 0 }]);
+  assert.equal((await tool("luke_briefing", { bot: "Alfred" })).structuredContent.next_release.song, "Night Drive", "with the sheet unread, the desk's own next release");
+
+  /* Luke marks a step, moves the date, cancels */
+  const step = await rel("release/step", { id, step: "teasers", status: "done" });
+  assert.equal(step.body.release.steps.find((s) => s.key === "teasers").by, "Luke");
+  assert.equal((await rel("release/step", { id, step: "teasers", status: "nope" })).status, 400);
+  const moved = await rel("release/date", { id, date: day(37) });
+  assert.deepEqual([moved.body.moved, moved.body.release.date, moved.body.release.steps[0].due], [true, day(37), done.due.slice(-11, -1)]);
+  const b = await (await api("board", { headers: { cookie } })).json();
+  assert.equal(b.packFields.length, 23); assert.equal(b.releaseSteps.length, 9); assert.ok(Array.isArray(b.answered));
+  assert.equal(b.releases[0].id, "nightdrive"); assert.equal(b.staff.find((w) => w.name === "Drop").releaseSteps[0].key, "approved");
+  assert.ok(b.messages.some((m) => m.to === "all" && m.from === "Luke" && /^New release: Night Drive/.test(m.text) && m.seen === null));
+  const gone = await rel("release/cancel", { id }, claude);
+  assert.deepEqual([gone.status, gone.body.release.status, gone.body.told], [200, "cancelled", true]);
+  assert.match((await tool("release_step", { bot: "Drop", song: "Night Drive", step: "approved", status: "done" })).content[0].text, /was cancelled/);
+
+  /* the sample: the login, no store, no write */
+  globalThis.__asked.length = 0;
+  for (const p of ["release", "release/send", "release/date", "release/cancel", "release/step"]) assert.deepEqual((await rel(p + "?sample=1", { id: "x", title: "y" })).body, { ok: true, sample: true }, p);
+  const sb = await (await api("board?sample=1", { headers: { cookie } })).json();
+  assert.equal(sb.releases.length, 3); assert.equal(sb.answered.length, 2); assert.equal(sb.packFields.length, 23);
+  assert.deepEqual(globalThis.__asked, [], "the sample never opened a store");
 });
