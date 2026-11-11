@@ -18,7 +18,7 @@ const json = (status, data) => new Response(JSON.stringify(data), { status, head
 const SHEET_TTL = 10 * 60 * 1000;
 
 async function rates(cache, months, today) {
-  const out = {};
+  const out = {}, at = {};
   await Promise.all(months.slice(0, 8).map(async (m) => {
     const key = `fx/${m}.json`;
     let got = null;
@@ -28,9 +28,17 @@ async function rates(cache, months, today) {
       const fx = await fetchMonthAverage(m, today);
       if (!fx.error) { got = { at: Date.now(), fx }; try { await cache.setJSON(key, got); } catch {} }
     }
-    if (got) out[m] = got.fx;
+    if (got) { out[m] = got.fx; at[m] = got.at; }
   }));
-  return out;
+  return { fx: out, at };
+}
+
+/* For /hq's "Data health" panel (11 Nov 2026): when the sheet was read and how fresh this month's
+   exchange rate is. Fields only; nothing here changes what the numbers are. */
+function healthFor(sheetAt, r, today) {
+  const m = today.slice(0, 7), fx = r.fx[m];
+  return { sheetAt: sheetAt ? new Date(sheetAt).toISOString() : null,
+    fx: fx && fx.USD ? { month: m, rate: fx.USD, days: fx.days || null, at: r.at[m] ? new Date(r.at[m]).toISOString() : null } : null };
 }
 
 /* Meta's own spend for the whole ad account, the 1st of last month .. today (read-only GET, cached an
@@ -71,7 +79,8 @@ export default async (req, context) => {
     if (sample || !rawKey || !sheetId) {
       if (!sample) return json(200, { connected: false, need: [!rawKey && "GOOGLE_SA_KEY", !sheetId && "HQ_SHEET_ID"].filter(Boolean) });
       const sheets = sampleSheets(today);
-      return json(200, { connected: true, sample: true, ...hqModel(sheets, today, await rates(cache, monthsIn(sheets, today), today), sampleMeta(sheets, today)),
+      const r = await rates(cache, monthsIn(sheets, today), today);
+      return json(200, { connected: true, sample: true, ...hqModel(sheets, today, r.fx, sampleMeta(sheets, today)), health: healthFor(Date.now() - 4 * 60000, r, today),
         metaKey: { state: "ok", text: "Meta key: reading OK, last read 12 min ago (sample)" }, generated: new Date().toISOString() });
     }
     let got = null;
@@ -86,10 +95,10 @@ export default async (req, context) => {
         try { await cache.setJSON("hq/sheets.json", got); } catch {}
       }
     }
-    const [fx, meta] = await Promise.all([rates(cache, monthsIn(got.sheets, today), today),
+    const [fxr, meta] = await Promise.all([rates(cache, monthsIn(got.sheets, today), today),
       metaForHq(cache, today).catch((e) => ({ ok: false, reason: "Couldn't read Meta (" + (e?.name || "error") + ")" }))]);
     const metaKey = keyHealth(await readKeyHealth(cache), !!Netlify.env.get("META_ADS_TOKEN"));
-    return json(200, { connected: true, ...hqModel(got.sheets, today, fx, meta), metaKey, readAt: new Date(got.at).toISOString(), generated: new Date().toISOString() });
+    return json(200, { connected: true, ...hqModel(got.sheets, today, fxr.fx, meta), metaKey, health: healthFor(got.at, fxr, today), readAt: new Date(got.at).toISOString(), generated: new Date().toISOString() });
   } catch (e) {
     console.error("hq data failed", e?.name || e);
     return json(500, { error: "Could not read the numbers" });

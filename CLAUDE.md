@@ -1052,6 +1052,43 @@ Brief: `../TOUCHME-LANDING-BUILD-BRIEF.md` (outside the repo on purpose).
   - Tests for the one dashboard: `tests/dashboard.test.mjs` (redirects, unchanged login + lockout,
     overview auth + people-only, sample never touching real stores or Meta, sheet errors, duties,
     the cached feed file).
+* **/hq new look + Stage 1: shell and navigation (11 Nov 2026).** Luke's brief: modernise /hq in stages
+  (Step 0 look -> Stage 1 shell -> Stage 2 Today briefing -> Stage 3 charts/tables/deeper views ->
+  Stage 4 polish), one branch per stage, preview + screenshots each time, merge only on "publish".
+  - **Look:** black base, bigger calmer type, NOTHING under 13 px (enforced by the `#shell` size floors
+    at the end of hq.html's CSS; the stage-1 browser check measures every tab). ONE red from the red
+    film: `--red-deep #8D060C` (fill, white text on it 8.7:1) and `--red #FF3B45` (text/dots on black
+    5.8:1), used ONLY for "needs attention" and the active tab. Green (`--spot`) = Spotify taps only.
+    The CRT wordmark (js/crt.js) small in the header (`.crt-hq`; static text under reduced motion;
+    Archivo loaded subset to the letters of BADSCANDAL). `showShell()` fires a resize so the canvas
+    measures itself after the login screen.
+  - **Tabs:** `js/hq-shell.js`. Each section is a `.view`, one shown at a time, address `#today`,
+    `#songs`, … plus `#songs/<slug>` (scrolls to that song's card, `id="song-<slug>"`); the back
+    button works; last tab in localStorage `bs_hq_tab`. Phone: bottom bar Today, Songs, Ads, Money,
+    More (More = a sheet with Pages, Growth, Fans, Releases, Team, Log out). Desktop (>=900 px): left
+    rail with all nine + Log out.
+  - **One date range** in the header (`#rangeSel`: Today, 7 days, 30 days, This month, Custom with
+    two date fields). "This month" is a custom range (1st .. today, São Paulo) under the hood. Every
+    tab follows it; the per-section pickers are gone. Remembered (`bs_admin_view`: range + page),
+    and "Humans only / Show everyone" too (`bs_hq_bots`).
+  - **Refresh:** the header button, and by itself every 5 minutes while the page is on screen (one
+    timer in js/hq.js; coming back after longer refreshes at once).
+  - **Data health** (header button with one dot; panel `#healthSheet`): Sheet (read N min ago / tab
+    errors / not connected), Meta (the key line now lives ONLY here), Page counter (last visit), Exchange
+    rate (this month's ECB average + age). Rules in `js/hq-lib.js` `healthRows()` / `healthState()`
+    (pure, tested in tests/hq-lib.test.mjs). New fields for it: `/api/hq/data` -> `health: { sheetAt,
+    fx: {month, rate, days, at} }`; `/api/admin/overview` -> `lastEventAt`. Nothing else changed in
+    the endpoints (the phone-app summary is untouched).
+  - **Loading / failing / offline:** placeholders (`.ph`) instead of blank cards; a failed answer shows
+    `#netBar` with Retry; the last good answers are kept on this device (localStorage
+    `bs_hq_last_sheet`, `bs_hq_last_ov`, `bs_hq_last_pages`, never in sample mode; the visit log is cut
+    to 400 rows there) and shown "as of <time>" when offline.
+  - **Home screen:** `hq.webmanifest` ("BADSCANDAL HQ", standalone, scope `/hq`), icons
+    `assets/hq-icon-{180,192,512}-v1.png` (white HQ over the red bar), Apple meta tags, and
+    `hq-sw.js` (registered with scope `/hq` only): keeps a copy of the /hq PAGE and its SCRIPTS so the
+    app opens without signal; never `/api/*`, never anything outside /hq (tested in a sandbox).
+    Bump its `CACHE` name if the list of files changes.
+  - `js/hq-lib.js` is the home for every rule the page shows from now on (Stage 2/3 add theirs).
 * **90-day rule:** `netlify/functions/rollup.mjs` (daily 06:00 UTC, production
   only) folds raw keys older than 90 days into `daily/<day>.json` counts and
   deletes them; the portal merges those back for old ranges.

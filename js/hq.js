@@ -10,7 +10,7 @@
   "use strict";
   var $ = function (id) { return document.getElementById(id); };
   var sample = /[?&]sample=1/.test(location.search);
-  var sheet = null, ov = null, sheetTimer = null, ovTimer = null, started = false;
+  var sheet = null, ov = null, started = false;
 
   /* ---------- helpers (shared with hq-pages.js through window.HQ) ---------- */
   function esc(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); }
@@ -108,7 +108,7 @@
     $("shell").hidden = true;
     $("login").hidden = false;
     $("err").textContent = msg || "";
-    clearInterval(sheetTimer); clearInterval(ovTimer);
+    clearInterval(timer);
     started = false;
     if (window.HQPages) window.HQPages.stop();
     setTimeout(function () { $("pw").focus(); }, 50);
@@ -145,33 +145,66 @@
   }
 
   /* ---------- loading: three answers in parallel, each drawn as it lands ---------- */
+  var EVERY = 5 * 60 * 1000, timer = null, lastRefresh = 0, sheetProblem = "";
   function start() {
     started = true;
     syncRangeSelects();
-    loadSheet();
-    loadOverview();
-    if (window.HQPages) window.HQPages.load(true);
-    clearInterval(sheetTimer); clearInterval(ovTimer);
-    sheetTimer = setInterval(function () { if (!document.hidden) loadSheet(); }, 5 * 60 * 1000);
-    ovTimer = setInterval(function () { if (!document.hidden) loadOverview(); }, 60 * 1000);
+    refresh();
+    clearInterval(timer);
+    timer = setInterval(function () { if (!document.hidden) refresh(); }, EVERY);
   }
-  document.addEventListener("visibilitychange", function () { if (!document.hidden && started) { loadOverview(); if (window.HQPages) window.HQPages.reload(); } });
-
+  /* every 5 minutes while the page is on screen; coming back after longer than that refreshes at once */
+  document.addEventListener("visibilitychange", function () { if (!document.hidden && started && Date.now() - lastRefresh > EVERY) refresh(); });
   function refresh() {
-    return Promise.all([loadSheet(), loadOverview(), window.HQPages ? window.HQPages.reload() : null]);
+    lastRefresh = Date.now();
+    return Promise.all([loadSheet(), loadOverview(), window.HQPages ? window.HQPages.reload() : null]).then(drawDataHealth, drawDataHealth);
   }
+
+  /* ---------- the last good numbers, kept on this device for offline ("as of <time>") ---------- */
+  function keep(key, q, j) { if (sample) return; try { localStorage.setItem(key, JSON.stringify({ at: Date.now(), q: q, j: j })); } catch (e) {} }
+  function kept(key, q) { if (sample) return null; try { var v = JSON.parse(localStorage.getItem(key) || "null"); return v && v.j && (q == null || v.q === q) ? v : null; } catch (e) { return null; } }
+  var net = {}; /* part -> { msg, asOf } */
+  function hhmm(at) { return new Date(at).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: "America/Sao_Paulo" }); }
+  function netState(part, msg, asOf) {
+    if (msg) net[part] = { msg: msg, asOf: asOf || null }; else delete net[part];
+    var parts = Object.keys(net), bar = $("netBar");
+    bar.hidden = !parts.length;
+    if (!parts.length) { $("dot").className = "livedot"; return; }
+    var offline = parts.every(function (k) { return net[k].msg === "offline"; });
+    var asOf = parts.map(function (k) { return net[k].asOf; }).filter(Boolean).sort()[0];
+    bar.className = "netbar" + (offline ? " offline" : "");
+    $("netMsg").textContent = offline ? (asOf ? "Offline · showing the numbers as of " + hhmm(asOf) + " SP" : "Offline · no numbers saved on this device yet")
+      : parts.map(function (k) { return net[k].msg === "offline" ? "" : net[k].msg; }).filter(Boolean).join(" ") + (asOf ? " Showing the numbers as of " + hhmm(asOf) + " SP." : "");
+    $("dot").className = "livedot off";
+    $("when").textContent = offline ? "offline" : "problem";
+  }
+  $("retry").addEventListener("click", function () { refresh(); });
+
   function loadSheet() {
     return getJSON("/api/hq/data" + (sample ? "?sample=1" : "")).then(function (res) {
       if (authFail(res)) return;
       showShell();
       $("sample").hidden = !sample;
-      if (res.s !== 200) { offSheet("Couldn't load the sheet numbers (" + res.s + "). Trying again in a few minutes."); return; }
-      if (res.j.error) { offSheet("Couldn't read the sheet: " + res.j.error + "."); return; }
-      if (!res.j.connected) { offSheet("The sheet sections read the bots' \"BADSCANDAL HQ\" sheet. Still to add on Netlify: " + (res.j.need || []).join(" and ") + "."); return; }
+      if (res.s !== 200) {
+        var old = kept("bs_hq_last_sheet");
+        if (old) { sheet = old.j; drawSheet(); }
+        sheetProblem = "Couldn't load (" + res.s + ")";
+        netState("sheet", "Couldn't load the sheet numbers (" + res.s + ").", old && old.at);
+        return;
+      }
+      netState("sheet", null);
+      if (res.j.error) { sheetProblem = "Can't be read: " + res.j.error; offSheet("Couldn't read the sheet: " + res.j.error + "."); return; }
+      if (!res.j.connected) { sheetProblem = "Not connected (" + (res.j.need || []).join(", ") + " missing on Netlify)"; offSheet("The sheet sections read the bots' \"BADSCANDAL HQ\" sheet. Still to add on Netlify: " + (res.j.need || []).join(" and ") + "."); return; }
+      sheetProblem = "";
       $("sheetOff").hidden = true;
       sheet = res.j;
+      keep("bs_hq_last_sheet", "", sheet);
       drawSheet();
-    }).catch(function () { $("dot").className = "livedot off"; $("when").textContent = "offline"; });
+    }).catch(function () {
+      var old = kept("bs_hq_last_sheet");
+      if (old && !sheet) { sheet = old.j; showShell(); drawSheet(); }
+      netState("sheet", "offline", old && old.at);
+    });
   }
   function offSheet(msg) {
     sheet = null;
@@ -185,15 +218,39 @@
   $("showSample").addEventListener("click", function () { location.search = "?sample=1"; });
 
   function loadOverview() {
-    return getJSON("/api/admin/overview?" + rangeQuery()).then(function (res) {
+    var q = rangeQuery().toString();
+    return getJSON("/api/admin/overview?" + q).then(function (res) {
       if (authFail(res)) return;
       showShell();
-      if (res.s !== 200) { $("yday").innerHTML = '<p class="empty">Couldn\'t load the page numbers (' + res.s + ").</p>"; return; }
+      if (res.s !== 200) {
+        var old = kept("bs_hq_last_ov", q);
+        if (old) { ov = old.j; drawOverview(); }
+        else $("yday").innerHTML = '<p class="empty2">Couldn\'t load the page numbers.</p>';
+        netState("ov", "Couldn't load the page numbers (" + res.s + ").", old && old.at);
+        return;
+      }
+      netState("ov", null);
       ov = res.j;
-      $("dot").className = "livedot";
-      $("when").textContent = (sample ? "sample · " : "live · ") + new Date().toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: "America/Sao_Paulo" }) + " SP";
-      drawYesterday(); drawSongs(); drawAds(); drawKeyLines();
-    }).catch(function () { $("dot").className = "livedot off"; $("when").textContent = "offline"; });
+      keep("bs_hq_last_ov", q, ov);
+      $("when").textContent = (sample ? "sample · " : "live · ") + hhmm(Date.now()) + " SP";
+      drawOverview();
+    }).catch(function () {
+      var old = kept("bs_hq_last_ov", q);
+      if (old) { ov = old.j; showShell(); drawOverview(); }
+      netState("ov", "offline", old && old.at);
+    });
+  }
+  function drawOverview() { drawYesterday(); drawSongs(); drawAds(); drawDataHealth(); }
+
+  /* ---------- Data health: Sheet, Meta, page counter, exchange rate (one dot in the header) ---------- */
+  function drawDataHealth() {
+    var rows = window.HQLib.healthRows({ sheet: sheet, sheetProblem: sheetProblem, ov: ov });
+    var st = window.HQLib.healthState(rows);
+    $("hDot").className = "hdot " + st;
+    $("healthBtn").setAttribute("aria-label", "Data health: " + (st === "bad" ? "something needs attention" : st === "ok" ? "all fine" : "not everything read yet"));
+    $("healthRows").innerHTML = rows.map(function (r) {
+      return '<li class="' + r.state + '"><i class="' + r.state + '" aria-hidden="true"></i><b>' + esc(r.label) + "</b><span>" + esc(r.text) + "</span></li>";
+    }).join("");
   }
 
   /* ---------- sheet errors: say so instead of looking empty ---------- */
@@ -216,7 +273,7 @@
 
   function drawSheet() {
     drawSheetErrors();
-    drawToday(); drawSongs(); drawCapCard(); drawGrowth(); drawFans(); drawReleases(); drawMoney(); drawTeam(); drawKeyLines();
+    drawToday(); drawSongs(); drawCapCard(); drawGrowth(); drawFans(); drawReleases(); drawMoney(); drawTeam(); drawDataHealth();
   }
 
   /* ---------- Today ---------- */
@@ -259,14 +316,6 @@
       "<li><span>Meta spend</span><b>" + (y.spend == null ? "–" : esc(money(y.spend, y.currency))) + "</b></li>" +
       "<li><span>Cost per tap</span><b>" + (y.cpt == null ? "–" : esc(money(y.cpt, y.currency))) + "</b></li></ul>";
   }
-  function drawKeyLines() {
-    var k = (ov && ov.metaKey) || (sheet && sheet.metaKey);
-    ["metaKey", "metaKey2"].forEach(function (id) {
-      var el = $(id); el.hidden = !k;
-      if (k) { el.textContent = k.text; el.className = "keyline" + (k.state === "ok" ? " ok" : k.state === "expired" || k.state === "error" ? " bad" : ""); }
-    });
-  }
-
   /* ---------- Songs: the sheet's Spotify numbers + our page + Meta + royalties, one card each ---------- */
   function drawSongs() {
     var bySheet = {}, order = [];
@@ -282,7 +331,7 @@
       var s = bySheet[k], p = byPage[k], sp = spendBy[k];
       var name = s ? s.song : p.title;
       var pill = !s ? "" : s.trend === "rising" ? '<span class="pill hot">Rising ' + signed(s.momentum) + "%</span>" : s.trend === "cooling" ? '<span class="pill warn">Cooling ' + signed(s.momentum) + "%</span>" : s.trend === "steady" ? '<span class="pill">Steady ' + signed(s.momentum) + "%</span>" : '<span class="pill">New</span>';
-      var out = '<div class="tile"><div class="songhead">' + (p && p.cover ? '<img class="cover" src="' + esc(p.cover) + '" alt="">' : "") + "<h3>" + esc(name) + "</h3>" + pill + "</div>";
+      var out = '<div class="tile" id="song-' + esc(p ? p.id : k) + '"><div class="songhead">' + (p && p.cover ? '<img class="cover" src="' + esc(p.cover) + '" alt="">' : "") + "<h3>" + esc(name) + "</h3>" + pill + "</div>";
       if (s) out += '<div class="big num">' + fmt(s.streams) + " <small>streams · " + esc(day(s.lastDay)) + "</small></div>" +
         '<div class="d">' + signed(s.dayChange) + " vs the day before · " + fmt(s.week) + " in 7 days" + (s.prevWeek != null ? " (" + fmt(s.prevWeek) + " the 7 before)" : "") + "</div>" + spark(s.series) +
         '<div class="d">' + fmt(s.listeners) + " listeners · " + fmt(s.saves) + " saves · " + fmt(s.adds) + " playlist adds" + (s.stale > 3 ? ' · <b style="color:var(--paper)">not logged for ' + s.stale + " days</b>" : "") + "</div>";
@@ -447,7 +496,7 @@
     stack("taskTable");
   }
 
-  window.HQ = { sample: sample, state: state, setRange: setRange, refresh: refresh, showLogin: showLogin, showShell: showShell, rangeQuery: rangeQuery,
+  window.HQ = { sample: sample, state: state, setRange: setRange, refresh: refresh, net: function (p, m, a) { netState(p, m, a); }, keep: keep, kept: kept, showLogin: showLogin, showShell: showShell, rangeQuery: rangeQuery,
     esc: esc, fmt: fmt, money: money, day: day, ago: ago, getJSON: getJSON, authFail: authFail };
   /* hq-pages.js is loaded with defer right after this file: start once both are in */
   document.addEventListener("DOMContentLoaded", start);

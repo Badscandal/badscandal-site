@@ -208,6 +208,8 @@ async function overview(env, r, now) {
   if (health) health.testMode = env.testMode;
   return {
     range: r.range, days: r.days.length, from: r.days[0], to: r.days[r.days.length - 1],
+    /* for /hq's "Data health": the newest visit record the counter wrote (any page, bots too) */
+    lastEventAt: events.reduce((m, e) => (e && e.ts > m ? e.ts : m), 0) || null,
     songs: per.map(({ y, tapsByAd, tapsByDay, ...s }) => s), yesterday, spend, cap, health,
     metaKey: keyHealth(keyRec, !!env.token, now), sample: env.sample || undefined, generated: new Date(now).toISOString(),
   };

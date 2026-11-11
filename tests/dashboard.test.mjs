@@ -67,6 +67,7 @@ test("overview: login required; every song, yesterday, spend, cap, health and th
   assert.equal(j.spend.days.length, 7);
   assert.equal(j.cap.connected, true); assert.ok(j.health.today.sent > 0);
   assert.equal(j.metaKey.state, "ok");
+  assert.ok(j.lastEventAt > Date.now() - 2 * 86400000, "Data health: the newest visit record");
 });
 
 test("overview: people only by default; bots don't count", async () => {

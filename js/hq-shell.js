@@ -13,6 +13,13 @@
     var t = (location.hash || "").replace(/^#/, "").split("/")[0];
     return TABS.indexOf(t) >= 0 ? t : "";
   }
+  /* #songs/touchme -> the Touch Me card (it may still be loading: try again for a few seconds) */
+  function subFromHash() { var p = (location.hash || "").replace(/^#/, "").split("/"); return p[1] ? decodeURIComponent(p[1]).replace(/[^a-z0-9-]/gi, "") : ""; }
+  function focusSub(tab, sub, tries) {
+    var el = sub && document.getElementById((tab === "songs" ? "song-" : tab + "-") + sub);
+    if (el) { el.scrollIntoView({ block: "start" }); window.scrollBy(0, -80); el.classList.add("pulse"); setTimeout(function () { el.classList.remove("pulse"); }, 1600); return; }
+    if (sub && (tries || 0) < 20) setTimeout(function () { focusSub(tab, sub, (tries || 0) + 1); }, 300);
+  }
   function show(tab) {
     TABS.forEach(function (t) { var v = $(t); if (v) v.hidden = t !== tab; });
     [].forEach.call(document.querySelectorAll("[data-tab]"), function (a) {
@@ -20,8 +27,9 @@
     });
     $("moreBtn").classList.toggle("on", MORE.indexOf(tab) >= 0);
     try { localStorage.setItem(KEY, tab); } catch (e) {}
-    closeMore();
+    closeMore(); closeHealth();
     window.scrollTo(0, 0);
+    focusSub(tab, subFromHash());
     /* the chart in Pages measures itself: redraw once it is visible */
     if (tab === "pages") window.dispatchEvent(new Event("resize"));
   }
@@ -46,6 +54,14 @@
   document.addEventListener("keydown", function (ev) { if (ev.key === "Escape" && !$("moreSheet").hidden) { closeMore(); $("moreBtn").focus(); } });
   $("logout2").addEventListener("click", function () { closeMore(); $("logout").click(); });
 
+  /* Data health panel */
+  function openHealth() { closeMore(); $("healthSheet").hidden = false; $("scrim").hidden = false; $("healthBtn").setAttribute("aria-expanded", "true"); $("healthRefresh").focus(); }
+  function closeHealth() { if ($("healthSheet").hidden) return; $("healthSheet").hidden = true; $("scrim").hidden = true; $("healthBtn").setAttribute("aria-expanded", "false"); }
+  $("healthBtn").addEventListener("click", function () { if ($("healthSheet").hidden) openHealth(); else closeHealth(); });
+  $("scrim").addEventListener("click", closeHealth);
+  document.addEventListener("keydown", function (ev) { if (ev.key === "Escape" && !$("healthSheet").hidden) { closeHealth(); $("healthBtn").focus(); } });
+  $("healthRefresh").addEventListener("click", function () { $("refresh").click(); });
+
   /* refresh: spins until all three answers are back */
   $("refresh").addEventListener("click", function () {
     var b = $("refresh");
@@ -55,4 +71,10 @@
   });
 
   route();
+
+  /* Installable on the home screen (hq.webmanifest) and opens without signal: hq-sw.js keeps a copy
+     of this page and its scripts (never the numbers: those come from this device's last good copy). */
+  if ("serviceWorker" in navigator && location.protocol === "https:") {
+    window.addEventListener("load", function () { navigator.serviceWorker.register("/hq-sw.js", { scope: "/hq" }).catch(function () {}); });
+  }
 })();

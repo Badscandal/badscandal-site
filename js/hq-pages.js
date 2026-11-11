@@ -8,10 +8,12 @@
   "use strict";
   var HQ = window.HQ;
   var $ = function (id) { return document.getElementById(id); };
-  var esc = HQ.esc, REFRESH_MS = 60000;
+  var esc = HQ.esc;
   var GREY = "#5A5A5A", GREEN = "#1ED760";
   var state = { link: "", unit: "day", filter: "all", fAd: "", fCc: "", shown: 50, bots: false };
   try { var saved = JSON.parse(localStorage.getItem("bs_admin_view") || "{}"); if (saved.link) state.link = saved.link; } catch (e) {}
+  /* "Humans only / Show everyone" is remembered on this device (Luke, 11 Nov 2026) */
+  try { state.bots = localStorage.getItem("bs_hq_bots") === "1"; } catch (e) {}
   var data = null, timer = null, loading = false, again = false;
 
   /* ---------- helpers ---------- */
@@ -71,56 +73,45 @@
   }
   function remember() { try { var v = JSON.parse(localStorage.getItem("bs_admin_view") || "{}"); v.link = state.link; localStorage.setItem("bs_admin_view", JSON.stringify(v)); } catch (e) {} }
 
-  /* ---------- loading ---------- */
+  /* ---------- loading (refreshed with the rest of /hq: every 5 min while on screen) ---------- */
   function load(first) {
-    if (loading) { again = true; return; }
+    if (loading) { again = true; return Promise.resolve(); }
     loading = true;
     if (!first && data) $("pgBody").classList.add("busy");
-    return HQ.getJSON("/api/admin/data?" + query()).then(function (res) {
+    var q = query();
+    return HQ.getJSON("/api/admin/data?" + q).then(function (res) {
       loading = false;
       $("pgBody").classList.remove("busy");
       if (HQ.authFail(res)) return;
-      if (res.s !== 200) { $("pgLoading").hidden = false; $("pgLoading").textContent = "Couldn't load the page numbers (" + res.s + "). Retrying in a minute."; return; }
+      if (res.s !== 200) {
+        var old = HQ.kept("bs_hq_last_pages", q);
+        if (old && !data) show(old.j);
+        HQ.net("pages", "Couldn't load the Pages numbers (" + res.s + ").", old && old.at);
+        return;
+      }
+      HQ.net("pages", null);
       HQ.showShell();
-      data = res.j;
-      if (!state.link) state.link = data.link;
-      $("pgLoading").hidden = true; $("pgBody").hidden = false;
-      render();
-      armRefresh();
-      if (again) { again = false; load(false); }
+      if (res.j.log && res.j.log.length > 400) HQ.keep("bs_hq_last_pages", q, Object.assign({}, res.j, { log: res.j.log.slice(0, 400) }));
+      else HQ.keep("bs_hq_last_pages", q, res.j);
+      show(res.j);
+      if (again) { again = false; return load(false); }
     }).catch(function () {
       loading = false;
       $("pgBody").classList.remove("busy");
-      if (!data) { $("pgLoading").hidden = false; $("pgLoading").textContent = "No connection. Retrying in a minute."; }
-      armRefresh();
+      var old = HQ.kept("bs_hq_last_pages", q);
+      if (old && !data) show(old.j);
+      HQ.net("pages", "offline", old && old.at);
     });
   }
-  function armRefresh() { clearInterval(timer); timer = setInterval(function () { if (!document.hidden) load(false); }, REFRESH_MS); }
+  function show(j) {
+    data = j;
+    if (!state.link) state.link = data.link;
+    $("pgLoading").hidden = true; $("pgBody").hidden = false;
+    render();
+  }
   function banner(msg, html) { $("banner").hidden = !msg; if (html) $("banner").innerHTML = msg; else $("banner").textContent = msg; }
 
-  /* ---------- controls ---------- */
-  function syncChips() {
-    var r = HQ.state.range;
-    [].forEach.call(document.querySelectorAll("#chips .chip"), function (c) { c.classList.toggle("on", c.getAttribute("data-r") === r); });
-    $("custom").hidden = r !== "custom";
-  }
-  $("chips").addEventListener("click", function (ev) {
-    var c = ev.target.closest(".chip");
-    if (!c) return;
-    var r = c.getAttribute("data-r");
-    state.shown = 50;
-    if (r === "custom") {
-      var from = HQ.state.from || (data && data.from) || "", to = HQ.state.to || (data && data.to) || "";
-      $("from").value = from; $("to").value = to;
-      HQ.state.range = "custom"; syncChips();
-      if (from && to) HQ.setRange("custom", from, to);
-      return;
-    }
-    HQ.setRange(r);
-  });
-  ["from", "to"].forEach(function (id) {
-    $(id).addEventListener("change", function () { var f = $("from").value, t = $("to").value; if (f && t) HQ.setRange("custom", f, t); });
-  });
+  /* ---------- controls (the date range is the one in the header) ---------- */
   $("link").addEventListener("change", function () { state.link = $("link").value; state.fAd = ""; state.fCc = ""; state.shown = 50; remember(); load(false); });
   $("seg").addEventListener("click", function (ev) {
     var b = ev.target.closest("button");
@@ -139,7 +130,11 @@
   $("fAd").addEventListener("change", function () { state.fAd = $("fAd").value; state.shown = 50; drawLog(); });
   $("fCc").addEventListener("change", function () { state.fCc = $("fCc").value; state.shown = 50; drawLog(); });
   $("more").addEventListener("click", function () { state.shown += 50; drawLog(); });
-  function toggleBots(on) { state.bots = typeof on === "boolean" ? on : !state.bots; state.shown = 50; load(false); }
+  function toggleBots(on) {
+    state.bots = typeof on === "boolean" ? on : !state.bots; state.shown = 50;
+    try { localStorage.setItem("bs_hq_bots", state.bots ? "1" : "0"); } catch (e) {}
+    load(false);
+  }
   $("botsBtn").addEventListener("click", function () { toggleBots(); });
   $("tHumans").addEventListener("click", function () { if (state.bots) toggleBots(false); });
   $("tBots").addEventListener("click", function () { if (!state.bots) toggleBots(true); });
@@ -171,8 +166,6 @@
     sel.innerHTML = data.links.map(function (l) { return '<option value="' + esc(l.id) + '"' + (l.id === data.link ? " selected" : "") + ">" + esc(l.title) + "</option>"; }).join("");
     var cur = data.links.filter(function (l) { return l.id === data.link; })[0];
     if (cur && cur.cover) $("pickImg").src = cur.cover;
-    syncChips();
-    if (HQ.state.range === "custom") { $("from").value = data.from; $("to").value = data.to; }
     $("tHumans").classList.toggle("on", !state.bots);
     $("tBots").classList.toggle("on", state.bots);
     $("botN").textContent = fmt((data.hidden || {}).visits || 0);
@@ -242,7 +235,7 @@
         '<span class="n num">' + fmt(n) + (base ? "<small>" + pct(v ? n / v : null) + "</small>" : "") + "</span></div>";
     };
     $("funnel").innerHTML = v || f.spotify
-      ? row("Visits", f.visits, "", false) + row("Unique", f.unique, "", true) + row("Spotify taps", f.spotify, "s", true) + (f.other ? row("Other stores", f.other, "o", true) : "")
+      ? row("Visits", f.visits, "", false) + row("People", f.unique, "", true) + row("Spotify taps", f.spotify, "s", true) + (f.other ? row("Other stores", f.other, "o", true) : "")
       : '<p class="empty">No visits in this period yet.</p>';
     var names = { apple: "Apple", youtube: "YouTube", deezer: "Deezer", amazon: "Amazon", soundcloud: "SoundCloud", instagram: "Instagram", tiktok: "TikTok", email: "Email" };
     $("stores").hidden = !f.other; /* song pages are Spotify-only; the home page also has other links */
@@ -263,7 +256,7 @@
     var rows = unit === "hour"
       ? data.series.hour.map(function (r) { return { label: String(r.h).padStart(2, "0"), tip: String(r.h).padStart(2, "0") + ":00–" + String(r.h).padStart(2, "0") + ":59", v: r.v, t: r.t }; })
       : data.series.day.map(function (r) { return { label: dayLabel(r.d, data.days > 10), tip: longDay(r.d), v: r.v, t: r.t }; });
-    var W = Math.round(svg.getBoundingClientRect().width) || 640, H = W < 500 ? 230 : 220, L = 34, B = 24, T = 10;
+    var W = Math.round(svg.getBoundingClientRect().width) || 640, H = W < 500 ? 230 : 220, L = 44, B = 28, T = 10;
     svg.setAttribute("viewBox", "0 0 " + W + " " + H);
     var mx = Math.max.apply(0, rows.map(function (r) { return Math.max(r.v, r.t); }).concat([1]));
     var step = Math.pow(10, Math.floor(Math.log10(mx)));
@@ -272,7 +265,7 @@
     for (var g = 0; g <= top; g += nice) {
       var y = H - B - g / top * ph;
       out += '<line x1="' + L + '" x2="' + W + '" y1="' + y + '" y2="' + y + '" stroke="#1F1F1F"/>' +
-        '<text x="' + (L - 8) + '" y="' + (y + 3.5) + '" fill="#6E6E6E" font-family="DM Mono,monospace" font-size="10" text-anchor="end">' + fmt(g) + "</text>";
+        '<text x="' + (L - 8) + '" y="' + (y + 3.5) + '" fill="#6E6E6E" font-family="DM Mono,monospace" font-size="13" text-anchor="end">' + fmt(g) + "</text>";
     }
     var every = Math.ceil(rows.length / Math.max(4, Math.floor((W - L) / 34)));
     var bw = Math.max(2, Math.min(22, cw * 0.32));
@@ -285,7 +278,7 @@
       var cx = L + i * cw + cw / 2;
       out += '<rect class="hit" data-i="' + i + '" x="' + (L + i * cw) + '" y="' + T + '" width="' + cw + '" height="' + ph + '" fill="#fff" opacity="0"/>';
       out += bar(cx - bw - 1, r.v / top * ph, GREY) + bar(cx + 1, r.t / top * ph, GREEN);
-      if (i % every === 0) out += '<text x="' + cx + '" y="' + (H - 6) + '" fill="#8A8A8A" font-family="DM Mono,monospace" font-size="10" text-anchor="middle">' + esc(r.label) + "</text>";
+      if (i % every === 0) out += '<text x="' + cx + '" y="' + (H - 6) + '" fill="#8A8A8A" font-family="DM Mono,monospace" font-size="13" text-anchor="middle">' + esc(r.label) + "</text>";
     });
     svg.innerHTML = out;
 
@@ -419,8 +412,8 @@
   }
 
   window.HQPages = {
-    load: function (first) { syncChips(); load(first); },
-    reload: function () { state.shown = 50; syncChips(); return load(false); },
+    load: function (first) { return load(first); },
+    reload: function () { state.shown = 50; return load(false); },
     stop: function () { clearInterval(timer); },
   };
 })();
