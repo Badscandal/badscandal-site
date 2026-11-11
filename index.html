@@ -70,9 +70,10 @@
      film carry the colour. Nothing here uses .roll except the footer link (it wipes child markup).
      ========================================================================================== -->
 <header class="nav">
-  <a class="nav-logo" href="index.html" aria-label="Badscandal — home">/</a>
+  <!-- this IS the home page: the logo is the small wordmark (a real tap target, back to the top),
+       and there is no separate "Home" link -->
+  <a class="nav-logo nav-logo--mark" href="index.html" aria-label="Badscandal — home">BADSCANDAL</a>
   <nav class="nav-links" aria-label="Primary">
-    <a class="nav-link roll" href="index.html">Home</a>
     <a class="nav-link roll" href="plugin.html">Plugin store</a>
   </nav>
   <div class="lang" role="group" aria-label="Language">
@@ -100,10 +101,12 @@
   </section>
 
   <!-- 02 · LATEST RELEASE — listen.json "release": mode "upcoming" = countdown + FOLLOW ON SPOTIFY,
-       "out" = LISTEN. No pre-save links, ever (team rule since 10 Nov 2026). ------------------ -->
+       "out" = LISTEN + "Out now" + "Released <date>". No pre-save links, ever (team rule since
+       10 Nov 2026). Under the card js/listen.js lists every song that is already out (from
+       /songs.json), each linking to its own page. ------------------------------------------- -->
   <section class="rel" id="latest">
     <article class="rel-card">
-      <img class="rel-cover" data-rel="cover" src="assets/listen-medaseubody-cover-v1.jpg" alt="Me Dá Seu Body — cover" width="1000" height="1000">
+      <div class="rel-art"><img class="rel-cover" data-rel="cover" src="assets/listen-medaseubody-cover-v1.jpg" alt="Me Dá Seu Body — cover" width="1000" height="1000"></div>
       <div class="rel-body">
         <p class="tag" data-rel="kicker">New single</p>
         <h2 class="rel-title" data-rel="title">Me Dá Seu Body</h2>
@@ -117,6 +120,7 @@
             <div class="cd-u"><span class="cd-n" data-cd="s">00</span><span class="cd-l">Sec</span></div>
           </div>
           <p class="cd-date" data-cd="date"></p>
+          <p class="cd-rel" data-cd="rel" hidden></p>
         </div>
         <a class="buy-btn" data-rel="cta" data-mag href="https://open.spotify.com/artist/29kaubgb6Esvwu0idVndGy" target="_blank" rel="noopener">Follow on Spotify</a>
         <p class="rel-links">
@@ -126,6 +130,12 @@
         </p>
       </div>
     </article>
+    <!-- OUT NOW (11 Nov 2026) — filled by js/listen.js from /songs.json: songs whose release day
+         has come and that have a Spotify track link. Hidden until there is at least one. -->
+    <div class="outs" data-outs hidden>
+      <p class="tag">Out now</p>
+      <ul class="plain outs-list"></ul>
+    </div>
   </section>
 
   <!-- 03 · STREAM — the artist profiles ------------------------------------------------------ -->
@@ -173,7 +183,7 @@
 <script src="js/main.js"></script>
 <script src="js/crt.js"></script>
 <script src="js/listen.js"></script>
-<!-- our own anonymous visit counter (no Meta on this page): /admin -> "Home page" -->
+<!-- our own anonymous visit counter (no Meta on this page): /hq -> Pages -> "Home page" -->
 <script src="js/count.js" defer></script>
 </body>
 </html>

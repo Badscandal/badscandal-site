@@ -72,6 +72,9 @@
     "Sec": { es: "Seg", pt: "Seg" },
     "Out": { es: "Sale el", pt: "Sai em" },
     "Out now": { es: "Ya disponible", pt: "Já disponível" },
+    /* home card + song list once a song is out (11 Nov 2026) — followed by the date. Capital R:
+       the lowercase "released" further down is the plugin update page's. */
+    "Released": { es: "Lanzamiento:", pt: "Lançamento:" },
     "Latest · Magic Records · 2024": { es: "Lo último · Magic Records · 2024", pt: "Mais recente · Magic Records · 2024" },
     "Streams across Spotify, Apple Music, YouTube and SoundCloud": { es: "Reproducciones en Spotify, Apple Music, YouTube y SoundCloud", pt: "Streams no Spotify, Apple Music, YouTube e SoundCloud" },
     "as of": { es: "a", pt: "em" },
