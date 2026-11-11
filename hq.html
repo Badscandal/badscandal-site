@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<meta name="referrer" content="no-referrer">
+<meta name="theme-color" content="#050505">
+<title>BADSCANDAL HQ</title>
+<link rel="icon" href="/favicon.ico">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Figtree:wght@300..900&display=swap" rel="stylesheet">
+<!-- BADSCANDAL HQ (11 Nov 2026): money, songs, growth, fans, releases and the bot team on one page.
+     Stand-alone like admin.html (no site.css, no main.js). Same login as /admin. Logic: js/hq.js.
+     Server: netlify/functions/hq.mjs (read-only). Numbers come from the bots' "BADSCANDAL HQ" sheet. -->
+<style>
+:root{--ink:#050505;--ink-2:#0C0C0C;--ink-3:#1F1F1F;--ink-4:#2A2A2A;--paper:#F2F2F2;--muted:#8A8A8A;--silver:#6E6E6E;--uv:#B4B4B4;--spot:#1ED760;--grey-mark:#5A5A5A;
+  --mono:"DM Mono",ui-monospace,Menlo,monospace;--sans:Figtree,system-ui,-apple-system,sans-serif;--r:16px;--pad:16px}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth;scroll-padding-top:110px}
+html,body{margin:0;background:var(--ink);color:var(--paper);font-family:var(--sans);-webkit-font-smoothing:antialiased}
+body{padding:0 0 calc(40px + env(safe-area-inset-bottom))}
+a{color:inherit}
+button{font:inherit;color:inherit}
+[hidden]{display:none !important}
+.lbl{font-family:var(--mono);font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.num{font-variant-numeric:tabular-nums}
+.top{position:sticky;top:0;z-index:5;background:rgba(5,5,5,.9);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border-bottom:1px solid var(--ink-3)}
+.top-in{max-width:1240px;margin:0 auto;padding:12px var(--pad);display:flex;flex-wrap:wrap;align-items:center;gap:10px 14px}
+.brand{font-weight:900;letter-spacing:.06em;font-size:15px}
+.brand span{font-family:var(--mono);font-weight:400;font-size:10px;letter-spacing:.14em;color:var(--muted);margin-left:8px}
+.when{margin-left:auto}
+.chips{display:flex;gap:6px;overflow-x:auto;width:100%;scrollbar-width:none}
+.chips::-webkit-scrollbar{display:none}
+.chip{flex:none;font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;padding:8px 13px;border-radius:999px;border:1px solid var(--ink-3);color:var(--uv);background:transparent;cursor:pointer;text-decoration:none}
+.chip:hover{border-color:var(--uv)}
+main{max-width:1240px;margin:0 auto;padding:16px var(--pad);display:grid;gap:14px;grid-template-columns:minmax(0,1fr)}
+.card{background:var(--ink-2);border:1px solid var(--ink-3);border-radius:var(--r);padding:16px;min-width:0}
+h2{font-size:17px;margin:0 0 2px;font-weight:700}
+h3{font-size:15px;margin:0;font-weight:700}
+.sub{font-size:12.5px;color:var(--muted);margin:0 0 12px}
+.sample{background:var(--paper);color:var(--ink);border-radius:var(--r);padding:12px 16px;font-weight:700;font-size:14px}
+.sample small{display:block;font-weight:400;font-size:12.5px;margin-top:2px}
+.note{font-size:13px;color:var(--uv);margin:0}
+.grid{display:grid;gap:10px;grid-template-columns:minmax(0,1fr)}
+@media(min-width:720px){.grid.g2{grid-template-columns:repeat(2,minmax(0,1fr))}.grid.g4{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(min-width:1000px){.grid.g3{grid-template-columns:repeat(3,minmax(0,1fr))}.grid.g4{grid-template-columns:repeat(4,minmax(0,1fr))}}
+.tile{background:var(--ink);border:1px solid var(--ink-3);border-radius:12px;padding:14px;min-width:0}
+.big{font-size:26px;font-weight:700;line-height:1.1;margin:6px 0 2px}
+.big small{font-size:13px;font-weight:400;color:var(--muted)}
+.d{font-size:12.5px;color:var(--uv)}
+.up{color:var(--paper)}.down{color:var(--muted)}
+.pill{display:inline-block;font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;border:1px solid var(--ink-4);border-radius:999px;padding:3px 8px;color:var(--uv);white-space:nowrap}
+.pill.hot{background:var(--paper);color:var(--ink);border-color:var(--paper)}
+.pill.warn{border-color:var(--paper);color:var(--paper)}
+.row{display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap}
+svg.spark{display:block;width:100%;height:44px;margin:10px 0 6px}
+.bar{position:relative;height:10px;border-radius:999px;background:var(--ink-3);margin:10px 0 6px;overflow:hidden}
+.bar i{position:absolute;left:0;top:0;bottom:0;background:var(--uv);border-radius:999px}
+.bar b{position:absolute;top:0;bottom:0;width:2px;background:var(--paper);opacity:.55}
+.warn .bar i,.stop .bar i,.over .bar i{background:var(--paper)}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{text-align:left;font-family:var(--mono);font-weight:400;font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);padding:6px;border-bottom:1px solid var(--ink-3);white-space:nowrap}
+td{padding:8px 6px;border-bottom:1px solid var(--ink-3);vertical-align:top;color:var(--uv)}
+td b,td a{color:var(--paper)}
+td.r,th.r{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
+.scroll table{min-width:640px}
+.steps{list-style:none;margin:10px 0 0;padding:0}
+.steps li{display:flex;gap:10px;align-items:baseline;padding:6px 0;border-top:1px solid var(--ink-3);font-size:13px;color:var(--uv)}
+.steps .dot{flex:none;width:9px;height:9px;border-radius:50%;border:1px solid var(--grey-mark);transform:translateY(1px)}
+.steps .done .dot{background:var(--spot);border-color:var(--spot)}
+.steps .late{color:var(--paper);font-weight:600}
+.steps .late .dot{background:var(--paper);border-color:var(--paper)}
+.steps .w{margin-left:auto;font-family:var(--mono);font-size:10.5px;color:var(--muted);white-space:nowrap}
+.empty{color:var(--muted);font-size:13px;margin:0}
+.btn{background:var(--paper);color:var(--ink);border:0;border-radius:999px;padding:11px 18px;font-weight:700;font-size:14px;cursor:pointer}
+.ghost{background:transparent;border:1px solid var(--ink-3);border-radius:999px;padding:7px 11px;font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);cursor:pointer;text-decoration:none}
+@media(min-width:900px){.chips{width:auto}.top-in{flex-wrap:nowrap}.when{order:3}}
+</style>
+</head>
+<body>
+<header class="top"><div class="top-in">
+  <div class="brand">BADSCANDAL<span>HQ</span></div>
+  <nav class="chips" aria-label="Sections">
+    <a class="chip" href="#today">Today</a><a class="chip" href="#songs">Songs</a><a class="chip" href="#growth">Growth</a><a class="chip" href="#fans">Fans</a><a class="chip" href="#releases">Releases</a><a class="chip" href="#money">Money</a><a class="chip" href="#team">Team</a>
+    <a class="ghost" href="/admin">Links &amp; ads</a>
+  </nav>
+  <div class="lbl when" id="when"></div>
+</div></header>
+
+<main id="main">
+  <div class="sample" id="sample" hidden>SAMPLE NUMBERS<small>Everything below is made up so you can see the layout. Nothing here is real yet.</small></div>
+  <section class="card" id="off" hidden>
+    <h2>Not connected yet</h2>
+    <p class="note" id="offMsg">The dashboard reads the bots' "BADSCANDAL HQ" sheet. That needs two settings on Netlify.</p>
+    <p style="margin:14px 0 0"><button class="btn" id="showSample" type="button">Show it with sample numbers</button></p>
+  </section>
+
+  <div id="app" hidden>
+  <section class="card" id="today">
+    <div class="row"><div><h2>Today</h2><p class="sub" id="todaySub"></p></div><span class="lbl" id="capMonth"></span></div>
+    <div class="grid g3">
+      <div class="tile" id="capTile">
+        <div class="lbl">Ad spend this month · all platforms</div>
+        <div class="big num" id="capSpent">–</div>
+        <div class="bar" aria-hidden="true"><i id="capFill"></i><b id="capWarn"></b><b id="capStop"></b></div>
+        <div class="d" id="capMsg"></div>
+      </div>
+      <div class="tile"><div class="lbl">Next release</div><div class="big" id="nextSong">–</div><div class="d" id="nextMsg"></div></div>
+      <div class="tile"><div class="lbl">Needs you, Luke</div><div id="forLuke"></div></div>
+    </div>
+  </section>
+
+  <section class="card" id="songs"><h2>Songs</h2><p class="sub">Spotify, day by day. Momentum = the last 7 days against the 7 before. Spotify's numbers arrive about two days late.</p><div class="grid g3" id="songList"></div></section>
+  <section class="card" id="growth"><h2>Growth</h2><p class="sub">Followers per platform, and the posts that went out on the days that grew most.</p><div class="grid g4" id="growthList"></div></section>
+  <section class="card" id="fans"><h2>Fans forming</h2><p class="sub" id="fansSub"></p><div class="scroll"><table id="fanTable"></table></div></section>
+  <section class="card" id="releases"><h2>Releases</h2><p class="sub">Counting back from release day: 28 days files, 21 RouteNote, 14 Spotify pitch, 10 lyrics, 7 video and page.</p><div class="grid g3" id="relList"></div></section>
+  <section class="card" id="money"><h2>Money</h2><p class="sub">Every amount in the currency it was billed or paid in. Totals in EUR are estimates at that month's average rate.</p><div class="scroll"><table id="moneyTable"></table></div><div id="moneyDetail"></div></section>
+  <section class="card" id="team"><h2>Team</h2><p class="sub" id="teamSub"></p><div class="scroll"><table id="teamTable"></table></div><div class="scroll" style="margin-top:14px"><table id="taskTable"></table></div></section>
+  </div>
+</main>
+<script src="js/hq.js"></script>
+</body>
+</html>

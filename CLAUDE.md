@@ -952,6 +952,23 @@ Brief: `../TOUCHME-LANDING-BUILD-BRIEF.md` (outside the repo on purpose).
   daily rates so far; `convert(amount, from, to, avg)`. Cached 12 h (`meta-cache`, `fx/<month>.json`).
   Luke asked for USD<->EUR at the month's average: converted figures are ESTIMATES shown NEXT TO the
   real amount and the rate used, never instead of it. The cap card shows the EUR estimate.
+* **BADSCANDAL HQ, `/hq` (11 Nov 2026; on branch `hq-dashboard` until Luke has seen it):** `hq.html`
+  + `js/hq.js`, stand-alone like admin.html, SAME login as /admin (no cookie -> sent to /admin).
+  Server `netlify/functions/hq.mjs` (`/api/hq/data`, read-only). It reads the bots' Google Sheet
+  "BADSCANDAL HQ" (tabs Growth, Songs, Fans, Releases, Tasks, Royalties, Spend, Income; exact
+  columns in the header of `netlify/lib/hq.mjs`, spec in badscandal-hq
+  `briefs/2026-11-11-hq-dashboard-spec.md`) through `netlify/lib/gsheets.mjs`: a Google service
+  account, scope spreadsheets.readonly, no dependencies (JWT signed with node:crypto). Netlify env
+  `GOOGLE_SA_KEY` (the JSON key, Luke pastes it) + `HQ_SHEET_ID`; the sheet is shared with the
+  service account as Viewer. Sheet cached 10 min (`meta-cache`, `hq/sheets.json`; `?fresh=1`).
+  `hqModel()` builds: Today (the COMBINED cap: Meta + Google + TikTok in USD, EUR at the month's
+  average rate; next release; tasks for Luke), Songs (daily Spotify numbers; momentum = last 7 days
+  vs the 7 before, only once both weeks have 4+ days, else "new"), Growth (followers per platform +
+  the best days and their posts), Fans (repeat commenters, asked the song name, DMs; suggestions
+  only), Releases (28/21/14/10/7-day timeline, late steps), Money (per month, every amount in its
+  own currency + EUR estimates), Team (tasks per owner, who last logged). Missing numbers stay
+  missing ("not read" is never 0). `/hq?sample=1` shows MADE-UP numbers (`hq-sample.mjs`) under a
+  SAMPLE banner. The page only displays; nothing on it changes ads, posts, sheets or money.
 * **90-day rule:** `netlify/functions/rollup.mjs` (daily 06:00 UTC, production
   only) folds raw keys older than 90 days into `daily/<day>.json` counts and
   deletes them; the portal merges those back for old ranges.
