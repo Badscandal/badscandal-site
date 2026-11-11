@@ -334,10 +334,13 @@ export function isOpen(m) { return m.needs !== "none" && !m.resolved; }
 /* what is waiting on one name, oldest first */
 export const waitingOn = (messages, name) => messages.filter((m) => isOpen(m) && low(m.to) === low(name)).sort((a, b) => (a.at < b.at ? -1 : 1));
 export function threads(messages) {
+  /* a thread = a first message and EVERY answer under it, however deep the answers were chained
+     (an answer to an answer must not vanish from the board) */
   const byId = Object.fromEntries(messages.map((m) => [m.id, m]));
+  const rootOf = (m) => { let cur = m; for (let i = 0; i < 20 && cur.re && byId[cur.re]; i++) cur = byId[cur.re]; return cur; };
   const replies = {};
-  for (const m of messages) if (m.re && byId[m.re]) (replies[m.re] || (replies[m.re] = [])).push(m);
-  return messages.filter((m) => !(m.re && byId[m.re])).map((m) => ({ ...m, replies: (replies[m.id] || []).sort((a, b) => (a.at < b.at ? -1 : 1)) }));
+  for (const m of messages) { const r = rootOf(m); if (r !== m) (replies[r.id] || (replies[r.id] = [])).push(m); }
+  return messages.filter((m) => rootOf(m) === m).map((m) => ({ ...m, replies: (replies[m.id] || []).sort((a, b) => (a.at < b.at ? -1 : 1)) }));
 }
 
 /* ---------- income: one record per payment, and "checked, nothing new" ---------- */
@@ -581,11 +584,15 @@ export async function loadDesk(store, now) {
 
 export function board(desk, now, hq) {
   const today = spDay(now), nowHM = spHM(now);
-  const staff = workers(desk.roster, { hq, updates: desk.updates, messages: desk.messages, cards: desk.cards, seen: desk.seen, today, nowHM });
+  /* one log: when the sheet was read, its Updates tab and the connector are already merged there
+     (hqModel -> team.live.feed), so a bot that still writes only the sheet is not shown as silent */
+  const live = hq && hq.team && hq.team.live && hq.team.live.ready ? hq.team.live.feed : null;
+  const updates = live ? live.map((u) => ({ sp: u.at, at: u.at, bot: u.bot, status: u.status, message: u.message, link: u.link || "" })) : desk.updates;
+  const staff = workers(desk.roster, { hq, updates, messages: desk.messages, cards: desk.cards, seen: desk.seen, today, nowHM });
   const lastSeen = Object.entries(desk.seen).filter(([n]) => n !== "Claude").sort((a, b) => (a[1].at < b[1].at ? 1 : -1))[0] || null;
   return {
     today, now: spStamp(now), staff,
-    updates: desk.updates.slice(0, 60),
+    updates: updates.slice(0, 60),
     messages: threads(desk.messages).slice(0, 80),
     waiting: { luke: waitingOn(desk.messages, "Luke"), claude: waitingOn(desk.messages, "Claude"), bots: desk.messages.filter((m) => isOpen(m) && !PEOPLE.includes(m.to)).length },
     income: desk.income,

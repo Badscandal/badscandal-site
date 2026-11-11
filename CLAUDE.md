@@ -1211,6 +1211,45 @@ write the sheets and shouldn't). Nothing here can touch ads, posts, sheets or mo
   badscandal-hq under `staff-desk/` and are loaded onto the desk; this public repo carries only the
   built-in job cards in `DEFAULT_ROSTER` and made-up sample data). `?sample=1` = the made-up desk, needs
   the login, never opens a store, never writes.
+* **/hq screens for the desk (11 Nov 2026):** `js/hq-staff.js` (loaded after js/hq.js, before
+  js/hq-shell.js; `window.HQStaff`: `reload`, `clear`, `drawWorkers`, `board`, `problem`) holds the page's
+  ONLY writes: Luke's messages / answers / "mark as done" (`POST /api/staff/message|resolve`) and the bots'
+  key switch (`POST /api/staff/config`), all through `HQ.postJSON`, all switched off in `?sample=1`. The
+  page still cannot change ads, posts, sheets or money.
+  - **Team = the workers section:** a connector strip (on/off, how many bots have used it, last used, the
+    "Switch the bots' key off" button with an inline confirm), then ONE CARD PER BOT ON THE ROSTER (also
+    bots with no duty): one state pill (Blocked / Late / Quiet today / To do / Working / Done / No duty
+    today / Paused), today's duties with their times, the latest update and its age, "Working on" /
+    "Needs" from the bot's card, counts, "Last used the connector …", "Copy message for Nova" on blocked
+    or late cards, and a "Why this bot" disclosure (why, daily times, what it writes, access, blockers).
+    Deep link `#team/<bot lowercase>`. Then the merged live log, Open tasks, Tasks per person.
+  - **Messages** (tenth tab, `#messages`, in the rail and the More sheet, AFTER the nine pinned by
+    tests/dashboard.test.mjs): "Waiting on you" on top (a decision's options ask "Send this answer?"
+    inline before sending: a mis-tap can't be undone; Reply; Mark as done), a compose box (To / What you
+    need / text, 16px so iOS doesn't zoom, the draft is kept if sending fails), then the board as threads;
+    the site's check is a calmer card that folds after 8 lines. Count badge on the nav item, red dot on
+    the phone's More button. Deep link `#messages/<id>`.
+  - **Today:** "Needs attention" gains messages waiting on Luke, income problems (3, then "+N more") and
+    "the connector is switched off" (`HQLib.staffAttention`); one "Site check 09:35: 3 things to look at ›"
+    line; "Needs you" is now "Your tasks".
+  - **Money → "Money coming in"** above the monthly tables: account tiles, received / pending per
+    currency (never added across currencies), problems, "Where money comes from", latest payments.
+  - **Data health:** Connector and Site check rows (`HQLib.staffHealth`; a check older than 26 h is red).
+  - New `HQLib` rules (all tested in tests/hq-staff.test.mjs): `workerLabel`, `sortWorkers`, `workerView`,
+    `dutyWhen`, `workerCounts`, `seenLine`, `connectorLine`, `novaMessage`, `liveFeed`, `spWhen`,
+    `waitLabel`, `needWords`, `reportParts`, `siteCheckLine`, `composeNames`, `threadRoot`,
+    `staffAttention`, `staffHealth`, `curList`, `cadenceWord`, `accountLine`, `sourceState`, `payLine`,
+    `incomeEmpty`, `incomeProblems`. `attention()` takes `o.board`; `healthRows()` adds the two rows only
+    when a board is passed. New `window.HQ` members: `postJSON`, `copyText`, `link`, `stack`, `drawFeed`,
+    `sheet()`, `boardChanged()`.
+  - localStorage `bs_hq_last_staff` (never in sample mode); logout now clears every `bs_hq_last_*` and
+    `bs_hq_seen`. `hq-sw.js`: `CACHE` is `bs-hq-v2`, `SHELL` includes `/js/hq-staff.js`.
+  - Fixed on the way: a blank black page when the first answers failed; an older date range's answer
+    overwriting a newer one; deep links not scrolling (no smooth scroll any more); desktop lines running
+    1,500 px (`main` capped at 1180px); text reading through the header and phone bar (.96 opaque); bare
+    tables (now in glass tiles); developer wording on Luke's page.
+  - A board that fails never breaks the page: Team falls back to what the sheet gives, Messages says so
+    with Retry.
 * **Not served any more:** `/CLAUDE.md`, `/HANDOFF-README.md`, `/README.txt`, `/README-STORE.txt` now
   404 (`_redirects`): this file was readable at badscandal.com/CLAUDE.md. The repo itself is still public,
   so nothing private goes in here.

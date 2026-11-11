@@ -251,3 +251,17 @@ test("staff: the twice-daily report always goes on the board, even when the shee
   const none = S.checkReport({ desk, hq: null, hqState: { connected: true, error: "Google didn't answer in time" }, now: NOW });
   assert.ok(none.problems.some((p) => /Duties: not read/.test(p)) && !none.problems.some((p) => /no duty rows/.test(p)), "an unread sheet is not blamed on Nova");
 });
+
+test("staff: an answer to an answer stays in its thread; a bot that only writes the sheet is not 'silent'", async () => {
+  const d = memoryDesk();
+  const a = (await S.sendMessage(d, NOW, R, { from: "Claude", to: "Nova", text: "Is the Updates tab there?", needs: "reply" })).message;
+  const b = (await S.sendMessage(d, NOW + 1, R, { from: "Nova", to: "Claude", text: "Yes.", re: a.id })).message;
+  await S.sendMessage(d, NOW + 2, R, { from: "Claude", to: "Nova", text: "Thanks.", re: b.id });
+  const t = S.threads(await S.listMessages(d, NOW + 3));
+  assert.equal(t.length, 1); assert.deepEqual(t[0].replies.map((m) => m.text), ["Yes.", "Thanks."]);
+  /* Steve wrote only the sheet's Updates tab today */
+  const hq = hqModel({ Updates: [["time", "bot", "status", "message", "link"], ["2026-11-12 09:05", "Steve", "done", "Instagram row written: 13,509 followers", ""]] }, "2026-11-12", {}, undefined, "09:20", { updates: [], overlay: null });
+  const bd = S.board(await S.loadDesk(d, NOW), NOW, hq);
+  const steve = bd.staff.find((w) => w.name === "Steve");
+  assert.equal(steve.last.message, "Instagram row written: 13,509 followers"); assert.equal(steve.state, "done"); assert.equal(bd.updates.length, 1);
+});
