@@ -1331,9 +1331,6 @@ body.upcoming .rel-links{display:none} /* not out yet: no store rows (10 Nov 202
   text-transform:uppercase;color:var(--muted)}
 .cd-date{margin-top:14px;font-family:var(--font-mono);font-weight:400;font-size:13px;
   letter-spacing:.12em;text-transform:uppercase;color:var(--paper)}
-/* "Released 30 October 2026" under OUT NOW (js/listen.js, once the song is out) */
-.cd-rel{margin-top:8px;font-family:var(--font-mono);font-weight:400;font-size:12px;
-  letter-spacing:.12em;text-transform:uppercase;color:var(--uv)}
 .cd-date.cd-now{font-family:var(--font-display);font-style:italic;font-size:clamp(30px,7vw,44px);
   letter-spacing:0;text-transform:none;color:var(--paper)}
 /* the seconds breathe in on every tick — the only motion, and reduced-motion never gets it (JS) */

@@ -15,8 +15,8 @@
    the page flips itself to OUT NOW + LISTEN (-> cta) without waiting for a JSON edit.
    Release week (25 Oct 2026): for 7 days from release.date (any mode, so keep `date` set on "out") the
    card gets .is-out — a light circling its edge, the cover fading in, OUT NOW as a shimmering link.
-   Released (11 Nov 2026): once a release is out the card always says so. Mode "out" keeps "Out now"
-   + "Released <date>" after the release week too. At zero in "upcoming" mode the button and the
+   Out (11 Nov 2026): once a release is out the card keeps saying "Out now", after the release week
+   too (no "Released <date>" line on the public page: Luke wants that wording in /hq only). At zero in "upcoming" mode the button and the
    OUT NOW link go to the song's Spotify track when /songs.json has one, else to our own song page
    (/<slug>), never just the artist profile; body.upcoming comes off. Under the card, "Out now"
    lists every released song in /songs.json (date reached in the visitor's time zone AND
@@ -65,14 +65,6 @@
     else { a.target = "_blank"; a.rel = "noopener"; }
   }
 
-  /* "Released 30 October 2026" under OUT NOW (plain text, in the page language) */
-  function released(box, at) {
-    var p = box.querySelector("[data-cd=rel]"), day = longDate(at);
-    if (!p || !day) return;
-    p.textContent = T("Released") + " " + day;
-    p.hidden = false;
-  }
-
   /* out for more than the release week: no ring, no shimmer, but it still says so */
   function settled(at) {
     var box = document.querySelector("[data-rel=countdown]");
@@ -80,7 +72,6 @@
     var grid = box.querySelector(".cd-grid"), dateEl = box.querySelector("[data-cd=date]");
     if (grid) grid.hidden = true;
     if (dateEl) dateEl.textContent = T("Out now");
-    released(box, at);
     box.hidden = false;
   }
 
@@ -107,7 +98,6 @@
         dateEl.classList.add("cd-now");
       }
       if (cta && l.href) { point(cta, l); cta.textContent = T("Listen"); }
-      released(box, at);
       document.body.classList.remove("upcoming"); /* it's out: the whole page says so, not half of it */
       /* release week: the light runs round the card (css "release week") */
       if (Date.now() - at < RELEASE_WEEK) {

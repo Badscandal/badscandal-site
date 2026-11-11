@@ -58,100 +58,15 @@ test("the visit counter accepts every song, the home page and the old listen pag
   assert.match(hit, /new Set\(\["home", "listen", \.\.\.SONGS\.map/);
 });
 
-/* ---------- "Out now / Released <date>" (11 Nov 2026) ---------- */
-
-const TEMPLATE_HTML = readFileSync(join(ROOT, "tools/song-template.html"), "utf8");
-const OUT = { slug: "outsong", title: "Out Song", date: "2026-10-30", cover: "assets/a-v1.jpg", coverWeb: "assets/a-600-v1.webp", share: "assets/share-a-1200-v1.jpg",
-  spotifyTrack: "https://open.spotify.com/track/6Y0BIHxJvTVIjOmk636Cw3", spotifyArtist: DATA.spotifyArtist };
-const SOON = { ...OUT, slug: "soonsong", title: "Soon Song", date: "2026-11-24", spotifyTrack: "" };
-
-/* Runs the page's own before-paint script against a stand-in page, with the clock and the
-   phone's language set by the test. Returns what a visitor would see. */
-function paint(html, now, lang) {
-  const attr = (n) => (html.match(new RegExp(`<main id="song"[^>]*\\sdata-${n}="([^"]*)"`)) || [])[1] || "";
-  const hiddenInHtml = (id) => new RegExp(`id="${id}"[^>]*\\shidden[\\s>]`).test(html);
-  const els = {};
-  const el = (id) => (els[id] ||= { id, hidden: hiddenInHtml(id), textContent: "", href: "", firstChild: { textContent: "", nodeValue: "" },
-    getAttribute: (k) => (id === "song" ? attr(k.replace(/^data-/, "")) : null), querySelector: (q) => el(id + " " + q) });
-  const script = html.match(/<script>([\s\S]*?)<\/script>\s*<\/main>/)[1];
-  const RealDate = Date;
-  class FakeDate extends RealDate {
-    constructor(...a) { if (a.length) super(...a); else super(now.getTime()); }
-    static now() { return now.getTime(); }
-  }
-  const win = {};
-  new Function("window", "document", "navigator", "Date", "performance", script)(
-    win, { getElementById: el, documentElement: {} }, { languages: [lang], language: lang }, FakeDate, { now: () => 0 });
-  return { outHidden: el("outnow").hidden, outNow: el("outnow").firstChild.textContent, released: el("rel").textContent,
-    countdownShown: el("cd").hidden === false, button: el("spt").textContent, href: el("sp").href };
-}
-
-test("a released song page says Out now + Released <date>; an unreleased one keeps it hidden (no-JS HTML)", () => {
-  const out = render(OUT, DATA.spotifyArtist), soon = render(SOON, DATA.spotifyArtist);
-  assert.match(out, /<p class="when out" id="outnow"><span>Out now<\/span><small id="rel">Released 30 October 2026<\/small><\/p>/);
-  assert.match(soon, /<p class="when out" id="outnow" hidden><span>Out now<\/span><small id="rel">Released 24 November 2026<\/small><\/p>/);
-  assert.match(out, /<meta name="description" content="Out Song by BADSCANDAL\. Out now\. Released 30 October 2026\. Listen on Spotify\.">/);
-  assert.match(soon, /<meta name="description" content="Soon Song by BADSCANDAL\. Out 24 November 2026\. Follow on Spotify\.">/);
-  /* the released text is plain text, never a link (an uncounted way off the page) */
-  for (const h of [out, soon]) assert.doesNotMatch(h.match(/<p class="when out"[\s\S]*?<\/p>/)[0], /<a[\s>]|href=/);
-  /* and the real pages agree with the list */
-  for (const s of DATA.songs) {
-    const h = read(s.slug + ".html");
-    if (s.spotifyTrack) assert.match(h, /id="outnow"><span>Out now<\/span><small id="rel">Released \d{1,2} [A-Z][a-z]+ \d{4}</, s.slug);
-    else assert.match(h, /id="outnow" hidden><span>Out now</, s.slug);
-  }
-});
-
-test("the before-paint script shows the released block by the visitor's date, in their language", () => {
-  const out = render(OUT, DATA.spotifyArtist), soon = render(SOON, DATA.spotifyArtist);
-  const nov11 = new Date(2026, 10, 11, 9, 0, 0);
-
-  const en = paint(out, nov11, "en-IE");
-  assert.deepEqual([en.outHidden, en.outNow, en.released, en.countdownShown, en.button, en.href],
-    [false, "Out now", "Released 30 October 2026", false, "Listen on Spotify", OUT.spotifyTrack]);
-  const pt = paint(out, nov11, "pt-BR");
-  assert.deepEqual([pt.outHidden, pt.outNow, pt.released, pt.button], [false, "Já disponível", "Lançamento: 30 de outubro de 2026", "Ouvir no Spotify"]);
-  assert.equal(paint(out, nov11, "de-DE").released, "Veröffentlicht am 30. Oktober 2026");
-  assert.equal(paint(out, nov11, "fr-FR").released, "Sorti le 30 octobre 2026");
-  assert.equal(paint(out, nov11, "ja-JP").released, "Released 30 October 2026", "an unknown language falls back to English");
-
-  /* before release nothing changes: Follow + the countdown, no released text */
-  const before = paint(soon, nov11, "en-IE");
-  assert.deepEqual([before.outHidden, before.countdownShown, before.button, before.href], [true, true, "Follow on Spotify", DATA.spotifyArtist]);
-  const lastSecond = paint(soon, new Date(2026, 10, 23, 23, 59, 59), "pt-BR");
-  assert.deepEqual([lastSecond.outHidden, lastSecond.countdownShown, lastSecond.button], [true, true, "Seguir no Spotify"]);
-
-  /* release day, local midnight: it flips even though the track link isn't in the list yet */
-  const day = paint(soon, new Date(2026, 10, 24, 0, 0, 1), "en-IE");
-  assert.deepEqual([day.outHidden, day.released, day.countdownShown, day.button, day.href],
-    [false, "Released 24 November 2026", false, "Listen on Spotify", DATA.spotifyArtist]);
-
-  /* a track link pasted in early must not show "Out now" before the day */
-  const early = paint(render({ ...SOON, spotifyTrack: OUT.spotifyTrack }, DATA.spotifyArtist), nov11, "en-IE");
-  assert.deepEqual([early.outHidden, early.countdownShown, early.button], [true, true, "Follow on Spotify"]);
-});
-
-test("every language row on the song page has all five strings (the fifth is \"Released\")", () => {
-  const rows = new Function("return " + TEMPLATE_HTML.match(/var B=(\{[\s\S]*?\}),\s*d=document/)[1])();
-  assert.deepEqual(Object.keys(rows).sort(), ["cs", "de", "en", "es", "fr", "it", "nl", "pl", "pt"]);
-  for (const [lang, row] of Object.entries(rows)) {
-    assert.equal(row.length, 5, lang);
-    for (const s of row) assert.ok(typeof s === "string" && s.trim().length > 1, lang + ": " + s);
-  }
-  assert.equal(rows.en[4], "Released");
-  assert.equal(rows.pt[4], "Lançamento:");
-  assert.equal(rows.es[4], "Lanzamiento:");
-});
 
 test("the home page lists what's out from /songs.json, counts the taps, and translates the new text", () => {
   const home = read("index.html"), js = read("js/listen.js"), i18n = read("js/i18n.js");
   assert.match(home, /<div class="outs" data-outs hidden>\s*<p class="tag">Out now<\/p>/);
-  assert.match(home, /data-cd="rel" hidden/);
   assert.match(js, /songs\.json/);
   assert.match(js, /setAttribute\("data-link", x\.slug\)/, "js/count.js counts a[data-link] taps");
   assert.match(js, /a\.href = "\/" \+ x\.slug/, "rows go to our own song page");
   assert.match(read("js/count.js"), /a\[data-link\]/);
-  assert.match(i18n, /"Released": \{ es: "[^"]+", pt: "[^"]+" \}/);
+  assert.ok(!/Released|Lançamento|Lanzamiento/.test(home) && !/T\("Released"\)|cd-rel/.test(js), "no 'Released' wording on the public home page (that lives in /hq)");
   assert.match(i18n, /"Out now": \{ es: "[^"]+", pt: "[^"]+" \}/);
 });
 

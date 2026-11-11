@@ -738,11 +738,11 @@ PAGE" at the end of site.css. Scripts: i18n -> main -> crt -> `js/listen.js`.
   in listen.js sets the length. Headless Chrome screenshots fire at load,
   before CSS animations run: to see the settled state, hold the load event
   open (a slow 1px image in a parent frame).
-* **Released (11 Nov 2026):** mode `"out"` keeps "Out now" + "Released <date>" (`.cd-date` + `.cd-rel`)
-  after the release week; KEEP `date` set. At zero in `"upcoming"` mode LISTEN and the Out-now link go to
-  the song's `spotifyTrack` from `/songs.json`, else to our own `/<slug>` (never just the artist profile);
-  the card's song is matched by cover file, then title, then date; `body.upcoming` comes off. listen.js
-  fetches `listen.json` + `songs.json` together.
+* **Out (11 Nov 2026):** mode `"out"` keeps "Out now" (`.cd-date`) after the release week; KEEP `date`
+  set. No "Released <date>" line on public pages (Luke: that wording is for /hq). At zero in `"upcoming"`
+  mode LISTEN and the Out-now link go to the song's `spotifyTrack` from `/songs.json`, else to our own
+  `/<slug>` (never just the artist profile); the card's song is matched by cover file, then title, then
+  date; `body.upcoming` comes off. listen.js fetches `listen.json` + `songs.json` together.
 * **"Out now" list** (`.outs` under the card): every song in `songs.json` whose day has come locally AND
   has `spotifyTrack`; rows link to `/<slug>` with `data-link="<slug>"`, so `js/count.js` records the tap.
   So pasting the track link into `songs.json` on release day also puts the song in this list.
@@ -751,8 +751,7 @@ PAGE" at the end of site.css. Scripts: i18n -> main -> crt -> `js/listen.js`.
   Desktop (900px and wider) is two columns (`.rel-card` grid, `#latest` 960px). The cover sits in
   `.rel-art` (solid backing; keep the wrapper or the release-week light shows beside the cover).
 * **Nav on home:** a small wordmark logo (`.nav-logo--mark`, hidden at 640px and narrower) + Plugin store
-  + languages; no Home link any more. `.nav-logo` has a 44px tap area site-wide. New i18n TEXT key
-  `"Released"` (capital R; the lowercase `"released"` is the plugin update page's). "as of <Month YYYY>"
+  + languages; no Home link any more. `.nav-logo` has a 44px tap area site-wide. "as of <Month YYYY>"
   and the footer clock weekday follow the page language.
 * **`404.html` (11 Nov 2026):** branded not-found page, stand-alone, CSS-only film look, noindex, no
   counter; every URL in it must be absolute. Netlify serves it for unknown paths and for the `/404 404!`
@@ -830,14 +829,9 @@ Brief: `../TOUCHME-LANDING-BUILD-BRIEF.md` (outside the repo on purpose).
   Spotify" -> the track (or the artist profile while `spotifyTrack` is empty).
   At zero the page flips itself (js/song.js) and shows "Out now". The Meta
   SpotifyClick carries `action: follow|listen`.
-* **Released state (11 Nov 2026):** from local midnight of `date` the page shows "Out now" +
-  "Released 30 October 2026" (`#outnow` / `#rel`, plain text, never a link) on EVERY load, in the
-  visitor's language (before this it only showed to someone who had the page open at midnight). Each
-  language row `B` in `tools/song-template.html` now has FIVE strings: Listen, Follow, "Out", "Out now",
-  "Released". The inline script sets `outnow.hidden = soon` before first paint; the no-JS HTML shows the
-  block only when `spotifyTrack` is set (`OUT_HIDDEN` / `RELEASED` in `tools/song-page.mjs`). The meta
-  description of a released song includes the date. Tests run the inline script against a stand-in page
-  with a set clock and language (`paint()` in `tests/songs.test.mjs`).
+* **A released song page stays exactly as /touchme looks: cover, title, the Spotify button.** No "Released"
+  line on the public page (Luke, 11 Nov 2026: "it's perfect like that"; the released wording belongs in
+  /hq, not here). Don't add one.
 * **The home page counts too** (`js/count.js`, page `home`, /admin "Home page"):
   views, the people-only `act`, and taps on every music/social link (target =
   spotify/apple/youtube/soundcloud/instagram/tiktok/email). NO Meta on the home

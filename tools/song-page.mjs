@@ -17,10 +17,8 @@ export function longDate(ymd) {
 }
 
 /* The page as it is served. Everything that depends on the visitor's clock (Follow vs Listen,
-   the countdown, "Out now / Released <date>") is decided by the page's inline script; the HTML only
-   carries the no-JS fallback, which depends on the list alone, so a rebuild on any day gives the
-   same file: a song with its Spotify track link set is "out" (Listen + the released block shown),
-   one without is not (Follow, released block hidden until the script sees the date has passed). */
+   the countdown) is decided by the page's inline script; the HTML only carries the no-JS fallback,
+   which depends on the list alone, so a rebuild on any day gives the same file. */
 export function render(song, artistUrl, template = readFileSync(TEMPLATE, "utf8")) {
   const artist = song.spotifyArtist || artistUrl;
   const out = !!song.spotifyTrack;
@@ -32,9 +30,7 @@ export function render(song, artistUrl, template = readFileSync(TEMPLATE, "utf8"
     ARTIST: artist,
     COVER_WEB: song.coverWeb,
     SHARE: song.share,
-    DESC: out ? `Out now. Released ${longDate(song.date)}. Listen on Spotify.` : `Out ${longDate(song.date)}. Follow on Spotify.`,
-    OUT_HIDDEN: out ? "" : " hidden",
-    RELEASED: longDate(song.date),
+    DESC: out ? "Out now. Listen on Spotify." : `Out ${longDate(song.date)}. Follow on Spotify.`,
     BUTTON_HREF: out ? song.spotifyTrack : artist,
     BUTTON_LABEL: out ? "Listen on Spotify" : "Follow on Spotify",
   };
