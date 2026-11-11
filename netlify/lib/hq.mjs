@@ -208,13 +208,26 @@ export function releasesReport(rows, today) {
 export const isDuty = (t) => /^d-/i.test(norm(t.id));
 /* nowHM: São Paulo "HH:MM" now. A duty's deadline may carry its time ("2026-11-12 09:15"): once that
    time has passed and the duty isn't done, it is late (live updates brief, 11 Nov 2026). */
-export function dutiesReport(tasks, today, nowHM = "") {
-  const list = tasks.filter((t) => isDuty(t) && t.task && (!DAY.test(norm(t.deadline).slice(0, 10)) || norm(t.deadline).slice(0, 10) === today))
+/* overlay (the staff desk, netlify/lib/staff.mjs dutyOverlay()): what each bot said TODAY through the
+   connector, by duty id or (when the bot has one duty) by bot. The sheet's "done" always wins; a
+   connector "done" finishes a duty the sheet still shows as to do; "blocked" brings its reason. */
+export function dutiesReport(tasks, today, nowHM = "", overlay = null) {
+  const mine = tasks.filter((t) => isDuty(t) && t.task && (!DAY.test(norm(t.deadline).slice(0, 10)) || norm(t.deadline).slice(0, 10) === today));
+  const perOwner = {};
+  for (const t of mine) perOwner[key(t.owner)] = (perOwner[key(t.owner)] || 0) + 1;
+  const list = mine
     .map((t) => {
       const m = /(\d{1,2}):(\d{2})/.exec(norm(t.deadline).slice(10)), due = m ? m[1].padStart(2, "0") + ":" + m[2] : "";
-      const status = /^(done|yes|ok|✓|✔)$/i.test(norm(t.status)) ? "done" : /block/i.test(norm(t.status)) ? "blocked" : "todo";
-      return { id: norm(t.id), owner: norm(t.owner) || "?", task: t.task, blocker: norm(t.blocker), status, due,
-        late: status === "todo" && !!due && !!nowHM && nowHM > due, updated: norm(t.updated) };
+      let status = /^(done|yes|ok|✓|✔)$/i.test(norm(t.status)) ? "done" : /block/i.test(norm(t.status)) ? "blocked" : "todo";
+      let blocker = norm(t.blocker), via = "", working = false;
+      const said = overlay ? (overlay.byDuty || {})[key(t.id)] || (perOwner[key(t.owner)] === 1 ? (overlay.byBot || {})[key(t.owner)] : null) : null;
+      if (said && status !== "done") {
+        if (said.status === "done") { status = "done"; via = "connector"; }
+        else if (said.status === "blocked") { status = "blocked"; blocker = blocker || said.message; via = "connector"; }
+        else if (said.status === "working") working = true;
+      }
+      return { id: norm(t.id), owner: norm(t.owner) || "?", task: t.task, blocker, status, due,
+        late: status === "todo" && !!due && !!nowHM && nowHM > due, updated: norm(t.updated), ...(via ? { via } : {}), ...(working ? { working } : {}) };
     });
   const owners = {};
   for (const d of list) { const o = owners[d.owner] || (owners[d.owner] = { owner: d.owner, done: 0, todo: 0, blocked: 0, late: 0, items: [] }); o.items.push(d); o[d.status]++; if (d.late) o.late++; }
@@ -359,7 +372,18 @@ export function metaSpend(spendRows, meta) {
 
 /* sheets: { Growth: [[...cells]], ... } straight from the sheet (Updates: optional, null = no tab).
    today: São Paulo "YYYY-MM-DD". meta: see metaSpend() (optional). nowHM: São Paulo "HH:MM" (duty times). */
-export function hqModel(sheets, today, fx = {}, meta, nowHM = "") {
+/* staff (optional, from the staff desk): { updates: [{sp, bot, status, message, link}], overlay } — the
+   connector's updates join the sheet's Updates tab in ONE live log, and finish/block today's duties. */
+export function mergeUpdates(sheetRows, staffUpdates) {
+  const seen = new Set(), out = [];
+  for (const r of (sheetRows || []).concat((staffUpdates || []).map((u) => ({ time: u.sp, bot: u.bot, status: u.status, message: u.message, link: u.link || "" })))) {
+    const k = [norm(r.time).slice(0, 10), key(r.bot), key(r.status), key(r.message)].join("|");
+    if (seen.has(k)) continue;
+    seen.add(k); out.push(r);
+  }
+  return out;
+}
+export function hqModel(sheets, today, fx = {}, meta, nowHM = "", staff = null) {
   const t = Object.fromEntries(HQ_TABS.map((n) => [n, rowsToObjects(sheets[n])]));
   const ms = metaSpend(t.Spend, meta);
   t.Spend = ms.rows;
@@ -370,8 +394,9 @@ export function hqModel(sheets, today, fx = {}, meta, nowHM = "") {
   const team = teamReport(t.Tasks, [t.Growth, t.Songs, t.Fans, t.Royalties], today);
   const money = { ...moneyReport(t.Spend, t.Income, t.Royalties, today, fx), metaSource: ms.source };
   const empty = HQ_TABS.filter((n) => !t[n].length);
-  team.duties = dutiesReport(t.Tasks, today, nowHM);
-  team.live = liveReport(sheets.Updates == null ? null : rowsToObjects(sheets.Updates));
+  team.duties = dutiesReport(t.Tasks, today, nowHM, staff ? staff.overlay : null);
+  const sheetUpdates = sheets.Updates == null ? null : rowsToObjects(sheets.Updates);
+  team.live = liveReport(sheetUpdates == null && !staff ? null : mergeUpdates(sheetUpdates, staff ? staff.updates : []));
   return { today, songs, growth, fans, releases, team, money, empty, sheetErrors: sheetErrors(sheets),
     next: releases.find((r) => r.date && r.date >= today) || null };
 }
