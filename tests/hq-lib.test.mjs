@@ -9,7 +9,8 @@ await import("../js/hq-lib.js");
 const L = globalThis.HQLib;
 const NOW = Date.parse("2026-11-11T12:00:00Z");
 const min = 60000;
-const sheetOk = { connected: true, sheetErrors: {}, health: { sheetAt: new Date(NOW - 4 * min).toISOString(), fx: { month: "2026-11", rate: 1.1204, days: 8, at: new Date(NOW - 3 * 3600000).toISOString() } } };
+const spAt = (ms) => new Date(ms - 3 * 3600000).toISOString().slice(0, 16).replace("T", " "); /* São Paulo "YYYY-MM-DD HH:MM" */
+const sheetOk = { connected: true, sheetErrors: {}, team: { duties: { total: 6, done: 3 }, live: { ready: true, lastAt: spAt(NOW - 5 * min), feed: [{ bot: "Forge" }] } }, health: { sheetAt: new Date(NOW - 4 * min).toISOString(), fx: { month: "2026-11", rate: 1.1204, days: 8, at: new Date(NOW - 3 * 3600000).toISOString() } } };
 const ovOk = { metaKey: { state: "ok", text: "Meta key: reading OK", at: NOW - 12 * min }, lastEventAt: NOW - 2 * min };
 
 test("ago: plain words", () => {
@@ -27,6 +28,7 @@ test("data health: all fine -> four green rows and a green dot", () => {
     ["Meta", "ok", "Key reading OK, last read 12 min ago"],
     ["Page counter", "ok", "Last visit 2 min ago"],
     ["Exchange rate", "ok", "1 EUR = 1.1204 USD (average of 8 days) · 3 h ago"],
+    ["Bots", "ok", "Last update 5 min ago (Forge) · 3 of 6 duties done"],
   ]);
   assert.equal(L.healthState(rows), "ok");
 });
@@ -48,6 +50,8 @@ test("data health: no visits for a while is grey, not red (it may just be quiet)
   let rows = L.healthRows({ sheet: sheetOk, ov: { ...ovOk, lastEventAt: NOW - 3 * 86400000 } }, NOW);
   assert.deepEqual([rows[2].state, rows[2].text], ["off", "Last visit 3 days ago"]);
   assert.equal(L.healthState(rows), "off");
+  rows = L.healthRows({ sheet: { ...sheetOk, team: { live: { ready: false } } }, ov: ovOk }, NOW);
+  assert.deepEqual([rows[4].state, rows[4].text], ["off", "No live updates yet: the Updates tab isn't in the sheet"]);
   rows = L.healthRows({ sheet: null, ov: null }, NOW);
   assert.deepEqual(rows.map((r) => r.state), ["off", "off", "off", "off"]);
   assert.equal(L.healthState(rows), "off");

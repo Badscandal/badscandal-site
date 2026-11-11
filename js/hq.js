@@ -307,7 +307,8 @@
     var du = sheet.team.duties;
     $("dutyBig").innerHTML = broken("Tasks") ? "–" : du.total ? du.done + " <small>of " + du.total + " done</small>" : "–";
     $("dutyMsg").innerHTML = broken("Tasks") ? '<span class="attn">The Tasks tab can\'t be read.</span>' : !du.total ? "No duties logged for today." :
-      (du.blocked ? '<span class="attn">' + du.blocked + " blocked</span> · " : "") + (du.total - du.done - du.blocked) + " to do";
+      (du.blocked ? '<span class="attn">' + du.blocked + " blocked</span> · " : "") + (du.late ? '<span class="attn">' + du.late + " late</span> · " : "") + (du.total - du.done - du.blocked - (du.late || 0)) + " to do";
+    $("nextTile").disabled = !n || broken("Releases");
   }
   /* ---------- Today as a morning briefing (Stage 2): the rules are in js/hq-lib.js ---------- */
   var lastSummary = "";
@@ -511,7 +512,8 @@
       return '<div class="tile"><div class="row"><h3>' + esc(r.song) + "</h3>" + (r.late ? '<span class="pill warn">' + r.late + " late</span>" : '<span class="pill">On time</span>') + "</div>" +
         '<div class="d" style="margin-top:6px">' + esc(day(r.date)) + " · " + when + (r.status && !(r.daysToGo <= 0 && /^(out|released|live)$/i.test(r.status)) ? " · " + esc(r.status) : "") + (r.weekday && r.weekday !== "Fri" && r.daysToGo > 0 ? " · not a Friday" : "") + "</div>" +
         '<ul class="steps">' + r.steps.map(function (s) { return '<li class="' + (s.done ? "done" : s.late ? "late" : "") + '"><span class="dot"></span><span>' + esc(s.label) + ' <span class="lbl">' + esc(s.owner) + '</span></span><span class="w">' + (s.done ? "done" : esc(day(s.due)) + (s.late ? " · late" : "")) + "</span></li>"; }).join("") + "</ul>" +
-        (r.notes ? '<div class="d" style="margin-top:8px">' + esc(r.notes) + "</div>" : "") + "</div>";
+        (r.notes ? '<div class="d" style="margin-top:8px">' + esc(r.notes) + "</div>" : "") +
+        '<button class="rel-btn" type="button" data-release="' + esc(r.song) + '">See what\'s missing ›</button></div>';
     }).join("") : '<p class="empty">No releases in the sheet yet.</p>';
   }
   function drawMoney() {
@@ -534,10 +536,7 @@
   function drawTeam() {
     var t = sheet.team, du = t.duties;
     $("teamSub").textContent = broken("Tasks") ? "" : t.tasks.length + " open tasks · " + t.late + " late · " + t.blocked + " blocked · today's duties " + du.done + " of " + du.total + " done";
-    $("dutyList").innerHTML = broken("Tasks") ? '<p class="empty">See the note above.</p>' : du.byOwner.length ? du.byOwner.map(function (o) {
-      return '<div class="tile"><div class="row"><h3>' + esc(o.owner) + '</h3><span class="lbl">' + o.done + " of " + o.items.length + " done</span></div>" +
-        o.items.map(function (d) { return '<div class="duty ' + d.status + '"><span>' + esc(d.task) + (d.blocker ? "<small>Blocked: " + esc(d.blocker) + "</small>" : "") + '</span><span class="w">' + d.status + "</span></div>"; }).join("") + "</div>";
-    }).join("") : '<p class="empty">No duties for today. The bots log them as Tasks rows whose id starts with "D-".</p>';
+    drawLive();
     $("teamTable").innerHTML = t.team.length ? "<tr><th>Who</th><th class='r'>Open</th><th class='r'>Late</th><th class='r'>Blocked</th><th>Last logged a number</th></tr>" + t.team.map(function (o) {
       return "<tr><td><b>" + esc(o.owner) + "</b></td><td class='r'>" + o.open + "</td><td class='r'>" + (o.late ? "<b>" + o.late + "</b>" : 0) + "</td><td class='r'>" + (o.blocked ? "<b>" + o.blocked + "</b>" : 0) + "</td><td>" + (o.lastLogged ? esc(day(o.lastLogged)) + (o.quiet > 2 ? " · <b>quiet " + o.quiet + " days</b>" : "") : "–") + "</td></tr>";
     }).join("") : broken("Tasks") ? "" : '<tr><td class="empty">No tasks in the sheet yet.</td></tr>';
@@ -547,6 +546,72 @@
     }).join("") : "";
     stack("taskTable");
   }
+
+  /* ---------- Live: one card per bot (today's duty + its latest update) and the feed ---------- */
+  var BST = { done: "Done", late: "Late", blocked: "Blocked", error: "Error", working: "Working", todo: "To do", info: "Updated", quiet: "No update yet" };
+  function spAgo(at) { var ms = window.HQLib.spMs(at); return ms ? window.HQLib.ago(Date.now() - ms) : ""; }
+  function drawLive() {
+    var du = sheet.team.duties, live = sheet.team.live || { ready: false, feed: [], bots: [] };
+    if (broken("Tasks")) { $("dutyList").innerHTML = '<p class="empty">See the note above.</p>'; }
+    var names = {};
+    du.byOwner.forEach(function (o) { names[o.owner] = { duties: o }; });
+    live.bots.forEach(function (b) { (names[b.bot] = names[b.bot] || {}).last = b; });
+    var order = Object.keys(names).sort(function (a, b) {
+      var rank = function (n) { var o = names[n].duties; return o ? (o.blocked ? 0 : o.late ? 1 : o.todo ? 2 : 3) : 4; };
+      return rank(a) - rank(b) || (a < b ? -1 : 1);
+    });
+    $("liveNote").hidden = live.ready;
+    $("liveNote").textContent = "The bots' live log isn't in the sheet yet. Nova has been asked to add an “Updates” tab (brief: 2026-11-11-live-updates.md in badscandal-hq). Until then this shows the duty rows only.";
+    if (!broken("Tasks")) $("dutyList").innerHTML = order.length ? order.map(function (n) {
+      var o = names[n].duties, last = names[n].last;
+      var st = o ? (o.blocked ? "blocked" : o.late ? "late" : !o.todo ? "done" : last && last.status === "working" ? "working" : "todo") : last ? (last.status === "done" ? "done" : last.status) : "quiet";
+      return '<div class="tile botcard"><div class="row"><h3>' + esc(n) + '</h3><span class="bstate ' + st + '">' + esc(BST[st] || st) + "</span></div>" +
+        (o ? o.items.map(function (d) {
+          return '<div class="duty ' + (d.late ? "blocked" : d.status) + '"><span>' + esc(d.task) + (d.blocker ? "<small>Blocked: " + esc(d.blocker) + "</small>" : "") + '</span><span class="w">' +
+            (d.status === "done" ? "done" : d.status === "blocked" ? "blocked" : d.late ? "late · " + esc(d.due) : d.due ? "by " + esc(d.due) : "to do") + "</span></div>"; }).join("") : '<p class="empty" style="margin:8px 0 0">No duty today.</p>') +
+        (last ? '<p class="blast"><b>' + esc(spAgo(last.lastAt)) + ":</b> " + (last.link ? link(last.link, last.message) : esc(last.message)) + "</p>" : "") + "</div>";
+    }).join("") : '<p class="empty">No duties for today. The bots log them as Tasks rows whose id starts with "D-".</p>';
+    var today = sheet.today;
+    $("liveFeed").innerHTML = !live.ready ? '<li><span class="t">–</span><span class="m">No live log yet.</span></li>' : live.feed.length ? live.feed.slice(0, 20).map(function (u) {
+      return '<li class="' + u.status + '"><span class="t">' + esc(u.at.slice(0, 10) === today ? u.at.slice(11) : day(u.at).replace(/ \w+$/, "")) + '</span><span class="m"><b>' + esc(u.bot) + "</b> " +
+        (u.link ? link(u.link, u.message) : esc(u.message)) + '<span class="s">' + esc(u.status) + "</span></span></li>";
+    }).join("") : '<li><span class="t">–</span><span class="m">Nothing logged yet today.</span></li>';
+  }
+
+  /* ---------- the release panel: what's missing, then what's done ---------- */
+  var detailFrom = null;
+  function openRelease(song) {
+    if (!sheet) return;
+    var r = (sheet.releases || []).filter(function (x) { return x.song === song; })[0];
+    var d = window.HQLib.releaseDetail(r, sheet.today);
+    if (!d) return;
+    var when = d.date ? (d.daysToGo > 0 ? d.daysToGo + " day" + (d.daysToGo === 1 ? "" : "s") + " to go" : d.daysToGo === 0 ? "out today" : "out " + (-d.daysToGo) + " days ago") : "no date yet";
+    var step = function (x) {
+      return '<li class="' + (x.done ? "done" : x.late ? "late" : "") + '"><i aria-hidden="true"></i><b>' + esc(x.label) + '</b><span class="w">' + esc(x.when) + "</span>" +
+        '<span class="o">' + esc(x.owner) + (x.due ? " · due " + esc(day(x.due)) : "") + "</span>" + (x.note ? '<span class="n">' + esc(x.note) + "</span>" : "") + "</li>";
+    };
+    $("detailBody").innerHTML = '<h2 class="d-title" id="detailTitle">' + esc(d.song) + "</h2>" +
+      '<p class="d-sub">' + esc(day(d.date)) + " · " + esc(when) + (d.status ? " · " + esc(d.status) : "") + (d.weekday && d.weekday !== "Fri" && d.daysToGo > 0 ? ' · <span class="attn">not a Friday</span>' : "") + "</p>" +
+      '<p class="d-sum' + (d.missing.some(function (x) { return x.late; }) ? " attn" : "") + '">' + esc(d.summary) + "</p>" +
+      (d.missing.length ? '<h3 class="d-h">What\'s missing</h3><ul class="d-steps">' + d.missing.map(step).join("") + "</ul>" : '<p class="d-sum">Nothing missing: every step is done.</p>') +
+      (d.done.length ? '<h3 class="d-h">Done</h3><ul class="d-steps">' + d.done.map(step).join("") + "</ul>" : "") +
+      (d.notes ? '<p class="d-notes">' + esc(d.notes) + "</p>" : "") +
+      '<p class="d-notes">Counting back from release day: 28 days files, 21 RouteNote, 14 Spotify pitch, 10 lyrics, 7 video and page, 1 ad drafts.</p>';
+    detailFrom = document.activeElement;
+    $("detailSheet").hidden = false; $("scrim").hidden = false;
+    $("detailClose").focus();
+  }
+  function closeRelease() {
+    if ($("detailSheet").hidden) return;
+    $("detailSheet").hidden = true; $("scrim").hidden = true;
+    if (detailFrom && detailFrom.focus) detailFrom.focus();
+  }
+  $("nextTile").addEventListener("click", function () { if (sheet && sheet.next) openRelease(sheet.next.song); });
+  document.addEventListener("click", function (ev) { var b = ev.target.closest && ev.target.closest("[data-release]"); if (b) openRelease(b.getAttribute("data-release")); });
+  $("detailClose").addEventListener("click", closeRelease);
+  $("scrim").addEventListener("click", closeRelease);
+  document.addEventListener("keydown", function (ev) { if (ev.key === "Escape") closeRelease(); });
+  window.addEventListener("hashchange", closeRelease);
 
   window.HQ = { sample: sample, state: state, setRange: setRange, refresh: refresh, net: function (p, m, a) { netState(p, m, a); }, keep: keep, kept: kept, showLogin: showLogin, showShell: showShell, rangeQuery: rangeQuery,
     esc: esc, fmt: fmt, money: money, day: day, ago: ago, getJSON: getJSON, authFail: authFail };

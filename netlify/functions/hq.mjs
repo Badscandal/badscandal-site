@@ -15,7 +15,10 @@ import { COOKIE, readCookie, verifySession } from "../lib/session.mjs";
 
 const NO_STORE = { "Cache-Control": "no-store", "X-Robots-Tag": "noindex, nofollow" };
 const json = (status, data) => new Response(JSON.stringify(data), { status, headers: { "Content-Type": "application/json; charset=utf-8", ...NO_STORE } });
-const SHEET_TTL = 10 * 60 * 1000;
+/* the sheet is read at most every 2 minutes (was 10) so the bots' live updates show quickly; one
+   batch read + one small read of the optional "Updates" tab, well inside Google's limits */
+const SHEET_TTL = 2 * 60 * 1000;
+const spHM = (ts) => new Intl.DateTimeFormat("en-GB", { timeZone: "America/Sao_Paulo", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(ts);
 
 async function rates(cache, months, today) {
   const out = {}, at = {};
@@ -78,15 +81,20 @@ export default async (req, context) => {
   try {
     if (sample || !rawKey || !sheetId) {
       if (!sample) return json(200, { connected: false, need: [!rawKey && "GOOGLE_SA_KEY", !sheetId && "HQ_SHEET_ID"].filter(Boolean) });
-      const sheets = sampleSheets(today);
+      const sheets = sampleSheets(today, Date.now());
       const r = await rates(cache, monthsIn(sheets, today), today);
-      return json(200, { connected: true, sample: true, ...hqModel(sheets, today, r.fx, sampleMeta(sheets, today)), health: healthFor(Date.now() - 4 * 60000, r, today),
+      return json(200, { connected: true, sample: true, ...hqModel(sheets, today, r.fx, sampleMeta(sheets, today), spHM(Date.now())), health: healthFor(Date.now() - 4 * 60000, r, today),
         metaKey: { state: "ok", text: "Meta key: reading OK, last read 12 min ago (sample)" }, generated: new Date().toISOString() });
     }
     let got = null;
     try { got = await cache.get("hq/sheets.json", { type: "json" }); } catch {}
     if (!got || Date.now() - got.at > SHEET_TTL || url.searchParams.get("fresh") === "1") {
       const fresh = await readTabs(rawKey, sheetId, HQ_TABS);
+      /* the bots' live log is its own read: a missing "Updates" tab must never break the rest */
+      if (!fresh.error) {
+        const up = await readTabs(rawKey, sheetId, ["Updates"]);
+        fresh.sheets.Updates = up.error ? null : up.sheets.Updates || [];
+      }
       if (fresh.error) {
         console.error("hq sheet: " + fresh.error);
         if (!got) return json(200, { connected: true, error: fresh.error });
@@ -98,7 +106,7 @@ export default async (req, context) => {
     const [fxr, meta] = await Promise.all([rates(cache, monthsIn(got.sheets, today), today),
       metaForHq(cache, today).catch((e) => ({ ok: false, reason: "Couldn't read Meta (" + (e?.name || "error") + ")" }))]);
     const metaKey = keyHealth(await readKeyHealth(cache), !!Netlify.env.get("META_ADS_TOKEN"));
-    return json(200, { connected: true, ...hqModel(got.sheets, today, fxr.fx, meta), metaKey, health: healthFor(got.at, fxr, today), readAt: new Date(got.at).toISOString(), generated: new Date().toISOString() });
+    return json(200, { connected: true, ...hqModel(got.sheets, today, fxr.fx, meta, spHM(Date.now())), metaKey, health: healthFor(got.at, fxr, today), readAt: new Date(got.at).toISOString(), generated: new Date().toISOString() });
   } catch (e) {
     console.error("hq data failed", e?.name || e);
     return json(500, { error: "Could not read the numbers" });

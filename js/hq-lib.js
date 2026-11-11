@@ -50,8 +50,21 @@
     if (!sheet) rows.push({ key: "fx", label: "Exchange rate", state: "off", text: "Not read yet" });
     else if (!fx) rows.push({ key: "fx", label: "Exchange rate", state: "bad", text: "This month's rate isn't read yet, so EUR estimates are missing" });
     else rows.push({ key: "fx", label: "Exchange rate", state: "ok", text: "1 EUR = " + fx.rate + " USD" + (fx.days ? " (average of " + fx.days + " days)" : "") + (t(fx.at) ? " · " + ago(now - t(fx.at)) : "") });
+    /* Bots: their live log ("Updates" tab) */
+    var live = sheet && sheet.team ? sheet.team.live : null;
+    if (sheet) {
+      if (!live || !live.ready) rows.push({ key: "bots", label: "Bots", state: "off", text: "No live updates yet: the Updates tab isn't in the sheet" });
+      else if (!live.lastAt) rows.push({ key: "bots", label: "Bots", state: "off", text: "Updates tab is there; nothing logged yet" });
+      else {
+        var la = spMs(live.lastAt), du = sheet.team.duties || {};
+        rows.push({ key: "bots", label: "Bots", state: la && now - la < 12 * 3600000 ? "ok" : "off",
+          text: "Last update " + ago(now - la) + " (" + live.feed[0].bot + ")" + (du.total ? " · " + du.done + " of " + du.total + " duties done" : "") });
+      }
+    }
     return rows;
   }
+  /* "YYYY-MM-DD HH:MM" São Paulo (UTC-3, no summer time since 2019) -> ms */
+  function spMs(s) { var v = Date.parse(String(s || "").replace(" ", "T") + ":00-03:00"); return isFinite(v) ? v : null; }
   /* the one dot on the header button: red if anything needs attention, green if all is fine */
   function healthState(rows) {
     if (rows.some(function (r) { return r.state === "bad"; })) return "bad";
@@ -119,7 +132,10 @@
         if (t.lastLogged && t.quiet != null && t.quiet >= 3 && !/^luke$/i.test(t.owner)) out.push({ key: "quiet:" + t.owner, text: t.owner + " hasn't logged a number for " + t.quiet + " days", href: "#team" });
       });
       ((sheet.team && sheet.team.duties && sheet.team.duties.byOwner) || []).forEach(function (ow) {
-        ow.items.forEach(function (d) { if (d.status === "blocked") out.push({ key: "duty:" + d.id, text: ow.owner + "'s duty is blocked: " + (d.blocker || d.task), href: "#team" }); });
+        ow.items.forEach(function (d) {
+          if (d.status === "blocked") out.push({ key: "duty:" + d.id, text: ow.owner + "'s duty is blocked: " + (d.blocker || d.task), href: "#team" });
+          else if (d.late) out.push({ key: "dutylate:" + d.id, text: ow.owner + "'s duty is late (due " + d.due + "): " + d.task, href: "#team" });
+        });
       });
       var src = sheet.money.metaSource;
       if (src && src.from === "meta" && src.mismatch && src.mismatch.length) out.push({ key: "mismatch", text: "The sheet's Meta spend differs from Meta on " + plural(src.mismatch.length, "day"), href: "#ads" });
@@ -246,6 +262,24 @@
     return lines.join("\n");
   }
 
-  return { ago: ago, healthRows: healthRows, healthState: healthState, median: median, change: change, money: money, attention: attention, briefing: briefing,
+  /* The release panel (Today "Next release" and Releases): every step, what's missing first.
+     today: "YYYY-MM-DD". -> { song, date, daysToGo, summary, missing: [...], done: [...] } */
+  function releaseDetail(r, today) {
+    if (!r) return null;
+    var dd = function (a, b) { return Math.round((Date.parse(b + "T12:00:00Z") - Date.parse(a + "T12:00:00Z")) / 86400000); };
+    var steps = r.steps.map(function (st) {
+      var when = !st.due ? "no date yet" : st.done ? "done" : st.late ? "late by " + plural(dd(st.due, today), "day") : st.due === today ? "due today" : "due in " + plural(dd(today, st.due), "day");
+      var note = String(st.note || "").trim();
+      return { label: st.label, owner: st.owner, due: st.due, done: st.done, late: st.late, when: when, note: /^(done|yes|✓|✔)$/i.test(note) ? "" : note };
+    });
+    var missing = steps.filter(function (x) { return !x.done; }).sort(function (a, b) { return (b.late - a.late) || ((a.due || "9") < (b.due || "9") ? -1 : 1); });
+    var done = steps.filter(function (x) { return x.done; });
+    var late = missing.filter(function (x) { return x.late; }).length;
+    return { song: r.song, date: r.date, daysToGo: r.daysToGo, weekday: r.weekday, status: r.status, notes: r.notes,
+      summary: done.length + " of " + steps.length + " steps done" + (late ? " · " + late + " late" : "") + (missing.length - late ? " · " + (missing.length - late) + " to do" : ""),
+      missing: missing, done: done };
+  }
+
+  return { ago: ago, spMs: spMs, releaseDetail: releaseDetail, healthRows: healthRows, healthState: healthState, median: median, change: change, money: money, attention: attention, briefing: briefing,
     snapshot: snapshot, changesSince: changesSince, tiles: tiles, summaryText: summaryText, shortStep: shortStep };
 });

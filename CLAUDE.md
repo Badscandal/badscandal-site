@@ -1115,6 +1115,29 @@ Brief: `../TOUCHME-LANDING-BUILD-BRIEF.md` (outside the repo on purpose).
     `recent` (last 8 finished days + `ads7`: every ad over the last 7 with its taps and song). One Meta
     read covers it (cached an hour). The sheet model gains `songs[].listenersSeries`.
   - The sample has a made-up ad "TM EU - clip 3" that spends and brings nobody, so the warnings show.
+* **Glass, the release panel, the bots' live log (11 Nov 2026, Luke's follow-up on Stage 2).**
+  - **Glass** ("like me and Lilian's app", i.e. LDashboard's Liquid Glass): frosted panels (`--glass`,
+    blur 22px, a light top edge) over a fixed wash taken from the red film (`body::before`: faint
+    #8D060C glows + a soft white one). Panels stay >= .62 opaque and dark so every number keeps its
+    contrast; nested tiles get lighter glass WITHOUT a second blur (phones stay fast). The desktop rail
+    floats as a glass capsule. Reduced transparency or no blur support -> near-solid panels, no wash.
+    The wash is atmosphere only: red as a MEANING is still just "needs attention" and the active tab.
+  - **Release panel** (`#detailSheet`, `openRelease()` in js/hq.js, rule `releaseDetail()` in
+    js/hq-lib.js): Today's "Next release" card is a button, and every Releases card has "See what's
+    missing ›". It lists what's missing first (late on top, "late by N days" / "due in N days", owner,
+    due date, the sheet cell's note e.g. "blocked: not in Spotify for Artists yet"), then what's done.
+    Bottom sheet on phones, centred dialog on desktop; Escape / scrim / ✕ close it and focus returns.
+  - **Live updates** (brief `briefs/2026-11-11-live-updates.md` in badscandal-hq, pushed 11 Nov; also
+    in its STAFF-MANUAL.md): a new HQ sheet tab `Updates` (time | bot | status | message | link;
+    status done/working/blocked/error/info; append-only; Nova creates it). `liveReport()` in
+    netlify/lib/hq.mjs -> `team.live` { ready, feed (newest 40), bots (last update each), lastAt }. The
+    tab is read with its OWN request (a missing tab makes Google answer 400 for the whole batch): no
+    tab -> `ready:false` and Team says so; nothing else breaks. Duty rows may carry a time in
+    `deadline` ("YYYY-MM-DD HH:MM", Nova writes it at 08:05): `dutiesReport(tasks, today, nowHM)`
+    marks a duty `late` once that São Paulo time has passed. Team -> Live: one card per bot (duty,
+    state Done/Working/Blocked/Late/To do, latest update + age) and the latest 20 updates; Today ->
+    Needs attention lists late duties; Data health gains a "Bots" row. The sheet cache is now 2
+    minutes (was 10) so updates show quickly. The sample has made-up updates timed relative to now.
 * **90-day rule:** `netlify/functions/rollup.mjs` (daily 06:00 UTC, production
   only) folds raw keys older than 90 days into `daily/<day>.json` counts and
   deletes them; the portal merges those back for old ranges.

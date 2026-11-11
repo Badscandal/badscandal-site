@@ -128,3 +128,43 @@ test("copy today's summary: plain text for WhatsApp", () => {
   assert.ok(lines.some((l) => /^Real Spotify taps: 140 \(\+40% vs the 7 days before\)$/.test(l)));
   assert.ok(!/<|&amp;/.test(txt), "no HTML in the text");
 });
+
+/* ---------- live updates (the bots' log), duty due times, the release panel ---------- */
+import { dutiesReport, liveReport } from "../netlify/lib/hq.mjs";
+
+test("duties: a due time in the deadline makes a duty late once it has passed", () => {
+  const T = (id, owner, deadline, status) => ({ id, owner, task: "x", deadline, status });
+  const d = dutiesReport([T("D-1", "Steve", "2026-11-11 09:10", "todo"), T("D-2", "Atlas", "2026-11-11 09:15", "done"), T("D-3", "Laura", "2026-11-11 11:00", "todo"), T("D-4", "Kevin", "2026-11-11", "todo")], "2026-11-11", "10:05");
+  const by = Object.fromEntries(d.byOwner.flatMap((o) => o.items).map((i) => [i.owner, [i.due, i.late]]));
+  assert.deepEqual(by, { Steve: ["09:10", true], Atlas: ["09:15", false], Laura: ["11:00", false], Kevin: ["", false] });
+  assert.equal(d.late, 1);
+  assert.equal(dutiesReport([T("D-1", "Steve", "2026-11-11 09:10", "todo")], "2026-11-11", "").late, 0, "no clock: nothing is called late");
+});
+
+test("live log: newest first, last update per bot; a missing tab is 'not ready', never an error", () => {
+  const rows = [{ time: "2026-11-11 09:12", bot: "Steve", status: "done", message: "Instagram row written", link: "https://instagram.com/badscandal" },
+    { time: "2026-11-11 9:40", bot: "Forge", status: "Working", message: "Checking the cap", link: "javascript:alert(1)" },
+    { time: "yesterday", bot: "Nova", status: "info", message: "bad time" }, { time: "2026-11-11 08:00", bot: "Steve", status: "weird", message: "older" }];
+  const l = liveReport(rows);
+  assert.equal(l.ready, true);
+  assert.deepEqual(l.feed.map((u) => [u.at, u.bot, u.status]), [["2026-11-11 09:40", "Forge", "working"], ["2026-11-11 09:12", "Steve", "done"], ["2026-11-11 08:00", "Steve", "info"]]);
+  assert.equal(l.feed[0].link, "", "only https links");
+  assert.deepEqual(l.bots.map((b) => [b.bot, b.status]), [["Forge", "working"], ["Steve", "done"]]);
+  assert.equal(l.lastAt, "2026-11-11 09:40");
+  assert.deepEqual(liveReport(null), { ready: false, feed: [], bots: [] });
+  const sheet = sheetOf(); sheet.team.duties = dutiesReport([{ id: "D-9", owner: "Laura", task: "Log YouTube", deadline: "2026-11-11 09:10", status: "todo" }], TODAY, "10:00");
+  assert.ok(L.attention({ sheet, ov: ovOf() }).some((a) => a.text === "Laura's duty is late (due 09:10): Log YouTube" && a.href === "#team"));
+});
+
+test("release panel: what's missing first (late on top), then what's done, in plain words", () => {
+  const sheet = sheetOf();
+  const r = sheet.releases.find((x) => x.song === "Me Dá Seu Body");
+  const d = L.releaseDetail(r, TODAY);
+  assert.equal(d.song, "Me Dá Seu Body");
+  assert.match(d.summary, /^\d of 6 steps done · 1 late · \d to do$/);
+  assert.equal(d.missing[0].label, "Spotify pitch sent"); assert.equal(d.missing[0].late, true); assert.equal(d.missing[0].when, "late by 1 day");
+  assert.ok(d.missing.slice(1).every((x) => !x.late), "late steps first");
+  assert.ok(d.missing.some((x) => /^due in \d+ days?$/.test(x.when)));
+  assert.ok(d.done.every((x) => x.done && x.when === "done"));
+  assert.equal(L.releaseDetail(null, TODAY), null);
+});
