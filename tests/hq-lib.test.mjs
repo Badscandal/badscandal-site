@@ -92,3 +92,14 @@ test("offline helper: keeps only the /hq page and its scripts; never the numbers
   assert.equal(f("https://fonts.googleapis.com/css2"), false);
   assert.match(readFileSync(new URL("../js/hq-shell.js", import.meta.url), "utf8"), /register\("\/hq-sw\.js", \{ scope: "\/hq" \}\)/);
 });
+
+test("hq: a song that is out says Released (in /hq, never on the public song page)", () => {
+  assert.deepEqual(L.releaseWords("2026-10-30", "2026-11-11"), { out: true, days: 12, pill: "Released", label: "Released", line: "Fri 30 Oct · 12 days ago" });
+  assert.equal(L.releaseWords("2026-11-10", "2026-11-11").line, "Tue 10 Nov · 1 day ago");
+  assert.deepEqual([L.releaseWords("2026-11-11", "2026-11-11").pill, L.releaseWords("2026-11-11", "2026-11-11").line], ["Released today", "Wed 11 Nov · today"]);
+  assert.deepEqual(L.releaseWords("2026-11-24", "2026-11-11"), { out: false, days: -13, pill: "Out in 13 days", label: "Release day", line: "Tue 24 Nov · in 13 days" });
+  assert.equal(L.releaseWords("2026-11-12", "2026-11-11").pill, "Out in 1 day");
+  for (const bad of ["", null, "soon", "30/10/2026"]) assert.equal(L.releaseWords(bad, "2026-11-11"), null, "no date: nothing is claimed");
+  const song = readFileSync(new URL("../touchme.html", import.meta.url), "utf8");
+  assert.ok(!/Released \d|id="rel"/.test(song), "the public song page carries no Released line");
+});

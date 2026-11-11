@@ -65,6 +65,7 @@ h3{font-size:15px;margin:0;font-weight:700}
 .pill{display:inline-block;font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;border:1px solid var(--ink-4);border-radius:999px;padding:3px 8px;color:var(--uv);white-space:nowrap}
 .pill.hot{background:var(--paper);color:var(--ink);border-color:var(--paper)}
 .pill.warn{border-color:var(--paper);color:var(--paper)}
+.pill.rel{border-color:var(--uv);color:var(--paper)} /* "Released": a plain fact, so neither red nor green */
 .row{display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap}
 svg.spark{display:block;width:100%;height:44px;margin:10px 0 6px}
 .bar{position:relative;height:10px;border-radius:999px;background:var(--ink-3);margin:10px 0 6px;overflow:hidden}
@@ -134,8 +135,12 @@ table.stack td:first-child::before,table.stack td.empty::before{content:none}
 .duty.done .w{color:var(--spot)} .duty.blocked{color:var(--paper);font-weight:600} .duty.blocked .w{color:var(--paper)}
 .duty small{display:block;font-weight:400;color:var(--muted)}
 .cover{width:36px;height:36px;border-radius:8px;object-fit:cover;background:var(--ink-3);flex:none}
-.songhead{display:flex;gap:10px;align-items:center}
+.songhead{display:flex;gap:8px 10px;align-items:center;flex-wrap:wrap}
 .songhead h3{flex:1;min-width:0}
+/* the Released / Rising pills: beside the title when there's room, on their own row on a phone so the
+   title never breaks in two */
+.songhead .pills{display:flex;gap:8px;flex-wrap:wrap}
+@media (max-width:719px){.songhead .pills{flex-basis:100%}}
 
 /* ---------- Ads + Pages: the components that came from /admin, scoped under .pg ---------- */
 .pg .pgrid{display:grid;gap:10px;grid-template-columns:minmax(0,1fr)}

@@ -269,6 +269,17 @@
     return lines.join("\n");
   }
 
+  /* Is a song out? (Luke, 11 Nov 2026: "when a song is released it should say released", in HERE, not
+     on the public song page.) date / today: "YYYY-MM-DD" (São Paulo). -> null without a date, else
+     { out, pill, label, line }: pill for the card's head, label + line for a labelled row. */
+  function releaseWords(date, today) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(String(date || "")) || !/^\d{4}-\d{2}-\d{2}$/.test(String(today || ""))) return null;
+    var n = Math.round((Date.parse(today + "T12:00:00Z") - Date.parse(date + "T12:00:00Z")) / 86400000);
+    if (n > 0) return { out: true, days: n, pill: "Released", label: "Released", line: day(date) + " · " + plural(n, "day") + " ago" };
+    if (n === 0) return { out: true, days: 0, pill: "Released today", label: "Released", line: day(date) + " · today" };
+    return { out: false, days: n, pill: "Out in " + plural(-n, "day"), label: "Release day", line: day(date) + " · in " + plural(-n, "day") };
+  }
+
   /* The release panel (Today "Next release" and Releases): every step, what's missing first.
      today: "YYYY-MM-DD". -> { song, date, daysToGo, summary, missing: [...], done: [...] } */
   function releaseDetail(r, today) {
@@ -502,7 +513,7 @@
   /* nothing submitted and no list of sources yet */
   function incomeEmpty(inc) { return !inc || (!inc.count && !(inc.sources || []).length && !(inc.entries || []).length); }
 
-  return { ago: ago, spMs: spMs, releaseDetail: releaseDetail, healthRows: healthRows, healthState: healthState, median: median, change: change, money: money, attention: attention, briefing: briefing,
+  return { ago: ago, spMs: spMs, releaseWords: releaseWords, releaseDetail: releaseDetail, healthRows: healthRows, healthState: healthState, median: median, change: change, money: money, attention: attention, briefing: briefing,
     snapshot: snapshot, changesSince: changesSince, tiles: tiles, summaryText: summaryText, shortStep: shortStep, day: day,
     slug: slug, workerLabel: workerLabel, sortWorkers: sortWorkers, workerView: workerView, dutyWhen: dutyWhen, workerCounts: workerCounts, seenLine: seenLine, connectorLine: connectorLine,
     novaMessage: novaMessage, liveFeed: liveFeed, spWhen: spWhen, waitLabel: waitLabel, needWords: needWords, reportParts: reportParts, siteCheckLine: siteCheckLine, composeNames: composeNames,

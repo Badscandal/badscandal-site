@@ -1250,6 +1250,11 @@ write the sheets and shouldn't). Nothing here can touch ads, posts, sheets or mo
     tables (now in glass tiles); developer wording on Luke's page.
   - A board that fails never breaks the page: Team falls back to what the sheet gives, Messages says so
     with Retry.
+  - **Released, said in /hq (Luke, 11 Nov 2026):** a song that is out carries a "Released" pill on its
+    Songs card and a row "Released | Fri 30 Oct · 12 days ago" (before release: "Out in 13 days" /
+    "Release day"); its Releases card says "Released" instead of "On time" / "N late" and "Released N days
+    ago". Rule: `HQLib.releaseWords(date, today)` (the sheet's release date, else our song page's date).
+    The PUBLIC song page never says Released: it stays cover, title, Spotify button.
 * **Not served any more:** `/CLAUDE.md`, `/HANDOFF-README.md`, `/README.txt`, `/README-STORE.txt` now
   404 (`_redirects`): this file was readable at badscandal.com/CLAUDE.md. The repo itself is still public,
   so nothing private goes in here.
