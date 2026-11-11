@@ -99,7 +99,11 @@
   }
   /* the release steps in short words, for sentences */
   var SHORT = { "Master, cover, details to Drop": "master and cover", "Submitted to RouteNote": "RouteNote", "Spotify pitch sent": "Spotify pitch",
-    "Lyrics ready": "lyrics", "Video scheduled, song page live": "video and page", "Ad drafts ready": "ad drafts" };
+    "Lyrics ready": "lyrics", "Video scheduled, song page live": "video and page", "Ad drafts ready": "ad drafts",
+    /* the release pipeline's own steps (staff desk, 11 Nov 2026): the same short words */
+    "Uploaded to RouteNote with the release date": "RouteNote upload", "Approved by RouteNote (nothing waiting)": "RouteNote approval", "Lyrics live": "lyrics",
+    "Song page live on badscandal.com": "song page", "Video scheduled on YouTube": "video", "Teaser clips approved for posting": "teaser clips",
+    "Ad drafts ready, inside the cap": "ad drafts", "Release day: Spotify link on the song page and the home card": "release-day links" };
   function shortStep(label) { return SHORT[label] || String(label || "").toLowerCase(); }
   var TAB_HREF = { Growth: "#growth", Songs: "#songs", Royalties: "#money", Fans: "#fans", Releases: "#releases", Tasks: "#team", Spend: "#money", Income: "#money" };
   function metaCur(ov) { return (ov && ((ov.yesterday && ov.yesterday.currency) || (ov.spend && ov.spend.currency))) || "USD"; }
@@ -370,6 +374,10 @@
     bad.forEach(function (d) { lines.push("Duty: " + d.task + " (" + dutyWhen(d) + ")"); if (d.blocker) lines.push("Blocker: " + d.blocker); });
     if (!bad.some(function (d) { return d.blocker; }) && w.blockers) lines.push("Known blocker: " + w.blockers);
     if (w.card && w.card.needs) lines.push("Needs: " + w.card.needs);
+    /* a late or blocked release step makes a card late / blocked too (11 Nov 2026): say which */
+    (w.releaseSteps || []).filter(function (s) { return s.status === "blocked" || s.late; }).forEach(function (s) {
+      lines.push("Release step: " + s.title + ": " + s.label + " (" + stepState(s, "").text + ")");
+    });
     if (w.last && w.last.message) lines.push("Latest update (" + String(w.last.at).slice(11) + "): " + w.last.message);
     return lines.join("\n");
   }
@@ -464,11 +472,12 @@
     else if (!c.connected) rows.push({ key: "connector", label: "Connector", state: "off", text: "On · no bot has connected yet" });
     else rows.push({ key: "connector", label: "Connector", state: "ok", text: "On · " + c.connected + " of " + c.total + " bots connected" + (lu ? " · last used " + ago(now - lu) + " (" + c.lastUsed.bot + ")" : "") });
     var r = board.report, at = r && t(r.at);
-    if (!r || !at) rows.push({ key: "check", label: "Site check", state: "off", text: "No check yet. The site checks itself twice a day" });
+    if (!r || !at) rows.push({ key: "check", label: "Site check", state: "off", text: "No check yet. The site checks itself three times a day" });
     else {
-      /* twice a day: more than 26 hours without one means it didn't run */
+      /* three times a day since 11 Nov 2026 (09:35, 15:35, 21:35 São Paulo): the longest gap is the 12
+         hours overnight, so more than 14 hours without one means a check didn't run */
       var res = checkResult(r);
-      rows.push({ key: "check", label: "Site check", state: now - at > 26 * 3600000 ? "bad" : "ok", text: "Last check " + ago(now - at) + (res ? ": " + res : "") });
+      rows.push({ key: "check", label: "Site check", state: now - at > 14 * 3600000 ? "bad" : "ok", text: "Last check " + ago(now - at) + (res ? ": " + res : "") });
     }
     return rows;
   }
@@ -513,10 +522,170 @@
   /* nothing submitted and no list of sources yet */
   function incomeEmpty(inc) { return !inc || (!inc.count && !(inc.sources || []).length && !(inc.entries || []).length); }
 
+  /* ================= Replies that visibly land (11 Nov 2026) =================
+     Luke: "when i reply to a message right now nothing happens let's make that clearer that i've
+     replied". So: the item leaves "Waiting on you" at once, a line says where it went and when, and
+     "You answered" shows whether the bot has looked at the desk since. */
+  /* an ISO time or ms -> "YYYY-MM-DD HH:MM" in São Paulo (UTC-3, no summer time since 2019) */
+  function spStampOf(at) { var v = t(at); return v == null ? "" : new Date(v - 3 * 3600000).toISOString().slice(0, 16).replace("T", " "); }
+  var CLAUDE_ROUNDS = "Claude reads the desk at 09:40, 15:40 and 21:40.";
+  /* the small mark on a message Luke sent: "Seen by Nova 17:10" / "Not read yet". null when there is
+     nobody to see it (to everyone, to Luke, to HQ). x = { to, seen, seenAt } as the board sends it. */
+  function seenWords(x, today) {
+    if (!x || x.seen == null || !x.to) return null;
+    if (x.seen) { var w = spWhen(spStampOf(x.seenAt), today); return { seen: true, text: "Seen by " + x.to + (w ? " " + w : ""), note: "" }; }
+    return { seen: false, text: "Not read yet", note: x.to === "Claude" ? CLAUDE_ROUNDS : "" };
+  }
+  /* the line that takes the place of what Luke just answered. kind: reply | option | done | message */
+  function sentLine(kind, to, at, choice) {
+    var who = to === "all" ? "everyone" : to || "", hm = spStampOf(at).slice(11, 16), out;
+    if (kind === "option") out = "Your answer “" + choice + "” went to " + who + " at " + hm + ".";
+    else if (kind === "done") out = "Marked as done at " + hm + ". " + who + " sees it on the desk.";
+    else out = "Sent to " + who + " at " + hm + ".";
+    return to === "Claude" ? out + " " + CLAUDE_ROUNDS : out;
+  }
+  /* "You answered": the board's list (board.answered), each with what was asked, what Luke said and
+     whether the bot has seen it. An answer to a message deep in a thread is filed by the desk under
+     the thread's first message, and that message is then closed with a separate "mark as done": the
+     words Luke typed are found again in the thread, so it never reads "Marked as done" for a reply. */
+  function answeredList(board) {
+    var today = board && board.today, threadsOf = (board && board.messages) || [];
+    return ((board && board.answered) || []).map(function (a) {
+      var r = a.reply || {}, text = r.text || "", kind = r.kind || "reply";
+      if (kind === "settled" && text === "Marked as done") {
+        var th = threadsOf.filter(function (x) { return x.id === a.id || (x.replies || []).some(function (y) { return y.id === a.id; }); })[0];
+        var mine = th ? (th.replies || []).filter(function (y) { return y.from === "Luke" && y.to === a.from && t(y.at) <= t(r.at) && t(r.at) - t(y.at) < 120000; }) : [];
+        if (mine.length) { text = mine[mine.length - 1].text; kind = "reply"; }
+      }
+      var say = kind === "reply" ? "You: " + text : text === "Marked as done" ? "You marked it as done." : "You answered: " + text;
+      return { id: a.id, who: a.from, asked: needWords(a).replace(/^needs/, "needed").replace(/^asks/, "asked"), their: a.text, when: spWhen(r.sp, today),
+        you: text, say: say, kind: kind, seen: seenWords({ to: a.from, seen: r.seen, seenAt: r.seenAt }, today) };
+    });
+  }
+
+  /* ================= The release pipeline on /hq (11 Nov 2026) =================
+     board.releases = the desk's releases (netlify/lib/staff.mjs releaseView), board.packFields = every
+     field of a release, board.releaseSteps = the steps. The page never hard-codes either list. */
+  var dayDiff = function (a, b) { return Math.round((Date.parse(b + "T12:00:00Z") - Date.parse(a + "T12:00:00Z")) / 86400000); };
+  var isDay = function (d) { return /^\d{4}-\d{2}-\d{2}$/.test(String(d || "")) && isFinite(Date.parse(d + "T12:00:00Z")); };
+  var GROUPS = [["files", "The files"], ["stores", "For the stores"], ["lyrics", "Lyrics"], ["pitch", "For the pitch (can wait)"], ["later", "Later, the team fills these"], ["notes", "Notes"]];
+  /* the form's sections, in Luke's order; a field in a group we don't know goes under Notes' heading */
+  function formGroups(fields) {
+    var known = GROUPS.map(function (g) { return g[0]; });
+    return GROUPS.map(function (g) {
+      return { key: g[0], title: g[1], fields: (fields || []).filter(function (f) { return f.group === g[0] || (g[0] === "notes" && known.indexOf(f.group) < 0); }) };
+    }).filter(function (g) { return g.fields.length; });
+  }
+  /* under the date field: "Fri 11 Dec, 30 days away", and a quiet note when it isn't a Friday or is
+     close (the early steps are then due at once). bad = the day has passed. */
+  function releaseDayNote(date, today) {
+    if (!isDay(date) || !isDay(today)) return { line: "", notes: [], bad: false };
+    var n = dayDiff(today, date), notes = [];
+    if (n < 0) return { line: day(date) + ", " + plural(-n, "day") + " ago", notes: ["That day has passed. Pick today or a later day."], bad: true };
+    if (new Date(date + "T12:00:00Z").getUTCDay() !== 5) notes.push("Not a Friday. New music usually comes out on a Friday.");
+    if (n < 21) notes.push("Fewer than 21 days away: the steps that should already be done will be due straight away.");
+    return { line: day(date) + ", " + (n === 0 ? "today" : n === 1 ? "tomorrow" : n + " days away"), notes: notes, bad: false };
+  }
+  /* one step's state in words: "done 12 Nov by Drop" · "late by 2 days" · "blocked: <note>" · "due in 5 days".
+     bad = late or blocked (the only red). st = a step of releaseView (or a bot's releaseSteps item). */
+  function stepState(st, today) {
+    if (!st) return { text: "", bad: false, done: false };
+    var n = typeof st.dueIn === "number" ? st.dueIn : isDay(st.due) && isDay(today) ? dayDiff(today, st.due) : null;
+    if (st.status === "done") {
+      var when = st.at ? day(spStampOf(st.at).slice(0, 10)).replace(/^\w+ /, "") : "";
+      return { text: "done" + (when ? " " + when : "") + (st.by ? " by " + st.by : ""), bad: false, done: true };
+    }
+    if (st.status === "blocked") return { text: "blocked" + (st.note ? ": " + st.note : ""), bad: true, done: false };
+    var pre = st.status === "working" ? "working · " : "";
+    if (n == null) return { text: pre + "no date yet", bad: false, done: false };
+    if (n < 0) return { text: pre + "late by " + plural(-n, "day"), bad: true, done: false };
+    return { text: pre + (n === 0 ? "due today" : n === 1 ? "due tomorrow" : "due in " + n + " days"), bad: false, done: false };
+  }
+  /* a release card's date line: "Tue 24 Nov · 13 days to go" / "Release day" / "Released 12 days ago" */
+  function releaseWhen(date, today) {
+    if (!isDay(date)) return "No release day yet";
+    var rw = releaseWords(date, today);
+    if (!rw) return day(date);
+    return day(date) + " · " + (!rw.out ? plural(-rw.days, "day") + " to go" : rw.days === 0 ? "Release day" : "Released " + plural(rw.days, "day") + " ago");
+  }
+  /* "Copyright line (needed for the RouteNote upload, Fri 20 Nov)"; a field needed to send is just its name */
+  function missingWords(m) { return m.short + (m.step ? " (needed for the " + shortStep(m.step) + (m.due ? ", " + day(m.due) : "") + ")" : ""); }
+  /* the card's line about the files and details. attn = something a step needs is still missing and
+     that step is due within 3 days (or late): the same rule as the site's check. */
+  function packLine(v, today) {
+    var miss = (v && v.missing) || [], soon = function (m) { return v.status === "scheduled" && !v.released && !!m.due && isDay(today) && dayDiff(today, m.due) <= 3; };
+    var items = miss.slice(0, 4).map(function (m) { return { text: missingWords(m), attn: soon(m) }; });
+    return { filled: v.packFilled + " of " + v.packTotal + " filled", items: items, more: Math.max(0, miss.length - 4),
+      text: v.packFilled + " of " + v.packTotal + " filled" + (miss.length ? " · still missing: " + items.map(function (x) { return x.text; }).join("; ") + (miss.length > 4 ? "; +" + (miss.length - 4) + " more" : "") : ""),
+      attn: miss.some(soon) };
+  }
+  /* the same sentence the desk answers with when a release can't be sent yet */
+  function missingSentence(miss) {
+    var req = (miss || []).filter(function (m) { return m.required !== false; });
+    return req.length ? "Still missing: " + req.map(function (m) { return m.short || m.label || m.key; }).join(", ") + ". Fill " + (req.length === 1 ? "it" : "them") + " in, then send again." : "";
+  }
+  /* what the form sends: only the fields that changed ("" clears one), so a field the team filled in
+     the meantime is never overwritten with an old copy. before = the release's pack ({} for a new one). */
+  function packChanges(fields, before, now) {
+    var out = {};
+    (fields || []).forEach(function (f) {
+      if (!now || !(f.key in now)) return;
+      var a = String((before || {})[f.key] == null ? "" : before[f.key]).trim(), b = String(now[f.key] == null ? "" : now[f.key]).trim();
+      if (a !== b) out[f.key] = b;
+    });
+    return out;
+  }
+  /* who fills a "later" field: "Drop fills this" / "Atlas or Webmaster fills this" */
+  function fillWho(f) { var w = (f && f.fill) || []; return w.length ? w.join(" or ") + " fills this" : "You fill this"; }
+  /* the card's one pill. bad = red (late / blocked) */
+  function relPill(v, today) {
+    if (v.status === "cancelled") return { text: "Cancelled", bad: false, rel: false };
+    if (v.status === "draft") return { text: "Draft", bad: false, rel: false };
+    var rw = releaseWords(v.date, today);
+    if (v.released && rw) return { text: rw.pill, bad: false, rel: true };
+    var c = v.counts || {};
+    if (c.blocked) return { text: c.blocked + " blocked", bad: true, rel: false };
+    if (c.late) return { text: c.late + " late", bad: true, rel: false };
+    return { text: "On time", bad: false, rel: false };
+  }
+  /* which cards the Releases tab draws, so a song is never shown twice: the desk's releases (still to
+     come, drafts too, soonest first), then the sheet's rows the desk doesn't have (their own card),
+     then the desk's released ones ("Out", newest first) and the cancelled ones. */
+  function releaseLists(board, sheet) {
+    var key = function (s) { var v = String(s == null ? "" : s); try { v = v.normalize("NFD").replace(/[̀-ͯ]/g, ""); } catch (e) {} return v.toLowerCase().replace(/[^a-z0-9]/g, ""); };
+    var desk = (board && board.releases) || [], have = {};
+    desk.forEach(function (v) { if (v.status !== "cancelled") have[key(v.title)] = 1; });
+    var byDate = function (a, b) { return (a.date || "9") < (b.date || "9") ? -1 : (a.date || "9") > (b.date || "9") ? 1 : 0; };
+    return {
+      coming: desk.filter(function (v) { return v.status !== "cancelled" && !v.released; }).sort(byDate),
+      sheetOnly: ((sheet && sheet.releases) || []).filter(function (r) { return !r.desk && !have[key(r.song)]; }),
+      out: desk.filter(function (v) { return v.status !== "cancelled" && v.released; }).sort(function (a, b) { return -byDate(a, b); }),
+      cancelled: desk.filter(function (v) { return v.status === "cancelled"; })
+    };
+  }
+  /* "Counting back from release day: 21 days RouteNote upload, 16 RouteNote approval, …" */
+  function stepsSummary(steps) {
+    var byDays = [];
+    (steps || []).forEach(function (s) {
+      var last = byDays[byDays.length - 1], w = s.days === 0 ? "" : shortStep(s.label);
+      if (s.days === 0) return;
+      if (last && last.days === s.days) last.words.push(w); else byDays.push({ days: s.days, words: [w] });
+    });
+    return byDays.length ? "Counting back from release day: " + byDays.map(function (x, i) { return x.days + (i ? "" : " days") + " " + x.words.join(" and "); }).join(", ") + "." : "";
+  }
+  function sendQuestion(title, date) { return "Send " + title + " to the team for " + day(date) + "? Every bot gets its steps and dates."; }
+  function moveQuestion(title, from, to) { return "Move " + title + " from " + day(from) + " to " + day(to) + "? Every step that isn't done moves with it, and the team is told."; }
+  function cancelQuestion(v) { return v.status === "draft" ? "Cancel the draft of " + v.title + "? Nobody was told about it yet." : "Cancel " + v.title + "? The team is told to stop working on its steps."; }
+
   return { ago: ago, spMs: spMs, releaseWords: releaseWords, releaseDetail: releaseDetail, healthRows: healthRows, healthState: healthState, median: median, change: change, money: money, attention: attention, briefing: briefing,
     snapshot: snapshot, changesSince: changesSince, tiles: tiles, summaryText: summaryText, shortStep: shortStep, day: day,
     slug: slug, workerLabel: workerLabel, sortWorkers: sortWorkers, workerView: workerView, dutyWhen: dutyWhen, workerCounts: workerCounts, seenLine: seenLine, connectorLine: connectorLine,
     novaMessage: novaMessage, liveFeed: liveFeed, spWhen: spWhen, waitLabel: waitLabel, needWords: needWords, reportParts: reportParts, siteCheckLine: siteCheckLine, composeNames: composeNames,
     threadRoot: threadRoot, staffAttention: staffAttention, staffHealth: staffHealth, curList: curList, cadenceWord: cadenceWord, accountLine: accountLine, sourceState: sourceState, payLine: payLine,
-    incomeEmpty: incomeEmpty, incomeProblems: incomeProblems };
+    incomeEmpty: incomeEmpty, incomeProblems: incomeProblems,
+    /* replies that visibly land + the release pipeline (11 Nov 2026) */
+    spStampOf: spStampOf, seenWords: seenWords, sentLine: sentLine, answeredList: answeredList, CLAUDE_ROUNDS: CLAUDE_ROUNDS,
+    formGroups: formGroups, releaseDayNote: releaseDayNote, releaseWhen: releaseWhen, stepState: stepState, missingWords: missingWords, packLine: packLine, missingSentence: missingSentence,
+    packChanges: packChanges, fillWho: fillWho, relPill: relPill, releaseLists: releaseLists, stepsSummary: stepsSummary,
+    sendQuestion: sendQuestion, moveQuestion: moveQuestion, cancelQuestion: cancelQuestion };
 });

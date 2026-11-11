@@ -4,7 +4,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { sampleBoard } from "../netlify/lib/staff-sample.mjs";
+import { sampleBoard, memoryDesk } from "../netlify/lib/staff-sample.mjs";
+import * as S from "../netlify/lib/staff.mjs";
 
 await import("../js/hq-lib.js");
 const L = globalThis.HQLib;
@@ -150,8 +151,10 @@ test("Data health: the Connector and Site check rows", () => {
   assert.deepEqual(rows(boardOf({ keys: { bots: false } }))[0], ["Connector", "off", "The connector's key isn't set on the site yet"]);
   assert.deepEqual(rows(boardOf({ connector: { botsOn: false, changedAt: iso(3), connected: 6, total: 12 } }))[0], ["Connector", "bad", "Switched off 3 min ago: the bots can't send anything"]);
   assert.deepEqual(rows(boardOf({ connector: { botsOn: true, connected: 0, total: 12, lastUsed: null } }))[0], ["Connector", "off", "On · no bot has connected yet"]);
-  assert.deepEqual(rows(boardOf())[1], ["Site check", "off", "No check yet. The site checks itself twice a day"]);
-  assert.equal(rows(boardOf({ report: { ...rep, at: iso(27 * 60) } }))[1][1], "bad", "twice a day: 27 hours without one is a problem");
+  assert.deepEqual(rows(boardOf())[1], ["Site check", "off", "No check yet. The site checks itself three times a day"]);
+  /* three times a day (09:35, 15:35, 21:35): the longest gap is 12 hours overnight */
+  assert.equal(rows(boardOf({ report: { ...rep, at: iso(13 * 60) } }))[1][1], "ok", "13 hours: the overnight gap plus a slow run");
+  assert.equal(rows(boardOf({ report: { ...rep, at: iso(15 * 60) } }))[1][1], "bad", "15 hours without one: a check didn't run");
   /* healthRows carries them only when the page asks with a board (older callers are unchanged) */
   assert.equal(L.healthRows({ sheet: null, ov: null }, NOW).length, 4);
   assert.deepEqual(L.healthRows({ sheet: null, ov: null, board: null }, NOW).slice(4).map((r) => r.label), ["Connector", "Site check"]);
@@ -230,4 +233,163 @@ test("the page: Messages is the tenth tab, the new script is kept offline, and n
   /* Luke's words: the visible text of the new parts never says MCP, token, endpoint or API */
   const visible = (page.slice(page.indexOf('id="team"'), page.indexOf("</main>")) + staff.replace(/\/\*[\s\S]*?\*\//g, "").replace(/"\/api\/staff\/[^"]*"/g, "")).replace(/<[^>]+>/g, " ");
   assert.doesNotMatch(visible, /\b(MCP|tokens?|endpoints?|API)\b/);
+});
+
+/* ================= Replies that visibly land + the release pipeline on /hq (11 Nov 2026) ================= */
+const isoAt = (sp) => new Date(Date.parse(sp.replace(" ", "T") + ":00-03:00")).toISOString(); /* "YYYY-MM-DD HH:MM" São Paulo -> ISO */
+
+test("replies: where it went and when, in one line; Claude's rounds are said", () => {
+  assert.equal(L.spStampOf(isoAt("2026-11-11 17:03")), "2026-11-11 17:03");
+  assert.equal(L.spStampOf(null), "");
+  const at = Date.parse(isoAt("2026-11-11 17:03"));
+  assert.equal(L.sentLine("reply", "Nova", at), "Sent to Nova at 17:03.");
+  assert.equal(L.sentLine("message", "all", at), "Sent to everyone at 17:03.");
+  assert.equal(L.sentLine("option", "Atlas", at, "Yes"), "Your answer “Yes” went to Atlas at 17:03.");
+  assert.equal(L.sentLine("done", "Kevin", at), "Marked as done at 17:03. Kevin sees it on the desk.");
+  assert.equal(L.sentLine("reply", "Claude", at), "Sent to Claude at 17:03. Claude reads the desk at 09:40, 15:40 and 21:40.");
+});
+
+test("replies: 'Seen by Nova 17:10' / 'Not read yet', and nothing when nobody can see it", () => {
+  assert.deepEqual(L.seenWords({ to: "Nova", seen: true, seenAt: isoAt("2026-11-11 17:10") }, TODAY), { seen: true, text: "Seen by Nova 17:10", note: "" });
+  assert.deepEqual(L.seenWords({ to: "Nova", seen: true, seenAt: isoAt("2026-11-10 08:05") }, TODAY), { seen: true, text: "Seen by Nova Tue 10 Nov, 08:05", note: "" });
+  assert.deepEqual(L.seenWords({ to: "Drop", seen: false, seenAt: null }, TODAY), { seen: false, text: "Not read yet", note: "" });
+  assert.equal(L.seenWords({ to: "Claude", seen: false }, TODAY).note, "Claude reads the desk at 09:40, 15:40 and 21:40.");
+  for (const to of ["all", "Luke", "HQ"]) assert.equal(L.seenWords({ to, seen: null }, TODAY), null, to);
+  assert.equal(L.seenWords(null, TODAY), null);
+});
+
+test("replies: 'You answered' from the board, and a reply deep in a thread is never called 'Marked as done'", () => {
+  const b = sampleBoard(NOW), list = L.answeredList(b);
+  assert.equal(list.length, b.answered.length);
+  for (const a of list) { assert.ok(a.who && a.asked && a.say && a.seen, JSON.stringify(a)); assert.match(a.seen.text, /^(Seen by \w+ |Not read yet)/); }
+  const reply = list.find((a) => a.kind === "reply"), settled = list.find((a) => a.kind === "settled");
+  assert.match(reply.say, /^You: /); assert.match(settled.say, /^You answered: /);
+  /* a bot's question that was itself an answer in a thread: the desk files Luke's reply under the thread's
+     first message and closes the question with a plain "answered" */
+  const root = msg("m1", "Luke", "Drop", "none", { at: isoAt("2026-11-11 08:00"), sp: "2026-11-11 08:00" });
+  const q = msg("m2", "Drop", "Luke", "action", { at: isoAt("2026-11-11 09:00"), sp: "2026-11-11 09:00", re: "m1" });
+  const lukes = msg("m3", "Luke", "Drop", "none", { at: isoAt("2026-11-11 09:30"), sp: "2026-11-11 09:30", re: "m1", text: "It's in the folder." });
+  root.replies = [q, lukes];
+  const board = boardOf({ messages: [root], answered: [{ id: "m2", from: "Drop", to: "Luke", text: q.text, needs: "action", at: q.at, sp: q.sp,
+    reply: { by: "Luke", kind: "settled", text: "Marked as done", at: new Date(Date.parse(lukes.at) + 900).toISOString(), sp: "2026-11-11 09:30", seen: false, seenAt: null } }] });
+  const a = L.answeredList(board)[0];
+  assert.deepEqual([a.kind, a.you, a.say, a.asked, a.when], ["reply", "It's in the folder.", "You: It's in the folder.", "asked you to do something", "09:30"]);
+  board.answered[0].reply.at = new Date(Date.parse(lukes.at) + 10 * min).toISOString(); /* marked as done much later: that's what it was */
+  assert.equal(L.answeredList(board)[0].say, "You marked it as done.");
+  assert.deepEqual(L.answeredList(boardOf()), []);
+});
+
+test("releases: the date line under the field, with a quiet note when it isn't a Friday or is close", () => {
+  assert.deepEqual(L.releaseDayNote("2026-12-11", TODAY), { line: "Fri 11 Dec, 30 days away", notes: [], bad: false });
+  const close = L.releaseDayNote("2026-11-24", TODAY);
+  assert.equal(close.line, "Tue 24 Nov, 13 days away");
+  assert.deepEqual(close.notes.map((n) => n.split(".")[0].split(":")[0]), ["Not a Friday", "Fewer than 21 days away"]);
+  assert.equal(L.releaseDayNote("2026-11-12", TODAY).line, "Thu 12 Nov, tomorrow");
+  assert.equal(L.releaseDayNote(TODAY, TODAY).line, "Wed 11 Nov, today");
+  assert.deepEqual(L.releaseDayNote("2026-11-09", TODAY), { line: "Mon 9 Nov, 2 days ago", notes: ["That day has passed. Pick today or a later day."], bad: true });
+  assert.deepEqual(L.releaseDayNote("", TODAY), { line: "", notes: [], bad: false });
+  assert.equal(L.releaseWhen("2026-11-24", TODAY), "Tue 24 Nov · 13 days to go");
+  assert.equal(L.releaseWhen("2026-11-12", TODAY), "Thu 12 Nov · 1 day to go");
+  assert.equal(L.releaseWhen(TODAY, TODAY), "Wed 11 Nov · Release day");
+  assert.equal(L.releaseWhen("2026-10-30", TODAY), "Fri 30 Oct · Released 12 days ago");
+  assert.equal(L.releaseWhen(null, TODAY), "No release day yet");
+});
+
+test("releases: a step's state in words; red only for late and blocked", () => {
+  const st = (o) => L.stepState({ key: "x", label: "X", owner: "Drop", status: "todo", note: "", at: null, by: null, ...o }, TODAY);
+  assert.deepEqual(st({ status: "done", due: "2026-11-10", at: isoAt("2026-11-12 10:00"), by: "Drop" }), { text: "done 12 Nov by Drop", bad: false, done: true });
+  assert.deepEqual(st({ status: "done", due: "2026-11-10" }), { text: "done", bad: false, done: true });
+  assert.deepEqual(st({ due: "2026-11-09" }), { text: "late by 2 days", bad: true, done: false });
+  assert.deepEqual(st({ status: "blocked", due: "2026-11-20", note: "Needs the cover" }), { text: "blocked: Needs the cover", bad: true, done: false });
+  assert.deepEqual(st({ due: TODAY }), { text: "due today", bad: false, done: false });
+  assert.deepEqual(st({ due: "2026-11-12" }), { text: "due tomorrow", bad: false, done: false });
+  assert.deepEqual(st({ due: "2026-11-16", status: "working" }), { text: "working · due in 5 days", bad: false, done: false });
+  assert.equal(L.stepState({ status: "todo", due: "2026-11-10", dueIn: -1 }, "").text, "late by 1 day", "a bot's list carries dueIn: no today needed");
+  assert.equal(st({ due: null }).text, "no date yet");
+});
+
+test("releases: what's missing, the card's pill, and the same sentence the desk refuses with", async () => {
+  const b = sampleBoard(NOW), v = (id) => b.releases.find((r) => r.id === id);
+  const mdsb = L.packLine(v("medaseubody"), b.today);
+  assert.match(mdsb.filled, /^\d+ of 17 filled$/);
+  assert.equal(mdsb.items[0].text, "Lyrics (needed for the lyrics, Sat 14 Nov)");
+  assert.equal(mdsb.attn, true, "the lyrics are needed within 3 days");
+  assert.deepEqual(mdsb.items.map((x) => x.attn), [true, true, false], "lyrics soon, the pitch is late, the video can wait");
+  const draft = L.packLine(v("survivors"), b.today);
+  assert.equal(draft.attn, false, "a draft is not late"); assert.equal(draft.items.length, 4); assert.ok(draft.more > 0);
+  assert.equal(L.packLine(v("touchme"), b.today).text, v("touchme").packFilled + " of 17 filled");
+  assert.equal(L.missingWords({ short: "Copyright line", step: "Uploaded to RouteNote with the release date", due: "2026-11-20" }), "Copyright line (needed for the RouteNote upload, Fri 20 Nov)");
+  assert.equal(L.missingWords({ short: "Artwork", step: "" }), "Artwork");
+  assert.deepEqual(L.relPill(v("medaseubody"), b.today), { text: "1 blocked", bad: true, rel: false });
+  assert.deepEqual(L.relPill(v("survivors"), b.today), { text: "Draft", bad: false, rel: false });
+  assert.deepEqual(L.relPill(v("touchme"), b.today), { text: "Released", bad: false, rel: true });
+  assert.deepEqual(L.relPill({ ...v("medaseubody"), counts: { done: 1, total: 9, late: 2, blocked: 0 } }, b.today), { text: "2 late", bad: true, rel: false });
+  assert.deepEqual(L.relPill({ ...v("medaseubody"), counts: { done: 1, total: 9, late: 0, blocked: 0 } }, b.today), { text: "On time", bad: false, rel: false });
+  assert.equal(L.relPill({ ...v("survivors"), status: "cancelled" }, b.today).text, "Cancelled");
+  /* the page's sentence is the desk's own */
+  const d = memoryDesk(), now = Date.parse("2026-11-12T12:20:00Z");
+  const r = await S.saveRelease(d, now, S.DEFAULT_ROSTER, { by: "Luke", title: "Survivors", pack: { wav: "https://example.com/m.wav", genre: "Dance" } });
+  const view = S.releaseView(r, "2026-11-12");
+  await assert.rejects(S.sendRelease(d, now, S.DEFAULT_ROSTER, { by: "Luke", id: r.id }), (e) => e.message === L.missingSentence(view.missing.filter((m) => m.required)));
+  assert.equal(L.missingSentence([{ key: "artwork", short: "Artwork", required: true }]), "Still missing: Artwork. Fill it in, then send again.");
+  assert.equal(L.missingSentence([{ key: "lyrics", short: "Lyrics", required: false }]), "");
+});
+
+test("releases: the form sends only what changed, so a field the team filled meanwhile is never overwritten", () => {
+  const fields = sampleBoard(NOW).packFields;
+  const before = { wav: "https://example.com/a.wav", genre: "Dance", isrc: "XX0000000000" };
+  const typed = { wav: "https://example.com/a.wav", genre: " House ", isrc: "XX0000000000", language: "Portuguese", mood: "", lyrics: "" };
+  assert.deepEqual(L.packChanges(fields, before, typed), { genre: "House", language: "Portuguese" });
+  assert.deepEqual(L.packChanges(fields, before, { ...typed, wav: "" }), { genre: "House", language: "Portuguese", wav: "" }, "emptying a field clears it");
+  assert.deepEqual(L.packChanges(fields, {}, { title: "not a field", wav: "" }), {}, "unknown keys and empty new fields are left out");
+  assert.equal(L.fillWho({ fill: ["Drop"] }), "Drop fills this");
+  assert.equal(L.fillWho({ fill: ["Atlas", "Webmaster"] }), "Atlas or Webmaster fills this");
+  assert.equal(L.fillWho({ fill: [] }), "You fill this");
+  const g = L.formGroups(fields);
+  assert.deepEqual(g.map((x) => x.title), ["The files", "For the stores", "Lyrics", "For the pitch (can wait)", "Later, the team fills these", "Notes"]);
+  assert.equal(g.reduce((n, x) => n + x.fields.length, 0), fields.length, "every field of the desk is on the form, once");
+  assert.deepEqual(g[0].fields.map((f) => f.key), ["wav", "artwork", "folder"]);
+  assert.deepEqual(L.formGroups([{ key: "bpm", group: "new-group" }])[0].title, "Notes", "a field in a group the page doesn't know still shows");
+});
+
+test("releases: one card per song (the desk's first), the sheet's own rows only when the desk doesn't have them", () => {
+  const b = sampleBoard(NOW);
+  const sheet = { releases: [{ song: "ME DA SEU BODY", date: "2026-11-24", desk: false, steps: [] }, { song: "Old Song", date: "2026-12-04", steps: [] }, { song: "Survivors", desk: true, steps: [] }] };
+  const l = L.releaseLists(b, sheet);
+  assert.deepEqual(l.coming.map((v) => v.id), ["medaseubody", "survivors"], "still to come, drafts too, soonest first");
+  assert.deepEqual(l.sheetOnly.map((r) => r.song), ["Old Song"], "accents and case don't make a second card; merged desk rows aren't drawn twice");
+  assert.deepEqual(l.out.map((v) => v.id), ["touchme"]);
+  assert.deepEqual(l.cancelled, []);
+  const withCancelled = L.releaseLists({ releases: [{ ...b.releases[0], status: "cancelled" }] }, { releases: [{ song: "Me Dá Seu Body", steps: [] }] });
+  assert.equal(withCancelled.cancelled.length, 1); assert.equal(withCancelled.sheetOnly.length, 1, "a cancelled desk release doesn't hide the sheet's row");
+  assert.deepEqual(L.releaseLists(null, null), { coming: [], sheetOnly: [], out: [], cancelled: [] });
+  assert.equal(L.stepsSummary(b.releaseSteps), "Counting back from release day: 21 days RouteNote upload, 16 RouteNote approval, 14 Spotify pitch, 10 lyrics, 7 song page and video, 3 teaser clips, 1 ad drafts.");
+  assert.equal(L.stepsSummary([]), "");
+  assert.equal(L.sendQuestion("Survivors", "2026-12-11"), "Send Survivors to the team for Fri 11 Dec? Every bot gets its steps and dates.");
+  assert.match(L.moveQuestion("Survivors", "2026-12-11", "2026-12-18"), /^Move Survivors from Fri 11 Dec to Fri 18 Dec\? Every step that isn't done moves with it, and the team is told\.$/);
+  assert.match(L.cancelQuestion({ title: "X", status: "draft" }), /Nobody was told/);
+  assert.match(L.cancelQuestion({ title: "X", status: "scheduled" }), /The team is told to stop/);
+  /* the pipeline's own labels have short words for Today's sentences */
+  assert.equal(L.shortStep("Approved by RouteNote (nothing waiting)"), "RouteNote approval");
+  assert.equal(L.shortStep("Something new"), "something new");
+});
+
+test("Team: a late or blocked release step is in Nova's message", () => {
+  const w = sampleBoard(NOW).staff.find((x) => x.name === "Drop");
+  assert.match(L.novaMessage(w), /\nRelease step: Me Dá Seu Body: Approved by RouteNote \(nothing waiting\) \(blocked: RouteNote wants/);
+  assert.doesNotMatch(L.novaMessage(worker("A", "late")), /Release step/);
+});
+
+test("the page: the Releases tab, its form and 'You answered' are there; no developer words", () => {
+  const page = readFileSync(new URL("../hq.html", import.meta.url), "utf8");
+  const staff = readFileSync(new URL("../js/hq-staff.js", import.meta.url), "utf8");
+  for (const id of ["relNew", "relForm", "relDesk", "relList", "relOut", "relSample", "answeredCard", "answeredList"]) assert.match(page, new RegExp('id="' + id + '"'), id);
+  for (const path of ['"release"', '"release/send"', '"release/date"', '"release/cancel"', '"release/step"']) assert.ok(staff.includes("write(" + path), path);
+  const code = staff.replace(/\/\*[\s\S]*?\*\//g, "");
+  const words = code.replace(/"\/api\/staff\/[^"]*"/g, "");
+  assert.doesNotMatch(words, /\b(MCP|tokens?|endpoints?|API)\b/, "plain words on Luke's page");
+  assert.doesNotMatch(words, /pack fields/i);
+  assert.doesNotMatch(code, /setTimeout\(function \(\) \{ \$\("msgOk"\)/, "'Sent to …' stays until the next message is started");
+  /* every write is off in the sample */
+  assert.match(code, /function write\(path, body\) \{\s*if \(HQ\.sample\) return Promise\.resolve\(\{ ok: false/);
 });

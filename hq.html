@@ -23,8 +23,9 @@
      (/api/admin/login). Sheet side: js/hq.js + /api/hq/data. Page-visit side: js/hq.js (Today, Songs,
      Ads via /api/admin/overview) + js/hq-pages.js (Pages via /api/admin/data). The staff desk (Team's bot
      cards, Messages, "Money coming in"): js/hq-staff.js + /api/staff/board. The page still can't change
-     ads, posts, sheets or money: the ONLY things it writes are Luke's own messages on the board and the
-     bots' key switch (11 Nov 2026). ?sample=1 = made-up numbers, and nothing is written there. -->
+     ads, posts, sheets or money: the ONLY things it writes are Luke's own messages on the board, the
+     bots' key switch and the release pipeline on the team's desk (11 Nov 2026). ?sample=1 = made-up
+     numbers, and nothing is written there. -->
 <style>
 :root{--ink:#050505;--ink-2:#0C0C0C;--ink-3:#1F1F1F;--ink-4:#2A2A2A;--paper:#F2F2F2;--muted:#8A8A8A;--silver:#6E6E6E;--uv:#B4B4B4;--spot:#1ED760;--grey-mark:#5A5A5A;
   --mono:"DM Mono",ui-monospace,Menlo,monospace;--sans:Figtree,system-ui,-apple-system,sans-serif;--r:16px;--pad:16px}
@@ -734,6 +735,128 @@ textarea.fld{min-height:112px;resize:vertical}
 @media(max-width:719px){.paywide{display:none}}
 #shell .more-row{display:block;margin:12px auto 0;min-height:44px;padding:0 18px}
 @media (prefers-reduced-motion:reduce){.bwhy summary::after{transition:none}}
+
+/* ================= Replies that visibly land + the release pipeline (11 Nov 2026) =================
+   Same glass, same controls (.fld, .sendbtn, .copybtn, .linkbtn, .confirm, .bstate). Red only for late,
+   blocked and "needs attention"; nothing new is green. 13px floor, 44px targets, 16px inputs. */
+/* Messages: the line that takes the place of an answered item, the seen marks, "You answered" */
+.landed{display:flex;align-items:flex-start;gap:12px;margin:0;padding:14px 0;border-top:.5px solid var(--glass-line);font-size:15px;line-height:1.45;color:var(--paper)}
+.landed:first-child{border-top:0;padding-top:4px}
+.landed::before{content:"";flex:none;width:18px;height:10px;margin-top:4px;border-left:2.5px solid var(--paper);border-bottom:2.5px solid var(--paper);transform:rotate(-45deg) translate(2px,-2px)}
+.landed .lsub{display:block;margin-top:2px;font-size:14px;color:var(--muted)}
+.mseen{font-size:13px;color:var(--muted);white-space:nowrap}
+.mseen.yes{color:var(--uv)}
+.tsent{margin:8px 0 0;font-size:14px;color:var(--paper)}
+.ans-sub{margin:-2px 0 6px;font-size:14px}
+.anslist{list-style:none;margin:0;padding:0}
+.anslist li{padding:14px 0;border-top:.5px solid var(--glass-line)}
+.anslist li:first-child{border-top:0;padding-top:4px}
+.anslist li:last-child{padding-bottom:2px}
+.anslist .aq{margin:6px 0 0;font-size:14px;color:var(--muted);overflow-wrap:anywhere;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.anslist .ay{margin:8px 0 0;font-size:15px;line-height:1.45;color:var(--paper);white-space:pre-wrap;overflow-wrap:anywhere}
+.anslist .ay b{font-weight:700}
+.aseen{display:inline-flex;align-items:center;gap:8px;margin:8px 0 0;font-size:14px;font-weight:600;color:var(--uv)}
+.aseen::before{content:"";width:8px;height:8px;border-radius:50%;border:1.5px solid var(--muted)}
+.aseen.yes{color:var(--paper)}
+.aseen.yes::before{background:var(--paper);border-color:var(--paper)}
+.anote{display:block;margin:4px 0 0;font-size:13px;color:var(--muted)}
+/* Releases: the bar, the cards, the pipeline */
+.relbar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:0 0 14px}
+.relgrid{display:grid;gap:12px;grid-template-columns:minmax(0,1fr);align-items:start;margin:0 0 12px}
+@media(min-width:1100px){.relgrid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.relgrid:empty{display:none}
+#shell .relcard{padding-bottom:8px}
+.relcard .bhead .pill,.relcard .bhead .bstate{flex:none}
+.rwhen{margin:4px 0 0;font-size:15px;color:var(--uv)}
+.rpack{margin:12px 0 0;font-size:15px;line-height:1.45;color:var(--uv);overflow-wrap:anywhere}
+.rpack b{display:block;font-size:13px;font-weight:600;color:var(--muted)}
+.rpack ul{margin:4px 0 0;padding:0 0 0 18px}
+.rpack li{margin:2px 0 0}
+.rpack li.attn{font-weight:600}
+.rnote{margin:10px 0 0;font-size:14px;color:var(--uv)}
+.rdone{margin:12px 0 0;padding:10px 12px;border-radius:12px;background:var(--glass-2);font-size:15px;color:var(--paper)}
+.relcard > .sendbtn{margin-top:14px}
+.rsteps{list-style:none;margin:14px 0 0;padding:0}
+.rsteps li{display:grid;grid-template-columns:14px minmax(0,1fr);gap:2px 12px;padding:12px 0;border-top:.5px solid var(--glass-line)}
+.rsteps i{width:11px;height:11px;margin-top:5px;border-radius:50%;border:1.5px solid var(--grey-mark)}
+.rsteps li.done i{background:var(--uv);border-color:var(--uv)}
+.rsteps li.bad i{background:var(--red);border-color:var(--red)}
+.rsteps .rs{min-width:0}
+.rsteps b{display:block;font-size:15px;font-weight:600;line-height:1.35;overflow-wrap:anywhere}
+.rsteps li.done b{color:var(--uv);font-weight:500}
+.rsteps .ro{display:block;margin-top:2px;font-size:14px;color:var(--muted)}
+.rsteps .rw{display:block;margin-top:2px;font-size:14px;color:var(--uv);overflow-wrap:anywhere}
+.rsteps li.bad .rw{color:var(--red);font-weight:600}
+.rsteps .rn{display:block;margin-top:6px;padding:8px 10px;border-radius:10px;background:rgba(255,255,255,.05);font-size:14px;color:var(--paper);overflow-wrap:anywhere;white-space:pre-wrap}
+.rsteps .rl{display:inline-flex;align-items:center;min-height:44px;font-size:14px;font-weight:600;color:var(--paper);text-underline-offset:3px;text-decoration-color:var(--silver)}
+.rsteps .rline{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:0 12px;min-height:24px}
+.rsteps .rline .rw{flex:1 1 140px}
+.rsteps .racts2{display:flex;flex-wrap:wrap;align-items:center;gap:0 14px;margin:-6px 0 -10px}
+.rsteps .racts2 .copybtn{margin:10px 0 6px}
+.racts{display:flex;flex-wrap:wrap;gap:10px;margin-top:14px;padding-top:12px;border-top:.5px solid var(--glass-line)}
+.relcard .confirm .fld{margin:0 0 8px}
+.relcard .confirm .rdn{margin:0 0 12px;font-size:14px;color:var(--uv)}
+.relcard .ferr{margin-top:12px}
+.rpackdl{margin:4px 0 8px}
+.rpackdl dt{margin:12px 0 2px;font-size:13px;font-weight:600;color:var(--muted)}
+.rpackdl dt:first-child{margin-top:0}
+.rpackdl dd{margin:0;font-size:15px;line-height:1.45;color:var(--paper);overflow-wrap:anywhere;white-space:pre-wrap}
+.rpackdl dd a,.ro-v a{display:flex;align-items:center;min-height:44px;color:var(--paper);text-underline-offset:3px;text-decoration-color:var(--silver)}
+.rpackdl .lyr{max-height:260px;overflow:auto;padding:10px 12px;border-radius:12px;background:rgba(255,255,255,.05);-webkit-overflow-scrolling:touch}
+.rlog{list-style:none;margin:6px 0 8px;padding:0}
+.rlog li{padding:6px 0;font-size:14px;color:var(--uv);border-top:.5px solid var(--glass-line);overflow-wrap:anywhere}
+.rlog li:first-child{border-top:0}
+.rlog span{color:var(--muted)}
+.relfold{margin:6px 0 12px}
+.relfold > summary{display:flex;align-items:center;gap:10px;min-height:48px;font:500 13px var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--muted);cursor:pointer;list-style:none}
+.relfold > summary::-webkit-details-marker{display:none}
+.relfold > summary::after{content:"";width:8px;height:8px;border-right:2px solid var(--muted);border-bottom:2px solid var(--muted);transform:rotate(45deg) translate(-2px,-2px)}
+.relfold[open] > summary::after{transform:rotate(-135deg) translate(-2px,-2px)}
+.relfold .relgrid{margin-top:4px}
+.rcanc{margin:0;padding:12px 0;border-top:.5px solid var(--glass-line);font-size:15px;color:var(--uv)}
+.rcanc:first-of-type{border-top:0}
+.rcanc b{color:var(--paper)}
+/* Team: a bot's release steps under its duties */
+.bsub{margin:14px 0 0;font-size:13px;font-weight:600;color:var(--muted)}
+.bsub + .bduties{margin-top:4px}
+/* Releases: the form */
+.relform{margin:0 0 16px}
+.relform h3{margin:0 0 4px;font-size:21px !important;font-weight:800;letter-spacing:-.01em}
+.relform .rf-sub{margin:0 0 16px;font-size:15px;color:var(--muted)}
+.ff{margin:0 0 16px;min-width:0;border:0;padding:0}
+.ff .flbl{color:var(--paper)}
+legend.flbl{padding:0}
+.req{margin-left:6px;font-size:13px;font-weight:500;color:var(--muted);white-space:nowrap}
+.fhint{margin:-2px 0 8px;font-size:14px;line-height:1.4;color:var(--muted)}
+.ff.miss .fld,.ff.miss .chooser label span{border:1px solid var(--red)}
+.ff.miss .flbl::after{content:" · still missing";color:var(--red);font-weight:600}
+.dnote{margin:8px 0 0;font-size:14px;color:var(--uv)}
+.dnote.bad{color:var(--red);font-weight:600}
+.dnote + .dnote{margin-top:2px}
+.dnote.q{color:var(--muted)}
+.chooser{display:flex;flex-wrap:wrap;gap:8px}
+.chooser label{position:relative;cursor:pointer}
+.chooser input{position:absolute;opacity:0;width:1px;height:1px}
+.chooser span{display:inline-flex;align-items:center;min-height:44px;padding:0 18px;border-radius:999px;background:rgba(255,255,255,.06);border:.5px solid var(--glass-line);font:600 15px var(--sans);color:var(--uv)}
+.chooser input:checked + span{background:var(--paper);color:var(--ink);border-color:var(--paper)}
+.chooser input:focus-visible + span{outline:2px solid var(--paper);outline-offset:2px}
+.chooser input:disabled + span{opacity:.55;cursor:default}
+.fgroup{margin:4px 0 0;border-top:.5px solid var(--glass-line)}
+.fgroup > h4,.fgroup > summary{display:flex;align-items:center;justify-content:space-between;gap:10px;min-height:52px;margin:0;font-size:17px;font-weight:700;color:var(--paper);list-style:none;cursor:default}
+.fgroup > summary{cursor:pointer}
+.fgroup > summary::-webkit-details-marker{display:none}
+.fgroup > summary .gs{margin-left:auto;font-size:14px;font-weight:500;color:var(--muted)}
+.fgroup > summary::after{content:"";flex:none;width:8px;height:8px;border-right:2px solid var(--muted);border-bottom:2px solid var(--muted);transform:rotate(45deg) translate(-2px,-2px)}
+.fgroup[open] > summary::after{transform:rotate(-135deg) translate(-2px,-2px)}
+.fgroup > .fbody{padding:4px 0 2px}
+.ro-v{margin:0;font-size:15px;color:var(--paper);overflow-wrap:anywhere}
+.ro-v.none{color:var(--muted)}
+textarea.fld.lyrics{min-height:220px}
+.rf-foot{margin-top:8px;padding-top:16px;border-top:.5px solid var(--glass-line)}
+.rf-foot .conn-acts{margin-top:0}
+.rf-foot .ferr{margin:0 0 12px}
+.rf-foot .fok{display:block;margin:0 0 12px}
+@media(min-width:720px){.ffrow{display:grid;gap:0 16px;grid-template-columns:repeat(2,minmax(0,1fr))}.ffrow .ff.wide{grid-column:1/-1}}
 </style>
 </head>
 <body>
@@ -934,7 +1057,13 @@ textarea.fld{min-height:112px;resize:vertical}
 
   <section class="card view" id="growth"><h2>Growth</h2><p class="sub">Followers per platform, and the posts that went out on the days that grew most.</p><div class="sheeterr" id="errGrowth" hidden></div><div class="grid g4" id="growthList"><div class="ph big"></div><div class="ph"></div></div></section>
   <section class="card view" id="fans"><h2>Fans forming</h2><p class="sub" id="fansSub"></p><div class="sheeterr" id="errFans" hidden></div><div class="tile"><div class="scroll"><table class="stack" id="fanTable"></table></div></div></section>
-  <section class="card view" id="releases"><h2>Releases</h2><p class="sub">Counting back from release day: 28 days files, 21 RouteNote, 14 Spotify pitch, 10 lyrics, 7 video and page.</p><div class="sheeterr" id="errReleases" hidden></div><div class="grid g3" id="relList"><div class="ph big"></div><div class="ph"></div></div></section>
+  <section class="card view" id="releases"><h2>Releases</h2><p class="sub" id="relSub">Every song on its way out: its files and details, and each bot's step with its date.</p><div class="sheeterr" id="errReleases" hidden></div>
+    <p class="mnote" id="relSample" hidden>This is the sample: the form opens, but saving, sending, changing a date and marking steps are switched off here.</p>
+    <div class="relbar"><button class="sendbtn" id="relNew" type="button" aria-controls="relForm" aria-expanded="false">New release</button><span class="fok" id="relMsg" role="status"></span></div>
+    <form class="t-card relform" id="relForm" aria-labelledby="rfTitleH" novalidate hidden></form>
+    <div class="relgrid" id="relDesk"></div>
+    <div class="grid g3" id="relList"><div class="ph big"></div><div class="ph"></div></div>
+    <div id="relOut"></div></section>
   <section class="card view" id="money"><h2>Money</h2><p class="sub">Every amount in the currency it was billed or paid in. Totals in EUR are estimates at that month's average rate.</p><div class="sheeterr" id="errMoney" hidden></div>
     <h3 class="sech">Money coming in</h3>
     <p class="secsub">Sent in by the bots every day through the connector. The monthly tables below still come from the income sheet.</p>
@@ -957,6 +1086,7 @@ textarea.fld{min-height:112px;resize:vertical}
       <div class="t-card mfail" id="msgFail" hidden><p>Couldn't load the messages.</p><button class="sendbtn" id="msgRetry" type="button">Retry</button></div>
       <div id="msgBody">
         <section class="t-card attn-card mcard" id="waitCard" aria-labelledby="waitTitle"><h3 class="t-lbl" id="waitTitle">Waiting on you <span class="nbadge" id="waitN" hidden></span></h3><div id="waitList"><div class="ph"></div><div class="ph"></div></div></section>
+        <section class="t-card mcard" id="answeredCard" aria-labelledby="answeredTitle" hidden><h3 class="t-lbl" id="answeredTitle">You answered</h3><p class="secsub ans-sub">The last two days. "Seen" means the bot has opened the desk since you answered.</p><ul class="anslist" id="answeredList"></ul></section>
         <form class="t-card mcard" id="composeForm" aria-labelledby="composeTitle">
           <h3 class="t-lbl" id="composeTitle">Write a message</h3>
           <div class="frow">

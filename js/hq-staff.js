@@ -4,13 +4,18 @@
                the live log
      Messages  what waits on Luke, a box to write, the whole board as threads
      Money     "Money coming in": accounts checked, this month, every source, the latest payments
-   Today's "Needs attention", the site-check line and Data health read the same answer through
-   js/hq.js (HQ.boardChanged). Every rule and every sentence is in js/hq-lib.js (tested); this file
+   Every rule and every sentence is in js/hq-lib.js (tested); this file
    only draws and sends.
 
-   THE ONLY WRITES ON /hq ARE HERE: Luke's own messages (send, answer, mark as done) and the bots'
-   key switch. Nothing here can touch an ad, a post, the sheet or any money. In /hq?sample=1 nothing
-   is sent at all and the page says so.
+     Releases  (11 Nov 2026) the release pipeline: a card per release on the desk with its files and
+               details and every bot's step, the form to start / finish / send one
+   Today's "Needs attention", the site-check line and Data health read the same answer through
+   js/hq.js (HQ.boardChanged).
+
+   THE ONLY WRITES ON /hq ARE HERE: Luke's own messages (send, answer, mark as done), the bots' key
+   switch, and (11 Nov 2026) the release pipeline: save / send / move / cancel a release and mark a
+   step. Nothing here can touch an ad, a post, the sheet or any money. In /hq?sample=1 nothing is
+   sent at all and the page says so.
 
    Everything on the board was typed by a bot or a person: it is ALWAYS escaped (esc), never put in
    the page as HTML, and a link is only a link when it starts with https://. */
@@ -24,7 +29,16 @@
   /* what is open / typed / in flight. Kept OUTSIDE the page so the 5-minute refresh can redraw
      without losing a half-written reply or closing what Luke opened. */
   var ui = fresh();
-  function fresh() { return { reply: "", ask: null, drafts: {}, err: {}, busy: "", open: {}, why: {}, payAll: false, allThreads: false, keyAsk: false, keyErr: "", keyBusy: false }; }
+  function fresh() {
+    return { reply: "", ask: null, drafts: {}, err: {}, busy: "", open: {}, why: {}, payAll: false, allThreads: false, keyAsk: false, keyErr: "", keyBusy: false,
+      /* replies that visibly land (11 Nov 2026): what Luke just answered (id -> the line in its place)
+         and the line under a thread he answered on the board */
+      landed: {}, tsent: {},
+      /* the release pipeline: busy / error / the inline question per card, notes, open disclosures, the form */
+      rel: { busy: "", err: {}, ask: null, note: {}, open: {}, fold: {} }, form: null };
+  }
+  var PEOPLE = ["Luke", "Claude", "HQ", "all"];
+  var KEEP_MS = 10 * 60000; /* how long "Sent to Nova at 17:03" stays in the place of what was answered */
   var safe = function (s) { return String(s == null ? "" : s).replace(/[^a-z0-9]/gi, ""); };
   var cap = function (s) { s = String(s || ""); return s.charAt(0).toUpperCase() + s.slice(1); };
 
@@ -56,21 +70,24 @@
     board = null; problem = ""; tried = false; goodAt = null; ui = fresh();
     $("msgText").value = ""; counter(); $("msgErr").textContent = ""; $("msgOk").textContent = "";
     $("waitList").innerHTML = $("threadList").innerHTML = $("dutyList").innerHTML = $("incomeBody").innerHTML = '<div class="ph"></div>';
+    $("answeredList").innerHTML = ""; $("answeredCard").hidden = true;
+    $("relForm").hidden = true; $("relForm").innerHTML = ""; $("relDesk").innerHTML = $("relOut").innerHTML = ""; $("relMsg").textContent = "";
     draw();
   }
   function draw() {
-    drawWorkers(); drawMessages(); drawIncome(); drawBadges();
+    drawWorkers(); drawMessages(); drawIncome(); drawBadges(); drawReleases();
     HQ.boardChanged(); /* Today's attention + site check, Data health, and Team's fallback when there is no board */
   }
 
   /* ---------- the page's writes ---------- */
-  /* -> { ok } | { ok:false, error: a plain sentence to show next to the button } */
+  /* -> { ok, j } | { ok:false, error: a plain sentence to show next to the button, j: the answer (a
+     release that can't be sent yet names its missing fields in j.missing) } */
   function write(path, body) {
     if (HQ.sample) return Promise.resolve({ ok: false, error: "This is the sample: nothing is sent." });
     return HQ.postJSON("/api/staff/" + path, body).then(function (res) {
       if (HQ.authFail(res)) return { ok: false, error: "You were logged out. Log in and send it again." };
       if (res.s === 200 && res.j && res.j.ok) return { ok: true, j: res.j };
-      return { ok: false, error: (res.j && typeof res.j.error === "string" && res.j.error) || "Couldn't save that (" + res.s + "). Try again." };
+      return { ok: false, j: res.j || {}, error: (res.j && typeof res.j.error === "string" && res.j.error) || "Couldn't save that (" + res.s + "). Try again." };
     }, function () { return { ok: false, error: "No connection. Nothing was sent: try again." }; });
   }
   var off = function () { return HQ.sample ? " disabled" : ""; };
@@ -106,12 +123,23 @@
       ((w.duties || []).length ? '<ul class="bduties">' + w.duties.map(function (d) {
         return '<li class="' + (d.status === "blocked" || d.late ? "bad" : d.status === "done" ? "done" : "") + '"><span class="bt">' + esc(d.task) + (d.blocker ? "<small>Blocked: " + esc(d.blocker) + "</small>" : "") +
           '</span><span class="bw">' + esc(L.dutyWhen(d)) + "</span></li>"; }).join("") + "</ul>" : "") +
+      relSteps(w) +
       (w.last ? '<p class="blast"><b>' + esc(lastMs ? L.ago(now - lastMs) : w.last.at) + "</b> " + HQ.link(w.last.link, w.last.message) + "</p>" : "") +
       (w.card && w.card.workingOn ? '<p class="bline"><b>Working on</b><span>' + esc(w.card.workingOn) + "</span></p>" : "") +
       (w.card && w.card.needs ? '<p class="bline need"><b>Needs</b><span>' + esc(w.card.needs) + "</span></p>" : "") +
       '<p class="bmeta">' + (counts ? "<span>" + esc(counts) + "</span>" : "") + "<span>" + esc(L.seenLine(w, now)) + "</span></p>" +
       (bad ? '<button class="copybtn" type="button" data-nova="' + esc(id) + '">Copy message for Nova</button>' : "") +
       '<details class="bwhy" data-why="' + esc(id) + '"' + (ui.why[id] ? " open" : "") + "><summary>Why this bot</summary>" + why.join("") + "</details></article>";
+  }
+  /* a bot's open release steps, under its duties: the same words as the release card */
+  function relSteps(w) {
+    var list = w.releaseSteps || [];
+    if (!list.length) return "";
+    return '<p class="bsub">Release steps</p><ul class="bduties">' + list.map(function (s) {
+      var st = L.stepState(s, board.today), blocked = s.status === "blocked";
+      return '<li class="' + (st.bad ? "bad" : "") + '"><span class="bt">' + esc(s.label) + '<small>' + esc(s.title) + (s.due ? " · due " + esc(L.day(s.due)) : "") + "</small>" +
+        (blocked && s.note ? "<small>Blocked: " + esc(s.note) + "</small>" : "") + '</span><span class="bw">' + esc(blocked ? "blocked" : st.text) + "</span></li>";
+    }).join("") + "</ul>";
   }
   /* -> true when the board drew Team (js/hq.js falls back to the sheet's duty rows when it didn't) */
   function drawWorkers() {
@@ -177,10 +205,28 @@
       (ui.reply === k ? replyBox(k, m) : '<div class="macts"><button class="copybtn" type="button" data-act="reply" data-k="' + esc(k) + '"' + dis + '>Reply</button><button class="copybtn" type="button" data-act="done" data-k="' + esc(k) + '"' + dis + ">" +
         (busy ? "Saving…" : "Mark as done") + "</button></div>") + errLine(k) + "</article>";
   }
+  /* what took the place of an item Luke answered: where it went and when (it stays 10 minutes) */
+  function landedItem(x) {
+    var first = String(x.m.text || "").split("\n")[0];
+    return '<p class="landed" role="status" tabindex="-1" id="wait-' + esc(safe(x.m.id)) + '"><span>' + esc(x.line) +
+      '<span class="lsub">' + esc(x.m.from + ": “" + first.slice(0, 80) + (first.length > 80 || String(x.m.text).indexOf("\n") >= 0 ? "…" : "") + "”") + "</span></span></p>";
+  }
+  /* "Seen by Nova 17:10" / "Not read yet" on a message (nothing when nobody can see it) */
+  function seenMark(m) { var s = L.seenWords(m, board.today); return s ? '<span class="mseen' + (s.seen ? " yes" : "") + '">' + esc(s.text) + "</span>" : ""; }
   function head(m) {
     var lab = L.waitLabel(m);
     return '<p class="mhead"><span><b>' + esc(m.from) + '</b> <span class="arrow">→</span> <b>' + esc(m.to === "all" ? "Everyone" : m.to) + '</b></span><span class="mtime">' + esc(when(m)) + "</span>" +
-      (lab ? '<span class="mlabel' + (lab.mine ? " mine" : lab.open ? " open" : "") + '">' + esc(lab.text) + "</span>" : "") + "</p>";
+      (lab ? '<span class="mlabel' + (lab.mine ? " mine" : lab.open ? " open" : "") + '">' + esc(lab.text) + "</span>" : "") + seenMark(m) + "</p>";
+  }
+  /* "You answered": the last two days, each with whether the bot has looked at the desk since */
+  function drawAnswered() {
+    var list = L.answeredList(board);
+    $("answeredCard").hidden = !list.length;
+    $("answeredList").innerHTML = list.map(function (a) {
+      return '<li><p class="mhead"><span><b>' + esc(a.who) + "</b> " + esc(a.asked) + '</span><span class="mtime">' + esc(a.when) + "</span></p>" +
+        '<p class="aq">' + esc(a.their) + '</p><p class="ay">' + esc(a.say) + "</p>" +
+        (a.seen ? '<p class="aseen' + (a.seen.seen ? " yes" : "") + '">' + esc(a.seen.text) + "</p>" + (a.seen.note ? '<span class="anote">' + esc(a.seen.note) + "</span>" : "") : "") + "</li>";
+    }).join("");
   }
   function thread(th) {
     var id = safe(th.id), k = "b:" + th.id;
@@ -193,6 +239,7 @@
     return '<article class="t-card thread" id="messages-' + esc(id) + '">' + head(th) + '<p class="mtext">' + esc(th.text) + "</p>" +
       ((th.options || []).length ? '<p class="mabout">Choices: ' + esc(th.options.join(" · ")) + "</p>" : "") +
       ((th.replies || []).length ? '<ul class="treplies">' + th.replies.map(function (r) { return "<li>" + head(r) + '<p class="mtext">' + esc(r.text) + "</p></li>"; }).join("") + "</ul>" : "") +
+      (ui.tsent[k] && Date.now() - ui.tsent[k].at < KEEP_MS ? '<p class="landed tsent" role="status"><span>' + esc(ui.tsent[k].line) + "</span></p>" : "") +
       (ui.reply === k ? replyBox(k, th) + errLine(k) : '<div class="tfoot"><button class="linkbtn" type="button" data-act="reply" data-k="' + esc(k) + '"' + off() + ">Reply</button></div>" + errLine(k)) + "</article>";
   }
   function drawMessages() {
@@ -208,19 +255,27 @@
     syncNeeds();
     byId = {};
     (board.messages || []).forEach(function (th) { byId[th.id] = th; (th.replies || []).forEach(function (r) { byId[r.id] = r; }); });
-    var wait = (board.waiting && board.waiting.luke) || [];
+    var wait = waitingNow();
     wait.forEach(function (m) { byId[m.id] = byId[m.id] || m; });
+    /* what Luke just answered stays in its place as one line ("Sent to Nova at 17:03") */
+    var stubs = Object.keys(ui.landed).map(function (id) { return ui.landed[id]; }).filter(function (x) { return Date.now() - x.at < KEEP_MS; });
+    var rows = wait.map(function (m) { return { at: m.at, html: waitItem(m) }; }).concat(stubs.map(function (x) { return { at: x.m.at, html: landedItem(x) }; }))
+      .sort(function (a, b) { return a.at < b.at ? -1 : a.at > b.at ? 1 : 0; });
     /* a redraw must not steal the reply Luke is typing: remember where the caret was */
     var act = document.activeElement, fk = act && act.getAttribute ? act.getAttribute("data-f") : null, s0 = fk ? act.selectionStart : 0, s1 = fk ? act.selectionEnd : 0;
     $("waitCard").classList.toggle("has", wait.length > 0);
-    $("waitList").innerHTML = wait.length ? wait.map(waitItem).join("") : '<p class="empty2">Nothing is waiting on you.</p>';
+    $("waitList").innerHTML = rows.length ? rows.map(function (x) { return x.html; }).join("") : '<p class="empty2">Nothing is waiting on you.</p>';
+    drawAnswered();
     var all = board.messages || [], list = ui.allThreads ? all : all.slice(0, 25);
     $("threadList").innerHTML = (all.length ? list.map(thread).join("") : '<p class="empty2">No messages yet. They show up here when a bot, Claude or you write one.</p>') +
       (all.length > list.length ? '<button class="copybtn more-row" type="button" data-act="older">Show older messages (' + (all.length - list.length) + ")</button>" : "");
     if (fk) { var el = $("messages").querySelector('[data-f="' + fk.replace(/[^a-z0-9:]/gi, "") + '"]'); if (el) { el.focus(); try { el.setSelectionRange(s0, s1); } catch (e) {} } }
   }
+  /* what still waits on Luke: the board's list without what he has just answered (the board may not
+     have caught up yet) */
+  function waitingNow() { return ((board && board.waiting && board.waiting.luke) || []).filter(function (m) { return !ui.landed[m.id]; }); }
   function drawBadges() {
-    var n = board ? ((board.waiting && board.waiting.luke) || []).length : 0;
+    var n = board ? waitingNow().length : 0;
     ["msgBadge", "msgBadge2", "waitN"].forEach(function (id) { $(id).hidden = !n; $(id).textContent = n; $(id).setAttribute("aria-label", n + " waiting on you"); });
     $("moreDot").hidden = !n;
   }
@@ -238,6 +293,18 @@
     if (act === "more") { var id = safe(k.slice(2)); ui.open[id] = !ui.open[id]; drawMessages(); focusIn('[data-act="more"][data-k="' + k.replace(/[^a-z0-9:]/gi, "") + '"]'); return; }
     if (!m || HQ.sample || ui.busy) return;
     var sel = function (a) { return '[data-act="' + a + '"][data-k="' + k.replace(/[^a-z0-9:]/gi, "") + '"]'; };
+    /* it landed: the item leaves "Waiting on you" at once, a line takes its place, and "You answered"
+       lists it before the board has even caught up */
+    var land = function (kind, text) {
+      var now = Date.now(), iso = new Date(now).toISOString();
+      ui.landed[m.id] = { m: m, at: now, line: L.sentLine(kind, m.from, now, text) };
+      if (board.waiting && board.waiting.luke) board.waiting.luke = board.waiting.luke.filter(function (x) { return x.id !== m.id; });
+      var rep = { by: "Luke", kind: kind === "reply" ? "reply" : "settled", text: kind === "done" ? "Marked as done" : text, at: iso, sp: L.spStampOf(now), seen: PEOPLE.indexOf(m.from) >= 0 ? null : false, seenAt: null };
+      board.answered = [{ id: m.id, from: m.from, to: m.to, text: m.text, needs: m.needs, at: m.at, sp: m.sp, reply: rep }].concat((board.answered || []).filter(function (a) { return a.id !== m.id; })).slice(0, 10);
+      ui.reply = ""; ui.ask = null;
+      draw(); /* the badge, Today's attention and the list, all at once */
+      var el = $("wait-" + safe(m.id)); if (el && k.charAt(0) === "w") el.focus();
+    };
     var settle = function (r, after) { /* one write came back */
       ui.busy = "";
       if (!r.ok) { ui.err[k] = r.error; drawMessages(); return false; }
@@ -251,17 +318,22 @@
     else if (act === "opt-no") { ui.ask = null; drawMessages(); }
     else if (act === "done") {
       ui.busy = k; drawMessages();
-      write("resolve", { id: m.id }).then(function (r) { if (settle(r)) reload(); });
+      write("resolve", { id: m.id }).then(function (r) { if (settle(r)) { land("done"); reload(); } });
     }
     else if (act === "send") {
       var text = String(ui.drafts[k] || "").trim();
       if (text.length < 2) { ui.err[k] = "Write your reply first."; drawMessages(); focusIn('[data-f="' + k.replace(/[^a-z0-9:]/gi, "") + '"]'); return; }
       ui.busy = k; drawMessages();
+      var root = L.threadRoot(board, m), waits = !m.resolved && m.to === "Luke" && m.needs && m.needs !== "none";
       answer(m, text).then(function (r) {
         if (!settle(r, function () { delete ui.drafts[k]; ui.reply = ""; })) return;
-        /* the desk settles a question when its answer points at it; ours points at the start of the
-           thread, so a question that was itself an answer is settled here */
-        if (m.needs === "reply" && !m.resolved && m.to === "Luke" && L.threadRoot(board, m) !== m.id) return write("resolve", { id: m.id, note: "answered" }).then(function () { reload(); });
+        var to = m.from === "Luke" ? m.to : m.from;
+        if (waits) land("reply", text);
+        if (k.charAt(0) === "b") { ui.tsent[k] = { at: Date.now(), line: L.sentLine("reply", to, Date.now()) }; drawMessages(); }
+        /* the desk settles what Luke answers when the answer points at it (11 Nov 2026: whatever it
+           needed); ours points at the start of the thread, so a message deeper in a thread that was
+           waiting on him is settled here */
+        if (waits && root !== m.id) return write("resolve", { id: m.id, note: "answered" }).then(function () { reload(); });
         reload();
       });
     }
@@ -273,7 +345,8 @@
         if (!r.ok) { settle(r); return; }
         return write("resolve", { id: m.id, note: String(choice).slice(0, 240) }).then(function (r2) {
           ui.busy = ""; ui.ask = null;
-          if (!r2.ok) ui.err[k] = "Your answer was sent, but it couldn't be marked as done: " + r2.error; else delete ui.err[k];
+          if (!r2.ok) { ui.err[k] = "Your answer was sent, but it couldn't be marked as done: " + r2.error; drawMessages(); }
+          else { delete ui.err[k]; land("option", choice); }
           reload();
         });
       });
@@ -288,7 +361,7 @@
     $("msgNeeds").disabled = all || HQ.sample;
     $("msgHint").hidden = !all;
   }
-  $("msgText").addEventListener("input", counter);
+  $("msgText").addEventListener("input", function () { counter(); $("msgOk").textContent = ""; });
   $("msgTo").addEventListener("change", syncNeeds);
   var sending = false;
   $("composeForm").addEventListener("submit", function (ev) {
@@ -302,8 +375,8 @@
       sending = false; btn.disabled = false; btn.textContent = "Send";
       if (!r.ok) { $("msgErr").textContent = r.error; return; } /* the text stays in the box */
       $("msgText").value = ""; counter();
-      $("msgOk").textContent = "Sent to " + (to === "all" ? "everyone" : to) + ".";
-      setTimeout(function () { $("msgOk").textContent = ""; }, 5000);
+      /* stays until Luke starts the next one: he can see it went, and when */
+      $("msgOk").textContent = L.sentLine("message", to, Date.now());
       reload();
     });
   });
@@ -359,5 +432,338 @@
     if (b.hasAttribute("data-pay-more")) { ui.payAll = true; drawIncome(); }
   });
 
-  window.HQStaff = { reload: reload, clear: clear, drawWorkers: drawWorkers, board: function () { return board; }, problem: function () { return problem; } };
+  /* ================= Releases: the release pipeline (11 Nov 2026) =================
+     Luke: "when a new song is ready we want all the info every bot needs ... and that they auto
+     schedule it ... and the pitch is handled later". One card per release on the desk (drafts too):
+     its files and details, then every step with its owner, date and state. The form is built from
+     board.packFields, so a field added on the desk shows here by itself. Writes: /api/staff/release
+     (save), release/send, release/date, release/cancel, release/step. The sheet's own release rows
+     keep their card (HQ.sheetReleaseCard) when the desk doesn't have that song. */
+  var relById = {};
+  var FORM_KEY = "bs_hq_last_relform"; /* what Luke typed and hasn't saved, on this device (logout clears every bs_hq_last_*) */
+  function relFields() { return (board && board.packFields) || []; }
+  function hhmm(ms) { return L.spStampOf(ms).slice(11, 16); }
+  var isLink = function (v) { return /^https:\/\//.test(String(v || "")); };
+  function outLink(url, text, cls) { return isLink(url) ? '<a' + (cls ? ' class="' + cls + '"' : "") + ' href="' + esc(url) + '" target="_blank" rel="noopener noreferrer">' + esc(text) + "</a>" : esc(text); }
+  function putRelease(v) {
+    if (!board || !v) return;
+    var list = board.releases || (board.releases = []), i = list.map(function (x) { return x.id; }).indexOf(v.id);
+    if (i >= 0) list[i] = v; else list.unshift(v);
+    relById[v.id] = v;
+  }
+
+  /* one step of the pipeline: owner, due date, state in words, the bot's note and link; Luke's own step
+     has "Mark as done", every other one a small "Mark done" / "Reopen" for Luke */
+  function relStep(v, s) {
+    var st = L.stepState(s, board.today), mine = s.owner === "Luke", k = v.id + ":" + s.key, busy = ui.rel.busy === "step:" + k, dis = HQ.sample || busy ? " disabled" : "";
+    var btn = "";
+    if (v.status === "scheduled" && !v.released) {
+      var to = st.done ? "todo" : "done", attrs = ' type="button" data-rel="step" data-id="' + esc(v.id) + '" data-step="' + esc(s.key) + '" data-to="' + to + '"' + dis;
+      btn = mine && !st.done ? '<button class="copybtn"' + attrs + ">" + (busy ? "Saving…" : "Mark as done") + "</button>"
+        : '<button class="linkbtn"' + attrs + ">" + (busy ? "Saving…" : st.done ? "Reopen" : "Mark done") + "</button>";
+    }
+    var lk = isLink(s.link) ? outLink(s.link, "Open the link", "rl") : "";
+    return '<li class="' + (st.done ? "done" : st.bad ? "bad" : "") + '"><i aria-hidden="true"></i><div class="rs"><b>' + esc(s.label) + "</b>" +
+      '<span class="ro">' + esc((mine ? "You" : s.owner) + (s.due ? " · due " + L.day(s.due) : "")) + "</span>" +
+      '<span class="rline"><span class="rw">' + esc(cap(st.text)) + "</span>" + (lk || btn ? '<span class="racts2">' + lk + btn + "</span>" : "") + "</span>" +
+      (s.note && s.status !== "blocked" ? '<span class="rn">' + esc(s.note) + "</span>" : "") + "</div></li>";
+  }
+  /* the inline questions under a card: a new release day, or cancelling */
+  function relAsk(v) {
+    var a = ui.rel.ask, busy = ui.rel.busy === "ask:" + v.id, dis = HQ.sample || busy ? " disabled" : "";
+    if (!a || a.id !== v.id) return "";
+    if (a.kind === "date") {
+      var dn = L.releaseDayNote(a.date, board.today), ok = a.date && !dn.bad && a.date !== v.date;
+      return '<div class="confirm" role="group" aria-label="Change the release day"><label class="flbl" for="rd-' + esc(safe(v.id)) + '">New release day</label>' +
+        '<input class="fld" type="date" id="rd-' + esc(safe(v.id)) + '" data-reldate="' + esc(v.id) + '" min="' + esc(board.today) + '" value="' + esc(a.date || "") + '"' + (busy ? " disabled" : "") + ">" +
+        (dn.line ? '<p class="rdn' + (dn.bad ? " attn" : "") + '">' + esc([dn.line].concat(dn.notes).join(". ").replace(/\.\./g, ".")) + "</p>" : "") +
+        (ok ? "<p>" + esc(L.moveQuestion(v.title, v.date, a.date)) + "</p>" : "") +
+        '<div class="conn-acts"><button class="sendbtn" type="button" data-rel="date-yes" data-id="' + esc(v.id) + '"' + (ok ? dis : " disabled") + ">" + (busy ? "Moving…" : "Yes, move it") + "</button>" +
+        '<button class="copybtn" type="button" data-rel="no" data-id="' + esc(v.id) + '"' + (busy ? " disabled" : "") + ">Keep the date</button></div></div>";
+    }
+    return '<div class="confirm" role="group" aria-label="Cancel the release"><p>' + esc(L.cancelQuestion(v)) + "</p>" +
+      '<div class="conn-acts"><button class="sendbtn" type="button" data-rel="cancel-yes" data-id="' + esc(v.id) + '"' + dis + ">" + (busy ? "Cancelling…" : "Yes, cancel it") + "</button>" +
+      '<button class="copybtn" type="button" data-rel="no" data-id="' + esc(v.id) + '"' + (busy ? " disabled" : "") + ">Keep it</button></div></div>";
+  }
+  /* "See the files and details": every filled field, read-only (lyrics in their own scrolling box,
+     links only when https://), then the latest changes */
+  function relPack(v) {
+    var filled = relFields().filter(function (f) { return v.pack && v.pack[f.key] != null && String(v.pack[f.key]) !== ""; });
+    var dl = filled.length ? '<dl class="rpackdl">' + filled.map(function (f) {
+      var val = String(v.pack[f.key]);
+      return "<dt>" + esc(f.label) + "</dt><dd>" + (f.kind === "link" ? outLink(val, val) : f.key === "lyrics" ? '<div class="lyr" tabindex="0" aria-label="Lyrics">' + esc(val) + "</div>" : esc(val)) + "</dd>";
+    }).join("") + "</dl>" : "<p>Nothing filled in yet.</p>";
+    var log = (v.log || []).slice(0, 6);
+    return '<details class="bwhy" data-relopen="' + esc(v.id) + '"' + (ui.rel.open[v.id] ? " open" : "") + "><summary>See the files and details</summary>" + dl +
+      (log.length ? '<p class="bsub">Latest changes</p><ul class="rlog">' + log.map(function (x) { return "<li><span>" + esc(L.spWhen(L.spStampOf(x.at), board.today)) + " · </span>" + esc(x.what) + "</li>"; }).join("") + "</ul>" : "") + "</details>";
+  }
+  function relCard(v) {
+    var today = board.today, pill = L.relPill(v, today), pk = L.packLine(v, today), live = v.status === "scheduled" && !v.released, off = HQ.sample ? " disabled" : "";
+    var acts = [];
+    if (v.status === "draft") acts.push('<button class="copybtn" type="button" data-rel="cancel" data-id="' + esc(v.id) + '"' + off + ">Cancel the draft</button>");
+    if (v.status === "scheduled") acts.push('<button class="copybtn" type="button" data-rel="edit" data-id="' + esc(v.id) + '">Edit the details</button>');
+    if (live) acts.push('<button class="copybtn" type="button" data-rel="date" data-id="' + esc(v.id) + '"' + off + ">Change the date</button>",
+      '<button class="copybtn" type="button" data-rel="cancel" data-id="' + esc(v.id) + '"' + off + ">Cancel release</button>");
+    var asking = ui.rel.ask && ui.rel.ask.id === v.id;
+    return '<article class="tile relcard" id="releases-' + esc(safe(v.id)) + '"><div class="bhead"><div><h3>' + esc(v.title) + "</h3>" +
+      '<p class="rwhen">' + esc(L.releaseWhen(v.date, today)) + (v.status === "draft" ? " · not sent yet" : "") + "</p></div>" +
+      '<span class="' + (pill.bad ? "bstate late" : "pill" + (pill.rel ? " rel" : "")) + '">' + esc(pill.text) + "</span></div>" +
+      (ui.rel.note[v.id] ? '<p class="rdone" role="status">' + esc(ui.rel.note[v.id]) + "</p>" : "") +
+      '<div class="rpack"><b>Files and details</b><span>' + esc(pk.filled) + (pk.items.length ? " · still missing:" : "") + "</span>" +
+        (pk.items.length ? "<ul>" + pk.items.map(function (x) { return "<li" + (x.attn ? ' class="attn"' : "") + ">" + esc(x.text) + "</li>"; }).join("") + (pk.more ? "<li>+" + pk.more + " more (see " + (v.status === "draft" ? "Finish and send" : "Edit the details") + ")</li>" : "") + "</ul>" : "") + "</div>" +
+      (v.tight && live ? '<p class="rnote">Sent fewer than 21 days before release, so the early steps were due straight away.</p>' : "") +
+      (v.status === "draft" ? '<button class="sendbtn" type="button" data-rel="edit" data-id="' + esc(v.id) + '">Finish and send</button>' : "") +
+      /* out, and every step done: one line instead of nine (the steps are history now) */
+      (v.released && v.counts && v.counts.total && v.counts.done === v.counts.total ? '<p class="rnote">All ' + v.counts.total + " steps done.</p>"
+        : (v.steps || []).length ? '<ol class="rsteps" aria-label="Steps">' + v.steps.map(function (s) { return relStep(v, s); }).join("") + "</ol>" : "") +
+      (asking ? relAsk(v) : acts.length ? '<div class="racts">' + acts.join("") + "</div>" : "") +
+      '<p class="ferr" role="alert">' + esc(ui.rel.err[v.id] || "") + "</p>" + relPack(v) + "</article>";
+  }
+  /* -> true when the desk drew the tab (js/hq.js draws the sheet's list when it didn't) */
+  function drawReleases() {
+    if (!board || !Array.isArray(board.releases)) return false;
+    var sheet = HQ.sheet(), lists = L.releaseLists(board, sheet);
+    relById = {}; board.releases.forEach(function (v) { relById[v.id] = v; });
+    $("relSample").hidden = !HQ.sample;
+    $("relSub").textContent = L.stepsSummary(board.releaseSteps) || "Every song on its way out: its files and details, and each bot's step with its date.";
+    /* a redraw must not take the caret out of the date field being picked */
+    var act = document.activeElement, fk = act && act.getAttribute ? act.getAttribute("data-reldate") : null;
+    $("relDesk").innerHTML = lists.coming.map(relCard).join("");
+    if (sheet && HQ.releasesBroken()) $("relList").innerHTML = '<p class="empty">See the note above.</p>';
+    else if (sheet || lists.coming.length || lists.out.length) $("relList").innerHTML = lists.sheetOnly.map(HQ.sheetReleaseCard).join("") ||
+      (lists.coming.length || lists.out.length ? "" : '<p class="empty">No releases yet. Start one with New release.</p>');
+    $("relOut").innerHTML = (lists.out.length ? '<details class="relfold" data-fold="out"' + (ui.rel.fold.out ? " open" : "") + "><summary>Out (" + lists.out.length + ')</summary><div class="relgrid">' + lists.out.map(relCard).join("") + "</div></details>" : "") +
+      (lists.cancelled.length ? '<details class="relfold" data-fold="cancelled"' + (ui.rel.fold.cancelled ? " open" : "") + "><summary>Cancelled (" + lists.cancelled.length + ")</summary>" + lists.cancelled.map(function (v) {
+        return '<p class="rcanc"><b>' + esc(v.title) + "</b> · " + esc(v.date ? L.day(v.date) : "no release day") + "</p>"; }).join("") + "</details>" : "");
+    if (fk) { var el = $("releases").querySelector('[data-reldate="' + fk.replace(/[^a-z0-9]/gi, "") + '"]'); if (el) el.focus(); }
+    return true;
+  }
+  function jumpTo(id) {
+    var el = $("releases-" + safe(id));
+    if (!el) return;
+    el.scrollIntoView({ block: "start" });
+    el.classList.add("pulse"); setTimeout(function () { el.classList.remove("pulse"); }, 1600);
+  }
+  function relDone(r, id, after) { /* one release write came back */
+    ui.rel.busy = "";
+    if (!r.ok) { ui.rel.err[id] = r.error; drawReleases(); return; }
+    delete ui.rel.err[id];
+    if (r.j && r.j.release) putRelease(r.j.release);
+    if (after) after(r.j || {});
+    drawReleases(); HQ.boardChanged();
+    reload();
+  }
+  $("releases").addEventListener("click", function (ev) {
+    var b = ev.target.closest && ev.target.closest("[data-rel]");
+    if (!b || !board) return;
+    var act = b.getAttribute("data-rel"), id = b.getAttribute("data-id") || "", v = relById[id];
+    var focusSel = function (sel) { var el = $("releases").querySelector(sel); if (el) el.focus(); };
+    var sid = id.replace(/[^a-z0-9]/gi, "");
+    if (act === "edit") { openForm(id); return; }
+    if (!v || ui.rel.busy) return;
+    if (act === "no") { ui.rel.ask = null; drawReleases(); focusSel('[data-rel="date"][data-id="' + sid + '"], [data-rel="cancel"][data-id="' + sid + '"]'); return; }
+    if (HQ.sample) return;
+    if (act === "date") { ui.rel.ask = { id: id, kind: "date", date: "" }; delete ui.rel.err[id]; drawReleases(); focusSel('[data-reldate="' + sid + '"]'); return; }
+    if (act === "cancel") { ui.rel.ask = { id: id, kind: "cancel" }; delete ui.rel.err[id]; drawReleases(); focusSel('[data-rel="no"][data-id="' + sid + '"]'); return; }
+    if (act === "date-yes" && ui.rel.ask && ui.rel.ask.id === id && ui.rel.ask.date) {
+      var to = ui.rel.ask.date, from = v.date;
+      ui.rel.busy = "ask:" + id; drawReleases();
+      write("release/date", { id: id, date: to }).then(function (r) {
+        relDone(r, id, function (j) { ui.rel.ask = null; ui.rel.note[id] = "Moved from " + L.day(from) + " to " + L.day(to) + " at " + hhmm(Date.now()) + ". Every step that isn't done has a new date." + (j.told ? " The team was told." : ""); });
+      });
+    }
+    if (act === "cancel-yes" && ui.rel.ask && ui.rel.ask.id === id) {
+      ui.rel.busy = "ask:" + id; drawReleases();
+      write("release/cancel", { id: id }).then(function (r) {
+        relDone(r, id, function (j) { ui.rel.ask = null; $("relMsg").textContent = v.title + " is cancelled." + (j.told ? " The team was told to stop working on it." : ""); });
+      });
+    }
+    if (act === "step") {
+      var key = b.getAttribute("data-step"), want = b.getAttribute("data-to") === "todo" ? "todo" : "done";
+      var st = (v.steps || []).filter(function (x) { return x.key === key; })[0];
+      if (!st) return;
+      ui.rel.busy = "step:" + id + ":" + key; drawReleases();
+      /* the bot's own note stays with its step; a "blocked" note doesn't outlive the block */
+      write("release/step", { id: id, step: key, status: want, note: st.status === "blocked" ? "" : st.note || "", link: "" }).then(function (r) { relDone(r, id); });
+    }
+  });
+  $("releases").addEventListener("change", function (ev) {
+    var id = ev.target.getAttribute && ev.target.getAttribute("data-reldate");
+    if (!id || !ui.rel.ask || ui.rel.ask.id !== id) return;
+    ui.rel.ask.date = ev.target.value; drawReleases();
+  });
+  /* remember which disclosures are open (toggle doesn't bubble: listen on the way down) */
+  $("releases").addEventListener("toggle", function (ev) {
+    var t = ev.target, id = t.getAttribute && t.getAttribute("data-relopen"), fold = t.getAttribute && t.getAttribute("data-fold"), fg = t.getAttribute && t.getAttribute("data-fg");
+    if (id) ui.rel.open[id] = t.open;
+    if (fold) ui.rel.fold[fold] = t.open;
+    if (fg && ui.form) ui.form.open[fg] = t.open;
+  }, true);
+
+  /* ---------- the form: start a release, finish a draft, or change one that went out ---------- */
+  function keepForm() { if (HQ.sample || !ui.form) return; try { localStorage.setItem(FORM_KEY, JSON.stringify({ id: ui.form.id, title: ui.form.title, date: ui.form.date, vals: ui.form.vals, at: Date.now() })); } catch (e) {} }
+  function forgetForm() { try { localStorage.removeItem(FORM_KEY); } catch (e) {} }
+  function openForm(id) {
+    if (!board || !relFields().length) { $("relMsg").textContent = "The form needs the team's desk, which couldn't be loaded. Try Refresh."; return; }
+    var v = id ? relById[id] : null, vals = {};
+    relFields().forEach(function (f) { vals[f.key] = v && v.pack && v.pack[f.key] != null ? String(v.pack[f.key]) : ""; });
+    var F = ui.form = { id: v ? v.id : "", status: v ? v.status : "draft", title: v ? v.title : "", date: (v && v.date) || "", orig: { title: v ? v.title : "", date: (v && v.date) || "", vals: JSON.parse(JSON.stringify(vals)) },
+      vals: vals, later: false, open: {}, miss: [], err: "", ok: "", busy: "", ask: false };
+    /* what Luke typed last time and didn't save comes back (this device only) */
+    var kept = null;
+    if (!HQ.sample) try { kept = JSON.parse(localStorage.getItem(FORM_KEY) || "null"); } catch (e) {}
+    if (kept && kept.id === F.id && kept.vals) {
+      F.title = kept.title || F.title; if (F.status !== "scheduled") F.date = kept.date || ""; Object.keys(kept.vals).forEach(function (k) { if (k in F.vals) F.vals[k] = String(kept.vals[k] || ""); });
+      F.ok = "What you typed last time is back. It isn't saved until you press Save or Send.";
+    }
+    $("relMsg").textContent = "";
+    drawForm();
+    $("relForm").hidden = false; $("relNew").setAttribute("aria-expanded", "true");
+    $("relForm").scrollIntoView({ block: "start" });
+    var t = $("rf-title"); if (t) t.focus({ preventScroll: true });
+  }
+  function closeForm(keep) {
+    if (!keep) forgetForm();
+    ui.form = null;
+    $("relForm").hidden = true; $("relForm").innerHTML = ""; $("relNew").setAttribute("aria-expanded", "false");
+  }
+  var NEED = function (f) {
+    if (f.required) return "needed to send";
+    var st = f.neededBy && (board.releaseSteps || []).filter(function (s) { return s.key === f.neededBy; })[0];
+    return st ? "needed for the " + L.shortStep(st.label) : "";
+  };
+  function fieldHtml(f) {
+    var F = ui.form, id = "rf-" + safe(f.key), val = F.vals[f.key] || "", need = NEED(f), hint = f.hint ? '<p class="fhint" id="' + id + '-h">' + esc(f.hint) + "</p>" : "";
+    var desc = f.hint ? ' aria-describedby="' + id + '-h"' : "", miss = F.miss.indexOf(f.key) >= 0 ? " miss" : "";
+    if (f.group === "later" && !F.later) /* the team fills these: read-only until Luke asks to change them */
+      return '<div class="ff" data-ff="' + esc(f.key) + '"><p class="flbl">' + esc(f.label) + '</p><p class="ro-v' + (val ? "" : " none") + '">' + (val ? (f.kind === "link" ? outLink(val, val) : esc(val)) : esc(L.fillWho(f))) + "</p></div>";
+    var lbl = esc(f.label) + (need ? ' <span class="req">' + esc(need) + "</span>" : "");
+    if (f.kind === "choice")
+      return '<fieldset class="ff' + miss + '" data-ff="' + esc(f.key) + '"><legend class="flbl">' + lbl + "</legend>" + hint + '<div class="chooser">' + (f.choices || []).map(function (c) {
+        return '<label><input type="radio" name="' + id + '" value="' + esc(c) + '" data-rf="' + esc(f.key) + '"' + (val === c ? " checked" : "") + desc + "><span>" + esc(c) + "</span></label>"; }).join("") + "</div></fieldset>";
+    var common = ' class="fld' + (f.key === "lyrics" ? " lyrics" : "") + '" id="' + id + '" data-rf="' + esc(f.key) + '" maxlength="' + (f.max || 200) + '"' + desc;
+    var input = f.kind === "text" ? "<textarea" + common + ' rows="' + (f.key === "lyrics" ? 10 : 4) + '">' + esc(val) + "</textarea>"
+      : f.kind === "link" ? '<input type="url" inputmode="url" autocapitalize="off" autocorrect="off" spellcheck="false" autocomplete="off" placeholder="https://"' + common + ' value="' + esc(val) + '">'
+      : '<input type="text" autocomplete="off"' + common + ' value="' + esc(val) + '">';
+    return '<div class="ff' + miss + (f.kind === "text" ? " wide" : "") + '" data-ff="' + esc(f.key) + '"><label class="flbl" for="' + id + '">' + lbl + "</label>" + hint + input + "</div>";
+  }
+  function dayNoteHtml() {
+    var F = ui.form;
+    if (F.status === "scheduled") return '<p class="dnote q">Already with the team. To move it, use Change the date on its card: that moves every open step and tells the team.</p>';
+    var dn = L.releaseDayNote(F.date, board.today);
+    return (dn.line ? '<p class="dnote' + (dn.bad ? " bad" : "") + '">' + esc(dn.line) + "</p>" : "") + dn.notes.map(function (n) { return '<p class="dnote' + (dn.bad ? " bad" : " q") + '">' + esc(n) + "</p>"; }).join("");
+  }
+  function drawForm() {
+    var F = ui.form;
+    if (!F) return;
+    var sched = F.status === "scheduled", miss = function (k) { return F.miss.indexOf(k) >= 0 ? " miss" : ""; };
+    var h = '<h3 id="rfTitleH">' + (F.id ? (sched ? "Edit " : "Finish ") + esc(F.orig.title || F.title) : "New release") + "</h3>" +
+      '<p class="rf-sub">' + (sched ? "It's already with the team: what you change here reaches every bot the next time it opens its day." : "Fill in what you have. Save it for later, or send it to the team once everything marked “needed to send” is in. The pitch details can wait.") + "</p>" +
+      '<div class="ffrow"><div class="ff' + miss("title") + '" data-ff="title"><label class="flbl" for="rf-title">Title <span class="req">needed to send</span></label><input class="fld" id="rf-title" data-rf="title" maxlength="120" autocomplete="off" value="' + esc(F.title) + '"></div>' +
+      '<div class="ff' + miss("date") + '" data-ff="date"><label class="flbl" for="rf-date">Release day <span class="req">needed to send</span></label><input class="fld" type="date" id="rf-date" data-rf="date" min="' + esc(board.today) + '" value="' + esc(F.date) + '"' + (sched ? " disabled" : "") + ' aria-describedby="rfDay"><div id="rfDay" aria-live="polite">' + dayNoteHtml() + "</div></div></div>";
+    L.formGroups(relFields()).forEach(function (g) {
+      var body = g.fields.map(fieldHtml).join("") + (g.key === "later" && !F.later ? '<button class="linkbtn" type="button" data-rf-act="later">Change these yourself</button>' : "");
+      var wrap = g.key === "files" || g.key === "stores" ? "ffrow" : "";
+      if (g.key === "files" || g.key === "stores") { h += '<section class="fgroup"><h4>' + esc(g.title) + '</h4><div class="fbody ' + wrap + '">' + body + "</div></section>"; return; }
+      var n = g.fields.filter(function (f) { return F.vals[f.key]; }).length, want = g.fields.some(function (f) { return F.miss.indexOf(f.key) >= 0; });
+      var open = F.open[g.key] != null ? F.open[g.key] : want || (g.key === "lyrics" && !!F.vals.lyrics);
+      h += '<details class="fgroup" data-fg="' + g.key + '"' + (open || want ? " open" : "") + "><summary>" + esc(g.title) + '<span class="gs">' + n + " of " + g.fields.length + " filled</span></summary><div class=\"fbody\">" + body + "</div></details>";
+    });
+    $("relForm").innerHTML = h + '<div class="rf-foot" id="rfFoot"></div>';
+    drawFoot();
+  }
+  function drawFoot() {
+    var F = ui.form, el = $("rfFoot");
+    if (!F || !el) return;
+    var sched = F.status === "scheduled", dis = HQ.sample || F.busy ? " disabled" : "";
+    var h = (F.err ? '<p class="ferr" role="alert">' + esc(F.err) + "</p>" : "") + (F.ok ? '<p class="fok" role="status">' + esc(F.ok) + "</p>" : "");
+    if (F.ask) h += '<div class="confirm" role="group" aria-label="Confirm sending"><p>' + esc(L.sendQuestion(F.title, F.date)) + '</p><div class="conn-acts"><button class="sendbtn" type="button" data-rf-act="send-yes"' + dis + ">" + (F.busy === "send" ? "Sending…" : "Yes, send it") + '</button><button class="copybtn" type="button" data-rf-act="send-no"' + (F.busy ? " disabled" : "") + ">Not yet</button></div></div>";
+    else h += '<div class="conn-acts">' + (sched ? "" : '<button class="sendbtn" type="button" data-rf-act="send"' + dis + ">" + (F.busy === "send" ? "Saving…" : "Send to the team") + "</button>") +
+      '<button class="copybtn" type="button" data-rf-act="save"' + dis + ">" + (F.busy === "save" ? "Saving…" : sched ? "Save changes" : "Save for later") + "</button>" +
+      '<button class="linkbtn" type="button" data-rf-act="close"' + (F.busy ? " disabled" : "") + ">Close</button></div>";
+    if (HQ.sample) h += '<p class="fok" style="margin:12px 0 0">This is the sample: saving and sending are switched off here.</p>';
+    el.innerHTML = h;
+  }
+  function markMiss() {
+    var F = ui.form;
+    [].forEach.call($("relForm").querySelectorAll("[data-ff]"), function (el) { el.classList.toggle("miss", F.miss.indexOf(el.getAttribute("data-ff")) >= 0); });
+    [].forEach.call($("relForm").querySelectorAll("details[data-fg]"), function (d) { if (d.querySelector(".miss")) d.open = true; });
+  }
+  function focusFirstMiss() {
+    var el = $("relForm").querySelector(".miss input, .miss textarea");
+    if (el) { el.focus({ preventScroll: true }); el.scrollIntoView({ block: "center" }); }
+  }
+  /* save (and, for Send, then check what's missing and ask before it goes) */
+  function saveForm(thenSend) {
+    var F = ui.form;
+    if (!F || HQ.sample || F.busy) return;
+    F.title = F.title.trim(); F.ok = ""; F.err = "";
+    if (!F.title) { F.err = "Give the release its title first."; F.miss = ["title"]; drawFoot(); markMiss(); focusFirstMiss(); return; }
+    var body = { title: F.title, pack: L.packChanges(relFields(), F.orig.vals, F.vals) };
+    if (F.id) body.id = F.id;
+    /* a release that went out keeps its date here ("Change the date" moves it and tells the team) */
+    if (F.status !== "scheduled" && (!F.id || F.date !== F.orig.date)) body.date = F.date || "";
+    F.busy = thenSend ? "send" : "save"; drawFoot();
+    write("release", body).then(function (r) {
+      F.busy = "";
+      if (ui.form !== F) return;
+      if (!r.ok) { F.err = r.error; drawFoot(); return; }
+      var v = r.j.release;
+      putRelease(v); forgetForm();
+      F.id = v.id; F.status = v.status; F.orig = { title: v.title, date: v.date || "", vals: JSON.parse(JSON.stringify(F.vals)) };
+      if (!thenSend) {
+        ui.rel.note[v.id] = "Saved at " + hhmm(Date.now()) + "." + (v.status === "draft" ? " Not sent to the team yet." : "");
+        closeForm(); drawReleases(); jumpTo(v.id); reload(); return;
+      }
+      var miss = (v.missing || []).filter(function (m) { return m.required; });
+      drawReleases();
+      if (miss.length) { F.err = L.missingSentence(miss) + " What you typed is saved."; F.miss = miss.map(function (m) { return m.key; }); drawFoot(); markMiss(); focusFirstMiss(); return; }
+      F.miss = []; F.ask = true; markMiss(); drawFoot();
+      var y = $("relForm").querySelector('[data-rf-act="send-yes"]'); if (y) y.focus();
+    });
+  }
+  function sendForm() {
+    var F = ui.form;
+    if (!F || !F.id || HQ.sample || F.busy) return;
+    F.busy = "send"; drawFoot();
+    write("release/send", { id: F.id }).then(function (r) {
+      F.busy = "";
+      if (ui.form !== F) return;
+      if (!r.ok) { F.ask = false; F.err = r.error; F.miss = r.j && Array.isArray(r.j.missing) ? r.j.missing : []; drawFoot(); markMiss(); focusFirstMiss(); return; }
+      putRelease(r.j.release);
+      var id = r.j.release.id;
+      ui.rel.note[id] = "Sent to the team at " + hhmm(Date.now()) + ". Every bot has its steps and dates." + (r.j.told ? " Everyone got a note on the board." : "");
+      closeForm(); drawReleases(); HQ.boardChanged(); jumpTo(id); reload();
+    });
+  }
+  $("relNew").addEventListener("click", function () {
+    if (ui.form && !ui.form.id) { $("relForm").scrollIntoView({ block: "start" }); var t = $("rf-title"); if (t) t.focus({ preventScroll: true }); return; }
+    openForm("");
+  });
+  $("relForm").addEventListener("input", onFormInput);
+  $("relForm").addEventListener("change", onFormInput);
+  function onFormInput(ev) {
+    var F = ui.form, el = ev.target, k = el.getAttribute && el.getAttribute("data-rf");
+    if (!F || !k) return;
+    if (el.type === "radio" && !el.checked) return;
+    if (k === "title" || k === "date") F[k] = el.value; else F.vals[k] = el.value;
+    if (k === "date") $("rfDay").innerHTML = dayNoteHtml();
+    if (F.miss.indexOf(k) >= 0 && String(el.value).trim()) { F.miss = F.miss.filter(function (x) { return x !== k; }); var w = el.closest("[data-ff]"); if (w) w.classList.remove("miss"); }
+    if (F.ask) { F.ask = false; drawFoot(); } /* changed after "Send?": ask again with what's there now */
+    keepForm();
+  }
+  $("relForm").addEventListener("click", function (ev) {
+    var b = ev.target.closest && ev.target.closest("[data-rf-act]");
+    if (!b || !ui.form) return;
+    var act = b.getAttribute("data-rf-act");
+    if (act === "later") { ui.form.later = true; ui.form.open.later = true; drawForm(); var i = $("relForm").querySelector('details[data-fg="later"] input'); if (i) i.focus(); }
+    else if (act === "close") { var id = ui.form.id; closeForm(true); if (id) jumpTo(id); else $("relNew").focus(); }
+    else if (act === "save") saveForm(false);
+    else if (act === "send") saveForm(true);
+    else if (act === "send-yes") sendForm();
+    else if (act === "send-no") { ui.form.ask = false; drawFoot(); var s = $("relForm").querySelector('[data-rf-act="send"]'); if (s) s.focus(); }
+  });
+  $("relForm").addEventListener("submit", function (ev) { ev.preventDefault(); });
+
+  window.HQStaff = { reload: reload, clear: clear, drawWorkers: drawWorkers, drawReleases: drawReleases, board: function () { return board; }, problem: function () { return problem; } };
 })();
