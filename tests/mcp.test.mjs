@@ -172,3 +172,15 @@ test("staff api: the sample is made up, needs the login, and never opens the rea
   assert.equal((await (await api("message?sample=1", { method: "POST", headers: { cookie }, body: JSON.stringify({ to: "Nova", text: "hello" }) })).json()).sample, true);
   assert.deepEqual(globalThis.__asked, []);
 });
+
+test("/api/hq/data still answers as before through the shared loader (login, sample, not connected)", async () => {
+  const { default: hq } = await import("../netlify/functions/hq.mjs");
+  const get = (path, headers = {}) => hq(new Request("https://badscandal.com" + path, { headers }), ctx);
+  assert.equal((await get("/api/hq/data")).status, 401);
+  assert.deepEqual(await (await get("/api/hq/data", { cookie })).json(), { connected: false, need: ["GOOGLE_SA_KEY", "HQ_SHEET_ID"] });
+  globalThis.__asked.length = 0;
+  const s = await (await get("/api/hq/data?sample=1", { cookie })).json();
+  assert.equal(s.sample, true); assert.equal(s.team.duties.total, 6); assert.equal(s.team.live.ready, true); assert.ok(s.money.cap.spent > 0); assert.ok(s.health && s.metaKey);
+  assert.ok(!globalThis.__asked.includes("staff"), "the sample never opens the staff desk");
+  assert.equal((await get("/api/hq/summary", { cookie })).status, 404);
+});

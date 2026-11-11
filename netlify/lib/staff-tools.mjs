@@ -129,7 +129,7 @@ export async function callTool(tool, args, ctx) {
       const r = await S.submitIncome(store, now, roster, { ...args, bot: me });
       const e = r.entry;
       return { saved: r.added || r.updated, duplicate: !r.added && !r.updated, updated: r.updated, id: e.id,
-        recorded: `${e.date} · ${e.payer} · ${e.currency} ${e.amount.toFixed(2)} · ${e.status} · ${e.account} · ${e.category}`,
+        recorded: `${e.arrived || e.date} · ${e.payer} · ${e.currency} ${e.amount.toFixed(2)} · ${e.status} · ${e.account} · ${e.category}` + (e.arrived && e.arrived !== e.date ? ` (statement of ${e.date})` : ""),
         note: r.added ? "Recorded." : r.updated ? "This payment was already on the desk; its status was updated." : "This payment was already on the desk. Nothing was added twice." };
     }
     case "income_check": {
