@@ -161,6 +161,8 @@
   var choice = get("localStorage", "bs_consent");
   /* bs_meta_off: "Turn off Meta on this browser" on /privacy (the opt-out outside the EU). */
   var metaOK = person && get("localStorage", "bs_meta_off") !== "1" && (eu !== "1" || choice === "yes");
+  /* TEST BRANCH ig-handoff-test: nothing goes to Meta from a preview address */
+  if (!/(^|\.)badscandal\.com$/.test(location.hostname)) metaOK = false;
 
   /* ---- Meta Pixel (browser) + Conversions API (server) ----
      The Pixel SCRIPT loads after first paint (so it's ready by the time anyone taps), but no
@@ -276,13 +278,14 @@
       return;
     }
     if (iOS && inApp) {
-      ev.preventDefault();
+      /* TEST (ig-handoff-test): the button's own href is already spotify:… (set below), so the
+         tap itself opens the app (Instagram may then skip its "problem loading" screen). We only
+         keep the web-player fallback. */
       var start = Date.now(), left = false;
       var gone = function () { left = true; };
       window.addEventListener("blur", gone, { once: true });
       window.addEventListener("pagehide", gone, { once: true });
       d.addEventListener("visibilitychange", function () { if (d.hidden) gone(); }, { once: true });
-      location.href = "spotify:" + t.kind + ":" + t.id;
       setTimeout(function () {
         /* still here 600 ms later = no app (or the app refused): the web player instead */
         if (!left && !d.hidden && Date.now() - start < 2500) location.href = WEB;
@@ -320,7 +323,7 @@
   var LISTEN = window.__bsListen || "Listen on Spotify";
   function setButton() {
     var t = target();
-    btn.href = t.web;
+    btn.href = iOS && inApp && t.id ? "spotify:" + t.kind + ":" + t.id : t.web;
     var label = d.getElementById("spt");
     if (label && !before()) label.textContent = LISTEN;
   }
@@ -341,6 +344,7 @@
     var n = { d: Math.floor(left / 86400), h: Math.floor(left % 86400 / 3600), m: Math.floor(left % 3600 / 60), s: left % 60 };
     for (var k in n) { var el = cd.querySelector('[data-cd="' + k + '"]'); if (el) el.textContent = k === "d" ? String(n[k]) : pad(n[k]); }
   }
+  setButton(); /* TEST: iPhone in-app browsers get the spotify: link on the button itself */
   var timer = before() ? setInterval(tick, 1000) : null;
   if (timer) tick();
 
