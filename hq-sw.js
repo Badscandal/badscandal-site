@@ -3,8 +3,8 @@
    It keeps a copy of the PAGE and its SCRIPTS so the home-screen app opens without signal. It never
    keeps the numbers (/api/* always goes to the network; the page shows this device's last good copy
    "as of <time>" when offline). Network first: a new version is used as soon as there is signal. */
-var CACHE = "bs-hq-v1";
-var SHELL = ["/hq", "/js/hq-lib.js", "/js/hq.js", "/js/hq-pages.js", "/js/hq-shell.js", "/js/crt.js", "/hq.webmanifest", "/assets/hq-icon-192-v1.png"];
+var CACHE = "bs-hq-v2"; /* v2 (11 Nov 2026): js/hq-staff.js joined the list */
+var SHELL = ["/hq", "/js/hq-lib.js", "/js/hq.js", "/js/hq-staff.js", "/js/hq-pages.js", "/js/hq-shell.js", "/js/crt.js", "/hq.webmanifest", "/assets/hq-icon-192-v1.png"];
 
 self.addEventListener("install", function (e) {
   e.waitUntil(caches.open(CACHE).then(function (c) { return c.addAll(SHELL); }).catch(function () {}).then(function () { return self.skipWaiting(); }));

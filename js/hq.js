@@ -3,9 +3,11 @@
    sheet side (/api/hq/data: Today, Growth, Fans, Releases, Money, Team, the combined cap) and the
    all-songs page side (/api/admin/overview: Today's yesterday, Songs, Ads). The Pages section is
    js/hq-pages.js (/api/admin/data), which uses window.HQ from here.
-   Speed: the three answers are asked for at the same time and each section is drawn the moment its
-   own answer arrives, Today first. ?sample=1 = made-up numbers everywhere, under the SAMPLE banner.
-   Display only: nothing on this page changes an ad, a post, the sheet or any money. */
+   The staff desk (/api/staff/board: Team's bot cards, Messages, "Money coming in") is js/hq-staff.js.
+   Speed: the answers are asked for at the same time and each section is drawn the moment its own
+   answer arrives, Today first. ?sample=1 = made-up numbers everywhere, under the SAMPLE banner.
+   The page still can't change an ad, a post, the sheet or any money. The ONLY things it writes
+   (11 Nov 2026, js/hq-staff.js) are Luke's own messages on the board and the bots' key switch. */
 (function () {
   "use strict";
   var $ = function (id) { return document.getElementById(id); };
@@ -22,6 +24,7 @@
     catch (e) { return Number(n).toFixed(2) + " " + (cur || ""); }
   }
   function day(d) { return d ? new Date(String(d).slice(0, 10) + "T12:00:00Z").toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" }) : "–"; }
+  function spToday() { try { return new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date()); } catch (e) { return new Date().toISOString().slice(0, 10); } }
   function monthName(m) { return new Date(m + "-15T12:00:00Z").toLocaleDateString("en-GB", { month: "long", year: "numeric", timeZone: "UTC" }); }
   function link(url, text) { return /^https:\/\//.test(url || "") ? '<a href="' + esc(url) + '" target="_blank" rel="noopener noreferrer">' + esc(text) + "</a>" : esc(text); }
   function spark(series) {
@@ -61,6 +64,25 @@
     return fetch(url, { credentials: "same-origin", cache: "no-store" })
       .then(function (r) { return r.json().catch(function () { return {}; }).then(function (j) { return { s: r.status, j: j }; }); });
   }
+
+  /* the page's only writes (js/hq-staff.js): same cookie, our own origin; answers like getJSON */
+  function postJSON(url, body) {
+    return fetch(url, { method: "POST", credentials: "same-origin", cache: "no-store", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) })
+      .then(function (r) { return r.json().catch(function () { return {}; }).then(function (j) { return { s: r.status, j: j }; }); });
+  }
+  /* plain text to the clipboard, with the old-browser fallback */
+  function copyText(text, done) {
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(done, fallback); else fallback();
+    function fallback() { var t = document.createElement("textarea"); t.value = text; t.setAttribute("readonly", ""); t.style.position = "fixed"; t.style.opacity = "0"; document.body.appendChild(t); t.select(); try { document.execCommand("copy"); done(); } catch (e) {} document.body.removeChild(t); }
+  }
+  /* a table and the glass tile around it: an empty table hides its tile (and its heading) */
+  function setTable(id, html) {
+    var t = $(id), wrap = t.closest("[data-wrap]") || t.closest(".tile");
+    t.innerHTML = html || "";
+    if (wrap) wrap.hidden = !html;
+    if (html) stack(id);
+  }
+  function staffBoard() { return window.HQStaff ? window.HQStaff.board() : null; }
 
   /* ---------- the range shared by Songs, Ads and Pages ---------- */
   /* São Paulo "today" and the 1st of its month, for "This month" (a custom range under the hood) */
@@ -106,7 +128,7 @@
   /* ---------- login (same endpoint, password, cookie and lockout as before) ---------- */
   function showLogin(msg) {
     $("shell").hidden = true;
-    $("login").hidden = false;
+    $("login").hidden = false; $("boot").hidden = true;
     $("err").textContent = msg || "";
     clearInterval(timer);
     started = false;
@@ -115,7 +137,7 @@
   }
   function showShell() {
     var was = $("shell").hidden;
-    $("login").hidden = true; $("shell").hidden = false;
+    $("login").hidden = true; $("shell").hidden = false; $("boot").hidden = true;
     /* the CRT wordmark (js/crt.js) measured itself while the shell was hidden: let it measure again */
     if (was) setTimeout(function () { window.dispatchEvent(new Event("resize")); }, 0);
   }
@@ -134,8 +156,19 @@
       })
       .catch(function () { btn.disabled = false; $("err").textContent = "No connection. Try again."; });
   });
+  /* Logging out forgets the numbers kept on this device too (every bs_hq_last_* and bs_hq_seen):
+     without a session, even offline, the page must not show the last numbers again. */
+  function forget() {
+    sheet = null; ov = null; curSeen = null; sinceShown = false; net = {};
+    if (window.HQStaff) window.HQStaff.clear();
+    try {
+      var gone = [];
+      for (var i = 0; i < localStorage.length; i++) { var k = localStorage.key(i); if (k && (k.indexOf("bs_hq_last_") === 0 || k === SEEN)) gone.push(k); }
+      gone.forEach(function (k) { localStorage.removeItem(k); });
+    } catch (e) {}
+  }
   $("logout").addEventListener("click", function () {
-    fetch("/api/admin/logout", { method: "POST", credentials: "same-origin" }).finally(function () { sheet = null; ov = null; showLogin(""); });
+    fetch("/api/admin/logout", { method: "POST", credentials: "same-origin" }).finally(function () { forget(); showLogin(""); });
   });
   /* any 401 / 503 from any of the three answers lands here */
   function authFail(res) {
@@ -148,6 +181,10 @@
   var EVERY = 5 * 60 * 1000, timer = null, lastRefresh = 0, sheetProblem = "";
   function start() {
     started = true;
+    /* never a blank black page: a device that has numbers kept (so it was logged in) gets the shell
+       at once with placeholders; a first visit sees "Loading…" until the first answer says who it is */
+    if (kept("bs_hq_last_sheet") || kept("bs_hq_last_ov") || kept("bs_hq_last_staff")) showShell(); else $("boot").hidden = false;
+    $("sample").hidden = !sample;
     syncRangeSelects();
     refresh();
     clearInterval(timer);
@@ -157,8 +194,9 @@
   document.addEventListener("visibilitychange", function () { if (!document.hidden && started && Date.now() - lastRefresh > EVERY) refresh(); });
   function refresh() {
     lastRefresh = Date.now();
-    var after = function () { drawDataHealth(); if (sheet || ov) drawSince(); };
-    return Promise.all([loadSheet(), loadOverview(), window.HQPages ? window.HQPages.reload() : null]).then(after, after);
+    /* the board may be the only answer that came back: Today still says what it knows */
+    var after = function () { drawDataHealth(); if (sheet || ov) drawSince(); else drawBriefing(); };
+    return Promise.all([loadSheet(), loadOverview(), window.HQPages ? window.HQPages.reload() : null, window.HQStaff ? window.HQStaff.reload() : null]).then(after, after);
   }
 
   /* ---------- the last good numbers, kept on this device for offline ("as of <time>") ---------- */
@@ -202,8 +240,11 @@
       keep("bs_hq_last_sheet", "", sheet);
       drawSheet();
     }).catch(function () {
+      /* no answer at all (offline, or the request died): ALWAYS show the shell, with the last good
+         numbers if this device has them, else the "Offline · no numbers saved" line. Never black. */
       var old = kept("bs_hq_last_sheet");
-      if (old && !sheet) { sheet = old.j; showShell(); drawSheet(); }
+      showShell();
+      if (old && !sheet) { sheet = old.j; drawSheet(); }
       netState("sheet", "offline", old && old.at);
     });
   }
@@ -211,18 +252,24 @@
     sheet = null;
     $("sheetOff").hidden = false; $("sheetOffMsg").textContent = msg;
     ["errToday", "errSongs", "errGrowth", "errFans", "errReleases", "errMoney", "errTeam"].forEach(function (id) { $(id).hidden = true; });
-    $("growthList").innerHTML = $("relList").innerHTML = '<p class="empty">Needs the sheet.</p>';
-    $("fanTable").innerHTML = $("moneyTable").innerHTML = $("teamTable").innerHTML = $("taskTable").innerHTML = $("moneyDetail").innerHTML = "";
-    $("dutyList").innerHTML = '<p class="empty">Needs the sheet.</p>';
+    $("growthList").innerHTML = $("relList").innerHTML = '<p class="empty">This fills in once the sheet is connected.</p>';
+    ["fanTable", "moneyTable", "teamTable", "taskTable"].forEach(function (id) { setTable(id, ""); });
+    $("moneyDetail").innerHTML = "";
+    $("teamSub").textContent = "";
+    drawLive();
     drawSongs(); drawCapCard();
   }
   $("showSample").addEventListener("click", function () { location.search = "?sample=1"; });
 
   function loadOverview() {
     var q = rangeQuery().toString();
+    /* the range may change while this is on its way (two quick picks, or the 5-minute refresh): an
+       answer for an older range is dropped, the newer request draws */
+    var stale = function () { return q !== rangeQuery().toString(); };
     return getJSON("/api/admin/overview?" + q).then(function (res) {
       if (authFail(res)) return;
       showShell();
+      if (stale()) return;
       if (res.s !== 200) {
         var old = kept("bs_hq_last_ov", q);
         if (old) { ov = old.j; drawOverview(); }
@@ -235,8 +282,10 @@
       $("when").textContent = (sample ? "sample · " : "live · ") + hhmm(Date.now()) + " SP";
       drawOverview();
     }).catch(function () {
+      showShell();
+      if (stale()) return;
       var old = kept("bs_hq_last_ov", q);
-      if (old) { ov = old.j; showShell(); drawOverview(); }
+      if (old) { ov = old.j; drawOverview(); }
       netState("ov", "offline", old && old.at);
     });
   }
@@ -244,7 +293,7 @@
 
   /* ---------- Data health: Sheet, Meta, page counter, exchange rate (one dot in the header) ---------- */
   function drawDataHealth() {
-    var rows = window.HQLib.healthRows({ sheet: sheet, sheetProblem: sheetProblem, ov: ov });
+    var rows = window.HQLib.healthRows({ sheet: sheet, sheetProblem: sheetProblem, ov: ov, board: staffBoard(), boardProblem: window.HQStaff ? window.HQStaff.problem() : "" });
     var st = window.HQLib.healthState(rows);
     $("hDot").className = "hdot " + st;
     $("healthBtn").setAttribute("aria-label", "Data health: " + (st === "bad" ? "something needs attention" : st === "ok" ? "all fine" : "not everything read yet"));
@@ -313,9 +362,14 @@
   /* ---------- Today as a morning briefing (Stage 2): the rules are in js/hq-lib.js ---------- */
   var lastSummary = "";
   function drawBriefing() {
-    if (!sheet && !ov) return;
+    var board = staffBoard();
+    if (!sheet && !ov && !board) return;
     var L = window.HQLib;
-    var att = L.attention({ sheet: sheet, ov: ov }), br = L.briefing({ sheet: sheet, ov: ov, attention: att }), ti = L.tiles({ sheet: sheet, ov: ov });
+    /* the site's own twice-daily check: one quiet line under the briefing, opening its message */
+    var chk = board && board.report ? L.siteCheckLine(board.report, board.today) : "";
+    $("siteCheck").hidden = !chk;
+    if (chk) { $("siteCheck").textContent = chk + " ›"; $("siteCheck").setAttribute("href", "#messages/" + String(board.report.id || "").replace(/[^a-z0-9]/gi, "")); }
+    var att = L.attention({ sheet: sheet, ov: ov, board: board }), br = L.briefing({ sheet: sheet, ov: ov, attention: att }), ti = L.tiles({ sheet: sheet, ov: ov });
     $("brief").innerHTML = br.map(function (x) { return "<p>" + esc(x) + "</p>"; }).join("");
     $("attnCard").classList.toggle("has", att.length > 0);
     $("attnList").innerHTML = att.length ? att.map(function (a) {
@@ -364,9 +418,7 @@
   window.addEventListener("pagehide", saveSeen);
   $("copySummary").addEventListener("click", function () {
     if (!lastSummary) return;
-    var done = function () { $("copied").textContent = "Copied. Paste it into WhatsApp."; setTimeout(function () { $("copied").textContent = ""; }, 4000); };
-    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(lastSummary).then(done, fallback); else fallback();
-    function fallback() { var t = document.createElement("textarea"); t.value = lastSummary; t.setAttribute("readonly", ""); t.style.position = "fixed"; t.style.opacity = "0"; document.body.appendChild(t); t.select(); try { document.execCommand("copy"); done(); } catch (e) {} document.body.removeChild(t); }
+    copyText(lastSummary, function () { $("copied").textContent = "Copied. Paste it into WhatsApp."; setTimeout(function () { $("copied").textContent = ""; }, 4000); });
   });
 
   /* ---------- Songs: the sheet's Spotify numbers + our page + Meta + royalties, one card each ---------- */
@@ -384,7 +436,10 @@
       var s = bySheet[k], p = byPage[k], sp = spendBy[k];
       var name = s ? s.song : p.title;
       var pill = !s ? "" : s.trend === "rising" ? '<span class="pill hot">Rising ' + signed(s.momentum) + "%</span>" : s.trend === "cooling" ? '<span class="pill warn">Cooling ' + signed(s.momentum) + "%</span>" : s.trend === "steady" ? '<span class="pill">Steady ' + signed(s.momentum) + "%</span>" : '<span class="pill">New</span>';
-      var out = '<div class="tile" id="song-' + esc(p ? p.id : k) + '"><div class="songhead">' + (p && p.cover ? '<img class="cover" src="' + esc(p.cover) + '" alt="">' : "") + "<h3>" + esc(name) + "</h3>" + pill + "</div>";
+      /* released or not, said in words on the card (the sheet's release date, else our song page's) */
+      var rw = HQLib.releaseWords((s && s.released) || (p && p.date), (sheet && sheet.today) || spToday());
+      var relPill = rw ? '<span class="pill ' + (rw.out ? "rel" : "") + '">' + esc(rw.pill) + "</span>" : "";
+      var out = '<div class="tile" id="song-' + esc(p ? p.id : k) + '"><div class="songhead">' + (p && p.cover ? '<img class="cover" src="' + esc(p.cover) + '" alt="">' : "") + "<h3>" + esc(name) + "</h3>" + (relPill || pill ? '<span class="pills">' + relPill + pill + "</span>" : "") + "</div>";
       if (s) out += '<div class="big num">' + fmt(s.streams) + " <small>streams · " + esc(day(s.lastDay)) + "</small></div>" +
         '<div class="d">' + signed(s.dayChange) + " vs the day before · " + fmt(s.week) + " in 7 days" + (s.prevWeek != null ? " (" + fmt(s.prevWeek) + " the 7 before)" : "") + "</div>" + spark(s.series) +
         '<div class="d">' + fmt(s.listeners) + " listeners · " + fmt(s.saves) + " saves · " + fmt(s.adds) + " playlist adds" + (s.stale > 3 ? ' · <b style="color:var(--paper)">not logged for ' + s.stale + " days</b>" : "") + "</div>";
@@ -394,7 +449,7 @@
         '<div class="kv"><span>Real Spotify taps</span><b>' + (p ? fmt(p.taps) : "–") + "</b></div>" +
         '<div class="kv"><span>Meta spend · per tap</span><b>' + (sp ? esc(money(sp.spend, cur)) + " · " + esc(money(sp.cpt, cur)) : ov && ov.spend && !ov.spend.connected ? "not connected" : "–") + "</b></div>";
       out += '<div class="kv"><span>Royalties so far</span><b>' + (s ? esc(amounts(s.royalties)) : "–") + "</b></div>" +
-        (s && s.daysOut != null ? '<div class="kv"><span>Out for</span><b>' + s.daysOut + " days</b></div>" : p && p.date ? '<div class="kv"><span>Release</span><b>' + esc(day(p.date)) + "</b></div>" : "");
+        (rw ? '<div class="kv"><span>' + esc(rw.label) + "</span><b>" + esc(rw.line) + "</b></div>" : "");
       return out + "</div>";
     }).join("");
   }
@@ -501,15 +556,16 @@
   function drawFans() {
     var f = sheet.fans;
     $("fansSub").textContent = f.total ? f.total + " people noticed · " + f.repeat + " came back more than once. Suggestions only: nobody is contacted without your yes." : "People asking for the song name, repeat commenters and DMs.";
-    $("fanTable").innerHTML = broken("Fans") ? "" : f.people.length ? "<tr><th>Who</th><th>Where</th><th class='r'>Times</th><th>What they said</th><th>About them</th><th>How to reach them</th></tr>" + f.people.map(function (p) {
+    setTable("fanTable", broken("Fans") ? "" : f.people.length ? "<tr><th>Who</th><th>Where</th><th class='r'>Times</th><th>What they said</th><th>About them</th><th>How to reach them</th></tr>" + f.people.map(function (p) {
       return "<tr><td><b>" + link(p.profile, p.handle) + "</b><br><span class='lbl'>" + esc(p.signals.join(" · ").replace(/_/g, " ")) + "</span></td><td>" + esc(p.platform) + "<br><span class='lbl'>" + esc(day(p.last)) + "</span></td><td class='r'>" + (p.times >= 2 ? "<b>" + p.times + "</b>" : p.times) + "</td><td>" + (p.quote ? "“" + link(p.post, p.quote) + "”" : "–") + "</td><td>" + esc(p.about || "–") + "</td><td>" + esc(p.engage || "–") + "</td></tr>";
-    }).join("") : '<tr><td class="empty">No fan signals logged yet.</td></tr>';
-    stack("fanTable");
+    }).join("") : '<tr><td class="empty">No fan signals logged yet.</td></tr>');
   }
   function drawReleases() {
     $("relList").innerHTML = broken("Releases") ? '<p class="empty">See the note above.</p>' : sheet.releases.length ? sheet.releases.map(function (r) {
-      var when = r.date ? (r.daysToGo > 0 ? r.daysToGo + " days to go" : r.daysToGo === 0 ? "Out today" : "Out " + (-r.daysToGo) + " day" + (r.daysToGo === -1 ? "" : "s") + " ago") : "No date yet";
-      return '<div class="tile"><div class="row"><h3>' + esc(r.song) + "</h3>" + (r.late ? '<span class="pill warn">' + r.late + " late</span>" : '<span class="pill">On time</span>') + "</div>" +
+      var isOut = !!r.date && r.daysToGo <= 0;
+      var when = r.date ? (r.daysToGo > 0 ? r.daysToGo + " days to go" : r.daysToGo === 0 ? "Released today" : "Released " + (-r.daysToGo) + " day" + (r.daysToGo === -1 ? "" : "s") + " ago") : "No date yet";
+      /* once it is out the card says Released; "On time" / "N late" are about getting there */
+      return '<div class="tile"><div class="row"><h3>' + esc(r.song) + "</h3>" + (isOut ? '<span class="pill rel">Released</span>' : r.late ? '<span class="pill warn">' + r.late + " late</span>" : '<span class="pill">On time</span>') + "</div>" +
         '<div class="d" style="margin-top:6px">' + esc(day(r.date)) + " · " + when + (r.status && !(r.daysToGo <= 0 && /^(out|released|live)$/i.test(r.status)) ? " · " + esc(r.status) : "") + (r.weekday && r.weekday !== "Fri" && r.daysToGo > 0 ? " · not a Friday" : "") + "</div>" +
         '<ul class="steps">' + r.steps.map(function (s) { return '<li class="' + (s.done ? "done" : s.late ? "late" : "") + '"><span class="dot"></span><span>' + esc(s.label) + ' <span class="lbl">' + esc(s.owner) + '</span></span><span class="w">' + (s.done ? "done" : esc(day(s.due)) + (s.late ? " · late" : "")) + "</span></li>"; }).join("") + "</ul>" +
         (r.notes ? '<div class="d" style="margin-top:8px">' + esc(r.notes) + "</div>" : "") +
@@ -518,11 +574,10 @@
   }
   function drawMoney() {
     var ms = sheet.money.months, incomeBad = broken("Income");
-    $("moneyTable").innerHTML = ms.length ? "<tr><th>Month</th><th>Ad spend (as billed)</th><th>Income received (as paid)</th><th class='r'>Spend ≈ EUR</th><th class='r'>Income ≈ EUR</th><th class='r'>Left over ≈ EUR</th></tr>" + ms.map(function (m) {
+    setTable("moneyTable", ms.length ? "<tr><th>Month</th><th>Ad spend (as billed)</th><th>Income received (as paid)</th><th class='r'>Spend ≈ EUR</th><th class='r'>Income ≈ EUR</th><th class='r'>Left over ≈ EUR</th></tr>" + ms.map(function (m) {
       return "<tr><td><b>" + esc(monthName(m.month)) + "</b>" + (m.rate ? "<br><span class='lbl'>1 EUR = " + m.rate + " USD</span>" : "") + "</td><td>" + esc(amounts(flat(m.spend))) + "</td><td>" + (incomeBad ? "can't be read" : esc(amounts(flat(m.income))) + (Object.keys(m.pending).length ? "<br><span class='lbl'>pending: " + esc(amounts(flat(m.pending))) + "</span>" : "")) +
         "</td><td class='r'>" + esc(money(m.spendEur.amount, "EUR")) + (m.spendEur.missing ? "*" : "") + "</td><td class='r'>" + (incomeBad ? "–" : esc(money(m.incomeEur.amount, "EUR")) + (m.incomeEur.missing ? "*" : "")) + "</td><td class='r'><b>" + (incomeBad || m.netEur == null ? "–" : esc(money(m.netEur, "EUR"))) + "</b></td></tr>";
-    }).join("") : '<tr><td class="empty">' + (broken("Spend") || incomeBad ? "See the note above." : "No spend or income rows yet.") + "</td></tr>";
-    stack("moneyTable");
+    }).join("") : '<tr><td class="empty">' + (broken("Spend") || incomeBad ? "See the note above." : "No spend or income rows yet.") + "</td></tr>");
     var m0 = ms[0];
     if (!m0) { $("moneyDetail").innerHTML = ""; return; }
     var block = function (title, o, bad) {
@@ -533,49 +588,61 @@
     var spendTitle = "Ad spend by platform" + (src && src.from === "meta" ? " · Meta from Meta" : src && src.from === "sheet" ? " · Meta from the sheet" : "");
     $("moneyDetail").innerHTML = '<div class="lbl" style="margin:16px 0 8px">' + esc(monthName(m0.month)) + ' in detail</div><div class="grid g3">' + block(spendTitle, m0.spend) + block("Income by type", m0.income, incomeBad) + block("Self-release royalties by song", m0.royalties, broken("Royalties")) + "</div>";
   }
+  var TASK_WORD = { todo: "To do", doing: "Doing", blocked: "Blocked", waiting: "Waiting", review: "In review" }; /* sentence case: no shouting pills */
   function drawTeam() {
     var t = sheet.team, du = t.duties;
-    $("teamSub").textContent = broken("Tasks") ? "" : t.tasks.length + " open tasks · " + t.late + " late · " + t.blocked + " blocked · today's duties " + du.done + " of " + du.total + " done";
+    $("teamSub").textContent = broken("Tasks") ? "" : t.tasks.length + " open task" + (t.tasks.length === 1 ? "" : "s") + " · " + t.late + " late · " + t.blocked + " blocked · today's duties " + du.done + " of " + du.total + " done";
     drawLive();
-    $("teamTable").innerHTML = t.team.length ? "<tr><th>Who</th><th class='r'>Open</th><th class='r'>Late</th><th class='r'>Blocked</th><th>Last logged a number</th></tr>" + t.team.map(function (o) {
+    setTable("teamTable", t.team.length ? "<tr><th>Who</th><th class='r'>Open</th><th class='r'>Late</th><th class='r'>Blocked</th><th>Last logged a number</th></tr>" + t.team.map(function (o) {
       return "<tr><td><b>" + esc(o.owner) + "</b></td><td class='r'>" + o.open + "</td><td class='r'>" + (o.late ? "<b>" + o.late + "</b>" : 0) + "</td><td class='r'>" + (o.blocked ? "<b>" + o.blocked + "</b>" : 0) + "</td><td>" + (o.lastLogged ? esc(day(o.lastLogged)) + (o.quiet > 2 ? " · <b>quiet " + o.quiet + " days</b>" : "") : "–") + "</td></tr>";
-    }).join("") : broken("Tasks") ? "" : '<tr><td class="empty">No tasks in the sheet yet.</td></tr>';
-    stack("teamTable");
-    $("taskTable").innerHTML = t.tasks.length ? "<tr><th>Task</th><th>Owner</th><th>Deadline</th><th>Status</th></tr>" + t.tasks.map(function (x) {
-      return "<tr><td>" + (x.late ? "<b>" + esc(x.task) + "</b>" : esc(x.task)) + (x.blocker ? "<br><span class='lbl'>blocked: " + esc(x.blocker) + "</span>" : "") + "</td><td>" + esc(x.owner) + "</td><td>" + esc(x.deadline ? day(x.deadline.slice(0, 10)) : "–") + (x.late ? " · <b>late</b>" : "") + "</td><td><span class='pill" + (x.status === "blocked" ? " warn" : "") + "'>" + esc(x.status) + "</span></td></tr>";
-    }).join("") : "";
-    stack("taskTable");
+    }).join("") : "");
+    setTable("taskTable", t.tasks.length ? "<tr><th>Task</th><th>Owner</th><th>Deadline</th><th>Status</th></tr>" + t.tasks.map(function (x) {
+      return "<tr><td>" + (x.late ? "<b>" + esc(x.task) + "</b>" : esc(x.task)) + (x.blocker ? "<small>Blocked: " + esc(x.blocker) + "</small>" : "") + "</td><td>" + esc(x.owner) + "</td><td>" + esc(x.deadline ? day(x.deadline.slice(0, 10)) : "–") + (x.late ? " · <b class='attn'>late</b>" : "") + "</td><td><span class='mlabel" + (x.status === "blocked" ? " mine" : "") + "'>" + esc(TASK_WORD[x.status] || x.status) + "</span></td></tr>";
+    }).join("") : broken("Tasks") ? "" : '<tr><td class="empty">No open tasks in the sheet.</td></tr>');
   }
 
-  /* ---------- Live: one card per bot (today's duty + its latest update) and the feed ---------- */
-  var BST = { done: "Done", late: "Late", blocked: "Blocked", error: "Error", working: "Working", todo: "To do", info: "Updated", quiet: "No update yet" };
+  /* ---------- Team, without the staff desk: what the sheet alone gives ----------
+     Normally js/hq-staff.js draws Team's cards (one per bot on the roster) and the live log from
+     /api/staff/board. This is the fallback for when that answer isn't there: a card per bot that has a
+     duty row or an update in the sheet. Same card, same words (HQLib.dutyWhen), one state pill. */
   function spAgo(at) { var ms = window.HQLib.spMs(at); return ms ? window.HQLib.ago(Date.now() - ms) : ""; }
   function drawLive() {
+    if (window.HQStaff && window.HQStaff.drawWorkers()) return; /* the staff desk drew it */
+    var L = window.HQLib;
+    $("connCard").hidden = true;
+    if (!sheet) {
+      $("liveNote").hidden = true;
+      $("dutyList").innerHTML = '<p class="empty">This fills in once the sheet is connected.</p>';
+      $("liveFeed").innerHTML = '<li><span class="t">–</span><span class="m">No live log yet.</span></li>';
+      return;
+    }
     var du = sheet.team.duties, live = sheet.team.live || { ready: false, feed: [], bots: [] };
-    if (broken("Tasks")) { $("dutyList").innerHTML = '<p class="empty">See the note above.</p>'; }
     var names = {};
     du.byOwner.forEach(function (o) { names[o.owner] = { duties: o }; });
     live.bots.forEach(function (b) { (names[b.bot] = names[b.bot] || {}).last = b; });
-    var order = Object.keys(names).sort(function (a, b) {
-      var rank = function (n) { var o = names[n].duties; return o ? (o.blocked ? 0 : o.late ? 1 : o.todo ? 2 : 3) : 4; };
-      return rank(a) - rank(b) || (a < b ? -1 : 1);
+    var cards = Object.keys(names).map(function (n) {
+      var o = names[n].duties, last = names[n].last, today = last && last.lastAt.slice(0, 10) === sheet.today;
+      var st = o ? (o.blocked ? "blocked" : o.late ? "late" : !o.todo ? "done" : today && last.status === "working" ? "working" : "todo") : today && (last.status === "blocked" || last.status === "error") ? "blocked" : "idle";
+      return { name: n, state: st, duties: o ? o.items : [], last: last };
     });
     $("liveNote").hidden = live.ready;
-    $("liveNote").textContent = "The bots' live log isn't in the sheet yet. Nova has been asked to add an “Updates” tab (brief: 2026-11-11-live-updates.md in badscandal-hq). Until then this shows the duty rows only.";
-    if (!broken("Tasks")) $("dutyList").innerHTML = order.length ? order.map(function (n) {
-      var o = names[n].duties, last = names[n].last;
-      var st = o ? (o.blocked ? "blocked" : o.late ? "late" : !o.todo ? "done" : last && last.status === "working" ? "working" : "todo") : last ? (last.status === "done" ? "done" : last.status) : "quiet";
-      return '<div class="tile botcard"><div class="row"><h3>' + esc(n) + '</h3><span class="bstate ' + st + '">' + esc(BST[st] || st) + "</span></div>" +
-        (o ? o.items.map(function (d) {
-          return '<div class="duty ' + (d.late ? "blocked" : d.status) + '"><span>' + esc(d.task) + (d.blocker ? "<small>Blocked: " + esc(d.blocker) + "</small>" : "") + '</span><span class="w">' +
-            (d.status === "done" ? "done" : d.status === "blocked" ? "blocked" : d.late ? "late · " + esc(d.due) : d.due ? "by " + esc(d.due) : "to do") + "</span></div>"; }).join("") : '<p class="empty" style="margin:8px 0 0">No duty today.</p>') +
-        (last ? '<p class="blast"><b>' + esc(spAgo(last.lastAt)) + ":</b> " + (last.link ? link(last.link, last.message) : esc(last.message)) + "</p>" : "") + "</div>";
-    }).join("") : '<p class="empty">No duties for today. The bots log them as Tasks rows whose id starts with "D-".</p>';
-    var today = sheet.today;
-    $("liveFeed").innerHTML = !live.ready ? '<li><span class="t">–</span><span class="m">No live log yet.</span></li>' : live.feed.length ? live.feed.slice(0, 20).map(function (u) {
-      return '<li class="' + u.status + '"><span class="t">' + esc(u.at.slice(0, 10) === today ? u.at.slice(11) : day(u.at).replace(/ \w+$/, "")) + '</span><span class="m"><b>' + esc(u.bot) + "</b> " +
-        (u.link ? link(u.link, u.message) : esc(u.message)) + '<span class="s">' + esc(u.status) + "</span></span></li>";
-    }).join("") : '<li><span class="t">–</span><span class="m">Nothing logged yet today.</span></li>';
+    $("liveNote").textContent = "The bots' live log isn't in the sheet yet (Nova has been asked to add it). Until then this shows today's duties only.";
+    if (broken("Tasks")) $("dutyList").innerHTML = '<p class="empty">See the note above.</p>';
+    else $("dutyList").innerHTML = cards.length ? L.sortWorkers(cards).map(function (w) {
+      return '<article class="tile botcard" id="team-' + esc(L.slug(w.name)) + '"><div class="bhead"><h3>' + esc(w.name) + '</h3><span class="bstate ' + w.state + '">' + esc(L.workerLabel(w.state)) + "</span></div>" +
+        (w.duties.length ? '<ul class="bduties">' + w.duties.map(function (d) {
+          return '<li class="' + (d.status === "blocked" || d.late ? "bad" : d.status === "done" ? "done" : "") + '"><span class="bt">' + esc(d.task) + (d.blocker ? "<small>Blocked: " + esc(d.blocker) + "</small>" : "") + '</span><span class="bw">' + esc(L.dutyWhen(d)) + "</span></li>"; }).join("") + "</ul>" : "") +
+        (w.last ? '<p class="blast"><b>' + esc(spAgo(w.last.lastAt)) + "</b> " + (w.last.link ? link(w.last.link, w.last.message) : esc(w.last.message)) + "</p>" : "") + "</article>";
+    }).join("") : '<p class="empty">No duties for today yet. Nova sets them every morning at 08:05.</p>';
+    drawFeed(live.ready ? live.feed : null, sheet.today);
+  }
+  /* the live log (Team). feed: [{at "YYYY-MM-DD HH:MM" São Paulo, bot, status, message, link}], null = there is none yet */
+  function drawFeed(feed, today) {
+    $("liveFeed").innerHTML = !feed ? '<li><span class="t">–</span><span class="m">No live log yet.</span></li>' : feed.length ? feed.slice(0, 20).map(function (u) {
+      var st = /^(done|working|blocked|error|info)$/.test(u.status) ? u.status : "info";
+      return '<li class="' + st + '"><span class="t">' + esc(u.at.slice(0, 10) === today ? u.at.slice(11) : day(u.at).replace(/^\w+,? /, "")) + '</span><span class="m"><b>' + esc(u.bot) + "</b> " +
+        (u.link ? link(u.link, u.message) : esc(u.message)) + (st === "info" ? "" : '<span class="s">' + esc(st) + "</span>") + "</span></li>";
+    }).join("") : '<li><span class="t">–</span><span class="m">Nothing logged yet.</span></li>';
   }
 
   /* ---------- the release panel: what's missing, then what's done ---------- */
@@ -614,7 +681,11 @@
   window.addEventListener("hashchange", closeRelease);
 
   window.HQ = { sample: sample, state: state, setRange: setRange, refresh: refresh, net: function (p, m, a) { netState(p, m, a); }, keep: keep, kept: kept, showLogin: showLogin, showShell: showShell, rangeQuery: rangeQuery,
-    esc: esc, fmt: fmt, money: money, day: day, ago: ago, getJSON: getJSON, authFail: authFail };
+    esc: esc, fmt: fmt, money: money, day: day, ago: ago, getJSON: getJSON, authFail: authFail,
+    /* for js/hq-staff.js (11 Nov 2026) */
+    postJSON: postJSON, copyText: copyText, link: link, stack: stack, drawFeed: drawFeed, sheet: function () { return sheet; },
+    /* the staff desk answered (or was cleared): Today's attention, the site-check line and Data health read it */
+    boardChanged: function () { if (sheet || ov) drawBriefing(); drawDataHealth(); if (!staffBoard()) drawLive(); } };
   /* hq-pages.js is loaded with defer right after this file: start once both are in */
   document.addEventListener("DOMContentLoaded", start);
 })();

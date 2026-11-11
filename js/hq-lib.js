@@ -19,7 +19,8 @@
   }
   var t = function (iso) { var v = iso == null ? NaN : typeof iso === "number" ? iso : Date.parse(iso); return isFinite(v) ? v : null; };
 
-  /* The "Data health" panel: Sheet, Meta, page counter, exchange rate. state: ok | bad | off.
+  /* The "Data health" panel: Sheet, Meta, page counter, exchange rate, bots, and (when o.board is
+     passed) the connector and the site's own check. state: ok | bad | off.
      sheet: the /api/hq/data answer (or null), sheetProblem: a plain reason when it couldn't be read,
      ov: the /api/admin/overview answer (or null). */
   function healthRows(o, now) {
@@ -61,6 +62,8 @@
           text: "Last update " + ago(now - la) + " (" + live.feed[0].bot + ")" + (du.total ? " · " + du.done + " of " + du.total + " duties done" : "") });
       }
     }
+    /* Connector + Site check (the staff desk): only when the caller has asked for the board */
+    if ("board" in o || o.boardProblem) rows = rows.concat(staffHealth(o.board, o.boardProblem, now));
     return rows;
   }
   /* "YYYY-MM-DD HH:MM" São Paulo (UTC-3, no summer time since 2019) -> ms */
@@ -111,7 +114,9 @@
      - an ad that spent USD 10+ over the last 7 finished days with 0 real Spotify taps
      - yesterday: spend with 0 taps (USD 10+), or cost per tap more than double the middle value
        (median) of the 7 days before (needs 3+ of those days with taps)
-     - the sheet's Meta spend disagreeing with Meta (by more than 1.00 on a day) */
+     - the sheet's Meta spend disagreeing with Meta (by more than 1.00 on a day)
+     - from the staff desk (o.board, see staffAttention()): messages waiting on Luke, income problems,
+       the bots' connector switched off */
   function attention(o) {
     var sheet = o.sheet, ov = o.ov, out = [];
     if (sheet) {
@@ -157,7 +162,9 @@
         }
       }
     }
-    return out;
+    /* the staff desk: messages waiting on Luke go first (he can act on them now), the rest after */
+    var st = staffAttention(o.board);
+    return st.filter(function (x) { return x.key === "msgs"; }).concat(out, st.filter(function (x) { return x.key !== "msgs"; }));
   }
 
   /* the 3 to 5 sentences at the top of Today */
@@ -262,6 +269,17 @@
     return lines.join("\n");
   }
 
+  /* Is a song out? (Luke, 11 Nov 2026: "when a song is released it should say released", in HERE, not
+     on the public song page.) date / today: "YYYY-MM-DD" (São Paulo). -> null without a date, else
+     { out, pill, label, line }: pill for the card's head, label + line for a labelled row. */
+  function releaseWords(date, today) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(String(date || "")) || !/^\d{4}-\d{2}-\d{2}$/.test(String(today || ""))) return null;
+    var n = Math.round((Date.parse(today + "T12:00:00Z") - Date.parse(date + "T12:00:00Z")) / 86400000);
+    if (n > 0) return { out: true, days: n, pill: "Released", label: "Released", line: day(date) + " · " + plural(n, "day") + " ago" };
+    if (n === 0) return { out: true, days: 0, pill: "Released today", label: "Released", line: day(date) + " · today" };
+    return { out: false, days: n, pill: "Out in " + plural(-n, "day"), label: "Release day", line: day(date) + " · in " + plural(-n, "day") };
+  }
+
   /* The release panel (Today "Next release" and Releases): every step, what's missing first.
      today: "YYYY-MM-DD". -> { song, date, daysToGo, summary, missing: [...], done: [...] } */
   function releaseDetail(r, today) {
@@ -280,6 +298,225 @@
       missing: missing, done: done };
   }
 
-  return { ago: ago, spMs: spMs, releaseDetail: releaseDetail, healthRows: healthRows, healthState: healthState, median: median, change: change, money: money, attention: attention, briefing: briefing,
-    snapshot: snapshot, changesSince: changesSince, tiles: tiles, summaryText: summaryText, shortStep: shortStep };
+  /* ================= The staff desk (11 Nov 2026): Team as the workers section, Messages, money coming in =================
+     board = the /api/staff/board answer (netlify/lib/staff.mjs board()). Everything on it was written by
+     bots or people: these functions only return plain text; the page escapes it when it draws. */
+  var lc = function (s) { return String(s == null ? "" : s).trim().toLowerCase(); };
+  /* "Nova" -> "nova": the card's address (#team/nova) */
+  function slug(name) { return lc(name).replace(/[^a-z0-9]/g, ""); }
+
+  /* ---- Team: one card per bot ---- */
+  var STATE_ORDER = ["blocked", "late", "quiet", "todo", "working", "done", "idle", "paused"];
+  var STATE_LABEL = { blocked: "Blocked", late: "Late", quiet: "Quiet today", todo: "To do", working: "Working", done: "Done", idle: "No duty today", paused: "Paused" };
+  function workerLabel(state) { return STATE_LABEL[state] || STATE_LABEL.idle; }
+  /* what needs a look first: blocked, late, quiet, to do, working, done, no duty, paused (then by name) */
+  function sortWorkers(staff) {
+    var rank = function (w) { var i = STATE_ORDER.indexOf(w.state); return i < 0 ? STATE_ORDER.indexOf("idle") : i; };
+    return (staff || []).slice().sort(function (a, b) { return rank(a) - rank(b) || (lc(a.name) < lc(b.name) ? -1 : lc(a.name) > lc(b.name) ? 1 : 0); });
+  }
+  /* The board's own "last word" per bot only knows the connector. A bot may still write the sheet's
+     Updates tab: take whichever word is newer, and let it count for "Quiet today" / "Blocked" the way
+     the connector's does. sheet = the /api/hq/data answer (or null). */
+  function workerView(w, sheet, today) {
+    var bots = (sheet && sheet.team && sheet.team.live && sheet.team.live.bots) || [];
+    var sb = bots.filter(function (b) { return lc(b.bot) === lc(w.name); })[0];
+    var last = w.last || null;
+    if (sb && sb.lastAt && (!last || sb.lastAt > last.at)) last = { at: sb.lastAt, status: sb.status, message: sb.message, link: sb.link || "" };
+    var state = STATE_ORDER.indexOf(w.state) >= 0 ? w.state : "idle";
+    var isToday = !!(last && today && String(last.at).slice(0, 10) === today);
+    if (state === "quiet" && isToday) state = "idle";
+    if (isToday && (last.status === "blocked") && ["idle", "quiet", "todo", "working", "late"].indexOf(state) >= 0) state = "blocked";
+    var out = {}; Object.keys(w).forEach(function (k) { out[k] = w[k]; });
+    out.last = last; out.state = state;
+    return out;
+  }
+  /* one duty's right-hand words, sentence case, said once: "late · due 00:30", never a second pill */
+  function dutyWhen(d) {
+    if (!d) return "";
+    if (d.status === "done") return "done";
+    if (d.status === "blocked") return "blocked";
+    if (d.late) return "late" + (d.due ? " · due " + d.due : "");
+    if (d.working) return "working" + (d.due ? " · due " + d.due : "");
+    return d.due ? "due " + d.due : "to do";
+  }
+  /* "3 open tasks · 1 late · 2 messages waiting on it" (only what isn't zero) */
+  function workerCounts(w) {
+    var open = (w.tasks || []).length, late = w.lateTasks || 0, wait = (w.waiting || []).length, out = [];
+    if (open) out.push(plural(open, "open task"));
+    if (late) out.push(late + " late");
+    if (wait) out.push(plural(wait, "message") + " waiting on it");
+    return out.join(" · ");
+  }
+  function seenLine(w, now) {
+    var at = t(w && w.seen);
+    return at ? "Last used the connector " + ago((now || Date.now()) - at) : "Hasn't used the connector yet";
+  }
+  /* the strip at the top of Team */
+  function connectorLine(board, now) {
+    now = now || Date.now();
+    var c = (board && board.connector) || {}, keys = (board && board.keys) || {}, on = c.botsOn !== false, notes = [];
+    var rest = (c.connected || 0) + " of " + (c.total || 0) + " bots have used it";
+    var lu = c.lastUsed && t(c.lastUsed.at);
+    if (lu) rest += " · last used " + ago(now - lu) + " (" + c.lastUsed.bot + ")";
+    if (keys.bots === false) notes.push("The connector's key isn't set on the site yet.");
+    if (!on) notes.push("Switched off" + (t(c.changedAt) ? " " + ago(now - t(c.changedAt)) : "") + ". No bot can send updates, messages or payments until you switch it back on.");
+    else if (!c.connected) notes.push("No bot has connected yet. It starts when the connector is added in the bots' app.");
+    return { on: on, head: "Bots' connector: " + (on ? "on" : "off"), rest: rest, notes: notes };
+  }
+  /* "Copy message for Nova": plain text about one blocked or late bot */
+  function novaMessage(w) {
+    var lines = ["Nova, please look at " + w.name + (w.role ? " (" + w.role + ")" : "") + ".", "State: " + workerLabel(w.state)];
+    var bad = (w.duties || []).filter(function (d) { return d.status === "blocked" || d.late; });
+    bad.forEach(function (d) { lines.push("Duty: " + d.task + " (" + dutyWhen(d) + ")"); if (d.blocker) lines.push("Blocker: " + d.blocker); });
+    if (!bad.some(function (d) { return d.blocker; }) && w.blockers) lines.push("Known blocker: " + w.blockers);
+    if (w.card && w.card.needs) lines.push("Needs: " + w.card.needs);
+    if (w.last && w.last.message) lines.push("Latest update (" + String(w.last.at).slice(11) + "): " + w.last.message);
+    return lines.join("\n");
+  }
+  /* ONE live log: what came through the connector (board.updates) and the sheet's Updates tab
+     (sheet.team.live.feed), the same line never twice, newest first. Either side may be missing. */
+  function liveFeed(board, sheet) {
+    var seen = {}, out = [];
+    var add = function (at, u) {
+      if (!at || !u || !u.bot) return;
+      var k = [String(at).slice(0, 10), lc(u.bot), lc(u.status), lc(u.message)].join("|");
+      if (seen[k]) return;
+      seen[k] = 1; out.push({ at: String(at), bot: u.bot, status: u.status || "info", message: u.message || "", link: u.link || "" });
+    };
+    ((board && board.updates) || []).forEach(function (u) { add(u.sp, u); });
+    ((sheet && sheet.team && sheet.team.live && sheet.team.live.feed) || []).forEach(function (u) { add(u.at, u); });
+    return out.map(function (u, i) { return [u, i]; }).sort(function (a, b) { return a[0].at < b[0].at ? 1 : a[0].at > b[0].at ? -1 : a[1] - b[1]; }).map(function (x) { return x[0]; });
+  }
+
+  /* ---- Messages ---- */
+  /* "09:15" today, "Mon 9 Nov, 09:15" before (sp = "YYYY-MM-DD HH:MM", São Paulo) */
+  function spWhen(sp, today) {
+    var s = String(sp || ""), hm = s.slice(11, 16);
+    if (!/^\d{4}-\d{2}-\d{2}/.test(s)) return "";
+    return s.slice(0, 10) === today ? hm : day(s) + (hm ? ", " + hm : "");
+  }
+  /* the small label on a message: who it waits on, or how it ended. null = it never asked for anything */
+  function waitLabel(m) {
+    if (!m || !m.needs || m.needs === "none") return null;
+    if (!m.resolved) return { text: "waiting on " + (m.to === "Luke" ? "you" : m.to === "all" ? "everyone" : m.to), open: true, mine: m.to === "Luke" };
+    if (m.resolved.note === "answered") return { text: "answered by " + (m.resolved.by === "Luke" ? "you" : m.resolved.by), open: false, mine: false };
+    return { text: "done", open: false, mine: false };
+  }
+  /* what a message waiting on Luke wants, in his words */
+  function needWords(m) { return { decision: "needs a decision", action: "asks you to do something", reply: "needs a reply" }[m && m.needs] || "wrote"; }
+  /* the site's own check ("report"): first line = the title, the rest collapsed after `max` lines */
+  function reportParts(text, max) {
+    max = max || 8;
+    var lines = String(text || "").split("\n"), title = lines.shift() || "";
+    while (lines.length && !lines[0].trim()) lines.shift();
+    return { title: title, head: lines.slice(0, max).join("\n"), rest: lines.slice(max).join("\n"), more: Math.max(0, lines.length - max) };
+  }
+  /* Today, under the briefing: "Site check 09:50: 3 things to look at" */
+  function checkResult(report) {
+    var title = String((report && report.text) || "").split("\n")[0], i = title.indexOf(": ");
+    return i >= 0 ? title.slice(i + 2) : title;
+  }
+  function siteCheckLine(report, today) {
+    if (!report || !report.text) return "";
+    var when = spWhen(report.sp, today);
+    return "Site check" + (when ? " " + when : "") + ": " + checkResult(report);
+  }
+  /* who Luke can write to: Nova first, then Claude, every other bot, then everyone */
+  function composeNames(names) {
+    var bots = (names || []).filter(function (n) { return ["Luke", "Claude", "HQ"].indexOf(n) < 0; });
+    var out = [];
+    if (bots.indexOf("Nova") >= 0) out.push({ value: "Nova", label: "Nova" });
+    out.push({ value: "Claude", label: "Claude" });
+    bots.forEach(function (n) { if (n !== "Nova") out.push({ value: n, label: n }); });
+    out.push({ value: "all", label: "Everyone" });
+    return out;
+  }
+  /* The board shows a message and, under it, its answers (one level). So an answer must point at the
+     message that STARTS the thread, or it would not be drawn. -> that message's id */
+  function threadRoot(board, m) {
+    if (!m) return "";
+    var hit = ((board && board.messages) || []).filter(function (th) { return th.id === m.id || th.id === m.re || (th.replies || []).some(function (r) { return r.id === m.id || r.id === m.re; }); })[0];
+    return hit ? hit.id : m.id;
+  }
+
+  /* ---- Today ---- */
+  /* "Needs attention" from the staff desk: messages waiting on Luke, income problems (3 at most,
+     then "+N more"), the bots' connector switched off. */
+  function staffAttention(board) {
+    if (!board) return [];
+    var out = [], n = ((board.waiting && board.waiting.luke) || []).length;
+    if (n) out.push({ key: "msgs", text: n === 1 ? "1 message is waiting on you" : n + " messages are waiting on you", href: "#messages" });
+    var p = incomeProblems(board.income);
+    p.slice(0, 3).forEach(function (x, i) { out.push({ key: "income:" + i, text: "Income: " + x, href: "#money" }); });
+    if (p.length > 3) out.push({ key: "income:more", text: "Income: +" + (p.length - 3) + " more", href: "#money" });
+    if (board.connector && board.connector.botsOn === false) out.push({ key: "connector", text: "The bots' connector is switched off", href: "#team" });
+    return out;
+  }
+
+  /* ---- Data health: "Connector" and "Site check" ---- */
+  function staffHealth(board, problem, now) {
+    now = now || Date.now();
+    if (problem) return [{ key: "connector", label: "Connector", state: "bad", text: problem }, { key: "check", label: "Site check", state: "off", text: "Not read yet" }];
+    if (!board) return [{ key: "connector", label: "Connector", state: "off", text: "Not read yet" }, { key: "check", label: "Site check", state: "off", text: "Not read yet" }];
+    var rows = [], c = board.connector || {}, keys = board.keys || {}, lu = c.lastUsed && t(c.lastUsed.at);
+    if (keys.bots === false) rows.push({ key: "connector", label: "Connector", state: "off", text: "The connector's key isn't set on the site yet" });
+    else if (c.botsOn === false) rows.push({ key: "connector", label: "Connector", state: "bad", text: "Switched off" + (t(c.changedAt) ? " " + ago(now - t(c.changedAt)) : "") + ": the bots can't send anything" });
+    else if (!c.connected) rows.push({ key: "connector", label: "Connector", state: "off", text: "On · no bot has connected yet" });
+    else rows.push({ key: "connector", label: "Connector", state: "ok", text: "On · " + c.connected + " of " + c.total + " bots connected" + (lu ? " · last used " + ago(now - lu) + " (" + c.lastUsed.bot + ")" : "") });
+    var r = board.report, at = r && t(r.at);
+    if (!r || !at) rows.push({ key: "check", label: "Site check", state: "off", text: "No check yet. The site checks itself twice a day" });
+    else {
+      /* twice a day: more than 26 hours without one means it didn't run */
+      var res = checkResult(r);
+      rows.push({ key: "check", label: "Site check", state: now - at > 26 * 3600000 ? "bad" : "ok", text: "Last check " + ago(now - at) + (res ? ": " + res : "") });
+    }
+    return rows;
+  }
+
+  /* ---- Money coming in ---- */
+  /* { USD: 104.04, EUR: 112.01 } -> ["USD 104.04", "EUR 112.01"]: each currency as given, never added, never converted */
+  function curList(o) { return Object.keys(o || {}).sort().map(function (c) { return money(o[c], c); }); }
+  var CADENCE = { daily: "Every day", monthly: "Every month", quarterly: "Every 3 months", irregular: "Irregular" };
+  function cadenceWord(c) { return CADENCE[c] || "Irregular"; }
+  /* an account tile: "checked today by Ledger · 0 new" / "not checked today". attn only for never / overdue / blocked */
+  function accountLine(a, today) {
+    var v = a.verdict, c = a.checked;
+    if (v === "blocked") return { text: "blocked: " + (a.blocker || a.why || "no reason given"), attn: true };
+    if (v === "not_tracked") return { text: "nobody is checking this yet", attn: false };
+    if (v === "never") return { text: "never checked through the connector", attn: true };
+    if (v === "overdue") return { text: "not checked since " + day(a.lastLook), attn: true };
+    if (v === "due") return { text: "not checked today" + (a.lastLook ? " · last look " + day(a.lastLook) : ""), attn: false };
+    if (c && c.day === today) return { text: "checked today by " + c.by + " · " + c.new + " new", attn: false };
+    return { text: "a payment was logged today", attn: false };
+  }
+  /* a source's state in plain words. attn for overdue / blocked */
+  function sourceState(s) {
+    var v = s.verdict;
+    if (v === "ok") return { text: "Up to date", attn: false };
+    if (v === "overdue") return { text: "Overdue", attn: true };
+    if (v === "never") return { text: "Nothing logged yet", attn: false };
+    if (v === "quiet") return { text: "Nothing yet (irregular)", attn: false };
+    if (v === "blocked") return { text: "Blocked: " + (s.blocker || s.why || "no reason given"), attn: true };
+    if (v === "not_tracked") return { text: "Nobody is logging this yet", attn: false };
+    return { text: "Not read", attn: false };
+  }
+  /* what to look at, as the desk found it; a payer nobody has named yet is said in our own words
+     ("New payer not on the list: …") instead of the desk's line about it */
+  function incomeProblems(inc) {
+    var out = ((inc && inc.problems) || []).filter(function (p) { return !/^New payer\(s\) not on the list/.test(p); });
+    var u = (inc && inc.unknown) || [];
+    if (u.length) out.push((u.length === 1 ? "New payer not on the list: " : "New payers not on the list: ") + u.join(", "));
+    return out;
+  }
+  /* "Mon 9 Nov · USD 104.04 · received" */
+  function payLine(p) { return p ? day(p.date) + " · " + money(p.amount, p.currency) + " · " + p.status : "none logged yet"; }
+  /* nothing submitted and no list of sources yet */
+  function incomeEmpty(inc) { return !inc || (!inc.count && !(inc.sources || []).length && !(inc.entries || []).length); }
+
+  return { ago: ago, spMs: spMs, releaseWords: releaseWords, releaseDetail: releaseDetail, healthRows: healthRows, healthState: healthState, median: median, change: change, money: money, attention: attention, briefing: briefing,
+    snapshot: snapshot, changesSince: changesSince, tiles: tiles, summaryText: summaryText, shortStep: shortStep, day: day,
+    slug: slug, workerLabel: workerLabel, sortWorkers: sortWorkers, workerView: workerView, dutyWhen: dutyWhen, workerCounts: workerCounts, seenLine: seenLine, connectorLine: connectorLine,
+    novaMessage: novaMessage, liveFeed: liveFeed, spWhen: spWhen, waitLabel: waitLabel, needWords: needWords, reportParts: reportParts, siteCheckLine: siteCheckLine, composeNames: composeNames,
+    threadRoot: threadRoot, staffAttention: staffAttention, staffHealth: staffHealth, curList: curList, cadenceWord: cadenceWord, accountLine: accountLine, sourceState: sourceState, payLine: payLine,
+    incomeEmpty: incomeEmpty, incomeProblems: incomeProblems };
 });

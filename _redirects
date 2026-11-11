@@ -32,6 +32,12 @@
 /stats       /hq  301!
 /stats.html  /hq  301!
 
+# Working notes that sit in the published root (CLAUDE.md, the old READMEs): not for visitors.
+/CLAUDE.md          /404  404!
+/HANDOFF-README.md  /404  404!
+/README.txt         /404  404!
+/README-STORE.txt   /404  404!
+
 # Server-side files that sit in the published root: never serve them.
 /package.json       /404  404!
 /package-lock.json  /404  404!
