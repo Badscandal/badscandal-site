@@ -210,7 +210,7 @@
     if (state.range === "custom") { $("from").value = data.from; $("to").value = data.to; }
     banner(data.bots ? "Showing bots too: every number below includes the " + fmt(data.hidden.visits) + " bot visits. <button class=\"ghost\" id=\"hideBots\" type=\"button\">Humans only</button>" : "", true);
     drawStrip();
-    drawKpis(); drawFunnel(); drawSeries(); drawBreakdowns(); drawSpeed(); drawMeta(); drawHealth(); drawBots(); drawSpend(); fillFilters(); drawLog();
+    drawKpis(); drawFunnel(); drawSeries(); drawBreakdowns(); drawSpeed(); drawMeta(); drawHealth(); drawBots(); drawSpend(); drawCap(); fillFilters(); drawLog();
   }
 
   function delta(cur, prev, isRate) {
@@ -438,6 +438,44 @@
     $("spNote").textContent = "Spend is in the ad account's currency (" + (c || "?") + "), never converted, and Meta's days are the ad account's days. Taps are real people only. " +
       (sp.unmatched ? money(sp.unmatched, c) + " of spend couldn't be matched to a song (an ad whose name nobody has visited from yet). " : "") +
       "Read from Meta " + (sp.fetched ? sp.fetched.slice(11, 16) + " SP" : "") + ", refreshed hourly.";
+  }
+
+  /* ---------- monthly ad cap (display only; the bots and Luke switch ads off, not this page) ---------- */
+  function drawCap() {
+    var k = data.cap, card = $("capCard");
+    card.className = "card c-cap";
+    if (!k || !k.connected || k.error) {
+      $("capOn").hidden = true; $("capOff").hidden = false;
+      $("capOff").textContent = k && k.error ? "Couldn't read Meta spend: " + k.error : "Meta spend not connected. To connect it, add META_ADS_TOKEN on Netlify (a read-only ads token).";
+      $("capMonth").textContent = "";
+      return;
+    }
+    $("capOff").hidden = true; $("capOn").hidden = false;
+    var cc = k.capCurrency, months = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+    $("capMonth").textContent = months[Number(k.month.slice(5, 7)) - 1] + " " + k.month.slice(0, 4);
+    if (k.status === "currency") {
+      $("capSpent").textContent = money(k.spent, k.currency);
+      $("capLeft").textContent = "";
+      $("capMsg").textContent = "The ad account bills in " + k.currency + ", the cap is in " + cc + ". Never converted, so this can't be compared here.";
+      $("capFill").style.width = "0"; $("capNote").textContent = "";
+      return;
+    }
+    card.className = "card c-cap " + k.status;
+    var pct = function (n) { return Math.min(100, (n / k.cap) * 100) + "%"; };
+    $("capSpent").innerHTML = esc(money(k.spent, cc)) + " <small>of " + esc(money(k.cap, cc)) + " · " + k.pct + "%</small>";
+    $("capLeft").textContent = k.left >= 0 ? money(k.left, cc) + " left" : money(-k.left, cc) + " over";
+    $("capFill").style.width = pct(k.spent);
+    $("capWarn").style.left = pct(k.warn); $("capStop").style.left = pct(k.stop);
+    $("capAx").textContent = fmt(k.warn) + " warn · " + fmt(k.stop) + " everything off · " + fmt(k.cap);
+    var msg = {
+      ok: "Under the warning line.",
+      warn: "Getting close: past " + money(k.warn, cc) + ". Alfred is warning Luke.",
+      stop: "Past " + money(k.stop, cc) + ": every ad should be OFF for the rest of the month (Luke's standing order).",
+      over: "OVER the " + money(k.cap, cc) + " cap. Every ad must be off now; tell Luke.",
+    }[k.status];
+    if (k.status === "ok" && k.perDay > 0) msg += " At the last days' pace (" + money(k.perDay, cc) + "/day) " + (k.stopDay ? "the " + money(k.stop, cc) + " line is reached around day " + k.stopDay + "." : "the month ends under the line.");
+    $("capMsg").textContent = msg;
+    $("capNote").textContent = "Meta only (the ad account's days). Google and TikTok bill in EUR and are logged by the bots in the Ads Tracker; never converted. Read from Meta " + (k.fetched ? k.fetched.slice(11, 16) + " SP" : "") + ", refreshed hourly. This page never pauses anything.";
   }
 
   function drawHealth() {

@@ -155,6 +155,21 @@ main.busy{opacity:.55}
 .keyrow{display:flex;justify-content:space-between;gap:10px;font-size:12.5px;color:var(--uv);padding:5px 0}
 .keyrow b{color:var(--paper)}
 
+/* monthly ad cap (README rule 12 in badscandal-hq): display only */
+.c-cap{grid-column:1/-1}
+.cap-row{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:6px 16px}
+.cap-big{font-size:26px;font-weight:700;color:var(--paper)}
+.cap-big small{font-size:13px;font-weight:400;color:var(--muted)}
+.cap-bar{position:relative;height:10px;border-radius:999px;background:var(--ink-3);margin:12px 0 6px;overflow:hidden}
+.cap-bar i{position:absolute;left:0;top:0;bottom:0;background:var(--uv);border-radius:999px}
+.cap-bar b{position:absolute;top:0;bottom:0;width:2px;background:var(--paper);opacity:.55}
+.c-cap.warn .cap-bar i{background:var(--paper)}
+.c-cap.stop,.c-cap.over{border-color:var(--paper)}
+.c-cap.stop .cap-bar i,.c-cap.over .cap-bar i{background:var(--paper)}
+.cap-ax{display:flex;justify-content:space-between;font-family:var(--mono);font-size:9.5px;color:var(--silver)}
+.cap-msg{font-size:13px;color:var(--uv);margin:10px 0 0}
+.c-cap.stop .cap-msg,.c-cap.over .cap-msg{color:var(--paper);font-weight:600}
+
 /* ad spend */
 .c-spend{grid-column:1/-1}
 .sp-cols{display:grid;grid-template-columns:minmax(0,1fr);gap:0 18px}
@@ -260,6 +275,18 @@ main.busy{opacity:.55}
     </div>
     <div class="mstat" id="mstat"><span id="mstatTxt">Meta: no events yet</span></div>
   </div>
+
+  <section class="card c-cap" id="capCard">
+    <div class="head"><div><h2>Monthly ad cap</h2><p class="sub" id="capSub">All Meta ads this month (the whole ad account, boosts included) against the USD 1,000 cap.</p></div><span class="lbl" id="capMonth"></span></div>
+    <p class="empty" id="capOff">Meta spend not connected. To connect it, add META_ADS_TOKEN on Netlify (a read-only ads token).</p>
+    <div id="capOn" hidden>
+      <div class="cap-row"><div class="cap-big num" id="capSpent">–</div><div class="lbl" id="capLeft"></div></div>
+      <div class="cap-bar" aria-hidden="true"><i id="capFill"></i><b id="capWarn"></b><b id="capStop"></b></div>
+      <div class="cap-ax"><span>0</span><span id="capAx">750 warn · 900 everything off · 1,000</span></div>
+      <p class="cap-msg" id="capMsg"></p>
+      <p class="sub" id="capNote" style="margin-top:8px"></p>
+    </div>
+  </section>
 
   <section class="kpis">
     <div class="card kpi hero">

@@ -26,11 +26,13 @@ export function adKey(s) {
   return v.toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 40);
 }
 
-export function insightsRequest(account, since, until) {
+/* level "ad" for cost per tap; level "account" for the monthly cap (the WHOLE ad account, so
+   boosts made in the Instagram app count too). */
+export function insightsRequest(account, since, until, level = "ad") {
   const q = new URLSearchParams({
-    level: "ad",
+    level,
     time_increment: "1",
-    fields: "ad_name,adset_name,campaign_name,spend,account_currency",
+    fields: level === "account" ? "spend,account_currency" : "ad_name,adset_name,campaign_name,spend,account_currency",
     time_range: JSON.stringify({ since, until }),
     limit: "500",
   });
@@ -38,8 +40,8 @@ export function insightsRequest(account, since, until) {
 }
 
 /* GET every page of the answer. fetchImpl is injectable for tests. Returns { rows } or { error }. */
-export async function fetchInsights(token, account, since, until, fetchImpl = fetch) {
-  let url = insightsRequest(account, since, until);
+export async function fetchInsights(token, account, since, until, fetchImpl = fetch, level = "ad") {
+  let url = insightsRequest(account, since, until, level);
   const rows = [];
   for (let page = 0; url && page < 20; page++) {
     let res, json;
@@ -116,6 +118,37 @@ export function spendReport(rows, songs, current) {
       const sp = (per[s.id] || {}).spend || 0;
       return { id: s.id, title: s.title, spend: round(sp), taps: s.taps || 0, cpt: cpt(sp, s.taps) };
     }),
+  };
+}
+
+/* ---------- the monthly ad cap (README rule 12 in badscandal-hq, Luke 11 Nov 2026) ----------
+   USD 1,000 per calendar month for all ads together; warn at 750, everything switched off at 900.
+   This only DISPLAYS where Meta's ad account stands: nothing here pauses or changes anything.
+   Google and TikTok bill in EUR and are logged by the bots in the Ads Tracker, not here. Currencies
+   are never converted: if the ad account isn't in the cap's currency, the page says so. */
+export const MONTHLY_CAP = { amount: 1000, warn: 750, stop: 900, currency: "USD" };
+
+/* rows: fetchInsights(..., "account") for the 1st of the month .. today. today: "YYYY-MM-DD". */
+export function capReport(rows, today, cap = MONTHLY_CAP) {
+  const currency = (rows.find((r) => r.currency) || {}).currency || cap.currency;
+  const byDay = {};
+  for (const r of rows) byDay[r.day] = (byDay[r.day] || 0) + r.spend;
+  const days = Object.keys(byDay).sort().map((d) => ({ d, spend: round(byDay[d]) }));
+  const spent = round(days.reduce((n, r) => n + r.spend, 0));
+  const [y, m, dd] = today.split("-").map(Number);
+  const daysInMonth = new Date(Date.UTC(y, m, 0)).getUTCDate();
+  /* pace = the last 3 FULL calendar days (today is partial; a paused day counts as 0) */
+  const back = (k) => new Date(Date.UTC(y, m - 1, dd - k)).toISOString().slice(0, 10);
+  const recent = [1, 2, 3].map(back).filter((d) => d.slice(0, 7) === today.slice(0, 7));
+  const perDay = recent.length ? recent.reduce((n, d) => n + (byDay[d] || 0), 0) / recent.length : 0;
+  const sameCurrency = currency === cap.currency;
+  const status = !sameCurrency ? "currency" : spent >= cap.amount ? "over" : spent >= cap.stop ? "stop" : spent >= cap.warn ? "warn" : "ok";
+  /* at the recent pace, on which day of the month would the stop line be reached? */
+  const stopDay = sameCurrency && perDay > 0 && spent < cap.stop ? Math.min(daysInMonth + 1, dd + Math.ceil((cap.stop - spent) / perDay)) : null;
+  return {
+    month: today.slice(0, 7), currency, cap: cap.amount, warn: cap.warn, stop: cap.stop, capCurrency: cap.currency,
+    spent, left: round(cap.amount - spent), pct: Math.round((spent / cap.amount) * 1000) / 10,
+    status, perDay: round(perDay), stopDay: stopDay && stopDay <= daysInMonth ? stopDay : null, days,
   };
 }
 

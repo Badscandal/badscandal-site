@@ -13,7 +13,7 @@
 import { getDeployStore, getStore } from "@netlify/blobs";
 import { adTaps, dashboard, defaultLink, healthSummary, LINKS, mergeSummary, resolveRange, spDay, spTime, summarize, toCSV, utcDaysFor, visitLog, addDays } from "../lib/admin.mjs";
 import { HEALTH_PREFIX, LAST_ERROR_KEY, LAST_KEY, parseHealthKey } from "../lib/capi.mjs";
-import { CACHE_MS, DEFAULT_ACCOUNT, fetchInsights, spendReport } from "../lib/metaspend.mjs";
+import { CACHE_MS, DEFAULT_ACCOUNT, capReport, fetchInsights, spendReport } from "../lib/metaspend.mjs";
 import { checkPassword, clearCookie, COOKIE, makeSession, readCookie, sessionCookie, verifySession } from "../lib/session.mjs";
 import { parseKey, PREFIX } from "../lib/stats.mjs";
 
@@ -122,6 +122,30 @@ async function loadSpend(context, spDays, events, current) {
   return { ...spendReport(got.rows, songs, current), fetched: spTime(got.at) };
 }
 
+/* The monthly ad cap: the whole Meta ad account, 1st of this month .. today (São Paulo), cached an
+   hour. READ-ONLY, display only. */
+async function loadCap(context) {
+  const token = Netlify.env.get("META_ADS_TOKEN");
+  if (!token) return { connected: false };
+  const account = (Netlify.env.get("META_AD_ACCOUNT_ID") || DEFAULT_ACCOUNT).replace(/\D/g, "");
+  const today = spDay(Date.now()), since = today.slice(0, 8) + "01";
+  const cache = context.deploy?.context === "production" ? getStore("meta-cache") : getDeployStore("meta-cache");
+  const key = `cap/${account}/${today}.json`;
+  let got = null;
+  try { got = await cache.get(key, { type: "json" }); } catch {}
+  if (!got || Date.now() - got.at > CACHE_MS) {
+    const fresh = await fetchInsights(token, account, since, today, fetch, "account");
+    if (fresh.error) {
+      console.error("meta cap: " + fresh.error); /* scrubbed: never the token */
+      if (!got) return { connected: true, error: fresh.error };
+    } else {
+      got = { at: Date.now(), rows: fresh.rows };
+      try { await cache.setJSON(key, got); } catch {}
+    }
+  }
+  return { connected: true, ...capReport(got.rows, today), fetched: spTime(got.at) };
+}
+
 /* Luke's "Don't count this device": a long-lived cookie set by the server (Safari keeps those; it
    wipes script-set storage after 7 days without a visit). Sent with every /api/hit beacon. */
 const NOSTAT = "bs_nostat";
@@ -176,14 +200,15 @@ export default async (req, context) => {
       });
     }
     const events = await listEvents(store, r.days);
-    const [cur, prev, health, spend] = await Promise.all([
+    const [cur, prev, health, spend, cap] = await Promise.all([
       load(store, r.days, link.id, { bots }, events),
       load(store, r.prev, link.id, { bots, until }),
       loadHealth(store, r.days).catch(() => null),
       link.date ? loadSpend(context, r.days, events, link.id).catch((e) => { console.error("meta spend failed", e?.name || e); return { connected: true, error: "Couldn't read Meta spend" }; }) : null,
+      loadCap(context).catch((e) => { console.error("meta cap failed", e?.name || e); return { connected: true, error: "Couldn't read Meta spend" }; }),
     ]);
     if (health) health.testMode = !!Netlify.env.get("META_TEST_EVENT_CODE");
-    const extra = { health, spend, bots, excluded: readCookie(req.headers.get("cookie"), NOSTAT) === "1" };
+    const extra = { health, spend, cap, bots, excluded: readCookie(req.headers.get("cookie"), NOSTAT) === "1" };
     return json(200, { ...dashboard(cur, prev, r.days, link.id, extra), range: r.range, generated: new Date().toISOString() });
   } catch (e) {
     console.error("admin data failed", e);

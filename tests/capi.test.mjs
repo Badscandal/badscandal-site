@@ -153,3 +153,37 @@ test("cost per tap: ads matched to real taps by name, per song, per day, currenc
   assert.deepEqual(r.allDays.find((d) => d.d === "2026-11-04"), { d: "2026-11-04", spend: 40, taps: 13, cpt: 40 / 13 });
   assert.equal(spendReport([], songs, "touchme").song.cpt, null, "no spend, no cost per tap");
 });
+
+/* ---------- the monthly ad cap (USD 1,000; warn 750, everything off at 900), 11 Nov 2026 ---------- */
+import { capReport, MONTHLY_CAP } from "../netlify/lib/metaspend.mjs";
+
+test("cap: the WHOLE ad account (level=account, so Instagram boosts count), GET only", async () => {
+  const q = new URL(insightsRequest("230002830106369", "2026-11-01", "2026-11-11", "account")).searchParams;
+  assert.equal(q.get("level"), "account");
+  assert.equal(q.get("fields"), "spend,account_currency");
+  let init;
+  await fetchInsights("SECRET", "230002830106369", "2026-11-01", "2026-11-11", async (u, i) => { init = i; return new Response('{"data":[]}', { status: 200 }); }, "account");
+  assert.equal(init.method, "GET");
+});
+
+const round2 = (n) => Math.round(n * 100) / 100;
+test("cap: month to date, left, status lines and the pace", () => {
+  assert.deepEqual(MONTHLY_CAP, { amount: 1000, warn: 750, stop: 900, currency: "USD" });
+  const day = (d, spend) => ({ day: d, spend, currency: "USD" });
+  const r = capReport([day("2026-11-01", 100), day("2026-11-09", 99.63), day("2026-11-10", 25.97), day("2026-11-11", 3)], "2026-11-11");
+  assert.equal(r.month, "2026-11");
+  assert.equal(r.spent, 228.6);
+  assert.equal(r.left, 771.4);
+  assert.equal(r.pct, 22.9);
+  assert.equal(r.status, "ok");
+  assert.equal(r.perDay, round2((0 + 99.63 + 25.97) / 3), "pace = the last 3 full calendar days (8, 9, 10 Nov), paused days count as 0");
+  assert.equal(r.stopDay, 11 + Math.ceil((900 - 228.6) / ((99.63 + 25.97) / 3)));
+  assert.equal(capReport([day("2026-11-05", 760)], "2026-11-06").status, "warn");
+  assert.equal(capReport([day("2026-11-05", 900)], "2026-11-06").status, "stop");
+  assert.equal(capReport([day("2026-11-05", 1000.01)], "2026-11-06").status, "over");
+  assert.equal(capReport([], "2026-11-06").spent, 0);
+  const eur = capReport([{ day: "2026-11-05", spend: 50, currency: "EUR" }], "2026-11-06");
+  assert.equal(eur.status, "currency", "never converted: a non-USD account can't be compared");
+  assert.equal(capReport([day("2026-11-01", 10)], "2026-11-02").stopDay, null, "pace that never reaches the line in this month");
+  assert.equal(capReport([day("2026-11-01", 500)], "2026-11-11").perDay, 0, "ads paused for days: no pace, no false alarm");
+});

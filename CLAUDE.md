@@ -938,6 +938,15 @@ Brief: `../TOUCHME-LANDING-BUILD-BRIEF.md` (outside the repo on purpose).
   own currency (never converted; Meta's days are the ad account's days). No token
   -> a quiet "Meta spend not connected" line. Nothing in the code can write to
   Meta.
+* **Monthly ad cap card (11 Nov 2026)** at the top of /admin (every link): the WHOLE Meta ad
+  account (`level=account`, so Instagram-app boosts count) from the 1st of the month to today
+  (São Paulo), against `MONTHLY_CAP` in `netlify/lib/metaspend.mjs` (USD 1,000; warn 750; at 900
+  every ad is switched off by the bots/Luke = README rule 12 in badscandal-hq). `capReport()`:
+  spent, left, %, status ok|warn|stop|over|currency (a non-USD account is never converted, just
+  flagged), and the pace (last 3 full calendar days, paused days = 0) with the day the 900 line
+  would be reached. Same token, same read-only GET, cached an hour (`meta-cache`, key
+  `cap/<account>/<day>.json`). DISPLAY ONLY: nothing on the site pauses or changes ads. Google and
+  TikTok (EUR) live in the bots' Ads Tracker sheet, not here.
 * **90-day rule:** `netlify/functions/rollup.mjs` (daily 06:00 UTC, production
   only) folds raw keys older than 90 days into `daily/<day>.json` counts and
   deletes them; the portal merges those back for old ranges.
