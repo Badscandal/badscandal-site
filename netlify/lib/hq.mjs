@@ -31,6 +31,8 @@ export const STEPS = [
 const norm = (s) => String(s == null ? "" : s).trim();
 const key = (s) => norm(s).toLowerCase().replace(/\s+/g, " ");
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
+/* a song's name without accents, case, spaces or signs ("Me Dá Seu Body" = "me da seu body") */
+const songKey = (s) => norm(s).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]/g, "");
 
 /* values: a tab as rows of cells (first row = headers) -> [{header: cell}] with lowercase headers */
 export function rowsToObjects(values) {
@@ -106,7 +108,7 @@ export function songsReport(rows, royalties, releases, today) {
     const s1 = sum(w1.map((x) => x.streams)), s0 = sum(w0.map((x) => x.streams));
     /* momentum needs two full-ish weeks; fewer days = "new" (no percentage is invented) */
     const pct = w0.length >= 4 && w1.length >= 4 && s0 > 0 ? Math.round(((s1 - s0) / s0) * 1000) / 10 : null;
-    const rel = releases.find((x) => key(x.song) === key(song));
+    const rel = releases.find((x) => songKey(x.song) === songKey(song) && DAY.test(x.release_date || ""));
     const relDate = rel && DAY.test(rel.release_date) ? rel.release_date : null;
     return {
       song,
@@ -199,6 +201,34 @@ export function releasesReport(rows, today) {
       steps, late: steps.filter((s) => s.late).length, notes: r.notes || "",
     };
   }).sort((a, b) => ((a.date || "9") < (b.date || "9") ? -1 : 1));
+}
+
+/* ---------- one list of releases: the sheet's and the staff desk's (11 Nov 2026) ----------
+   The desk's release pipeline (netlify/lib/staff.mjs releaseView) is mapped to the sheet's shape, so
+   everything that reads `releases` / `next` (Today, the release panel, attention, the briefing) works
+   for a desk release unchanged. A song in both (titles compared without accents, case and spaces) is
+   ONE entry: the desk's steps and dates, the sheet's status text kept. deskReleases: scheduled ones. */
+export function mergeReleases(sheetReleases, deskReleases, today) {
+  if (!deskReleases || !deskReleases.length) return sheetReleases;
+  const fromDesk = (v) => {
+    const date = DAY.test(v.date || "") ? v.date : null;
+    const steps = (v.steps || []).map((s) => ({ label: s.label, owner: s.owner, due: s.due || null, done: s.status === "done",
+      late: s.status !== "done" && !!s.due && s.due < today, note: s.status === "blocked" ? "blocked: " + (s.note || "") : s.note || "" }));
+    return { song: v.title, slug: v.id, date, status: (v.pack && v.pack.storeStatus) || "",
+      daysToGo: date ? daysBetween(today, date) : null,
+      weekday: date ? ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][new Date(date + "T12:00:00Z").getUTCDay()] : null,
+      steps, late: steps.filter((s) => s.late).length, notes: (v.pack && v.pack.notes) || "",
+      desk: true, id: v.id, missing: v.missing || [], tight: !!v.tight };
+  };
+  const desk = deskReleases.filter((v) => v && v.title && v.status === "scheduled").map(fromDesk);
+  const byKey = new Map(desk.map((d) => [songKey(d.song), d]));
+  const out = sheetReleases.map((r) => {
+    const d = byKey.get(songKey(r.song));
+    if (!d) return r;
+    byKey.delete(songKey(r.song));
+    return { ...d, status: r.status || d.status, slug: r.slug || d.slug };
+  });
+  return out.concat([...byKey.values()]).sort((a, b) => ((a.date || "9") < (b.date || "9") ? -1 : (a.date || "9") > (b.date || "9") ? 1 : 0));
 }
 
 /* ---------- team: tasks per owner and who last logged ---------- */
@@ -375,8 +405,9 @@ export function metaSpend(spendRows, meta) {
 
 /* sheets: { Growth: [[...cells]], ... } straight from the sheet (Updates: optional, null = no tab).
    today: São Paulo "YYYY-MM-DD". meta: see metaSpend() (optional). nowHM: São Paulo "HH:MM" (duty times). */
-/* staff (optional, from the staff desk): { updates: [{sp, bot, status, message, link}], overlay } — the
-   connector's updates join the sheet's Updates tab in ONE live log, and finish/block today's duties. */
+/* staff (optional, from the staff desk): { updates: [{sp, bot, status, message, link}], overlay, releases } — the
+   connector's updates join the sheet's Updates tab in ONE live log, and finish/block today's duties;
+   releases (scheduled releaseView()s) join the sheet's Releases tab (mergeReleases). */
 export function mergeUpdates(sheetRows, staffUpdates) {
   /* every sheet row stays as it is; a connector update is dropped only when the sheet already has
      the very same line from the same bot on the same day (a bot that wrote both) */
@@ -388,10 +419,13 @@ export function hqModel(sheets, today, fx = {}, meta, nowHM = "", staff = null) 
   const t = Object.fromEntries(HQ_TABS.map((n) => [n, rowsToObjects(sheets[n])]));
   const ms = metaSpend(t.Spend, meta);
   t.Spend = ms.rows;
-  const songs = songsReport(t.Songs, t.Royalties, t.Releases, today);
+  const deskReleases = staff && Array.isArray(staff.releases) ? staff.releases : [];
+  /* a song's release date: the desk's first (it is the one the team works to), then the sheet's */
+  const relDates = deskReleases.filter((v) => v.status === "scheduled" && v.date).map((v) => ({ song: v.title, release_date: v.date }));
+  const songs = songsReport(t.Songs, t.Royalties, relDates.concat(t.Releases), today);
   const growth = growthReport(t.Growth, today);
   const fans = fansReport(t.Fans);
-  const releases = releasesReport(t.Releases, today);
+  const releases = mergeReleases(releasesReport(t.Releases, today), deskReleases, today);
   const team = teamReport(t.Tasks, [t.Growth, t.Songs, t.Fans, t.Royalties], today);
   const money = { ...moneyReport(t.Spend, t.Income, t.Royalties, today, fx), metaSource: ms.source };
   const empty = HQ_TABS.filter((n) => !t[n].length);

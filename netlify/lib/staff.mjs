@@ -9,6 +9,9 @@
      roster    who each bot is, why it is needed, what it does every day
      sources   every place money comes from, so a missing one is visible
      cards     what each bot says it is working on; seen/<bot>.json = its last call
+     releases  the release pipeline (11 Nov 2026): one pack per song with everything every bot needs
+               (the WAV, the artwork, the lyrics, the RouteNote details) and its steps, dated back
+               from the release day
 
    Reached by the bots through the connector at /mcp (netlify/lib/mcp.mjs + staff-tools.mjs), by
    /hq through /api/staff/* (netlify/functions/staff.mjs). Everything here takes the store and the
@@ -29,9 +32,9 @@ export const CATEGORIES = ["Self-releases", "Label deals", "Publishing", "Produc
 export const INCOME_STATUS = ["received", "pending", "transfer"];
 export const CADENCE = ["daily", "monthly", "quarterly", "irregular"];
 export const SOURCE_STATE = ["active", "blocked", "unknown", "not_tracked"];
-export const PEOPLE = ["Luke", "Claude", "HQ"]; /* not bots; HQ = the site's own twice-daily check */
+export const PEOPLE = ["Luke", "Claude", "HQ"]; /* not bots; HQ = the site's own check (three times a day since 11 Nov 2026) */
 /* nobody needs more than this in a day; past it something is looping, and the answer is "stop" */
-export const LIMITS = { updatesPerBotPerDay: 60, messagesPerSenderPerDay: 40, messagesPerMonth: 1500, paymentsPerMonth: 3000, checksPerBotPerDay: 40 };
+export const LIMITS = { updatesPerBotPerDay: 60, messagesPerSenderPerDay: 40, messagesPerMonth: 1500, paymentsPerMonth: 3000, checksPerBotPerDay: 40, releases: 60, releaseLog: 30 };
 
 /* The team as the repo may show it: names and one public line each. The full roster (why each bot
    is needed, its tools, its times) is seeded into the store and replaces this. */
@@ -232,14 +235,16 @@ export function setRoster(store, list) {
 }
 
 /* ---------- the bots' running log ---------- */
-export async function postUpdate(store, now, roster, a) {
+/* extra (never from a tool's arguments): { release } marks a line written by setStep() for a release
+   step, so it shows in the live log but never finishes or blocks the bot's DAILY duty (dutyOverlay). */
+export async function postUpdate(store, now, roster, a, extra = {}) {
   const bot = whoIs(a.bot, roster);
   const status = low(a.status);
   if (!UPDATE_STATUS.includes(status)) fail(`status must be one of: ${UPDATE_STATUS.join(", ")}`);
   const message = clean(a.message, 240);
   if (message.length < 3) fail("message is empty. Say what you did or what is in the way, with the number if there is one.");
   noSecrets(message, a.link);
-  const u = { id: newId("u", now), at: new Date(now).toISOString(), sp: spStamp(now), bot, status, message, link: httpsLink(a.link), duty: /^[Dd]-[\w-]{1,30}$/.test(clean(a.duty, 40)) ? clean(a.duty, 40) : "" };
+  const u = { id: newId("u", now), at: new Date(now).toISOString(), sp: spStamp(now), bot, status, message, link: httpsLink(a.link), duty: /^[Dd]-[\w-]{1,30}$/.test(clean(a.duty, 40)) ? clean(a.duty, 40) : "", ...(extra.release ? { release: clean(extra.release, 60) } : {}) };
   await mutate(store, `upd/${spDay(now)}.json`, [], (list) => {
     /* a looping bot is told to stop; it never pushes the others' lines out */
     if (list.filter((x) => x.bot === bot).length >= LIMITS.updatesPerBotPerDay) fail(`${bot} has already posted ${LIMITS.updatesPerBotPerDay} updates today, which is the limit. Something is repeating: stop, and tell Nova.`, "limit");
@@ -262,6 +267,7 @@ export function dutyOverlay(updates, today) {
   const byDuty = {}, byBot = {};
   for (const u of [...updates].sort((a, b) => (a.at < b.at ? -1 : 1))) {
     if (!u.sp || u.sp.slice(0, 10) !== today || !["done", "blocked", "working", "error"].includes(u.status)) continue;
+    if (u.release) continue; /* "Survivors: Lyrics live — done" is about a release step, not today's duty */
     const v = { status: u.status === "error" ? "blocked" : u.status, message: u.message, at: u.sp, iso: u.at, bot: low(u.bot) };
     if (u.duty) byDuty[low(u.duty)] = v;
     byBot[low(u.bot)] = v; /* the bot's latest word, with or without a duty id */
@@ -291,7 +297,10 @@ export async function sendMessage(store, now, roster, a) {
     parent = await mutate(store, msgKey(pm), [], (list) => {
       const p = list.find((x) => x.id === re);
       if (!p) fail("There is no message with that id", "not_found");
-      /* an answer from the person it was waiting on settles a "reply" */
+      /* an answer from the person it was waiting on settles a "reply". Luke's answer settles ANYTHING
+         that waits on him (11 Nov 2026, Luke: "when i reply to a message right now nothing happens"):
+         a plain reply to an action or a decision used to leave it sitting in "Waiting on you". */
+      if (!p.resolved && from === "Luke" && isOpen(p) && p.to === "Luke") { p.resolved = { by: "Luke", at: m.at, note: "answered" }; return { value: p }; }
       if (p.needs === "reply" && !p.resolved && (p.to === from || p.to === "all")) { p.resolved = { by: from, at: m.at, note: "answered" }; return { value: p }; }
       return { skip: true, value: p };
     });
@@ -557,9 +566,348 @@ export function setGuide(store, now, text) {
   return store.setJSON("guide.json", { text: t, at: new Date(now).toISOString() });
 }
 
+/* ---------- the release pipeline (11 Nov 2026) ----------
+   Luke: "when a new song is ready we want all the info every bot needs, high quality wav link,
+   artwork, lyrics, information for routenote everything, and that they auto schedule it and
+   everything and the pitch is handled later". One desk document, releases.json (newest first), one
+   entry per song: the PACK (every field a bot needs, PACK_FIELDS) and the STEPS (RELEASE_STEPS),
+   dated back from the release day when Luke sends it to the team. The form on /hq, the connector's
+   tools and the "still missing" list are all built from these two lists, so a field is added in ONE
+   place. A release is "draft" (Luke is still filling it), "scheduled" (sent; the steps have dates)
+   or "cancelled". "Released" is never stored: it is a scheduled release whose day has come. */
+const F = (key, label, short, kind, group, o = {}) => ({ key, label, short, kind, group, required: !!o.required, neededBy: o.neededBy || "",
+  choices: o.choices || [], hint: o.hint || "", fill: o.fill || [], max: o.max || (kind === "line" ? 200 : kind === "link" ? 400 : 1000) });
+/* group = where the /hq form shows it: files | stores | lyrics | pitch | later | notes.
+   required = must be filled before the pack can go to the team. neededBy = a step that needs it (it
+   shows as missing until filled, and that step's owner is told). fill = which bots may fill it
+   through the connector (Luke and Claude fill everything; Nova may fill what any bot may fill). */
+export const PACK_FIELDS = [
+  F("wav", "Master WAV (link)", "Master WAV", "link", "files", { required: true, hint: "A download link to the final master, as a WAV file (Dropbox, Google Drive...). It must start with https://" }),
+  F("artwork", "Artwork, 3000 x 3000 (link)", "Artwork", "link", "files", { required: true, hint: "A link to the cover: square, 3000 x 3000 pixels, JPG or PNG. No store logos or web addresses on it." }),
+  F("folder", "Folder with the release files (link)", "Folder", "link", "files", { hint: "Optional. One shared folder with the master, the cover, stems and clips." }),
+  F("language", "Language of the lyrics", "Language", "line", "stores", { required: true, hint: 'For example "Portuguese", "English", or "Instrumental".' }),
+  F("explicit", "Explicit lyrics?", "Explicit", "choice", "stores", { required: true, choices: ["No", "Yes", "Clean version"], hint: "Yes if the lyrics swear or are sexual. RouteNote asks for it." }),
+  F("genre", "Genre", "Genre", "line", "stores", { required: true, hint: 'The main store genre, for example "Dance" or "Electronic".' }),
+  F("subgenre", "Second genre", "Second genre", "line", "stores", { hint: 'Optional, for example "House".' }),
+  F("version", "Version (Original, Radio edit...)", "Version", "line", "stores", { hint: "Leave empty for the original." }),
+  F("writers", "Writers: full legal names, who wrote music and who wrote lyrics", "Writers", "text", "stores", { required: true, max: 600, hint: 'One person per line, for example "Full Legal Name: music and lyrics". Legal names, not artist names.' }),
+  F("producers", "Producers", "Producers", "line", "stores", { hint: "Optional. As they should be credited." }),
+  F("featuring", "Featured artists", "Featured artists", "line", "stores", { hint: "Only artists credited in the title." }),
+  F("copyright", "Copyright line (℗ and ©)", "Copyright line", "line", "stores", { neededBy: "upload", hint: 'For example "℗ 2026 BADSCANDAL · © 2026 BADSCANDAL". Drop needs it for the upload.' }),
+  F("lyrics", "Lyrics, full text", "Lyrics", "text", "lyrics", { neededBy: "lyrics", max: 8000, fill: ["Verse"], hint: "The whole text, line by line, as sung. Verse puts them live in the stores." }),
+  F("mood", "Mood (for the pitch)", "Mood", "line", "pitch", { neededBy: "pitch", hint: 'Can wait. For example "late night, euphoric".' }),
+  F("instruments", "Instruments (for the pitch)", "Instruments", "line", "pitch", { neededBy: "pitch", hint: 'Can wait. For example "synths, drum machine, vocal chops".' }),
+  F("story", "The song in two lines (for the pitch)", "The song in two lines", "text", "pitch", { neededBy: "pitch", max: 400, hint: "Can wait. What the song is about and why it matters, for Atlas's Spotify pitch." }),
+  F("isrc", "ISRC", "ISRC", "line", "later", { fill: ["Drop"], max: 40, hint: "Drop fills it from RouteNote." }),
+  F("upc", "UPC", "UPC", "line", "later", { fill: ["Drop"], max: 40, hint: "Drop fills it from RouteNote." }),
+  F("storeStatus", "Status at the distributor", "Status at the distributor", "line", "later", { fill: ["Drop"], hint: 'Drop keeps it current, for example "in review at RouteNote".' }),
+  F("spotifyTrack", "Spotify track link", "Spotify track link", "link", "later", { fill: ["Atlas", "Webmaster"], hint: "https://open.spotify.com/track/... once the song is out." }),
+  F("video", "Video (link)", "Video", "link", "later", { neededBy: "video", fill: ["Laura"], hint: "Laura fills it once the video is scheduled." }),
+  F("page", "Song page (link)", "Song page", "link", "later", { fill: ["Webmaster"], hint: "Webmaster fills it once the page is live: https://badscandal.com/<slug>" }),
+  F("notes", "Anything else the team should know", "Notes", "text", "notes", { max: 1000, hint: "Optional." }),
+];
+const FIELD = Object.fromEntries(PACK_FIELDS.map((f) => [f.key, f]));
+/* days = how many days before the release day the step is due */
+export const RELEASE_STEPS = [
+  { key: "upload", label: "Uploaded to RouteNote with the release date", owner: "Drop", days: 21 },
+  { key: "approved", label: "Approved by RouteNote (nothing waiting)", owner: "Drop", days: 16 },
+  { key: "pitch", label: "Spotify pitch sent", owner: "Atlas", days: 14 },
+  { key: "lyrics", label: "Lyrics live", owner: "Verse", days: 10 },
+  { key: "page", label: "Song page live on badscandal.com", owner: "Webmaster", days: 7 },
+  { key: "video", label: "Video scheduled on YouTube", owner: "Laura", days: 7 },
+  { key: "teasers", label: "Teaser clips approved for posting", owner: "Luke", days: 3 },
+  { key: "ads", label: "Ad drafts ready, inside the cap", owner: "Forge", days: 1 },
+  { key: "live", label: "Release day: Spotify link on the song page and the home card", owner: "Webmaster", days: 0 },
+];
+const STEP = Object.fromEntries(RELEASE_STEPS.map((s) => [s.key, s]));
+export const STEP_STATUS = ["todo", "working", "done", "blocked"];
+export const RELEASE_STATUS = ["draft", "scheduled", "cancelled"];
+const REL_KEY = "releases.json";
+const WEEKDAY = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const MONTH = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const isDay = (d) => DAY.test(d || "") && !Number.isNaN(Date.parse(d + "T12:00:00Z")) && new Date(d + "T12:00:00Z").toISOString().slice(0, 10) === d;
+/* "2026-12-11" -> "Fri 11 Dec" (what a bot and Luke read; the ISO date travels next to it) */
+export const dayWords = (d) => (isDay(d) ? `${WEEKDAY[new Date(d + "T12:00:00Z").getUTCDay()]} ${Number(d.slice(8, 10))} ${MONTH[Number(d.slice(5, 7)) - 1]}` : "");
+/* a song's name compared without accents, case, spaces or signs: "Me Dá Seu Body" = "me da seu body" = "medaseubody" */
+export const songKey = (s) => String(s == null ? "" : s).normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]/g, "");
+export const releaseId = (title) => songKey(title).slice(0, 40);
+const filled = (v) => v != null && String(v).trim() !== "";
+const lukeOrClaude = (by, what) => { if (by !== "Luke" && by !== "Claude") fail(`Only Luke or Claude can ${what}. If something about this release needs changing, send Luke a message.`, "not_allowed"); };
+const joinWords = (list) => (list.length < 2 ? list.join("") : list.slice(0, -1).join(", ") + " and " + list[list.length - 1]);
+
+/* every pack value through the same cleaners as the rest of the desk, then the secrets guard (the
+   lyrics too: ordinary words like "password" or a number in a line pass, a real "password: x1y2z3"
+   doesn't) */
+export function packValue(key, v) {
+  const f = FIELD[key];
+  if (!f) fail(`"${clean(key, 40)}" is not a field of the release pack. The fields are: ${PACK_FIELDS.map((x) => x.key).join(", ")}.`);
+  if (v == null) return "";
+  if (typeof v !== "string" && typeof v !== "number") fail(`${f.short} must be written as text.`);
+  let out;
+  if (f.kind === "link") {
+    const s = clean(v, 400);
+    if (!s) return "";
+    out = httpsLink(s);
+    if (!out) fail(`${f.short} must be a link that starts with https:// (copy it from the browser's address bar). Nothing was saved.`);
+  } else if (f.kind === "choice") {
+    const s = clean(v, 40);
+    if (!s) return "";
+    out = f.choices.find((c) => low(c) === low(s));
+    if (!out) fail(`${f.short} must be one of: ${f.choices.join(", ")}.`);
+  } else out = f.kind === "text" ? cleanText(v, f.max) : clean(v, f.max);
+  noSecrets(out);
+  return out;
+}
+
+/* The steps, dated back from the release day. A due date already past becomes TODAY: a release sent
+   late is compressed, never born late. tight = sent fewer than 21 days before its day. */
+export function scheduleSteps(date, today) {
+  const steps = RELEASE_STEPS.map((s) => {
+    const want = addDays(date, -s.days);
+    return { key: s.key, label: s.label, owner: s.owner, due: want < today ? today : want, status: "todo", note: "", link: "", at: null, by: null };
+  });
+  return { steps, tight: daysBetween(today, date) < 21 };
+}
+
+/* what one release looks like to /hq and to the tools */
+export function releaseView(r, today) {
+  const date = isDay(r.date) ? r.date : null;
+  const pack = r.pack || {};
+  const steps = (r.steps || []).map((s) => ({ ...s, late: s.status !== "done" && !!s.due && s.due < today, dueIn: s.due ? daysBetween(today, s.due) : null }));
+  const dueOf = (key) => { const s = steps.find((x) => x.key === key); return s ? s.due : date && STEP[key] ? addDays(date, -STEP[key].days) : null; };
+  const missing = [];
+  if (!date) missing.push({ key: "date", label: "Release day", short: "Release day", required: true, neededBy: "", step: "", owner: "", due: null });
+  for (const f of PACK_FIELDS) if (f.required && !filled(pack[f.key])) missing.push({ key: f.key, label: f.label, short: f.short, required: true, neededBy: "", step: "", owner: "", due: null });
+  for (const f of PACK_FIELDS) if (!f.required && f.neededBy && !filled(pack[f.key])) missing.push({ key: f.key, label: f.label, short: f.short, required: false, neededBy: f.neededBy, step: STEP[f.neededBy].label, owner: STEP[f.neededBy].owner, due: dueOf(f.neededBy) });
+  /* "Pack: 14 of 17 filled": the fields Luke fills; the team's "later" fields are not counted */
+  const own = PACK_FIELDS.filter((f) => f.group !== "later");
+  const open = steps.filter((s) => s.status !== "done");
+  const next = open[0] || null;
+  const released = r.status === "scheduled" && !!date && date <= today;
+  return { id: r.id, title: r.title, date, status: r.status, weekday: date ? WEEKDAY[new Date(date + "T12:00:00Z").getUTCDay()] : null, dateWords: dayWords(date),
+    daysToGo: date ? daysBetween(today, date) : null, released, tight: !!r.tight,
+    createdAt: r.createdAt || null, createdBy: r.createdBy || "", updatedAt: r.updatedAt || null, sentAt: r.sentAt || null,
+    pack: Object.fromEntries(PACK_FIELDS.filter((f) => filled(pack[f.key])).map((f) => [f.key, pack[f.key]])),
+    packFilled: own.filter((f) => filled(pack[f.key])).length, packTotal: own.length, missing, steps,
+    counts: { done: steps.length - open.length, total: steps.length, late: steps.filter((s) => s.late).length, blocked: steps.filter((s) => s.status === "blocked").length },
+    next: next ? { key: next.key, label: next.label, owner: next.owner, due: next.due, dueIn: next.dueIn, status: next.status, late: next.late } : null,
+    log: (r.log || []).slice().reverse() };
+}
+/* a release the team is still working on: sent, and not out for more than 14 days */
+export const releaseActive = (v) => v.status === "scheduled" && (v.daysToGo == null || v.daysToGo >= -14);
+
+export async function listReleases(store) { const { data } = await readDoc(store, REL_KEY, []); return Array.isArray(data) ? data : []; }
+/* id or title, without accents / case / spaces; a live release before a cancelled one of the same name.
+   drafts: false = the bots' view (a draft is Luke's, not the team's yet). */
+export function findRelease(list, song, { drafts = true } = {}) {
+  const k = songKey(song);
+  const seen = list.filter((r) => drafts || r.status !== "draft");
+  const hits = k ? seen.filter((r) => r.id === k || songKey(r.title) === k) : [];
+  const hit = hits.find((r) => r.status !== "cancelled") || hits[0];
+  if (hit) return hit;
+  const names = seen.filter((r) => r.status !== "cancelled").map((r) => `${r.title} (${r.id})`);
+  fail(`There is no release called "${clean(song, 60)}". ` + (names.length ? `The releases on the desk are: ${names.join(", ")}.` : "There are no releases on the desk yet."));
+}
+const logIt = (r, at, by, what) => { r.log = (r.log || []).concat({ at, by, what: clean(what, 240) }).slice(-LIMITS.releaseLog); }; /* the last 30 changes */
+/* one note to the whole team; a full board must not undo the release change that was already saved */
+async function tellTeam(store, now, roster, from, text) {
+  try { return (await sendMessage(store, now, roster, { from, to: "all", text, needs: "none" })).message.id; } catch { return null; }
+}
+
+/* Luke or Claude: start a draft, or change one. pack = only the fields being set ("" clears one);
+   the fields left out keep their value. Changing the title keeps the id. */
+export async function saveRelease(store, now, roster, a) {
+  const by = whoIs(a.by, roster, { people: true });
+  lukeOrClaude(by, "start or edit a release pack");
+  const today = spDay(now), at = new Date(now).toISOString();
+  const title = clean(a.title, 120);
+  noSecrets(title);
+  const dateGiven = a.date !== undefined && a.date !== null;
+  const date = clean(a.date, 10);
+  if (date && !isDay(date)) fail("The release day must be a date written YYYY-MM-DD, for example 2026-12-11.");
+  const pack = a.pack == null ? {} : a.pack;
+  if (typeof pack !== "object" || Array.isArray(pack)) fail("pack must be the fields of the release, each with its value.");
+  const unknown = Object.keys(pack).filter((k) => !FIELD[k]);
+  if (unknown.length) fail(`${unknown.length === 1 ? "This is not a field" : "These are not fields"} of the release pack: ${unknown.map((k) => clean(k, 40)).join(", ")}. The fields are: ${PACK_FIELDS.map((f) => f.key).join(", ")}.`);
+  const values = Object.fromEntries(Object.keys(pack).map((k) => [k, packValue(k, pack[k])]));
+  const id = a.id ? clean(a.id, 60) : "";
+  const past = (d) => `The release day ${dayWords(d)} has already passed. Pick today or a later day.`;
+  return mutate(store, REL_KEY, [], (list) => {
+    if (id) {
+      const r = list.find((x) => x.id === id);
+      if (!r) fail(`There is no release with the id "${id}".`);
+      if (r.status === "cancelled") fail(`${r.title} was cancelled. Start a new release instead.`);
+      const changes = [];
+      if (title && title !== r.title) { changes.push(`renamed it from "${r.title}" to "${title}"`); r.title = title; }
+      if (dateGiven && date !== (r.date || "")) {
+        if (r.status === "scheduled") fail(`${r.title} has already gone to the team. Use "Change the date" instead: it moves every open step and tells the team.`);
+        if (date && date < today) fail(past(date));
+        changes.push(date ? `set the release day to ${dayWords(date)}` : "cleared the release day");
+        r.date = date;
+      }
+      r.pack = r.pack || {};
+      const changed = Object.keys(values).filter((k) => (r.pack[k] || "") !== values[k]);
+      for (const k of changed) { if (values[k]) r.pack[k] = values[k]; else delete r.pack[k]; }
+      if (changed.length) changes.push(`changed ${joinWords(changed.map((k) => FIELD[k].short))}`);
+      if (!changes.length) return { skip: true, value: r };
+      r.updatedAt = at;
+      logIt(r, at, by, `${by} ${changes.join("; ")}`);
+      return { value: r };
+    }
+    if (!title) fail("A release needs its title.");
+    const base = releaseId(title);
+    if (!base) fail("The title needs at least one letter or digit.");
+    if (date && date < today) fail(past(date));
+    const clash = list.find((x) => x.id === base);
+    /* the same form sent twice must not make two releases; a cancelled one may be started again */
+    if (clash && clash.status !== "cancelled") fail(`There is already a release called "${clash.title}" (${clash.status === "draft" ? "a draft" : "sent to the team"}). Open it and edit it instead of starting a second one.`, "exists");
+    let nid = base;
+    for (let n = 2; list.some((x) => x.id === nid); n++) nid = base + n;
+    if (list.length >= LIMITS.releases) fail(`The desk holds ${LIMITS.releases} releases, which is the limit. Nothing was saved. Ask Claude to clear out old ones.`, "limit");
+    const r = { id: nid, title, date, status: "draft", createdAt: at, createdBy: by, updatedAt: at, sentAt: null, tight: false,
+      pack: Object.fromEntries(Object.entries(values).filter(([, v]) => v)), steps: [], log: [] };
+    logIt(r, at, by, `${by} started the pack` + (date ? ` for ${dayWords(date)}` : ""));
+    list.unshift(r);
+    return { value: r };
+  });
+}
+
+/* Luke or Claude: the pack goes to the team. The steps get their dates and ONE note goes to all. */
+export async function sendRelease(store, now, roster, a) {
+  const by = whoIs(a.by, roster, { people: true });
+  lukeOrClaude(by, "send a release to the team");
+  const today = spDay(now), at = new Date(now).toISOString();
+  const out = await mutate(store, REL_KEY, [], (list) => {
+    const r = list.find((x) => x.id === clean(a.id, 60));
+    if (!r) fail(`There is no release with the id "${clean(a.id, 60)}".`);
+    if (r.status === "scheduled") return { skip: true, value: { release: r, already: true } }; /* sent twice: nothing happens the second time */
+    if (r.status === "cancelled") fail(`${r.title} was cancelled. Start a new release instead.`);
+    const miss = releaseView(r, today).missing.filter((m) => m.required);
+    if (miss.length) { const e = new StaffError(`Still missing: ${miss.map((m) => m.short).join(", ")}. Fill ${miss.length === 1 ? "it" : "them"} in, then send again.`, "missing"); e.missing = miss.map((m) => m.key); throw e; }
+    if (r.date < today) fail(`The release day ${dayWords(r.date)} has already passed. Pick a new day first.`);
+    const s = scheduleSteps(r.date, today);
+    Object.assign(r, { status: "scheduled", sentAt: at, updatedAt: at, steps: s.steps, tight: s.tight });
+    logIt(r, at, by, `${by} sent it to the team for ${dayWords(r.date)}` + (s.tight ? ` (${daysBetween(today, r.date)} days before release: the early steps are due today)` : ""));
+    return { value: { release: r, already: false } };
+  });
+  if (out.already) return { ...out, told: null };
+  const r = out.release;
+  const told = await tellTeam(store, now, roster, by, `New release: ${r.title}, out ${dayWords(r.date)}. The pack is on the desk (tool release_pack). Your steps and their dates are in my_day.` +
+    (r.tight ? ` It is ${daysBetween(today, r.date)} days away, so the steps that should already be done are due today.` : ""));
+  return { ...out, told };
+}
+
+/* Luke or Claude: a new release day. Open steps get new dates; done steps keep theirs. */
+export async function moveRelease(store, now, roster, a) {
+  const by = whoIs(a.by, roster, { people: true });
+  lukeOrClaude(by, "move a release");
+  const today = spDay(now), at = new Date(now).toISOString();
+  const date = clean(a.date, 10);
+  if (!isDay(date)) fail("The new release day must be a date written YYYY-MM-DD, for example 2026-12-11.");
+  if (date < today) fail(`${dayWords(date)} has already passed. Pick today or a later day.`);
+  const out = await mutate(store, REL_KEY, [], (list) => {
+    const r = list.find((x) => x.id === clean(a.id, 60));
+    if (!r) fail(`There is no release with the id "${clean(a.id, 60)}".`);
+    if (r.status === "cancelled") fail(`${r.title} was cancelled. Start a new release instead.`);
+    const from = r.date || "";
+    if (from === date) return { skip: true, value: { release: r, moved: false } };
+    if (r.status === "scheduled") {
+      const s = scheduleSteps(date, today);
+      for (const st of r.steps) if (st.status !== "done") { const n = s.steps.find((x) => x.key === st.key); if (n) st.due = n.due; }
+      r.tight = r.tight || s.tight;
+    }
+    r.date = date; r.updatedAt = at;
+    logIt(r, at, by, from ? `${by} moved the date from ${dayWords(from)} to ${dayWords(date)}` : `${by} set the release day to ${dayWords(date)}`);
+    return { value: { release: r, moved: true, from } };
+  });
+  if (!out.moved || out.release.status !== "scheduled") return { ...out, told: null };
+  const told = await tellTeam(store, now, roster, by, `${out.release.title} moved from ${dayWords(out.from)} to ${dayWords(date)}. Every step that is not done has a new date: see my_day.`);
+  return { ...out, told };
+}
+
+/* Luke or Claude: called off. The team is told only if it had heard of it (a draft never went out). */
+export async function cancelRelease(store, now, roster, a) {
+  const by = whoIs(a.by, roster, { people: true });
+  lukeOrClaude(by, "cancel a release");
+  const at = new Date(now).toISOString();
+  const out = await mutate(store, REL_KEY, [], (list) => {
+    const r = list.find((x) => x.id === clean(a.id, 60));
+    if (!r) fail(`There is no release with the id "${clean(a.id, 60)}".`);
+    if (r.status === "cancelled") return { skip: true, value: { release: r, was: "cancelled" } };
+    const was = r.status;
+    r.status = "cancelled"; r.updatedAt = at;
+    logIt(r, at, by, `${by} cancelled it`);
+    return { value: { release: r, was } };
+  });
+  if (out.was !== "scheduled") return { ...out, told: null };
+  const told = await tellTeam(store, now, roster, by, `${out.release.title} (out ${dayWords(out.release.date)}) is cancelled. Stop working on its steps.`);
+  return { ...out, told };
+}
+
+/* who may fill a field: Luke and Claude anything; Nova whatever any bot may fill; a bot its own */
+const mayFill = (f, by) => by === "Luke" || by === "Claude" || (f.fill.length && (by === "Nova" || f.fill.includes(by)));
+export const fieldsFor = (bot) => PACK_FIELDS.filter((f) => mayFill(f, bot)).map((f) => f.key);
+
+/* a bot fills ONE field it is responsible for (Drop the ISRC, Verse the lyrics...) */
+export async function fillRelease(store, now, roster, a) {
+  const by = whoIs(a.by, roster, { people: true });
+  const key = Object.keys(FIELD).find((k) => low(k) === low(a.field));
+  if (!key) { const mine = fieldsFor(by); fail(`"${clean(a.field, 40)}" is not a field of the release pack.` + (mine.length ? ` You can fill: ${mine.join(", ")}.` : " There is no field for you to fill.")); }
+  const f = FIELD[key];
+  if (!mayFill(f, by)) fail(`${f.short} is filled by ${f.fill.length ? f.fill.join(" or ") + " (or Nova, Luke or Claude)" : "Luke or Claude only"}, not by you. If it is wrong or missing, send ${f.fill.length ? f.fill[0] : "Luke"} a message.`, "not_allowed");
+  const value = packValue(key, a.value);
+  if (!value) fail(`value is empty. Write the ${f.short} itself.`);
+  const at = new Date(now).toISOString();
+  return mutate(store, REL_KEY, [], (list) => {
+    const r = findRelease(list, a.id || a.song, { drafts: by === "Luke" || by === "Claude" });
+    if (r.status === "cancelled") fail(`${r.title} was cancelled. Nothing was saved.`);
+    r.pack = r.pack || {};
+    if (r.pack[key] === value) return { skip: true, value: r };
+    const had = filled(r.pack[key]);
+    r.pack[key] = value; r.updatedAt = at;
+    logIt(r, at, by, `${by} ${had ? "changed" : "filled"} ${f.short}`);
+    return { value: r };
+  });
+}
+
+/* the step's owner, Nova, Claude or Luke marks a step. A bot's mark is also a line in the live log. */
+export async function setStep(store, now, roster, a) {
+  const by = whoIs(a.by, roster, { people: true });
+  const status = low(a.status);
+  if (!STEP_STATUS.includes(status)) fail(`status must be one of: ${STEP_STATUS.join(", ")}. Use done only when it is really done.`);
+  const note = cleanText(a.note, 240);
+  const rawLink = clean(a.link, 400), link = httpsLink(rawLink);
+  if (rawLink && !link) fail("link must start with https:// . Nothing was saved.");
+  if (status === "blocked" && note.length < 3) fail("A blocked step needs a note: say exactly what is needed and from whom.");
+  noSecrets(note, link);
+  const at = new Date(now).toISOString();
+  const { release: r, st, changed } = await mutate(store, REL_KEY, [], (list) => {
+    const r = findRelease(list, a.id || a.song, { drafts: by === "Luke" || by === "Claude" });
+    if (r.status === "cancelled") fail(`${r.title} was cancelled. Nothing was saved.`);
+    if (r.status !== "scheduled") fail(`${r.title} has not been sent to the team yet, so it has no steps.`);
+    const want = low(a.step);
+    const st = (r.steps || []).find((s) => s.key === want || low(s.label) === want);
+    if (!st) fail(`"${clean(a.step, 60)}" is not a step of this release. The steps are: ${r.steps.map((s) => s.key).join(", ")}.`);
+    if (by !== st.owner && !["Nova", "Claude", "Luke"].includes(by)) fail(`"${st.label}" is ${st.owner}'s step. Only ${st.owner}, Nova, Claude or Luke can mark it. Mark only your own steps.`, "not_allowed");
+    if (st.status === status && st.note === note && (!link || st.link === link)) return { skip: true, value: { release: r, st, changed: false } };
+    Object.assign(st, { status, note, ...(link ? { link } : {}), at, by });
+    r.updatedAt = at;
+    logIt(r, at, by, `${by}: ${st.label} — ${status === "todo" ? "reopened" : status}` + (note ? ` (${note})` : ""));
+    return { value: { release: r, st, changed: true } };
+  });
+  if (changed && !PEOPLE.includes(by)) {
+    try {
+      await postUpdate(store, now, roster, { bot: by, status: status === "todo" ? "info" : status, message: `${r.title}: ${st.label} — ${status === "todo" ? "reopened" : status}` + (note ? `: ${note}` : ""), link: st.link }, { release: r.id });
+    } catch {} /* the step is saved; a full live log must not undo it */
+  }
+  return r;
+}
+
 /* ---------- the whole desk in one answer (for /hq and for the bots' tools) ---------- */
-/* hq: the dashboard model from netlify/lib/hq.mjs (optional): gives each bot its duty and tasks. */
-export function workers(roster, { hq, updates, messages, cards, seen, today, nowHM }) {
+/* hq: the dashboard model from netlify/lib/hq.mjs (optional): gives each bot its duty and tasks.
+   releases: releaseView()s (optional): each bot's open release steps; a late or blocked one makes the
+   bot late / blocked, like a duty does (11 Nov 2026). */
+export function workers(roster, { hq, updates, messages, cards, seen, today, nowHM, releases = [] }) {
   const duties = (hq && hq.team && hq.team.duties && hq.team.duties.byOwner) || [];
   const tasks = (hq && hq.team && hq.team.tasks) || [];
   return roster.map((b) => {
@@ -570,10 +918,13 @@ export function workers(roster, { hq, updates, messages, cards, seen, today, now
     const todays = updates.filter((u) => low(u.bot) === k && u.sp.slice(0, 10) === today);
     const open = tasks.filter((t) => low(t.owner) === k);
     const asks = waitingOn(messages, b.name);
+    const relSteps = releases.filter(releaseActive).flatMap((r) => r.steps.filter((s) => s.status !== "done" && low(s.owner) === k)
+      .map((s) => ({ id: r.id, title: r.title, key: s.key, label: s.label, due: s.due, dueIn: s.dueIn, status: s.status, late: s.late, note: s.note || "" })))
+      .sort((a, b) => (a.due < b.due ? -1 : a.due > b.due ? 1 : 0));
     let state = "idle";
     if (b.state === "paused") state = "paused";
-    else if (items.some((d) => d.status === "blocked") || (last && last.status === "blocked" && last.sp.slice(0, 10) === today)) state = "blocked";
-    else if (items.some((d) => d.late)) state = "late";
+    else if (items.some((d) => d.status === "blocked") || relSteps.some((s) => s.status === "blocked") || (last && last.status === "blocked" && last.sp.slice(0, 10) === today)) state = "blocked";
+    else if (items.some((d) => d.late) || relSteps.some((s) => s.late)) state = "late";
     else if (items.length && items.every((d) => d.status === "done")) state = "done";
     else if (todays.length && todays[0].status === "working") state = "working"; /* updates are newest first */
     else if (todays.length && todays[0].status === "done" && !items.length) state = "done";
@@ -584,28 +935,67 @@ export function workers(roster, { hq, updates, messages, cards, seen, today, now
       blockers: b.blockers || "", paused: b.state === "paused", state, duties: items, tasks: open.slice(0, 12), lateTasks: open.filter((t) => t.late).length,
       last: last ? { at: last.sp, status: last.status, message: last.message, link: last.link } : null, updatesToday: todays.length,
       card: cards[k] || null, waiting: asks.map((m) => ({ id: m.id, from: m.from, text: m.text.slice(0, 200), needs: m.needs, at: m.sp })),
-      seen: s ? s.at : null, connected: !!s };
+      releaseSteps: relSteps, seen: s ? s.at : null, connected: !!s };
   });
 }
 
 export async function loadDesk(store, now) {
-  const [roster, updates, messages, cardsDoc, config] = await Promise.all([getRoster(store), listUpdates(store, now, 3), listMessages(store, now, 2), readDoc(store, "cards.json", {}), getConfig(store)]);
+  const [roster, updates, messages, cardsDoc, config, releases] = await Promise.all([getRoster(store), listUpdates(store, now, 3), listMessages(store, now, 2), readDoc(store, "cards.json", {}), getConfig(store), listReleases(store)]);
   const [seen, income] = await Promise.all([getSeen(store, roster), incomeState(store, now)]);
-  return { roster, updates, messages, cards: cardsDoc.data || {}, seen, income, config };
+  return { roster, updates, messages, cards: cardsDoc.data || {}, seen, income, config, releases };
 }
+
+/* Has the person a message was sent to used the desk since it was written? (11 Nov 2026: so Luke
+   sees his answer land.) null for "all", Luke and HQ: nobody's visit can be told for them. */
+export function seenBy(seen, to, at) {
+  if (!to || to === "all" || to === "Luke" || to === "HQ") return { seen: null, seenAt: null };
+  const s = seen && seen[to];
+  return s && s.at > at ? { seen: true, seenAt: s.at } : { seen: false, seenAt: null };
+}
+/* the last 10 things Luke answered (a reply) or settled (an option, "mark as done") in 48 hours, newest
+   first, each with whether its sender has looked at the desk since */
+export function answeredByLuke(messages, seen, now) {
+  const since = new Date(now - 48 * 3600000).toISOString();
+  const replies = messages.filter((m) => m.from === "Luke" && m.re).sort((a, b) => (a.at < b.at ? 1 : -1));
+  const out = [];
+  for (const m of messages) {
+    if (m.from === "Luke") continue;
+    const rep = replies.find((x) => x.re === m.id) || null;
+    const set = m.resolved && m.resolved.by === "Luke" ? m.resolved : null;
+    const at = rep ? rep.at : set ? set.at : null;
+    if (!at || at < since) continue;
+    const text = rep ? rep.text : set.note && set.note !== "answered" ? set.note : "Marked as done";
+    out.push({ id: m.id, from: m.from, to: m.to, text: m.text, needs: m.needs, at: m.at, sp: m.sp,
+      reply: { by: "Luke", kind: rep ? "reply" : "settled", text, at, sp: spStamp(Date.parse(at)), ...seenBy(seen, m.from, at) } });
+  }
+  return out.sort((a, b) => (a.reply.at < b.reply.at ? 1 : -1)).slice(0, 10);
+}
+/* releases for /hq: coming ones first (soonest first), then the ones that are out (newest first),
+   cancelled last; 20 at most */
+function releaseOrder(views) {
+  const rank = (v) => (v.status === "cancelled" ? 2 : v.released ? 1 : 0);
+  return views.slice().sort((a, b) => rank(a) - rank(b) || (rank(a) === 1 ? ((a.date || "") < (b.date || "") ? 1 : -1) : ((a.date || "9") < (b.date || "9") ? -1 : (a.date || "9") > (b.date || "9") ? 1 : 0)));
+}
+/* what the page needs to build the form and the pipeline without hard-coding either */
+export const packFieldsOut = () => PACK_FIELDS.map((f) => ({ key: f.key, label: f.label, short: f.short, kind: f.kind, required: f.required, neededBy: f.neededBy, choices: f.choices, hint: f.hint, fill: f.fill, group: f.group, max: f.max }));
+export const releaseStepsOut = () => RELEASE_STEPS.map((s) => ({ key: s.key, label: s.label, owner: s.owner, days: s.days }));
 
 export function board(desk, now, hq) {
   const today = spDay(now), nowHM = spHM(now);
+  const views = (desk.releases || []).map((r) => releaseView(r, today));
+  const mark = (m) => ({ ...m, ...seenBy(desk.seen, m.to, m.at) });
   /* one log: when the sheet was read, its Updates tab and the connector are already merged there
      (hqModel -> team.live.feed), so a bot that still writes only the sheet is not shown as silent */
   const live = hq && hq.team && hq.team.live && hq.team.live.ready ? hq.team.live.feed : null;
   const updates = live ? live.map((u) => ({ sp: u.at, at: u.at, bot: u.bot, status: u.status, message: u.message, link: u.link || "" })) : desk.updates;
-  const staff = workers(desk.roster, { hq, updates, messages: desk.messages, cards: desk.cards, seen: desk.seen, today, nowHM });
+  const staff = workers(desk.roster, { hq, updates, messages: desk.messages, cards: desk.cards, seen: desk.seen, today, nowHM, releases: views });
   const lastSeen = Object.entries(desk.seen).filter(([n]) => n !== "Claude").sort((a, b) => (a[1].at < b[1].at ? 1 : -1))[0] || null;
   return {
     today, now: spStamp(now), staff,
     updates: updates.slice(0, 60),
-    messages: threads(desk.messages).slice(0, 80),
+    messages: threads(desk.messages).slice(0, 80).map((t) => ({ ...mark(t), replies: t.replies.map(mark) })),
+    answered: answeredByLuke(desk.messages, desk.seen, now),
+    releases: releaseOrder(views).slice(0, 20), packFields: packFieldsOut(), releaseSteps: releaseStepsOut(),
     waiting: { luke: waitingOn(desk.messages, "Luke"), claude: waitingOn(desk.messages, "Claude"), bots: desk.messages.filter((m) => isOpen(m) && !PEOPLE.includes(m.to)).length },
     income: desk.income,
     connector: { botsOn: desk.config.botsOn, changedAt: desk.config.changedAt, lastUsed: lastSeen ? { bot: lastSeen[0], at: lastSeen[1].at, tool: lastSeen[1].tool } : null,
@@ -615,10 +1005,12 @@ export function board(desk, now, hq) {
   };
 }
 
-/* ---------- the site's own check, twice a day (netlify/functions/staffcheck.mjs) ----------
+/* ---------- the site's own check, three times a day (netlify/functions/staffcheck.mjs) ----------
    Facts only, no judgement: what a person would otherwise have to look up tab by tab. */
+/* which of the three checks this is (09:35, 15:35, 21:35 São Paulo since 11 Nov 2026) */
+export const dayPart = (now) => { const hm = spHM(now); return hm < "13:00" ? "morning" : hm < "19:00" ? "afternoon" : "evening"; };
 export function checkReport({ desk, hq, hqState, now }) {
-  const today = spDay(now), hm = spHM(now), morning = hm < "15:00";
+  const today = spDay(now), hm = spHM(now), part = dayPart(now);
   const b = board(desk, now, hq);
   const lines = [], problems = [];
   const say = (ok, text) => { (ok ? lines : problems).push(text); };
@@ -647,7 +1039,23 @@ export function checkReport({ desk, hq, hqState, now }) {
   if (b.waiting.luke.length) problems.push(`${b.waiting.luke.length} waiting on Luke (oldest ${age(b.waiting.luke[0])} h): "${b.waiting.luke[0].text.slice(0, 90)}"`);
   const stale = desk.messages.filter((m) => isOpen(m) && m.to !== "Luke" && age(m) >= 24);
   for (const m of stale.slice(0, 5)) problems.push(`${m.to} has not answered ${m.from} for ${age(m)} h: "${m.text.slice(0, 70)}"`);
-  /* 4. the dashboard's own sources */
+  /* 4. the releases on the desk: late and blocked steps, and a pack field a step needs within 3 days */
+  for (const v of (desk.releases || []).map((r) => releaseView(r, today)).filter(releaseActive)) {
+    for (const st of v.steps) {
+      if (st.status === "blocked") problems.push(`${v.title}: ${st.label} is blocked (${st.owner})` + (st.note ? `: ${st.note.replace(/\s+/g, " ").slice(0, 120)}` : ""));
+      else if (st.late) problems.push(`${v.title}: ${st.label} is late (${st.owner}, due ${dayWords(st.due)})`);
+    }
+    if (v.released) continue;
+    const soon = {};
+    for (const m of v.missing) {
+      const st = v.steps.find((x) => x.key === m.neededBy);
+      if (st && st.status !== "done" && st.dueIn <= 3) (soon[st.key] || (soon[st.key] = { st, fields: [] })).fields.push(m.short.toLowerCase());
+    }
+    const parts = Object.values(soon).map((g) => `${joinWords(g.fields)} still missing and ${g.st.label} is due ${dayWords(g.st.due)}`);
+    if (parts.length) problems.push(`${v.title}: ${parts.join("; ")}`);
+    else if (!v.counts.late && !v.counts.blocked) lines.push(`${v.title}: ${v.counts.done} of ${v.counts.total} steps done, out ${dayWords(v.date)}`);
+  }
+  /* 5. the dashboard's own sources */
   if (hqState) {
     if (hqState.connected === false) problems.push("The HQ sheet is not connected");
     else if (hqState.error) problems.push("The HQ sheet can't be read: " + hqState.error);
@@ -663,7 +1071,7 @@ export function checkReport({ desk, hq, hqState, now }) {
      password or an account number is left out here, so the report itself always goes through */
   const scrub = (list) => list.map((t) => (secretIn(t) ? "(one line left out: it looked like a password, a code or an account number)" : t));
   problems.splice(0, problems.length, ...scrub(problems)); lines.splice(0, lines.length, ...scrub(lines));
-  const title = `HQ check, ${today} ${morning ? "morning" : "evening"}: ` + (problems.length ? `${problems.length} thing${problems.length === 1 ? "" : "s"} to look at` : "all running");
+  const title = `HQ check, ${today} ${part}: ` + (problems.length ? `${problems.length} thing${problems.length === 1 ? "" : "s"} to look at` : "all running");
   const text = [title, ...(problems.length ? ["", "Needs a look:", ...problems.map((p) => "- " + p)] : []), "", "Running:", ...lines.map((l) => "- " + l)].join("\n").slice(0, 1500);
-  return { title, problems, lines, text, part: morning ? "am" : "pm", day: today };
+  return { title, problems, lines, text, part, day: today };
 }

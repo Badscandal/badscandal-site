@@ -1,5 +1,5 @@
 /* Reads everything /hq's sheet side shows and builds the answer of /api/hq/data (moved out of
-   netlify/functions/hq.mjs on 11 Nov 2026 so the staff connector and the twice-daily check read the
+   netlify/functions/hq.mjs on 11 Nov 2026 so the staff connector and the site's own check read the
    very same picture). READ-ONLY: the bots' Google Sheet, Meta's own spend, the ECB rates. The one
    new input is the staff desk (netlify/lib/staff.mjs): the bots' connector updates join the sheet's
    Updates tab and can finish or block today's duties.
@@ -13,7 +13,8 @@ import { hqModel, HQ_TABS } from "./hq.mjs";
 import { sampleMeta, sampleSheets } from "./hq-sample.mjs";
 import { EXPIRED_CODE, keyHealth, readKeyHealth, readMeta } from "./metaread.mjs";
 import { DEFAULT_ACCOUNT } from "./metaspend.mjs";
-import { dutyOverlay, listUpdates, spDay, spHM } from "./staff.mjs";
+import { dutyOverlay, listReleases, listUpdates, releaseView, spDay, spHM } from "./staff.mjs";
+import { sampleReleases } from "./staff-sample.mjs";
 
 /* the sheet is read at most every 2 minutes so the bots' live updates show quickly; one batch read
    + one small read of the optional "Updates" tab, well inside Google's limits */
@@ -66,10 +67,15 @@ const monthsIn = (sheets, today) => {
   return [...set].sort().reverse();
 };
 
-/* what the bots said through the connector over the last three days; never breaks the page */
+/* what the bots said through the connector over the last three days, and the releases sent to the
+   team (11 Nov 2026: they join the sheet's Releases tab, hq.mjs mergeReleases); never breaks the page */
+const scheduled = (list, today) => list.filter((r) => r && r.status === "scheduled").map((r) => releaseView(r, today));
 async function staffSide(desk, now) {
   if (!desk) return null;
-  try { const updates = await listUpdates(desk, now, 3); return { updates, overlay: dutyOverlay(updates, spDay(now)) }; } catch { return null; }
+  try {
+    const [updates, releases] = await Promise.all([listUpdates(desk, now, 3), listReleases(desk).catch(() => [])]);
+    return { updates, overlay: dutyOverlay(updates, spDay(now)), releases: scheduled(releases, spDay(now)) };
+  } catch { return null; }
 }
 
 export async function loadHq({ cache, desk = null, env, now = Date.now(), sample = false, fresh = false, fetchImpl }) {
@@ -79,7 +85,8 @@ export async function loadHq({ cache, desk = null, env, now = Date.now(), sample
     if (!sample) return { connected: false, need: [!rawKey && "GOOGLE_SA_KEY", !sheetId && "HQ_SHEET_ID"].filter(Boolean) };
     const sheets = sampleSheets(today, now);
     const r = await rates(cache, monthsIn(sheets, today), today, fetchImpl);
-    return { connected: true, sample: true, ...hqModel(sheets, today, r.fx, sampleMeta(sheets, today), spHM(now)), health: healthFor(now - 4 * 60000, r, today),
+    /* the made-up desk releases join the made-up sheet, so the sample shows one list as the real page does */
+    return { connected: true, sample: true, ...hqModel(sheets, today, r.fx, sampleMeta(sheets, today), spHM(now), { releases: scheduled(sampleReleases(now), today) }), health: healthFor(now - 4 * 60000, r, today),
       metaKey: { state: "ok", text: "Meta key: reading OK, last read 12 min ago (sample)" }, generated: new Date(now).toISOString() };
   }
   let got = null;
