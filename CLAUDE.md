@@ -973,6 +973,19 @@ Brief: `../TOUCHME-LANDING-BUILD-BRIEF.md` (outside the repo on purpose).
   own currency + EUR estimates), Team (tasks per owner, who last logged). Missing numbers stay
   missing ("not read" is never 0). `/hq?sample=1` shows MADE-UP numbers (`hq-sample.mjs`) under a
   SAMPLE banner. The page only displays; nothing on it changes ads, posts, sheets or money.
+* **`GET /api/hq/summary` (11 Nov 2026), for the LDashboard phone app's BADSCANDAL tab**
+  (repo luke-lilian-before-we-go; its own `/api/hq` calls this server to server, behind that app's
+  access code). Same handler (`netlify/functions/hq.mjs`), same sheet cache, built ONLY from
+  `hqModel()` via `hqSummary()` in `netlify/lib/hq.mjs`, so it can't disagree with /hq: the cap
+  block, next release + its late steps, per song latest streams / day change / momentum / trend +
+  a 14-day spark, followers per platform with day/week change, the 10 most recent fans, this
+  month's money (own currencies + EUR estimates), tasks for Luke and late/blocked counts. ~3 KB.
+  Auth: `Authorization: Bearer <HQ_APP_TOKEN>` only (`bearerOk()` in `netlify/lib/session.mjs`,
+  SHA-256 both sides then constant-time compare). Netlify env `HQ_APP_TOKEN` (the SAME value is set
+  on the LDashboard site); unset -> 503 (fails closed), wrong -> 401, no cookie, no CORS headers,
+  GET only, `?sample=1` works behind the token. The app token never opens `/api/hq/data`.
+  Never print or commit the token; it lives only in the two Netlify sites' env.
+  Tests: `tests/hq-summary.test.mjs` (runs the real handler with a fake Blobs store).
 * **90-day rule:** `netlify/functions/rollup.mjs` (daily 06:00 UTC, production
   only) folds raw keys older than 90 days into `daily/<day>.json` counts and
   deletes them; the portal merges those back for old ranges.
