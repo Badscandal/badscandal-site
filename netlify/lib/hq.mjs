@@ -264,15 +264,50 @@ export function moneyReport(spend, income, royalties, today, fx = {}) {
   };
 }
 
-/* sheets: { Growth: [[...cells]], ... } straight from the sheet. today: São Paulo "YYYY-MM-DD". */
-export function hqModel(sheets, today, fx = {}) {
+/* ---------- Meta from Meta (11 Nov 2026) ----------
+   When the read-only Meta read works, the Meta part of the cap and of Money comes from Meta itself
+   (the whole ad account, level=account), not from the sheet's Meta rows; Google and TikTok still come
+   from the sheet. Only days inside the read range are replaced. A day where the sheet's Meta total
+   differs from Meta's by more than 1.00 is listed as "sheet says X". If the read failed, the sheet's
+   rows stay and the reason is passed on so the page can say so in plain words.
+   meta: undefined (sample: nothing to say) | { ok:false, reason } | { ok:true, rows:[{day, spend,
+   currency}], since, until }. Returns { rows, source }. */
+export const isMetaPlatform = (p) => /^(meta|facebook|instagram|fb|ig)\b/i.test(norm(p));
+export function metaSpend(spendRows, meta) {
+  if (!meta) return { rows: spendRows, source: null };
+  if (!meta.ok) return { rows: spendRows, source: { from: "sheet", reason: meta.reason || "unknown", expired: !!meta.expired } };
+  const inRange = (d) => d >= meta.since && d <= meta.until;
+  const currency = (meta.rows.find((r) => r.currency) || {}).currency || "USD";
+  const sheet = {}, api = {}, keep = [];
+  for (const r of spendRows) {
+    const d = norm(r.date).slice(0, 10);
+    if (isMetaPlatform(r.platform) && DAY.test(d) && inRange(d)) {
+      const a = num(r.spend);
+      if (a != null && (r.currency || "USD").toUpperCase() === currency) sheet[d] = round((sheet[d] || 0) + a);
+      continue; /* replaced by Meta's own number */
+    }
+    keep.push(r);
+  }
+  for (const r of meta.rows) if (DAY.test(r.day) && inRange(r.day)) api[r.day] = round((api[r.day] || 0) + (Number(r.spend) || 0));
+  const mismatch = Object.keys(sheet).sort().filter((d) => Math.abs(sheet[d] - (api[d] || 0)) > 1.0)
+    .map((d) => ({ d, meta: api[d] || 0, sheet: sheet[d], currency }));
+  const added = Object.keys(api).sort().map((d) => ({ date: d, platform: "Meta", campaign: "ALL (account)", spend: String(api[d]), currency }));
+  return { rows: [...keep, ...added], source: { from: "meta", currency, since: meta.since, until: meta.until,
+    total: round(Object.values(api).reduce((x, y) => x + y, 0)), mismatch } };
+}
+
+/* sheets: { Growth: [[...cells]], ... } straight from the sheet. today: São Paulo "YYYY-MM-DD".
+   meta: see metaSpend() (optional). */
+export function hqModel(sheets, today, fx = {}, meta) {
   const t = Object.fromEntries(HQ_TABS.map((n) => [n, rowsToObjects(sheets[n])]));
+  const ms = metaSpend(t.Spend, meta);
+  t.Spend = ms.rows;
   const songs = songsReport(t.Songs, t.Royalties, t.Releases, today);
   const growth = growthReport(t.Growth, today);
   const fans = fansReport(t.Fans);
   const releases = releasesReport(t.Releases, today);
   const team = teamReport(t.Tasks, [t.Growth, t.Songs, t.Fans, t.Royalties], today);
-  const money = moneyReport(t.Spend, t.Income, t.Royalties, today, fx);
+  const money = { ...moneyReport(t.Spend, t.Income, t.Royalties, today, fx), metaSource: ms.source };
   const empty = HQ_TABS.filter((n) => !t[n].length);
   return { today, songs, growth, fans, releases, team, money, empty,
     next: releases.find((r) => r.date && r.date >= today) || null };

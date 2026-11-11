@@ -57,6 +57,15 @@
     if (c.estimated) msg += " Billed: " + amounts(c.native) + (c.rate ? " (EUR counted at this month's average, 1 EUR = " + c.rate + " USD)." : " (no rate yet, EUR part not counted).");
     if (c.lastDay) msg += " Last day logged: " + day(c.lastDay) + ".";
     $("capMsg").textContent = msg;
+    /* where Meta's part came from: Meta itself (read-only), or the sheet because the read failed */
+    var src = data.money.metaSource;
+    $("capMeta").innerHTML = !src ? "" : src.from === "meta"
+      ? "Meta counted from Meta itself (" + esc(money(src.total, src.currency)) + " since " + esc(day(src.since)) + "); Google and TikTok from the sheet." +
+        (src.mismatch.length ? src.mismatch.map(function (x) { return "<br>" + esc(day(x.d)) + ": Meta " + esc(money(x.meta, x.currency)) + ' · <b class="says">sheet says ' + esc(money(x.sheet, x.currency)) + "</b>"; }).join("") : "")
+      : '<b class="says">Meta\'s own numbers couldn\'t be read' + (src.expired ? " (the Meta key has expired)" : "") + ", so Meta comes from the sheet.</b> Reason: " + esc(src.reason);
+    var k = data.metaKey, kl = $("metaKey");
+    kl.hidden = !k;
+    if (k) { kl.textContent = k.text; kl.className = "keyline" + (k.state === "ok" ? " ok" : k.state === "expired" || k.state === "error" ? " bad" : ""); }
     var n = data.next;
     $("nextSong").textContent = n ? n.song : "None set";
     $("nextMsg").textContent = n ? (n.daysToGo === 0 ? "Out today" : n.daysToGo + " days to go") + " · " + day(n.date) + (n.late ? " · " + n.late + " step" + (n.late > 1 ? "s" : "") + " late" : " · on time") : "Tell Nova the next song and a Friday.";
@@ -118,7 +127,9 @@
       var k = Object.keys(o || {});
       return '<div class="tile"><div class="lbl">' + esc(title) + "</div>" + (k.length ? k.map(function (c) { return '<div class="row d" style="margin-top:6px"><span>' + esc(c) + "</span><b style='color:var(--paper)'>" + esc(amounts(o[c])) + "</b></div>"; }).join("") : '<p class="empty" style="margin-top:6px">Nothing logged.</p>') + "</div>";
     };
-    $("moneyDetail").innerHTML = '<div class="lbl" style="margin:16px 0 8px">' + esc(monthName(m0.month)) + ' in detail</div><div class="grid g3">' + block("Ad spend by platform", m0.spend) + block("Income by type", m0.income) + block("Self-release royalties by song", m0.royalties) + "</div>";
+    var src = data.money.metaSource;
+    var spendTitle = "Ad spend by platform" + (src && src.from === "meta" ? " · Meta from Meta" : src && src.from === "sheet" ? " · Meta from the sheet" : "");
+    $("moneyDetail").innerHTML = '<div class="lbl" style="margin:16px 0 8px">' + esc(monthName(m0.month)) + ' in detail</div><div class="grid g3">' + block(spendTitle, m0.spend) + block("Income by type", m0.income) + block("Self-release royalties by song", m0.royalties) + "</div>";
   }
 
   function drawTeam() {

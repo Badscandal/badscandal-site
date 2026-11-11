@@ -75,6 +75,13 @@ td.r,th.r{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
 .steps .late .dot{background:var(--paper);border-color:var(--paper)}
 .steps .w{margin-left:auto;font-family:var(--mono);font-size:10.5px;color:var(--muted);white-space:nowrap}
 .empty{color:var(--muted);font-size:13px;margin:0}
+/* the Meta key line (11 Nov 2026) and "sheet says X" */
+.keyline{font-size:12.5px;color:var(--uv);margin:-4px 0 12px;display:flex;align-items:center;gap:8px}
+.keyline::before{content:"";flex:none;width:8px;height:8px;border-radius:50%;background:var(--grey-mark)}
+.keyline.ok::before{background:var(--spot)}
+.keyline.bad{color:var(--paper);font-weight:700}
+.keyline.bad::before{background:var(--paper)}
+.says{color:var(--paper)}
 .btn{background:var(--paper);color:var(--ink);border:0;border-radius:999px;padding:11px 18px;font-weight:700;font-size:14px;cursor:pointer}
 .ghost{background:transparent;border:1px solid var(--ink-3);border-radius:999px;padding:7px 11px;font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);cursor:pointer;text-decoration:none}
 @media(min-width:900px){.chips{width:auto}.top-in{flex-wrap:nowrap}.when{order:3}}
@@ -112,12 +119,14 @@ table.stack td:first-child::before,table.stack td.empty::before{content:none}
   <div id="app" hidden>
   <section class="card" id="today">
     <div class="row"><div><h2>Today</h2><p class="sub" id="todaySub"></p></div><span class="lbl" id="capMonth"></span></div>
+    <p class="keyline" id="metaKey" hidden></p>
     <div class="grid g3">
       <div class="tile" id="capTile">
         <div class="lbl">Ad spend this month · all platforms</div>
         <div class="big num" id="capSpent">–</div>
         <div class="bar" aria-hidden="true"><i id="capFill"></i><b id="capWarn"></b><b id="capStop"></b></div>
         <div class="d" id="capMsg"></div>
+        <div class="d" id="capMeta" style="margin-top:8px"></div>
       </div>
       <div class="tile"><div class="lbl">Next release</div><div class="big" id="nextSong">–</div><div class="d" id="nextMsg"></div></div>
       <div class="tile"><div class="lbl">Needs you, Luke</div><div id="forLuke"></div></div>

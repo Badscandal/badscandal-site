@@ -13,7 +13,8 @@
 import { getDeployStore, getStore } from "@netlify/blobs";
 import { adTaps, dashboard, defaultLink, healthSummary, LINKS, mergeSummary, resolveRange, spDay, spTime, summarize, toCSV, utcDaysFor, visitLog, addDays } from "../lib/admin.mjs";
 import { HEALTH_PREFIX, LAST_ERROR_KEY, LAST_KEY, parseHealthKey } from "../lib/capi.mjs";
-import { CACHE_MS, DEFAULT_ACCOUNT, capReport, fetchInsights, spendReport } from "../lib/metaspend.mjs";
+import { DEFAULT_ACCOUNT, capReport, spendReport } from "../lib/metaspend.mjs";
+import { keyHealth, readKeyHealth, readMeta } from "../lib/metaread.mjs";
 import { convert, fetchMonthAverage, FX_TTL_MS } from "../lib/fx.mjs";
 import { checkPassword, clearCookie, COOKIE, makeSession, readCookie, sessionCookie, verifySession } from "../lib/session.mjs";
 import { parseKey, PREFIX } from "../lib/stats.mjs";
@@ -106,19 +107,10 @@ async function loadSpend(context, spDays, events, current) {
   const account = (Netlify.env.get("META_AD_ACCOUNT_ID") || DEFAULT_ACCOUNT).replace(/\D/g, "");
   const since = spDays[0], until = spDays[spDays.length - 1];
   const cache = context.deploy?.context === "production" ? getStore("meta-cache") : getDeployStore("meta-cache");
-  const key = `insights/${account}/${since}_${until}.json`;
-  let got = null;
-  try { got = await cache.get(key, { type: "json" }); } catch {}
-  if (!got || Date.now() - got.at > CACHE_MS) {
-    const fresh = await fetchInsights(token, account, since, until);
-    if (fresh.error) {
-      console.error("meta spend: " + fresh.error); /* scrubbed: never the token */
-      if (!got) return { connected: true, error: fresh.error };
-    } else {
-      got = { at: Date.now(), rows: fresh.rows };
-      try { await cache.setJSON(key, got); } catch {}
-    }
-  }
+  const r = await readMeta({ cache, token, account, since, until, level: "ad", key: `insights/${account}/${since}_${until}.json` });
+  if (r.error) console.error("meta spend: " + r.error); /* scrubbed: never the token */
+  const got = r.error ? r.stale : r;
+  if (!got) return { connected: true, error: r.error };
   const songs = LINKS.filter((l) => l.date).map((l) => ({ id: l.id, title: l.title, ...adTaps(summarize(events, spDays, l.id)) }));
   return { ...spendReport(got.rows, songs, current), fetched: spTime(got.at) };
 }
@@ -131,19 +123,10 @@ async function loadCap(context) {
   const account = (Netlify.env.get("META_AD_ACCOUNT_ID") || DEFAULT_ACCOUNT).replace(/\D/g, "");
   const today = spDay(Date.now()), since = today.slice(0, 8) + "01";
   const cache = context.deploy?.context === "production" ? getStore("meta-cache") : getDeployStore("meta-cache");
-  const key = `cap/${account}/${today}.json`;
-  let got = null;
-  try { got = await cache.get(key, { type: "json" }); } catch {}
-  if (!got || Date.now() - got.at > CACHE_MS) {
-    const fresh = await fetchInsights(token, account, since, today, fetch, "account");
-    if (fresh.error) {
-      console.error("meta cap: " + fresh.error); /* scrubbed: never the token */
-      if (!got) return { connected: true, error: fresh.error };
-    } else {
-      got = { at: Date.now(), rows: fresh.rows };
-      try { await cache.setJSON(key, got); } catch {}
-    }
-  }
+  const r = await readMeta({ cache, token, account, since, until: today, level: "account", key: `cap/${account}/${today}.json` });
+  if (r.error) console.error("meta cap: " + r.error); /* scrubbed: never the token */
+  const got = r.error ? r.stale : r;
+  if (!got) return { connected: true, error: r.error };
   const rep = capReport(got.rows, today);
   const fx = await loadFx(context, rep.month, today).catch(() => null);
   const eur = fx && !fx.error ? convert(rep.spent, rep.currency, "EUR", fx) : null;
@@ -225,7 +208,10 @@ export default async (req, context) => {
       loadCap(context).catch((e) => { console.error("meta cap failed", e?.name || e); return { connected: true, error: "Couldn't read Meta spend" }; }),
     ]);
     if (health) health.testMode = !!Netlify.env.get("META_TEST_EVENT_CODE");
-    const extra = { health, spend, cap, bots, excluded: readCookie(req.headers.get("cookie"), NOSTAT) === "1" };
+    /* after the reads above, so it reflects them */
+    const metaCache = context.deploy?.context === "production" ? getStore("meta-cache") : getDeployStore("meta-cache");
+    const metaKey = keyHealth(await readKeyHealth(metaCache), !!Netlify.env.get("META_ADS_TOKEN"));
+    const extra = { health, spend, cap, bots, metaKey, excluded: readCookie(req.headers.get("cookie"), NOSTAT) === "1" };
     return json(200, { ...dashboard(cur, prev, r.days, link.id, extra), range: r.range, generated: new Date().toISOString() });
   } catch (e) {
     console.error("admin data failed", e);

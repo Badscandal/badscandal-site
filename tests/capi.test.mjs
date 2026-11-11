@@ -102,7 +102,7 @@ test("spend reader: GET only, token in the header (never the URL), pinned Graph 
   const q = new URL(url).searchParams;
   assert.equal(q.get("level"), "ad");
   assert.equal(q.get("time_increment"), "1");
-  assert.equal(q.get("fields"), "ad_name,adset_name,campaign_name,spend,account_currency");
+  assert.equal(q.get("fields"), "ad_name,adset_name,campaign_name,spend,account_currency,impressions,reach,inline_link_clicks,actions");
   assert.deepEqual(JSON.parse(q.get("time_range")), { since: "2026-11-03", until: "2026-11-09" });
   const calls = [];
   const fake = async (u, init) => {

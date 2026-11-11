@@ -925,7 +925,7 @@ Brief: `../TOUCHME-LANDING-BUILD-BRIEF.md` (outside the repo on purpose).
   opens on the newest song that is already out. The humans/bots switch reads
   "Humans only" / "Show everyone (incl. bots)".
 * **Cost per tap (10 Nov 2026), READ-ONLY Meta reader** (`netlify/lib/
-  metaspend.mjs`): Netlify env `META_ADS_TOKEN` (Luke adds it; an ads_read
+  metaspend.mjs`, via `metaread.mjs` since 11 Nov): Netlify env `META_ADS_TOKEN` (Luke adds it; an ads_read
   token) + `META_AD_ACCOUNT_ID` (default 230002830106369). ONE kind of call: GET
   Ads Insights, level=ad, daily (time_increment=1), fields ad_name, adset_name,
   campaign_name, spend, account_currency, Graph version = the one pinned in
@@ -973,6 +973,40 @@ Brief: `../TOUCHME-LANDING-BUILD-BRIEF.md` (outside the repo on purpose).
   own currency + EUR estimates), Team (tasks per owner, who last logged). Missing numbers stay
   missing ("not read" is never 0). `/hq?sample=1` shows MADE-UP numbers (`hq-sample.mjs`) under a
   SAMPLE banner. The page only displays; nothing on it changes ads, posts, sheets or money.
+* **Meta flows by itself (11 Nov 2026): one reader, the sheet feed, /hq from Meta, the key line.**
+  READ-ONLY towards Meta everywhere: GET requests to Ads Insights only, nothing that can create,
+  change or pause. Token `META_ADS_TOKEN` in the Authorization header, never in a URL, never logged.
+  - **One reader:** `netlify/lib/metaread.mjs` `readMeta()` = the one-hour `meta-cache` Blob cache +
+    `fetchInsights()`. /admin (cost per tap, cap), /hq and the feed all use it. Every REAL read (not a
+    cache hit) overwrites `meta-key/health.json` {ok, at, code, error, lastOk}.
+  - **Ad-level fields** now include impressions, reach, inline_link_clicks and actions (only
+    `landing_page_view` is kept, as `lpv`). `songOf()` (exported from metaspend.mjs) is THE song
+    matching, used by spendReport and the feed.
+  - **Key health line** (`keyHealth()`): top of /admin (`#kstat`, next to the Meta status) and /hq Today
+    (`#metaKey`): "Meta key: reading OK, last read N min ago"; Meta error code 190 -> "The Meta key has
+    expired: make a new one". The token is a PERSONAL one and can expire after ~60 days: then make a new
+    read-only (ads_read) token and replace META_ADS_TOKEN on Netlify (Luke does this).
+  - **Sheet feed** (`netlify/functions/feed.mjs`, shapes in `netlify/lib/feed.mjs`) for the bots' Ads
+    Tracker sheet, pulled with `=IMPORTDATA("https://badscandal.com/api/feed/<file>?key=…")`:
+    `meta-daily.csv` (date,platform,campaign,spend,currency: one row per calendar day, whole ad
+    account, "Meta", "ALL (account)", 0.00 for a day with no spend) and `meta-ads.csv` (date,campaign,
+    ad_set,ad,song,spend,currency,impressions,reach,link_clicks,landing_page_views,spotify_taps,
+    cost_per_tap: per ad per day; taps = people-only taps from our counter for that ad (adKey of
+    utm_content) on that São Paulo day, as /admin counts a one-day range; cost_per_tap empty at 0 taps).
+    Range: the 1st of last month .. YESTERDAY in Europe/Dublin (finished days only). Access: `?key=` =
+    Netlify env `SHEET_FEED_KEY` (secret; IMPORTDATA can't send headers), hashed + constant-time
+    compare; wrong/missing/unset -> plain 404. The query string is never logged. Meta error -> HTTP 502
+    and one scrubbed line, never zeros for days that weren't read. Cache-Control no-store. The key is
+    in the Mac's Keychain (service `badscandal-sheet-feed-key`); never print it on its own.
+  - **/hq Meta from Meta:** `hqModel(sheets, today, fx, meta)` -> `metaSpend()`: when the read works
+    (account level, the 1st of last month .. today), the sheet's Meta rows (platform Meta/Facebook/
+    Instagram) inside that range are REPLACED by Meta's own daily totals, so the cap and Money use Meta;
+    Google and TikTok stay from the sheet. A day where the sheet's Meta total differs by more than 1.00
+    is listed under the cap as "<day>: Meta X · sheet says Y". Read failed -> the sheet's rows stay and
+    the page says "Meta's own numbers couldn't be read, so Meta comes from the sheet" + the reason.
+    `money.metaSource` carries it. `/hq?sample=1` uses a made-up Meta read (`sampleMeta()`).
+  - Tests: `tests/feed.test.mjs` (CSV shapes, the 404 key check, the Dublin cut-off, the Meta-error
+    path, people-only taps, key health, the /hq rule).
 * **90-day rule:** `netlify/functions/rollup.mjs` (daily 06:00 UTC, production
   only) folds raw keys older than 90 days into `daily/<day>.json` counts and
   deletes them; the portal merges those back for old ranges.

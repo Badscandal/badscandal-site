@@ -49,3 +49,13 @@ export function sampleSheets(today) {
     [m, "Cheerful Music", "Production", "1300.00", "USD", "pending"]];
   return { Growth, Songs, Fans, Releases, Tasks, Royalties, Spend, Income };
 }
+
+/* A MADE-UP Meta read for /hq?sample=1 (11 Nov 2026): Meta's "own" numbers = the sample sheet's Meta
+   rows, except the latest day is 6.40 higher, so the "sheet says X" line can be seen. */
+export function sampleMeta(sheets, today) {
+  const rows = sheets.Spend.slice(1).filter((r) => r[1] === "Meta").map((r) => ({ day: r[0], spend: Number(r[3]), currency: r[4] }));
+  const last = rows.reduce((a, r) => (r.day > a ? r.day : a), "");
+  for (const r of rows) if (r.day === last) r.spend = Math.round((r.spend + 6.4) * 100) / 100;
+  const m = today.slice(0, 7), prev = day(m + "-01", 1).slice(0, 7);
+  return { ok: true, rows, since: prev + "-01", until: today };
+}

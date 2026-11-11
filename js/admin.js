@@ -405,6 +405,14 @@
       : last.ok ? "Meta: sending OK, last event " + ago(last.agoMs) + (last.test ? " (test mode)" : "")
       : "Meta: ERROR " + ago(last.agoMs) + ": " + (last.message || last.detail);
     el.title = last ? last.time + " SP · " + last.events.join(" + ") : "";
+    /* the read-only Meta ads key (personal, can expire after ~60 days): "reading OK" or "expired" */
+    var k = data.metaKey, ks = $("kstat");
+    ks.hidden = !k;
+    if (k) {
+      ks.className = "mstat" + (k.state === "ok" ? " ok" : k.state === "expired" || k.state === "error" ? " bad" : "");
+      $("kstatTxt").textContent = k.text;
+      ks.title = k.state === "expired" ? "Make a new read-only token in Meta and replace META_ADS_TOKEN on Netlify" : "";
+    }
   }
 
   /* ---------- cost per tap (Meta spend, read-only) ---------- */

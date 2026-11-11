@@ -26,13 +26,23 @@ export function adKey(s) {
   return v.toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 40);
 }
 
+/* What we read per ad per day (11 Nov 2026: + impressions, reach, link clicks and the actions list,
+   from which only landing_page_view is kept). */
+export const AD_FIELDS = "ad_name,adset_name,campaign_name,spend,account_currency,impressions,reach,inline_link_clicks,actions";
+const count = (v) => (v == null || v === "" || !Number.isFinite(Number(v)) ? null : Number(v));
+export function landingPageViews(actions) {
+  if (!Array.isArray(actions)) return null;
+  const a = actions.find((x) => x && x.action_type === "landing_page_view");
+  return a ? count(a.value) : 0;
+}
+
 /* level "ad" for cost per tap; level "account" for the monthly cap (the WHOLE ad account, so
    boosts made in the Instagram app count too). */
 export function insightsRequest(account, since, until, level = "ad") {
   const q = new URLSearchParams({
     level,
     time_increment: "1",
-    fields: level === "account" ? "spend,account_currency" : "ad_name,adset_name,campaign_name,spend,account_currency",
+    fields: level === "account" ? "spend,account_currency" : AD_FIELDS,
     time_range: JSON.stringify({ since, until }),
     limit: "500",
   });
@@ -49,16 +59,17 @@ export async function fetchInsights(token, account, since, until, fetchImpl = fe
       res = await fetchImpl(url, { method: "GET", headers: { Authorization: "Bearer " + token }, signal: AbortSignal.timeout(8000) });
       json = await res.json().catch(() => null);
     } catch (e) {
-      return { error: e?.name === "TimeoutError" ? "Meta didn't answer in time" : "Couldn't reach Meta" };
+      return { error: e?.name === "TimeoutError" ? "Meta didn't answer in time" : "Couldn't reach Meta", code: null };
     }
     if (!res.ok || !json || !Array.isArray(json.data)) {
       const err = (json && json.error) || {};
-      return { error: scrub(`${err.message || "Meta said no"} (HTTP ${res.status}${err.code ? ", code " + err.code : ""})`) };
+      return { error: scrub(`${err.message || "Meta said no"} (HTTP ${res.status}${err.code ? ", code " + err.code : ""})`), code: Number(err.code) || null };
     }
     for (const r of json.data) {
       rows.push({
         day: r.date_start, ad: r.ad_name || "", adset: r.adset_name || "", campaign: r.campaign_name || "",
         spend: Number(r.spend) || 0, currency: r.account_currency || "",
+        ...(level === "account" ? {} : { impressions: count(r.impressions), reach: count(r.reach), linkClicks: count(r.inline_link_clicks), lpv: landingPageViews(r.actions) }),
       });
     }
     url = json.paging && json.paging.next ? json.paging.next.replace(/([?&])access_token=[^&]*&?/, "$1") : "";
@@ -68,16 +79,21 @@ export async function fetchInsights(token, account, since, until, fetchImpl = fe
 
 /* rows: from fetchInsights. songs: [{id, title, taps, tapsByAd: {adKey: taps}, tapsByDay: {day: taps}}]
    (one per page in the link picker; the home page has no ads). current: the id shown in /admin. */
+/* Which song an ad row belongs to: the song people tapped from this ad (utm_content), else the song
+   whose title/slug is in its campaign / ad set / ad name, else "" (not matched). Used by /admin and
+   by the sheet feed (netlify/functions/feed.mjs), so both always agree. */
+export function songOf(r, songs) {
+  const k = adKey(r.ad);
+  const seen = songs.find((s) => s.tapsByAd && k in s.tapsByAd);
+  if (seen) return seen.id;
+  const hay = adKey(r.campaign + " " + r.adset + " " + r.ad);
+  const named = songs.find((s) => s.title && (hay.includes(adKey(s.title)) || hay.includes(adKey(s.id))));
+  return named ? named.id : "";
+}
+
 export function spendReport(rows, songs, current) {
   const currency = (rows.find((r) => r.currency) || {}).currency || "";
-  const owner = (r) => {
-    const k = adKey(r.ad);
-    const seen = songs.find((s) => s.tapsByAd && k in s.tapsByAd);
-    if (seen) return seen.id;
-    const hay = adKey(r.campaign + " " + r.adset + " " + r.ad);
-    const named = songs.find((s) => s.title && (hay.includes(adKey(s.title)) || hay.includes(adKey(s.id))));
-    return named ? named.id : "";
-  };
+  const owner = (r) => songOf(r, songs);
   const per = {}, allDays = {}; let total = 0, unmatched = 0;
   for (const r of rows) {
     total += r.spend;
