@@ -26,7 +26,8 @@ export const TZ = "America/Sao_Paulo";
 export const UPDATE_STATUS = ["done", "working", "blocked", "error", "info"];
 export const NEEDS = ["none", "reply", "action", "decision"];
 export const CATEGORIES = ["Self-releases", "Label deals", "Publishing", "Production", "Salary", "Other"];
-export const INCOME_STATUS = ["received", "pending", "transfer"];
+/* unsorted (bank reader, 11 Nov 2026): seen in an account, nobody has said what it is yet; counts in neither received nor pending */
+export const INCOME_STATUS = ["received", "pending", "transfer", "unsorted"];
 export const CADENCE = ["daily", "monthly", "quarterly", "irregular"];
 export const SOURCE_STATE = ["active", "blocked", "unknown", "not_tracked"];
 export const PEOPLE = ["Luke", "Claude", "HQ"]; /* not bots; HQ = the site's own twice-daily check */
@@ -403,9 +404,9 @@ export async function submitIncome(store, now, roster, a) {
       /* the same payment again: never added twice. It may gain its reference; pending may become
          received; received never goes back to pending (a statement email read again). */
       const gainsRef = !!e.reference && !old.reference;
-      const moves = old.status !== e.status && !(old.status === "received" && e.status === "pending");
+      const moves = old.status !== e.status && !(old.status === "received" && e.status === "pending") && e.status !== "unsorted"; /* a later "unsorted" never overwrites a decided status */
       if (!moves && !gainsRef && !(e.note && e.note !== old.note)) return { skip: true, value: { entry: old, added: false, updated: false } };
-      if (moves) { old.history = (old.history || []).concat({ at: e.at, by, from: old.status, to: e.status }).slice(-10); old.status = e.status; }
+      if (moves) { if (old.status === "unsorted") old.category = e.category; old.history = (old.history || []).concat({ at: e.at, by, from: old.status, to: e.status }).slice(-10); old.status = e.status; }
       if (gainsRef) old.reference = e.reference;
       if (e.note) old.note = e.note;
       old.updatedAt = e.at;
@@ -431,6 +432,34 @@ export async function incomeCheck(store, now, roster, a) {
     return { value: c };
   });
   return c;
+}
+/* Luke (or Claude, Ledger, Sheet, Nova) says what an "unsorted" payment is: income (with its category)
+   or not income (a transfer). Only an unsorted entry can be sorted here; anything decided stays. */
+export const SORTERS = ["Luke", "Claude", "Ledger", "Sheet", "Nova"];
+export async function sortIncome(store, now, roster, a) {
+  const by = whoIs(a.by, roster, { people: true });
+  if (!SORTERS.includes(by)) fail(`Only ${SORTERS.join(", ")} can sort a payment.`, "not_allowed");
+  const id = clean(a.id, 20);
+  if (!/^i[0-9a-z]{8,16}$/.test(id)) fail("id must be the payment's id (it starts with i)");
+  const status = low(a.status);
+  if (!["received", "transfer"].includes(status)) fail('status must be "received" (it is income) or "transfer" (not income)');
+  const category = status === "received" ? CATEGORIES.find((c) => low(c) === low(a.category)) : null;
+  if (status === "received" && !category) fail(`category must be one of: ${CATEGORIES.join(", ")}`);
+  let months = [clean(a.month, 7)];
+  if (!/^\d{4}-\d{2}$/.test(months[0])) { let m = spDay(now).slice(0, 7); months = []; for (let i = 0; i < 4; i++, m = prevMonth(m)) months.push(m); }
+  for (const m of months) {
+    const hit = await mutate(store, incKey(m), [], (list) => {
+      const e = list.find((x) => x.id === id);
+      if (!e) return { skip: true, value: null };
+      if (e.status !== "unsorted") fail(`That payment is already sorted (${e.status}). Nothing was changed.`, "not_allowed");
+      const at = new Date(now).toISOString();
+      e.history = (e.history || []).concat({ at, by, from: "unsorted", to: status }).slice(-10);
+      e.status = status; if (category) e.category = category; e.updatedAt = at;
+      return { value: e };
+    });
+    if (hit) return hit;
+  }
+  fail("There is no payment with that id", "not_found");
 }
 export async function getSources(store) {
   const { data } = await readDoc(store, "sources.json", []);
@@ -463,7 +492,7 @@ export function incomeReport(entries, checks, sources, today) {
   /* a payment counts on the day it arrived (a pending statement that later landed keeps both dates) */
   entries = entries.map((e) => (e.arrived && e.arrived !== e.date ? { ...e, statement: e.date, date: e.arrived } : e));
   for (const e of entries) {
-    if (e.date.slice(0, 7) !== month || e.status === "transfer") continue;
+    if (e.date.slice(0, 7) !== month || e.status === "transfer" || e.status === "unsorted") continue;
     add(e.status === "pending" ? pending : received, e.currency, e.amount);
     if (e.status === "received") add(byCat[e.category] || (byCat[e.category] = {}), e.currency, e.amount);
   }
@@ -476,7 +505,7 @@ export function incomeReport(entries, checks, sources, today) {
     const lastLogged = mine.reduce((a, e) => (!a || e.at > a ? e.at : a), null); /* the last time anything was logged for it, as a São Paulo day */
     const lastLook = [lastLogged && spDay(Date.parse(lastLogged)), chk && chk.day].filter(Boolean).sort().pop() || null;
     const monthTotal = {};
-    for (const e of mine) if (e.date.slice(0, 7) === month && e.status !== "transfer") add(monthTotal, e.currency, e.amount);
+    for (const e of mine) if (e.date.slice(0, 7) === month && e.status !== "transfer" && e.status !== "unsorted") add(monthTotal, e.currency, e.amount);
     let verdict = "ok", why = "";
     if (s.state === "not_tracked") { verdict = "not_tracked"; why = "Nobody is logging this yet"; }
     else if (s.state === "blocked") { verdict = "blocked"; why = s.blocker || "Blocked"; }
@@ -491,7 +520,7 @@ export function incomeReport(entries, checks, sources, today) {
   });
   /* payments whose payer matches no known source: a new source nobody has named yet */
   const payers = sources.filter((s) => s.kind !== "account");
-  const unknown = [...new Set(entries.filter((e) => e.status !== "transfer" && !payers.some((s) => low(e.source) === s.id || srcMatches(s, e.payer))).map((e) => e.payer))].slice(0, 20);
+  const unknown = [...new Set(entries.filter((e) => e.status !== "transfer" && e.status !== "unsorted" && !payers.some((s) => low(e.source) === s.id || srcMatches(s, e.payer))).map((e) => e.payer))].slice(0, 20);
   const accounts = list.filter((s) => s.kind === "account"), src = list.filter((s) => s.kind !== "account");
   const problems = [];
   for (const a of accounts) if (["never", "overdue", "due"].includes(a.verdict)) problems.push(`${a.name}: not checked today${a.owner ? " (" + a.owner + ")" : ""}`);
@@ -500,7 +529,10 @@ export function incomeReport(entries, checks, sources, today) {
   if (unknown.length) problems.push(`New payer(s) not on the list of sources: ${unknown.join(", ")}`);
   const oldPending = entries.filter((e) => e.status === "pending" && daysBetween(e.date, today) > 30).length;
   if (oldPending) problems.push(`${oldPending} pending payment${oldPending === 1 ? "" : "s"} older than 30 days`);
-  return { month, received, pending, byCategory: byCat, count: entries.filter((e) => e.date.slice(0, 7) === month).length,
+  /* seen in an account (the bank reader), not yet said what it is: listed apart, in no total */
+  const unsorted = entries.filter((e) => e.status === "unsorted").sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : a.at < b.at ? 1 : -1));
+  if (unsorted.length) problems.push(`${unsorted.length} payment${unsorted.length === 1 ? "" : "s"} in ${[...new Set(unsorted.map((e) => e.account))].join(" and ")} that nobody has sorted yet`);
+  return { month, received, pending, byCategory: byCat, count: entries.filter((e) => e.date.slice(0, 7) === month).length, unsorted: unsorted.slice(0, 40), unsortedCount: unsorted.length,
     entries: [...entries].sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : a.at < b.at ? 1 : -1)).slice(0, 60),
     accounts, sources: src, unknown, problems,
     lastEntryAt: entries.reduce((a, e) => (!a || e.at > a ? e.at : a), null) };
