@@ -28,7 +28,7 @@ export function edgePaths() {
 export function problems(list = DATA.songs) {
   const out = [], seen = new Set();
   const RESERVED = new Set(["admin", "api", "assets", "css", "js", "listen", "privacy", "stats", "store", "us", "live",
-    "plugin", "activate", "index", "home", "netlify", "tests", "tools", "updatecleanslate", "404", "lukepower"]);
+    "plugin", "activate", "index", "home", "netlify", "tests", "tools", "updatecleanslate", "404", "lukepower", "hq", "mcp", "staff"]);
   for (const s of list) {
     const at = `song "${s.slug}"`;
     if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(s.slug || "")) out.push(`${at}: slug must be lowercase letters/digits (dashes allowed)`);

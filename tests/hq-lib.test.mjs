@@ -82,10 +82,24 @@ test("offline helper: keeps only the /hq page and its scripts; never the numbers
   const f = sw();
   assert.equal(f("https://badscandal.com/hq", "navigate"), true);
   assert.equal(f("https://badscandal.com/js/hq.js"), true);
+  assert.equal(f("https://badscandal.com/js/hq-staff.js"), true, "the staff desk's script opens offline too (cache bs-hq-v2)");
+  assert.equal(f("https://badscandal.com/api/staff/board"), false, "the board always comes from the network");
+  assert.equal(f("https://badscandal.com/api/staff/message", "cors", "POST"), false, "a message is never answered from a copy");
   assert.equal(f("https://badscandal.com/api/hq/data"), false, "the numbers always come from the network");
   assert.equal(f("https://badscandal.com/api/admin/overview?range=7d"), false);
   assert.equal(f("https://badscandal.com/api/admin/login", "cors", "POST"), false);
   assert.equal(f("https://badscandal.com/js/main.js"), false, "not the rest of the site");
   assert.equal(f("https://fonts.googleapis.com/css2"), false);
   assert.match(readFileSync(new URL("../js/hq-shell.js", import.meta.url), "utf8"), /register\("\/hq-sw\.js", \{ scope: "\/hq" \}\)/);
+});
+
+test("hq: a song that is out says Released (in /hq, never on the public song page)", () => {
+  assert.deepEqual(L.releaseWords("2026-10-30", "2026-11-11"), { out: true, days: 12, pill: "Released", label: "Released", line: "Fri 30 Oct · 12 days ago" });
+  assert.equal(L.releaseWords("2026-11-10", "2026-11-11").line, "Tue 10 Nov · 1 day ago");
+  assert.deepEqual([L.releaseWords("2026-11-11", "2026-11-11").pill, L.releaseWords("2026-11-11", "2026-11-11").line], ["Released today", "Wed 11 Nov · today"]);
+  assert.deepEqual(L.releaseWords("2026-11-24", "2026-11-11"), { out: false, days: -13, pill: "Out in 13 days", label: "Release day", line: "Tue 24 Nov · in 13 days" });
+  assert.equal(L.releaseWords("2026-11-12", "2026-11-11").pill, "Out in 1 day");
+  for (const bad of ["", null, "soon", "30/10/2026"]) assert.equal(L.releaseWords(bad, "2026-11-11"), null, "no date: nothing is claimed");
+  const song = readFileSync(new URL("../touchme.html", import.meta.url), "utf8");
+  assert.ok(!/Released \d|id="rel"/.test(song), "the public song page carries no Released line");
 });
