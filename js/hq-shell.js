@@ -1,23 +1,27 @@
 /* BADSCANDAL HQ · the shell (11 Nov 2026, Step 0 of the new look): tabs with their own address
    (#today, #songs, … — the back button works), the bottom bar on phones (Today, Songs, Ads, Money,
    More) and the left rail on desktop, the More sheet, and the refresh button. The last tab is
-   remembered on this device. The data itself is js/hq.js + js/hq-pages.js. */
+   remembered on this device. The data itself is js/hq.js + js/hq-pages.js + js/hq-staff.js.
+   Messages (the staff desk, 11 Nov 2026) is the tenth tab: in the rail, and in More on phones. */
 (function () {
   "use strict";
   var $ = function (id) { return document.getElementById(id); };
-  var TABS = ["today", "songs", "ads", "pages", "growth", "fans", "releases", "money", "team"];
-  var MORE = ["pages", "growth", "fans", "releases", "team"];
+  var TABS = ["today", "songs", "ads", "pages", "growth", "fans", "releases", "money", "team", "messages"];
+  var MORE = ["pages", "growth", "fans", "releases", "team", "messages"];
   var KEY = "bs_hq_tab";
 
   function tabFromHash() {
     var t = (location.hash || "").replace(/^#/, "").split("/")[0];
     return TABS.indexOf(t) >= 0 ? t : "";
   }
-  /* #songs/touchme -> the Touch Me card (it may still be loading: try again for a few seconds) */
+  /* #songs/touchme -> the Touch Me card, #team/nova -> Nova's card, #messages/<id> -> that message
+     (it may still be loading: try again for a few seconds). A plain jump: the page no longer
+     smooth-scrolls, and scroll-padding-top (hq.html) keeps the card clear of the header, so there is
+     no second scrollBy to cancel the first. */
   function subFromHash() { var p = (location.hash || "").replace(/^#/, "").split("/"); return p[1] ? decodeURIComponent(p[1]).replace(/[^a-z0-9-]/gi, "") : ""; }
   function focusSub(tab, sub, tries) {
     var el = sub && document.getElementById((tab === "songs" ? "song-" : tab + "-") + sub);
-    if (el) { el.scrollIntoView({ block: "start" }); window.scrollBy(0, -80); el.classList.add("pulse"); setTimeout(function () { el.classList.remove("pulse"); }, 1600); return; }
+    if (el) { el.scrollIntoView({ block: "start" }); el.classList.add("pulse"); setTimeout(function () { el.classList.remove("pulse"); }, 1600); return; }
     if (sub && (tries || 0) < 20) setTimeout(function () { focusSub(tab, sub, (tries || 0) + 1); }, 300);
   }
   function show(tab) {
@@ -64,7 +68,7 @@
   /* "Needs attention" items about the Meta key open this panel instead of a tab */
   document.addEventListener("click", function (ev) { var a = ev.target.closest && ev.target.closest("[data-health]"); if (a) { ev.preventDefault(); openHealth(); } });
 
-  /* refresh: spins until all three answers are back */
+  /* refresh: spins until every answer is back */
   $("refresh").addEventListener("click", function () {
     var b = $("refresh");
     if (b.classList.contains("spin") || !window.HQ || !window.HQ.refresh) return;
