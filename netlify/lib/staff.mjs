@@ -412,7 +412,7 @@ export async function submitIncome(store, now, roster, a) {
       const gainsRef = !!e.reference && !old.reference;
       const moves = old.status !== e.status && !(old.status === "received" && e.status === "pending") && e.status !== "unsorted"; /* a later "unsorted" never overwrites a decided status */
       if (!moves && !gainsRef && !(e.note && e.note !== old.note)) return { skip: true, value: { entry: old, added: false, updated: false } };
-      if (moves && old.status === "unsorted" && by !== "HQ" && !SORTERS.includes(by)) fail("That payment is waiting for Luke to say what it is. Nothing was changed.", "not_allowed");
+      if (moves && old.status === "unsorted" && by !== "HQ" && !SORTERS.includes(by)) fail("That payment is unsorted. Only Ledger, Sheet, Nova, Claude or Luke say what it is, with the tool sort_payment. Nothing was changed.", "not_allowed");
       if (moves) { if (old.status === "unsorted") old.category = e.category; old.history = (old.history || []).concat({ at: e.at, by, from: old.status, to: e.status }).slice(-10); old.status = e.status; }
       if (gainsRef) old.reference = e.reference;
       if (e.note) old.note = e.note;
@@ -440,11 +440,12 @@ export async function incomeCheck(store, now, roster, a) {
   });
   return c;
 }
-/* Luke (or Claude) says what an "unsorted" payment is: income (with its category) or not income (a
-   transfer). The bots don't: unsorted payments are Luke's PERSONAL account, which the bots never see.
+/* Who may say what an "unsorted" payment is: income (with its category) or not income (a transfer).
+   Luke and Claude, and the three bots whose job is the money: Ledger, Sheet and Nova (Luke, 11 Nov
+   2026: the bots see his full Revolut income, so the income bot can sort it).
    What the bank reader itself decided (its last word is HQ's: "transfer" from an own-transfer rule,
    "received" from a known source) can be corrected too; what a person or a bot decided stays. */
-export const SORTERS = ["Luke", "Claude"];
+export const SORTERS = ["Luke", "Claude", "Ledger", "Sheet", "Nova"];
 export async function sortIncome(store, now, roster, a) {
   const by = whoIs(a.by, roster, { people: true });
   if (!SORTERS.includes(by)) fail(`Only ${SORTERS.join(", ")} can sort a payment.`, "not_allowed");

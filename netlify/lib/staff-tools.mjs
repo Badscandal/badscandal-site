@@ -77,18 +77,16 @@ export const TOOLS = [
   { name: "read_guide", title: "Read the staff guide", readOnly: true,
     description: "The written guide to this desk: who does what, the daily times, how to log income, how messages work, the rules that never bend. Read it once when you are first connected, and again whenever Nova says it changed.",
     inputSchema: obj({ bot: BOT }, ["bot"]) },
+  { name: "sort_payment", title: "Say what a Revolut payment is", idempotent: true,
+    description: 'For Ledger (Sheet and Nova may too). The site reads Luke\'s personal Revolut every morning and puts every incoming payment on the desk. One it could not place has the status "unsorted": it is in the account, and nobody has said what it is, so it counts as nothing yet. Use this to say what ONE such payment is: received (it is income: give its category) or transfer (not income: Luke moving his own money, a refund, a gift, a friend paying him back). Find the id and month in income_status under "unsorted". Sort it ONLY when it is clear from the payer (a label, a distributor, a publisher, a known client = received; Luke\'s own name or his own account = transfer). When it is not clear, leave it unsorted and ask Luke with ONE send_message, needs decision, naming the payer, the date and the amount. Never guess. You can also correct a payment the site sorted itself; what Luke or another person decided cannot be changed here.',
+    inputSchema: obj({ bot: BOT, id: str("The payment's id from income_status (it starts with i)."), month: str("The month it is filed under, YYYY-MM (the first 7 characters of its date)."),
+      status: str("received | transfer", { enum: ["received", "transfer"] }), category: str("Only with received: Self-releases | Label deals | Publishing | Production | Salary | Other.", { enum: S.CATEGORIES }) }, ["bot", "id", "status"]) },
 ];
 
-/* Claude's key only (functions/staff.mjs lists these for role "claude"; the bots never see them).
-   Unsorted payments come from Luke's PERSONAL Revolut: only Luke and Claude sort them. */
-export const CLAUDE_TOOLS = [
-  { name: "sort_payment", title: "Say what a Revolut payment is", idempotent: true,
-    description: 'Sort one payment the bank reader could not place (status "unsorted"), or correct one the reader placed itself: received (it is income: give its category) or transfer (not income: Luke\'s own money, a refund, a gift). Find the id and month in income_status, "unsorted". Only for Claude; ask Luke when it is not obvious.',
-    inputSchema: obj({ id: str("The payment's id (it starts with i)."), month: str("The month it is filed under, YYYY-MM (the first 7 characters of its date)."),
-      status: str("received | transfer", { enum: ["received", "transfer"] }), category: str("Only with received: Self-releases | Label deals | Publishing | Production | Salary | Other.", { enum: S.CATEGORIES }) }, ["id", "status"]) },
-];
-/* Luke's personal account, as the bank reader files it: what is not income (yet) stays off the bots' screens */
-const personal = (e) => /^revolut$/i.test(String(e.account || "").trim()) && (e.status === "unsorted" || e.status === "transfer");
+/* Luke, 11 Nov 2026: "let them see my full revolut personal income to be able to actually see the
+   income". So the bots see EVERY incoming Revolut payment on the desk (sorted or not, transfers too),
+   and Ledger, Sheet and Nova can say what an unsorted one is. Nothing extra is Claude-only. */
+export const CLAUDE_TOOLS = [];
 
 const RULES = [
   "Never write a password, login code, key, card or bank account number anywhere on this desk.",
@@ -154,12 +152,12 @@ export async function callTool(tool, args, ctx) {
       return { month: i.month, received_this_month: cur(i.received), pending_this_month: cur(i.pending), payments_logged_this_month: i.count,
         accounts: i.accounts.map((a) => ({ name: a.name, owner: a.owner, checked_today: a.lastLook === today, last_checked: a.lastLook || "never", state: a.verdict })),
         sources: i.sources.map(line), problems: i.problems,
-        newest_payments: i.entries.filter((e) => ctx.role === "claude" || !personal(e)).slice(0, 15).map((e) => `${e.date} · ${e.payer} · ${e.currency} ${e.amount.toFixed(2)} · ${e.status} · ${e.account} · by ${e.by}`),
-        ...(ctx.role === "claude" ? { unsorted: i.unsorted.map((e) => ({ id: e.id, month: e.date.slice(0, 7), line: `${e.date} · ${e.payer} · ${e.currency} ${e.amount.toFixed(2)} · ${e.account}` })) } : {}) };
+        newest_payments: i.entries.slice(0, 15).map((e) => `${e.date} · ${e.payer} · ${e.currency} ${e.amount.toFixed(2)} · ${e.status} · ${e.account} · by ${e.by}`),
+        /* in the account, not yet said what they are: counted as nothing until sorted (tool sort_payment) */
+        unsorted: i.unsorted.map((e) => ({ id: e.id, month: e.date.slice(0, 7), line: `${e.date} · ${e.payer} · ${e.currency} ${e.amount.toFixed(2)} · ${e.account}` })) };
     }
     case "sort_payment": {
-      if (ctx.role !== "claude") throw new S.StaffError("That tool is not available.");
-      const e = await S.sortIncome(store, now, roster, { by: "Claude", id: args.id, month: args.month, status: args.status, category: args.category });
+      const e = await S.sortIncome(store, now, roster, { by: me, id: args.id, month: args.month, status: args.status, category: args.category });
       return { saved: true, id: e.id, status: e.status, category: e.category, recorded: `${e.arrived || e.date} · ${e.payer} · ${e.currency} ${e.amount.toFixed(2)} · ${e.status}` };
     }
     case "set_my_card": {
