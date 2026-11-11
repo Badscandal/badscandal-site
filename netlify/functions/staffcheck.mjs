@@ -1,5 +1,6 @@
-/* The site's own check of the whole set-up, twice a day (11 Nov 2026): 09:50 and 21:50 São Paulo
-   (12:50 and 00:50 UTC). Just before Alfred's 10:00 message and after Nova's 21:00 wrap-up it looks
+/* The site's own check of the whole set-up, twice a day (11 Nov 2026): 09:35 and 21:35 São Paulo
+   (12:35 and 00:35 UTC). Before Claude's two rounds (09:40, 21:40) and Alfred's 10:00 message, and
+   after Nova's 21:00 wrap-up, it looks
    at what a person would otherwise check tab by tab: today's duties, who has said nothing, whether
    every money account was checked, messages nobody answered, the sheet, the Meta key, the cap, the
    next release. Facts only (netlify/lib/staff.mjs checkReport). It posts ONE message on the board
@@ -23,4 +24,4 @@ export default async () => {
   }
 };
 
-export const config = { schedule: "50 0,12 * * *" };
+export const config = { schedule: "35 0,12 * * *" };
