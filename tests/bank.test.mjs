@@ -732,3 +732,20 @@ test("bank endpoints: who may call what; the callback's two answers; nothing sec
       assert.ok(!everything.includes(secret), "leaked: " + secret);
   } finally { console.log = log; console.error = err; }
 });
+
+test("bank status for /hq?sample=1: made up, after the login, and no store is opened", async () => {
+  const HENV = { ADMIN_KEY: "correct horse", STAFF_BOT_KEY: "bot-key-for-tests-0123456789", STAFF_CLAUDE_KEY: "claude-key-for-tests-0123456789" };
+  globalThis.Netlify = { env: { get: (k) => HENV[k] } };
+  const { default: bankFn } = await import("../netlify/functions/bank.mjs");
+  const cookie = sessionCookie(await makeSession("correct horse")).split(";")[0];
+  const ask = (headers) => bankFn(new Request("https://badscandal.com/api/bank/status?sample=1", { headers }), { deploy: { context: "production" } });
+  assert.equal((await ask({})).status, 401, "the sample still needs the login");
+  assert.equal((await ask({ authorization: "Bearer " + HENV.STAFF_BOT_KEY })).status, 403);
+  globalThis.__asked.length = 0;
+  const r = await ask({ cookie });
+  const j = await r.json();
+  assert.equal(r.status, 200);
+  assert.deepEqual([j.sample, j.configured, j.connected, j.daysLeft, j.lastAdded, j.accounts.length], [true, true, true, 86, 2, 3]);
+  assert.match(B.bankLine(j, Date.now()), /^Revolut: read (today|yesterday) at 06:50 · 2 payments in · approval ends in 86 days$/);
+  assert.deepEqual(globalThis.__asked, [], "no store was opened for the sample");
+});

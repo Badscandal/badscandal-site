@@ -36,6 +36,8 @@ const SOURCES = [
   { id: "northlight", name: "Northlight Records", kind: "payer", category: "Label deals", currency: "EUR", lands: "Bank", cadence: "monthly", owner: "Ledger", state: "active", match: ["northlight"] },
   { id: "distro", name: "Sample Distro", kind: "payer", category: "Self-releases", currency: "USD", lands: "PayPal", cadence: "monthly", owner: "Drop", state: "active", match: ["sample distro"] },
   { id: "publisher", name: "Sample Publishing", kind: "payer", category: "Publishing", currency: "USD", lands: "Wise", cadence: "quarterly", owner: "Ledger", state: "active", match: ["sample publishing"] },
+  /* the bank reader (11 Nov 2026): the site itself reads this one every morning */
+  { id: "revolut", name: "Revolut", kind: "account", owner: "HQ", cadence: "daily", state: "active", how: "read-only, read by the site every morning" },
   { id: "plugin", name: "Plug-in sales", kind: "payer", category: "Other", currency: "USD", lands: "Bank", cadence: "monthly", owner: "", state: "not_tracked" },
 ];
 
@@ -117,7 +119,12 @@ export function sampleDesk(now = Date.now()) {
   const E = (back, payer, amount, currency, status, account, category, by = "Ledger") => ({ id: "i" + back + payer.length, at: new Date(ago(back * 1440 + 90)).toISOString(), by, date: d(back), payer, amount, currency, status, category, account, reference: "", period: "", source: "", note: "" });
   const entries = [E(0, "Sample Distro", 104.04, "USD", "received", "PayPal", "Self-releases"), E(2, "Northlight Records", 112.01, "EUR", "pending", "Statement only", "Label deals"),
     E(9, "Sample Publishing", 420.5, "USD", "received", "Wise", "Publishing"), E(34, "Northlight Records", 96.4, "EUR", "received", "Bank", "Label deals"), E(36, "Sample Distro", 88.1, "USD", "received", "PayPal", "Self-releases")];
-  const checks = [{ at: new Date(ago(6)).toISOString(), day: today, by: "Ledger", account: "Wise", new: 0, note: "" }, { at: new Date(ago(6)).toISOString(), day: today, by: "Ledger", account: "PayPal", new: 1, note: "" }];
+  /* MADE-UP rows as the Revolut reader files them (by HQ): two it could not place ("to sort", in no
+     total) and one of Luke's own transfers between his accounts (never income) */
+  const R = (back, payer, amount, status) => ({ ...E(back, payer, amount, "EUR", status, "Revolut", "Other", "HQ"), id: "irevsample" + back + payer.length, reference: "sample-tx-" + back + payer.length, note: "Read from Revolut" });
+  entries.push(R(0, "A. Example", 60, "unsorted"), R(1, "Made-up Studio Ltd", 350, "unsorted"), R(1, "Own savings pocket", 200, "transfer"));
+  const checks = [{ at: new Date(ago(6)).toISOString(), day: today, by: "Ledger", account: "Wise", new: 0, note: "" }, { at: new Date(ago(6)).toISOString(), day: today, by: "Ledger", account: "PayPal", new: 1, note: "" },
+    { at: new Date(ago(200)).toISOString(), day: today, by: "HQ", account: "Revolut", new: 2, note: "" }];
   const seen = Object.fromEntries(["Ledger", "Atlas", "Nova", "Steve", "Forge", "Drop"].map((n, i) => [n, { at: new Date(ago(6 + i * 27)).toISOString(), tool: "post_update" }]));
   seen.Claude = { at: new Date(ago(130)).toISOString(), tool: "send_message" };
   /* read markers (V6): the same six read their messages when they last came (my_day); so Luke's answer
@@ -127,6 +134,17 @@ export function sampleDesk(now = Date.now()) {
   return { roster: ROSTER, updates, messages, cards: { atlas: { workingOn: "Backfilling Touch Me's daily rows to release day", needs: "", at: new Date(ago(200)).toISOString() }, kevin: { workingOn: "TikTok banner", needs: "Luke's phone code for TikTok", at: new Date(ago(400)).toISOString() } },
     seen, income: S.incomeReport(entries, checks, SOURCES.map((s) => ({ match: [], category: "Other", currency: "", lands: "", how: "", blocker: "", needsLuke: "", ...s })), today), config: { botsOn: true, changedAt: null },
     releases: sampleReleases(now), read, sightings: sampleSightings(now) };
+}
+
+/* MADE-UP state of the Revolut reader for /hq?sample=1 (GET /api/bank/status?sample=1): connected,
+   read this morning at 06:50 São Paulo (09:50 UTC), 2 payments in, the approval good for 86 more days.
+   The account names are invented; nothing is opened or asked of any bank. */
+export function sampleBankStatus(now = Date.now()) {
+  const d = new Date(now), at = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 9, 50);
+  const read = new Date(at <= now ? at : at - 86400000).toISOString();
+  return { configured: true, connected: true, needsApproval: false, aspsp: "Revolut", validUntil: new Date(now + 86.5 * 86400000).toISOString(), daysLeft: 86, expiring: false,
+    accounts: [{ name: "Current", currency: "EUR" }, { name: "Savings", currency: "EUR" }, { name: "Current", currency: "USD" }],
+    lastRunAt: read, lastOkAt: read, lastError: null, lastAdded: 2, partial: false, canConnectHere: true };
 }
 
 export function sampleBoard(now = Date.now()) {

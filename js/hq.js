@@ -295,7 +295,9 @@
 
   /* ---------- Data health: Sheet, Meta, page counter, exchange rate (one dot in the header) ---------- */
   function drawDataHealth() {
-    var rows = window.HQLib.healthRows({ sheet: sheet, sheetProblem: sheetProblem, ov: ov, board: staffBoard(), boardProblem: window.HQStaff ? window.HQStaff.problem() : "" });
+    var H = window.HQStaff, o = { sheet: sheet, sheetProblem: sheetProblem, ov: ov, board: staffBoard(), boardProblem: H ? H.problem() : "" };
+    if (H) { o.bank = H.bank(); o.bankProblem = H.bankProblem(); } /* the Revolut row (11 Nov 2026) */
+    var rows = window.HQLib.healthRows(o);
     var st = window.HQLib.healthState(rows);
     $("hDot").className = "hdot " + st;
     $("healthBtn").setAttribute("aria-label", "Data health: " + (st === "bad" ? "something needs attention" : st === "ok" ? "all fine" : "not everything read yet"));
@@ -371,7 +373,7 @@
     var chk = board && board.report ? L.siteCheckLine(board.report, board.today) : "";
     $("siteCheck").hidden = !chk;
     if (chk) { $("siteCheck").textContent = chk + " ›"; $("siteCheck").setAttribute("href", "#messages/" + String(board.report.id || "").replace(/[^a-z0-9]/gi, "")); }
-    var att = L.attention({ sheet: sheet, ov: ov, board: board }), br = L.briefing({ sheet: sheet, ov: ov, attention: att }), ti = L.tiles({ sheet: sheet, ov: ov });
+    var att = L.attention({ sheet: sheet, ov: ov, board: board, bank: window.HQStaff ? window.HQStaff.bank() : null }), br = L.briefing({ sheet: sheet, ov: ov, attention: att }), ti = L.tiles({ sheet: sheet, ov: ov });
     $("brief").innerHTML = br.map(function (x) { return "<p>" + esc(x) + "</p>"; }).join("");
     $("attnCard").classList.toggle("has", att.length > 0);
     $("attnList").innerHTML = att.length ? att.map(function (a) {

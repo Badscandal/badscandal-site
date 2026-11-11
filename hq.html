@@ -707,7 +707,7 @@ textarea.fld{min-height:112px;resize:vertical}
 .acct .al{margin:3px 0 0;font-size:14px;color:var(--uv);overflow-wrap:anywhere}
 .acct .al.need{color:var(--paper)}
 #shell .acct .tile.attn-t{border:1px solid var(--red)}
-.acct .attn-t .al:first-of-type{color:var(--red);font-weight:600}
+.acct .attn-t .an + .al{color:var(--red);font-weight:600} /* the line right under the name (was :first-of-type, which never matched: the name is a p too) */
 .inmonth{display:grid;gap:10px;grid-template-columns:repeat(2,minmax(0,1fr));margin:0 0 12px}
 .inmonth .t-lbl{margin-bottom:6px}
 .inmonth .amt{margin:0;font-size:24px;line-height:1.25;font-weight:700;letter-spacing:-.01em;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
@@ -734,6 +734,39 @@ textarea.fld{min-height:112px;resize:vertical}
 @media(min-width:720px){.paylist{display:none}}
 @media(max-width:719px){.paywide{display:none}}
 #shell .more-row{display:block;margin:12px auto 0;min-height:44px;padding:0 18px}
+/* Revolut (the bank reader, 11 Nov 2026): its tile spans the row of account tiles; "To sort" below the
+   month's totals. Red only when Luke has to act (the approval gone or ending: .attn-t). */
+.acct .bank{grid-column:1/-1}
+.acct .bank .al{font-size:15px;line-height:1.45}
+.acct .bank .al.bacc{color:var(--muted);font-size:14px}
+.acct .bank .conn-acts{margin-top:12px}
+.acct .bank .rdone{margin:12px 0 0}
+.rdone.bad{border:1px solid var(--red)}
+.acct .bank .bnote{display:block;margin:10px 0 0}
+.paylist .pa.nc,#payTable td.nc b{color:var(--muted);font-weight:500}
+.tosort{margin:0 0 12px}
+.tosort .t-lbl{margin:0 0 4px}
+.tosort .tsub{margin:0 0 10px;font-size:14px;line-height:1.45;color:var(--uv)}
+.tosort .tsub:last-child{margin:12px 0 0}
+.tosort .mnote{margin:0 0 10px}
+.sortlist{list-style:none;margin:0;padding:0;max-width:760px}
+.sortlist > li{padding:14px 0;border-top:.5px solid var(--glass-line)}
+.sortlist > li:first-child{border-top:0;padding-top:4px}
+.sortlist > li:last-child{padding-bottom:2px}
+.sortlist > li.landed{padding:14px 0}
+.sortlist > li.landed:first-child{padding-top:4px}
+.srow{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 12px;align-items:baseline;font-size:15px}
+.srow b{font-weight:600;color:var(--paper);overflow-wrap:anywhere}
+.srow .pm{display:block;margin-top:2px;font-size:14px;color:var(--muted)}
+.srow .pa{font-weight:700;color:var(--paper);font-variant-numeric:tabular-nums;white-space:nowrap}
+.sacts{display:flex;flex-wrap:wrap;gap:10px;margin-top:12px}
+.sortlist .confirm{margin-top:12px}
+.sortlist .confirm .sq{margin:0 0 12px;color:var(--uv)}
+.sortlist .ferr{margin-top:10px}
+.stypes{display:grid;gap:8px;grid-template-columns:repeat(2,minmax(0,1fr));margin:0 0 12px}
+@media(min-width:600px){.stypes{grid-template-columns:repeat(3,minmax(0,1fr))}}
+.stypes .copybtn{width:100%;padding:0 10px;font-size:15px}
+.stypes .copybtn[aria-pressed="true"]{background:var(--paper);color:var(--ink);border-color:var(--paper)}
 @media (prefers-reduced-motion:reduce){.bwhy summary::after{transition:none}}
 
 /* ================= Replies that visibly land + the release pipeline (11 Nov 2026) =================
@@ -1130,7 +1163,7 @@ textarea.fld.lyrics{min-height:220px}
     <div id="relSpot"><div class="ph"></div></div></section>
   <section class="card view" id="money"><h2>Money</h2><p class="sub">Every amount in the currency it was billed or paid in. Totals in EUR are estimates at that month's average rate.</p><div class="sheeterr" id="errMoney" hidden></div>
     <h3 class="sech">Money coming in</h3>
-    <p class="secsub">Sent in by the bots every day through the connector. The monthly tables below still come from the income sheet.</p>
+    <p class="secsub">Sent in by the bots every day through the connector, and read from Revolut by the site every morning. The monthly tables below still come from the income sheet.</p>
     <div id="incomeBody"><div class="ph big"></div><div class="ph"></div></div>
     <h3 class="sech" style="margin-top:30px">Month by month</h3>
     <p class="secsub">Ad spend and income per month, from the sheet.</p>

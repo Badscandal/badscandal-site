@@ -64,6 +64,8 @@
     }
     /* Connector + Site check (the staff desk): only when the caller has asked for the board */
     if ("board" in o || o.boardProblem) rows = rows.concat(staffHealth(o.board, o.boardProblem, now));
+    /* Revolut (the bank reader): only when the caller has asked for its state */
+    if ("bank" in o || o.bankProblem) rows.push(bankHealth(o.bank, o.bankProblem, now));
     return rows;
   }
   /* "YYYY-MM-DD HH:MM" São Paulo (UTC-3, no summer time since 2019) -> ms */
@@ -122,7 +124,8 @@
        (median) of the 7 days before (needs 3+ of those days with taps)
      - the sheet's Meta spend disagreeing with Meta (by more than 1.00 on a day)
      - from the staff desk (o.board, see staffAttention()): messages waiting on Luke, income problems,
-       the bots' connector switched off */
+       the bots' connector switched off
+     - Revolut (o.bank + o.board, see bankAttention()): payments to sort, the approval gone or ending */
   function attention(o) {
     var sheet = o.sheet, ov = o.ov, out = [];
     if (sheet) {
@@ -175,7 +178,7 @@
     out = cap.concat(releaseAttention(sheet, o.board), out.filter(function (x) { return x.key !== "cap"; }));
     /* the staff desk: messages waiting on Luke go first (he can act on them now), and with them a song in
        Spotify for Artists only he can say what it is (review, 11 Nov 2026: it sat ninth of ten); the rest after */
-    var st = staffAttention(o.board), first = function (x) { return x.key === "msgs" || x.key === "spotify"; };
+    var st = staffAttention(o.board).concat(bankAttention(o.bank, o.board)), first = function (x) { return x.key === "msgs" || x.key === "spotify"; };
     return st.filter(first).concat(out, st.filter(function (x) { return !first(x); }));
   }
 
@@ -539,7 +542,9 @@
   /* what to look at, as the desk found it; a payer nobody has named yet is said in our own words
      ("New payer not on the list: …") instead of the desk's line about it */
   function incomeProblems(inc) {
-    var out = ((inc && inc.problems) || []).filter(function (p) { return !/^New payer\(s\) not on the list/.test(p); });
+    /* the desk's "N payments in Revolut that nobody has sorted yet" has its own block ("To sort") and
+       its own line on Today (bankAttention), so it is not said a third time here */
+    var out = ((inc && inc.problems) || []).filter(function (p) { return !/^New payer\(s\) not on the list/.test(p) && !/ that nobody has sorted yet$/.test(p); });
     var u = (inc && inc.unknown) || [];
     if (u.length) out.push((u.length === 1 ? "New payer not on the list: " : "New payers not on the list: ") + u.join(", "));
     return out;
@@ -922,6 +927,124 @@
     return told ? "Answered at " + hm + ". Nova was asked to find out who delivered " + title + "." : "Your answer is saved, but the message to Nova couldn't go. Press “Send it to Nova again”.";
   }
 
+  /* ================= Revolut: the bank reader on the page (11 Nov 2026) =================
+     GET /api/bank/status (netlify/functions/bank.mjs) says where the reader is; the payments it could
+     not place are on the desk as "unsorted" (board.income.unsorted): in no total until someone sorts
+     them (POST /api/staff/sort). Luke's words, never the reader's: "to sort", "your own transfer". */
+  var MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  var addDay = function (d, n) { return new Date(Date.parse(d + "T12:00:00Z") + n * 86400000).toISOString().slice(0, 10); };
+  var PREVIEW = "Connecting Revolut only works on badscandal.com itself, not on a preview.";
+  /* the six kinds of income a payment can be sorted as (the desk's CATEGORIES) */
+  var SORT_TYPES = ["Self-releases", "Label deals", "Publishing", "Production", "Salary", "Other"];
+  function endsWords(n) { return n === 0 ? "approval ends today" : n === 1 ? "approval ends tomorrow" : "approval ends in " + n + " days"; }
+  /* the reader's last read failed: an error, and no full read since it */
+  function bankFailed(st) { var ok = t(st && st.lastOkAt), run = t(st && st.lastRunAt); return !!(st && st.lastError && (ok == null || (run != null && run > ok))); }
+  /* The one sentence (the server's bankLine, netlify/lib/bank.mjs, word for word; São Paulo times):
+     "Revolut: read today at 06:50 · 2 payments in · approval ends in 86 days" */
+  function bankLine(st, now) {
+    now = now || Date.now();
+    if (!st || !st.configured) return "The site is missing its Revolut settings";
+    if (st.needsApproval) return "Revolut has to be approved again";
+    if (!st.connected) return "Revolut is not connected";
+    var parts = [], ok = t(st.lastOkAt);
+    if (ok != null) {
+      var d = spStampOf(ok).slice(0, 10), today = spStampOf(now).slice(0, 10);
+      var when = d === today ? "today" : d === addDay(today, -1) ? "yesterday" : "on " + Number(d.slice(8, 10)) + " " + MON[Number(d.slice(5, 7)) - 1];
+      parts.push("Revolut: read " + when + " at " + spStampOf(ok).slice(11, 16));
+    } else parts.push(st.partial ? "Revolut: not fully read yet" : "Revolut: not read yet");
+    if (bankFailed(st)) parts.push("the last read failed");
+    else if (st.partial) parts.push("the last read stopped part way, the rest comes at the next read");
+    else if (ok != null && typeof st.lastAdded === "number" && isFinite(st.lastAdded)) parts.push(st.lastAdded === 0 ? "no new payments" : st.lastAdded + " payment" + (st.lastAdded === 1 ? "" : "s") + " in");
+    parts.push(endsWords(st.daysLeft));
+    return parts.join(" · ");
+  }
+  /* What the Revolut tile shows: the line, the accounts it reads, the reader's own sentence when the
+     last read failed, and which buttons: connect | approve | sync | disconnect (the first is the main
+     one). attn when Luke has to act: approval gone, or 14 days or fewer left. note = why there is no
+     Connect button (only the live site can connect) or what is missing. */
+  function bankView(st, now) {
+    var v = { line: bankLine(st, now), attn: false, accounts: [], error: "", note: "", buttons: [] };
+    if (!st) return v;
+    v.accounts = (st.accounts || []).map(function (a) { return [a.name, a.currency].filter(Boolean).join(" · "); }).filter(Boolean);
+    if (!st.configured) { v.note = "Connecting needs the Revolut settings on Netlify first."; return v; }
+    var here = !!st.canConnectHere;
+    if (st.needsApproval) { v.attn = true; v.buttons = here ? ["approve", "disconnect"] : ["disconnect"]; }
+    else if (!st.connected) v.buttons = here ? ["connect"] : [];
+    else {
+      v.attn = !!st.expiring;
+      v.buttons = (st.expiring && here ? ["approve"] : []).concat("sync", "disconnect");
+      if (bankFailed(st)) v.error = st.lastError;
+    }
+    if (!here && (st.needsApproval || !st.connected || st.expiring)) v.note = PREVIEW;
+    return v;
+  }
+  var BANK_BUTTON = { connect: "Connect Revolut", approve: "Approve again", sync: "Read now", disconnect: "Disconnect" };
+  function bankButton(k) { return BANK_BUTTON[k] || ""; }
+  /* The bank sends Luke back to /hq?bank=connected|failed|device#money. -> { kind, line, search (the
+     address without the flag, for history.replaceState), had } */
+  var FLAG_LINE = { connected: "Revolut is connected. The first read is running.", failed: "That didn't connect. Press Connect Revolut to try again.",
+    device: "Finish on the device you started on: press Connect Revolut here." };
+  function bankFlag(search) {
+    var parts = String(search || "").replace(/^\?/, "").split("&").filter(Boolean), kind = "", had = false;
+    parts = parts.filter(function (p) { var m = /^bank=(.*)$/.exec(p); if (!m) return true; had = true; if (FLAG_LINE[m[1]]) kind = m[1]; return false; });
+    return { kind: kind, line: FLAG_LINE[kind] || "", search: parts.length ? "?" + parts.join("&") : "", had: had };
+  }
+  /* "Read now" came back (the sync summary). -> { ok, text } */
+  function syncWords(s, at) {
+    if (!s || typeof s !== "object") return { ok: false, text: "Couldn't read Revolut just now. Try again." };
+    if (!s.ok || s.error) return { ok: false, text: s.error || "Couldn't read Revolut just now. Try again." };
+    var n = s.newPayments || 0, hm = spStampOf(at).slice(11, 16);
+    return { ok: true, text: "Read at " + hm + ": " + (n ? n + " new payment" + (n === 1 ? "" : "s") + " came in" : "nothing new came in") + (s.more ? ". The rest comes at the next read." : ".") };
+  }
+  /* a payment's state in "Latest payments": counted = it is in the totals. A transfer is Luke's own
+     money; one somebody sorted as "Not income" (a refund, a gift) is said as that. */
+  function payStatus(e) {
+    var s = e && e.status;
+    if (s === "unsorted") return { text: "To sort", counted: false };
+    if (s === "transfer") { var h = (e.history || []), last = h[h.length - 1]; return { text: last && last.from === "unsorted" ? "Not income" : "Your own transfer", counted: false }; }
+    s = String(s || ""); return { text: s.charAt(0).toUpperCase() + s.slice(1), counted: true };
+  }
+  /* the inline question before a payment is sorted (it can't be changed on the page afterwards) */
+  function sortQuestion(e, status, category) {
+    var what = e.payer + "'s " + money(e.amount, e.currency) + " (" + day(e.date) + ")";
+    return status === "received" ? "Sort " + what + " as income (" + category + ")? It counts as money coming in from then on, and can't be changed here."
+      : "Sort " + what + " as not income? Your own money, a refund, a gift: it never counts in the totals, and can't be changed here.";
+  }
+  function sortedLine(status, category) { return status === "received" ? "Sorted as income (" + category + ")" : "Sorted as not income"; }
+  /* "2 payments in Revolut to sort" */
+  function toSortWords(inc) {
+    var list = (inc && inc.unsorted) || [], n = (inc && inc.unsortedCount) || list.length;
+    if (!n) return "";
+    var where = list.map(function (e) { return e.account; }).filter(function (a, i, all) { return a && all.indexOf(a) === i; });
+    return n + " payment" + (n === 1 ? "" : "s") + " in " + (where.length ? joinWords(where) : "the accounts") + " to sort";
+  }
+  /* Today's "Needs attention" from the reader: payments to sort, and the approval (gone, or 14 days or
+     fewer left). Every item opens Money. */
+  function bankAttention(st, board) {
+    var out = [], ts = toSortWords(board && board.income);
+    if (ts) out.push({ key: "tosort", text: ts, href: "#money" });
+    if (st && st.configured && st.needsApproval) out.push({ key: "bank", text: "Revolut has to be approved again", href: "#money" });
+    else if (st && st.configured && st.connected && st.expiring) out.push({ key: "bank", text: "Revolut's " + endsWords(st.daysLeft), href: "#money" });
+    return out;
+  }
+  /* Data health: the "Revolut" row. It reads every morning at 06:50 (09:50 UTC); more than 26 hours
+     without a full read means a morning was missed. */
+  function bankHealth(st, problem, now) {
+    now = now || Date.now();
+    var R = function (state, text) { return { key: "revolut", label: "Revolut", state: state, text: text }; };
+    if (!st) return problem ? R("bad", problem) : R("off", "Not read yet");
+    if (!st.configured) return R("off", "Not set up: the site is missing its Revolut settings");
+    if (st.needsApproval) return R("bad", "Has to be approved again (Money)");
+    if (!st.connected) return R("off", "Not connected");
+    var ok = t(st.lastOkAt);
+    if (bankFailed(st)) return R("bad", "The last read failed: " + st.lastError);
+    if (st.expiring) return R("bad", (ok != null ? "Read " + ago(now - ok) + " · " : "") + endsWords(st.daysLeft));
+    if (st.partial) return R("off", "The last read stopped part way: the rest comes at the next read");
+    if (ok == null) return R("off", "Not read yet: it reads every morning at 06:50");
+    if (now - ok > 26 * 3600000) return R("bad", "Last full read " + ago(now - ok) + ": it reads every morning at 06:50");
+    return R("ok", "Read " + ago(now - ok) + " · " + endsWords(st.daysLeft));
+  }
+
   return { ago: ago, spMs: spMs, releaseWords: releaseWords, releaseDetail: releaseDetail, healthRows: healthRows, healthState: healthState, median: median, change: change, money: money, attention: attention, briefing: briefing,
     snapshot: snapshot, changesSince: changesSince, tiles: tiles, summaryText: summaryText, shortStep: shortStep, day: day,
     slug: slug, workerLabel: workerLabel, sortWorkers: sortWorkers, workerView: workerView, dutyWhen: dutyWhen, workerCounts: workerCounts, seenLine: seenLine, connectorLine: connectorLine,
@@ -937,5 +1060,8 @@
     titleKey: titleKey, outLine: outLine, sendButton: sendButton, canSendAnyway: canSendAnyway, dealWords: dealWords, songDeal: songDeal,
     fieldShown: fieldShown, fieldRequired: fieldRequired, needWord: needWord, upcomingPill: upcomingPill, whereLine: whereLine,
     releaseAttention: releaseAttention, sentNote: sentNote, sightingsHead: sightingsHead, sightRow: sightRow, sightQuestion: sightQuestion,
-    sightConfirm: sightConfirm, sightDone: sightDone };
+    sightConfirm: sightConfirm, sightDone: sightDone,
+    /* the Revolut reader (11 Nov 2026) */
+    bankLine: bankLine, bankView: bankView, bankButton: bankButton, bankFlag: bankFlag, syncWords: syncWords, payStatus: payStatus, sortQuestion: sortQuestion,
+    sortedLine: sortedLine, toSortWords: toSortWords, bankAttention: bankAttention, bankHealth: bankHealth, SORT_TYPES: SORT_TYPES };
 });

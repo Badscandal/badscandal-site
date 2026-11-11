@@ -7,6 +7,7 @@
                                                   /hq?bank=device#money (finished in another browser or
                                                   on another device) or /hq?bank=failed#money
      GET  /api/bank/status      Luke or Claude    connected? approval days left, last read, last error
+                                                  (?sample=1: a made-up state for /hq?sample=1, no store opened)
      POST /api/bank/sync        Luke or Claude    one refresh now -> its summary
      POST /api/bank/disconnect  Luke              gives the approval back and forgets it
 
@@ -19,6 +20,7 @@ import { getDeployStore, getStore } from "@netlify/blobs";
 import * as B from "../lib/bank.mjs";
 import { keyOk } from "../lib/feed.mjs";
 import { COOKIE, readCookie, verifySession } from "../lib/session.mjs";
+import { sampleBankStatus } from "../lib/staff-sample.mjs";
 
 const NO_STORE = { "Cache-Control": "no-store", "X-Robots-Tag": "noindex, nofollow" };
 const json = (status, data, extra = {}) => new Response(JSON.stringify(data), { status, headers: { "Content-Type": "application/json; charset=utf-8", ...NO_STORE, ...extra } });
@@ -74,6 +76,8 @@ export default async (req, context) => {
       const origin = req.headers.get("origin");
       if (origin && origin !== url.origin) return json(403, { error: "Forbidden" });
     }
+    /* /hq?sample=1: a made-up state, after the login, without opening any store */
+    if (path === "status" && req.method === "GET" && url.searchParams.get("sample") === "1") return json(200, { sample: true, ...sampleBankStatus(Date.now()) });
     const st = stores(context), now = Date.now();
 
     if (path === "status") {
