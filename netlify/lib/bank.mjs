@@ -11,12 +11,14 @@
 
    Netlify env (names only, Luke sets them): ENABLE_BANKING_APPLICATION_ID, ENABLE_BANKING_PRIVATE_KEY
    (the PEM, raw or base64 on one line), optional ENABLE_BANKING_ASPSP_NAME / _COUNTRY (default
-   Revolut / IE). The redirect address registered with Enable Banking is exactly REDIRECT_URL.
+   Revolut / IE), optional BANK_OWN_NAMES (Luke's own name as other banks write it, comma-separated:
+   money from those names is his own transfer). The redirect address registered with Enable Banking is exactly REDIRECT_URL.
 
    Blob store "bank" (strong consistency):
      conn.json          { sessionId, validUntil, aspsp, connectedAt, accounts:[{ uid, name, currency, idHash, holder }], gone? }
      state/<nonce>.json { at, validUntil }  single use, 10 minutes: the lock on the public callback
-     sync.json          { lastRunAt, lastOkAt, lastError, perAccount:{ <uid>:{ lastDate, cursor? } }, lastAdded, totals, last }
+     sync.json          { lastRunAt, lastOkAt, lastError, perAccount:{ <idHash>:{ lastDate, cursor? } }, lastAdded, totals, last }
+                        (keyed by the account's identification hash: the uid changes with every approval)
    The session id is never returned by any endpoint and never logged.
 
    What a refresh does (syncBank): reads every account's transactions since (lastDate - 7 days), or
@@ -30,7 +32,7 @@
    Then incomeCheck() so the dashboard shows "Revolut: checked today".
 
    Everything here takes the stores, the env, the clock and fetch as arguments (tests/bank.test.mjs). */
-import { createHash, createPrivateKey, randomBytes, sign } from "node:crypto";
+import { createHash, createPrivateKey, randomBytes, sign, timingSafeEqual } from "node:crypto";
 import * as S from "./staff.mjs";
 
 export const API = "https://api.enablebanking.com";
@@ -46,6 +48,9 @@ export const LIMITS = {
   expiringDays: 14,
   pairDays: 3, /* the two legs of Luke's own transfer may book up to 3 days apart */
   callMs: 9000, /* one request to the reader */
+  readShare: 0.75, /* no read may still be running after 75% of a refresh's budget: the rest is the desk's */
+  callbackMs: 8000, /* the whole callback (a normal function is cut off at 10 s) */
+  sessionMs: 5000, /* POST /sessions inside it; the account details share what is left */
 };
 export const SAY = {
   again: "Revolut has to be approved again: press Connect Revolut",
@@ -76,12 +81,15 @@ const sha = (s) => createHash("sha256").update(String(s)).digest("hex");
 export function readConfig(env) {
   const get = (k) => String((typeof env === "function" ? env(k) : env && env[k]) || "").trim();
   const applicationId = get("ENABLE_BANKING_APPLICATION_ID"), privateKey = get("ENABLE_BANKING_PRIVATE_KEY");
-  return { configured: !!(applicationId && privateKey), applicationId, privateKey,
+  const ownNames = get("BANK_OWN_NAMES").split(",").map((x) => x.trim()).filter(Boolean).slice(0, 10);
+  return { configured: !!(applicationId && privateKey), applicationId, privateKey, ownNames,
     aspsp: { name: get("ENABLE_BANKING_ASPSP_NAME") || "Revolut", country: (get("ENABLE_BANKING_ASPSP_COUNTRY") || "IE").toUpperCase() }, redirectUrl: REDIRECT_URL };
 }
 
 /* A failure that is safe to describe: what went wrong and the reader's HTTP status, never a body,
-   an id, a code or a key. kind: missing | key | refused | gone | no_bank | reader | network | bad_answer | no_accounts | cancelled */
+   an id, a code or a key. kind: missing | key | refused | gone | no_bank | reader | network | timeout | bad_answer | no_accounts | cancelled | browser
+   refused = Enable Banking turned the SITE away (a 401/403 that doesn't say the session ended: a key that
+   doesn't match the application id, an application that isn't active); gone = Luke's approval ended. */
 export class BankError extends Error {
   constructor(kind, status = 0, code = "") { super(`bank: ${kind}${status ? " " + status : ""}`); this.name = "BankError"; this.kind = kind; this.status = status; this.code = code; }
 }
@@ -113,20 +121,22 @@ export function signJwt(cfg, nowMs) {
 
 /* ---------- one request to the reader ---------- */
 const GONE_WORDS = /(EXPIRED|REVOKED|CLOSED|INVALID)_SESSION|SESSION_(EXPIRED|REVOKED|CLOSED|NOT_FOUND|DOES_NOT_EXIST)|\b(session|consent)\b[^.]{0,40}\b(expired|revoked|closed|invalid|not found|does not exist|no longer)/i;
-export async function ebCall(cfg, fetchImpl, now, method, path, body) {
+/* timeoutMs: how long this one request may take (a refresh passes what is left of its budget) */
+export async function ebCall(cfg, fetchImpl, now, method, path, body, timeoutMs = LIMITS.callMs) {
   const token = signJwt(cfg, now);
   let res;
   try {
     res = await fetchImpl(API + path, { method, headers: { Authorization: "Bearer " + token, Accept: "application/json", ...(body === undefined ? {} : { "Content-Type": "application/json" }) },
-      body: body === undefined ? undefined : JSON.stringify(body), signal: AbortSignal.timeout(LIMITS.callMs) });
-  } catch { throw new BankError("network"); }
+      body: body === undefined ? undefined : JSON.stringify(body), signal: AbortSignal.timeout(Math.max(1, Math.round(timeoutMs))) });
+  } catch (err) { throw new BankError(err && err.name === "TimeoutError" ? "timeout" : "network"); }
   if (!res.ok) {
     const info = await res.json().catch(() => null);
     const word = info && typeof info.error === "string" && /^[A-Z][A-Z_]{2,40}$/.test(info.error) ? info.error : "";
     const text = info ? [info.error, info.message, info.detail].filter((x) => typeof x === "string").join(" ") : "";
-    const gone = res.status === 401 || res.status === 403 || GONE_WORDS.test(text);
-    const e = new BankError(gone ? "gone" : "reader", res.status, word);
-    throw e;
+    /* only words that say the SESSION ended mean "approve again"; a bare 401/403 is the site's key or
+       application being refused, which no re-approval fixes */
+    const kind = GONE_WORDS.test(text) ? "gone" : res.status === 401 || res.status === 403 ? "refused" : "reader";
+    throw new BankError(kind, res.status, word);
   }
   if (res.status === 204) return {};
   try { return await res.json(); } catch { throw new BankError("bad_answer", res.status); }
@@ -160,7 +170,16 @@ export async function startConnect({ bank, env, now, fetchImpl }) {
   } catch (e) { await bank.delete(`state/${state}.json`).catch(() => {}); throw isGone(e) ? new BankError("refused", e.status, e.code) : e; }
   if (!body || typeof body.url !== "string" || !/^https:\/\/\S+$/.test(body.url)) { await bank.delete(`state/${state}.json`).catch(() => {}); throw new BankError("bad_answer"); }
   await pruneStates(bank, now);
-  return { url: body.url };
+  return { url: body.url, binding: stateBinding(state) }; /* binding goes into Luke's browser as a cookie (functions/bank.mjs), never into the answer */
+}
+/* The callback is public: the nonce proves "a Connect press made this", the cookie proves "in THIS
+   browser". Without it, whoever opened the approval link Luke's press made (a shared screen, a link
+   sent on) could approve THEIR OWN bank account onto Luke's dashboard. */
+export const STATE_COOKIE = "__Host-bs_bank_state";
+export const stateBinding = (state) => sha("bank-state|" + state);
+export function bindingOk(state, binding) {
+  const a = Buffer.from(stateBinding(String(state || ""))), b = Buffer.from(String(binding || ""));
+  return a.length === b.length && timingSafeEqual(a, b);
 }
 /* presses of Connect that were never finished: older than the 10 minutes, they can only be clutter */
 async function pruneStates(bank, now) {
@@ -176,7 +195,9 @@ async function pruneStates(bank, now) {
 /* ---------- the accounts the approval covers ---------- */
 /* PSD2 names the account holder in "name" on /accounts/{uid}/details; Revolut's per-currency accounts
    often carry no label of their own, so the label is the description, the product, or "EUR account". */
-const NUMBERS = /\b[A-Z]{2}\d{2}(?: ?[A-Z0-9]{2,4}){3,8}\b|(?:\d[ -]?){7,}\d/g; /* IBAN-shaped, or 8+ digits: never kept */
+/* never kept: IBAN-shaped text in any case (groups of four, a short last group), or 6+ digits in a row
+   with spaces, dots, dashes or slashes between them (account and sort codes, tax numbers like CPF) */
+const NUMBERS = /\b[A-Z]{2}\d{2}(?: ?[A-Z0-9]{4}){2,7}(?: ?[A-Z0-9]{1,3})?\b|(?:\d[ .\/-]?){5,}\d/gi;
 const noNumbers = (s, max) => S.clean(String(s || "").replace(NUMBERS, " ").replace(/\s+/g, " ").replace(/^[\s,.;:/-]+|[\s,.;:/-]+$/g, ""), max);
 export function accountInfo(uid, details, fromSession) {
   const d = details && typeof details === "object" ? details : {}, f = fromSession && typeof fromSession === "object" ? fromSession : {};
@@ -189,13 +210,19 @@ export function accountInfo(uid, details, fromSession) {
 /* ---------- the callback: the bank sends Luke's browser back here ---------- */
 const STATE_RE = /^[A-Za-z0-9_-]{20,64}$/;
 /* -> { ok: true, accounts } or { ok: false, why: "state" } (an unknown, used or expired nonce:
-   NOTHING is read, written or called). Other failures throw a BankError after the nonce is gone. */
-export async function finishCallback({ bank, env, now, fetchImpl, code, state, error }) {
+   NOTHING is read, written or called) or { ok: false, why: "browser" } (not the browser that pressed
+   Connect: nothing is touched, the nonce stays for the right browser). Other failures throw a
+   BankError after the nonce is gone. binding = the cookie Connect set. The whole callback keeps
+   inside LIMITS.callbackMs (clock = the real clock), and a session made at Enable Banking that can't be
+   stored is given back at once, so no approval is ever left live where nobody can end it. */
+export async function finishCallback({ bank, env, now, fetchImpl, code, state, error, binding, clock = Date.now }) {
+  const started = clock();
   if (!STATE_RE.test(String(state || ""))) return { ok: false, why: "state" };
   const key = `state/${state}.json`;
   const got = await bank.getWithMetadata(key, { type: "json", consistency: "strong" });
   const at = got && got.data ? Date.parse(got.data.at) : NaN;
   if (!got || !got.data || got.data.used || !(now - at <= LIMITS.stateMinutes * 60000) || now < at - 60000) return { ok: false, why: "state" };
+  if (!bindingOk(state, binding)) return { ok: false, why: "browser" }; /* a real press, finished elsewhere: the nonce stays for Luke's browser */
   /* claim it (write only if unchanged): two copies of the same callback can't both go on */
   const claim = await bank.setJSON(key, { ...got.data, used: iso(now) }, got.etag ? { onlyIfMatch: got.etag } : {});
   if (claim && claim.modified === false) return { ok: false, why: "state" };
@@ -203,28 +230,37 @@ export async function finishCallback({ bank, env, now, fetchImpl, code, state, e
     if (error || !code) throw new BankError("cancelled");
     const cfg = readConfig(env);
     if (!cfg.configured) throw new BankError("missing");
-    const sess = await ebCall(cfg, fetchImpl, now, "POST", "/sessions", { code: String(code) });
+    const sess = await ebCall(cfg, fetchImpl, now, "POST", "/sessions", { code: String(code) }, LIMITS.sessionMs);
     const sessionId = sess && sess.session_id != null ? String(sess.session_id) : "";
     if (!sessionId) throw new BankError("bad_answer");
-    const data = Array.isArray(sess.accounts_data) ? sess.accounts_data : [];
-    const accounts = [];
-    for (const entry of Array.isArray(sess.accounts) ? sess.accounts : []) {
-      const uid = first(typeof entry === "string" ? entry : entry && entry.uid);
-      if (!uid || accounts.some((a) => a.uid === uid)) continue;
-      let details = null;
-      try { details = await ebCall(cfg, fetchImpl, now, "GET", `/accounts/${encodeURIComponent(uid)}/details`); } catch {} /* the account is still kept without its details */
-      accounts.push(accountInfo(uid, details, { ...(data.find((x) => x && first(x.uid) === uid) || {}), ...(entry && typeof entry === "object" ? entry : {}) }));
+    const left = () => Math.max(300, started + LIMITS.callbackMs - clock());
+    try {
+      const data = Array.isArray(sess.accounts_data) ? sess.accounts_data : [];
+      const entries = [];
+      for (const entry of Array.isArray(sess.accounts) ? sess.accounts : []) {
+        const uid = first(typeof entry === "string" ? entry : entry && entry.uid);
+        if (uid && !entries.some((x) => x.uid === uid)) entries.push({ uid, entry });
+      }
+      if (!entries.length) throw new BankError("no_accounts");
+      /* every account's details at once, inside what is left of the time; an account whose details
+         don't come is still kept, labelled from the session's own data */
+      const ms = Math.max(300, left() - 1500);
+      const details = await Promise.all(entries.map(({ uid }) => ebCall(cfg, fetchImpl, now, "GET", `/accounts/${encodeURIComponent(uid)}/details`, undefined, ms).catch(() => null)));
+      const accounts = entries.map(({ uid, entry }, i) => accountInfo(uid, details[i], { ...(data.find((x) => x && first(x.uid) === uid) || {}), ...(entry && typeof entry === "object" ? entry : {}) }));
+      const vu = sess.access && Date.parse(sess.access.valid_until);
+      const validUntil = Number.isFinite(vu) && vu > now ? iso(vu) : got.data.validUntil || consentUntil(null, now);
+      const old = (await S.readDoc(bank, "conn.json", null)).data;
+      await bank.setJSON("conn.json", { sessionId, validUntil, aspsp: { name: first(sess.aspsp && sess.aspsp.name) || cfg.aspsp.name, country: first(sess.aspsp && sess.aspsp.country) || cfg.aspsp.country },
+        connectedAt: iso(now), accounts });
+      await S.mutate(bank, "sync.json", {}, (s) => { s.lastError = null; s.connectedAt = iso(now); return { value: null }; }).catch(() => {});
+      /* a previous approval is given back (its failure doesn't matter: it expires by itself) */
+      if (old && old.sessionId && old.sessionId !== sessionId) await ebCall(cfg, fetchImpl, now, "DELETE", `/sessions/${encodeURIComponent(old.sessionId)}`, undefined, Math.min(1500, left())).catch(() => {});
+      return { ok: true, accounts: accounts.length };
+    } catch (e) {
+      /* the session exists at Enable Banking but is not stored here: give it back now */
+      await ebCall(cfg, fetchImpl, now, "DELETE", `/sessions/${encodeURIComponent(sessionId)}`, undefined, Math.min(1500, left())).catch(() => {});
+      throw e;
     }
-    if (!accounts.length) throw new BankError("no_accounts");
-    const vu = sess.access && Date.parse(sess.access.valid_until);
-    const validUntil = Number.isFinite(vu) && vu > now ? iso(vu) : got.data.validUntil || consentUntil(null, now);
-    const old = (await S.readDoc(bank, "conn.json", null)).data;
-    await bank.setJSON("conn.json", { sessionId, validUntil, aspsp: { name: first(sess.aspsp && sess.aspsp.name) || cfg.aspsp.name, country: first(sess.aspsp && sess.aspsp.country) || cfg.aspsp.country },
-      connectedAt: iso(now), accounts });
-    await S.mutate(bank, "sync.json", {}, (s) => { s.lastError = null; s.connectedAt = iso(now); return { value: null }; }).catch(() => {});
-    /* a previous approval is given back (its failure doesn't matter: it expires by itself) */
-    if (old && old.sessionId && old.sessionId !== sessionId) await ebCall(cfg, fetchImpl, now, "DELETE", `/sessions/${encodeURIComponent(old.sessionId)}`).catch(() => {});
-    return { ok: true, accounts: accounts.length };
   } finally {
     await bank.delete(key).catch(() => {});
   }
@@ -249,6 +285,8 @@ export async function bankStatus({ bank, env, now, canConnectHere }) {
   const needsApproval = !!conn && (!!conn.gone || !(vu > now));
   const connected = !!conn && !needsApproval;
   const daysLeft = connected ? Math.max(0, Math.floor((vu - now) / DAY_MS)) : null;
+  /* the last run stopped at a cap (pages or time) without an error: not everything is read yet */
+  const partial = !!(sync.last && sync.last.more) && !sync.lastError && !!sync.lastRunAt && sync.lastRunAt !== sync.lastOkAt;
   return {
     configured: cfg.configured, connected, needsApproval,
     aspsp: conn && conn.aspsp ? conn.aspsp.name || null : null,
@@ -256,7 +294,7 @@ export async function bankStatus({ bank, env, now, canConnectHere }) {
     accounts: conn ? (conn.accounts || []).map((a) => ({ name: a.name, currency: a.currency })) : [],
     lastRunAt: sync.lastRunAt || null, lastOkAt: sync.lastOkAt || null,
     lastError: needsApproval ? SAY.again : sync.lastError || null,
-    lastAdded: Number.isInteger(sync.lastAdded) ? sync.lastAdded : null,
+    lastAdded: Number.isInteger(sync.lastAdded) ? sync.lastAdded : null, partial,
     canConnectHere: !!canConnectHere,
   };
 }
@@ -272,9 +310,10 @@ export function bankLine(st, now = Date.now()) {
     const d = S.spDay(ok), today = S.spDay(now);
     const when = d === today ? "today" : d === addDays(today, -1) ? "yesterday" : `on ${Number(d.slice(8, 10))} ${MON[Number(d.slice(5, 7)) - 1]}`;
     parts.push(`Revolut: read ${when} at ${S.spHM(ok)}`);
-  } else parts.push("Revolut: not read yet");
+  } else parts.push(st.partial ? "Revolut: not fully read yet" : "Revolut: not read yet");
   const failedSince = st.lastError && (!Number.isFinite(ok) || Date.parse(st.lastRunAt) > ok);
   if (failedSince) parts.push("the last read failed");
+  else if (st.partial) parts.push("the last read stopped part way, the rest comes at the next read");
   else if (Number.isFinite(ok) && Number.isInteger(st.lastAdded)) parts.push(st.lastAdded === 0 ? "no new payments" : `${st.lastAdded} payment${st.lastAdded === 1 ? "" : "s"} in`);
   parts.push(st.daysLeft === 0 ? "approval ends today" : st.daysLeft === 1 ? "approval ends tomorrow" : `approval ends in ${st.daysLeft} days`);
   return parts.join(" · ");
@@ -309,12 +348,15 @@ export function readTx(t) {
 /* the payer exactly as the bank gives it, else the first line of the payment text; numbers that could
    be an account (IBAN-shaped, 8+ digits) are never kept */
 export const payerOf = (tx) => noNumbers(tx.payer, 80) || noNumbers(tx.remit[0], 80) || "Unknown payer";
-export const refHash = (tx, payer) => "h" + sha([tx.date, tx.amount.toFixed(2), tx.currency, low(payer)].join("|")).slice(0, 24);
+/* salt = the account's identification hash + "#" + which look-alike this is (0, 1, ...) in the bank's own
+   order: two equal payments from one payer on one day are two payments, and a re-read gives the same keys */
+export const lookAlike = (tx, payer) => [tx.date, tx.amount.toFixed(2), tx.currency, low(payer), ...tx.remit.map(low)].join("|");
+export const refHash = (tx, payer, salt = "") => "h" + sha(lookAlike(tx, payer) + "|" + salt).slice(0, 24);
 /* the reference on the desk: the bank's transaction id (else its entry reference), else a hash of
-   date|amount|currency|payer. An id too long for the desk is hashed rather than cut (cut ids could collide). */
-export function refOf(tx, payer) {
+   date|amount|currency|payer|text + the salt above. An id too long for the desk is hashed rather than cut (cut ids could collide). */
+export function refOf(tx, payer, salt = "") {
   const id = S.clean(tx.id, 200);
-  if (!id) return refHash(tx, payer);
+  if (!id) return refHash(tx, payer, salt);
   return id.length <= 80 ? id : "t" + sha(id).slice(0, 32);
 }
 
@@ -323,8 +365,26 @@ export function normName(s) {
   return String(s || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim().split(" ")
     .filter((w) => w && !["mr", "mrs", "ms", "dr"].includes(w)).sort().join(" ");
 }
-/* the desk's own rule for "this payer is that source" (netlify/lib/staff.mjs incomeReport) */
-const srcMatches = (s, text) => { const t = low(text); return !!t && [low(s.name), s.id, ...(s.match || [])].filter(Boolean).some((k) => t.includes(k)); };
+/* Luke himself, as another bank writes him: his full name in any order, or (two words or more, no
+   company word) his first and last name with at most one word more ("LUKE POWER" for "Luke James
+   Power", "Luke J Power" for "Luke Power"). "Luke Power Music Ltd" is not him. */
+const TITLES = ["mr", "mrs", "ms", "miss", "mx", "dr"];
+const COMPANY = /\b(?:ltd|limited|llc|llp|inc|plc|gmbh|ltda|eireli|sa|sas|srl|bv|co|company|corp|music|records|recordings|publishing|productions?|studios?|label|group|holdings|media|entertainment|agency|management|services|trust|foundation)\b/;
+const nameWords = (s) => String(s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim().split(" ").filter((w) => w && !TITLES.includes(w));
+export function ownName(payer, holders) {
+  const p = nameWords(payer);
+  if (p.length < 2) return false;
+  return (holders || []).some((h) => {
+    const w = nameWords(h);
+    if (w.length < 2) return false; /* a full name, never one word */
+    if (normName(h) === normName(payer)) return true;
+    return !COMPANY.test(p.join(" ")) && p.length <= w.length + 1 && p.includes(w[0]) && p.includes(w[w.length - 1]);
+  });
+}
+/* "this payer is that source": the source's name or one of its match words, as WHOLE words of the payer
+   (stricter than the desk's substring rule: "distro" must not find DISTROKID, and the id is not a name) */
+const wordIn = (text, key) => { const k = low(key); return !!k && new RegExp("(?:^|[^a-z0-9])" + k.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "(?![a-z0-9])").test(text); };
+const srcMatches = (s, text) => { const t = low(text); return !!t && [s.name, ...(s.match || [])].filter(Boolean).some((k) => wordIn(t, k)); };
 export function sourceFor(payer, sources) {
   const s = (Array.isArray(sources) ? sources : []).find((x) => x && x.kind !== "account" && x.id && srcMatches(x, payer));
   return s ? { id: s.id, name: s.name, category: s.category || "Other" } : null;
@@ -341,24 +401,27 @@ export const OWN_MOVES = [
   [/\btop-?up by \*\d{4}\b/i, "card top-up"], /* "Top-Up by *1234", "Apple Pay Top-Up by *1234" */
   [/^(?:apple|google) pay (?:top-?up|deposit)\b/i, "card top-up"],
 ];
-export const REFUND = /\b(?:refund(?:ed)?|reversal|reversed|reverted|chargeback)\b/i;
+/* a non-letter on either side, so CARD_REFUND and REFUND-123 count too */
+export const REFUND = /(?:^|[^a-z])(?:refund(?:ed|s)?|reversal|reversed|reverted|chargeback|cashback)(?![a-z])/i;
 
 /* What a booked credit is. tx = Enable Banking's transaction as it comes; ctx = { uid (its account),
-   holders (the account holders' names), debits (this run's booked debits: { uid, amount, currency,
+   holders (the account holders' names + BANK_OWN_NAMES), labels (the accounts' own names), debits (this run's booked debits: { uid, amount, currency,
    date }), sources (the desk's list) }. Checked in this order: own name, Revolut's wording, refund, known
    source, the pair. -> { kind, why, source?, pair? } (pair = the index of the
    matching debit, so the caller can use each debit once). null for anything that isn't a booked credit. */
 export function classify(t, ctx = {}) {
   const tx = readTx(t);
   if (tx.credit !== true || !tx.booked || !tx.amount || !tx.currency || !tx.date) return null;
-  const holders = (ctx.holders || []).map(normName).filter((n) => n.includes(" ")); /* a full name, never one word */
-  if (tx.payer && holders.includes(normName(tx.payer))) return { kind: "transfer", why: "own name" };
+  if (tx.payer && ownName(tx.payer, ctx.holders)) return { kind: "transfer", why: "own name" };
   const lines = [...tx.remit, tx.payer, tx.code].filter(Boolean);
   for (const [re, why] of OWN_MOVES) if (lines.some((l) => re.test(l))) return { kind: "transfer", why };
   if (lines.some((l) => REFUND.test(l))) return { kind: "refund", why: "refund" };
   const source = sourceFor(payerOf(tx), ctx.sources);
   if (source) return { kind: "income", why: "source", source }; /* a known payer is never hidden by a look-alike debit */
-  const pair = (ctx.debits || []).findIndex((d) => d && d.uid !== ctx.uid && d.currency === tx.currency && d.amount === tx.amount && d.date && daysApart(d.date, tx.date) <= LIMITS.pairDays);
+  /* the pair only for a credit that names nobody else: no payer, Revolut itself, or one of his accounts'
+     own names. A friend's 50 is never hidden by a 50 Luke happened to pay out elsewhere. */
+  const named = tx.payer && !/^revolut\b/i.test(tx.payer) && !(ctx.labels || []).some((l) => low(l) === low(tx.payer));
+  const pair = named ? -1 : (ctx.debits || []).findIndex((d) => d && d.uid !== ctx.uid && d.currency === tx.currency && d.amount === tx.amount && d.date && daysApart(d.date, tx.date) <= LIMITS.pairDays);
   if (pair >= 0) return { kind: "transfer", why: "pair", pair };
   return { kind: "unsorted", why: "unknown payer" };
 }
@@ -375,13 +438,11 @@ async function deskEntries(desk, fromDate, now) {
   return map;
 }
 const ofSource = (e, source) => low(e.source) === source.id || srcMatches(source, e.payer);
-/* Already on the desk? The same Revolut transaction id; or a statement (pending) that this very credit
-   already turned into received in an earlier run (it may keep the statement's own reference). */
-export function findKnown(entries, tx, ref, source) {
+/* Already on the desk? The same Revolut transaction id, as its reference or, on a statement this
+   credit turned into received (which keeps the statement's own reference), as its bankRef. */
+export function findKnown(entries, ref) {
   const r = low(ref);
-  return entries.find((e) => low(e.account) === low(ACCOUNT) && r && low(e.reference) === r)
-    || (source && entries.find((e) => low(e.account) === low(ACCOUNT) && e.status === "received" && e.arrived === tx.date && e.amount === tx.amount && e.currency === tx.currency
-      && (e.history || []).some((h) => h.from === "pending" && h.to === "received") && ofSource(e, source))) || null;
+  return (r && entries.find((e) => low(e.account) === low(ACCOUNT) && (low(e.reference) === r || low(e.bankRef) === r))) || null;
 }
 /* A statement Ledger logged as pending ("Northlight Records Ltd") and the bank's credit ("NORTHLIGHT RECORDS
    LIMITED") are one payment when both belong to the same known source, with the same amount and
@@ -399,7 +460,7 @@ async function markGone(bank, now) {
   await S.mutate(bank, "conn.json", null, (c) => { if (!c || c.gone) return { skip: true, value: null }; c.gone = iso(now); return { value: null }; }).catch(() => {});
   await S.mutate(bank, "sync.json", {}, (s) => { s.lastRunAt = iso(now); s.lastError = SAY.again; return { value: null }; }).catch(() => {});
 }
-const sayFor = (e) => (e && e.name === "BankError" ? (e.kind === "network" ? SAY.unreachable : e.kind === "missing" ? SAY.missing : e.kind === "key" ? SAY.keyBad : SAY.readerDown) : SAY.desk);
+const sayFor = (e) => (e && e.name === "BankError" ? (e.kind === "network" || e.kind === "timeout" ? SAY.unreachable : e.kind === "missing" ? SAY.missing : e.kind === "key" ? SAY.keyBad : e.kind === "refused" ? SAY.keyRefused : SAY.readerDown) : SAY.desk);
 const COUNTS = ["credits", "income", "unsorted", "transfers", "refunds", "added", "updated", "upgraded", "already", "skipped", "newPayments"];
 
 /* ---------- the refresh ---------- */
@@ -418,34 +479,47 @@ export async function syncBank({ bank, desk, env, now, fetchImpl, clock = Date.n
   sum.connected = true;
   const prev = (await S.readDoc(bank, "sync.json", {})).data || {};
   const per = prev.perAccount || {}, next = {}, rows = [];
-  const today = iso(now).slice(0, 10), fetchUntil = started + Math.floor(budgetMs * 0.6); /* the rest of the time is for the desk */
+  const today = iso(now).slice(0, 10), fetchUntil = started + Math.floor(budgetMs * 0.6); /* no new read starts after 60%... */
+  const readUntil = started + Math.floor(budgetMs * LIMITS.readShare); /* ...and none is still running after 75%: the rest is for the desk */
+  /* an account with nothing saved (the first run; a new account; an approval made again, whose accounts
+     come back under new uids) starts at the 1st of last month, or a week before the last full read if
+     that is earlier, so a lapsed approval leaves no gap */
+  const okDay = dayOf(prev.lastOkAt);
+  const fresh = okDay && addDays(okDay, -LIMITS.overlapDays) < firstOfPrevMonth(now) ? addDays(okDay, -LIMITS.overlapDays) : firstOfPrevMonth(now);
+  const slot = (acc) => acc.idHash || acc.uid;
   let error = null, gone = false, accountFails = 0, complete = true;
 
   /* 1. read every account, page by page, within the caps */
   for (const acc of conn.accounts || []) {
-    const st = per[acc.uid] || {};
-    const from = (st.cursor && st.cursor.dateFrom) || (st.lastDate ? addDays(st.lastDate, -LIMITS.overlapDays) : firstOfPrevMonth(now));
+    const st = per[slot(acc)] || {};
+    const from = (st.cursor && st.cursor.dateFrom) || (st.lastDate ? addDays(st.lastDate, -LIMITS.overlapDays) : fresh);
     let key = (st.cursor && st.cursor.key) || null, n = 0, done = false;
     try {
       while (n < pagesPerAccount && clock() < fetchUntil) {
         const q = new URLSearchParams({ date_from: from });
         if (key) q.set("continuation_key", key);
+        const ms = Math.max(500, Math.min(LIMITS.callMs, readUntil - clock()));
         let page;
-        try { page = await ebCall(cfg, fetchImpl, now, "GET", `/accounts/${encodeURIComponent(acc.uid)}/transactions?${q}`); }
-        catch (e) { if (n === 0 && key && !isGone(e)) { key = null; continue; } throw e; } /* a saved place the reader no longer knows: start the account again */
+        try { page = await ebCall(cfg, fetchImpl, now, "GET", `/accounts/${encodeURIComponent(acc.uid)}/transactions?${q}`, undefined, ms); }
+        catch (e) {
+          if (e.kind === "timeout" && ms < LIMITS.callMs) break; /* OUR time ran out, not the reader: like the time cap, the next run carries on */
+          if (n === 0 && key && !["gone", "refused", "timeout", "network"].includes(e.kind)) { key = null; continue; } /* a saved place the reader no longer knows: start the account again */
+          throw e;
+        }
         n++; sum.pages++;
         for (const t of Array.isArray(page && page.transactions) ? page.transactions : []) rows.push({ uid: acc.uid, raw: t });
         key = page && typeof page.continuation_key === "string" && page.continuation_key.trim() ? page.continuation_key : null;
         if (!key) { done = true; break; }
       }
       sum.accounts++;
-      next[acc.uid] = done ? { lastDate: today } : key ? { ...(st.lastDate ? { lastDate: st.lastDate } : {}), cursor: { key, dateFrom: from } } : st;
+      next[slot(acc)] = done ? { lastDate: today } : key ? { ...(st.lastDate ? { lastDate: st.lastDate } : {}), cursor: { key, dateFrom: from } } : st;
       if (!done) sum.more = true;
     } catch (e) {
       if (isGone(e)) { gone = true; break; }
-      accountFails++; next[acc.uid] = st; error = SAY.someAccounts;
+      accountFails++; next[slot(acc)] = st; error = SAY.someAccounts;
       if (conn.accounts.length === 1) error = sayFor(e);
       console.error("bank: an account could not be read:", logLine(e));
+      if (e.kind === "refused") { error = SAY.keyRefused; break; } /* the site's key: every account would say the same */
     }
   }
   if (gone) { await markGone(bank, now); return { ...sum, connected: false, error: SAY.again }; }
@@ -455,9 +529,12 @@ export async function syncBank({ bank, desk, env, now, fetchImpl, clock = Date.n
   for (const r of rows) {
     const tx = readTx(r.raw);
     if (!tx.booked || tx.credit === null || !tx.amount || !tx.currency || !tx.date) continue;
-    const k = r.uid + "|" + (tx.id || JSON.stringify(r.raw));
-    if (seen.has(k)) continue;
-    seen.add(k); txs.push({ ...tx, uid: r.uid, raw: r.raw });
+    /* the same id twice in one read is one payment; rows WITHOUT an id are never merged here (two
+       identical-looking rows are two payments: refHash numbers them) */
+    const k = tx.id ? r.uid + "|" + tx.id : null;
+    if (k && seen.has(k)) continue;
+    if (k) seen.add(k);
+    txs.push({ ...tx, uid: r.uid, raw: r.raw });
   }
   sum.booked = txs.length;
   const debits = txs.filter((t) => !t.credit).map((t) => ({ uid: t.uid, amount: t.amount, currency: t.currency, date: t.date }));
@@ -468,26 +545,31 @@ export async function syncBank({ bank, desk, env, now, fetchImpl, clock = Date.n
     roster = await S.getRoster(desk);
     if (credits.length) {
       const sources = await S.getSources(desk);
-      const holders = (conn.accounts || []).map((a) => a.holder).filter(Boolean);
+      const holders = (conn.accounts || []).map((a) => a.holder).filter(Boolean).concat(cfg.ownNames);
+      const labels = (conn.accounts || []).map((a) => a.name).filter(Boolean);
+      const hashOf = Object.fromEntries((conn.accounts || []).map((a) => [a.uid, slot(a)]));
       const index = await deskEntries(desk, credits[0].date, now);
+      const alike = new Map();
       for (const tx of credits) {
+        const payer = payerOf(tx), base = hashOf[tx.uid] + "|" + lookAlike(tx, payer);
+        const nth = alike.get(base) || 0; alike.set(base, nth + 1); /* counted before any skip, so a re-read numbers the same */
         if (clock() - started > budgetMs) { complete = false; sum.more = true; break; }
-        const c = classify(tx.raw, { uid: tx.uid, holders, debits, sources });
+        const c = classify(tx.raw, { uid: tx.uid, holders, labels, debits, sources });
         if (!c) continue;
         if (c.pair != null) debits.splice(c.pair, 1);
         sum[c.kind === "transfer" ? "transfers" : c.kind === "refund" ? "refunds" : c.kind]++;
         if (c.kind === "refund") continue;
         const status = c.kind === "income" ? "received" : c.kind;
-        const payer = payerOf(tx), ref = refOf(tx, payer);
+        const ref = refOf(tx, payer, hashOf[tx.uid] + "#" + nth);
         const entries = [...index.values()];
-        const known = findKnown(entries, tx, ref, c.source);
+        const known = findKnown(entries, ref);
         if (known && !(known.status === "unsorted" && status !== "unsorted")) { sum.already++; continue; }
-        let name = payer, reference = ref;
+        /* a statement waiting as pending: THAT one is turned into received (it keeps its reference;
+           the transaction id is kept beside it as bankRef, which is how a re-read knows it) */
         const pend = c.kind === "income" && !known ? pendingFor(entries, tx, c.source) : null;
-        if (pend) { name = pend.payer; if (pend.reference && low(pend.reference) !== low(ref)) reference = ""; } /* the desk's own rule then turns it into received */
         try {
-          const r = await S.submitIncome(desk, now, roster, { bot: "HQ", date: tx.date, payer: name, amount: tx.amount, currency: tx.currency, account: ACCOUNT, status,
-            category: c.source ? c.source.category : undefined, source: c.source ? c.source.id : undefined, reference, note: "Read from Revolut" });
+          const r = await S.submitIncome(desk, now, roster, { bot: "HQ", date: tx.date, payer: pend ? pend.payer : payer, amount: tx.amount, currency: tx.currency, account: ACCOUNT, status,
+            category: c.source ? c.source.category : undefined, source: c.source ? c.source.id : undefined, reference: ref, note: "Read from Revolut", ...(pend ? { pending_id: pend.id } : {}) });
           index.set(r.entry.id, r.entry);
           if (r.added) { sum.added++; if (status !== "transfer") sum.newPayments++; }
           else if (r.updated) { sum.updated++; const h = (r.entry.history || []).at(-1); if (pend && h && h.from === "pending") sum.upgraded++; }
@@ -514,15 +596,16 @@ export async function syncBank({ bank, desk, env, now, fetchImpl, clock = Date.n
   try {
     await S.mutate(bank, "sync.json", {}, (s) => {
       s.lastRunAt = iso(now);
-      if (!error) s.lastOkAt = iso(now);
+      if (!error && !sum.more) s.lastOkAt = iso(now); /* "read" means every account to the end */
       s.lastError = error;
       if (complete) {
         const keep = {};
         const merged = { ...(s.perAccount || {}), ...next };
-        for (const a of conn.accounts || []) if (merged[a.uid]) keep[a.uid] = merged[a.uid];
+        for (const a of conn.accounts || []) if (merged[slot(a)]) keep[slot(a)] = merged[slot(a)];
         s.perAccount = keep;
       }
-      s.lastAdded = sum.newPayments;
+      /* after a run that stopped part way, the next one adds to its count: "N payments in" covers the whole read */
+      s.lastAdded = (s.last && s.last.more && Number.isInteger(s.lastAdded) ? s.lastAdded : 0) + sum.newPayments;
       const t = s.totals || {};
       for (const k of COUNTS) t[k] = (t[k] || 0) + sum[k];
       t.runs = (t.runs || 0) + 1;

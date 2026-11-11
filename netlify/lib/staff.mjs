@@ -368,6 +368,7 @@ export async function submitIncome(store, now, roster, a) {
   if (!/^[A-Z]{3}$/.test(currency)) fail("currency must be the three-letter code the money was paid in (EUR, USD, GBP, BRL...). Never convert.");
   const status = low(a.status) || "received";
   if (!INCOME_STATUS.includes(status)) fail(`status must be one of: ${INCOME_STATUS.join(", ")}`);
+  if (status === "unsorted" && by !== "HQ") fail("status must be received, pending or transfer"); /* only the bank reader files a payment as unsorted */
   const category = CATEGORIES.find((c) => low(c) === low(a.category)) || (a.category ? null : "Other");
   if (!category) fail(`category must be one of: ${CATEGORIES.join(", ")}`);
   const account = clean(a.account, 40);
@@ -382,15 +383,20 @@ export async function submitIncome(store, now, roster, a) {
      in this month and the three before, and turn it into received (it keeps its statement date and
      gains the day it arrived, which is the day it counts on). */
   if (status === "received") {
+    /* pending_id (the bank reader): THAT statement, chosen by the caller, and no other */
+    const pid = clean(a.pending_id, 20);
     let m = date.slice(0, 7);
     for (let i = 0; i < 4; i++, m = prevMonth(m)) {
       const hit = await mutate(store, incKey(m), [], (list) => {
         if (list.some((x) => samePayment(x, e))) return { skip: true, value: null }; /* the exact payment is there: the normal path below handles it */
-        const old = list.find((x) => x.status === "pending" && sameMoney(x, e) && x.date <= date && !(x.reference && e.reference && low(x.reference) !== low(e.reference)));
+        const old = pid ? list.find((x) => x.id === pid && x.status === "pending" && x.amount === e.amount && x.currency === e.currency && x.date <= date)
+          : list.find((x) => x.status === "pending" && sameMoney(x, e) && x.date <= date && !(x.reference && e.reference && low(x.reference) !== low(e.reference)));
         if (!old) return { skip: true, value: null };
         old.history = (old.history || []).concat({ at: e.at, by, from: "pending", to: "received" }).slice(-10);
         old.status = "received"; old.arrived = date; old.account = account; old.updatedAt = e.at;
+        /* a statement keeps its own reference; the account's transaction id is kept beside it */
         if (e.reference && !old.reference) old.reference = e.reference;
+        else if (e.reference && low(old.reference) !== low(e.reference)) old.bankRef = e.reference;
         if (e.note) old.note = e.note;
         return { value: { entry: old, added: false, updated: true } };
       });
@@ -406,6 +412,7 @@ export async function submitIncome(store, now, roster, a) {
       const gainsRef = !!e.reference && !old.reference;
       const moves = old.status !== e.status && !(old.status === "received" && e.status === "pending") && e.status !== "unsorted"; /* a later "unsorted" never overwrites a decided status */
       if (!moves && !gainsRef && !(e.note && e.note !== old.note)) return { skip: true, value: { entry: old, added: false, updated: false } };
+      if (moves && old.status === "unsorted" && by !== "HQ" && !SORTERS.includes(by)) fail("That payment is waiting for Luke to say what it is. Nothing was changed.", "not_allowed");
       if (moves) { if (old.status === "unsorted") old.category = e.category; old.history = (old.history || []).concat({ at: e.at, by, from: old.status, to: e.status }).slice(-10); old.status = e.status; }
       if (gainsRef) old.reference = e.reference;
       if (e.note) old.note = e.note;
@@ -433,9 +440,11 @@ export async function incomeCheck(store, now, roster, a) {
   });
   return c;
 }
-/* Luke (or Claude, Ledger, Sheet, Nova) says what an "unsorted" payment is: income (with its category)
-   or not income (a transfer). Only an unsorted entry can be sorted here; anything decided stays. */
-export const SORTERS = ["Luke", "Claude", "Ledger", "Sheet", "Nova"];
+/* Luke (or Claude) says what an "unsorted" payment is: income (with its category) or not income (a
+   transfer). The bots don't: unsorted payments are Luke's PERSONAL account, which the bots never see.
+   What the bank reader itself decided (its last word is HQ's: "transfer" from an own-transfer rule,
+   "received" from a known source) can be corrected too; what a person or a bot decided stays. */
+export const SORTERS = ["Luke", "Claude"];
 export async function sortIncome(store, now, roster, a) {
   const by = whoIs(a.by, roster, { people: true });
   if (!SORTERS.includes(by)) fail(`Only ${SORTERS.join(", ")} can sort a payment.`, "not_allowed");
@@ -451,9 +460,11 @@ export async function sortIncome(store, now, roster, a) {
     const hit = await mutate(store, incKey(m), [], (list) => {
       const e = list.find((x) => x.id === id);
       if (!e) return { skip: true, value: null };
-      if (e.status !== "unsorted") fail(`That payment is already sorted (${e.status}). Nothing was changed.`, "not_allowed");
+      const lastBy = (e.history || []).length ? e.history[e.history.length - 1].by : e.by;
+      if (e.status !== "unsorted" && lastBy !== "HQ") fail(`That payment is already sorted (${e.status}). Nothing was changed.`, "not_allowed");
+      if (e.status === "pending") fail("That payment is still pending. Nothing was changed.", "not_allowed");
       const at = new Date(now).toISOString();
-      e.history = (e.history || []).concat({ at, by, from: "unsorted", to: status }).slice(-10);
+      e.history = (e.history || []).concat({ at, by, from: e.status, to: status }).slice(-10);
       e.status = status; if (category) e.category = category; e.updatedAt = at;
       return { value: e };
     });

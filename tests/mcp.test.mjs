@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { registerHooks } from "node:module";
 import { handle, headerText, LEGACY, MODERN, toolList } from "../netlify/lib/mcp.mjs";
 import { TOOLS, INSTRUCTIONS } from "../netlify/lib/staff-tools.mjs";
+import * as S from "../netlify/lib/staff.mjs";
 import { makeSession, sessionCookie } from "../netlify/lib/session.mjs";
 
 /* the handler under test talks to @netlify/blobs: swap it for the in-memory stand-in */
@@ -200,4 +201,41 @@ test("connector: requests that were turned away are noted (never the key), and C
   assert.ok(trace.some((t) => t.method === "initialize" && t.status === 200 && t.key === "bots"));
   assert.ok(!JSON.stringify(trace).includes(ENV.STAFF_BOT_KEY) && !JSON.stringify(trace).includes("definitely-wrong"), "no key is ever written down");
   assert.equal((await api("trace", { headers: { authorization: "Bearer " + ENV.STAFF_BOT_KEY } })).status, 403);
+});
+
+test("bank reader: Luke's personal Revolut never reaches the bots; only Luke and Claude sort it (/api/staff/sort, Claude's sort_payment)", async () => {
+  const desk = globalThis.__stores.get("staff"), now = Date.now(), day = S.spDay(now), month = day.slice(0, 7);
+  const rev = { bot: "HQ", date: day, currency: "EUR", account: "Revolut", note: "Read from Revolut" };
+  const friend = (await S.submitIncome(desk, now, S.DEFAULT_ROSTER, { ...rev, payer: "Made-up Mum", amount: 40, status: "unsorted", reference: "tx-mum" })).entry;
+  const own = (await S.submitIncome(desk, now, S.DEFAULT_ROSTER, { ...rev, payer: "Made-up Self", amount: 300, status: "transfer", reference: "tx-own" })).entry;
+  await S.submitIncome(desk, now, S.DEFAULT_ROSTER, { ...rev, payer: "Sample Records", amount: 70, status: "received", reference: "tx-label", category: "Label deals" });
+  /* the bots: no row of the personal account that isn't income, and no tool to sort with */
+  const bot = (await tool("income_status", { bot: "Nova" })).structuredContent;
+  const seen = JSON.stringify(bot);
+  assert.ok(!seen.includes("Made-up Mum") && !seen.includes("Made-up Self") && bot.unsorted === undefined, seen);
+  assert.ok(bot.newest_payments.some((l) => l.includes("Sample Records")), "income from a known payer is still income the bots report");
+  const botTools = (await (await post(rpc("tools/list"), "Bearer " + ENV.STAFF_BOT_KEY)).json()).result.tools;
+  assert.ok(!botTools.some((t) => t.name === "sort_payment"));
+  assert.deepEqual(botTools.find((t) => t.name === "submit_income").inputSchema.properties.status.enum, ["received", "pending", "transfer"], "the bots can't file a payment as unsorted");
+  const tried = await (await post(rpc("tools/call", { name: "sort_payment", arguments: { id: friend.id, month, status: "transfer" } }), "Bearer " + ENV.STAFF_BOT_KEY)).json();
+  assert.ok(tried.error || (tried.result && tried.result.isError), "a bot calling it anyway is refused: " + JSON.stringify(tried));
+  assert.match((await tool("submit_income", { bot: "Nova", date: day, payer: "Made-up Mum", amount: 40, currency: "EUR", account: "Revolut", reference: "tx-mum", status: "received" })).content[0].text, /waiting for Luke/, "a bot can't sort it by sending it again");
+  assert.match((await tool("submit_income", { bot: "Nova", date: day, payer: "Someone", amount: 5, currency: "EUR", account: "Wise", status: "unsorted" })).content[0].text, /received, pending or transfer/);
+  /* Claude: sees them with their ids, and sorts through its own tool */
+  const claude = "Bearer " + ENV.STAFF_CLAUDE_KEY;
+  assert.ok((await (await post(rpc("tools/list"), claude)).json()).result.tools.some((t) => t.name === "sort_payment"));
+  const cs = (await tool("income_status", { bot: "Claude" }, claude)).structuredContent;
+  assert.deepEqual(cs.unsorted.find((u) => u.id === friend.id), { id: friend.id, month, line: `${day} · Made-up Mum · EUR 40.00 · Revolut` });
+  const sorted = (await tool("sort_payment", { id: friend.id, month, status: "received", category: "Other" }, claude)).structuredContent;
+  assert.deepEqual([sorted.saved, sorted.status, sorted.category], [true, "received", "Other"]);
+  assert.match((await tool("sort_payment", { id: friend.id, month, status: "transfer" }, claude)).content[0].text, /already sorted/, "what a person decided stays");
+  /* Luke, on /hq: corrects what the bank reader itself decided (its own-transfer rule was wrong) */
+  const sort = (body, headers) => api("sort", { method: "POST", headers: { "content-type": "application/json", ...headers }, body: JSON.stringify(body) });
+  assert.equal((await sort({ id: own.id, month, status: "received", category: "Salary" }, { authorization: "Bearer " + ENV.STAFF_BOT_KEY })).status, 403);
+  assert.equal((await sort({ id: own.id, month, status: "received", category: "Salary" }, { cookie, origin: "https://evil.example" })).status, 403);
+  const r = await sort({ id: own.id, month, status: "received", category: "Salary" }, { cookie, origin: "https://badscandal.com" });
+  const e = (await r.json()).entry;
+  assert.deepEqual([r.status, e.status, e.category, e.history.at(-1).by, e.history.at(-1).from], [200, "received", "Salary", "Luke", "transfer"]);
+  assert.equal((await sort({ id: own.id, month, status: "transfer" }, { cookie })).status, 400, "once Luke has said, it stays");
+  assert.equal((await sort({ id: "i" + "0".repeat(12), month, status: "transfer" }, { cookie })).status, 404);
 });

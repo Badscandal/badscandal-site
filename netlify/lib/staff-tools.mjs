@@ -52,7 +52,7 @@ export const TOOLS = [
       amount: { type: "number", description: "The amount as paid, for example 112.01. Positive. Not converted." },
       currency: str("Three-letter code of the currency it was paid in: EUR, USD, GBP, BRL..."),
       account: str('Where it landed: "Wise", "PayPal", "Revolut", "Bank", or "Statement only" when you only saw a statement.'),
-      status: str("received | pending | transfer. Default received.", { enum: S.INCOME_STATUS }),
+      status: str("received | pending | transfer. Default received.", { enum: ["received", "pending", "transfer"] }),
       category: str("Self-releases | Label deals | Publishing | Production | Salary | Other. Default Other.", { enum: S.CATEGORIES }),
       reference: str("The payment's own reference or transaction id from the account, if it shows one. This is what stops double counting. Not an account number."),
       period: str('Optional. What the payment covers, for example "2026-Q3" or "Sep 2026".'),
@@ -78,6 +78,17 @@ export const TOOLS = [
     description: "The written guide to this desk: who does what, the daily times, how to log income, how messages work, the rules that never bend. Read it once when you are first connected, and again whenever Nova says it changed.",
     inputSchema: obj({ bot: BOT }, ["bot"]) },
 ];
+
+/* Claude's key only (functions/staff.mjs lists these for role "claude"; the bots never see them).
+   Unsorted payments come from Luke's PERSONAL Revolut: only Luke and Claude sort them. */
+export const CLAUDE_TOOLS = [
+  { name: "sort_payment", title: "Say what a Revolut payment is", idempotent: true,
+    description: 'Sort one payment the bank reader could not place (status "unsorted"), or correct one the reader placed itself: received (it is income: give its category) or transfer (not income: Luke\'s own money, a refund, a gift). Find the id and month in income_status, "unsorted". Only for Claude; ask Luke when it is not obvious.',
+    inputSchema: obj({ id: str("The payment's id (it starts with i)."), month: str("The month it is filed under, YYYY-MM (the first 7 characters of its date)."),
+      status: str("received | transfer", { enum: ["received", "transfer"] }), category: str("Only with received: Self-releases | Label deals | Publishing | Production | Salary | Other.", { enum: S.CATEGORIES }) }, ["id", "status"]) },
+];
+/* Luke's personal account, as the bank reader files it: what is not income (yet) stays off the bots' screens */
+const personal = (e) => /^revolut$/i.test(String(e.account || "").trim()) && (e.status === "unsorted" || e.status === "transfer");
 
 const RULES = [
   "Never write a password, login code, key, card or bank account number anywhere on this desk.",
@@ -143,7 +154,13 @@ export async function callTool(tool, args, ctx) {
       return { month: i.month, received_this_month: cur(i.received), pending_this_month: cur(i.pending), payments_logged_this_month: i.count,
         accounts: i.accounts.map((a) => ({ name: a.name, owner: a.owner, checked_today: a.lastLook === today, last_checked: a.lastLook || "never", state: a.verdict })),
         sources: i.sources.map(line), problems: i.problems,
-        newest_payments: i.entries.slice(0, 15).map((e) => `${e.date} · ${e.payer} · ${e.currency} ${e.amount.toFixed(2)} · ${e.status} · ${e.account} · by ${e.by}`) };
+        newest_payments: i.entries.filter((e) => ctx.role === "claude" || !personal(e)).slice(0, 15).map((e) => `${e.date} · ${e.payer} · ${e.currency} ${e.amount.toFixed(2)} · ${e.status} · ${e.account} · by ${e.by}`),
+        ...(ctx.role === "claude" ? { unsorted: i.unsorted.map((e) => ({ id: e.id, month: e.date.slice(0, 7), line: `${e.date} · ${e.payer} · ${e.currency} ${e.amount.toFixed(2)} · ${e.account}` })) } : {}) };
+    }
+    case "sort_payment": {
+      if (ctx.role !== "claude") throw new S.StaffError("That tool is not available.");
+      const e = await S.sortIncome(store, now, roster, { by: "Claude", id: args.id, month: args.month, status: args.status, category: args.category });
+      return { saved: true, id: e.id, status: e.status, category: e.category, recorded: `${e.arrived || e.date} · ${e.payer} · ${e.currency} ${e.amount.toFixed(2)} · ${e.status}` };
     }
     case "set_my_card": {
       if (me === "Claude") throw new S.StaffError("Cards are for the bots.");

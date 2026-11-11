@@ -93,12 +93,13 @@ test("bank: the approval asked for = the bank's maximum, at most 180 days, minus
 test("bank connect: /aspsps, then /auth with the right body; the nonce is stored first; nothing is stored when it fails", async () => {
   const bank = memoryDesk(), f = fakeReader();
   const r = await B.startConnect({ bank, env: ENV, now: NOW, fetchImpl: f });
-  assert.deepEqual(r, { url: "https://auth.example.test/approve?ref=made-up" });
   assert.deepEqual(f.calls.map((c) => c.method + " " + c.path), ["GET /aspsps", "POST /auth"]);
   assert.equal(f.calls[0].query.country, "IE");
   const keys = [...bank._map.keys()];
   assert.equal(keys.length, 1); assert.match(keys[0], /^state\/[A-Za-z0-9_-]{32}\.json$/);
   const nonce = keys[0].slice(6, -5);
+  assert.deepEqual(r, { url: "https://auth.example.test/approve?ref=made-up", binding: B.stateBinding(nonce) }, "the browser's cookie value comes back beside the address");
+  assert.ok(!r.binding.includes(nonce) && B.bindingOk(nonce, r.binding) && !B.bindingOk(nonce, r.binding.slice(1)) && !B.bindingOk(nonce, ""));
   assert.deepEqual(f.calls[1].body, { access: { valid_until: new Date(NOW + 180 * DAY - 3600000).toISOString() }, aspsp: { name: "Revolut", country: "IE" }, state: nonce,
     redirect_url: "https://badscandal.com/api/bank/callback", psu_type: "personal" });
   assert.deepEqual(await doc(bank, keys[0]), { at: new Date(NOW).toISOString(), validUntil: f.calls[1].body.access.valid_until });
@@ -109,8 +110,9 @@ test("bank connect: /aspsps, then /auth with the right body; the nonce is stored
   /* an old unfinished press is cleared on the next one */
   await B.startConnect({ bank, env: ENV, now: NOW + 20 * 60000, fetchImpl: f });
   assert.equal([...bank._map.keys()].length, 1);
-  /* failures: nothing stored */
-  for (const [fail, kind] of [[(m, p) => (p === "/aspsps" ? ok({ code: 401, message: "Unauthorized" }, 401) : null), "refused"], [(m, p) => (p === "/auth" ? ok({ error: "WRONG_REQUEST_PARAMETERS" }, 422) : null), "reader"]]) {
+  /* failures: nothing stored (403 "Application is not active" is what a new production application answers) */
+  for (const [fail, kind] of [[(m, p) => (p === "/aspsps" ? ok({ code: 401, message: "Unauthorized" }, 401) : null), "refused"], [(m, p) => (p === "/aspsps" ? ok({ code: 403, message: "Application is not active" }, 403) : null), "refused"],
+    [(m, p) => (p === "/auth" ? ok({ error: "WRONG_REQUEST_PARAMETERS" }, 422) : null), "reader"]]) {
     const b2 = memoryDesk();
     await assert.rejects(B.startConnect({ bank: b2, env: ENV, now: NOW, fetchImpl: fakeReader({ fail }) }), (e) => e.kind === kind);
     assert.equal(b2._map.size, 0);
@@ -129,10 +131,14 @@ test("bank callback: a wrong, reused or expired nonce changes nothing; a good on
   const snap = () => JSON.stringify([...bank._map.entries()]);
   const before = snap();
   f.calls.length = 0;
-  const cb = (o) => B.finishCallback({ bank, env: ENV, now: NOW + 60000, fetchImpl: f, code: "made-up-code-123", state: nonce, ...o });
+  const cb = (o) => B.finishCallback({ bank, env: ENV, now: NOW + 60000, fetchImpl: f, code: "made-up-code-123", state: nonce, binding: B.stateBinding(nonce), ...o });
   for (const state of [undefined, "", "nope", "x".repeat(32), nonce.slice(0, -1) + (nonce.endsWith("A") ? "B" : "A"), "../conn", nonce + "/../x"])
-    assert.deepEqual(await cb({ state }), { ok: false, why: "state" }, String(state));
+    assert.deepEqual(await cb({ state, binding: B.stateBinding(state) }), { ok: false, why: "state" }, String(state));
   assert.deepEqual(await cb({ now: NOW + 11 * 60000 }), { ok: false, why: "state" }, "older than 10 minutes");
+  /* the right nonce in ANOTHER browser (no cookie, or another press's cookie): refused, nothing touched,
+     and the nonce still works in Luke's own browser */
+  for (const binding of [undefined, "", B.stateBinding("x".repeat(32)), B.stateBinding(nonce).toUpperCase()])
+    assert.deepEqual(await cb({ binding }), { ok: false, why: "browser" }, String(binding));
   assert.equal(snap(), before, "nothing written or deleted"); assert.equal(f.calls.length, 0, "the bank was not called");
 
   const good = await cb({ now: NOW + 120000 });
@@ -154,14 +160,14 @@ test("bank callback: a wrong, reused or expired nonce changes nothing; a good on
   /* a cancelled approval: the nonce is used up, the old connection stays */
   await B.startConnect({ bank, env: ENV, now: NOW + DAY, fetchImpl: f });
   const n2 = [...bank._map.keys()].find((k) => k.startsWith("state/")).slice(6, -5);
-  await assert.rejects(B.finishCallback({ bank, env: ENV, now: NOW + DAY + 1000, fetchImpl: f, state: n2, error: "access_denied" }), (e) => e.kind === "cancelled");
+  await assert.rejects(B.finishCallback({ bank, env: ENV, now: NOW + DAY + 1000, fetchImpl: f, state: n2, binding: B.stateBinding(n2), error: "access_denied" }), (e) => e.kind === "cancelled");
   assert.equal((await doc(bank, "conn.json")).sessionId, SID); assert.equal([...bank._map.keys()].filter((k) => k.startsWith("state/")).length, 0);
   /* reconnecting replaces the connection and gives the old approval back */
   await B.startConnect({ bank, env: ENV, now: NOW + DAY, fetchImpl: f });
   const n3 = [...bank._map.keys()].find((k) => k.startsWith("state/")).slice(6, -5);
   await bank.setJSON("conn.json", { ...(await doc(bank, "conn.json")), sessionId: "made-up-older-session" });
   f.calls.length = 0;
-  assert.equal((await B.finishCallback({ bank, env: ENV, now: NOW + DAY + 1000, fetchImpl: f, state: n3, code: "c2" })).ok, true);
+  assert.equal((await B.finishCallback({ bank, env: ENV, now: NOW + DAY + 1000, fetchImpl: f, state: n3, binding: B.stateBinding(n3), code: "c2" })).ok, true);
   assert.deepEqual(f.calls.at(-1), { method: "DELETE", path: "/sessions/made-up-older-session", query: {}, body: undefined, auth: f.calls.at(-1).auth });
 });
 
@@ -169,7 +175,7 @@ test("bank callback: a wrong, reused or expired nonce changes nothing; a good on
 test("bank status: before, after, expiring, expired; bankLine says it in one sentence", async () => {
   const empty = memoryDesk();
   const none = await B.bankStatus({ bank: empty, env: {}, now: NOW, canConnectHere: true });
-  assert.deepEqual(none, { configured: false, connected: false, needsApproval: false, aspsp: null, validUntil: null, daysLeft: null, expiring: false, accounts: [], lastRunAt: null, lastOkAt: null, lastError: null, lastAdded: null, canConnectHere: true });
+  assert.deepEqual(none, { configured: false, connected: false, needsApproval: false, aspsp: null, validUntil: null, daysLeft: null, expiring: false, accounts: [], lastRunAt: null, lastOkAt: null, lastError: null, lastAdded: null, partial: false, canConnectHere: true });
   assert.equal(B.bankLine(none, NOW), "The site is missing its Revolut settings");
   const before = await B.bankStatus({ bank: empty, env: ENV, now: NOW, canConnectHere: false });
   assert.equal(before.configured, true); assert.equal(B.bankLine(before, NOW), "Revolut is not connected");
@@ -179,7 +185,7 @@ test("bank status: before, after, expiring, expired; bankLine says it in one sen
   const st = await B.bankStatus({ bank, env: ENV, now: NOW + 60000, canConnectHere: true });
   assert.deepEqual(st, { configured: true, connected: true, needsApproval: false, aspsp: "Revolut", validUntil: new Date(NOW + 86.5 * DAY).toISOString(), daysLeft: 86, expiring: false,
     accounts: [{ name: "Current", currency: "EUR" }, { name: "Savings", currency: "EUR" }, { name: "Current", currency: "USD" }],
-    lastRunAt: "2026-11-12T09:50:00.000Z", lastOkAt: "2026-11-12T09:50:00.000Z", lastError: null, lastAdded: 2, canConnectHere: true });
+    lastRunAt: "2026-11-12T09:50:00.000Z", lastOkAt: "2026-11-12T09:50:00.000Z", lastError: null, lastAdded: 2, partial: false, canConnectHere: true });
   assert.ok(!JSON.stringify(st).includes(SID) && !JSON.stringify(st).includes("uid-") && !JSON.stringify(st).includes("Sam Example"), "no session id, no account ids, no holder name");
   assert.equal(B.bankLine(st, NOW + 60000), "Revolut: read today at 06:50 · 2 payments in · approval ends in 86 days");
   assert.equal(B.bankLine({ ...st, lastAdded: 1, daysLeft: 1 }, NOW + DAY), "Revolut: read yesterday at 06:50 · 1 payment in · approval ends tomorrow");
@@ -278,7 +284,7 @@ test("bank refresh: only booked credits; first run from the 1st of last month; t
   const rev = inc.accounts.find((a) => a.id === "revolut");
   assert.deepEqual([rev.verdict, rev.checked], ["ok", { day: "2026-11-12", by: "HQ", new: 2 }], "the dashboard shows Revolut checked today");
   const sync = await doc(bank, "sync.json");
-  assert.deepEqual(sync.perAccount, { "uid-eur": { lastDate: "2026-11-12" }, "uid-sav": { lastDate: "2026-11-12" }, "uid-usd": { lastDate: "2026-11-12" } });
+  assert.deepEqual(sync.perAccount, { a1: { lastDate: "2026-11-12" }, a2: { lastDate: "2026-11-12" }, a3: { lastDate: "2026-11-12" } }, "kept by the account's identification hash, not its uid");
   assert.deepEqual([sync.lastRunAt, sync.lastOkAt, sync.lastError, sync.lastAdded, sync.totals.added, sync.totals.runs], ["2026-11-12T09:50:00.000Z", "2026-11-12T09:50:00.000Z", null, 2, 4, 1]);
   assert.ok(!JSON.stringify(sync).includes(SID));
 
@@ -313,15 +319,15 @@ test("bank refresh: the page cap and the time cap stop a run; the next run carri
   const f = fakeReader({ pages: { "uid-eur": pages(3) } });
   const a = await B.syncBank({ bank, desk, env: ENV, now: NOW, fetchImpl: f, pagesPerAccount: 2 });
   assert.deepEqual([a.ok, a.pages, a.added, a.more, a.checked], [true, 2, 2, true, false], "not every page read: no 'checked today' yet");
-  assert.deepEqual((await doc(bank, "sync.json")).perAccount, { "uid-eur": { cursor: { key: "page-2", dateFrom: "2026-10-01" } } });
+  assert.deepEqual((await doc(bank, "sync.json")).perAccount, { a1: { cursor: { key: "page-2", dateFrom: "2026-10-01" } } });
   f.calls.length = 0;
   const b = await B.syncBank({ bank, desk, env: ENV, now: NOW + DAY, fetchImpl: f, pagesPerAccount: 2 });
   assert.deepEqual(f.calls.map((c) => c.query), [{ date_from: "2026-10-01", continuation_key: "page-2" }]);
   assert.deepEqual([b.pages, b.added, b.more, b.checked], [1, 1, false, true]);
-  assert.deepEqual((await doc(bank, "sync.json")).perAccount, { "uid-eur": { lastDate: "2026-11-13" } });
+  assert.deepEqual((await doc(bank, "sync.json")).perAccount, { a1: { lastDate: "2026-11-13" } });
   assert.equal((await allEntries(desk)).length, 3);
   /* a saved place the reader no longer knows: the account is read again from the start, nothing doubled */
-  await bank.setJSON("sync.json", { perAccount: { "uid-eur": { cursor: { key: "page-9", dateFrom: "2026-10-01" } } } });
+  await bank.setJSON("sync.json", { perAccount: { a1: { cursor: { key: "page-9", dateFrom: "2026-10-01" } } } });
   const reader = fakeReader({ pages: { "uid-eur": pages(3) } });
   const wrapped = async (url, init) => (new URL(url).searchParams.get("continuation_key") === "page-9" ? ok({ error: "WRONG_CONTINUATION_KEY" }, 400) : reader(url, init));
   const c = await B.syncBank({ bank, desk, env: ENV, now: NOW + 2 * DAY, fetchImpl: wrapped });
@@ -333,7 +339,7 @@ test("bank refresh: the page cap and the time cap stop a run; the next run carri
   const slow = fakeReader({ pages: { "uid-eur": pages(5) }, tick: () => { t += 5000; } });
   const d = await B.syncBank({ bank: bank2, desk: desk2, env: ENV, now: NOW, fetchImpl: slow, clock: () => t });
   assert.deepEqual([d.ok, d.pages, d.added, d.more, d.checked], [true, 3, 3, true, false]);
-  assert.deepEqual((await doc(bank2, "sync.json")).perAccount, { "uid-eur": { cursor: { key: "page-3", dateFrom: "2026-10-01" } } });
+  assert.deepEqual((await doc(bank2, "sync.json")).perAccount, { a1: { cursor: { key: "page-3", dateFrom: "2026-10-01" } } });
   t = 0;
   const e = await B.syncBank({ bank: bank2, desk: desk2, env: ENV, now: NOW + DAY, fetchImpl: slow, clock: () => t });
   assert.deepEqual([e.pages, e.added, e.more, e.checked], [2, 2, false, true]);
@@ -352,7 +358,7 @@ test("bank refresh: the page cap and the time cap stop a run; the next run carri
   u = 0; desk3.setJSON = origSubmit;
   const h = await B.syncBank({ bank: bank3, desk: desk3, env: ENV, now: NOW, fetchImpl: fakeReader({ pages: { "uid-eur": [{ transactions: MONTH }] } }), clock: () => u });
   assert.deepEqual([h.added, h.already, h.refunds, h.more, h.checked], [2, 2, 1, false, true]);
-  assert.deepEqual((await doc(bank3, "sync.json")).perAccount, { "uid-eur": { lastDate: "2026-11-12" } });
+  assert.deepEqual((await doc(bank3, "sync.json")).perAccount, { a1: { lastDate: "2026-11-12" } });
 });
 
 test("bank refresh: a statement logged as pending is turned into received, never doubled (other wording, other month, its own reference)", async () => {
@@ -391,8 +397,8 @@ test("bank refresh: an odd payer name is skipped, the run goes on; an expired ap
   assert.deepEqual([s.ok, s.skipped, s.added, s.checked, s.error], [true, 2, 1, true, null]);
   assert.ok(!JSON.stringify([...desk._map.entries()]).includes("hunter22x"));
 
-  /* the approval is gone (the reader answers 401): connected false, the plain sentence, no more calls */
-  const gone = fakeReader({ fail: (m, p) => (p.endsWith("/transactions") ? ok({ code: 401, message: "Unauthorized" }, 401) : null) });
+  /* the approval is gone (the reader says the session expired): connected false, the plain sentence, no more calls */
+  const gone = fakeReader({ fail: (m, p) => (p.endsWith("/transactions") ? ok({ code: 401, error: "EXPIRED_SESSION", message: "Session expired" }, 401) : null) });
   const g = await B.syncBank({ bank, desk, env: ENV, now: NOW + DAY, fetchImpl: gone });
   assert.deepEqual([g.ok, g.connected, g.error], [false, false, "Revolut has to be approved again: press Connect Revolut"]);
   const st = await B.bankStatus({ bank, env: ENV, now: NOW + DAY, canConnectHere: true });
@@ -413,12 +419,12 @@ test("bank refresh: an odd payer name is skipped, the run goes on; an expired ap
 
   /* anything else: a plain sentence, the connection is kept, the next run tries again */
   const b500 = await connectedBank({ accounts: [ACCOUNTS[0]] });
-  await b500.setJSON("sync.json", { lastOkAt: new Date(NOW - DAY).toISOString(), perAccount: { "uid-eur": { lastDate: "2026-11-11" } } });
+  await b500.setJSON("sync.json", { lastOkAt: new Date(NOW - DAY).toISOString(), perAccount: { a1: { lastDate: "2026-11-11" } } });
   const r = await B.syncBank({ bank: b500, desk, env: ENV, now: NOW, fetchImpl: fakeReader({ fail: (m, p) => (p.endsWith("/transactions") ? ok({ error: "ASPSP_ERROR" }, 500) : null) }) });
   assert.deepEqual([r.ok, r.connected, r.error, r.checked], [false, true, B.SAY.readerDown, false]);
   const st5 = await B.bankStatus({ bank: b500, env: ENV, now: NOW });
   assert.deepEqual([st5.connected, st5.lastError, st5.lastOkAt], [true, B.SAY.readerDown, new Date(NOW - DAY).toISOString()]);
-  assert.deepEqual((await doc(b500, "sync.json")).perAccount, { "uid-eur": { lastDate: "2026-11-11" } }, "where it got to is not moved on");
+  assert.deepEqual((await doc(b500, "sync.json")).perAccount, { a1: { lastDate: "2026-11-11" } }, "where it got to is not moved on");
   const three = await connectedBank();
   const net = await B.syncBank({ bank: three, desk, env: ENV, now: NOW, fetchImpl: async (u) => { if (String(u).includes("uid-sav")) throw new Error("ECONNRESET"); return fakeReader()(u); } });
   assert.deepEqual([net.ok, net.accounts, net.error], [false, 2, B.SAY.someAccounts]);
@@ -433,6 +439,198 @@ test("bank refresh: an odd payer name is skipped, the run goes on; an expired ap
   const w = await B.syncBank({ bank: b6, desk: broken, env: ENV, now: NOW, fetchImpl: fakeReader({ pages: { "uid-eur": [{ transactions: MONTH }] } }) });
   assert.deepEqual([w.ok, w.error, w.checked], [false, B.SAY.desk, false]);
   assert.equal((await doc(b6, "sync.json")).perAccount, undefined);
+});
+
+/* ---------------------------------------------------------------- what the reviews found (12 Nov 2026) */
+test("bank refresh: a refused key (401/403 that doesn't say the session ended) is said as the key; the approval is NOT marked gone", async () => {
+  for (const [answer, status] of [[{ message: "Invalid JWT signature" }, 401], [{ code: 403, message: "Application is not active" }, 403]]) {
+    const bank = await connectedBank(), desk = await deskWithSources();
+    const f = fakeReader({ fail: (m, p) => (p.endsWith("/transactions") ? ok(answer, status) : null) });
+    const r = await B.syncBank({ bank, desk, env: ENV, now: NOW, fetchImpl: f });
+    assert.deepEqual([r.ok, r.connected, r.error, r.checked], [false, true, B.SAY.keyRefused, false], JSON.stringify(answer));
+    assert.equal(f.calls.filter((c) => c.path.endsWith("/transactions")).length, 1, "one refusal is enough: every account would say the same");
+    assert.equal((await doc(bank, "conn.json")).gone, undefined);
+    const st = await B.bankStatus({ bank, env: ENV, now: NOW });
+    assert.deepEqual([st.connected, st.needsApproval, st.lastError], [true, false, B.SAY.keyRefused]);
+    assert.equal(B.bankLine(st, NOW), "Revolut: not read yet · the last read failed · approval ends in 86 days");
+    /* the key put right on Netlify: the next read just works, no reconnect needed */
+    const fixed = await B.syncBank({ bank, desk, env: ENV, now: NOW + 3600000, fetchImpl: fakeReader() });
+    assert.deepEqual([fixed.ok, fixed.connected, fixed.error], [true, true, null]);
+  }
+});
+
+test("bank callback: the details are asked all at once inside the time left; a session that can't be stored is given back at once", async () => {
+  const bank = memoryDesk();
+  const press = async () => { const r = await B.startConnect({ bank, env: ENV, now: NOW, fetchImpl: fakeReader() }); const n = [...bank._map.keys()].filter((k) => k.startsWith("state/")).find((k) => B.bindingOk(k.slice(6, -5), r.binding)).slice(6, -5); return { state: n, binding: r.binding }; };
+  /* POST /sessions took 7 of the 8 seconds; the details never answer: the callback still ends in time */
+  const base = fakeReader();
+  let t = 1000, open = 0, most = 0;
+  const slow = async (url, init) => {
+    const p = new URL(url).pathname;
+    if (p === "/sessions") t += 7000;
+    if (p.endsWith("/details")) { base(url, init); open++; most = Math.max(most, open); return new Promise((_, no) => init.signal.addEventListener("abort", () => { open--; no(init.signal.reason); })); }
+    return base(url, init);
+  };
+  const t0 = Date.now();
+  assert.deepEqual(await B.finishCallback({ bank, env: ENV, now: NOW + 1000, fetchImpl: slow, code: "c1", ...(await press()), clock: () => t }), { ok: true, accounts: 2 });
+  assert.ok(Date.now() - t0 < 2000, "waited only for what was left");
+  assert.equal(most, 2, "both accounts' details were asked at the same time");
+  assert.deepEqual((await doc(bank, "conn.json")).accounts.map((a) => [a.uid, a.name, a.idHash]), [["uid-eur", "Account", B.accountInfo("uid-eur", null, { identification_hash: "hash-eur" }).idHash], ["uid-usd", "Account", B.accountInfo("uid-usd", null, { identification_hash: "hash-usd" }).idHash]], "kept without details");
+  /* a session with no accounts: refused, and the session is given back */
+  const empty = fakeReader({ fail: (m, p) => (m === "POST" && p === "/sessions" ? ok({ session_id: "made-up-orphan-1", accounts: [] }) : null) });
+  await assert.rejects(B.finishCallback({ bank, env: ENV, now: NOW + 2000, fetchImpl: empty, code: "c2", ...(await press()) }), (e) => e.kind === "no_accounts");
+  assert.deepEqual(empty.calls.filter((c) => c.method === "DELETE").map((c) => c.path), ["/sessions/made-up-orphan-1"]);
+  /* the store fails while saving: given back too; the connection that was there stays */
+  const keep = (await doc(bank, "conn.json")).sessionId, real = bank.setJSON.bind(bank);
+  const press3 = await press();
+  bank.setJSON = async (k, v, o) => { if (k === "conn.json") throw new Error("store down"); return real(k, v, o); };
+  const other = fakeReader({ fail: (m, p) => (m === "POST" && p === "/sessions" ? ok({ session_id: "made-up-orphan-2", accounts: ["uid-eur"] }) : null) });
+  await assert.rejects(B.finishCallback({ bank, env: ENV, now: NOW + 3000, fetchImpl: other, code: "c3", ...press3 }));
+  bank.setJSON = real;
+  assert.deepEqual(other.calls.filter((c) => c.method === "DELETE").map((c) => c.path), ["/sessions/made-up-orphan-2"]);
+  assert.equal((await doc(bank, "conn.json")).sessionId, keep);
+});
+
+test("bank refresh: no request outlives the budget; a page cut off by OUR clock is picked up by the next run", async () => {
+  const bank = await connectedBank({ accounts: [ACCOUNTS[0]] }), desk = await deskWithSources();
+  const pages = [{ transactions: [tx({ id: "s-0", date: "2026-11-02", amount: 11, payer: "Made-up Friend A" })], continuation_key: "page-1" }, { transactions: [tx({ id: "s-1", date: "2026-11-03", amount: 12, payer: "Made-up Friend B" })] }];
+  const base = fakeReader({ pages: { "uid-eur": pages } });
+  const hang = async (url, init) => (new URL(url).searchParams.get("continuation_key") === "page-1" ? new Promise((_, no) => init.signal.addEventListener("abort", () => no(init.signal.reason))) : base(url, init));
+  const t0 = Date.now();
+  const s = await B.syncBank({ bank, desk, env: ENV, now: NOW, fetchImpl: hang, budgetMs: 1000 });
+  assert.ok(Date.now() - t0 < 1000, `${Date.now() - t0} ms of a 1000 ms budget`);
+  assert.deepEqual([s.ok, s.error, s.pages, s.added, s.more, s.checked], [true, null, 1, 1, true, false], "our own time running out is the time cap, not a failure");
+  assert.deepEqual((await doc(bank, "sync.json")).perAccount, { a1: { cursor: { key: "page-1", dateFrom: "2026-10-01" } } });
+  const s2 = await B.syncBank({ bank, desk, env: ENV, now: NOW + 3600000, fetchImpl: base });
+  assert.deepEqual([s2.pages, s2.added, s2.more, s2.checked], [1, 1, false, true]);
+  /* the reader's own slowness (a request given its full time) is still "could not be reached" */
+  assert.equal((await B.syncBank({ bank, desk, env: ENV, now: NOW + 7200000, fetchImpl: async () => { const e = new Error("t"); e.name = "TimeoutError"; throw e; } })).error, B.SAY.unreachable);
+});
+
+test("bank classify: refund codes in any spelling; sources by whole words; the pair never hides a named payer; Luke's name as other banks write it; numbers scrubbed", () => {
+  const sources = SOURCES.concat({ id: "distro", name: "Distro Payouts", category: "Self-releases", state: "active", match: [] });
+  const ctx = { uid: "uid-eur", holders: ["Sam Alex Example"], labels: ["Current", "Savings"], sources, debits: [{ uid: "uid-sav", amount: 50, currency: "EUR", date: "2026-11-03" }] };
+  const k = (o, c = ctx) => { const r = B.classify(tx({ date: "2026-11-05", amount: 9.99, ...o }), c); return r && r.kind; };
+  assert.equal(B.classify({ ...tx({ date: "2026-11-05", amount: 9.99, payer: "DistroKid" }), bank_transaction_code: { description: "CARD_REFUND" } }, ctx).kind, "refund", "CARD_REFUND from a merchant whose name contains a source's id");
+  for (const text of ["REFUND-0042", "Cashback", "card_refund", "Refunds", "Purchase reversed"]) assert.equal(k({ text, payer: "Example Shop" }), "refund", text);
+  assert.equal(k({ text: "Refundable deposit back", payer: "Made-up Friend" }), "unsorted");
+  assert.equal(B.sourceFor("DISTROKID", sources), null, "a source's id inside a longer word is not that source");
+  assert.equal(B.sourceFor("NORTHLIGHTS CAFE", sources), null);
+  assert.equal(B.sourceFor("DISTRO PAYOUTS LTD", sources).id, "distro");
+  assert.equal(B.sourceFor("Northlight Records Limited", sources).id, "northlight");
+  /* the pair: only a credit that names nobody else */
+  assert.equal(k({ amount: 50, payer: "Ana Example-Friend" }), "unsorted", "a friend's 50 is not hidden by a 50 Luke paid out of Savings");
+  for (const o of [{ text: "Transfer" }, { payer: "Revolut" }, { payer: "Savings" }]) assert.equal(k({ amount: 50, ...o }), "transfer", JSON.stringify(o));
+  /* his own name as another bank writes it */
+  for (const payer of ["SAM EXAMPLE", "Example Sam", "Sam A. Example", "Mr Sam Alex Example"]) assert.equal(k({ payer }), "transfer", payer);
+  for (const payer of ["Sam Example Music", "Sam Example Records Ltd", "Sam", "Sam Other", "Sam Alex Example Junior Smith"]) assert.equal(k({ payer }), "unsorted", payer);
+  assert.deepEqual(B.readConfig({ ...ENV, BANK_OWN_NAMES: " Sam Example , S Example ,," }).ownNames, ["Sam Example", "S Example"]);
+  assert.deepEqual(B.readConfig(ENV).ownNames, []);
+  for (const [text, want] of [["ie29 aibk 9311 5212 3456 78", "Unknown payer"], ["CPF 123.456.789-00", "CPF"], ["Acc 1234567 sort 12-34-56", "Acc sort"], ["IE29AIBK93115212345678 rent", "rent"]])
+    assert.equal(B.payerOf(B.readTx(tx({ date: "2026-11-05", amount: 1, text }))), want, text);
+});
+
+test("bank refresh: Luke's own name from BANK_OWN_NAMES (his Wise/PayPal top-ups) is a transfer", async () => {
+  const bank = await connectedBank({ accounts: [{ ...ACCOUNTS[0], holder: "" }] }), desk = await deskWithSources();
+  const f = fakeReader({ pages: { "uid-eur": [{ transactions: [tx({ id: "w-1", date: "2026-11-04", amount: 500, payer: "SAMUEL EXAMPLE" })] }] } });
+  const s = await B.syncBank({ bank, desk, env: { ...ENV, BANK_OWN_NAMES: "Samuel J Example" }, now: NOW, fetchImpl: f });
+  assert.deepEqual([s.transfers, s.unsorted, s.newPayments], [1, 0, 0]);
+});
+
+test("bank refresh: look-alikes are each kept (equal same-day credits with a statement waiting; rows without ids); the statement chosen is the one that lands", async () => {
+  const R = S.DEFAULT_ROSTER;
+  for (const stRef of ["", "ST-77"]) {
+    const bank = await connectedBank({ accounts: [ACCOUNTS[0]] }), desk = await deskWithSources();
+    await S.submitIncome(desk, NOW, R, { bot: "Ledger", date: "2026-11-01", payer: "Northlight Records Ltd", amount: 250, currency: "EUR", account: "Statement only", status: "pending", category: "Label deals", reference: stRef });
+    const f = fakeReader({ pages: { "uid-eur": [{ transactions: [tx({ id: "tx-1", date: "2026-11-10", amount: "250.00", payer: "NORTHLIGHT" }), tx({ id: "tx-2", date: "2026-11-10", amount: "250.00", payer: "NORTHLIGHT" })] }] } });
+    const s = await B.syncBank({ bank, desk, env: ENV, now: NOW, fetchImpl: f });
+    assert.deepEqual([s.income, s.upgraded, s.added, s.already], [2, 1, 1, 0], "statement ref: " + stRef);
+    for (const d of [1, 2]) { const again = await B.syncBank({ bank, desk, env: ENV, now: NOW + d * DAY, fetchImpl: f }); assert.deepEqual([again.added, again.updated, again.already], [0, 0, 2]); }
+    const all = await allEntries(desk);
+    assert.equal(all.length, 2); assert.deepEqual((await S.incomeState(desk, NOW)).received, { EUR: 500 });
+    const up = all.find((e) => e.arrived);
+    assert.deepEqual([up.reference, up.bankRef], stRef ? ["ST-77", "tx-1"] : ["tx-1", undefined]);
+  }
+  /* no transaction ids: equal payments from one friend on one day, different texts and identical rows */
+  const bank = await connectedBank({ accounts: [ACCOUNTS[0]] }), desk = await deskWithSources();
+  const noId = (text) => tx({ date: "2026-11-10", amount: "20.00", payer: "Ana Example-Friend", text });
+  const f = fakeReader({ pages: { "uid-eur": [{ transactions: [noId("dinner"), noId("taxi"), noId("rent"), noId("rent")] }] } });
+  const first = await B.syncBank({ bank, desk, env: ENV, now: NOW, fetchImpl: f });
+  assert.deepEqual([first.unsorted, first.added, first.already], [4, 4, 0]);
+  const reread = await B.syncBank({ bank, desk, env: ENV, now: NOW + DAY, fetchImpl: f });
+  assert.deepEqual([reread.added, reread.already], [0, 4]);
+  assert.equal((await allEntries(desk)).length, 4);
+  /* two statements of the same size: the oldest is chosen, and THAT one becomes received */
+  const b3 = await connectedBank({ accounts: [ACCOUNTS[0]] }), d3 = await deskWithSources();
+  const A = (await S.submitIncome(d3, NOW, R, { bot: "Ledger", date: "2026-10-05", payer: "Northlight Records Ltd", amount: 100, currency: "EUR", account: "Statement only", status: "pending", category: "Label deals", reference: "ST-1" })).entry;
+  const P = (await S.submitIncome(d3, NOW, R, { bot: "Ledger", date: "2026-11-02", payer: "Northlight Records Ltd", amount: 100, currency: "EUR", account: "Statement only", status: "pending", category: "Label deals" })).entry;
+  const f3 = fakeReader({ pages: { "uid-eur": [{ transactions: [tx({ id: "tx-9", date: "2026-11-10", amount: "100.00", payer: "NORTHLIGHT RECORDS LIMITED" })] }] } });
+  assert.equal((await B.syncBank({ bank: b3, desk: d3, env: ENV, now: NOW, fetchImpl: f3 })).upgraded, 1);
+  const all3 = await allEntries(d3), a = all3.find((e) => e.id === A.id);
+  assert.deepEqual([a.status, a.reference, a.bankRef, a.arrived, all3.find((e) => e.id === P.id).status, all3.length], ["received", "ST-1", "tx-9", "2026-11-10", "pending", 2]);
+  const r3 = await B.syncBank({ bank: b3, desk: d3, env: ENV, now: NOW + DAY, fetchImpl: f3 });
+  assert.deepEqual([r3.added, r3.updated, r3.already], [0, 0, 1]);
+});
+
+test("bank refresh: after a lapse and a new approval (new uids, same accounts), and after Disconnect + Connect, the gap is read", async () => {
+  const bank = await connectedBank({ accounts: [ACCOUNTS[0]] }), desk = await deskWithSources();
+  await B.syncBank({ bank, desk, env: ENV, now: NOW, fetchImpl: fakeReader() }); /* read to the end on 12 Nov */
+  const conn = (uid, idHash, at) => bank.setJSON("conn.json", { sessionId: "made-up-session-" + uid, validUntil: new Date(at + 170 * DAY).toISOString(), aspsp: { name: "Revolut", country: "IE" }, connectedAt: new Date(at).toISOString(), accounts: [{ ...ACCOUNTS[0], uid, idHash }] });
+  const later = NOW + 60 * DAY; /* 11 Jan 2027: the approval lapsed in between; Luke approves again, the same account comes back as a new uid */
+  await conn("uid-new", "a1", later);
+  const g = fakeReader({ pages: { "uid-new": [{ transactions: [tx({ id: "gap-1", date: "2026-11-20", amount: 80, payer: "Made-up Friend" })] }] } });
+  const s = await B.syncBank({ bank, desk, env: ENV, now: later, fetchImpl: g });
+  assert.deepEqual(g.calls.filter((c) => c.path.endsWith("/transactions")).map((c) => [c.path, c.query.date_from]), [["/accounts/uid-new/transactions", "2026-11-05"]], "from where the last full read ended, not the 1st of last month (2026-12-01)");
+  assert.equal(s.added, 1);
+  /* Disconnect forgets every account's place; a Connect 80 days later starts a week before the last full read */
+  await B.disconnect({ bank, env: ENV, now: later, fetchImpl: g });
+  await conn("uid-3", "zz", later + 80 * DAY);
+  const h = fakeReader();
+  await B.syncBank({ bank, desk, env: ENV, now: later + 80 * DAY, fetchImpl: h });
+  assert.equal(h.calls.find((c) => c.path.endsWith("/transactions")).query.date_from, "2027-01-04");
+});
+
+test("bank status: a run stopped by a cap is not called a full read; the run that finishes counts both", async () => {
+  const bank = await connectedBank({ accounts: [ACCOUNTS[0]] }), desk = await deskWithSources();
+  await bank.setJSON("sync.json", { lastRunAt: new Date(NOW - DAY).toISOString(), lastOkAt: new Date(NOW - DAY).toISOString(), lastError: null, lastAdded: 0, perAccount: {} });
+  const three = fakeReader({ pages: { "uid-eur": Array.from({ length: 3 }, (_, i) => ({ transactions: [tx({ id: "c-" + i, date: "2026-11-02", amount: 1 + i, payer: "Made-up Friend" })], ...(i < 2 ? { continuation_key: "page-" + (i + 1) } : {}) })) } });
+  const a = await B.syncBank({ bank, desk, env: ENV, now: NOW, fetchImpl: three, pagesPerAccount: 2 });
+  assert.deepEqual([a.ok, a.more, a.newPayments], [true, true, 2]);
+  const st = await B.bankStatus({ bank, env: ENV, now: NOW });
+  assert.deepEqual([st.lastOkAt, st.partial, st.lastAdded], [new Date(NOW - DAY).toISOString(), true, 2], "lastOkAt stays at the last FULL read");
+  assert.equal(B.bankLine(st, NOW), "Revolut: read yesterday at 06:50 · the last read stopped part way, the rest comes at the next read · approval ends in 86 days");
+  assert.equal(B.bankLine({ ...st, lastOkAt: null }, NOW), "Revolut: not fully read yet · the last read stopped part way, the rest comes at the next read · approval ends in 86 days");
+  const b = await B.syncBank({ bank, desk, env: ENV, now: NOW + 3600000, fetchImpl: three, pagesPerAccount: 2 });
+  assert.deepEqual([b.more, b.newPayments, b.checked], [false, 1, true]);
+  const st2 = await B.bankStatus({ bank, env: ENV, now: NOW + 3600000 });
+  assert.deepEqual([st2.partial, st2.lastAdded], [false, 3]);
+  assert.equal(B.bankLine(st2, NOW + 3600000), "Revolut: read today at 07:50 · 3 payments in · approval ends in 86 days");
+});
+
+test("bank refresh, end to end: only real income counts (refund codes, cashback, an exchange, a top-up, a friend beside a look-alike debit, equal payments, a statement)", async () => {
+  const bank = await connectedBank({ accounts: [ACCOUNTS[0], ACCOUNTS[1]] }), desk = memoryDesk();
+  await S.setSources(desk, SOURCES.concat({ id: "distro", name: "Distro Payouts", category: "Self-releases", state: "active" }));
+  await S.submitIncome(desk, NOW, S.DEFAULT_ROSTER, { bot: "Ledger", date: "2026-11-01", payer: "Northlight Records Ltd", amount: 250, currency: "EUR", account: "Statement only", status: "pending", category: "Label deals" });
+  const cur = [
+    { ...tx({ id: "e-1", date: "2026-11-03", amount: "9.99", payer: "DistroKid" }), bank_transaction_code: { description: "CARD_REFUND" } },
+    tx({ id: "e-2", date: "2026-11-03", amount: "1.20", payer: "Revolut", text: "Cashback" }),
+    tx({ id: "e-3", date: "2026-11-04", amount: "100.00", text: "Exchanged to EUR" }),
+    tx({ id: "e-4", date: "2026-11-05", amount: "60.00", text: "Apple Pay Top-Up by *1234" }),
+    tx({ id: "e-5", date: "2026-11-09", amount: "25.00", payer: "Ana Example-Friend", text: "Dinner" }),
+    tx({ id: "e-6", date: "2026-11-10", amount: "250.00", payer: "NORTHLIGHT RECORDS LIMITED" }),
+    tx({ id: "e-7", date: "2026-11-10", amount: "250.00", payer: "NORTHLIGHT RECORDS LIMITED" }),
+    tx({ id: "e-8", date: "2026-11-11", amount: "60.00", payer: "SAMPLE PUBLISHING LLC" }),
+  ];
+  const sav = [tx({ id: "e-9", date: "2026-11-08", amount: "25.00", out: true, text: "Example Shop" })];
+  const f = fakeReader({ pages: { "uid-eur": [{ transactions: cur }], "uid-sav": [{ transactions: sav }] } });
+  const s = await B.syncBank({ bank, desk, env: ENV, now: NOW, fetchImpl: f });
+  assert.deepEqual([s.credits, s.income, s.unsorted, s.transfers, s.refunds, s.upgraded, s.added, s.newPayments], [8, 3, 1, 2, 2, 1, 5, 3]);
+  const inc = await S.incomeState(desk, NOW);
+  assert.deepEqual([inc.received, inc.pending, inc.unsortedCount, inc.unsorted[0].payer], [{ EUR: 560 }, {}, 1, "Ana Example-Friend"], "exactly the real income");
+  assert.equal((await allEntries(desk)).length, 6);
+  const again = await B.syncBank({ bank, desk, env: ENV, now: NOW + DAY, fetchImpl: f });
+  assert.deepEqual([again.added, again.updated, again.already], [0, 0, 6]);
+  assert.deepEqual((await S.incomeState(desk, NOW + DAY)).received, { EUR: 560 });
 });
 
 /* ---------------------------------------------------------------- the doors */
@@ -453,11 +651,14 @@ test("bank endpoints: who may call what; the callback's two answers; nothing sec
     const prod = { deploy: { context: "production" } }, preview = { deploy: { context: "deploy-preview" } };
     const cookie = sessionCookie(await makeSession("correct horse")).split(";")[0];
     const answers = [];
-    const call = async (method, path, { auth, origin, ctx = prod } = {}) => {
+    let setCookie = null;
+    const call = async (method, path, { auth, origin, ctx = prod, jar } = {}) => {
       const headers = {};
       if (auth === "luke") headers.cookie = cookie; else if (auth) headers.authorization = "Bearer " + auth;
+      if (jar) headers.cookie = (headers.cookie ? headers.cookie + "; " : "") + jar;
       if (origin) headers.origin = origin;
       const res = await bankFn(new Request("https://badscandal.com/api/bank/" + path, { method, headers }), ctx);
+      setCookie = res.headers.get("set-cookie");
       const text = await res.text();
       answers.push(text + " " + (res.headers.get("location") || ""));
       return { status: res.status, body: text ? JSON.parse(text) : null, location: res.headers.get("location") };
@@ -489,13 +690,20 @@ test("bank endpoints: who may call what; the callback's two answers; nothing sec
     assert.deepEqual(c, { status: 200, body: { url: "https://auth.example.test/approve?ref=made-up" }, location: null });
     const store = globalThis.__stores.get("bank");
     const nonce = [...store._map.keys()].find((k) => k.startsWith("state/")).slice(6, -5);
-    /* the callback: public; a bad nonce -> failed, a good one -> connected */
+    /* Connect ties the press to THIS browser: a Lax cookie (the bank's redirect is a top-level GET from its site) */
+    assert.equal(setCookie, `__Host-bs_bank_state=${B.stateBinding(nonce)}; Max-Age=600; Path=/; Secure; HttpOnly; SameSite=Lax`);
+    const jar = setCookie.split(";")[0];
+    /* the callback: public; a bad nonce -> failed; the right nonce in another browser -> device; with the cookie -> connected */
     const CODE = "made-up-code-SECRET-42";
-    const bad = await call("GET", `callback?code=${CODE}&state=not-the-nonce-0000000000`);
+    const bad = await call("GET", `callback?code=${CODE}&state=not-the-nonce-0000000000`, { jar });
     assert.deepEqual([bad.status, bad.location], [302, "/hq?bank=failed#money"]);
-    const good = await call("GET", `callback?code=${CODE}&state=${nonce}`);
+    const elsewhere = await call("GET", `callback?code=${CODE}&state=${nonce}`);
+    assert.deepEqual([elsewhere.status, elsewhere.location], [302, "/hq?bank=device#money"], "someone else finishing Luke's approval link attaches nothing");
+    assert.equal((await call("GET", "status", { auth: "luke" })).body.connected, false);
+    const good = await call("GET", `callback?code=${CODE}&state=${nonce}`, { jar });
     assert.deepEqual([good.status, good.location], [302, "/hq?bank=connected#money"]);
-    assert.equal((await call("GET", `callback?code=${CODE}&state=${nonce}`)).location, "/hq?bank=failed#money", "used once only");
+    assert.equal(setCookie, "__Host-bs_bank_state=; Max-Age=0; Path=/; Secure; HttpOnly; SameSite=Lax", "the callback clears the cookie");
+    assert.equal((await call("GET", `callback?code=${CODE}&state=${nonce}`, { jar })).location, "/hq?bank=failed#money", "used once only");
     const st = await call("GET", "status", { auth: HENV.STAFF_CLAUDE_KEY });
     assert.deepEqual([st.body.connected, st.body.accounts], [true, [{ name: "Current", currency: "EUR" }, { name: "USD account", currency: "USD" }]]);
     /* sync: Luke or Claude */
@@ -504,9 +712,10 @@ test("bank endpoints: who may call what; the callback's two answers; nothing sec
     assert.equal((await call("POST", "sync", LUKE)).body.already, 4);
     /* a callback whose session exchange fails: failed, one scrubbed line */
     await call("POST", "connect", LUKE);
+    const jar2 = setCookie.split(";")[0];
     const n2 = [...store._map.keys()].find((k) => k.startsWith("state/")).slice(6, -5);
     globalThis.fetch = fakeReader({ fail: (m, p) => (p === "/sessions" ? ok({ error: "WRONG_AUTHORIZATION_CODE", message: "code " + CODE + " is wrong" }, 422) : null) });
-    const failed = await call("GET", `callback?code=${CODE}&state=${n2}`);
+    const failed = await call("GET", `callback?code=${CODE}&state=${n2}`, { jar: jar2 });
     assert.equal(failed.location, "/hq?bank=failed#money");
     assert.ok(lines.includes("bank callback failed: reader 422 WRONG_AUTHORIZATION_CODE"), lines.join("\n"));
     assert.equal((await call("GET", "status", { auth: "luke" })).body.connected, true, "a failed reconnect leaves the old connection");

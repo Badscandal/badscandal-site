@@ -2,8 +2,10 @@
 
      POST /api/bank/connect     Luke              -> { url }: Revolut's approval page (read-only access)
      GET  /api/bank/callback    public            the bank sends Luke's browser back here; the single-use
-                                                  nonce from connect is the lock. -> 302 /hq?bank=connected#money
-                                                  or /hq?bank=failed#money
+                                                  nonce from connect + the cookie connect set in THIS
+                                                  browser are the lock. -> 302 /hq?bank=connected#money,
+                                                  /hq?bank=device#money (finished in another browser or
+                                                  on another device) or /hq?bank=failed#money
      GET  /api/bank/status      Luke or Claude    connected? approval days left, last read, last error
      POST /api/bank/sync        Luke or Claude    one refresh now -> its summary
      POST /api/bank/disconnect  Luke              gives the approval back and forgets it
@@ -19,8 +21,10 @@ import { keyOk } from "../lib/feed.mjs";
 import { COOKIE, readCookie, verifySession } from "../lib/session.mjs";
 
 const NO_STORE = { "Cache-Control": "no-store", "X-Robots-Tag": "noindex, nofollow" };
-const json = (status, data) => new Response(JSON.stringify(data), { status, headers: { "Content-Type": "application/json; charset=utf-8", ...NO_STORE } });
-const back = (flag) => new Response(null, { status: 302, headers: { Location: `/hq?bank=${flag}#money`, "Referrer-Policy": "no-referrer", ...NO_STORE } });
+const json = (status, data, extra = {}) => new Response(JSON.stringify(data), { status, headers: { "Content-Type": "application/json; charset=utf-8", ...NO_STORE, ...extra } });
+/* the callback always clears the Connect cookie: it is single use like the nonce it proves */
+const CLEAR_STATE = `${B.STATE_COOKIE}=; Max-Age=0; Path=/; Secure; HttpOnly; SameSite=Lax`;
+const back = (flag) => new Response(null, { status: 302, headers: { Location: `/hq?bank=${flag}#money`, "Referrer-Policy": "no-referrer", "Set-Cookie": CLEAR_STATE, ...NO_STORE } });
 const env = (k) => Netlify.env.get(k);
 const fetchImpl = (...a) => fetch(...a);
 
@@ -46,15 +50,16 @@ async function callback(req, context) {
   if (req.method !== "GET") return json(405, { error: "Use GET" });
   const q = new URL(req.url).searchParams;
   try {
-    const r = await B.finishCallback({ bank: stores(context).bank, env, now: Date.now(), fetchImpl, code: q.get("code"), state: q.get("state"), error: q.get("error") });
-    return back(r.ok ? "connected" : "failed");
+    const binding = readCookie(req.headers.get("cookie"), B.STATE_COOKIE);
+    const r = await B.finishCallback({ bank: stores(context).bank, env, now: Date.now(), fetchImpl, code: q.get("code"), state: q.get("state"), error: q.get("error"), binding });
+    return back(r.ok ? "connected" : r.why === "browser" ? "device" : "failed");
   } catch (e) {
     console.error("bank callback failed:", B.logLine(e));
     return back("failed");
   }
 }
 
-const CONNECT_SAY = { missing: B.SAY.missing, key: B.SAY.keyBad, refused: B.SAY.keyRefused, no_bank: B.SAY.noBank, network: B.SAY.unreachable };
+const CONNECT_SAY = { missing: B.SAY.missing, key: B.SAY.keyBad, refused: B.SAY.keyRefused, no_bank: B.SAY.noBank, network: B.SAY.unreachable, timeout: B.SAY.unreachable };
 
 export default async (req, context) => {
   const url = new URL(req.url);
@@ -87,7 +92,9 @@ export default async (req, context) => {
       if (!B.readConfig(env).configured) return json(503, { error: B.SAY.missing });
       if (!st.prod) return json(409, { error: B.SAY.preview });
       try {
-        return json(200, await B.startConnect({ bank: st.bank, env, now, fetchImpl }));
+        const { url: to, binding } = await B.startConnect({ bank: st.bank, env, now, fetchImpl });
+        /* Lax, not Strict: the bank sends the browser back with a top-level GET from its own site */
+        return json(200, { url: to }, { "Set-Cookie": `${B.STATE_COOKIE}=${binding}; Max-Age=${B.LIMITS.stateMinutes * 60}; Path=/; Secure; HttpOnly; SameSite=Lax` });
       } catch (e) {
         if (e && e.name !== "BankError") throw e;
         console.error("bank connect failed:", B.logLine(e));

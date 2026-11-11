@@ -6,6 +6,7 @@
      GET  /api/staff/board     everything /hq shows about the team, the messages and the money in
      POST /api/staff/message   Luke (or Claude) writes on the board        { to, text, needs, re, options }
      POST /api/staff/resolve   …or settles a message                        { id, note }
+     POST /api/staff/sort      Luke (or Claude) says what a Revolut payment is { id, month, status: received|transfer, category }
      POST /api/staff/config    Luke switches the bots' key off / on         { botsOn }
      PUT  /api/staff/seed      Claude loads the roster, the income sources and the guide
 
@@ -24,7 +25,7 @@ import { handle } from "../lib/mcp.mjs";
 import { COOKIE, readCookie, verifySession } from "../lib/session.mjs";
 import * as S from "../lib/staff.mjs";
 import { sampleBoard } from "../lib/staff-sample.mjs";
-import { callTool, INSTRUCTIONS, TOOLS } from "../lib/staff-tools.mjs";
+import { callTool, CLAUDE_TOOLS, INSTRUCTIONS, TOOLS } from "../lib/staff-tools.mjs";
 
 const NO_STORE = { "Cache-Control": "no-store", "X-Robots-Tag": "noindex, nofollow" };
 const json = (status, data, extra = {}) => new Response(data === null ? null : JSON.stringify(data), { status, headers: { ...(data === null ? {} : { "Content-Type": "application/json; charset=utf-8" }), ...NO_STORE, ...extra } });
@@ -93,7 +94,7 @@ async function mcp(req, context) {
   const st = stores(context), now = Date.now();
   const headers = Object.fromEntries([...req.headers].map(([k, v]) => [k.toLowerCase(), v]));
   const ctx = { store: st.desk, now, role, hq: hqLoader(st) };
-  const out = await handle(b.value, headers, { tools: TOOLS, instructions: INSTRUCTIONS, call: (tool, args) => callTool(tool, args, ctx) });
+  const out = await handle(b.value, headers, { tools: role === "claude" ? TOOLS.concat(CLAUDE_TOOLS) : TOOLS, instructions: INSTRUCTIONS, call: (tool, args) => callTool(tool, args, ctx) });
   const method = b.value && typeof b.value.method === "string" ? b.value.method : "";
   await note(context, req, out.status, who, method, out.body && out.body.error ? out.body.error.message : "");
   return json(out.status, out.body);
@@ -135,6 +136,8 @@ async function api(req, context, path) {
       return json(200, { ok: true, message: r.message });
     }
     if (path === "resolve" && req.method === "POST") return json(200, { ok: true, message: await S.resolveMessage(st.desk, now, roster, { id: a.id, by: me, note: a.note }) });
+    if (path === "sort" && req.method === "POST")
+      return json(200, { ok: true, entry: await S.sortIncome(st.desk, now, roster, { by: me, id: a.id, month: a.month, status: a.status, category: a.category }) });
     if (path === "config" && req.method === "POST") {
       if (role !== "luke") return json(403, { error: "Only Luke switches the bots' key" });
       return json(200, { ok: true, config: await S.setConfig(st.desk, now, { botsOn: a.botsOn }) });
