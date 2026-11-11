@@ -13,8 +13,8 @@ import { hqModel, HQ_TABS } from "./hq.mjs";
 import { sampleMeta, sampleSheets } from "./hq-sample.mjs";
 import { EXPIRED_CODE, keyHealth, readKeyHealth, readMeta } from "./metaread.mjs";
 import { DEFAULT_ACCOUNT } from "./metaspend.mjs";
-import { dutyOverlay, listReleases, listUpdates, releaseView, spDay, spHM } from "./staff.mjs";
-import { sampleReleases } from "./staff-sample.mjs";
+import { dutyOverlay, getSightings, listReleases, listUpdates, releaseView, spDay, spHM } from "./staff.mjs";
+import { sampleReleases, sampleSightings } from "./staff-sample.mjs";
 
 /* the sheet is read at most every 2 minutes so the bots' live updates show quickly; one batch read
    + one small read of the optional "Updates" tab, well inside Google's limits */
@@ -67,14 +67,17 @@ const monthsIn = (sheets, today) => {
   return [...set].sort().reverse();
 };
 
-/* what the bots said through the connector over the last three days, and the releases sent to the
-   team (11 Nov 2026: they join the sheet's Releases tab, hq.mjs mergeReleases); never breaks the page */
-const scheduled = (list, today) => list.filter((r) => r && r.status === "scheduled").map((r) => releaseView(r, today));
+/* what the bots said through the connector over the last three days, and the desk's releases (11 Nov
+   2026: the scheduled ones join the sheet's Releases tab, hq.mjs mergeReleases; every one that isn't
+   cancelled tells Songs whose song it is, songs[].deal), and Atlas's last Spotify for Artists report
+   (the sheet's own late pitch waits while the song isn't there); never breaks the page */
+const live = (list, today, sightings) => list.filter((r) => r && r.status !== "cancelled").map((r) => releaseView(r, today, { sightings }));
 async function staffSide(desk, now) {
   if (!desk) return null;
   try {
-    const [updates, releases] = await Promise.all([listUpdates(desk, now, 3), listReleases(desk).catch(() => [])]);
-    return { updates, overlay: dutyOverlay(updates, spDay(now)), releases: scheduled(releases, spDay(now)) };
+    const [updates, releases, sightings] = await Promise.all([listUpdates(desk, now, 3), listReleases(desk).catch(() => []), getSightings(desk).catch(() => undefined)]);
+    /* undefined = the report could not be read: the sheet's late pitch is then left as the sheet says */
+    return { updates, overlay: dutyOverlay(updates, spDay(now)), releases: live(releases, spDay(now), sightings || null), ...(sightings === undefined ? {} : { sightings }) };
   } catch { return null; }
 }
 
@@ -86,7 +89,7 @@ export async function loadHq({ cache, desk = null, env, now = Date.now(), sample
     const sheets = sampleSheets(today, now);
     const r = await rates(cache, monthsIn(sheets, today), today, fetchImpl);
     /* the made-up desk releases join the made-up sheet, so the sample shows one list as the real page does */
-    return { connected: true, sample: true, ...hqModel(sheets, today, r.fx, sampleMeta(sheets, today), spHM(now), { releases: scheduled(sampleReleases(now), today) }), health: healthFor(now - 4 * 60000, r, today),
+    return { connected: true, sample: true, ...hqModel(sheets, today, r.fx, sampleMeta(sheets, today), spHM(now), { releases: live(sampleReleases(now), today, sampleSightings(now)), sightings: sampleSightings(now) }), health: healthFor(now - 4 * 60000, r, today),
       metaKey: { state: "ok", text: "Meta key: reading OK, last read 12 min ago (sample)" }, generated: new Date(now).toISOString() };
   }
   let got = null;

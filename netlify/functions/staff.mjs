@@ -17,7 +17,10 @@
      POST /api/staff/release/remove  …take a cancelled or long-out one off the desk { id }
      GET  /api/staff/release?id=     ONE whole release (the board's copy has no lyrics and no log)
      (the release pipeline, 11 Nov 2026: every answer is { ok, release: releaseView } or 400 { error }
-      in a plain sentence; a refused send also carries missing: [field keys])
+      in a plain sentence; a refused send also carries missing: [field keys] and canSendAnyway: true.
+      release/send takes anyway: true (Luke or Claude): sent with required fields missing)
+     POST /api/staff/sighting        Luke answers what a song Spotify for Artists shows is  { key, answer, label?, note? }
+                                     answer: self | label | notmine | mistake (Luke only, 11 Nov 2026)
 
    Who is calling:
      Luke   = the /hq login cookie (same as every /api/admin/* call; POSTs must come from our own page)
@@ -33,7 +36,7 @@ import { loadHq } from "../lib/hq-load.mjs";
 import { handle } from "../lib/mcp.mjs";
 import { COOKIE, readCookie, verifySession } from "../lib/session.mjs";
 import * as S from "../lib/staff.mjs";
-import { sampleBoard, sampleReleases } from "../lib/staff-sample.mjs";
+import { sampleBoard, sampleReleases, sampleSightings } from "../lib/staff-sample.mjs";
 import { callTool, INSTRUCTIONS, TOOLS } from "../lib/staff-tools.mjs";
 
 const NO_STORE = { "Cache-Control": "no-store", "X-Robots-Tag": "noindex, nofollow" };
@@ -134,9 +137,10 @@ async function api(req, context, path) {
   if (path === "release" && req.method === "GET") {
     /* one whole release, lyrics and log included (11 Nov 2026: the board no longer carries them) */
     const id = String(url.searchParams.get("id") || "").slice(0, 60);
-    const list = sample ? sampleReleases(now) : await S.listReleases(stores(context).desk);
+    const desk = sample ? null : stores(context).desk;
+    const [list, sightings] = sample ? [sampleReleases(now), sampleSightings(now)] : await Promise.all([S.listReleases(desk), S.getSightings(desk)]);
     const r = list.find((x) => x.id === id);
-    return r ? json(200, { ok: true, ...(sample ? { sample: true } : {}), release: S.releaseView(r, S.spDay(now)) }) : json(404, { error: "There is no release with that id. Refresh the page." });
+    return r ? json(200, { ok: true, ...(sample ? { sample: true } : {}), release: S.releaseView(r, S.spDay(now), { sightings }) }) : json(404, { error: "There is no release with that id. Refresh the page." });
   }
   if (sample) return json(200, { ok: true, sample: true }); /* the sample never writes */
 
@@ -153,13 +157,22 @@ async function api(req, context, path) {
     }
     if (path === "resolve" && req.method === "POST") return json(200, { ok: true, message: await S.resolveMessage(st.desk, now, roster, { id: a.id, by: me, note: a.note }) });
     if (path.startsWith("release") && req.method === "POST") {
-      const view = (r) => S.releaseView(r, S.spDay(now));
+      const sightings = await S.getSightings(st.desk).catch(() => null);
+      const view = (r) => S.releaseView(r, S.spDay(now), { sightings });
       if (path === "release") return json(200, { ok: true, release: view(await S.saveRelease(st.desk, now, roster, { by: me, id: a.id, title: a.title, date: a.date, pack: a.pack })) });
-      if (path === "release/send") { const r = await S.sendRelease(st.desk, now, roster, { by: me, id: a.id }); return json(200, { ok: true, release: view(r.release), already: r.already, told: !!r.told }); }
+      if (path === "release/send") {
+        const r = await S.sendRelease(st.desk, now, roster, { by: me, id: a.id, anyway: a.anyway === true });
+        return json(200, { ok: true, release: view(r.release), already: r.already, told: !!r.told, alreadyOut: !!r.alreadyOut, sentWithout: r.without || [] });
+      }
       if (path === "release/date") { const r = await S.moveRelease(st.desk, now, roster, { by: me, id: a.id, date: a.date }); return json(200, { ok: true, release: view(r.release), moved: r.moved, told: !!r.told }); }
       if (path === "release/cancel") { const r = await S.cancelRelease(st.desk, now, roster, { by: me, id: a.id }); return json(200, { ok: true, release: view(r.release), told: !!r.told }); }
       if (path === "release/remove") return json(200, { ok: true, ...(await S.removeRelease(st.desk, now, roster, { by: me, id: a.id })) });
       if (path === "release/step") return json(200, { ok: true, release: view(await S.setStep(st.desk, now, roster, { by: me, id: a.id, step: a.step, status: a.status, note: a.note, link: a.link })) });
+    }
+    if (path === "sighting" && req.method === "POST") {
+      if (role !== "luke") return json(403, { error: "Only Luke answers what a song in Spotify for Artists is" });
+      const r = await S.answerSighting(st.desk, now, roster, { by: me, key: a.key, answer: a.answer, label: a.label, note: a.note });
+      return json(200, { ok: true, answer: r.answer, release: r.release ? S.releaseView(r.release, S.spDay(now), { sightings: r.sightings }) : null, told: !!r.told, sightings: r.sightings });
     }
     if (path === "config" && req.method === "POST") {
       if (role !== "luke") return json(403, { error: "Only Luke switches the bots' key" });
@@ -173,7 +186,7 @@ async function api(req, context, path) {
       return json(200, { ok: true, done });
     }
   } catch (e) {
-    if (e && e.name === "StaffError") return json(e.code === "not_found" ? 404 : e.code === "busy" ? 503 : 400, { error: e.message, ...(e.missing ? { missing: e.missing } : {}) });
+    if (e && e.name === "StaffError") return json(e.code === "not_found" ? 404 : e.code === "busy" ? 503 : 400, { error: e.message, ...(e.missing ? { missing: e.missing } : {}), ...(e.anyway ? { canSendAnyway: true } : {}) });
     console.error("staff api failed", e?.name || e);
     return json(500, { error: "Could not save that" });
   }

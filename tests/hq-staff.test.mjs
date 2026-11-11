@@ -330,7 +330,7 @@ test("releases: what's missing, the card's pill, and the same sentence the desk 
   const d = memoryDesk(), now = Date.parse("2026-11-12T12:20:00Z");
   const r = await S.saveRelease(d, now, S.DEFAULT_ROSTER, { by: "Luke", title: "Survivors", pack: { wav: "https://example.com/m.wav", genre: "Dance" } });
   const view = S.releaseView(r, "2026-11-12");
-  await assert.rejects(S.sendRelease(d, now, S.DEFAULT_ROSTER, { by: "Luke", id: r.id }), (e) => e.message === L.missingSentence(view.missing.filter((m) => m.required)));
+  await assert.rejects(S.sendRelease(d, now, S.DEFAULT_ROSTER, { by: "Luke", id: r.id }), (e) => e.message.startsWith(L.missingSentence(view.missing.filter((m) => m.required)))); /* the desk adds "Or send anyway: …" (11 Nov 2026, v2) */
   assert.equal(L.missingSentence([{ key: "artwork", short: "Artwork", required: true }]), "Still missing: Artwork. Fill it in, then send again.");
   assert.equal(L.missingSentence([{ key: "lyrics", short: "Lyrics", required: false }]), "");
 });
@@ -356,14 +356,15 @@ test("releases: one card per song (the desk's first), the sheet's own rows only 
   const b = sampleBoard(NOW);
   const sheet = { releases: [{ song: "ME DA SEU BODY", date: "2026-11-24", desk: false, steps: [] }, { song: "Old Song", date: "2026-12-04", steps: [] }, { song: "Survivors", desk: true, steps: [] }] };
   const l = L.releaseLists(b, sheet);
-  assert.deepEqual(l.coming.map((v) => v.id), ["medaseubody", "survivors"], "still to come, drafts too, soonest first");
+  assert.deepEqual(l.coming.map((v) => v.id), ["medaseubody", "slowburn", "survivors"], "still to come, drafts too, soonest first");
   assert.deepEqual(l.sheetOnly.map((r) => r.song), ["Old Song"], "accents and case don't make a second card; merged desk rows aren't drawn twice");
   assert.deepEqual(l.out.map((v) => v.id), ["touchme"]);
   assert.deepEqual(l.cancelled, []);
   const withCancelled = L.releaseLists({ releases: [{ ...b.releases[0], status: "cancelled" }] }, { releases: [{ song: "Me Dá Seu Body", steps: [] }] });
   assert.equal(withCancelled.cancelled.length, 1); assert.equal(withCancelled.sheetOnly.length, 1, "a cancelled desk release doesn't hide the sheet's row");
   assert.deepEqual(L.releaseLists(null, null), { coming: [], sheetOnly: [], out: [], cancelled: [] });
-  assert.equal(L.stepsSummary(b.releaseSteps), "Counting back from release day: 21 days RouteNote upload, 16 RouteNote approval, 14 Spotify pitch, 10 lyrics, 7 song page and video, 3 teaser clips, 1 ad drafts.");
+  /* 15 = the Spotify for Artists step (server, 11 Nov 2026 v2); its short word is the page's to choose */
+  assert.match(L.stepsSummary(b.releaseSteps), /^Counting back from release day: 21 days RouteNote upload, 16 RouteNote approval, 15 [^,]+, 14 Spotify pitch, 10 lyrics, 7 song page and video, 3 teaser clips, 1 ad drafts\.$/);
   assert.equal(L.stepsSummary([]), "");
   assert.equal(L.sendQuestion("Survivors", "2026-12-11"), "Send Survivors to the team for Fri 11 Dec? Every bot gets its steps and dates.");
   assert.match(L.moveQuestion("Survivors", "2026-12-11", "2026-12-18"), /^Move Survivors from Fri 11 Dec to Fri 18 Dec\? Every step that isn't done moves with it, and the team is told\.$/);
