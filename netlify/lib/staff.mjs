@@ -568,6 +568,20 @@ export async function getSeen(store, roster) {
 export async function touchRead(store, now, name) {
   try { await store.setJSON(`read/${low(name).replace(/[^a-z0-9]/g, "")}.json`, { at: new Date(now).toISOString() }); } catch {}
 }
+/* when this reader last took its messages (null = never); read BEFORE touchRead moves it */
+export async function lastRead(store, name) {
+  try { const { data } = await readDoc(store, `read/${low(name).replace(/[^a-z0-9]/g, "")}.json`, null); return data && data.at ? data.at : null; } catch { return null; }
+}
+/* What a reader is HANDED when the read marker moves (11 Nov 2026, review: my_day wrote "Read by Ledger"
+   for Luke's reply, which it never gave Ledger; it listed only what was still open). Every message to
+   `name`, to all, or answering one of `name`'s own, written since its last read, newest `max`, oldest
+   first. more = how many older ones did not fit (read_messages has them). */
+export function messagesFor(messages, name, since, max = 30) {
+  const mine = new Set(messages.filter((m) => m.from === name).map((m) => m.id));
+  const all = messages.filter((m) => m.from !== name && (!since || m.at > since) && (m.to === name || m.to === "all" || (!!m.re && mine.has(m.re))))
+    .sort((a, b) => (a.at < b.at ? 1 : -1));
+  return { list: all.slice(0, max).reverse(), more: Math.max(0, all.length - max) };
+}
 export async function getRead(store, roster) {
   const names = botNames(roster).concat("Claude");
   const docs = await Promise.all(names.map((n) => readDoc(store, `read/${low(n).replace(/[^a-z0-9]/g, "")}.json`, null)));
@@ -610,7 +624,7 @@ export function setGuide(store, now, text) {
    tools and the "still missing" list are all built from these two lists, so a field is added in ONE
    place. A release is "draft" (Luke is still filling it), "scheduled" (sent; the steps have dates)
    or "cancelled". "Released" is never stored: it is a scheduled release whose day has come. */
-const F = (key, label, short, kind, group, o = {}) => ({ key, label, short, kind, group, required: !!o.required, requiredWhen: o.requiredWhen || null, neededBy: o.neededBy || "",
+const F = (key, label, short, kind, group, o = {}) => ({ key, label, short, kind, group, required: !!o.required, requiredWhen: o.requiredWhen || null, showWhen: "showWhen" in o ? o.showWhen : o.requiredWhen || null, neededBy: o.neededBy || "",
   choices: o.choices || [], hint: o.hint || "", fill: o.fill || [], max: o.max || (kind === "line" ? 200 : kind === "link" ? 400 : 1000) });
 /* group = where the /hq form shows it: deal | files | stores | lyrics | pitch | later | notes.
    required = must be filled before the pack can go to the team. requiredWhen = { field, equals }:
@@ -642,8 +656,10 @@ export const PACK_FIELDS = [
   F("writers", "Writers: full legal names, who wrote music and who wrote lyrics", "Writers", "text", "stores", { required: true, max: 600, hint: 'One person per line, for example "Full Legal Name: music and lyrics". Legal names, not artist names.' }),
   F("producers", "Producers", "Producers", "line", "stores", { hint: "Optional. As they should be credited." }),
   F("featuring", "Featured artists", "Featured artists", "line", "stores", { hint: "Only artists credited in the title." }),
-  /* required to send since 11 Nov 2026 (evening): a self-release cannot be uploaded without it */
-  F("copyright", "Copyright line (℗ and ©)", "Copyright line", "line", "stores", { required: true, hint: 'For example "℗ 2026 BADSCANDAL · © 2026 BADSCANDAL". Drop needs it for the upload.' }),
+  /* required to send a SELF-RELEASE since 11 Nov 2026 (evening): it cannot be uploaded without it. A label
+     release the label delivers doesn't use it (review, 11 Nov 2026); one we upload ourselves needs it for
+     the upload. showWhen: the form shows it whatever the kind (requiredWhen alone would hide it). */
+  F("copyright", "Copyright line (℗ and ©)", "Copyright line", "line", "stores", { requiredWhen: { field: "kind", equals: SELF_KIND }, showWhen: null, neededBy: "upload", hint: 'For example "℗ 2026 BADSCANDAL · © 2026 BADSCANDAL". Drop needs it for the upload.' }),
   /* Luke's words only (11 Nov 2026): Verse puts them live, it never writes them (the guide: "never write,
      guess or copy lyrics"), so no bot fills this field */
   F("lyrics", "Lyrics, full text", "Lyrics", "text", "lyrics", { neededBy: "lyrics", max: 8000, hint: "The whole text, line by line, as sung. Verse puts them live in the stores." }),
@@ -684,6 +700,7 @@ export const STEP_STATUS = ["todo", "working", "done", "blocked", "skipped"];
 const finished = (s) => !!s && (s.status === "done" || s.status === "skipped");
 export const LABEL_NOTE = "The label delivers this one";
 export const OUT_NOTE = "Already out when it was recorded";
+export const PITCHED_NOTE = "The pitch was sent before this step existed";
 /* the steps whose work carries the release day OUTSIDE the desk (the store, YouTube, the song page):
    when the day moves after they are done, they have to be changed there too */
 const DATED_OUTSIDE = ["upload", "video", "page", "live"];
@@ -697,6 +714,24 @@ export const dayWords = (d) => (isDay(d) ? `${WEEKDAY[new Date(d + "T12:00:00Z")
 /* a song's name compared without accents, case, spaces or signs: "Me Dá Seu Body" = "me da seu body" = "medaseubody" */
 export const songKey = (s) => String(s == null ? "" : s).normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]/g, "");
 export const releaseId = (title) => songKey(title).slice(0, 40);
+/* Is it the same song? (fixed 11 Nov 2026, review) A title with no Latin letter or digit ("Ночь", an emoji)
+   has an EMPTY songKey, and "" === "" made every such title the same song. Those are compared by their
+   own words instead (lower case, spaces trimmed); an empty title is never the same as anything. */
+const ownWords = (s) => String(s == null ? "" : s).normalize("NFC").trim().toLowerCase().replace(/\s+/g, " ");
+export function sameSong(a, b) {
+  const ka = songKey(a), kb = songKey(b);
+  if (ka || kb) return ka === kb;
+  return ownWords(a) !== "" && ownWords(a) === ownWords(b);
+}
+/* the part of a sighting's key that names the song: its songKey, or for a title with no Latin letter or
+   digit a short hash of its own words (ASCII, so two such songs never share one key or one page id) */
+function titlePart(title) {
+  const k = songKey(title);
+  if (k) return k;
+  let h = 2166136261;
+  for (const ch of ownWords(title)) { h ^= ch.codePointAt(0); h = Math.imul(h, 16777619) >>> 0; }
+  return "t" + h.toString(36);
+}
 const filled = (v) => v != null && String(v).trim() !== "";
 const lukeOrClaude = (by, what) => { if (by !== "Luke" && by !== "Claude") fail(`Only Luke or Claude can ${what}. If something about this release needs changing, send Luke a message.`, "not_allowed"); };
 const joinWords = (list) => (list.length < 2 ? list.join("") : list.slice(0, -1).join(", ") + " and " + list[list.length - 1]);
@@ -782,15 +817,29 @@ function freeWaiting(r, key, today) {
 }
 /* label release or not, after a change of the pack on a release already sent: the upload and the
    approval follow the deal (only while nobody has started them) */
-function applyDeal(r) {
+function applyDeal(r, today) {
   if (r.status !== "scheduled" || r.alreadyOut) return [];
   const lab = labelDelivers(r.pack), changed = [];
   for (const s of r.steps || []) {
     if (s.key !== "upload" && s.key !== "approved") continue;
     if (lab && s.status === "todo") { s.status = "skipped"; s.note = LABEL_NOTE; changed.push(s.label); }
-    else if (!lab && s.status === "skipped" && s.note === LABEL_NOTE) { s.status = "todo"; s.note = ""; changed.push(s.label); }
+    /* ours again: never born late (review, 11 Nov 2026), like a release sent late */
+    else if (!lab && s.status === "skipped" && s.note === LABEL_NOTE) { s.status = "todo"; s.note = ""; if (today && s.due && s.due < today) s.due = today; changed.push(s.label); }
   }
   return changed;
+}
+/* What Drop is told when the deal changes after the song went to the team (review, 11 Nov 2026: his steps
+   moved without a word, and an upload he had started stayed "working" on a song the label delivers).
+   "" when nothing of his changed. */
+function dealNews(r, by, moved) {
+  const up = (r.steps || []).find((s) => s.key === "upload");
+  const started = up && (up.status === "working" || up.status === "done") ? up.status : "";
+  const lab = labelDelivers(r.pack);
+  if (!moved.length && !(lab && started)) return "";
+  const head = `${by} changed whose release ${r.title} is (out ${dayWords(r.date)}): `;
+  if (!lab) return head + `we deliver it now, through ${distributorOf(r.pack)}. ${joinWords(moved)} ${moved.length === 1 ? "is" : "are"} yours again: the dates are in my_day.`;
+  return head + `${r.pack.label || "the label"} delivers it to the stores, not us.` + (moved.length ? ` ${joinWords(moved)} ${moved.length === 1 ? "is" : "are"} skipped.` : "") +
+    (started ? ` "${up.label}" is already ${started}: stop, and tell Luke on the desk whether it went to RouteNote, so the song is not delivered twice.` : " Do not upload it to RouteNote.");
 }
 
 /* A song recorded only for its deal (already out): it needs the deal, not the files. A draft whose day
@@ -817,6 +866,7 @@ export function releaseView(r, today, o = {}) {
   for (const f of PACK_FIELDS) if (!out && !requiredNow(f, pack) && f.neededBy && !filled(pack[f.key])) {
     const st = steps.find((x) => x.key === f.neededBy);
     if (st && st.status === "skipped") continue; /* the label delivers it: nothing of ours needs the field */
+    if (!st && labelDelivers(pack) && (f.neededBy === "upload" || f.neededBy === "approved")) continue; /* nor in a draft */
     missing.push({ key: f.key, label: f.label, short: f.short, required: false, neededBy: f.neededBy, step: STEP[f.neededBy].label, owner: STEP[f.neededBy].owner, due: dueOf(f.neededBy) });
   }
   /* "Pack: 14 of 17 filled": the fields Luke fills about the song; the team's "later" fields and the
@@ -827,14 +877,14 @@ export function releaseView(r, today, o = {}) {
   const next = open.find((s) => !s.waiting) || open[0] || null;
   const released = r.status === "scheduled" && !!date && date <= today;
   const v = { id: r.id, title: r.title, date, status: r.status, weekday: date ? WEEKDAY[new Date(date + "T12:00:00Z").getUTCDay()] : null, dateWords: dayWords(date),
-    daysToGo: date ? daysBetween(today, date) : null, released, tight: !!r.tight, alreadyOut: !!r.alreadyOut,
+    daysToGo: date ? daysBetween(today, date) : null, released, tight: !!r.tight, alreadyOut: !!r.alreadyOut, sentWithout: Array.isArray(r.sentWithout) ? r.sentWithout : null,
     createdAt: r.createdAt || null, createdBy: r.createdBy || "", updatedAt: r.updatedAt || null, sentAt: r.sentAt || null,
     pack: Object.fromEntries(PACK_FIELDS.filter((f) => filled(pack[f.key])).map((f) => [f.key, pack[f.key]])),
     deal: dealOf(r),
     packFilled: own.filter((f) => filled(pack[f.key])).length, packTotal: own.length, missing, steps,
     counts: { done: steps.filter((s) => s.status === "done").length, total: steps.filter((s) => s.status !== "skipped").length, late: steps.filter((s) => s.late).length,
       blocked: steps.filter((s) => s.status === "blocked").length, skipped: steps.filter((s) => s.status === "skipped").length, waiting: steps.filter((s) => s.waiting).length },
-    next: next ? { key: next.key, label: next.label, owner: next.owner, due: next.due, dueIn: next.dueIn, status: next.status, late: next.late, waiting: next.waiting } : null,
+    next: next ? { key: next.key, label: next.label, owner: next.owner, due: next.due, dueIn: next.dueIn, status: next.status, late: next.late, waiting: next.waiting, note: next.note || "" } : null,
     log: (r.log || []).slice().reverse() };
   v.warnings = releaseWarnings(v, o.sightings || null, today);
   v.where = whereWords(v, today);
@@ -858,15 +908,31 @@ export function whereWords(v, today) {
   if (v.released) return (v.daysToGo === 0 ? "Out today" : `Out since ${v.dateWords}`) + " · " + n;
   const x = v.next;
   if (!x) return `All ${v.counts.total} steps done · out ${v.dateWords}`;
-  return `${n} · next: ${x.label}, ${x.owner}, ` + (x.waiting ? "waiting: not in Spotify for Artists yet" : x.late ? `late since ${dayWords(x.due)}` : dayWords(x.due) || "no date yet");
+  /* blocked before late (11 Nov 2026, review): "late" pointed at Drop when the step waits on Luke's cover */
+  return `${n} · next: ${x.label}, ${x.owner}, ` + (x.waiting ? "waiting: not in Spotify for Artists yet" : x.status === "blocked" ? "blocked" + (x.note ? `: ${x.note.replace(/\s+/g, " ").slice(0, 60)}` : "") : x.late ? `late since ${dayWords(x.due)}` : dayWords(x.due) || "no date yet");
 }
 
 /* ---------- warnings on a release (V5, 11 Nov 2026): a fact with a consequence, most urgent first ----------
    Each item { kind, text }; releaseWarnings() gives the sentences. kinds: today | blocked | late |
-   pitch | spotify | soon | without | split | tight. sightings: the latest Spotify for Artists report
+   twice | pitch | spotify | date | soon | without | unrecorded | split | tight. sightings: the latest Spotify for Artists report
    (sightingsView or the stored document), or null. */
 const plural = (n, w) => `${n} ${w}${n === 1 ? "" : "s"}`;
-const inReport = (sightings, title) => { const list = sightings && (sightings.items || sightings.list); return !!list && list.some((x) => songKey(x.title) === songKey(title)); };
+/* sightings: the stored report (list + answers) or sightingsView (items, each with its match and answer) */
+const reportItems = (s) => (s && Array.isArray(s.items || s.list) ? s.items || s.list : null);
+const answerOf = (s, x) => (x.answer && typeof x.answer === "object" ? x.answer : ((s && s.answers) || {})[x.key]) || null;
+/* does the report show THIS release (the same song within a day of its date, or the one Luke named)? */
+const inReport = (sightings, v) => { const list = reportItems(sightings); return !!list && list.some((x) => (x.match != null ? x.match === v.id : sightMatch(x, [v], sightings.answers) === v)); };
+/* the day Spotify for Artists shows for this release when it is not the pack's day: the song Luke said
+   it is, or the same title nobody has answered for and nothing else of that name within a day */
+function otherDate(sightings, v) {
+  const list = reportItems(sightings);
+  if (!list || !(v.daysToGo > 0)) return null;
+  const named = list.find((x) => { const a = answerOf(sightings, x); return a && a.answer === "it" && a.id === v.id; });
+  if (named) return nearDay(named.date, v.date) ? null : named.date;
+  if (list.some((x) => sameSong(x.title, v.title) && nearDay(x.date, v.date))) return null;
+  const x = list.find((y) => sameSong(y.title, v.title) && !answerOf(sightings, y));
+  return x ? x.date : null;
+}
 export function warningsOf(v, sightings, today) {
   if (!v || v.status !== "scheduled" || v.alreadyOut || !v.date) return [];
   const out = [];
@@ -876,7 +942,10 @@ export function warningsOf(v, sightings, today) {
   if (days === 0 && live && !finished(live)) out.push({ kind: "today", rank: 0, text: "Out today and the Spotify link is not on the song page yet" });
   for (const s of v.steps) if (s.status === "blocked") out.push({ kind: "blocked", rank: 1, text: `${s.label} is blocked (${s.owner})` + (s.note ? `: ${s.note.replace(/\s+/g, " ").slice(0, 160)}` : "") });
   const pitchTooLate = pitch && !finished(pitch) && days > 0 && days < 7;
-  const spotMissing = spot && !finished(spot) && days > 0 && days <= 14 && !inReport(sightings, v.title);
+  /* only while the pitch is still to go (11 Nov 2026, review): a pitch already sent (an older release
+     moved, or marked by Luke) can't be held up by it */
+  const other = otherDate(sightings, v);
+  const spotMissing = spot && !finished(spot) && pitch && !finished(pitch) && days > 0 && days <= 14 && !inReport(sightings, v) && !other;
   for (const s of v.steps.filter((x) => x.late && x.status !== "blocked").sort((a, b) => a.dueIn - b.dueIn)) {
     if (s.key === "live" && days === 0) continue; /* said above */
     if (s.key === "pitch" && pitchTooLate) continue; /* said below, with what it means */
@@ -884,7 +953,10 @@ export function warningsOf(v, sightings, today) {
     out.push({ kind: "late", rank: 2, text: `${s.label} is ${plural(-s.dueIn, "day")} late (${s.owner})` });
   }
   if (pitchTooLate) out.push({ kind: "pitch", rank: 3, text: "Too late for a Spotify pitch: Spotify needs it 7 days before release" });
-  if (spotMissing) out.push({ kind: "spotify", rank: 3, text: `Not showing in Spotify for Artists yet, ${plural(days, "day")} before release: the pitch cannot be sent until it does` });
+  /* with fewer than 7 days to go the pitch is too late anyway (said above): no "until it does" */
+  if (spotMissing) out.push({ kind: "spotify", rank: 3, text: `Not showing in Spotify for Artists yet, ${plural(days, "day")} before release` + (pitchTooLate ? "" : ": the pitch cannot be sent until it does") });
+  /* the same song shows there on another day (11 Nov 2026, review): one of the two dates is wrong */
+  if (other) out.push({ kind: "date", rank: 3, text: `Spotify for Artists shows ${dayWords(other)}, the pack says ${dayWords(v.date)}` });
   /* a field a step needs within 3 days (not for a step that is waiting: the Spotify line says why) */
   const soon = {};
   for (const m of v.missing) {
@@ -897,8 +969,16 @@ export function warningsOf(v, sightings, today) {
     out.push({ kind: "soon", rank: 4, text: `${words} ${f.length > 1 || /s$/i.test(f[0]) ? "are" : "is"} missing and ${g.s.label} ${g.s.dueIn < 0 ? "was" : "is"} due ${dayWords(g.s.due)}` });
   }
   const isLabel = v.pack && v.pack.kind === LABEL_KIND;
-  const without = v.missing.filter((m) => m.required && m.key !== "date" && !(isLabel && m.key === "split"));
-  if (without.length) out.push({ kind: "without", rank: 5, text: `Sent without ${joinWords(without.map((m) => m.short))}: fill ${without.length === 1 ? "it" : "them"} in on the pack` });
+  /* "Sent without" only for what "send anyway" really left out (sentWithout, 11 Nov 2026, review). A release
+     sent before whose release it is was asked has no record of it: said as such, and kept out of the
+     site's check (it was never sent without anything). */
+  if (Array.isArray(v.sentWithout)) {
+    const without = v.missing.filter((m) => m.required && v.sentWithout.includes(m.key) && !(isLabel && m.key === "split"));
+    if (without.length) out.push({ kind: "without", rank: 5, text: `Sent without ${joinWords(without.map((m) => m.short))}: fill ${without.length === 1 ? "it" : "them"} in under Edit the details` });
+  } else if (!(v.pack && v.pack.kind)) out.push({ kind: "unrecorded", rank: 5, text: "Not recorded yet: self-release or label" });
+  /* a label release the label delivers, with our upload started or done: the song could reach the stores twice */
+  const up = st("upload");
+  if (v.pack && labelDelivers(v.pack) && up && (up.status === "working" || up.status === "done")) out.push({ kind: "twice", rank: 1, text: `A label release, but ${up.label} is ${up.status} (${up.owner}): one song must not be delivered twice` });
   if (isLabel && !filled(v.pack.split)) out.push({ kind: "split", rank: 5, text: `A label release with no split recorded: write down who owns what${v.pack.label ? ` (us and ${v.pack.label})` : ""}` });
   if (v.tight && v.sentAt && !v.released) {
     const sentDays = daysBetween(spDay(Date.parse(v.sentAt)), v.date);
@@ -948,7 +1028,9 @@ export async function saveRelease(store, now, roster, a) {
   /* a day in the past is allowed since 11 Nov 2026 (V2): a song that is already out is recorded for its
      deal; sending it creates no dated steps */
   const pastNote = (d) => (d && d < today ? " (already out)" : "");
-  return mutate(store, REL_KEY, [], (list) => {
+  let news = ""; /* what Drop is told when the deal changes a release already sent (set inside the write) */
+  const saved = await mutate(store, REL_KEY, [], (list) => {
+    news = "";
     if (id) {
       const r = list.find((x) => x.id === id);
       if (!r) fail(`There is no release with the id "${id}".`);
@@ -970,10 +1052,11 @@ export async function saveRelease(store, now, roster, a) {
       const changed = Object.keys(values).filter((k) => (r.pack[k] || "") !== values[k]);
       for (const k of changed) { if (values[k]) r.pack[k] = values[k]; else delete r.pack[k]; }
       if (changed.length) changes.push(`changed ${joinWords(changed.map((k) => FIELD[k].short))}`);
-      /* the deal changed on a release already sent: the upload and the approval follow it */
+      /* the deal changed on a release already sent: the upload and the approval follow it, and Drop is told */
       if (changed.some((k) => k === "kind" || k === "distributor")) {
-        const moved = applyDeal(r);
+        const moved = applyDeal(r, today);
         if (moved.length) changes.push(`${labelDelivers(r.pack) ? "skipped" : "reopened"} ${joinWords(moved)} (${labelDelivers(r.pack) ? "the label delivers it" : "we deliver it"})`);
+        news = dealNews(r, by, moved);
       }
       if (!changes.length) return { skip: true, value: r };
       r.updatedAt = at;
@@ -995,10 +1078,13 @@ export async function saveRelease(store, now, roster, a) {
       : "Ask Claude to remove old ones: a cancelled release, or one that came out more than 90 days ago, can be removed."), "limit");
     const r = { id: nid, title, date, status: "draft", createdAt: at, createdBy: by, updatedAt: at, sentAt: null, tight: false,
       pack: Object.fromEntries(Object.entries(values).filter(([, v]) => v)), steps: [], log: [] };
-    logIt(r, at, by, `${by} started the pack` + (date ? ` for ${dayWords(date)}${pastNote(date)}` : "") + (a.from ? ` (${clean(a.from, 80)})` : ""));
+    logIt(r, at, by, `${by} started the song` + (date ? ` for ${dayWords(date)}${pastNote(date)}` : "") + (a.from ? ` (${clean(a.from, 80)})` : ""));
     list.unshift(r);
     return { value: r };
   });
+  /* ONE message to the owner of the upload; a full board must not undo the change already saved */
+  if (news) try { await sendMessage(store, now, roster, { from: "HQ", to: STEP.upload.owner, text: news, needs: "action" }); } catch {}
+  return saved;
 }
 
 /* Luke or Claude: the pack goes to the team. The steps get their dates and ONE note goes to all.
@@ -1025,11 +1111,13 @@ export async function sendRelease(store, now, roster, a) {
     }
     const alreadyOut = r.date < today;
     const s = scheduleSteps(r.date, today, { alreadyOut, labelDelivers: labelDelivers(r.pack) });
-    Object.assign(r, { status: "scheduled", sentAt: at, updatedAt: at, steps: s.steps, tight: s.tight, ...(alreadyOut ? { alreadyOut: true } : {}) });
+    /* sentWithout (11 Nov 2026, review): what "send anyway" left out, kept on the release. Only this makes the
+       "Sent without …" warning: a release sent before a field was required was never sent without it. */
+    Object.assign(r, { status: "scheduled", sentAt: at, updatedAt: at, steps: s.steps, tight: s.tight, sentWithout: miss.map((m) => m.key), ...(alreadyOut ? { alreadyOut: true } : {}) });
     /* Atlas's last report already shows it (a song Luke put in the pipeline from that report): its
        Spotify step is done from the start, in Atlas's name, and the pitch is open */
-    const shown = !alreadyOut && seenIn && seenIn.list.find((x) => songKey(x.title) === songKey(r.title));
-    if (shown) { const st = r.steps.find((x) => x.key === "spotify"); Object.assign(st, { status: "done", note: `Showing in Spotify for Artists since ${dayWords(shown.firstSeen)}`, at, by: seenIn.by }); freeWaiting(r, "spotify", today); }
+    const shown = !alreadyOut && seenIn && seenIn.list.find((x) => sightMatch(x, [r], seenIn.answers) === r);
+    if (shown) { const st = r.steps.find((x) => x.key === "spotify"); Object.assign(st, { status: "done", note: spotNote(shown, r), at, by: seenIn.by }); freeWaiting(r, "spotify", today); }
     const without = miss.length ? ` without ${joinWords(miss.map((m) => m.short))} (sent anyway)` : "";
     logIt(r, at, by, alreadyOut ? `${by} recorded it as already out (${dayWords(r.date)}): no steps` + without
       : `${by} sent it to the team for ${dayWords(r.date)}` + (s.tight ? ` (${daysBetween(today, r.date)} days before release: the early steps are due today)` : "") + without);
@@ -1065,8 +1153,10 @@ export async function moveRelease(store, now, roster, a) {
       /* a release sent before the Spotify step existed gets it now, when Luke moves it (11 Nov 2026) */
       if (!r.steps.some((x) => x.key === "spotify")) {
         const n = s.steps.find((x) => x.key === "spotify"), at2 = r.steps.findIndex((x) => x.key === "pitch");
-        r.steps.splice(at2 < 0 ? r.steps.length : at2, 0, { ...n });
-        added = true;
+        /* its pitch already went out (review, 11 Nov 2026): the step is history, not a new job for Atlas */
+        const pitched = at2 >= 0 && finished(r.steps[at2]);
+        r.steps.splice(at2 < 0 ? r.steps.length : at2, 0, pitched ? { ...n, status: "skipped", note: PITCHED_NOTE, at, by } : { ...n });
+        added = pitched ? "skipped" : true;
       }
       for (const st of r.steps) if (!finished(st)) { const n = s.steps.find((x) => x.key === st.key); if (n) st.due = n.due; }
       r.tight = s.tight; /* moved months out, every open step has its full time again: no longer "sent late" */
@@ -1074,7 +1164,7 @@ export async function moveRelease(store, now, roster, a) {
       doneOutside = r.steps.filter((st) => st.status === "done" && DATED_OUTSIDE.includes(st.key)).map((st) => `${st.label} (${st.owner})`);
     }
     r.date = date; r.updatedAt = at;
-    logIt(r, at, by, (from ? `${by} moved the date from ${dayWords(from)} to ${dayWords(date)}` : `${by} set the release day to ${dayWords(date)}`) + (added ? "; added the step \"Showing as upcoming in Spotify for Artists\"" : ""));
+    logIt(r, at, by, (from ? `${by} moved the date from ${dayWords(from)} to ${dayWords(date)}` : `${by} set the release day to ${dayWords(date)}`) + (added ? "; added the step \"Showing as upcoming in Spotify for Artists\"" + (added === "skipped" ? " (skipped: the pitch was already sent)" : "") : ""));
     return { value: { release: r, moved: true, from, doneOutside } };
   });
   if (!out.moved || out.release.status !== "scheduled" || out.release.alreadyOut) return { ...out, told: null };
@@ -1202,7 +1292,39 @@ export const SIGHT_ANSWERS = [
   { answer: "notmine", text: "Not mine, or on the wrong account" },
   { answer: "mistake", text: "A mistake: it should not be there" },
 ];
-export const sightKey = (title, date) => songKey(title) + "|" + date;
+export const sightKey = (title, date) => titlePart(title) + "|" + date;
+/* Which desk release IS this song in Spotify for Artists? (fixed 11 Nov 2026, review: the title alone
+   matched another artist's "Love You" to our Love You, out since March, and a pack dated 11 Dec to a store
+   date of 4 Dec.) The same song (sameSong), not cancelled, not a song recorded after it came out, and
+   its release day within one day of the date shown there (a draft with no day yet matches on its
+   title). Or the release Luke named for it ("It is <song>", answers[key].id). */
+const nearDay = (a, b) => isDay(a) && isDay(b) && Math.abs(daysBetween(a, b)) <= 1;
+export function sightMatch(item, releases, answers) {
+  const live = (releases || []).filter((r) => r && r.status !== "cancelled" && !r.alreadyOut);
+  const ans = answers && answers[item.key];
+  if (ans && ans.answer === "it" && ans.id) { const named = live.find((r) => r.id === ans.id); if (named) return named; }
+  return live.find((r) => sameSong(r.title, item.title) && (r.date ? nearDay(r.date, item.date) : r.status === "draft")) || null;
+}
+/* The release Luke may mean when a song there has no match (V4 review, 11 Nov 2026): the same song under
+   a longer or shorter title ("Me Dá Seu Body (feat. Sample)", "(Extended Mix)"), the same title on another
+   day, or failing those the ONE live release out that very day. Offered as a fifth answer, "It is <song>".
+   A song already out is never offered (another artist's "Love You" is not our Love You from March). */
+export function sightNear(item, releases, today) {
+  const live = (releases || []).filter((r) => r && r.status !== "cancelled" && !r.alreadyOut && !(r.status === "scheduled" && isDay(r.date) && r.date < today));
+  const k = songKey(item.title);
+  const byName = live.find((r) => { const rk = songKey(r.title); return !!k && !!rk && rk.length >= 3 && (k.startsWith(rk) || rk.startsWith(k)); }) ||
+    live.find((r) => sameSong(r.title, item.title));
+  if (byName) return byName;
+  const sameDay = live.filter((r) => r.date === item.date);
+  return sameDay.length === 1 ? sameDay[0] : null;
+}
+/* a claim on the message to Nova ("sending:<when>"), so two quick taps send it once; older than a minute
+   = that send failed and may be tried again */
+const CLAIM = "sending:";
+const claimFresh = (msg, now) => typeof msg === "string" && msg.startsWith(CLAIM) && now - Date.parse(msg.slice(CLAIM.length)) < 60000;
+const toldId = (msg) => (typeof msg === "string" && msg && !msg.startsWith(CLAIM) ? msg : null);
+/* the note on a spotify step it marked done; the title as shown there when it differs from the pack */
+const spotNote = (seen, r) => `Showing in Spotify for Artists${sameSong(seen.title, r.title) ? "" : ` as "${seen.title}"`} since ${dayWords(seen.firstSeen)}`;
 export async function getSightings(store) { const { data } = await readDoc(store, SIGHT_KEY, null); return data && Array.isArray(data.list) ? data : null; }
 
 export async function reportSightings(store, now, roster, a) {
@@ -1232,16 +1354,17 @@ export async function reportSightings(store, now, roster, a) {
   });
   /* a song in the pipeline that now shows there: its "spotify" step is done, once, by the reporter */
   const completed = [];
-  const keys = new Set(doc.list.map((x) => songKey(x.title)));
-  if (keys.size) {
+  if (doc.list.length) {
     const got = await mutate(store, REL_KEY, [], (list) => {
       const done = [];
-      for (const r of list) {
-        if (r.status !== "scheduled" || r.alreadyOut || !keys.has(songKey(r.title))) continue;
+      /* each song shown there finds ITS release: the same song within a day of its date, or the one
+         Luke named for it (sightMatch); never another song of the same name on another day */
+      for (const seen of doc.list) {
+        const r = sightMatch(seen, list, doc.answers);
+        if (!r || r.status !== "scheduled" || done.some((x) => x.id === r.id)) continue;
         const st = (r.steps || []).find((s) => s.key === "spotify");
         if (!st || finished(st)) continue;
-        const seen = doc.list.find((x) => songKey(x.title) === songKey(r.title));
-        Object.assign(st, { status: "done", note: `Showing in Spotify for Artists since ${dayWords(seen.firstSeen)}`, at, by });
+        Object.assign(st, { status: "done", note: spotNote(seen, r), at, by });
         freeWaiting(r, "spotify", today);
         r.updatedAt = at;
         logIt(r, at, by, `${by}: ${st.label} — done (${st.note})`);
@@ -1259,23 +1382,30 @@ export async function reportSightings(store, now, roster, a) {
 
 /* the report as /hq and the bots read it. releases: the desk's releases (stored or releaseView). */
 export function sightingsView(doc, releases, today, now = null) {
-  const base = { at: null, sp: null, by: null, note: "", never: true, stale: false, items: [], unknown: 0, waitingOnLuke: 0, choices: SIGHT_ANSWERS };
+  const base = { at: null, sp: null, by: null, note: "", never: true, stale: false, items: [], unknown: 0, retry: 0, waitingOnLuke: 0, choices: SIGHT_ANSWERS };
   if (!doc || !Array.isArray(doc.list)) return base;
   const live = (releases || []).filter((r) => r && r.status !== "cancelled");
   const answers = doc.answers || {};
   const stale = now != null ? now - Date.parse(doc.at) > 48 * 3600000 : daysBetween(String(doc.sp || "").slice(0, 10) || today, today) > 2;
+  const clock = now != null ? now : Date.parse(today + "T15:00:00Z");
   const items = doc.list.map((x) => {
-    const hit = live.find((r) => songKey(r.title) === songKey(x.title));
+    const hit = sightMatch(x, live, answers);
     const ans = answers[x.key] || null;
-    const state = hit ? "pipeline" : ans ? "answered" : "unknown";
+    /* "Not mine" / "a mistake" whose message to Nova never went (a busy desk, a limit): Luke's answer is
+       kept, and the page offers "Send it to Nova again" (state retry) instead of a dead end */
+    const tells = !!ans && (ans.answer === "notmine" || ans.answer === "mistake");
+    const retry = tells && !toldId(ans.msg) && !claimFresh(ans.msg, clock);
+    const state = hit ? "pipeline" : retry ? "retry" : ans ? "answered" : "unknown";
     const choice = ans ? SIGHT_ANSWERS.find((c) => c.answer === ans.answer) : null;
+    const near = state === "unknown" ? sightNear(x, live, today) : null;
     return { key: x.key, title: x.title, date: x.date, dateWords: dayWords(x.date), shownAs: x.shownAs || "", firstSeen: x.firstSeen || null,
       match: hit ? hit.id : null, matchStatus: hit ? hit.status : null, state,
       question: state === "unknown" ? `${x.title} is upcoming in Spotify for Artists for ${dayWords(x.date)}, and it has not gone through the pipeline. What is it?` : null,
-      answer: ans ? { answer: ans.answer, text: choice ? choice.text : ans.answer, label: ans.label || "", note: ans.note || "", by: ans.by, at: ans.at, day: spDay(Date.parse(ans.at)), told: ans.msg || null } : null };
+      ...(near ? { near: { id: near.id, title: near.title, date: near.date || null, dateWords: dayWords(near.date) } } : {}),
+      answer: ans ? { answer: ans.answer, text: choice ? choice.text : ans.answer === "it" ? `It is ${hit ? hit.title : "a song in the pipeline"}` : ans.answer, label: ans.label || "", note: ans.note || "", by: ans.by, at: ans.at, day: spDay(Date.parse(ans.at)), told: toldId(ans.msg), ...(ans.id ? { id: ans.id } : {}) } : null };
   });
-  const unknown = items.filter((x) => x.state === "unknown").length;
-  return { ...base, at: doc.at, sp: doc.sp, by: doc.by, note: doc.note || "", never: false, stale, items, unknown, waitingOnLuke: unknown };
+  const unknown = items.filter((x) => x.state === "unknown").length, retry = items.filter((x) => x.state === "retry").length;
+  return { ...base, at: doc.at, sp: doc.sp, by: doc.by, note: doc.note || "", never: false, stale, items, unknown, retry, waitingOnLuke: unknown + retry };
 }
 
 /* Luke answers "what is it?" for a song Spotify for Artists shows that the pipeline doesn't have.
@@ -1285,38 +1415,61 @@ export async function answerSighting(store, now, roster, a) {
   const by = whoIs(a.by, roster, { people: true });
   if (by !== "Luke") fail("Only Luke answers what a song in Spotify for Artists is.", "not_allowed");
   const answer = low(a.answer);
-  if (!SIGHT_ANSWERS.some((c) => c.answer === answer)) fail(`answer must be one of: ${SIGHT_ANSWERS.map((c) => c.answer).join(", ")}.`);
+  /* "it" (11 Nov 2026, review): "It is <a song already in the pipeline>", shown under another title */
+  if (answer !== "it" && !SIGHT_ANSWERS.some((c) => c.answer === answer)) fail(`answer must be one of: ${SIGHT_ANSWERS.map((c) => c.answer).join(", ")}, or it (with the id of the song in the pipeline).`);
   const label = clean(a.label, 120), note = clean(a.note, 240);
   if (answer === "label" && label.length < 2) fail("Write the label's name.");
   noSecrets(label, note);
-  const key = clean(a.key, 200), at = new Date(now).toISOString();
+  const key = clean(a.key, 200), at = new Date(now).toISOString(), today = spDay(now);
   const doc = await getSightings(store);
   const item = doc && doc.list.find((x) => x.key === key);
   if (!item) fail("That song is not in the latest Spotify for Artists report any more. Refresh the page.", "not_found");
   let release = null;
+  if (answer === "it") {
+    const id = clean(a.id, 60), r = (await listReleases(store)).find((x) => x.id === id);
+    if (!r || r.status === "cancelled" || r.alreadyOut) fail("That song is not in the pipeline any more. Refresh the page.", "not_found");
+    /* its Spotify step is done now, in Luke's name, with the title as it shows there; the pitch opens */
+    release = await mutate(store, REL_KEY, [], (list) => {
+      const x = list.find((y) => y.id === id);
+      const st = x && x.status === "scheduled" ? (x.steps || []).find((s) => s.key === "spotify") : null;
+      if (!st || finished(st)) return { skip: true, value: x || r };
+      Object.assign(st, { status: "done", note: spotNote(item, x), at, by });
+      freeWaiting(x, "spotify", today);
+      x.updatedAt = at;
+      logIt(x, at, by, `${by}: ${st.label} — done (${st.note})`);
+      return { value: x };
+    });
+  }
   if (answer === "self" || answer === "label") {
     release = await saveRelease(store, now, roster, { by, title: item.title, date: item.date, pack: { kind: answer === "label" ? LABEL_KIND : SELF_KIND, ...(answer === "label" ? { label } : {}) }, from: "seen in Spotify for Artists" });
   }
-  const prev = await mutate(store, SIGHT_KEY, {}, (d) => {
+  const tells = answer === "notmine" || answer === "mistake";
+  /* the message to Nova is CLAIMED inside the same write that records the answer (fixed 11 Nov 2026,
+     review): two quick taps, or a retry from a slow phone, both read the answer before either had sent,
+     and Nova got the message twice. Only the call that set the claim sends. */
+  const rec = await mutate(store, SIGHT_KEY, {}, (d) => {
     if (!Array.isArray(d.list)) fail("There is no Spotify for Artists report on the desk.", "not_found");
     d.answers = d.answers || {};
     const old = d.answers[key] || null;
-    const same = old && old.answer === answer && (old.label || "") === label;
-    d.answers[key] = { answer, label, note: note || (same ? old.note || "" : ""), by, at: same ? old.at : at, msg: same ? old.msg || null : null };
-    return { value: old };
+    const same = old && old.answer === answer && (old.label || "") === label && (old.id || "") === (release && answer === "it" ? release.id : "");
+    let msg = same ? old.msg || null : null, mine = false;
+    if (tells && !toldId(msg) && !claimFresh(msg, now)) { msg = CLAIM + at; mine = true; }
+    d.answers[key] = { answer, label, ...(answer === "it" ? { id: release.id } : {}), note: note || (same ? old.note || "" : ""), by, at: same ? old.at : at, msg };
+    return { value: { mine, msg } };
   });
-  let told = prev && prev.answer === answer && (prev.label || "") === label ? prev.msg || null : null;
-  if ((answer === "notmine" || answer === "mistake") && !told) {
+  let told = toldId(rec.msg);
+  if (rec.mine) {
     const says = answer === "notmine" ? "it is not his, or it is on the wrong account" : "it is a mistake and should not be there";
     try {
       told = (await sendMessage(store, now, roster, { from: "Luke", to: "Nova", needs: "action",
         text: `'${item.title}' is upcoming in our Spotify for Artists for ${dayWords(item.date)} (shown as: ${item.shownAs || "not given"}). Luke says: ${says}.` + (note ? ` Luke's note: ${note}.` : "") +
           " Find out who delivered it and from which account, say what has to be done, and report back on the desk." })).message.id;
-    } catch { told = null; } /* the answer is recorded; the page says the message could not go, and answering again sends it */
-    if (told) try { await mutate(store, SIGHT_KEY, {}, (d) => { if (!d.answers || !d.answers[key]) return { skip: true, value: null }; d.answers[key].msg = told; return { value: null }; }); } catch {}
+    } catch { told = null; } /* the answer is kept; the claim is let go below, so "Send it to Nova again" on the page sends it */
+    try { await mutate(store, SIGHT_KEY, {}, (d) => { const x = d.answers && d.answers[key]; if (!x || x.msg !== rec.msg) return { skip: true, value: null }; x.msg = told; return { value: null }; }); } catch {}
   }
+  const sending = tells && !rec.mine && claimFresh(rec.msg, now); /* another tap is sending it right now */
   const fresh = await getSightings(store);
-  return { item, answer, release, told, sightings: sightingsView(fresh, await listReleases(store), spDay(now), now) };
+  return { item, answer, release, told, sending, sightings: sightingsView(fresh, await listReleases(store), spDay(now), now) };
 }
 
 /* ---------- the whole desk in one answer (for /hq and for the bots' tools) ---------- */
@@ -1408,7 +1561,7 @@ export function slimRelease(v) {
   return { ...v, pack, lyricsChars: lyrics ? String(lyrics).length : 0, log: [], logCount: (v.log || []).length, slim: true };
 }
 /* what the page needs to build the form and the pipeline without hard-coding either */
-export const packFieldsOut = () => PACK_FIELDS.map((f) => ({ key: f.key, label: f.label, short: f.short, kind: f.kind, required: f.required, requiredWhen: f.requiredWhen, neededBy: f.neededBy, choices: f.choices, hint: f.hint, fill: f.fill, group: f.group, max: f.max }));
+export const packFieldsOut = () => PACK_FIELDS.map((f) => ({ key: f.key, label: f.label, short: f.short, kind: f.kind, required: f.required, requiredWhen: f.requiredWhen, showWhen: f.showWhen, neededBy: f.neededBy, choices: f.choices, hint: f.hint, fill: f.fill, group: f.group, max: f.max }));
 export const releaseStepsOut = () => RELEASE_STEPS.map((s) => ({ key: s.key, label: s.label, owner: s.owner, days: s.days, ...(s.after ? { after: s.after } : {}) }));
 
 export function board(desk, now, hq) {
@@ -1479,7 +1632,7 @@ export function checkReport({ desk, hq, hqState, now }) {
   for (const v of (desk.releases || []).map((r) => releaseView(r, today, { sightings })).filter(releaseActive)) {
     for (const st of v.steps) if (st.status === "blocked") problems.push(`${v.title}: ${st.label} is blocked (${st.owner})` + (st.note ? `: ${st.note.replace(/\s+/g, " ").slice(0, 120)}` : ""));
     /* the warnings that say what lateness MEANS (V5): said instead of the plain late line for that step */
-    const warn = warningsOf(v, sightings, today).filter((w) => ["today", "pitch", "spotify", "without", "split"].includes(w.kind));
+    const warn = warningsOf(v, sightings, today).filter((w) => ["today", "twice", "pitch", "spotify", "date", "without", "split"].includes(w.kind));
     const said = new Set([...(warn.some((w) => w.kind === "pitch") ? ["pitch"] : []), ...(warn.some((w) => w.kind === "spotify") ? ["spotify"] : [])]);
     const late = v.steps.filter((st) => st.late && st.status !== "blocked" && !said.has(st.key));
     if (late.length === 1) problems.push(`${v.title}: ${late[0].label} is late (${late[0].owner}, due ${dayWords(late[0].due)})`);

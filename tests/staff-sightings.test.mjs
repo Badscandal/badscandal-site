@@ -92,7 +92,12 @@ test("send anyway: Luke or Claude only; what is missing stays as a warning and t
   const out = await S.sendRelease(d, NOW, R, { by: "Luke", id: r.id, anyway: true });
   assert.deepEqual([out.release.status, out.without], ["scheduled", ["copyright"]]);
   assert.match(out.release.log.at(-1).what, /^Luke sent it to the team for Fri 11 Dec without Copyright line \(sent anyway\)$/);
-  assert.ok(S.releaseView(out.release, TODAY).warnings.includes("Sent without Copyright line: fill it in on the pack"));
+  assert.deepEqual(out.release.sentWithout, ["copyright"], "what was left out is kept on the release");
+  assert.ok(S.releaseView(out.release, TODAY).warnings.includes("Sent without Copyright line: fill it in under Edit the details"), "Luke's words, not the developer's 'pack'");
+  const rep = S.checkReport({ desk: await S.loadDesk(d, NOW), hq: null, hqState: null, now: NOW });
+  assert.ok(rep.problems.includes("Hurry: Sent without Copyright line: fill it in under Edit the details"), rep.problems.join("\n"));
+  await S.saveRelease(d, NOW + 1, R, { by: "Luke", id: r.id, pack: { copyright: "℗ 2026 Sample" } });
+  assert.deepEqual(S.releaseView((await S.listReleases(d))[0], TODAY).warnings.filter((w) => /Sent without/.test(w)), [], "filled in later: the warning goes");
   assert.match((await all(d)).find((m) => /^New release from Luke: Hurry/.test(m.text)).text, /Still missing, to be added to the pack: Copyright line\.$/);
   const noDay = await S.saveRelease(d, NOW, R, { by: "Claude", title: "No Day", pack: FULL });
   await assert.rejects(S.sendRelease(d, NOW, R, { by: "Claude", id: noDay.id, anyway: true }), (e) => /The release day can't be left out/.test(e.message) && e.anyway === false);
@@ -176,7 +181,14 @@ test("the pitch WAITS while the song is not in Spotify for Artists, and is an or
   await fails(S.setStep(d, NOW, R, { by: "Atlas", id: r.id, step: "pitch", status: "done" }), /"Spotify pitch sent" is waiting for "Showing as upcoming in Spotify for Artists" \(Atlas\)/);
   const t = await call(d, "my_day", { bot: "Atlas" });
   assert.deepEqual(t.release_steps.find((s) => s.step === "pitch").state, "waiting");
-  assert.match(t.next, /^You have 2 open release steps; the soonest is "Showing as upcoming in Spotify for Artists"/, "the waiting pitch is not what to do next");
+  /* the spotify step is done by the daily report, never by release_step (review, 11 Nov 2026) */
+  assert.match(t.next, /^Report what Spotify for Artists shows as upcoming with spotify_upcoming: the first report that lists Wait For It marks "Showing as upcoming in Spotify for Artists" done \(due Tue 10 Nov \(2026-11-10\), LATE\)\. Do not mark it with release_step\. You have 2 open release steps in all/, "the waiting pitch is not what to do next");
+  assert.equal(t.next.split("spotify_upcoming").length - 1, 1, "said once, not again as 'Every day: …'");
+  assert.equal(t.release_steps.find((s) => s.step === "spotify").how, "done by your spotify_upcoming report, not by release_step");
+  assert.equal(t.release_steps.find((s) => s.step === "pitch").waiting_for, "the song to show as upcoming in Spotify for Artists");
+  const own = (await call(d, "releases", { bot: "Atlas" })).releases[0].your_steps;
+  assert.deepEqual([own.find((s) => s.step === "pitch").waiting_for, own.find((s) => s.step === "spotify").how], ["the song to show as upcoming in Spotify for Artists", "done by your spotify_upcoming report, not by release_step"], "the same words in releases");
+  assert.match(TOOLS.find((x) => x.name === "release_step").description, /The step spotify .* is done by Atlas's spotify_upcoming report, not by this tool/);
   await S.setStep(d, NOW, R, { by: "Atlas", id: r.id, step: "spotify", status: "done" });
   v = S.releaseView((await S.listReleases(d))[0], TODAY);
   const q = v.steps.find((s) => s.key === "pitch");
@@ -294,19 +306,27 @@ test("the report: never, stale after 48 hours, and the site check says so only w
   assert.equal(S.board(await S.loadDesk(d, NOW), NOW, null).sightings.stale, true);
 });
 
-test("a sheet-only release: a late 'Spotify pitch sent' waits while the latest report doesn't show the song", () => {
+test("a sheet-only release: a late 'Spotify pitch sent' waits only while a CURRENT report doesn't show the song, and only before its day", () => {
   const rows = releasesReport([{ song: "Me Da Seu Body", release_date: "2026-11-20", "t-14 pitched": "" }], TODAY);
-  assert.equal(rows[0].steps.find((s) => s.label === "Spotify pitch sent").late, true, "the sheet alone: late");
-  const waitRow = mergeReleases(rows, [], TODAY, null)[0];
-  const p = waitRow.steps.find((s) => s.label === "Spotify pitch sent");
-  assert.deepEqual([p.late, p.waiting, p.waitingText], [false, true, "waiting: not in Spotify for Artists yet"]);
+  const pitchOf = (r) => r.steps.find((s) => s.label === "Spotify pitch sent");
+  assert.equal(pitchOf(rows[0]).late, true, "the sheet alone: late");
+  const report = (ago, list = []) => ({ at: new Date(NOW - ago).toISOString(), sp: S.spStamp(NOW - ago), by: "Atlas", list, answers: {} });
+  const waitRow = mergeReleases(rows, [], TODAY, report(3 * HOUR), NOW)[0];
+  assert.deepEqual([pitchOf(waitRow).late, pitchOf(waitRow).waiting, pitchOf(waitRow).waitingText], [false, true, "waiting: not in Spotify for Artists yet"]);
   assert.equal(waitRow.late, rows[0].late - 1);
-  const shown = { list: [{ title: "Me Dá Seu Body", date: "2026-11-20" }] };
-  assert.equal(mergeReleases(rows, [], TODAY, shown)[0].steps.find((s) => s.label === "Spotify pitch sent").late, true, "it shows there: late is late");
-  assert.equal(mergeReleases(rows, [], TODAY, undefined)[0].steps.find((s) => s.label === "Spotify pitch sent").late, true, "the desk was not read: the sheet's word stands");
+  assert.equal(pitchOf(mergeReleases(rows, [], TODAY, report(3 * HOUR, [{ title: "Me Dá Seu Body", date: "2026-11-20" }]), NOW)[0]).late, true, "it shows there: late is late");
+  assert.equal(pitchOf(mergeReleases(rows, [], TODAY, undefined, NOW)[0]).late, true, "the desk was not read: the sheet's word stands");
+  /* review, 11 Nov 2026: nobody has looked, the look is old, or the song is already out: late is late */
+  assert.equal(pitchOf(mergeReleases(rows, [], TODAY, null, NOW)[0]).late, true, "Atlas never reported: nobody has looked");
+  assert.equal(pitchOf(mergeReleases(rows, [], TODAY, report(49 * HOUR), NOW)[0]).late, true, "a report over 48 hours old says nothing about today");
+  assert.equal(pitchOf(mergeReleases(rows, [], TODAY, report(3 * HOUR))[0]).waiting, true, "no clock given: judged by the São Paulo day");
+  assert.equal(pitchOf(mergeReleases(rows, [], TODAY, report(3 * DAY))[0]).late, true);
+  const out = releasesReport([{ song: "Old Song", release_date: "2026-11-07", "t-14 pitched": "" }], TODAY);
+  assert.equal(pitchOf(mergeReleases(out, [], TODAY, report(3 * HOUR), NOW)[0]).late, true, "out since 7 Nov: it will never show under Upcoming, so it never waits");
   const sheet = { Releases: [["song", "release_date", "T-14 pitched"], ["Me Da Seu Body", "2026-11-20", ""]] };
-  assert.equal(hqModel(sheet, TODAY, {}, undefined, "09:20", { updates: [], overlay: null, releases: [], sightings: null }).releases[0].steps.find((s) => s.label === "Spotify pitch sent").waiting, true);
-  assert.equal(hqModel(sheet, TODAY).releases[0].steps.find((s) => s.label === "Spotify pitch sent").late, true);
+  assert.equal(pitchOf(hqModel(sheet, TODAY, {}, undefined, "09:20", { updates: [], overlay: null, releases: [], sightings: report(3 * HOUR), now: NOW }).releases[0]).waiting, true);
+  assert.equal(pitchOf(hqModel(sheet, TODAY, {}, undefined, "09:20", { updates: [], overlay: null, releases: [], sightings: null, now: NOW }).releases[0]).late, true);
+  assert.equal(pitchOf(hqModel(sheet, TODAY).releases[0]).late, true);
 });
 
 /* ---------- V6: read, not active ---------- */
@@ -383,12 +403,21 @@ test("moving the date names the steps already done with the old date outside the
   assert.doesNotMatch((await all(d)).find((m) => /^Luke moved Plain/.test(m.text)).text, /Already done/);
 });
 
-test("the copyright line is required to send", async () => {
+test("the copyright line is required to send a self-release; a label release the label delivers doesn't need it", async () => {
   const d = memoryDesk();
   const { copyright, ...rest } = FULL;
   const r = await S.saveRelease(d, NOW, R, { by: "Luke", title: "No Copyright", date: "2026-12-11", pack: rest });
   await assert.rejects(S.sendRelease(d, NOW, R, { by: "Luke", id: r.id }), (e) => e.missing.join() === "copyright" && /^Still missing: Copyright line\./.test(e.message));
-  assert.equal(S.PACK_FIELDS.find((f) => f.key === "copyright").required, true);
+  /* review, 11 Nov 2026: nothing of ours uses it when the label delivers */
+  const { copyright: c2, ...labelNoCopy } = LABEL;
+  const lab = await sent(d, "Label No Copyright", "2026-12-18", labelNoCopy);
+  assert.equal(lab.status, "scheduled", "sent without being refused");
+  const lv = S.releaseView(lab, TODAY);
+  assert.deepEqual([lv.missing.some((m) => m.key === "copyright"), lv.warnings.some((w) => /Copyright/.test(w))], [false, false]);
+  assert.ok(!S.releaseView({ id: "z", title: "Z", status: "draft", date: "2026-12-18", pack: labelNoCopy }, TODAY).missing.some((m) => m.key === "copyright"), "nor in its draft");
+  /* a label release we upload ourselves: needed for OUR upload, not to send */
+  const own = await sent(d, "Own Upload", "2026-12-25", { ...labelNoCopy, distributor: "RouteNote" });
+  assert.deepEqual(S.releaseView(own, TODAY).missing.filter((m) => m.key === "copyright").map((m) => [m.required, m.neededBy]), [[false, "upload"]]);
 });
 
 /* ---------- releases stored before 11 Nov 2026 (no kind, no spotify step) ---------- */
@@ -399,7 +428,11 @@ test("an older release (no kind, no Spotify step) still reads, is never given a 
   await d.setJSON("releases.json", [{ id: "oldsong", title: "Old Song", date: "2026-12-11", status: "scheduled", createdAt: "2026-11-01T12:00:00Z", createdBy: "Luke", updatedAt: "2026-11-01T12:00:00Z", sentAt: "2026-11-01T12:00:00Z", tight: false, pack, steps, log: [] }]);
   const v = S.releaseView((await S.listReleases(d))[0], TODAY);
   assert.deepEqual([v.steps.length, v.deal.kind, v.steps.find((s) => s.key === "pitch").waiting], [9, "", false]);
-  assert.ok(v.warnings.includes("Sent without Self-release or label and Copyright line: fill them in on the pack"));
+  /* review, 11 Nov 2026: it was never "sent without" anything (nothing was required then) */
+  assert.ok(!v.warnings.some((w) => /Sent without/.test(w)), v.warnings.join("\n"));
+  assert.ok(v.warnings.includes("Not recorded yet: self-release or label"));
+  const rep = S.checkReport({ desk: await S.loadDesk(d, NOW), hq: null, hqState: null, now: NOW });
+  assert.ok(!rep.problems.some((p) => /Old Song: (Sent without|Not recorded yet)/.test(p)), "kept out of the site's check: " + rep.problems.join("\n"));
   assert.equal((await S.sendRelease(d, NOW, R, { by: "Luke", id: "oldsong" })).already, true, "sending again changes nothing");
   assert.equal(S.board(await S.loadDesk(d, NOW), NOW, null).releases[0].steps.length, 9, "reading never adds a step");
   const m = await S.moveRelease(d, NOW, R, { by: "Luke", id: "oldsong", date: "2026-12-18" });
@@ -407,4 +440,181 @@ test("an older release (no kind, no Spotify step) still reads, is never given a 
   assert.equal(step(m.release, "spotify").due, "2026-12-03");
   assert.match(m.release.log.at(-1).what, /; added the step "Showing as upcoming in Spotify for Artists"$/);
   assert.equal((await S.moveRelease(d, NOW, R, { by: "Luke", id: "oldsong", date: "2026-12-25" })).release.steps.length, 10, "once");
+});
+
+/* ---------- fixes after the two reviews (11 Nov 2026) ---------- */
+test("read means handed over: my_day gives every new message for the bot (Luke's reply, needs none, older notes to all) before marking it read", async () => {
+  const d = memoryDesk();
+  const q = (await S.sendMessage(d, NOW, R, { from: "Ledger", to: "Luke", text: "Which account for the sample payment?", needs: "reply" })).message;
+  const rep = (await S.sendMessage(d, NOW + 1000, R, { from: "Luke", to: "Ledger", text: "Wise, please.", needs: "none", re: q.id })).message;
+  const fyi = (await S.sendMessage(d, NOW + 2000, R, { from: "Luke", to: "Ledger", text: "Just so you know: the bank row is fine." })).message;
+  /* six notes to all: my_day's notes_for_everyone shows the newest five; the sixth must still be handed over */
+  const notes = [];
+  for (let i = 0; i < 6; i++) notes.push((await S.sendMessage(d, NOW + 3000 + i, R, { from: "Nova", to: "all", text: "Note number " + i })).message);
+  const day = await call(d, "my_day", { bot: "Ledger" }, NOW + HOUR);
+  const text = JSON.stringify(day);
+  for (const m of [rep, fyi, ...notes]) assert.ok(text.includes(m.text), "handed over: " + m.text);
+  const got = day.messages_for_you.find((m) => m.id === rep.id);
+  assert.deepEqual([got.from, got.reply_to, got.answering_yours], ["Luke", q.id, "Which account for the sample payment?"]);
+  assert.ok(!day.messages_for_you.some((m) => day.notes_for_everyone.some((n) => n.id === m.id)), "not said twice in one answer");
+  const b = S.board(await S.loadDesk(d, NOW + 2 * HOUR), NOW + 2 * HOUR, null);
+  assert.equal(b.answered[0].reply.seen, true, "and only now: Read by Ledger");
+  /* the next my_day hands over only what is new since */
+  const late = (await S.sendMessage(d, NOW + 3 * HOUR, R, { from: "Luke", to: "Ledger", text: "One more thing." })).message;
+  assert.deepEqual((await call(d, "my_day", { bot: "Ledger" }, NOW + 4 * HOUR)).messages_for_you.map((m) => m.id), [late.id]);
+  /* Alfred's luke_briefing marks his messages read: it hands them over too; nobody else's briefing does */
+  const toAlfred = (await S.sendMessage(d, NOW, R, { from: "Luke", to: "Alfred", text: "Keep it to five lines today." })).message;
+  assert.deepEqual((await call(d, "luke_briefing", { bot: "Alfred" }, NOW + HOUR)).messages_for_you.map((m) => m.text), [toAlfred.text, ...notes.map((n) => n.text)], "his own, oldest first, and the notes to all");
+  assert.equal((await call(d, "luke_briefing", { bot: "Nova" }, NOW + HOUR)).messages_for_you, undefined);
+  /* Claude's own my_day too */
+  const toClaude = (await S.sendMessage(d, NOW, R, { from: "Luke", to: "Claude", text: "Thanks, noted." })).message;
+  assert.ok((await call(d, "my_day", { bot: "x" }, NOW + HOUR, "claude")).messages_for_you.some((m) => m.id === toClaude.id));
+  assert.match(TOOLS.find((t) => t.name === "my_day").description, /messages_for_you/);
+});
+
+test("a release sent before the Spotify step, moved after its pitch went out: the step is added as skipped, and no 'pitch cannot be sent' warning", async () => {
+  const d = memoryDesk();
+  const steps = S.scheduleSteps("2026-11-24", "2026-11-01").steps.filter((s) => s.key !== "spotify")
+    .map((s) => (["upload", "approved", "pitch"].includes(s.key) ? { ...s, status: "done", by: "Atlas" } : s));
+  await d.setJSON("releases.json", [{ id: "oldone", title: "Old One", date: "2026-11-24", status: "scheduled", sentAt: "2026-11-01T12:00:00Z", pack: { ...FULL, lyrics: "la" }, steps, log: [] }]);
+  const m = await S.moveRelease(d, NOW, R, { by: "Luke", id: "oldone", date: "2026-11-25" });
+  const sp = step(m.release, "spotify");
+  assert.deepEqual([sp.status, sp.note], ["skipped", "The pitch was sent before this step existed"]);
+  assert.match(m.release.log.at(-1).what, /added the step "Showing as upcoming in Spotify for Artists" \(skipped: the pitch was already sent\)$/);
+  const v = S.releaseView(m.release, TODAY);
+  assert.ok(!v.warnings.some((w) => /Spotify for Artists/.test(w)), v.warnings.join("\n"));
+  assert.ok(!/Showing as upcoming/.test(v.where), v.where);
+  assert.deepEqual(S.board(await S.loadDesk(d, NOW), NOW, null).staff.find((w) => w.name === "Atlas").releaseSteps, [], "no new step for Atlas");
+  /* the pitch marked done by Luke while it waits: the song not showing can no longer hold it up */
+  const r = await sent(d, "Marked", "2026-11-25");
+  await S.setStep(d, NOW, R, { by: "Luke", id: r.id, step: "pitch", status: "done", note: "Sent from my phone" });
+  assert.ok(!S.releaseView((await S.listReleases(d)).find((x) => x.id === r.id), TODAY).warnings.some((w) => /the pitch cannot be sent/.test(w)));
+});
+
+test("Spotify for Artists: a song matches its release by title AND date (within a day); another artist's same-title song is asked about, and a different date is a warning", async () => {
+  const d = memoryDesk();
+  await S.saveRelease(d, NOW, R, { by: "Luke", title: "Love You", date: "2026-03-01", pack: { kind: "Self-release" } });
+  await S.sendRelease(d, NOW, R, { by: "Luke", id: "loveyou" });
+  const later = await sent(d, "Night Drive", "2026-12-11");
+  const out = await call(d, "spotify_upcoming", { bot: "Atlas", releases: [{ title: "Love You", date: "2026-11-27", shown_as: "Someone Else · DistroKid" }, { title: "Night Drive", date: "2026-12-04" }] });
+  assert.deepEqual([out.in_the_pipeline, out.steps_done], [[], []], "nothing completed by a title alone");
+  const sv = S.board(await S.loadDesk(d, NOW), NOW, null).sightings;
+  assert.deepEqual(sv.items.map((x) => [x.title, x.state, x.match]), [["Love You", "unknown", null], ["Night Drive", "unknown", null]]);
+  assert.equal(sv.items[0].near, undefined, "a song already out is never offered as 'It is …'");
+  assert.equal(step((await S.listReleases(d)).find((x) => x.id === later.id), "spotify").status, "todo");
+  const v = S.releaseView((await S.listReleases(d)).find((x) => x.id === later.id), TODAY, { sightings: await S.getSightings(d) });
+  assert.ok(v.warnings.includes("Spotify for Artists shows Fri 4 Dec, the pack says Fri 11 Dec"), v.warnings.join("\n"));
+  assert.ok(!v.warnings.some((w) => /Not showing in Spotify for Artists/.test(w)), "it does show, on another day: said as that");
+  const rep = S.checkReport({ desk: await S.loadDesk(d, NOW), hq: null, hqState: null, now: NOW });
+  assert.ok(rep.problems.includes("Night Drive: Spotify for Artists shows Fri 4 Dec, the pack says Fri 11 Dec"), rep.problems.join("\n"));
+  /* within a day counts as the same song (a time zone) */
+  await call(d, "spotify_upcoming", { bot: "Atlas", releases: [{ title: "Night Drive", date: "2026-12-10" }] }, NOW + HOUR);
+  assert.equal(step((await S.listReleases(d)).find((x) => x.id === later.id), "spotify").status, "done");
+  /* a release sent while the report shows its title on another day: not marked done */
+  await call(d, "spotify_upcoming", { bot: "Atlas", releases: [{ title: "Glass Heart", date: "2026-12-04" }] }, NOW + 2 * HOUR);
+  assert.equal(step(await sent(d, "Glass Heart", "2026-12-18", FULL, NOW + 3 * HOUR), "spotify").status, "todo");
+});
+
+test("titles with no Latin letter: each keeps its own key and never matches another (no '' === '')", async () => {
+  const d = memoryDesk();
+  assert.notEqual(S.sightKey("Ночь", "2026-12-11"), S.sightKey("День", "2026-12-11"));
+  assert.match(S.sightKey("Ночь", "2026-12-11"), /^t[0-9a-z]+\|2026-12-11$/, "ASCII, so the page's ids stay apart too");
+  assert.equal(S.sightKey("Ночь", "2026-12-11"), S.sightKey(" ночь ", "2026-12-11"));
+  assert.deepEqual([S.sameSong("Ночь", "День"), S.sameSong("Ночь", "ночь"), S.sameSong("", ""), S.sameSong("Me Dá Seu Body", "me da seu body")], [false, true, false, true]);
+  await sent(d, "День", "2026-12-11");
+  const out = await call(d, "spotify_upcoming", { bot: "Atlas", releases: [{ title: "Ночь", date: "2026-12-11" }, { title: "День", date: "2026-12-11" }] });
+  assert.equal(out.songs, 2, "both kept");
+  const sv = S.board(await S.loadDesk(d, NOW), NOW, null).sightings;
+  assert.deepEqual(sv.items.map((x) => [x.title, x.state]), [["Ночь", "unknown"], ["День", "pipeline"]]);
+  assert.deepEqual(out.steps_done, ["День: Showing as upcoming in Spotify for Artists (the Spotify pitch is open now)"], "only its own release");
+  const m = hqModel({ Songs: [["date", "song", "spotify_streams"], ["2026-11-10", "Ночь", "1"]] }, TODAY, {}, undefined, "09:20", { updates: [], overlay: null, releases: (await S.listReleases(d)).map((r) => S.releaseView(r, TODAY)) });
+  assert.equal(m.songs[0].deal, null, "Songs: another song's deal is never borrowed");
+  assert.deepEqual(mergeReleases([{ song: "Ночь", date: "2026-12-11", steps: [] }], [S.releaseView((await S.listReleases(d))[0], TODAY)], TODAY).map((r) => r.song).sort(), ["День", "Ночь"], "two cards, not one");
+});
+
+test("'Not mine' twice in a hurry: Nova is told ONCE (the send is claimed in the same write as the answer)", async () => {
+  const base = memoryDesk();
+  const slow = new Proxy(base, { get: (t, k) => (typeof t[k] === "function" ? async (...a) => { await new Promise((r) => setTimeout(r, 8)); return t[k](...a); } : t[k]) });
+  await call(base, "spotify_upcoming", { bot: "Atlas", releases: [{ title: "Paper Sky", date: "2026-12-04" }] });
+  const key = S.sightKey("Paper Sky", "2026-12-04");
+  for (const gap of [0, 15, 35]) {
+    await base.setJSON("msg/2026-11.json", []);
+    await base.setJSON("sightings.json", { ...(await S.getSightings(base)), answers: {} });
+    const one = S.answerSighting(slow, NOW, R, { by: "Luke", key, answer: "notmine" });
+    await new Promise((r) => setTimeout(r, gap));
+    const two = S.answerSighting(slow, NOW + 50, R, { by: "Luke", key, answer: "notmine" });
+    const res = await Promise.all([one, two]);
+    assert.equal((await S.listMessages(base, NOW)).filter((m) => m.to === "Nova").length, 1, "gap " + gap + " ms");
+    assert.ok(res.every((x) => x.told || x.sending), "neither tap is told it failed");
+  }
+});
+
+test("'Not mine' whose message to Nova could not go: the answer is kept, the song is offered 'Send it to Nova again', and that sends it", async () => {
+  const d = memoryDesk();
+  await call(d, "spotify_upcoming", { bot: "Atlas", releases: [{ title: "Paper Sky", date: "2026-12-04", shown_as: "Someone Else" }] });
+  const key = S.sightKey("Paper Sky", "2026-12-04");
+  /* Luke has hit the day's limit of messages: the message can't go */
+  await d.setJSON("msg/2026-11.json", Array.from({ length: S.LIMITS.messagesPerSenderPerDay }, (_, i) => ({ id: "mfill" + i, at: new Date(NOW - i).toISOString(), sp: S.spStamp(NOW - i), from: "Luke", to: "Nova", text: "x", needs: "none", re: "", options: [], kind: "note", resolved: null })));
+  const first = await S.answerSighting(d, NOW, R, { by: "Luke", key, answer: "notmine" });
+  assert.deepEqual([first.told, first.sightings.items[0].state, first.sightings.retry, first.sightings.waitingOnLuke], [null, "retry", 1, 1]);
+  assert.equal((await S.getSightings(d)).answers[key].msg, null, "the claim is let go");
+  await d.setJSON("msg/2026-11.json", []);
+  const again = await S.answerSighting(d, NOW + DAY, R, { by: "Luke", key, answer: "notmine" });
+  assert.ok(again.told);
+  assert.deepEqual([again.sightings.items[0].state, again.sightings.items[0].answer.told], ["answered", again.told]);
+  assert.equal((await S.listMessages(d, NOW + DAY)).filter((m) => m.to === "Nova").length, 1);
+});
+
+test("'It is <song>': a song in the pipeline shown under another title is offered, and answering marks its Spotify step done", async () => {
+  const d = memoryDesk();
+  const r = await sent(d, "Me Dá Seu Body", "2026-11-24");
+  await call(d, "spotify_upcoming", { bot: "Atlas", releases: [{ title: "Me Dá Seu Body (feat. Sample)", date: "2026-11-24" }, { title: "Something Else", date: "2026-12-30" }] });
+  let sv = S.board(await S.loadDesk(d, NOW), NOW, null).sightings;
+  const item = sv.items[0];
+  assert.deepEqual([item.state, item.near && item.near.id, item.near && item.near.title], ["unknown", r.id, "Me Dá Seu Body"]);
+  assert.equal(sv.items[1].near, undefined, "nothing like it: no fifth answer");
+  await fails(S.answerSighting(d, NOW, R, { by: "Luke", key: item.key, answer: "it", id: "nope" }), /not in the pipeline any more/);
+  const out = await S.answerSighting(d, NOW, R, { by: "Luke", key: item.key, answer: "it", id: r.id });
+  const st = step(out.release, "spotify");
+  assert.deepEqual([st.status, st.by, st.note], ["done", "Luke", 'Showing in Spotify for Artists as "Me Dá Seu Body (feat. Sample)" since Thu 12 Nov']);
+  assert.equal(S.releaseView(out.release, TODAY).steps.find((s) => s.key === "pitch").waiting, false, "the pitch opens");
+  assert.deepEqual([out.sightings.items[0].state, out.sightings.items[0].match, out.sightings.unknown], ["pipeline", r.id, 1]);
+  assert.equal((await S.listReleases(d)).length, 1, "no duplicate draft");
+  /* the next report keeps it matched */
+  await call(d, "spotify_upcoming", { bot: "Atlas", releases: [{ title: "Me Dá Seu Body (feat. Sample)", date: "2026-11-24" }] }, NOW + DAY);
+  sv = S.board(await S.loadDesk(d, NOW + DAY), NOW + DAY, null).sightings;
+  assert.deepEqual([sv.items[0].state, sv.items[0].match], ["pipeline", r.id]);
+});
+
+test("the deal changed after sending: Drop is told once, an upload already started is a warning, and his reopened steps are never born late", async () => {
+  const d = memoryDesk();
+  const r = await sent(d, "Switch", "2026-12-11");
+  await S.setStep(d, NOW, R, { by: "Drop", id: r.id, step: "upload", status: "working" });
+  const lab = await S.saveRelease(d, NOW + 1000, R, { by: "Luke", id: r.id, pack: { kind: "With a label", label: "Sample Records", split: "50/50" } });
+  assert.deepEqual([step(lab, "upload").status, step(lab, "approved").status], ["working", "skipped"]);
+  const toDrop = (await all(d)).filter((m) => m.to === "Drop");
+  assert.equal(toDrop.length, 1);
+  assert.deepEqual([toDrop[0].from, toDrop[0].needs], ["HQ", "action"]);
+  assert.equal(toDrop[0].text, 'Luke changed whose release Switch is (out Fri 11 Dec): Sample Records delivers it to the stores, not us. Approved by RouteNote (nothing waiting) is skipped. "Uploaded to RouteNote with the release date" is already working: stop, and tell Luke on the desk whether it went to RouteNote, so the song is not delivered twice.');
+  assert.ok(S.releaseView(lab, TODAY).warnings.includes("A label release, but Uploaded to RouteNote with the release date is working (Drop): one song must not be delivered twice"));
+  const rep = S.checkReport({ desk: await S.loadDesk(d, NOW), hq: null, hqState: null, now: NOW });
+  assert.ok(rep.problems.some((p) => /Switch: A label release, but Uploaded to RouteNote/.test(p)), rep.problems.join("\n"));
+  /* the split edited again: nothing of Drop's changes, nobody is told */
+  await S.saveRelease(d, NOW + 2000, R, { by: "Luke", id: r.id, pack: { split: "BADSCANDAL 50% · Sample Records 50%" } });
+  assert.equal((await all(d)).filter((m) => m.to === "Drop").length, 1);
+  /* back to a self-release, weeks later: the approval is his again, due today at the earliest, and he is told */
+  const back = await S.saveRelease(d, Date.parse("2026-11-28T12:00:00Z"), R, { by: "Luke", id: r.id, pack: { kind: "Self-release" } });
+  assert.deepEqual([step(back, "approved").status, step(back, "approved").due], ["todo", "2026-11-28"]);
+  assert.match((await S.listMessages(d, Date.parse("2026-11-28T12:00:00Z"))).find((m) => m.to === "Drop").text, /we deliver it now, through RouteNote \(badscandaladmin\)\. Approved by RouteNote \(nothing waiting\) is yours again/);
+});
+
+test("small wording: release_step says Upcoming; 'started the song'; a blocked next step says blocked; a pitch too late has no 'until it does'", async () => {
+  const d = memoryDesk();
+  const r = await sent(d, "Words", "2026-12-11");
+  assert.equal((await call(d, "release_step", { bot: "Drop", song: "Words", step: "upload", status: "working" })).shown_on, "badscandal.com/hq, Upcoming and the live log");
+  assert.match(r.log[0].what, /^Luke started the song for Fri 11 Dec$/);
+  const w = warn(made("2026-11-17", "2026-11-01"));
+  assert.ok(w.includes("Not showing in Spotify for Artists yet, 5 days before release"), w.join("\n"));
+  assert.ok(w.includes("Too late for a Spotify pitch: Spotify needs it 7 days before release"));
+  assert.ok(!w.some((x) => /until it does/.test(x)));
 });

@@ -223,8 +223,8 @@ test("release pipeline: Luke's routes, the bots' four tools, refusals as sentenc
   const badLink = await rel("release", { id, pack: { artwork: "http://example.com/c.jpg" } });
   assert.deepEqual([badLink.status, badLink.body.error], [400, "Artwork must be a link that starts with https:// (copy it from the browser's address bar). Nothing was saved."]);
   const early = await rel("release/send", { id });
-  assert.equal(early.status, 400); assert.equal(early.body.error, "Still missing: Self-release or label, Artwork, Language, Explicit, Writers, Copyright line. Fill them in, then send again. Or send anyway: what is missing stays on the release as a warning.");
-  assert.deepEqual([early.body.missing, early.body.canSendAnyway], [["kind", "artwork", "language", "explicit", "writers", "copyright"], true]);
+  assert.equal(early.status, 400); assert.equal(early.body.error, "Still missing: Self-release or label, Artwork, Language, Explicit, Writers. Fill them in, then send again. Or send anyway: what is missing stays on the release as a warning.");
+  assert.deepEqual([early.body.missing, early.body.canSendAnyway], [["kind", "artwork", "language", "explicit", "writers"], true]);
   /* Claude's key fills the rest (as Claude), Luke sends */
   const filled = await rel("release", { id, pack: { kind: "Self-release", artwork: "https://example.com/c.jpg", language: "English", explicit: "No", writers: "Sample Writer: music and lyrics", copyright: "℗ 2026 Sample · © 2026 Sample" } }, claude);
   assert.equal(filled.body.release.log[0].by, "Claude");
@@ -323,4 +323,14 @@ test("v2: Atlas's Spotify for Artists report, Luke's answer at /api/staff/sighti
   assert.deepEqual([sp.status, sp.by], ["done", "Atlas"], "Atlas's report already shows it: done from the start, the pitch is open");
   assert.equal(sent.body.release.steps.find((s) => s.key === "pitch").waiting, false);
   assert.equal((await rel("sighting?sample=1", { key: "x", answer: "self" })).body.sample, true, "the sample never writes");
+});
+
+test("staff api: Claude reading the board with its key counts as READ (review, 11 Nov 2026), not only as having used the desk", async () => {
+  const claude = { authorization: "Bearer " + ENV.STAFF_CLAUDE_KEY };
+  const sent = await (await api("message", { method: "POST", headers: { cookie, "content-type": "application/json" }, body: JSON.stringify({ to: "Claude", text: "Please look at the cap tonight." }) })).json();
+  const mark = async () => (await (await api("board", { headers: { cookie } })).json()).messages.find((m) => m.id === sent.message.id).seen;
+  assert.equal(await mark(), false, "Luke reading his own board marks nothing");
+  await new Promise((r) => setTimeout(r, 5));
+  assert.equal((await api("board", { headers: claude })).status, 200);
+  assert.equal(await mark(), true, "Read by Claude");
 });

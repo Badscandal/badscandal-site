@@ -173,9 +173,10 @@
     /* the warnings on the releases still coming (v2): right after the cap, at most 4 */
     var cap = out.filter(function (x) { return x.key === "cap"; });
     out = cap.concat(releaseAttention(sheet, o.board), out.filter(function (x) { return x.key !== "cap"; }));
-    /* the staff desk: messages waiting on Luke go first (he can act on them now), the rest after */
-    var st = staffAttention(o.board);
-    return st.filter(function (x) { return x.key === "msgs"; }).concat(out, st.filter(function (x) { return x.key !== "msgs"; }));
+    /* the staff desk: messages waiting on Luke go first (he can act on them now), and with them a song in
+       Spotify for Artists only he can say what it is (review, 11 Nov 2026: it sat ninth of ten); the rest after */
+    var st = staffAttention(o.board), first = function (x) { return x.key === "msgs" || x.key === "spotify"; };
+    return st.filter(first).concat(out, st.filter(function (x) { return !first(x); }));
   }
 
   /* the 3 to 5 sentences at the top of Today */
@@ -657,6 +658,9 @@
      as late, so Luke must be able to finish (or reopen) it. Luke's own step gets the main button. */
   function stepButton(v, s) {
     if (!v || !s || v.status !== "scheduled" || s.status === "skipped") return null; /* skipped: not ours to mark */
+    /* waiting (the pitch before the song shows in Spotify for Artists): one tap must not record a pitch that
+       could not have gone out (review, 11 Nov 2026); the desk tells the bots the same */
+    if (s.waiting && s.status !== "done") return null;
     var done = s.status === "done", mine = s.owner === "Luke";
     return { to: done ? "todo" : "done", text: done ? "Reopen" : mine ? "Mark as done" : "Mark done", main: mine && !done };
   }
@@ -720,7 +724,9 @@
     return { text: "On time", bad: false, rel: false };
   }
   /* a song's name without accents, case, spaces or signs ("Me Dá Seu Body" = "medaseubody"), as the desk compares them */
-  function titleKey(s) { var v = String(s == null ? "" : s); try { v = v.normalize("NFD").replace(/[̀-ͯ]/g, ""); } catch (e) {} return v.toLowerCase().replace(/[^a-z0-9]/g, ""); }
+  /* a title with no Latin letter or digit ("Ночь") keeps its own words (review, 11 Nov 2026): "" for every such
+     title made them all one song */
+  function titleKey(s) { var raw = String(s == null ? "" : s), v = raw; try { v = v.normalize("NFD").replace(/[̀-ͯ]/g, ""); } catch (e) {} var k = v.toLowerCase().replace(/[^a-z0-9]/g, ""); return k || (raw.trim() ? "~" + raw.trim().toLowerCase().replace(/\s+/g, " ") : ""); }
   /* Which cards the Upcoming tab draws (v2, 11 Nov 2026, Luke: "songs done in the pipeline should go to the
      upcoming section"), so a song is never shown twice:
        pipeline   the drafts Luke is still filling ("In the pipeline"), soonest first
@@ -800,7 +806,7 @@
      read yet, so nothing is claimed. */
   function songDeal(name, sheetSong, board) {
     var list = board && Array.isArray(board.releases) ? board.releases : null, k = titleKey(name);
-    var same = (list || []).filter(function (v) { return v && v.status !== "cancelled" && v.deal && titleKey(v.title) === k; });
+    var same = (list || []).filter(function (v) { return v && k && v.status !== "cancelled" && v.deal && titleKey(v.title) === k; });
     var v = same.filter(function (x) { return x.status === "scheduled"; })[0] || same[0];
     if (v) return v.deal;
     if (sheetSong && "deal" in sheetSong) return sheetSong.deal || null;
@@ -810,7 +816,9 @@
   /* the form follows the desk's rule (PACK_FIELDS requiredWhen): the label and the split are shown and
      needed only "With a label". out = the release day has passed (a song already out): only "Whose
      release is it" is needed then. vals = what the form holds now. */
-  function fieldShown(f, vals) { return !f || !f.requiredWhen || (vals || {})[f.requiredWhen.field] === f.requiredWhen.equals; }
+  /* showWhen (11 Nov 2026, review): the copyright line is required only for a self-release but is shown
+     whatever the kind; a field list from before showWhen existed falls back to requiredWhen */
+  function fieldShown(f, vals) { var w = f && ("showWhen" in f ? f.showWhen : f.requiredWhen); return !f || !w || (vals || {})[w.field] === w.equals; }
   function fieldRequired(f, vals, out) {
     if (!f) return false;
     var req = !!f.required || (!!f.requiredWhen && (vals || {})[f.requiredWhen.field] === f.requiredWhen.equals);
@@ -820,6 +828,8 @@
   function needWord(f, vals, steps, out) {
     if (fieldRequired(f, vals, out)) return out ? "needed to record it" : "needed to send";
     if (out || !f || !f.neededBy) return "";
+    var v = vals || {};
+    if ((f.neededBy === "upload" || f.neededBy === "approved") && v.kind === LABEL_KIND && !/routenote/i.test(v.distributor || "")) return ""; /* the label delivers it */
     var st = (steps || []).filter(function (s) { return s.key === f.neededBy; })[0];
     return st ? "needed for the " + shortStep(st.label) : "";
   }
@@ -879,8 +889,13 @@
   function sightRow(x) {
     if (!x) return null;
     var base = { key: x.key, title: x.title, when: x.dateWords || day(x.date), shown: x.shownAs || "", id: x.match || "" };
-    if (x.state === "pipeline") base.text = x.matchStatus === "draft" ? "In the pipeline" : "In Upcoming";
-    else if (x.state === "answered") {
+    if (x.state === "pipeline") base.text = (x.matchStatus === "draft" ? "In the pipeline" : "In Upcoming") + (x.answer && x.answer.answer === "it" ? " (you said it is this song, " + day(x.answer.day) + ")" : "");
+    else if (x.state === "retry") {
+      /* "Not mine" / "a mistake" whose message to Nova never went: the page offers to send it again */
+      var ra = x.answer || {};
+      base.text = "You said: " + (ra.text || ra.answer || "") + (ra.day ? ", " + day(ra.day) : "") + ". The message to Nova couldn't go.";
+      base.retry = ra.answer || "";
+    } else if (x.state === "answered") {
       var a = x.answer || {};
       base.text = "You said: " + (a.text || a.answer || "") + (a.label ? " (" + a.label + ")" : "") + (a.day ? ", " + day(a.day) : "") + "." +
         ((a.answer === "notmine" || a.answer === "mistake") ? (a.told ? " Nova was asked to find out." : " The message to Nova couldn't go yet.") : "");
@@ -893,6 +908,7 @@
   /* asked before an answer goes: what will happen */
   function sightConfirm(x, answer, label) {
     var d = " (" + (x.dateWords || day(x.date)) + ")";
+    if (answer === "it" && x.near) return "Is " + x.title + " the same song as " + x.near.title + (x.near.dateWords ? " (" + x.near.dateWords + ")" : "") + "? Its step “Showing as upcoming in Spotify for Artists” is marked done, and Atlas can send the pitch.";
     if (answer === "self") return "Start a draft of " + x.title + d + " as a self-release? It goes to “In the pipeline”, where you fill in its files and details.";
     if (answer === "label") return "Start a draft of " + x.title + d + " with " + (label || "the label") + "? It goes to “In the pipeline”, where you fill in the split, its files and details.";
     var says = answer === "notmine" ? "is not yours, or is on the wrong account" : "is a mistake and should not be there";
@@ -902,7 +918,8 @@
   function sightDone(title, answer, told, at) {
     var hm = spStampOf(at).slice(11, 16);
     if (answer === "self" || answer === "label") return "Answered at " + hm + ". " + title + " is now in “In the pipeline”: fill in its files and details there.";
-    return told ? "Answered at " + hm + ". Nova was asked to find out who delivered " + title + "." : "Your answer is saved, but the message to Nova couldn't go. Answer again to send it.";
+    if (answer === "it") return "Answered at " + hm + ". " + title + " counts as showing in Spotify for Artists now.";
+    return told ? "Answered at " + hm + ". Nova was asked to find out who delivered " + title + "." : "Your answer is saved, but the message to Nova couldn't go. Press “Send it to Nova again”.";
   }
 
   return { ago: ago, spMs: spMs, releaseWords: releaseWords, releaseDetail: releaseDetail, healthRows: healthRows, healthState: healthState, median: median, change: change, money: money, attention: attention, briefing: briefing,

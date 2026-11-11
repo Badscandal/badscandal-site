@@ -22,7 +22,7 @@ export const INSTRUCTIONS = [
 
 export const TOOLS = [
   { name: "my_day", title: "My day", readOnly: true,
-    description: "START HERE, every run. Returns who you are on the team, today's duties and their deadlines (São Paulo time), your open tasks, messages waiting on you, new notes for the whole team, and the rules. Read it before doing anything else.",
+    description: "START HERE, every run. Returns who you are on the team, today's duties and their deadlines (São Paulo time), your open tasks, messages waiting on you, every new message for you since your last read (messages_for_you: Luke's answers to you included), new notes for the whole team, and the rules. Read it before doing anything else.",
     inputSchema: obj({ bot: BOT }, ["bot"]) },
   { name: "post_update", title: "Post an update", idempotent: false,
     description: "Add one line to the live log Luke sees on the dashboard. Call it when you START a duty (status working), when you FINISH it (status done, with the number you logged), when you are STUCK (status blocked, say exactly what is needed and from whom) or when something FAILED (status error). One line, plain words, no secrets. Finishing a duty here also marks it done on the dashboard.",
@@ -71,7 +71,7 @@ export const TOOLS = [
     description: "Every bot with today's duties (done, to do, late, blocked), its latest update, what it says it is working on, what is waiting on it, and when it last used this desk; every release with its late steps and warnings, and what Spotify for Artists showed in Atlas's last report. For Nova's standup, the 12:00 chase and the 21:00 wrap-up.",
     inputSchema: obj({ bot: BOT }, ["bot"]) },
   { name: "luke_briefing", title: "What Luke needs to hear", readOnly: true,
-    description: "For Alfred's 10:00 message and for alerts. Returns the site's latest check (three times a day), Claude's latest note for Luke, every decision waiting on Luke with its options, ad spend against the monthly cap, the next release and what is late, the songs Spotify for Artists shows as upcoming that are not in the pipeline (Luke has to say what they are), income logged this month, and which bots have not logged. Report it; do not add numbers of your own.",
+    description: "For Alfred's 10:00 message and for alerts. For Alfred it also gives every new message for him since his last read (messages_for_you). Returns the site's latest check (three times a day), Claude's latest note for Luke, every decision waiting on Luke with its options, ad spend against the monthly cap, the next release and what is late, the songs Spotify for Artists shows as upcoming that are not in the pipeline (Luke has to say what they are), income logged this month, and which bots have not logged. Report it; do not add numbers of your own.",
     inputSchema: obj({ bot: BOT }, ["bot"]) },
   { name: "set_my_card", title: "Say what I am working on", idempotent: true,
     description: "Update your card on the dashboard's Team page: what you are working on beyond the daily duty, and anything you need (an access, a file, a decision). Replace the whole text each time; keep it current.",
@@ -83,7 +83,7 @@ export const TOOLS = [
     description: "The whole pack of ONE release: every field with its label (the master WAV link, the artwork link, the lyrics in full, the writers, the details for RouteNote, the pitch notes, ISRC, UPC...) and every step with its owner, due date and state. Use it before you work on a release step: everything you need should be here. If something you need is missing: mark your step blocked with release_step, naming the field, and send Luke ONE message naming the field (only once, not every run).",
     inputSchema: obj({ bot: BOT, song: str('The song\'s title or its id, for example "Me Dá Seu Body" or "medaseubody". Accents and capitals do not matter.') }, ["bot", "song"]) },
   { name: "release_step", title: "Mark one of my release steps",
-    description: "Mark ONE of YOUR OWN steps of a release (from my_day or releases). status working = you started it. status done = it is really done in the store or on the platform (uploaded, approved, pitched, live), NOT \"started\" and NOT \"I asked someone\"; put the link that proves it in link when there is one. status blocked = you cannot go on: say in note exactly what is needed and from whom. status todo = undo a mistake. status skipped = the step does not apply to this release (Nova only, with the reason in note). A step that is \"waiting\" (the pitch, until the song shows in Spotify for Artists) cannot be marked done yet. Never mark another bot's step (Nova only: when the owner told you it is done and cannot reach the desk; say so in the note). Luke's own step (teasers) is his approval: only Luke marks it done. This also writes a line in the live log Luke sees.",
+    description: "Mark ONE of YOUR OWN steps of a release (from my_day or releases). status working = you started it. status done = it is really done in the store or on the platform (uploaded, approved, pitched, live), NOT \"started\" and NOT \"I asked someone\"; put the link that proves it in link when there is one. status blocked = you cannot go on: say in note exactly what is needed and from whom. status todo = undo a mistake. status skipped = the step does not apply to this release (Nova only, with the reason in note). A step that is \"waiting\" (the pitch, until the song shows in Spotify for Artists) cannot be marked done yet. The step spotify (Showing as upcoming in Spotify for Artists) is done by Atlas's spotify_upcoming report, not by this tool (the staff guide's Atlas part names the only two exceptions). Never mark another bot's step (Nova only: when the owner told you it is done and cannot reach the desk; say so in the note). Luke's own step (teasers) is his approval: only Luke marks it done. This also writes a line in the live log Luke sees.",
     inputSchema: obj({ bot: BOT, song: str("The song's title or its id."),
       step: str(`Which step: ${S.RELEASE_STEPS.map((s) => `${s.key} (${s.label}, ${s.owner})`).join("; ")}.`, { enum: S.RELEASE_STEPS.map((s) => s.key) }),
       status: str("working | done | blocked | todo | skipped (skipped: Nova only)", { enum: S.STEP_STATUS }),
@@ -121,10 +121,14 @@ const BUILT_IN_GUIDE = "The staff guide has not been loaded onto the desk yet. U
 /* a release step in words a bot can act on. skipped = it does not apply (the label delivers it);
    waiting = it can't start until the step before it is done (the pitch, until the song shows in
    Spotify for Artists): never late */
+/* the same words in my_day, releases and release_pack (11 Nov 2026, review) */
+const WAIT_SPOTIFY = "the song to show as upcoming in Spotify for Artists";
+const waitFor = (s) => (s.waitingFor === "spotify" || !s.waitingFor ? WAIT_SPOTIFY : `the step "${(S.RELEASE_STEPS.find((x) => x.key === s.waitingFor) || {}).label || s.waitingFor}"`);
+const SPOT_HOW = "done by your spotify_upcoming report, not by release_step";
 const stepState = (s) => (s.status === "done" ? "done" : s.status === "skipped" ? "skipped" : s.status === "blocked" ? "blocked" : s.waiting ? "waiting" : s.late ? "late" : s.status === "working" ? "working" : "to do");
 const when = (d) => (d ? `${S.dayWords(d)} (${d})` : "no date yet");
 const stepOut = (s) => ({ step: s.key, label: s.label, owner: s.owner, due: when(s.due), state: stepState(s), ...(s.note ? { note: s.note } : {}), ...(s.link ? { link: s.link } : {}), ...(s.status === "done" && s.by ? { done_by: s.by } : {}),
-  ...(s.waiting ? { waiting_for: s.waitingText || "the step before it" } : {}) });
+  ...(s.waiting ? { waiting_for: waitFor(s) } : {}), ...(s.key === "spotify" && !["done", "skipped"].includes(s.status) ? { how: SPOT_HOW } : {}) });
 const dealOut = (d) => (d && d.kind ? { kind: d.kind, ...(d.label ? { label: d.label } : {}), ...(d.split ? { split: d.split } : {}), delivered_by: d.distributor } : "not recorded yet");
 /* what Spotify for Artists showed in Atlas's last report, as the bots read it (V4) */
 const s4aOut = (sv) => ({ reported_at: sv.never ? "never" : sv.sp, ...(sv.stale ? { stale: "older than 48 hours" } : {}),
@@ -142,8 +146,12 @@ export async function callTool(tool, args, ctx) {
   const config = ctx.role === "claude" ? null : await S.getConfig(store);
   if (config && !config.botsOn) throw new S.StaffError("Luke has switched the bots' connector off. Stop, and tell Nova.", "off");
   await S.touchSeen(store, now, me, tool.name);
-  /* "read" (V6): only the tools that hand over the caller's messages say it has read them */
-  if (tool.name === "my_day" || tool.name === "read_messages" || (tool.name === "luke_briefing" && me === "Alfred")) await S.touchRead(store, now, me);
+  /* "read" (V6): only the tools that hand over the caller's messages say it has read them. The marker it
+     had before is read first: my_day and Alfred's luke_briefing hand over everything written since then
+     (messages_for_you), so "Read by Ledger" never stands under an answer Ledger was not given. */
+  const hands = tool.name === "my_day" || tool.name === "read_messages" || (tool.name === "luke_briefing" && me === "Alfred");
+  const readSince = hands ? await S.lastRead(store, me) : null;
+  if (hands) await S.touchRead(store, now, me);
   const today = S.spDay(now);
 
   switch (tool.name) {
@@ -221,7 +229,7 @@ export async function callTool(tool, args, ctx) {
       return { saved: true, at: r.doc.sp, songs: sv.items.length, ...(sv.items.length ? {} : { note: "Recorded: nothing is upcoming in Spotify for Artists." }),
         in_the_pipeline: sv.items.filter((x) => x.state === "pipeline").map((x) => x.title),
         not_in_the_pipeline: sv.items.filter((x) => x.state === "unknown").map((x) => `${x.title}, ${x.dateWords}: Luke is asked what it is`),
-        answered_by_luke: sv.items.filter((x) => x.state === "answered").map((x) => `${x.title}: ${x.answer.text}`),
+        answered_by_luke: sv.items.filter((x) => x.state === "answered" || x.state === "retry").map((x) => `${x.title}: ${x.answer.text}`),
         steps_done: r.completed.map((c) => `${c.title}: ${c.label} (the Spotify pitch is open now)`),
         shown_on: "badscandal.com/hq, Upcoming" };
     }
@@ -229,7 +237,7 @@ export async function callTool(tool, args, ctx) {
       const r = await S.setStep(store, now, roster, { by: me, id: args.song, step: args.step, status: args.status, note: args.note, link: args.link });
       const want = String(args.step || "").trim().toLowerCase();
       const st = S.releaseView(r, today).steps.find((s) => s.key === want || s.label.toLowerCase() === want);
-      return { saved: true, song: r.title, step: st.key, label: st.label, state: stepState(st), due: when(st.due), ...(st.note ? { note: st.note } : {}), shown_on: "badscandal.com/hq, Releases and the live log" };
+      return { saved: true, song: r.title, step: st.key, label: st.label, state: stepState(st), due: when(st.due), ...(st.note ? { note: st.note } : {}), shown_on: "badscandal.com/hq, Upcoming and the live log" };
     }
     case "release_fill": {
       const r = await S.fillRelease(store, now, roster, { by: me, id: args.song, field: args.field, value: args.value });
@@ -252,29 +260,41 @@ export async function callTool(tool, args, ctx) {
   const worker = (w) => ({ name: w.name, role: w.role, state: w.state, duties: w.duties.map((d) => ({ id: d.id, task: d.task, due: d.due || "today", status: d.late ? "late" : d.status, ...(d.blocker ? { blocker: d.blocker } : {}) })),
     last_update: w.last ? `${w.last.at} ${w.last.status}: ${w.last.message}` : "none", working_on: w.card ? w.card.workingOn : "", needs: w.card ? w.card.needs : "",
     open_tasks: w.tasks.length, late_tasks: w.lateTasks, waiting_on_it: w.waiting.length, last_used_the_desk: w.seen ? S.spStamp(Date.parse(w.seen)) : "never" });
+  /* everything new for the caller since its last read (S.messagesFor), not repeating what the same answer
+     already lists (shown = ids); a reply to one of its own messages carries the start of that message */
+  const byId = Object.fromEntries(desk.messages.map((m) => [m.id, m]));
+  const forYou = (shown) => {
+    const got = S.messagesFor(desk.messages, me, readSince), skip = new Set(shown);
+    return { messages_for_you: got.list.filter((m) => !skip.has(m.id)).map((m) => ({ ...short(m), ...(m.re && byId[m.re] && byId[m.re].from === me ? { answering_yours: byId[m.re].text.slice(0, 160) } : {}) })),
+      ...(got.more ? { more_messages: `${got.more} older message${got.more === 1 ? "" : "s"} for you did not fit here: call read_messages to see ${got.more === 1 ? "it" : "them"}.` } : {}) };
+  };
 
   switch (tool.name) {
     case "my_day": {
-      if (me === "Claude") return { you: "Claude", today, now: b.now, waiting_on_you: b.waiting.claude.map(short), waiting_on_luke: b.waiting.luke.map(short),
+      if (me === "Claude") return { you: "Claude", today, now: b.now, waiting_on_you: b.waiting.claude.map(short), ...forYou(b.waiting.claude.map((m) => m.id)), waiting_on_luke: b.waiting.luke.map(short),
         releases: rel.filter((v) => S.releaseActive(v) || v.status === "draft").map((v) => `${v.title}: ${v.status === "draft" ? "draft" : v.released ? "released" : "coming"}, ${when(v.date)}, ${v.counts.done} of ${v.counts.total} steps done` + (v.counts.late ? `, ${v.counts.late} late` : "") + (v.counts.blocked ? `, ${v.counts.blocked} blocked` : "") + (v.missing.length ? `; missing: ${v.missing.map((m) => m.short).join(", ")}` : "")),
         unknown_in_spotify: b.sightings.items.filter((x) => x.state === "unknown").map((x) => `${x.title}, ${x.dateWords}`),
         ...(sheetNote ? { note: sheetNote } : {}) };
       const w = b.staff.find((x) => x.name === me);
       const since = now - 36 * 3600000;
       const rs = w.releaseSteps.map((s) => ({ song: s.title, step: s.key, label: s.label, due: when(s.due), state: stepState(s), ...(s.note ? { note: s.note } : {}),
-        ...(s.waiting ? { waiting_for: "the song to show as upcoming in Spotify for Artists" } : {}) }));
+        ...(s.waiting ? { waiting_for: WAIT_SPOTIFY } : {}), ...(s.key === "spotify" ? { how: SPOT_HOW } : {}) }));
       /* the soonest step the bot can work on now; a waiting one is not something to do today */
       const firstRs = w.releaseSteps.find((s) => !s.waiting);
+      const notes = desk.messages.filter((m) => m.to === "all" && Date.parse(m.at) > since).slice(0, 5);
+      /* the spotify step is done by the daily report, never by release_step (11 Nov 2026, review) */
+      const spotNext = firstRs && firstRs.key === "spotify";
       return { you: me, role: w.role, why_you_are_needed: w.why, today, now_sao_paulo: b.now, daily_duty: w.duty, usual_time: w.time, schedule: w.schedule,
         duties_today: w.duties.map((d) => ({ id: d.id, task: d.task, due: d.due || "today", status: d.late ? "late" : d.status, ...(d.blocker ? { blocker: d.blocker } : {}) })),
         open_tasks: w.tasks.map((t) => ({ id: t.id, task: t.task, deadline: t.deadline, status: t.late ? "late" : t.status, ...(t.blocker ? { blocker: t.blocker } : {}) })),
-        waiting_on_you: w.waiting, notes_for_everyone: desk.messages.filter((m) => m.to === "all" && Date.parse(m.at) > since).slice(0, 5).map(short),
+        waiting_on_you: w.waiting, notes_for_everyone: notes.map(short), ...forYou(w.waiting.map((m) => m.id).concat(notes.map((m) => m.id))),
         your_last_update: w.last ? `${w.last.at} ${w.last.status}: ${w.last.message}` : "none yet",
         ...(/^(ledger|sheet|nova|alfred)$/i.test(me) ? { income_problems: b.income.problems } : {}),
         release_steps: rs, rules: RULES,
-        next: (firstRs ? `You have ${rs.length} open release step${rs.length === 1 ? "" : "s"}; the soonest is "${firstRs.label}" for ${firstRs.title}, due ${when(firstRs.due)}${firstRs.late ? " (LATE)" : ""}. Read the pack with release_pack, do it, then mark it with release_step (done only when it is really done). `
+        next: (spotNext ? `Report what Spotify for Artists shows as upcoming with spotify_upcoming: the first report that lists ${firstRs.title} marks "${firstRs.label}" done (due ${when(firstRs.due)}${firstRs.late ? ", LATE" : ""}). Do not mark it with release_step.${rs.length > 1 ? ` You have ${rs.length} open release steps in all: see release_steps.` : ""} `
+          : firstRs ? `You have ${rs.length} open release step${rs.length === 1 ? "" : "s"}; the soonest is "${firstRs.label}" for ${firstRs.title}, due ${when(firstRs.due)}${firstRs.late ? " (LATE)" : ""}. Read the pack with release_pack, do it, then mark it with release_step (done only when it is really done). `
           : rs.length ? `Your release step${rs.length === 1 ? " is" : "s are"} waiting for the song to show as upcoming in Spotify for Artists: nothing to do on ${rs.length === 1 ? "it" : "them"} yet. ` : "") +
-          (me === "Atlas" ? "Every day: report what Spotify for Artists shows as upcoming with spotify_upcoming. " : "") +
+          (me === "Atlas" && !spotNext ? "Every day: report what Spotify for Artists shows as upcoming with spotify_upcoming. " : "") +
           "Do your duty, then call post_update with status done and the number. If you are stuck, post_update with status blocked and say what is needed.",
         ...(sheetNote ? { note: sheetNote } : !w.duties.length && !w.paused ? { note: "The task board has no duty row for you today. Do your daily duty at your usual time anyway, and tell Nova the row is missing." } : {}) };
     }
@@ -303,6 +323,7 @@ export async function callTool(tool, args, ctx) {
         next_release: next ? { song: next.song, date: next.date, days_to_go: next.daysToGo, late_steps: next.steps.filter((s) => s.late).map((s) => `${s.label} (${s.owner})`),
           ...(hq ? {} : { source: "the desk only: the sheet's Releases tab was not read, so an earlier release there can't be ruled out" }) } : hq ? "none planned" : "not read",
         unknown_in_spotify: b.sightings.items.filter((x) => x.state === "unknown").map((x) => `${x.title}, ${x.dateWords}`),
+        ...(me === "Alfred" ? forYou([]) : {}), /* Alfred's call marks his messages read: they are handed to him here */
         income_this_month: { received: cur(b.income.received), pending: cur(b.income.pending), problems: b.income.problems },
         duties_not_done: hq ? quiet : "not read",
         how_to_report: "One message, 8 lines at most. Numbers exactly as given here, with their currency. \"not read\" is said as not read, never as 0. Decisions: say the question and the options.", ...(sheetNote ? { note: sheetNote } : {}) };

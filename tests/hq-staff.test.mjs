@@ -486,7 +486,13 @@ test("v2: the form follows the desk's rule: the label and the split only 'With a
   assert.equal(L.fieldShown(f("label"), self), false); assert.equal(L.fieldShown(f("split"), {}), false);
   assert.equal(L.fieldShown(f("label"), lab), true); assert.equal(L.fieldShown(f("wav"), self), true); assert.equal(L.fieldShown(f("distributor"), self), true);
   assert.equal(L.fieldRequired(f("split"), lab), true); assert.equal(L.fieldRequired(f("split"), self), false);
-  assert.equal(L.fieldRequired(f("copyright"), self), true, "the copyright line is needed to send (v2)");
+  assert.equal(L.fieldRequired(f("copyright"), self), true, "the copyright line is needed to send a self-release (v2)");
+  /* review, 11 Nov 2026: not for a label release the label delivers, and shown on the form whatever the kind */
+  assert.equal(L.fieldRequired(f("copyright"), lab), false);
+  assert.deepEqual([L.fieldShown(f("copyright"), lab), L.fieldShown(f("copyright"), {}), L.fieldShown(f("copyright"), self)], [true, true, true]);
+  assert.equal(L.needWord(f("copyright"), lab, steps), "", "the label delivers it: nothing of ours needs it");
+  assert.equal(L.needWord(f("copyright"), { kind: "With a label", distributor: "RouteNote" }, steps), "needed for the RouteNote upload", "we upload it ourselves");
+  assert.equal(L.fieldShown({ key: "label", requiredWhen: { field: "kind", equals: "With a label" } }, self), false, "a field list from before showWhen: as before");
   assert.equal(L.fieldRequired(f("wav"), self, true), false, "already out: the files went to the stores long ago");
   assert.equal(L.fieldRequired(f("kind"), {}, true), true);
   assert.equal(L.needWord(f("wav"), self, steps), "needed to send");
@@ -521,7 +527,10 @@ test("v2: a step that is not ours, and the pitch that waits for Spotify for Arti
   assert.deepEqual(st({ due: "2026-11-01", waiting: true, waitingText: "waiting: the song is not in Spotify for Artists yet" }), { text: "waiting: the song is not in Spotify for Artists yet", bad: false, done: false, waiting: true }, "waiting is never late");
   assert.equal(st({ status: "blocked", note: "No mood yet", waiting: true }).text, "blocked: No mood yet", "blocked says blocked");
   assert.equal(L.stepButton({ status: "scheduled" }, { owner: "Drop", status: "skipped" }), null, "not ours: no button");
-  assert.deepEqual(L.stepButton({ status: "scheduled" }, { owner: "Atlas", status: "todo", waiting: true }), { to: "done", text: "Mark done", main: false }, "Luke can still mark a waiting pitch done");
+  /* review, 11 Nov 2026: one tap must not record a pitch that could not have gone out */
+  assert.equal(L.stepButton({ status: "scheduled" }, { owner: "Atlas", status: "todo", waiting: true }), null, "a waiting pitch has no Mark done");
+  assert.deepEqual(L.stepButton({ status: "scheduled" }, { owner: "Atlas", status: "done", waiting: true }), { to: "todo", text: "Reopen", main: false }, "a pitch already done can still be reopened");
+  assert.deepEqual(L.stepButton({ status: "scheduled" }, { owner: "Atlas", status: "blocked", waiting: false }), { to: "done", text: "Mark done", main: false });
   const b = sampleBoard(NOW), sb = b.releases.find((v) => v.id === "slowburn"), mdsb = b.releases.find((v) => v.id === "medaseubody");
   assert.deepEqual(sb.steps.filter((s) => L.stepState(s, b.today).skipped).map((s) => s.key), ["upload", "approved"], "the label delivers Slow Burn");
   assert.equal(L.stepState(mdsb.steps.find((s) => s.key === "pitch"), b.today).text, "waiting: the song is not in Spotify for Artists yet");
@@ -568,6 +577,10 @@ test("v2: Today's 'Needs attention' lists the release warnings (4 at most, then 
   assert.deepEqual(L.staffAttention(boardOf({ sightings: { unknown: 1 } })), [{ key: "spotify", text: "Spotify for Artists shows 1 song that didn't go through the pipeline: say what it is", href: "#releases/spotify" }]);
   assert.match(L.staffAttention(boardOf({ sightings: { unknown: 2 } }))[0].text, /shows 2 songs .* say what they are$/);
   assert.ok(L.staffAttention(b).some((x) => x.key === "spotify"), "the sample's Velvet Night");
+  /* review, 11 Nov 2026: the question only Luke can answer goes first, with the messages, not near the end */
+  const order = L.attention({ sheet, ov: { metaKey: { state: "expired", text: "Meta key: expired" } }, board: boardOf({ sightings: { unknown: 1 }, connector: { botsOn: false } }) }).map((x) => x.key);
+  assert.deepEqual(order.slice(0, 2), ["spotify", "rw:a:0"], order.join());
+  assert.ok(order.indexOf("connector") > order.indexOf("key"), "the rest stays after the sheet's items");
 });
 
 test("v2: In Spotify for Artists: when Atlas looked, never, stale, the matched songs and the questions", () => {
@@ -598,14 +611,31 @@ test("v2: In Spotify for Artists: when Atlas looked, never, stale, the matched s
   const at = Date.parse(isoAt("2026-11-11 17:03"));
   assert.equal(L.sightDone("Velvet Night", "label", false, at), "Answered at 17:03. Velvet Night is now in “In the pipeline”: fill in its files and details there.");
   assert.equal(L.sightDone("Velvet Night", "notmine", true, at), "Answered at 17:03. Nova was asked to find out who delivered Velvet Night.");
-  assert.equal(L.sightDone("Velvet Night", "mistake", false, at), "Your answer is saved, but the message to Nova couldn't go. Answer again to send it.");
+  assert.equal(L.sightDone("Velvet Night", "mistake", false, at), "Your answer is saved, but the message to Nova couldn't go. Press “Send it to Nova again”.");
+  assert.equal(L.sightDone("Me Dá Seu Body (feat. Sample)", "it", false, at), "Answered at 17:03. Me Dá Seu Body (feat. Sample) counts as showing in Spotify for Artists now.");
+  /* review, 11 Nov 2026: a message to Nova that couldn't go is offered again (state retry), never a dead end */
+  const retry = L.sightRow({ ...unknown, state: "retry", answer: { answer: "mistake", text: "A mistake: it should not be there", label: "", day: "2026-11-11", told: null } });
+  assert.deepEqual([retry.text, retry.retry], ["You said: A mistake: it should not be there, Wed 11 Nov. The message to Nova couldn't go.", "mistake"]);
+  /* the fifth answer: a song in the pipeline under another title */
+  const near = { title: "Me Dá Seu Body (feat. Sample)", date: "2026-11-24", dateWords: "Tue 24 Nov", near: { id: "medaseubody", title: "Me Dá Seu Body", dateWords: "Tue 24 Nov" } };
+  assert.equal(L.sightConfirm(near, "it"), "Is Me Dá Seu Body (feat. Sample) the same song as Me Dá Seu Body (Tue 24 Nov)? Its step “Showing as upcoming in Spotify for Artists” is marked done, and Atlas can send the pitch.");
+  assert.equal(L.sightRow({ ...matched, answer: { answer: "it", day: "2026-11-11" } }).text, "In Upcoming (you said it is this song, Wed 11 Nov)");
+  const staffJs = readFileSync(new URL("../js/hq-staff.js", import.meta.url), "utf8");
+  assert.match(staffJs, /data-sp="resend"/); assert.match(staffJs, /"It is " \+ x\.near\.title/);
+  /* titles with no Latin letter are not all one song on the page either */
+  assert.notEqual(L.titleKey("Ночь"), L.titleKey("День")); assert.equal(L.titleKey(""), "");
+  assert.equal(L.songDeal("Ночь", null, { releases: [{ id: "r1", title: "День", status: "scheduled", deal: { kind: "Self-release" } }] }), null);
 });
 
 test("v2: the sheet's own late pitch reads 'waiting' while Spotify for Artists doesn't show the song (Luke's Me Dá Seu Body case)", async () => {
   const { hqModel } = await import("../netlify/lib/hq.mjs");
   const { sampleSheets, sampleMeta } = await import("../netlify/lib/hq-sample.mjs");
   const sh = sampleSheets(TODAY);
-  const m = hqModel(sh, TODAY, {}, sampleMeta(sh, TODAY), "10:00", { updates: [], releases: [], sightings: null });
+  /* a CURRENT report that doesn't list it (review, 11 Nov 2026: no report at all means nobody looked) */
+  const report = { at: new Date(NOW - 60 * min).toISOString(), sp: TODAY + " 09:00", by: "Atlas", list: [], answers: {} };
+  const m = hqModel(sh, TODAY, {}, sampleMeta(sh, TODAY), "10:00", { updates: [], releases: [], sightings: report, now: NOW });
+  const never = hqModel(sh, TODAY, {}, sampleMeta(sh, TODAY), "10:00", { updates: [], releases: [], sightings: null, now: NOW });
+  assert.equal(never.releases.find((x) => x.song === "Me Dá Seu Body").steps.find((s) => s.label === "Spotify pitch sent").late, true, "no report yet: late is late");
   const r = m.releases.find((x) => x.song === "Me Dá Seu Body"), pitch = r.steps.find((s) => s.label === "Spotify pitch sent");
   assert.equal(pitch.waiting, true); assert.equal(pitch.late, false);
   assert.ok(!L.attention({ sheet: m, ov: null }).some((a) => /Spotify pitch/.test(a.text)), "not in Needs attention as late");
@@ -616,6 +646,8 @@ test("v2: the page: the tab is called Upcoming (its address stays #releases), th
   const page = readFileSync(new URL("../hq.html", import.meta.url), "utf8");
   const staff = readFileSync(new URL("../js/hq-staff.js", import.meta.url), "utf8");
   const hq = readFileSync(new URL("../js/hq.js", import.meta.url), "utf8");
+  /* review, 11 Nov 2026: "the Releases tab" is the SHEET's tab; Luke's HQ tab is Upcoming */
+  assert.ok(hq.includes("The Releases tab in the sheet shows an error.") && !hq.includes("The Releases tab shows an error."));
   assert.equal(page.split('data-tab="releases"').length - 1, 2, "rail and More sheet");
   assert.equal((page.match(/data-tab="releases"[^]*?<span>([^<]+)<\/span>/g) || []).map((x) => x.match(/<span>([^<]+)<\/span>$/)[1]).join(","), "Upcoming,Upcoming");
   assert.match(page, /<section class="card view" id="releases"><h2>Upcoming<\/h2>/);

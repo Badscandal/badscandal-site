@@ -619,9 +619,12 @@
       body = '<div class="confirm" role="group" aria-label="Confirm your answer">' +
         (S.answer === "label" ? '<label class="flbl" for="spl-' + esc(id) + '">The label\'s name</label><input class="fld" id="spl-' + esc(id) + '" data-splabel="' + esc(x.key) + '" maxlength="120" autocomplete="off" value="' + esc(S.label) + '"' + (busy ? " disabled" : "") + ">" : "") +
         '<p id="spc-' + esc(id) + '">' + esc(L.sightConfirm(x, S.answer, S.label.trim())) + "</p>" +
-        '<div class="conn-acts"><button class="sendbtn" type="button" data-sp="yes" data-k="' + esc(x.key) + '"' + dis + ">" + (busy ? "Sending…" : self ? "Yes, start the draft" : "Yes, tell Nova") + "</button>" +
+        '<div class="conn-acts"><button class="sendbtn" type="button" data-sp="yes" data-k="' + esc(x.key) + '"' + dis + ">" + (busy ? "Sending…" : self ? "Yes, start the draft" : S.answer === "it" ? "Yes, it is that song" : "Yes, tell Nova") + "</button>" +
         '<button class="copybtn" type="button" data-sp="no" data-k="' + esc(x.key) + '"' + (busy ? " disabled" : "") + ">Cancel</button></div></div>";
-    } else body = '<div class="mopts spopts">' + choices.map(function (c) {
+    } else body = '<div class="mopts spopts">' +
+      /* a song in the pipeline under another title (review, 11 Nov 2026): a fifth answer, first */
+      (x.near ? '<button class="copybtn" type="button" data-sp="pick" data-k="' + esc(x.key) + '" data-a="it"' + (HQ.sample ? " disabled" : "") + ">" + esc("It is " + x.near.title) + "</button>" : "") +
+      choices.map(function (c) {
       return '<button class="copybtn" type="button" data-sp="pick" data-k="' + esc(x.key) + '" data-a="' + esc(c.answer) + '"' + (HQ.sample ? " disabled" : "") + ">" + esc(c.text) + "</button>"; }).join("") + "</div>";
     return '<div class="spq" id="spq-' + esc(id) + '"><p class="spt"><b>' + esc(q.title) + "</b>" + esc(q.rest) + "</p>" + (x.shownAs ? '<p class="sps">Shown there as: ' + esc(x.shownAs) + "</p>" : "") +
       body + '<p class="ferr" role="alert">' + esc(S.err[x.key] || "") + "</p></div>";
@@ -631,13 +634,17 @@
     return '<li class="' + (x.state === "answered" ? "q" : "") + '"><span class="spr"><b>' + esc(r.title) + "</b> · " + esc(r.when) + "</span>" +
       '<span class="spw">' + (x.state === "pipeline" && r.id && relById[r.id] ? '<button class="linkbtn" type="button" data-sp="go" data-id="' + esc(r.id) + '">' + esc(r.text) + "</button>" : esc(r.text)) + "</span>" +
       (r.shown ? '<span class="sps">Shown there as: ' + esc(r.shown) + "</span>" : "") +
-      (fresh ? '<p class="landed tsent" role="status"><span>' + esc(d.line) + "</span></p>" : "") + "</li>";
+      /* the message to Nova never went (review, 11 Nov 2026): the same answer, sent again */
+      (r.retry ? '<div class="conn-acts"><button class="copybtn" type="button" data-sp="resend" data-k="' + esc(x.key) + '"' + (HQ.sample || ui.spot.busy === x.key ? " disabled" : "") + ">" + (ui.spot.busy === x.key ? "Sending…" : "Send it to Nova again") + "</button></div>" +
+        '<p class="ferr" role="alert">' + esc(ui.spot.err[x.key] || "") + "</p>" : "") +
+      (fresh ? (d.fail ? '<p class="ferr" role="alert">' + esc(d.line) + "</p>" : '<p class="landed tsent" role="status"><span>' + esc(d.line) + "</span></p>") : "") + "</li>";
   }
   function drawSpotify() {
     var el = $("relSpot"), sv = board && board.sightings;
     if (!sv) { el.innerHTML = '<p class="empty2">Not read yet.</p>'; return; }
     var h = L.sightingsHead(sv, Date.now(), board.today), items = sv.items || [];
-    var ask = items.filter(function (x) { return x.state === "unknown"; }), rest = items.filter(function (x) { return x.state !== "unknown"; });
+    /* a song whose message to Nova couldn't go (retry) is listed first among the rest: Luke has a button there */
+    var ask = items.filter(function (x) { return x.state === "unknown"; }), rest = items.filter(function (x) { return x.state === "retry"; }).concat(items.filter(function (x) { return x.state !== "unknown" && x.state !== "retry"; }));
     var choices = sv.choices && sv.choices.length ? sv.choices : [];
     el.innerHTML = '<div class="tile spotcard"><p class="sphead' + (h.attn ? " attn" : "") + '">' + esc(h.text) + "</p>" +
       (sv.note ? '<p class="sps">' + esc((sv.by || "Atlas") + "’s note: " + sv.note) + "</p>" : "") + (h.empty ? '<p class="sps">' + esc(h.empty) + "</p>" : "") +
@@ -667,17 +674,26 @@
       return;
     }
     if (act === "no") { S.k = ""; S.answer = ""; S.label = ""; drawSpotify(); focus("#spq-" + sk + " [data-sp=pick]"); return; }
-    if (act !== "yes" || S.k !== k || HQ.sample) return;
-    var answer = S.answer, label = S.label.trim();
+    var answer, label;
+    if (act === "resend") {
+      /* the same answer again: the desk sends the message it could not send before */
+      if (HQ.sample || x.state !== "retry" || !x.answer) return;
+      answer = x.answer.answer; label = x.answer.label || "";
+    } else {
+      if (act !== "yes" || S.k !== k || HQ.sample) return;
+      answer = S.answer; label = S.label.trim();
+    }
     if (answer === "label" && label.length < 2) { S.err[k] = "Write the label's name first."; drawSpotify(); focus("#spl-" + sk); return; }
+    if (answer === "it" && !x.near) return;
     S.busy = k; drawSpotify();
-    write("sighting", { key: k, answer: answer, label: answer === "label" ? label : "" }).then(function (r) {
+    write("sighting", { key: k, answer: answer, label: answer === "label" ? label : "", id: answer === "it" ? x.near.id : "" }).then(function (r) {
       S.busy = "";
       if (!r.ok) { S.err[k] = r.error; drawSpotify(); return; }
       delete S.err[k];
       if (r.j.sightings) board.sightings = r.j.sightings;
       if (r.j.release) putRelease(r.j.release);
-      S.done[k] = { at: Date.now(), line: L.sightDone(x.title, answer, !!r.j.told, Date.now()) };
+      /* fail: the answer is kept but the message to Nova didn't go: said in red, never with a tick */
+      S.done[k] = { at: Date.now(), line: L.sightDone(x.title, answer, !!r.j.told, Date.now()), fail: (answer === "notmine" || answer === "mistake") && !r.j.told };
       S.k = ""; S.answer = ""; S.label = "";
       draw();
       reload();

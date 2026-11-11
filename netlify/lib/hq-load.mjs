@@ -77,7 +77,7 @@ async function staffSide(desk, now) {
   try {
     const [updates, releases, sightings] = await Promise.all([listUpdates(desk, now, 3), listReleases(desk).catch(() => []), getSightings(desk).catch(() => undefined)]);
     /* undefined = the report could not be read: the sheet's late pitch is then left as the sheet says */
-    return { updates, overlay: dutyOverlay(updates, spDay(now)), releases: live(releases, spDay(now), sightings || null), ...(sightings === undefined ? {} : { sightings }) };
+    return { updates, overlay: dutyOverlay(updates, spDay(now)), releases: live(releases, spDay(now), sightings || null), now, ...(sightings === undefined ? {} : { sightings }) };
   } catch { return null; }
 }
 
@@ -89,7 +89,7 @@ export async function loadHq({ cache, desk = null, env, now = Date.now(), sample
     const sheets = sampleSheets(today, now);
     const r = await rates(cache, monthsIn(sheets, today), today, fetchImpl);
     /* the made-up desk releases join the made-up sheet, so the sample shows one list as the real page does */
-    return { connected: true, sample: true, ...hqModel(sheets, today, r.fx, sampleMeta(sheets, today), spHM(now), { releases: live(sampleReleases(now), today, sampleSightings(now)), sightings: sampleSightings(now) }), health: healthFor(now - 4 * 60000, r, today),
+    return { connected: true, sample: true, ...hqModel(sheets, today, r.fx, sampleMeta(sheets, today), spHM(now), { releases: live(sampleReleases(now), today, sampleSightings(now)), sightings: sampleSightings(now), now }), health: healthFor(now - 4 * 60000, r, today),
       metaKey: { state: "ok", text: "Meta key: reading OK, last read 12 min ago (sample)" }, generated: new Date(now).toISOString() };
   }
   let got = null;
