@@ -10,7 +10,7 @@
   "use strict";
   var $ = function (id) { return document.getElementById(id); };
   var sample = /[?&]sample=1/.test(location.search);
-  var sheet = null, ov = null, sheetTimer = null, ovTimer = null, started = false;
+  var sheet = null, ov = null, started = false;
 
   /* ---------- helpers (shared with hq-pages.js through window.HQ) ---------- */
   function esc(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); }
@@ -43,6 +43,7 @@
     var h = Math.round(m / 60);
     return h < 48 ? h + " h ago" : Math.round(h / 24) + " days ago";
   }
+  function ordinal(n) { var x = ["th", "st", "nd", "rd"], v = n % 100; return n + (x[(v - 20) % 10] || x[v] || x[0]); }
   function adKey(s) { var v = String(s || ""); try { v = v.normalize("NFD").replace(/[̀-ͯ]/g, ""); } catch (e) {} return v.toLowerCase().replace(/[^a-z0-9]/g, ""); }
   /* phones: each wide-table row becomes a card, every value labelled from the header row */
   function stack(id) {
@@ -62,8 +63,15 @@
   }
 
   /* ---------- the range shared by Songs, Ads and Pages ---------- */
+  /* São Paulo "today" and the 1st of its month, for "This month" (a custom range under the hood) */
+  function spToday() { try { return new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date()); } catch (e) { return new Date().toISOString().slice(0, 10); } }
   var state = { range: "7d", from: "", to: "" };
-  try { var saved = JSON.parse(localStorage.getItem("bs_admin_view") || "{}"); if (/^(today|7d|30d)$/.test(saved.range)) state.range = saved.range; } catch (e) {}
+  try {
+    var saved = JSON.parse(localStorage.getItem("bs_admin_view") || "{}");
+    if (/^(today|7d|30d)$/.test(saved.range)) state.range = saved.range;
+    if (saved.range === "month") { state.range = "custom"; state.to = spToday(); state.from = state.to.slice(0, 8) + "01"; }
+  } catch (e) {}
+  function isMonth() { var t = spToday(); return state.range === "custom" && state.to === t && state.from === t.slice(0, 8) + "01"; }
   function rangeQuery() {
     var q = new URLSearchParams({ range: state.range });
     if (state.range === "custom") { if (state.from) q.set("from", state.from); if (state.to) q.set("to", state.to); }
@@ -71,20 +79,28 @@
     return q;
   }
   function syncRangeSelects() {
-    [].forEach.call(document.querySelectorAll("[data-range]"), function (s) {
-      s.querySelector('option[value="custom"]').hidden = state.range !== "custom";
-      s.value = state.range;
-    });
+    var v = isMonth() ? "month" : state.range;
+    [].forEach.call(document.querySelectorAll("[data-range]"), function (s) { s.value = v; });
+    var c = $("rangeCustom");
+    if (c) { c.hidden = v !== "custom"; if (state.from) $("rFrom").value = state.from; if (state.to) $("rTo").value = state.to; }
   }
+  /* range: today | 7d | 30d | month | custom (from, to) */
   function setRange(range, from, to) {
-    state.range = range; state.from = from || state.from; state.to = to || state.to;
+    if (range === "month") { to = spToday(); from = to.slice(0, 8) + "01"; }
+    state.range = range === "month" ? "custom" : range; state.from = from || state.from; state.to = to || state.to;
     try { var v = JSON.parse(localStorage.getItem("bs_admin_view") || "{}"); v.range = range; localStorage.setItem("bs_admin_view", JSON.stringify(v)); } catch (e) {}
     syncRangeSelects();
     loadOverview();
     if (window.HQPages) window.HQPages.reload();
   }
   document.addEventListener("change", function (ev) {
-    if (ev.target.matches && ev.target.matches("[data-range]")) setRange(ev.target.value);
+    if (!ev.target.matches) return;
+    if (ev.target.matches("[data-range]")) {
+      var v = ev.target.value;
+      if (v === "custom") { $("rangeCustom").hidden = false; $("rFrom").value = state.from || spToday().slice(0, 8) + "01"; $("rTo").value = state.to || spToday(); $("rFrom").focus(); return; }
+      setRange(v);
+    }
+    if (ev.target.id === "rFrom" || ev.target.id === "rTo") { var f = $("rFrom").value, t = $("rTo").value; if (f && t) setRange("custom", f <= t ? f : t, f <= t ? t : f); }
   });
 
   /* ---------- login (same endpoint, password, cookie and lockout as before) ---------- */
@@ -92,12 +108,17 @@
     $("shell").hidden = true;
     $("login").hidden = false;
     $("err").textContent = msg || "";
-    clearInterval(sheetTimer); clearInterval(ovTimer);
+    clearInterval(timer);
     started = false;
     if (window.HQPages) window.HQPages.stop();
     setTimeout(function () { $("pw").focus(); }, 50);
   }
-  function showShell() { $("login").hidden = true; $("shell").hidden = false; }
+  function showShell() {
+    var was = $("shell").hidden;
+    $("login").hidden = true; $("shell").hidden = false;
+    /* the CRT wordmark (js/crt.js) measured itself while the shell was hidden: let it measure again */
+    if (was) setTimeout(function () { window.dispatchEvent(new Event("resize")); }, 0);
+  }
   $("loginForm").addEventListener("submit", function (ev) {
     ev.preventDefault();
     var btn = $("go");
@@ -124,30 +145,66 @@
   }
 
   /* ---------- loading: three answers in parallel, each drawn as it lands ---------- */
+  var EVERY = 5 * 60 * 1000, timer = null, lastRefresh = 0, sheetProblem = "";
   function start() {
     started = true;
     syncRangeSelects();
-    loadSheet();
-    loadOverview();
-    if (window.HQPages) window.HQPages.load(true);
-    clearInterval(sheetTimer); clearInterval(ovTimer);
-    sheetTimer = setInterval(function () { if (!document.hidden) loadSheet(); }, 5 * 60 * 1000);
-    ovTimer = setInterval(function () { if (!document.hidden) loadOverview(); }, 60 * 1000);
+    refresh();
+    clearInterval(timer);
+    timer = setInterval(function () { if (!document.hidden) refresh(); }, EVERY);
   }
-  document.addEventListener("visibilitychange", function () { if (!document.hidden && started) { loadOverview(); if (window.HQPages) window.HQPages.reload(); } });
+  /* every 5 minutes while the page is on screen; coming back after longer than that refreshes at once */
+  document.addEventListener("visibilitychange", function () { if (!document.hidden && started && Date.now() - lastRefresh > EVERY) refresh(); });
+  function refresh() {
+    lastRefresh = Date.now();
+    return Promise.all([loadSheet(), loadOverview(), window.HQPages ? window.HQPages.reload() : null]).then(drawDataHealth, drawDataHealth);
+  }
+
+  /* ---------- the last good numbers, kept on this device for offline ("as of <time>") ---------- */
+  function keep(key, q, j) { if (sample) return; try { localStorage.setItem(key, JSON.stringify({ at: Date.now(), q: q, j: j })); } catch (e) {} }
+  function kept(key, q) { if (sample) return null; try { var v = JSON.parse(localStorage.getItem(key) || "null"); return v && v.j && (q == null || v.q === q) ? v : null; } catch (e) { return null; } }
+  var net = {}; /* part -> { msg, asOf } */
+  function hhmm(at) { return new Date(at).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: "America/Sao_Paulo" }); }
+  function netState(part, msg, asOf) {
+    if (msg) net[part] = { msg: msg, asOf: asOf || null }; else delete net[part];
+    var parts = Object.keys(net), bar = $("netBar");
+    bar.hidden = !parts.length;
+    if (!parts.length) { $("dot").className = "livedot"; return; }
+    var offline = parts.every(function (k) { return net[k].msg === "offline"; });
+    var asOf = parts.map(function (k) { return net[k].asOf; }).filter(Boolean).sort()[0];
+    bar.className = "netbar" + (offline ? " offline" : "");
+    $("netMsg").textContent = offline ? (asOf ? "Offline · showing the numbers as of " + hhmm(asOf) + " SP" : "Offline · no numbers saved on this device yet")
+      : parts.map(function (k) { return net[k].msg === "offline" ? "" : net[k].msg; }).filter(Boolean).join(" ") + (asOf ? " Showing the numbers as of " + hhmm(asOf) + " SP." : "");
+    $("dot").className = "livedot off";
+    $("when").textContent = offline ? "offline" : "problem";
+  }
+  $("retry").addEventListener("click", function () { refresh(); });
 
   function loadSheet() {
-    getJSON("/api/hq/data" + (sample ? "?sample=1" : "")).then(function (res) {
+    return getJSON("/api/hq/data" + (sample ? "?sample=1" : "")).then(function (res) {
       if (authFail(res)) return;
       showShell();
       $("sample").hidden = !sample;
-      if (res.s !== 200) { offSheet("Couldn't load the sheet numbers (" + res.s + "). Trying again in a few minutes."); return; }
-      if (res.j.error) { offSheet("Couldn't read the sheet: " + res.j.error + "."); return; }
-      if (!res.j.connected) { offSheet("The sheet sections read the bots' \"BADSCANDAL HQ\" sheet. Still to add on Netlify: " + (res.j.need || []).join(" and ") + "."); return; }
+      if (res.s !== 200) {
+        var old = kept("bs_hq_last_sheet");
+        if (old) { sheet = old.j; drawSheet(); }
+        sheetProblem = "Couldn't load (" + res.s + ")";
+        netState("sheet", "Couldn't load the sheet numbers (" + res.s + ").", old && old.at);
+        return;
+      }
+      netState("sheet", null);
+      if (res.j.error) { sheetProblem = "Can't be read: " + res.j.error; offSheet("Couldn't read the sheet: " + res.j.error + "."); return; }
+      if (!res.j.connected) { sheetProblem = "Not connected (" + (res.j.need || []).join(", ") + " missing on Netlify)"; offSheet("The sheet sections read the bots' \"BADSCANDAL HQ\" sheet. Still to add on Netlify: " + (res.j.need || []).join(" and ") + "."); return; }
+      sheetProblem = "";
       $("sheetOff").hidden = true;
       sheet = res.j;
+      keep("bs_hq_last_sheet", "", sheet);
       drawSheet();
-    }).catch(function () { $("dot").className = "livedot off"; $("when").textContent = "offline"; });
+    }).catch(function () {
+      var old = kept("bs_hq_last_sheet");
+      if (old && !sheet) { sheet = old.j; showShell(); drawSheet(); }
+      netState("sheet", "offline", old && old.at);
+    });
   }
   function offSheet(msg) {
     sheet = null;
@@ -161,15 +218,39 @@
   $("showSample").addEventListener("click", function () { location.search = "?sample=1"; });
 
   function loadOverview() {
-    getJSON("/api/admin/overview?" + rangeQuery()).then(function (res) {
+    var q = rangeQuery().toString();
+    return getJSON("/api/admin/overview?" + q).then(function (res) {
       if (authFail(res)) return;
       showShell();
-      if (res.s !== 200) { $("yday").innerHTML = '<p class="empty">Couldn\'t load the page numbers (' + res.s + ").</p>"; return; }
+      if (res.s !== 200) {
+        var old = kept("bs_hq_last_ov", q);
+        if (old) { ov = old.j; drawOverview(); }
+        else $("yday").innerHTML = '<p class="empty2">Couldn\'t load the page numbers.</p>';
+        netState("ov", "Couldn't load the page numbers (" + res.s + ").", old && old.at);
+        return;
+      }
+      netState("ov", null);
       ov = res.j;
-      $("dot").className = "livedot";
-      $("when").textContent = (sample ? "sample · " : "live · ") + new Date().toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: "America/Sao_Paulo" }) + " SP";
-      drawYesterday(); drawSongs(); drawAds(); drawKeyLines();
-    }).catch(function () { $("dot").className = "livedot off"; $("when").textContent = "offline"; });
+      keep("bs_hq_last_ov", q, ov);
+      $("when").textContent = (sample ? "sample · " : "live · ") + hhmm(Date.now()) + " SP";
+      drawOverview();
+    }).catch(function () {
+      var old = kept("bs_hq_last_ov", q);
+      if (old) { ov = old.j; showShell(); drawOverview(); }
+      netState("ov", "offline", old && old.at);
+    });
+  }
+  function drawOverview() { drawYesterday(); drawSongs(); drawAds(); drawDataHealth(); }
+
+  /* ---------- Data health: Sheet, Meta, page counter, exchange rate (one dot in the header) ---------- */
+  function drawDataHealth() {
+    var rows = window.HQLib.healthRows({ sheet: sheet, sheetProblem: sheetProblem, ov: ov });
+    var st = window.HQLib.healthState(rows);
+    $("hDot").className = "hdot " + st;
+    $("healthBtn").setAttribute("aria-label", "Data health: " + (st === "bad" ? "something needs attention" : st === "ok" ? "all fine" : "not everything read yet"));
+    $("healthRows").innerHTML = rows.map(function (r) {
+      return '<li class="' + r.state + '"><i class="' + r.state + '" aria-hidden="true"></i><b>' + esc(r.label) + "</b><span>" + esc(r.text) + "</span></li>";
+    }).join("");
   }
 
   /* ---------- sheet errors: say so instead of looking empty ---------- */
@@ -192,7 +273,7 @@
 
   function drawSheet() {
     drawSheetErrors();
-    drawToday(); drawSongs(); drawCapCard(); drawGrowth(); drawFans(); drawReleases(); drawMoney(); drawTeam(); drawKeyLines();
+    drawToday(); drawSongs(); drawCapCard(); drawGrowth(); drawFans(); drawReleases(); drawMoney(); drawTeam(); drawDataHealth();
   }
 
   /* ---------- Today ---------- */
@@ -206,39 +287,35 @@
     $(fill).style.width = p(c.spent); $(warn).style.left = p(c.warn); $(stop).style.left = p(c.stop);
   }
   function drawToday() {
-    var c = sheet.money.cap;
+    var c = sheet.money.cap, attn = c.status !== "ok";
     $("capMonth").textContent = monthName(c.month);
-    $("todaySub").textContent = day(sheet.today) + " · São Paulo";
-    $("capTile").className = "tile " + c.status;
-    $("capSpent").innerHTML = esc(money(c.spent, c.currency)) + " <small>of " + esc(money(c.amount, c.currency)) + " · " + c.pct + "%</small>";
+    $("todaySub").textContent = day(sheet.today);
+    $("capTile").className = "t-card t-cap " + c.status;
+    $("capSpent").innerHTML = esc(money(c.spent, c.currency)) + " <small>of " + esc(fmt(c.amount)) + "</small>";
     paintBar(c, "capFill", "capWarn", "capStop");
-    $("capShort").textContent = capMessage(c) + " Details in Ads.";
+    var line = { ok: money(c.left, c.currency) + " left", warn: "Past " + fmt(c.warn) + ": getting close", stop: "Past " + fmt(c.stop) + ": every ad should be off", over: "Over the cap: every ad must be off now" }[c.status] || "";
+    var pace = c.status === "ok" && c.perDay > 0 ? (c.stopDay ? "At this pace the " + fmt(c.stop) + " line comes on the " + ordinal(c.stopDay) + "." : "On pace to stay under " + fmt(c.stop) + ".") : "";
+    $("capShort").innerHTML = '<b class="' + (attn ? "attn" : "") + '">' + esc(line) + "</b>" + (pace ? " · " + esc(pace) : "");
     var n = sheet.next;
     $("nextSong").textContent = broken("Releases") ? "Can't be read" : n ? n.song : "None set";
-    $("nextMsg").textContent = broken("Releases") ? "The Releases tab shows an error." : n ? (n.daysToGo === 0 ? "Out today" : n.daysToGo + " days to go") + " · " + day(n.date) + (n.late ? " · " + n.late + " step" + (n.late > 1 ? "s" : "") + " late" : " · on time") : "Tell Nova the next song and a Friday.";
+    $("nextMsg").innerHTML = broken("Releases") ? '<span class="attn">The Releases tab shows an error.</span>' : n ? "<b>" + (n.daysToGo === 0 ? "Out today" : n.daysToGo + " day" + (n.daysToGo === 1 ? "" : "s")) + "</b> · " + esc(day(n.date)) +
+      (n.late ? ' · <span class="attn">' + n.late + " step" + (n.late > 1 ? "s" : "") + " late</span>" : " · on time") : "Tell Nova the next song and a Friday.";
     var mine = sheet.team.forLuke;
-    $("forLuke").innerHTML = broken("Tasks") ? '<p class="empty" style="margin-top:8px">The Tasks tab can\'t be read (sheet error).</p>' : mine.length ? '<ul class="steps">' + mine.slice(0, 5).map(function (x) {
-      return '<li class="' + (x.late ? "late" : "") + '"><span class="dot"></span><span>' + esc(x.task) + '</span><span class="w">' + esc(x.deadline ? day(x.deadline.slice(0, 10)) : "") + "</span></li>"; }).join("") + "</ul>"
-      : '<p class="empty" style="margin-top:8px">Nothing waiting on you.</p>';
+    $("forLuke").innerHTML = broken("Tasks") ? '<p class="empty2 attn">The Tasks tab can\'t be read.</p>' : mine.length ? '<ul class="t-list">' + mine.slice(0, 4).map(function (x) {
+      return '<li class="' + (x.late ? "late" : "") + '"><span>' + esc(x.task) + '</span><span class="when">' + (x.late ? "late · " : "") + esc(x.deadline ? day(x.deadline.slice(0, 10)) : "") + "</span></li>"; }).join("") + "</ul>"
+      : '<p class="empty2">Nothing waiting on you.</p>';
     var du = sheet.team.duties;
     $("dutyBig").innerHTML = broken("Tasks") ? "–" : du.total ? du.done + " <small>of " + du.total + " done</small>" : "–";
-    $("dutyMsg").textContent = broken("Tasks") ? "The Tasks tab can't be read." : !du.total ? "No duties (D- rows) for today in the sheet." : (du.blocked ? du.blocked + " blocked · " : "") + (du.total - du.done - du.blocked) + " still to do. Per bot in Team.";
+    $("dutyMsg").innerHTML = broken("Tasks") ? '<span class="attn">The Tasks tab can\'t be read.</span>' : !du.total ? "No duties logged for today." :
+      (du.blocked ? '<span class="attn">' + du.blocked + " blocked</span> · " : "") + (du.total - du.done - du.blocked) + " to do";
   }
   function drawYesterday() {
     var y = ov.yesterday;
-    $("yday").innerHTML = '<div class="big num">' + fmt(y.taps) + ' <small>real Spotify taps · ' + esc(day(y.d)) + "</small></div>" +
-      '<div class="kv"><span>People on the song pages</span><b>' + fmt(y.people) + "</b></div>" +
-      '<div class="kv"><span>Meta spend</span><b>' + (y.spend == null ? "–" : esc(money(y.spend, y.currency))) + "</b></div>" +
-      '<div class="kv"><span>Cost per tap</span><b>' + (y.cpt == null ? "–" : esc(money(y.cpt, y.currency))) + "</b></div>";
+    $("yday").innerHTML = '<p class="t-big num green">' + fmt(y.taps) + ' <small>real Spotify taps</small></p>' +
+      '<ul class="t-rows"><li><span>People on the song pages</span><b>' + fmt(y.people) + "</b></li>" +
+      "<li><span>Meta spend</span><b>" + (y.spend == null ? "–" : esc(money(y.spend, y.currency))) + "</b></li>" +
+      "<li><span>Cost per tap</span><b>" + (y.cpt == null ? "–" : esc(money(y.cpt, y.currency))) + "</b></li></ul>";
   }
-  function drawKeyLines() {
-    var k = (ov && ov.metaKey) || (sheet && sheet.metaKey);
-    ["metaKey", "metaKey2"].forEach(function (id) {
-      var el = $(id); el.hidden = !k;
-      if (k) { el.textContent = k.text; el.className = "keyline" + (k.state === "ok" ? " ok" : k.state === "expired" || k.state === "error" ? " bad" : ""); }
-    });
-  }
-
   /* ---------- Songs: the sheet's Spotify numbers + our page + Meta + royalties, one card each ---------- */
   function drawSongs() {
     var bySheet = {}, order = [];
@@ -254,7 +331,7 @@
       var s = bySheet[k], p = byPage[k], sp = spendBy[k];
       var name = s ? s.song : p.title;
       var pill = !s ? "" : s.trend === "rising" ? '<span class="pill hot">Rising ' + signed(s.momentum) + "%</span>" : s.trend === "cooling" ? '<span class="pill warn">Cooling ' + signed(s.momentum) + "%</span>" : s.trend === "steady" ? '<span class="pill">Steady ' + signed(s.momentum) + "%</span>" : '<span class="pill">New</span>';
-      var out = '<div class="tile"><div class="songhead">' + (p && p.cover ? '<img class="cover" src="' + esc(p.cover) + '" alt="">' : "") + "<h3>" + esc(name) + "</h3>" + pill + "</div>";
+      var out = '<div class="tile" id="song-' + esc(p ? p.id : k) + '"><div class="songhead">' + (p && p.cover ? '<img class="cover" src="' + esc(p.cover) + '" alt="">' : "") + "<h3>" + esc(name) + "</h3>" + pill + "</div>";
       if (s) out += '<div class="big num">' + fmt(s.streams) + " <small>streams · " + esc(day(s.lastDay)) + "</small></div>" +
         '<div class="d">' + signed(s.dayChange) + " vs the day before · " + fmt(s.week) + " in 7 days" + (s.prevWeek != null ? " (" + fmt(s.prevWeek) + " the 7 before)" : "") + "</div>" + spark(s.series) +
         '<div class="d">' + fmt(s.listeners) + " listeners · " + fmt(s.saves) + " saves · " + fmt(s.adds) + " playlist adds" + (s.stale > 3 ? ' · <b style="color:var(--paper)">not logged for ' + s.stale + " days</b>" : "") + "</div>";
@@ -419,7 +496,7 @@
     stack("taskTable");
   }
 
-  window.HQ = { sample: sample, state: state, setRange: setRange, showLogin: showLogin, showShell: showShell, rangeQuery: rangeQuery,
+  window.HQ = { sample: sample, state: state, setRange: setRange, refresh: refresh, net: function (p, m, a) { netState(p, m, a); }, keep: keep, kept: kept, showLogin: showLogin, showShell: showShell, rangeQuery: rangeQuery,
     esc: esc, fmt: fmt, money: money, day: day, ago: ago, getJSON: getJSON, authFail: authFail };
   /* hq-pages.js is loaded with defer right after this file: start once both are in */
   document.addEventListener("DOMContentLoaded", start);
