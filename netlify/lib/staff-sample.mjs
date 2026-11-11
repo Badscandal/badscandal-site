@@ -27,14 +27,7 @@ export function memoryDesk() {
   };
 }
 
-const ROSTER = S.DEFAULT_ROSTER.map((b) => ({ ...b, why: {
-  Nova: "Without Nova nobody resets the day's duties, chases what is missing or writes the evening wrap-up.",
-  Alfred: "The only voice that reaches Luke: one message a day, so nothing else has to.",
-  Ledger: "Sees every payment the day it lands, so income is never found weeks later.",
-  Atlas: "Spotify numbers per song are the number the whole plan is steered by.",
-  Forge: "Keeps ad spend inside the monthly cap before anything launches.",
-}[b.name] || "Keeps its part of the dashboard alive every day.",
-schedule: [{ time: b.time, what: b.duty }], writes: "", access: "", blockers: b.name === "Kevin" ? "TikTok asks for Luke's phone code on a new sign-in" : "" }));
+const ROSTER = S.DEFAULT_ROSTER.map((b) => ({ access: "", blockers: b.name === "Kevin" ? "TikTok asks for Luke's phone code on a new sign-in" : "", ...b }));
 
 const SOURCES = [
   { id: "wise", name: "Wise", kind: "account", owner: "Ledger", cadence: "daily", state: "active", how: "read-only connection" },

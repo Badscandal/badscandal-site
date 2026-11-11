@@ -163,7 +163,7 @@ export async function callTool(tool, args, ctx) {
   const sheetNote = hq ? null : "The team's Google Sheet could not be read just now, so duties and tasks are missing from this answer. Carry on with your job card.";
   const worker = (w) => ({ name: w.name, role: w.role, state: w.state, duties: w.duties.map((d) => ({ id: d.id, task: d.task, due: d.due || "today", status: d.late ? "late" : d.status, ...(d.blocker ? { blocker: d.blocker } : {}) })),
     last_update: w.last ? `${w.last.at} ${w.last.status}: ${w.last.message}` : "none", working_on: w.card ? w.card.workingOn : "", needs: w.card ? w.card.needs : "",
-    open_tasks: w.tasks.length, late_tasks: w.lateTasks, waiting_on_it: w.waiting.length, last_used_the_desk: w.seen || "never" });
+    open_tasks: w.tasks.length, late_tasks: w.lateTasks, waiting_on_it: w.waiting.length, last_used_the_desk: w.seen ? S.spStamp(Date.parse(w.seen)) : "never" });
 
   switch (tool.name) {
     case "my_day": {
@@ -176,7 +176,8 @@ export async function callTool(tool, args, ctx) {
         waiting_on_you: w.waiting, notes_for_everyone: desk.messages.filter((m) => m.to === "all" && Date.parse(m.at) > since).slice(0, 5).map(short),
         your_last_update: w.last ? `${w.last.at} ${w.last.status}: ${w.last.message}` : "none yet",
         ...(/^(ledger|sheet|nova|alfred)$/i.test(me) ? { income_problems: b.income.problems } : {}),
-        rules: RULES, next: "Do your duty, then call post_update with status done and the number. If you are stuck, post_update with status blocked and say what is needed.", ...(sheetNote ? { note: sheetNote } : {}) };
+        rules: RULES, next: "Do your duty, then call post_update with status done and the number. If you are stuck, post_update with status blocked and say what is needed.",
+        ...(sheetNote ? { note: sheetNote } : !w.duties.length && !w.paused ? { note: "The task board has no duty row for you today. Do your daily duty at your usual time anyway, and tell Nova the row is missing." } : {}) };
     }
     case "team_board":
       return { today, now_sao_paulo: b.now, duties: hq ? { done: hq.team.duties.done, total: hq.team.duties.total, late: hq.team.duties.late, blocked: hq.team.duties.blocked } : "not read",

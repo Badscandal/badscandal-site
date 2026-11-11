@@ -125,7 +125,7 @@ test("connector: a bot's whole day, end to end (the sheet isn't connected in thi
   const team = (await tool("team_board", { bot: "Nova" })).structuredContent;
   assert.equal(team.team.length, 12); assert.equal(team.duties, "not read"); assert.equal(team.waiting_on_luke.length, 1);
   assert.equal(team.team.find((w) => w.name === "Ledger").last_update.includes("working: Checking Wise"), true); assert.equal(team.team.find((w) => w.name === "Atlas").working_on, "Backfilling Touch Me");
-  assert.notEqual(team.team.find((w) => w.name === "Ledger").last_used_the_desk, "never"); assert.equal(team.team.find((w) => w.name === "Verse").last_used_the_desk, "never");
+  assert.match(team.team.find((w) => w.name === "Ledger").last_used_the_desk, /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/, "São Paulo time, not UTC"); assert.equal(team.team.find((w) => w.name === "Verse").last_used_the_desk, "never");
   const brief = (await tool("luke_briefing", { bot: "Alfred" })).structuredContent;
   assert.equal(brief.ad_spend, "not read", "a number that could not be read is never 0"); assert.equal(brief.decisions_waiting_on_luke[0].options.length, 2); assert.equal(brief.income_this_month.received, "USD 104.04");
   assert.match((await tool("read_guide", { bot: "Verse" })).content[0].text, /has not been loaded/);
