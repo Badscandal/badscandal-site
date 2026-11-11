@@ -7,7 +7,7 @@
      POST /api/staff/message   Luke (or Claude) writes on the board        { to, text, needs, re, options, note }
                                (-> settled: did the answer close the message it answers; note = Luke's pick)
      POST /api/staff/resolve   …or settles a message                        { id, note }
-     POST /api/staff/sort      Luke (or Claude) says what a Revolut payment is { id, month, status: received|transfer, category }
+     POST /api/staff/sort      Luke (or Claude) says what a Revolut payment is { id, month, status: received|transfer, category, pending_id? }
      POST /api/staff/config    Luke switches the bots' key off / on         { botsOn }
      PUT  /api/staff/seed      Claude loads the roster, the income sources and the guide
      POST /api/staff/release         a release pack: start a draft or change one { id?, title, date, pack }
@@ -178,7 +178,7 @@ async function api(req, context, path) {
       return json(200, { ok: true, answer: r.answer, release: r.release ? S.releaseView(r.release, S.spDay(now), { sightings: r.sightings }) : null, told: !!(r.told || r.sending), sightings: r.sightings });
     }
     if (path === "sort" && req.method === "POST")
-      return json(200, { ok: true, entry: await S.sortIncome(st.desk, now, roster, { by: me, id: a.id, month: a.month, status: a.status, category: a.category }) });
+      return json(200, { ok: true, entry: await S.sortIncome(st.desk, now, roster, { by: me, id: a.id, month: a.month, status: a.status, category: a.category, pending_id: a.pending_id }) });
     if (path === "config" && req.method === "POST") {
       if (role !== "luke") return json(403, { error: "Only Luke switches the bots' key" });
       return json(200, { ok: true, config: await S.setConfig(st.desk, now, { botsOn: a.botsOn }) });

@@ -749,7 +749,7 @@ textarea.fld{min-height:112px;resize:vertical}
 .tosort .tsub{margin:0 0 10px;font-size:14px;line-height:1.45;color:var(--uv)}
 .tosort .tsub:last-child{margin:12px 0 0}
 .tosort .mnote{margin:0 0 10px}
-.sortlist{list-style:none;margin:0;padding:0;max-width:760px}
+.sortlist{list-style:none;margin:0;padding:0}
 .sortlist > li{padding:14px 0;border-top:.5px solid var(--glass-line)}
 .sortlist > li:first-child{border-top:0;padding-top:4px}
 .sortlist > li:last-child{padding-bottom:2px}
@@ -767,6 +767,8 @@ textarea.fld{min-height:112px;resize:vertical}
 @media(min-width:600px){.stypes{grid-template-columns:repeat(3,minmax(0,1fr))}}
 .stypes .copybtn{width:100%;padding:0 10px;font-size:15px}
 .stypes .copybtn[aria-pressed="true"]{background:var(--paper);color:var(--ink);border-color:var(--paper)}
+/* "It's the pending … statement": the first answer, across the whole row, its words wrap */
+.stypes .copybtn.stmt{grid-column:1/-1;padding:10px 16px;line-height:1.35;text-align:left;border-radius:22px}
 @media (prefers-reduced-motion:reduce){.bwhy summary::after{transition:none}}
 
 /* ================= Replies that visibly land + the release pipeline (11 Nov 2026) =================

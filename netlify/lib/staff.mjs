@@ -478,24 +478,47 @@ export async function incomeCheck(store, now, roster, a) {
    What the bank reader itself decided (its last word is HQ's: "transfer" from an own-transfer rule,
    "received" from a known source) can be corrected too; what a person or a bot decided stays. */
 export const SORTERS = ["Luke", "Claude", "Ledger", "Sheet", "Nova"];
+/* how many months of payments "To sort" looks back over (this month and the 11 before): an unsorted
+   payment stays on the list, in the count and in income_status for a year, not just four months */
+export const UNSORTED_MONTHS = 12;
+const PAY_ID = /^i[0-9a-z]{8,16}$/;
+/* Is the statement p (pending) the money of the credit e? Same amount and currency, dated on or before
+   it, in its month or the three before (the rule the bank reader's own upgrade uses). */
+const pendingFits = (p, e) => p.status === "pending" && p.amount === e.amount && p.currency === e.currency && p.date <= e.date && monthsBack(e.date.slice(0, 7), 4).includes(String(p.date).slice(0, 7));
+const monthsBack = (m, n) => { const out = []; for (let i = 0; i < n; i++, m = prevMonth(m)) out.push(m); return out; };
+/* a.pending_id (with status received): the payment is the money of THAT statement, logged earlier as
+   pending. The statement is upgraded as the bank reader's own upgrade does it (received, arrived = the
+   credit's day, the credit's id kept as its reference or bankRef) and the unsorted row is taken off the
+   desk, so the money is counted once, as received, and never also as pending. */
 export async function sortIncome(store, now, roster, a) {
   const by = whoIs(a.by, roster, { people: true });
   if (!SORTERS.includes(by)) fail(`Only ${SORTERS.join(", ")} can sort a payment.`, "not_allowed");
   const id = clean(a.id, 20);
-  if (!/^i[0-9a-z]{8,16}$/.test(id)) fail("id must be the payment's id (it starts with i)");
+  if (!PAY_ID.test(id)) fail("id must be the payment's id (it starts with i)");
   const status = low(a.status);
   if (!["received", "transfer"].includes(status)) fail('status must be "received" (it is income) or "transfer" (not income)');
+  const pid = a.pending_id == null || a.pending_id === "" ? "" : clean(a.pending_id, 20);
+  if (pid && (status !== "received" || !PAY_ID.test(pid))) fail("pending_id goes only with status received, and must be the pending statement's id (it starts with i)");
   const category = status === "received" ? CATEGORIES.find((c) => low(c) === low(a.category)) : null;
-  if (status === "received" && !category) fail(`category must be one of: ${CATEGORIES.join(", ")}`);
+  if (status === "received" && !category && !pid) fail(`category must be one of: ${CATEGORIES.join(", ")}`);
   let months = [clean(a.month, 7)];
-  if (!/^\d{4}-\d{2}$/.test(months[0])) { let m = spDay(now).slice(0, 7); months = []; for (let i = 0; i < 4; i++, m = prevMonth(m)) months.push(m); }
+  if (!/^\d{4}-\d{2}$/.test(months[0])) months = monthsBack(spDay(now).slice(0, 7), UNSORTED_MONTHS);
+  const sortable = (e) => {
+    const lastBy = (e.history || []).length ? e.history[e.history.length - 1].by : e.by;
+    if (e.status !== "unsorted" && lastBy !== "HQ") fail(`That payment is already sorted (${e.status}). Nothing was changed.`, "not_allowed");
+    if (e.status === "pending") fail("That payment is still pending. Nothing was changed.", "not_allowed");
+  };
   for (const m of months) {
+    if (pid) {
+      const cur = ((await readDoc(store, incKey(m), [])).data || []).find((x) => x.id === id);
+      if (!cur) continue;
+      sortable(cur);
+      return mergePending(store, now, by, cur, m, pid);
+    }
     const hit = await mutate(store, incKey(m), [], (list) => {
       const e = list.find((x) => x.id === id);
       if (!e) return { skip: true, value: null };
-      const lastBy = (e.history || []).length ? e.history[e.history.length - 1].by : e.by;
-      if (e.status !== "unsorted" && lastBy !== "HQ") fail(`That payment is already sorted (${e.status}). Nothing was changed.`, "not_allowed");
-      if (e.status === "pending") fail("That payment is still pending. Nothing was changed.", "not_allowed");
+      sortable(e);
       const at = new Date(now).toISOString();
       e.history = (e.history || []).concat({ at, by, from: e.status, to: status }).slice(-10);
       e.status = status; if (category) e.category = category; e.updatedAt = at;
@@ -504,6 +527,33 @@ export async function sortIncome(store, now, roster, a) {
     if (hit) return hit;
   }
   fail("There is no payment with that id", "not_found");
+}
+async function mergePending(store, now, by, e, month, pid) {
+  const at = new Date(now).toISOString(), ref = e.reference || "";
+  const drop = (list) => { const i = list.findIndex((x) => x.id === e.id); if (i >= 0) list.splice(i, 1); return i >= 0; };
+  let up = null;
+  for (const m of monthsBack(e.date.slice(0, 7), 4)) {
+    up = await mutate(store, incKey(m), [], (list) => {
+      const p = list.find((x) => x.id === pid);
+      if (!p) return { skip: true, value: null };
+      /* done already (a second press, or a first one cut off before the row went): only the row goes */
+      const done = p.status === "received" && !!ref && (low(p.reference) === low(ref) || low(p.bankRef) === low(ref));
+      if (!done) {
+        if (p.status !== "pending") fail(`That statement is not pending any more (${p.status}). Nothing was changed.`, "not_allowed");
+        if (!pendingFits(p, e)) fail("That statement is not this payment: the amount, the currency or the day doesn't fit. Nothing was changed.", "not_allowed");
+        p.history = (p.history || []).concat({ at, by, from: "pending", to: "received", merged: e.id }).slice(-10);
+        p.status = "received"; p.arrived = e.date; p.account = e.account; p.updatedAt = at;
+        if (ref && !p.reference) p.reference = ref;
+        else if (ref && low(p.reference) !== low(ref)) p.bankRef = ref; /* how the bank reader knows it when it reads the payment again */
+      }
+      if (m === month) drop(list); /* the same month: one write does both */
+      return { value: p };
+    });
+    if (up) break;
+  }
+  if (!up) fail("There is no pending statement with that id", "not_found");
+  if (month !== up.date.slice(0, 7)) await mutate(store, incKey(month), [], (list) => (drop(list) ? { value: null } : { skip: true, value: null }));
+  return up;
 }
 export async function getSources(store) {
   const { data } = await readDoc(store, "sources.json", []);
@@ -527,9 +577,13 @@ export function setSources(store, list) {
 const srcMatches = (s, text) => { const t = low(text); return !!t && [low(s.name), s.id, ...(s.match || [])].filter(Boolean).some((k) => t.includes(k)); };
 const DUE_DAYS = { daily: 2, monthly: 45, quarterly: 110 };
 
-/* The picture of the money coming in. entries: this month + last (+ any older passed in).
-   -> { month, received:{CUR:n}, pending:{CUR:n}, entries (newest 60), accounts:[...], sources:[...], problems:[...] } */
-export function incomeReport(entries, checks, sources, today) {
+/* The picture of the money coming in. entries: this month + last (+ any older passed in). older: the
+   months before those (up to UNSORTED_MONTHS in all), read ONLY for "To sort" (unsorted payments and
+   the statement each may be).
+   -> { month, received:{CUR:n}, pending:{CUR:n}, entries (newest 60), accounts:[...], sources:[...], problems:[...],
+        unsorted (newest 40, each with pendingMatch {id, payer, amount, currency, date} when ONE payer's
+        pending statement fits it), unsortedCount } */
+export function incomeReport(entries, checks, sources, today, older = []) {
   const month = today.slice(0, 7);
   const add = (o, cur, a) => { o[cur] = round((o[cur] || 0) + a); };
   const received = {}, pending = {}, byCat = {};
@@ -574,19 +628,32 @@ export function incomeReport(entries, checks, sources, today) {
   const oldPending = entries.filter((e) => e.status === "pending" && daysBetween(e.date, today) > 30).length;
   if (oldPending) problems.push(`${oldPending} pending payment${oldPending === 1 ? "" : "s"} older than 30 days`);
   /* seen in an account (the bank reader), not yet said what it is: listed apart, in no total */
-  const unsorted = entries.filter((e) => e.status === "unsorted").sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : a.at < b.at ? 1 : -1));
+  const pool = entries.concat(older || []);
+  const unsorted = pool.filter((e) => e.status === "unsorted").sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : a.at < b.at ? 1 : -1));
   if (unsorted.length) problems.push(`${unsorted.length} payment${unsorted.length === 1 ? "" : "s"} in ${[...new Set(unsorted.map((e) => e.account))].join(" and ")} that nobody has sorted yet`);
-  return { month, received, pending, byCategory: byCat, count: entries.filter((e) => e.date.slice(0, 7) === month).length, unsorted: unsorted.slice(0, 40), unsortedCount: unsorted.length,
+  /* the oldest month "To sort" reads: what is still unsorted there drops off the list when this month ends */
+  const edge = monthsBack(month, UNSORTED_MONTHS).pop(), leaving = unsorted.filter((e) => e.date.slice(0, 7) <= edge).length;
+  if (leaving) problems.push(`${leaving} unsorted payment${leaving === 1 ? "" : "s"} from ${MONTH[Number(edge.slice(5, 7)) - 1]} ${edge.slice(0, 4)} drop${leaving === 1 ? "s" : ""} off "To sort" when this month ends: sort ${leaving === 1 ? "it" : "them"} before then`);
+  /* the money of a statement logged as pending? Offered only when every statement that fits is the same payer's (the oldest is taken, as the bank reader does) */
+  const pend = pool.filter((p) => p.status === "pending");
+  const withMatch = (e) => {
+    const fit = pend.filter((p) => pendingFits(p, e)).sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+    if (!fit.length || new Set(fit.map((p) => low(p.payer))).size > 1) return e;
+    const p = fit[0];
+    return { ...e, pendingMatch: { id: p.id, payer: p.payer, amount: p.amount, currency: p.currency, date: p.date } };
+  };
+  return { month, received, pending, byCategory: byCat, count: entries.filter((e) => e.date.slice(0, 7) === month).length, unsorted: unsorted.slice(0, 40).map(withMatch), unsortedCount: unsorted.length,
     entries: [...entries].sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : a.at < b.at ? 1 : -1)).slice(0, 60),
     accounts, sources: src, unknown, problems,
     lastEntryAt: entries.reduce((a, e) => (!a || e.at > a ? e.at : a), null) };
 }
 export async function incomeState(store, now) {
-  const today = spDay(now), m = today.slice(0, 7), months = [m, prevMonth(m), prevMonth(prevMonth(m)), prevMonth(prevMonth(prevMonth(m)))];
+  /* this month and the three before for the totals, the sources and the list; a year for "To sort" */
+  const today = spDay(now), months = monthsBack(today.slice(0, 7), UNSORTED_MONTHS);
   const [inc, chk, sources] = await Promise.all([
     Promise.all(months.map((k) => readDoc(store, incKey(k), []))), Promise.all(months.slice(0, 2).map((k) => readDoc(store, chkKey(k), []))), getSources(store)]);
   const flat = (docs) => docs.flatMap((d) => (Array.isArray(d.data) ? d.data : []));
-  return incomeReport(flat(inc), flat(chk), sources, today);
+  return incomeReport(flat(inc.slice(0, 4)), flat(chk), sources, today, flat(inc.slice(4)));
 }
 
 /* ---------- cards (what a bot says it is working on) and last-seen ---------- */

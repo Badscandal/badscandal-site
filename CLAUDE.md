@@ -1628,7 +1628,8 @@ to the real bank (see the end).
 * **The endpoints** (`netlify/functions/bank.mjs`; Luke = the /hq cookie with the Origin check on POSTs,
   Claude = `STAFF_CLAUDE_KEY`; the bots' key gets 403 everywhere here):
   `POST /api/bank/connect` (Luke only) -> `{url}` of Revolut's approval page (503 settings missing / key
-  unreadable, 409 on a preview, 502 when Enable Banking refuses the key or doesn't list the bank) ·
+  unreadable, 409 on a preview, 502 when Enable Banking refuses the key or doesn't list the bank; a
+  settings failure answers `{error, kind: key|refused|no_bank}`) ·
   `GET /api/bank/callback` (public; the lock is below) -> 302 `/hq?bank=connected|device|failed#money` ·
   `GET /api/bank/status` (Luke or Claude; `?sample=1` = `sampleBankStatus()`, no store opened) ·
   `POST /api/bank/sync` (Luke or Claude; one read now with an 8 s budget; always HTTP 200, check `ok` /
@@ -1645,8 +1646,10 @@ to the real bank (see the end).
   account details fetched together); a session that can't be stored is given back at once (`DELETE`). A
   reconnect gives the previous session back.
 * **Status** (`bankStatus`): `{configured, connected, needsApproval, aspsp, validUntil, daysLeft,
-  expiring (<= 14 days), accounts: [{name, currency}], lastRunAt, lastOkAt, lastError, lastAdded,
-  partial, canConnectHere (production only)}`. `needsApproval` = a stored approval that ended or was
+  expiring (<= 14 days), accounts: [{name, currency}], lastRunAt, lastOkAt, lastError, errorKind,
+  connectedAt, lastAdded, partial, canConnectHere (production only)}`. `errorKind` (`errorKind(sentence)`:
+  key | refused | no_bank | "") is how the page knows a failure is about the Netlify settings; the sync
+  summary carries it too when it isn't empty. `needsApproval` = a stored approval that ended or was
   marked gone. Only a reader answer that SAYS the session ended (`GONE_WORDS`) means "approve again"; a
   bare 401/403 is kind `refused` (the site's key or application), said as `SAY.keyRefused`, and the
   connection is NOT marked gone.
@@ -1676,6 +1679,9 @@ to the real bank (see the end).
   - `incomeCheck` ("Revolut: checked today", note "Read from Revolut: N new, N to sort, …") ONLY when
     every account was read to the end. `lastOkAt` only after a full read with no error; a capped run is
     `partial` and "N payments in" adds up across it and the run that finishes it.
+  - The reader upgrades a statement only for a KNOWN source. A credit from a payer it can't place
+    ("NLR Payments BV" for Northlight's statement) lands as unsorted; sorting it with `pending_id` (below)
+    does the same upgrade by hand.
 * **`classify(tx, ctx)`, in this order:** (1) **own name** -> transfer: the payer is an account holder
   (`ownName`: the full name in any order, accents/case/dots/titles ignored, or first + last name with at
   most one extra word and no company word like Ltd/Music/Records; never one word) or in `BANK_OWN_NAMES` ·
@@ -1695,20 +1701,42 @@ to the real bank (see the end).
   pending, a source's month), not in "new payers", listed apart (`incomeReport().unsorted` newest 40 +
   `unsortedCount`) with one problems line "N payments in Revolut that nobody has sorted yet". Only the
   reader (`HQ`) files a payment as unsorted; a later unsorted never overwrites a decided status.
+  - **A year, not four months (review 12 Nov 2026):** `incomeState` reads this month and the 11 before
+    (`UNSORTED_MONTHS` = 12) but passes only the first four as `entries`; the rest go in as
+    `incomeReport(…, today, older)` and are used ONLY for `unsorted` / `unsortedCount` (and their
+    statements). What is still unsorted in the oldest month read adds a problems line: "N unsorted
+    payment(s) from Dec 2025 drop(s) off "To sort" when this month ends: sort it/them before then".
+    `sortIncome` without a month looks through the same 12 months.
+  - **The statement it may be:** each row of `unsorted` carries `pendingMatch {id, payer, amount, currency,
+    date}` when pending statements with its amount and currency, dated on or before it, in its month or
+    the three before, exist and are all ONE payer's (the oldest is offered). `income_status` shows it as
+    `pending_match {id, line}`.
   - **Who sees it:** the bots see EVERYTHING the reader puts on the desk, unsorted rows and own transfers
     included (`income_status`, with `unsorted: [{id, month, line}]`). Luke's decision of 11 Nov 2026
     (commit `e8c8b6e`); it reverses the review fix that had hidden personal rows from the bots.
   - **Who sorts:** `SORTERS` = Luke, Claude, Ledger, Sheet, Nova. `sortIncome(store, now, roster, {by, id,
-    month, status: "received" (+ category, one of the six CATEGORIES) | "transfer" (not income)})`: only an
-    unsorted entry, or one whose last decision was the reader's own (HQ); never a pending one; what a person
-    or a bot decided stays. `submitIncome` refuses to move an unsorted entry to a decided status for anyone
+    month, status: "received" (+ category, one of the six CATEGORIES) | "transfer" (not income),
+    pending_id?})`: only an unsorted entry, or one whose last decision was the reader's own (HQ); never a
+    pending one; what a person or a bot decided stays. **`pending_id`** (with received, no category
+    needed): the payment is THAT pending statement's money (`mergePending`): the statement turns received
+    with `arrived` = the credit's day, `account` = the credit's, the credit's id as its `reference` (or
+    `bankRef` when it has its own), history `{from: pending, to: received, merged: <the row's id>}`, and
+    the unsorted row is REMOVED (same file: one write; otherwise the statement first, then the row, and a
+    second press after a cut-off finishes the removal). The result is the statement. Refused: with
+    transfer; a statement that isn't pending any more; one whose amount, currency or day doesn't fit.
+    Without it, the same money showed in Received AND Pending and later raised a false "pending older
+    than 30 days". `submitIncome` refuses to move an unsorted entry to a decided status for anyone
     else. The connector tool `sort_payment` (listed for every bot, refused for anyone not in `SORTERS`; its description: sort ONLY when the
     payer makes it clear, else ONE `send_message` to Luke, needs decision; never guess) and `POST
-    /api/staff/sort` {id, month, status, category} (Luke's cookie or Claude's key). `CLAUDE_TOOLS` is now
+    /api/staff/sort` {id, month, status, category, pending_id?} (Luke's cookie or Claude's key); `sort_payment`
+    takes `pending_id` too. `CLAUDE_TOOLS` is now
     empty: nothing is Claude-only.
-* **The sentences:** `SAY` in bank.mjs (again, missing, notConnected, preview, keyBad, keyRefused,
-  noBank, readerDown, unreachable, someAccounts, desk; keyBad / keyRefused / noBank name the Netlify
-  settings) and `bankLine(status, now)`, the one line: "Revolut: read today at 06:50 · 2 payments in ·
+* **The sentences:** `SAY` in bank.mjs (again = "Revolut has to be approved again: press Approve again",
+  missing, notConnected, preview, keyBad, keyRefused, noBank, readerDown, unreachable, someAccounts, desk;
+  keyBad / keyRefused / noBank name the Netlify settings: they are for Claude and the logs, and the page
+  shows "Revolut's settings on Netlify need fixing: ask Claude." instead, `HQLib.bankSays(kind, text)`,
+  in the tile, Data health, Read now and Connect; a sentence naming ENABLE_BANKING_ / PEM / base64 /
+  redeploy is caught even without its kind) and `bankLine(status, now)`, the one line: "Revolut: read today at 06:50 · 2 payments in ·
   approval ends in 86 days" / "… the last read failed …" / "… the last read stopped part way, the rest
   comes at the next read …" / "Revolut is not connected" / "Revolut has to be approved again" / "The
   site is missing its Revolut settings". `HQLib.bankLine` is the same function, tested case by case
@@ -1717,7 +1745,8 @@ to the real bank (see the end).
   and refreshed with it; its state is kept in memory only (no localStorage key; offline the tile says it
   couldn't be read). Money -> "Money coming in":
   - **The Revolut tile** among the account tiles (the desk's own "Revolut" account tile is dropped, one
-    tile per account): `bankLine` word for word, "Reads Current · EUR, … Read only: it can never move
+    tile per account): `bankLine` word for word without its "Revolut: " (the tile is headed Revolut:
+    "Read today at 06:50 · …"), "Reads Current · EUR, … Read only: it can never move
     money.", and the buttons `bankView` picks: Read now + Disconnect when connected (Approve again first and
     a red border with 14 days or fewer); Approve again + Disconnect when the approval is gone (red); Connect
     Revolut when not connected; on a preview no Connect, just `SAY.preview`; not configured: "Connecting
@@ -1726,22 +1755,40 @@ to the real bank (see the end).
     Read now -> "Reading…" -> "Read at HH:MM: N new payments came in." and everything reloads. Connect goes
     to the returned address only if it starts with https://. Disconnect asks inline first.
   - **`?bank=` flags** (`bankFlag`): connected / failed / device say their line in the tile and are taken
-    out of the address with `history.replaceState`; `connected` runs ONE automatic Read now (not in the
-    sample).
+    out of the address with `history.replaceState`. Once the status is in, `bankFlagAfter(flag, status,
+    now)` decides: "connected" stays only while Revolut IS connected, and runs ONE automatic Read now only
+    when `connectedAt` is under 10 minutes old (an old link, a bookmark or the address bar's memory never
+    starts a read; never in the sample). failed / device say "the Revolut button below" (it may be
+    Connect Revolut or Approve again).
+  - **Back from Revolut** without approving: a `pageshow` from the back-forward cache clears "Opening
+    Revolut…" so the buttons work again.
+  - **Fresh after a write:** `reload(true)` after a sort, a Read now and a Disconnect: a board or status
+    request already in flight (the 5-minute refresh) is waited for, then asked again, so the page never
+    keeps an answer from before the write.
   - **To sort · N** below Received / Pending: "It's income" asks which of the six kinds (`SORT_TYPES`) then
-    confirms ("Sort X's EUR 60.00 (Wed 11 Nov) as income (Production)? … can't be changed here."); "Not
+    confirms (when the row has `pendingMatch`, the FIRST answer is "It's the pending Northlight Records
+    statement (EUR 112.01, Mon 2 Nov)" (`pendingAnswer`), asked as `pendingQuestion`, sent with
+    `pending_id`, and its line is "Sorted as the Northlight Records statement: received"); otherwise it asks
+    ("Sort X's EUR 60.00 (Wed 11 Nov) as income (Production)? … can't be changed here."); "Not
     income" asks once; afterwards "Sorted as income (Production)" takes the row's place for 10 minutes,
     focus moves to it, and the totals are read again. Off in the sample.
   - **Latest payments** say "To sort", "Your own transfer" or "Not income" (`payStatus`), amounts greyed.
+    "Your own transfer" only for a transfer the reader filed (by HQ) that nobody changed since; every
+    other transfer (sorted as not income, a bot's refund or gift) is "Not income".
   - **Today:** "N payments in Revolut to sort", "Revolut has to be approved again", "Revolut's approval ends
     in N days", all to `#money` (`bankAttention`); the desk's "…nobody has sorted yet" line is not repeated
-    as an income problem. **Data health:** a "Revolut" row (`bankHealth`), red after 26 h without a full read.
+    as an income problem, and once the reader is configured `incomeProblems(inc, bank)` drops the desk's
+    own "Revolut: …" lines ("Revolut: blocked. …" from the seed's Revolut account source, "Revolut: not
+    checked today"): the tile, `bankAttention` and Data health say Revolut's state. `staffAttention(board,
+    bank)`. **Data health:** a "Revolut" row (`bankHealth`), red after 26 h without a full read.
   - New `HQLib`: `bankLine`, `bankView`, `bankButton`, `bankFlag`, `syncWords`, `payStatus`, `sortQuestion`,
-    `sortedLine`, `toSortWords`, `bankAttention`, `bankHealth`, `SORT_TYPES`; `attention()` takes `o.bank`,
+    `sortedLine`, `toSortWords`, `bankAttention`, `bankHealth`, `SORT_TYPES`, and after the review of 12 Nov
+    2026 `bankSays`, `bankFlagAfter`, `pendingAnswer`, `pendingQuestion`, `pendingSorted`; `attention()` takes `o.bank`,
     `healthRows()` adds the row when `bank` is passed; `window.HQStaff` gains `bank()`, `bankProblem()`.
     Fixed on the way: the red line on an attention account tile never matched (`:first-of-type`).
   - **Sample:** `sampleBankStatus()` (connected, read 06:50, 2 in, 86 days), a made-up Revolut account
-    source checked by HQ, two made-up rows to sort and one own transfer, none in the totals.
+    source checked by HQ, two made-up rows to sort and one own transfer, none in the totals. The sample's
+    old blocked "Bank" account is gone (it showed a broken bank beside the connected Revolut).
 * **To switch it on (Luke, once):** add `https://badscandal.com/api/bank/callback` to the Enable Banking
   application's redirect URLs (the old one pointed at the bookkeeping app); put the two env values on
   Netlify with the helper OUTSIDE this repo, "Staff Desk/4 - Put the Revolut reader's settings on the site
@@ -1751,7 +1798,7 @@ to the real bank (see the end).
 * **NOT proven yet (no real bank call has ever been made):** Revolut's actual wording for exchanges,
   pockets and top-ups in this feed (the patterns come from an older CSV importer's tests); whether
   `/accounts/{uid}/details` `name` really is the holder (if not, the own-name rule never fires: the safe
-  direction); what an ended or revoked approval looks like (if it is a bare 401, Luke sees the key
-  message, though the expiry date still says "approve again"); whether a continuation key works the next
+  direction); what an ended or revoked approval looks like (if it is a bare 401, Luke sees "Revolut's settings on
+  Netlify need fixing: ask Claude.", though the expiry date still says "approve again"); whether a continuation key works the next
   day; whether `POST /sessions` gives `accounts` as strings or objects (both handled); whether the daily
   read fits the scheduled function's time on a long history.

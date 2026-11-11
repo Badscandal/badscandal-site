@@ -175,7 +175,7 @@ test("bank callback: a wrong, reused or expired nonce changes nothing; a good on
 test("bank status: before, after, expiring, expired; bankLine says it in one sentence", async () => {
   const empty = memoryDesk();
   const none = await B.bankStatus({ bank: empty, env: {}, now: NOW, canConnectHere: true });
-  assert.deepEqual(none, { configured: false, connected: false, needsApproval: false, aspsp: null, validUntil: null, daysLeft: null, expiring: false, accounts: [], lastRunAt: null, lastOkAt: null, lastError: null, lastAdded: null, partial: false, canConnectHere: true });
+  assert.deepEqual(none, { configured: false, connected: false, needsApproval: false, aspsp: null, validUntil: null, daysLeft: null, expiring: false, accounts: [], lastRunAt: null, lastOkAt: null, lastError: null, errorKind: "", connectedAt: null, lastAdded: null, partial: false, canConnectHere: true });
   assert.equal(B.bankLine(none, NOW), "The site is missing its Revolut settings");
   const before = await B.bankStatus({ bank: empty, env: ENV, now: NOW, canConnectHere: false });
   assert.equal(before.configured, true); assert.equal(B.bankLine(before, NOW), "Revolut is not connected");
@@ -185,7 +185,7 @@ test("bank status: before, after, expiring, expired; bankLine says it in one sen
   const st = await B.bankStatus({ bank, env: ENV, now: NOW + 60000, canConnectHere: true });
   assert.deepEqual(st, { configured: true, connected: true, needsApproval: false, aspsp: "Revolut", validUntil: new Date(NOW + 86.5 * DAY).toISOString(), daysLeft: 86, expiring: false,
     accounts: [{ name: "Current", currency: "EUR" }, { name: "Savings", currency: "EUR" }, { name: "Current", currency: "USD" }],
-    lastRunAt: "2026-11-12T09:50:00.000Z", lastOkAt: "2026-11-12T09:50:00.000Z", lastError: null, lastAdded: 2, partial: false, canConnectHere: true });
+    lastRunAt: "2026-11-12T09:50:00.000Z", lastOkAt: "2026-11-12T09:50:00.000Z", lastError: null, errorKind: "", connectedAt: new Date(NOW - DAY).toISOString(), lastAdded: 2, partial: false, canConnectHere: true });
   assert.ok(!JSON.stringify(st).includes(SID) && !JSON.stringify(st).includes("uid-") && !JSON.stringify(st).includes("Sam Example"), "no session id, no account ids, no holder name");
   assert.equal(B.bankLine(st, NOW + 60000), "Revolut: read today at 06:50 · 2 payments in · approval ends in 86 days");
   assert.equal(B.bankLine({ ...st, lastAdded: 1, daysLeft: 1 }, NOW + DAY), "Revolut: read yesterday at 06:50 · 1 payment in · approval ends tomorrow");
@@ -201,7 +201,7 @@ test("bank status: before, after, expiring, expired; bankLine says it in one sen
   assert.equal(fifteen.expiring, false);
   for (const extra of [{ validUntil: new Date(NOW - 1000).toISOString() }, { gone: new Date(NOW).toISOString() }]) {
     const ex = await B.bankStatus({ bank: await connectedBank(extra), env: ENV, now: NOW });
-    assert.deepEqual([ex.connected, ex.needsApproval, ex.daysLeft, ex.expiring, ex.lastError], [false, true, null, false, "Revolut has to be approved again: press Connect Revolut"]);
+    assert.deepEqual([ex.connected, ex.needsApproval, ex.daysLeft, ex.expiring, ex.lastError], [false, true, null, false, "Revolut has to be approved again: press Approve again"]);
     assert.equal(B.bankLine(ex, NOW), "Revolut has to be approved again");
   }
 });
@@ -400,7 +400,7 @@ test("bank refresh: an odd payer name is skipped, the run goes on; an expired ap
   /* the approval is gone (the reader says the session expired): connected false, the plain sentence, no more calls */
   const gone = fakeReader({ fail: (m, p) => (p.endsWith("/transactions") ? ok({ code: 401, error: "EXPIRED_SESSION", message: "Session expired" }, 401) : null) });
   const g = await B.syncBank({ bank, desk, env: ENV, now: NOW + DAY, fetchImpl: gone });
-  assert.deepEqual([g.ok, g.connected, g.error], [false, false, "Revolut has to be approved again: press Connect Revolut"]);
+  assert.deepEqual([g.ok, g.connected, g.error], [false, false, "Revolut has to be approved again: press Approve again"]);
   const st = await B.bankStatus({ bank, env: ENV, now: NOW + DAY, canConnectHere: true });
   assert.deepEqual([st.connected, st.needsApproval, st.lastError], [false, true, B.SAY.again]);
   gone.calls.length = 0;
@@ -423,7 +423,7 @@ test("bank refresh: an odd payer name is skipped, the run goes on; an expired ap
   const r = await B.syncBank({ bank: b500, desk, env: ENV, now: NOW, fetchImpl: fakeReader({ fail: (m, p) => (p.endsWith("/transactions") ? ok({ error: "ASPSP_ERROR" }, 500) : null) }) });
   assert.deepEqual([r.ok, r.connected, r.error, r.checked], [false, true, B.SAY.readerDown, false]);
   const st5 = await B.bankStatus({ bank: b500, env: ENV, now: NOW });
-  assert.deepEqual([st5.connected, st5.lastError, st5.lastOkAt], [true, B.SAY.readerDown, new Date(NOW - DAY).toISOString()]);
+  assert.deepEqual([st5.connected, st5.lastError, st5.errorKind, st5.lastOkAt], [true, B.SAY.readerDown, "", new Date(NOW - DAY).toISOString()]);
   assert.deepEqual((await doc(b500, "sync.json")).perAccount, { a1: { lastDate: "2026-11-11" } }, "where it got to is not moved on");
   const three = await connectedBank();
   const net = await B.syncBank({ bank: three, desk, env: ENV, now: NOW, fetchImpl: async (u) => { if (String(u).includes("uid-sav")) throw new Error("ECONNRESET"); return fakeReader()(u); } });
@@ -447,15 +447,16 @@ test("bank refresh: a refused key (401/403 that doesn't say the session ended) i
     const bank = await connectedBank(), desk = await deskWithSources();
     const f = fakeReader({ fail: (m, p) => (p.endsWith("/transactions") ? ok(answer, status) : null) });
     const r = await B.syncBank({ bank, desk, env: ENV, now: NOW, fetchImpl: f });
-    assert.deepEqual([r.ok, r.connected, r.error, r.checked], [false, true, B.SAY.keyRefused, false], JSON.stringify(answer));
+    assert.deepEqual([r.ok, r.connected, r.error, r.errorKind, r.checked], [false, true, B.SAY.keyRefused, "refused", false], JSON.stringify(answer));
     assert.equal(f.calls.filter((c) => c.path.endsWith("/transactions")).length, 1, "one refusal is enough: every account would say the same");
     assert.equal((await doc(bank, "conn.json")).gone, undefined);
     const st = await B.bankStatus({ bank, env: ENV, now: NOW });
-    assert.deepEqual([st.connected, st.needsApproval, st.lastError], [true, false, B.SAY.keyRefused]);
+    assert.deepEqual([st.connected, st.needsApproval, st.lastError, st.errorKind], [true, false, B.SAY.keyRefused, "refused"], "the sentence names Netlify settings (for Claude); the page gets the kind");
     assert.equal(B.bankLine(st, NOW), "Revolut: not read yet · the last read failed · approval ends in 86 days");
     /* the key put right on Netlify: the next read just works, no reconnect needed */
     const fixed = await B.syncBank({ bank, desk, env: ENV, now: NOW + 3600000, fetchImpl: fakeReader() });
-    assert.deepEqual([fixed.ok, fixed.connected, fixed.error], [true, true, null]);
+    assert.deepEqual([fixed.ok, fixed.connected, fixed.error, fixed.errorKind], [true, true, null, undefined]);
+    assert.equal((await B.bankStatus({ bank, env: ENV, now: NOW + 3600000 })).errorKind, "");
   }
 });
 
@@ -684,7 +685,7 @@ test("bank endpoints: who may call what; the callback's two answers; nothing sec
     delete HENV.ENABLE_BANKING_PRIVATE_KEY;
     assert.deepEqual((await call("POST", "connect", LUKE)), { status: 503, body: { error: B.SAY.missing }, location: null });
     HENV.ENABLE_BANKING_PRIVATE_KEY = "junk";
-    assert.deepEqual((await call("POST", "connect", LUKE)).body, { error: B.SAY.keyBad });
+    assert.deepEqual((await call("POST", "connect", LUKE)).body, { error: B.SAY.keyBad, kind: "key" }, "kind: the page says it in Luke's words, never the setting's name");
     HENV.ENABLE_BANKING_PRIVATE_KEY = KEY64;
     const c = await call("POST", "connect", LUKE);
     assert.deepEqual(c, { status: 200, body: { url: "https://auth.example.test/approve?ref=made-up" }, location: null });
@@ -748,4 +749,21 @@ test("bank status for /hq?sample=1: made up, after the login, and no store is op
   assert.deepEqual([j.sample, j.configured, j.connected, j.daysLeft, j.lastAdded, j.accounts.length], [true, true, true, 86, 2, 3]);
   assert.match(B.bankLine(j, Date.now()), /^Revolut: read (today|yesterday) at 06:50 · 2 payments in · approval ends in 86 days$/);
   assert.deepEqual(globalThis.__asked, [], "no store was opened for the sample");
+});
+
+test("bank + desk: a payment the reader couldn't place, sorted as the money of a pending statement, is counted once and never read back in", async () => {
+  const bank = await connectedBank({ accounts: [ACCOUNTS[0]] }), desk = await deskWithSources(), R = S.DEFAULT_ROSTER;
+  const st = (await S.submitIncome(desk, NOW, R, { bot: "Ledger", date: "2026-11-02", payer: "Northlight Records Ltd", amount: 112.01, currency: "EUR", account: "Statement only", status: "pending", category: "Label deals" })).entry;
+  const f = fakeReader({ pages: { "uid-eur": [{ transactions: [tx({ id: "t-nlr", date: "2026-11-10", amount: "112.01", payer: "NLR Payments BV" })] }] } });
+  assert.equal((await B.syncBank({ bank, desk, env: ENV, now: NOW, fetchImpl: f })).unsorted, 1, "the payer matches no source: unsorted");
+  let inc = await S.incomeState(desk, NOW);
+  assert.deepEqual([inc.received, inc.pending, inc.unsorted[0].pendingMatch.id], [{}, { EUR: 112.01 }, st.id]);
+  await S.sortIncome(desk, NOW, R, { by: "Luke", id: inc.unsorted[0].id, month: "2026-11", status: "received", pending_id: st.id });
+  inc = await S.incomeState(desk, NOW);
+  assert.deepEqual([inc.received, inc.pending, inc.unsortedCount], [{ EUR: 112.01 }, {}, 0]);
+  /* the 7-day overlap reads the same credit again: already there (its id is now the statement's reference) */
+  const again = await B.syncBank({ bank, desk, env: ENV, now: NOW + DAY, fetchImpl: f });
+  assert.deepEqual([again.added, again.updated, again.already], [0, 0, 1]);
+  assert.equal((await allEntries(desk)).length, 1);
+  assert.ok(!(await S.incomeState(desk, NOW + 35 * DAY)).problems.some((p) => /pending payment/.test(p)), "no false 'pending older than 30 days'");
 });

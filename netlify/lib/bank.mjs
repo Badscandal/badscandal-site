@@ -53,7 +53,7 @@ export const LIMITS = {
   sessionMs: 5000, /* POST /sessions inside it; the account details share what is left */
 };
 export const SAY = {
-  again: "Revolut has to be approved again: press Connect Revolut",
+  again: "Revolut has to be approved again: press Approve again",
   missing: "The site is missing its Revolut settings",
   notConnected: "Revolut is not connected",
   preview: "Connecting Revolut only works on badscandal.com itself, not on a preview.",
@@ -65,6 +65,10 @@ export const SAY = {
   someAccounts: "One of the Revolut accounts could not be read just now. It tries again at the next daily read.",
   desk: "The payments could not be saved on the dashboard just now. It tries again at the next daily read.",
 };
+/* keyBad / keyRefused / noBank name Netlify settings: they are for Claude and the logs. The page is
+   sent their kind (errorKind) and says it in Luke's words instead. */
+const SETTINGS_SAID = { [SAY.keyBad]: "key", [SAY.keyRefused]: "refused", [SAY.noBank]: "no_bank" };
+export const errorKind = (said) => (said && SETTINGS_SAID[said]) || "";
 
 const DAY_MS = 86400000;
 const iso = (ms) => new Date(ms).toISOString();
@@ -293,7 +297,8 @@ export async function bankStatus({ bank, env, now, canConnectHere }) {
     validUntil: conn ? conn.validUntil || null : null, daysLeft, expiring: connected && daysLeft <= LIMITS.expiringDays,
     accounts: conn ? (conn.accounts || []).map((a) => ({ name: a.name, currency: a.currency })) : [],
     lastRunAt: sync.lastRunAt || null, lastOkAt: sync.lastOkAt || null,
-    lastError: needsApproval ? SAY.again : sync.lastError || null,
+    lastError: needsApproval ? SAY.again : sync.lastError || null, errorKind: needsApproval ? "" : errorKind(sync.lastError),
+    connectedAt: conn ? conn.connectedAt || null : null, /* the page reads at once after Connect only while this is fresh */
     lastAdded: Number.isInteger(sync.lastAdded) ? sync.lastAdded : null, partial,
     canConnectHere: !!canConnectHere,
   };
@@ -614,5 +619,6 @@ export async function syncBank({ bank, desk, env, now, fetchImpl, clock = Date.n
       return { value: null };
     });
   } catch { error = error || SAY.desk; }
-  return { ...sum, ok: !error, error };
+  const kind = errorKind(error);
+  return { ...sum, ok: !error, error, ...(kind ? { errorKind: kind } : {}) };
 }

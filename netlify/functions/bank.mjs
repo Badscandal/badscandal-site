@@ -102,7 +102,8 @@ export default async (req, context) => {
       } catch (e) {
         if (e && e.name !== "BankError") throw e;
         console.error("bank connect failed:", B.logLine(e));
-        return json(e.kind === "missing" || e.kind === "key" ? 503 : 502, { error: CONNECT_SAY[e.kind] || "Enable Banking did not answer properly. Try again in a minute." });
+        /* kind: the page says a settings problem (key, refused, no_bank) in Luke's words; error is for Claude */
+        return json(e.kind === "missing" || e.kind === "key" ? 503 : 502, { error: CONNECT_SAY[e.kind] || "Enable Banking did not answer properly. Try again in a minute.", ...(B.errorKind(CONNECT_SAY[e.kind]) ? { kind: e.kind } : {}) });
       }
     }
     if (path === "disconnect") {

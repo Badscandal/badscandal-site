@@ -304,3 +304,48 @@ test("staff: an 'unsorted' payment (seen in the bank, not yet said what it is) i
   assert.equal((await S.sortIncome(d, NOW + 8, R, { by: "Claude", id: c.entry.id, status: "received", category: "other" })).category, "Other");
   assert.equal(a.entry.category, "Other");
 });
+
+test("staff: sorting a payment as the money of a statement logged as pending upgrades THAT statement; the money is never in Received AND Pending", async () => {
+  const d = memoryDesk();
+  const hq = { bot: "HQ", currency: "EUR", account: "Revolut", note: "Read from Revolut", status: "unsorted" };
+  const st = (await S.submitIncome(d, NOW, R, { bot: "Ledger", date: "2026-11-02", payer: "Northlight Records", amount: 112.01, currency: "EUR", account: "Statement only", status: "pending", category: "Label deals" })).entry;
+  const cr = (await S.submitIncome(d, NOW, R, { ...hq, date: "2026-11-10", payer: "NLR Payments BV", amount: 112.01, reference: "tx-nlr" })).entry;
+  let i = await S.incomeState(d, NOW);
+  assert.deepEqual(i.unsorted[0].pendingMatch, { id: st.id, payer: "Northlight Records", amount: 112.01, currency: "EUR", date: "2026-11-02" }, "the page and the bots are offered the statement");
+  /* the wrong way round is refused: with "transfer", with a statement for another amount */
+  await fails(S.sortIncome(d, NOW, R, { by: "Luke", id: cr.id, month: "2026-11", status: "transfer", pending_id: st.id }), /pending_id goes only with status received/);
+  const other = (await S.submitIncome(d, NOW, R, { bot: "Ledger", date: "2026-11-01", payer: "Sample Publishing", amount: 50, currency: "EUR", account: "Statement only", status: "pending", category: "Publishing" })).entry;
+  await fails(S.sortIncome(d, NOW, R, { by: "Luke", id: cr.id, month: "2026-11", status: "received", pending_id: other.id }), /not this payment/);
+  /* Luke: "It's the pending Northlight Records statement" (no category: the statement keeps its own) */
+  const up = await S.sortIncome(d, NOW + 1, R, { by: "Luke", id: cr.id, month: "2026-11", status: "received", pending_id: st.id });
+  assert.deepEqual([up.id, up.status, up.arrived, up.account, up.reference, up.category, up.history.at(-1).merged], [st.id, "received", "2026-11-10", "Revolut", "tx-nlr", "Label deals", cr.id]);
+  i = await S.incomeState(d, NOW);
+  assert.deepEqual([i.received, i.pending, i.unsortedCount], [{ EUR: 112.01 }, { EUR: 50 }, 0], "received once, no longer pending, and the unsorted row is gone");
+  assert.equal(i.entries.filter((e) => e.amount === 112.01).length, 1);
+  assert.ok((await S.incomeState(d, NOW + 40 * 86400000)).problems.includes("1 pending payment older than 30 days"), "only the other statement: Northlight's is not 'pending older than 30 days'");
+  await fails(S.sortIncome(d, NOW + 2, R, { by: "Luke", id: cr.id, month: "2026-11", status: "received", pending_id: st.id }), /no payment/);
+  /* a statement in an earlier month (two files), with its own reference: the credit's id is kept as bankRef */
+  const st2 = (await S.submitIncome(d, NOW, R, { bot: "Ledger", date: "2026-10-28", payer: "Northlight Records", amount: 75, currency: "EUR", account: "Statement only", status: "pending", category: "Label deals", reference: "ST-9" })).entry;
+  const cr2 = (await S.submitIncome(d, NOW, R, { ...hq, date: "2026-11-03", payer: "NLR Payments BV", amount: 75, reference: "tx-nlr-2" })).entry;
+  const up2 = await S.sortIncome(d, NOW + 3, R, { by: "Ledger", id: cr2.id, status: "received", pending_id: st2.id });
+  assert.deepEqual([up2.status, up2.reference, up2.bankRef, up2.arrived], ["received", "ST-9", "tx-nlr-2", "2026-11-03"]);
+  i = await S.incomeState(d, NOW);
+  assert.deepEqual([i.received, i.pending, i.unsortedCount], [{ EUR: 187.01 }, { EUR: 50 }, 0]);
+});
+
+test("staff: an unsorted payment stays in 'To sort' for a year (not four months), and says so before it drops off", async () => {
+  const d = memoryDesk();
+  const hq = { bot: "HQ", payer: "Made-up Friend", currency: "EUR", account: "Revolut", status: "unsorted" };
+  const july = (await S.submitIncome(d, NOW, R, { ...hq, date: "2026-07-15", amount: 30, reference: "tx-jul" })).entry;
+  const dec = (await S.submitIncome(d, NOW, R, { ...hq, date: "2025-12-20", amount: 20, reference: "tx-dec" })).entry;
+  let i = await S.incomeState(d, NOW);
+  assert.deepEqual([i.unsortedCount, i.unsorted.map((e) => e.id)], [2, [july.id, dec.id]]);
+  assert.ok(i.problems.includes("2 payments in Revolut that nobody has sorted yet"));
+  assert.ok(i.problems.includes('1 unsorted payment from Dec 2025 drops off "To sort" when this month ends: sort it before then'));
+  assert.deepEqual([i.received, i.entries.length], [{}, 0], "the older months are read for 'To sort' only");
+  /* sort_payment without a month finds it too */
+  assert.equal((await S.sortIncome(d, NOW, R, { by: "Ledger", id: july.id, status: "transfer" })).status, "transfer");
+  assert.equal((await S.sortIncome(d, NOW, R, { by: "Ledger", id: dec.id, status: "received", category: "Other" })).status, "received");
+  i = await S.incomeState(d, NOW);
+  assert.deepEqual([i.unsortedCount, i.problems.filter((p) => /sort/.test(p))], [0, []]);
+});

@@ -245,6 +245,20 @@ test("bank reader: the bots see every incoming Revolut payment; Ledger, Sheet an
   assert.deepEqual([r.status, e.status, e.category, e.history.at(-1).by, e.history.at(-1).from], [200, "received", "Salary", "Luke", "transfer"]);
   assert.equal((await sort({ id: own.id, month, status: "transfer" }, { cookie })).status, 400, "once Luke has said, it stays");
   assert.equal((await sort({ id: "i" + "0".repeat(12), month, status: "transfer" }, { cookie })).status, 404);
+  /* the money of a statement already logged as pending: income_status offers it, sort_payment and /api/staff/sort take pending_id */
+  const R = S.DEFAULT_ROSTER, stmt = { date: day, currency: "EUR", account: "Statement only", status: "pending", category: "Label deals" };
+  const p1 = (await S.submitIncome(desk, now, R, { ...stmt, bot: "Ledger", payer: "Made-up Label One", amount: 88.5 })).entry;
+  const c1 = (await S.submitIncome(desk, now, R, { ...rev, payer: "MLO Payments", amount: 88.5, status: "unsorted", reference: "tx-mlo" })).entry;
+  const p2 = (await S.submitIncome(desk, now, R, { ...stmt, bot: "Ledger", payer: "Made-up Label Two", amount: 66 })).entry;
+  const c2 = (await S.submitIncome(desk, now, R, { ...rev, payer: "MLT Payments", amount: 66, status: "unsorted", reference: "tx-mlt" })).entry;
+  const offered = (await tool("income_status", { bot: "Nova" })).structuredContent.unsorted.find((u) => u.id === c1.id);
+  assert.deepEqual(offered.pending_match, { id: p1.id, line: `${day} · Made-up Label One · EUR 88.50 · pending` });
+  const m1 = (await tool("sort_payment", { bot: "Nova", id: c1.id, month, status: "received", pending_id: p1.id })).structuredContent;
+  assert.deepEqual([m1.saved, m1.id, m1.status, m1.category], [true, p1.id, "received", "Label deals"]);
+  const r2 = await sort({ id: c2.id, month, status: "received", pending_id: p2.id }, { cookie, origin: "https://badscandal.com" });
+  assert.deepEqual([r2.status, (await r2.json()).entry.id], [200, p2.id]);
+  const left = (await tool("income_status", { bot: "Nova" })).structuredContent;
+  assert.deepEqual([left.unsorted.length, left.pending_this_month], [0, "nothing logged"], "both statements landed; nothing is pending and nothing to sort");
 });
 
 /* ---- the release pipeline (11 Nov 2026): the four tools and /api/staff/release*, end to end ---- */

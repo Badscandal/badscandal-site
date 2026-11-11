@@ -41,7 +41,7 @@
       /* Revolut (11 Nov 2026): the tile's button in flight, its inline "Disconnect?", the last error and
          what the last "Read now" brought; the payment being sorted, errors per payment, and what was
          sorted (id -> the line in its place, kept 10 minutes like an answered message) */
-      bank: { busy: "", ask: false, err: "", done: "" }, sort: { id: "", kind: "", cat: "", busy: false }, sortErr: {}, sorted: {} };
+      bank: { busy: "", ask: false, err: "", done: "" }, sort: { id: "", kind: "", cat: "", stmt: false, busy: false }, sortErr: {}, sorted: {} };
   }
   var PEOPLE = ["Luke", "Claude", "HQ", "all"];
   var KEEP_MS = 10 * 60000; /* how long "Sent to Nova at 17:03" stays in the place of what was answered */
@@ -50,9 +50,11 @@
 
   /* ---------- loading: with the other answers, on start and on every refresh ---------- */
   /* the desk's board and Revolut's state, side by side: either may fail without the other */
-  function reload() { return Promise.all([reloadBoard(), loadBank()]); }
-  function reloadBoard() {
-    if (loading) return loading;
+  /* fresh (after a write: a sort, a Read now): never reuse an answer asked for BEFORE the write was
+     saved; wait for it, then ask again */
+  function reload(fresh) { return Promise.all([reloadBoard(fresh), loadBank(fresh)]); }
+  function reloadBoard(fresh) {
+    if (loading) return fresh ? loading.then(function () { return reloadBoard(); }) : loading;
     loading = HQ.getJSON("/api/staff/board" + (HQ.sample ? "?sample=1" : "")).then(function (res) {
       loading = null; tried = true;
       if (HQ.authFail(res)) return;
@@ -478,16 +480,19 @@
     if (f.had) { try { history.replaceState(history.state, "", location.pathname + f.search + location.hash); } catch (e) {} }
     return f.kind ? { kind: f.kind, line: f.line, auto: f.kind === "connected" } : null;
   })();
-  function loadBank() {
-    if (bankLoading) return bankLoading;
+  function loadBank(fresh) {
+    if (bankLoading) return fresh ? bankLoading.then(function () { return loadBank(); }) : bankLoading;
     bankLoading = HQ.getJSON("/api/bank/status" + (HQ.sample ? "?sample=1" : "")).then(function (res) {
       bankLoading = null; bankTried = true;
       if (HQ.authFail(res)) return;
       if (res.s === 200 && res.j && typeof res.j.configured === "boolean") { bank = res.j; bankProblem = ""; }
       else bankProblem = "Couldn't be read (" + res.s + ")";
+      /* "connected" is said only while Revolut is connected, and reads at once only right after a real
+         Connect (an old link or bookmark to /hq?bank=connected does neither) */
+      var after = bank ? L.bankFlagAfter(bankFlagNow, bank, Date.now()) : { flag: bankFlagNow, sync: false };
+      bankFlagNow = after.flag;
       drawIncome(); HQ.boardChanged();
-      /* just connected: one read at once (only after the page knows who is looking) */
-      if (bank && bankFlagNow && bankFlagNow.auto) { bankFlagNow.auto = false; if (bank.connected && !HQ.sample) bankSync(); }
+      if (after.sync && !HQ.sample) bankSync();
     }, function () { bankLoading = null; bankTried = true; bankProblem = "No connection"; drawIncome(); HQ.boardChanged(); });
     return bankLoading;
   }
@@ -496,7 +501,7 @@
     return HQ.postJSON("/api/bank/" + path, {}).then(function (res) {
       if (HQ.authFail(res)) return { ok: false, error: "You were logged out. Log in and try again." };
       if (res.s === 200 && res.j) return { ok: true, j: res.j };
-      return { ok: false, error: (res.j && typeof res.j.error === "string" && res.j.error) || "That didn't work (" + res.s + "). Try again." };
+      return { ok: false, kind: (res.j && typeof res.j.kind === "string" && res.j.kind) || "", error: (res.j && typeof res.j.error === "string" && res.j.error) || "That didn't work (" + res.s + "). Try again." };
     }, function () { return { ok: false, error: "No connection. Nothing was sent: try again." }; });
   }
   function bankFocus(sel) { var el = $("incomeBody").querySelector(sel); if (el) el.focus(); }
@@ -509,7 +514,7 @@
       if (w.ok) ui.bank.done = w.text; else ui.bank.err = w.text;
       if (bankFlagNow && bankFlagNow.kind === "connected") bankFlagNow = null; /* "the first read is running" has its answer */
       drawIncome();
-      reload(); /* what came in: the list to sort, the totals, the tile's line */
+      reload(true); /* what came in: the list to sort, the totals, the tile's line */
     });
   }
   function bankConnect() {
@@ -517,10 +522,13 @@
     ui.bank.busy = "connect"; ui.bank.err = ""; ui.bank.done = ""; bankFlagNow = null; drawIncome();
     bankPost("connect").then(function (r) {
       var to = r.ok && r.j && typeof r.j.url === "string" && /^https:\/\//.test(r.j.url) ? r.j.url : "";
-      if (!to) { ui.bank.busy = ""; ui.bank.err = r.ok ? "Revolut's approval page didn't come back. Try again." : r.error; drawIncome(); return; }
+      if (!to) { ui.bank.busy = ""; ui.bank.err = r.ok ? "Revolut's approval page didn't come back. Try again." : L.bankSays(r.kind, r.error); drawIncome(); return; }
       location.assign(to); /* Revolut asks Luke to approve read-only access, then sends him back here */
     });
   }
+  /* Back from Revolut's page without approving: a browser that restores the page as it was would keep
+     every Revolut button greyed out on "Opening Revolut…" */
+  window.addEventListener("pageshow", function (ev) { if (ev.persisted && ui.bank.busy === "connect") { ui.bank.busy = ""; drawIncome(); } });
   function bankClick(act) {
     if (act === "retry") { loadBank(); return; }
     if (HQ.sample || !bank || ui.bank.busy) return;
@@ -534,7 +542,7 @@
         ui.bank.busy = "";
         if (!r.ok) { ui.bank.err = r.error; drawIncome(); return; }
         ui.bank.ask = false; ui.bank.done = "Disconnected at " + hhmm(Date.now()) + ". The payments already read stay here.";
-        loadBank();
+        loadBank(true);
       });
     }
   }
@@ -557,7 +565,8 @@
         return '<button class="' + (k === "disconnect" ? "linkbtn" : i === 0 ? "sendbtn" : "copybtn") + '" type="button" data-bank="' + k + '"' + dis + ">" + esc(busyNow ? BUSY[k] || "Saving…" : L.bankButton(k)) + "</button>";
       }).join("") + "</div>" : "";
     var flag = bankFlagNow ? '<p class="rdone' + (bankFlagNow.kind === "connected" ? "" : " bad") + '" role="status">' + esc(bankFlagNow.line) + "</p>" : "";
-    return '<div class="tile bank' + (v.attn ? " attn-t" : "") + '" id="bankTile">' + head + '<p class="al">' + esc(v.line) + "</p>" +
+    /* the tile is headed "Revolut" already: its line starts "Read today at 06:50 · …" */
+    return '<div class="tile bank' + (v.attn ? " attn-t" : "") + '" id="bankTile">' + head + '<p class="al">' + esc(cap(v.line.replace(/^Revolut: /, ""))) + "</p>" +
       (v.error ? '<p class="al">' + esc(v.error) + "</p>" : "") +
       (bankProblem ? '<p class="al">Couldn\'t check again just now: this is what was read before.</p>' : "") +
       (v.accounts.length ? '<p class="al bacc">Reads ' + esc(v.accounts.join(", ")) + ". Read only: it can never move money.</p>" : "") +
@@ -584,14 +593,16 @@
   }
   function sortRow(e) {
     var s = ui.sort.id === e.id ? ui.sort : null, busy = !!(s && s.busy), dis = HQ.sample || busy ? " disabled" : "", id = esc(e.id);
+    /* the money of a statement already logged as pending (the desk offers it): the first answer */
+    var stmt = e.pendingMatch ? '<button class="copybtn stmt" type="button" data-sort="stmt" data-id="' + id + '" aria-pressed="' + !!(s && s.stmt) + '"' + dis + ">" + esc(L.pendingAnswer(e)) + "</button>" : "";
     var top = '<div class="srow"><div class="sl"><b>' + esc(e.payer) + '</b><span class="pm">' + esc(L.day(e.date) + (e.account ? " · " + e.account : "")) + '</span></div><span class="pa">' + esc(L.money(e.amount, e.currency)) + "</span></div>";
     var body;
     if (!s) body = '<div class="sacts"><button class="copybtn" type="button" data-sort="income" data-id="' + id + '"' + off() + ">It's income</button>" +
       '<button class="copybtn" type="button" data-sort="not" data-id="' + id + '"' + off() + ">Not income</button></div>";
-    else if (s.kind === "income") body = '<div class="confirm" role="group" aria-label="What kind of income"><p>What kind of income is it?</p><div class="stypes">' +
+    else if (s.kind === "income") body = '<div class="confirm" role="group" aria-label="What kind of income"><p>' + (stmt ? "Which statement or kind of income is it?" : "What kind of income is it?") + '</p><div class="stypes">' + stmt +
       L.SORT_TYPES.map(function (c) { return '<button class="copybtn" type="button" data-sort="cat" data-id="' + id + '" data-cat="' + esc(c) + '" aria-pressed="' + (s.cat === c) + '"' + dis + ">" + esc(c) + "</button>"; }).join("") + "</div>" +
-      (s.cat ? '<p class="sq">' + esc(L.sortQuestion(e, "received", s.cat)) + "</p>" : "") +
-      '<div class="conn-acts"><button class="sendbtn" type="button" data-sort="yes" data-id="' + id + '"' + (s.cat ? dis : " disabled") + ">" + (busy ? "Saving…" : "Yes, it's income") + "</button>" +
+      (s.stmt ? '<p class="sq">' + esc(L.pendingQuestion(e)) + "</p>" : s.cat ? '<p class="sq">' + esc(L.sortQuestion(e, "received", s.cat)) + "</p>" : "") +
+      '<div class="conn-acts"><button class="sendbtn" type="button" data-sort="yes" data-id="' + id + '"' + (s.cat || s.stmt ? dis : " disabled") + ">" + (busy ? "Saving…" : s.stmt ? "Yes, it's that statement" : "Yes, it's income") + "</button>" +
       '<button class="copybtn" type="button" data-sort="no" data-id="' + id + '"' + (busy ? " disabled" : "") + ">Cancel</button></div></div>";
     else body = '<div class="confirm" role="group" aria-label="Not income"><p>' + esc(L.sortQuestion(e, "transfer")) + "</p>" +
       '<div class="conn-acts"><button class="sendbtn" type="button" data-sort="yes" data-id="' + id + '"' + dis + ">" + (busy ? "Saving…" : "Yes, not income") + "</button>" +
@@ -603,24 +614,27 @@
     var inc = board.income || {}, e = (inc.unsorted || []).filter(function (x) { return x.id === id; })[0];
     if (!e) return;
     var sel = function (a) { return '[data-sort="' + a + '"][data-id="' + safe(id) + '"]'; };
-    if (act === "income" || act === "not") { ui.sort = { id: id, kind: act, cat: "", busy: false }; delete ui.sortErr[id]; drawIncome(); bankFocus(act === "not" ? sel("no") : '[data-sort="cat"][data-id="' + safe(id) + '"]'); return; }
-    if (act === "no") { var k = ui.sort.kind; ui.sort = { id: "", kind: "", cat: "", busy: false }; drawIncome(); bankFocus(sel(k === "not" ? "not" : "income")); return; }
-    if (act === "cat" && ui.sort.id === id) { ui.sort.cat = L.SORT_TYPES.indexOf(cat) >= 0 ? cat : ""; drawIncome(); bankFocus('[data-sort="cat"][data-id="' + safe(id) + '"][aria-pressed="true"]'); return; }
+    if (act === "income" || act === "not") { ui.sort = { id: id, kind: act, cat: "", stmt: false, busy: false }; delete ui.sortErr[id]; drawIncome(); bankFocus(act === "not" ? sel("no") : e.pendingMatch ? sel("stmt") : '[data-sort="cat"][data-id="' + safe(id) + '"]'); return; }
+    if (act === "no") { var k = ui.sort.kind; ui.sort = { id: "", kind: "", cat: "", stmt: false, busy: false }; drawIncome(); bankFocus(sel(k === "not" ? "not" : "income")); return; }
+    if (act === "cat" && ui.sort.id === id) { ui.sort.cat = L.SORT_TYPES.indexOf(cat) >= 0 ? cat : ""; ui.sort.stmt = false; drawIncome(); bankFocus('[data-sort="cat"][data-id="' + safe(id) + '"][aria-pressed="true"]'); return; }
+    if (act === "stmt" && ui.sort.id === id && e.pendingMatch) { ui.sort.stmt = true; ui.sort.cat = ""; drawIncome(); bankFocus(sel("stmt")); return; }
     if (act !== "yes" || ui.sort.id !== id) return;
-    var status = ui.sort.kind === "income" ? "received" : "transfer", category = ui.sort.cat;
-    if (status === "received" && !category) return;
+    var status = ui.sort.kind === "income" ? "received" : "transfer", category = ui.sort.cat, pm = status === "received" && ui.sort.stmt ? e.pendingMatch : null;
+    if (status === "received" && !category && !pm) return;
     ui.sort.busy = true; drawIncome();
-    write("sort", { id: id, month: String(e.date).slice(0, 7), status: status, category: status === "received" ? category : undefined }).then(function (r) {
+    write("sort", { id: id, month: String(e.date).slice(0, 7), status: status, category: status === "received" && !pm ? category : undefined, pending_id: pm ? pm.id : undefined }).then(function (r) {
       ui.sort.busy = false;
       if (!r.ok) { ui.sortErr[id] = r.error; drawIncome(); return; }
       delete ui.sortErr[id];
-      ui.sort = { id: "", kind: "", cat: "", busy: false };
-      ui.sorted[id] = { id: id, at: Date.now(), line: L.sortedLine(status, category), sub: e.payer + " · " + L.money(e.amount, e.currency) + " · " + L.day(e.date) };
-      /* at once, before the board catches up: out of the list, the status in "Latest payments" */
-      (inc.entries || []).forEach(function (x) { if (x.id === id) { x.status = status; if (status === "received") x.category = category; x.history = (x.history || []).concat({ by: "Luke", from: "unsorted", to: status }); } });
+      ui.sort = { id: "", kind: "", cat: "", stmt: false, busy: false };
+      ui.sorted[id] = { id: id, at: Date.now(), line: pm ? L.pendingSorted(pm) : L.sortedLine(status, category), sub: e.payer + " · " + L.money(e.amount, e.currency) + " · " + L.day(e.date) };
+      /* at once, before the board catches up: out of the list, the status in "Latest payments" (the
+         money of a statement: this row is gone and the statement is received) */
+      if (pm) inc.entries = (inc.entries || []).filter(function (x) { return x.id !== id; }).map(function (x) { return x.id === pm.id ? Object.assign({}, x, { status: "received", arrived: e.date, account: e.account }) : x; });
+      else (inc.entries || []).forEach(function (x) { if (x.id === id) { x.status = status; if (status === "received") x.category = category; x.history = (x.history || []).concat({ by: "Luke", from: "unsorted", to: status }); } });
       draw();
       bankFocus("#sort-" + safe(id));
-      reload(); /* the totals with it counted (or not) */
+      reload(true); /* the totals with it counted (or not) */
     });
   }
 

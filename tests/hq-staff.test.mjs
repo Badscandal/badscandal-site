@@ -703,8 +703,9 @@ test("Revolut: the tile's buttons, red only when Luke has to act, and Connect on
 
 test("Revolut: the bank's return flags say one line, once, and leave the address", () => {
   assert.deepEqual(L.bankFlag("?bank=connected"), { kind: "connected", line: "Revolut is connected. The first read is running.", search: "", had: true });
-  assert.deepEqual(L.bankFlag("?bank=failed"), { kind: "failed", line: "That didn't connect. Press Connect Revolut to try again.", search: "", had: true });
-  assert.deepEqual(L.bankFlag("?sample=1&bank=device"), { kind: "device", line: "Finish on the device you started on: press Connect Revolut here.", search: "?sample=1", had: true });
+  /* the button may be "Connect Revolut" or "Approve again": the flags name neither */
+  assert.deepEqual(L.bankFlag("?bank=failed"), { kind: "failed", line: "That didn't connect. Press the Revolut button below to try again.", search: "", had: true });
+  assert.deepEqual(L.bankFlag("?sample=1&bank=device"), { kind: "device", line: "Finish on the device you started on, or start again here with the Revolut button below.", search: "?sample=1", had: true });
   assert.deepEqual(L.bankFlag("?bank=<script>"), { kind: "", line: "", search: "", had: true }, "an unknown flag says nothing, and goes too");
   assert.deepEqual(L.bankFlag("?sample=1"), { kind: "", line: "", search: "?sample=1", had: false });
   assert.deepEqual(L.bankFlag(""), { kind: "", line: "", search: "", had: false });
@@ -715,13 +716,15 @@ test("Revolut: Read now says what came in, or the reader's own sentence", () => 
   assert.deepEqual(L.syncWords({ ok: true, newPayments: 2, more: false, error: null }, at), { ok: true, text: "Read at 10:04: 2 new payments came in." });
   assert.deepEqual(L.syncWords({ ok: true, newPayments: 1, more: true, error: null }, at), { ok: true, text: "Read at 10:04: 1 new payment came in. The rest comes at the next read." });
   assert.equal(L.syncWords({ ok: true, newPayments: 0 }, at).text, "Read at 10:04: nothing new came in.");
-  assert.deepEqual(L.syncWords({ ok: false, error: "Revolut has to be approved again: press Connect Revolut" }, at), { ok: false, text: "Revolut has to be approved again: press Connect Revolut" });
+  assert.deepEqual(L.syncWords({ ok: false, error: "Revolut has to be approved again: press Approve again" }, at), { ok: false, text: "Revolut has to be approved again: press Approve again" });
   assert.equal(L.syncWords(null, at).ok, false);
 });
 
 test("Revolut: payments say what they are in words; to sort and transfers never count", () => {
   assert.deepEqual(L.payStatus({ status: "unsorted" }), { text: "To sort", counted: false });
-  assert.deepEqual(L.payStatus({ status: "transfer" }), { text: "Your own transfer", counted: false });
+  assert.deepEqual(L.payStatus({ status: "transfer", by: "HQ" }), { text: "Your own transfer", counted: false }, "the reader found it is his own money");
+  assert.deepEqual(L.payStatus({ status: "transfer", by: "Ledger" }), { text: "Not income", counted: false }, "a bot's transfer may be a refund or a gift");
+  assert.deepEqual(L.payStatus({ status: "transfer", by: "HQ", history: [{ by: "Nova", from: "received", to: "transfer" }] }), { text: "Not income", counted: false });
   assert.deepEqual(L.payStatus({ status: "transfer", history: [{ by: "Luke", from: "unsorted", to: "transfer" }] }), { text: "Not income", counted: false }, "sorted as not income: a refund, a gift");
   assert.deepEqual(L.payStatus({ status: "received" }), { text: "Received", counted: true });
   assert.deepEqual(L.payStatus({ status: "pending" }), { text: "Pending", counted: true });
@@ -780,4 +783,64 @@ test("Revolut on the page: every bank call is the page's own, sorting goes throu
   assert.match(staff, /\/\^https:\\\/\\\/\/\.test\(r\.j\.url\)/, "the browser only goes to an https address");
   const words = (staff.match(/"[^"\n]{3,}"|'[^'\n]{3,}'/g) || []).join(" ");
   for (const bad of [/\bAPI\b/, /\btoken\b/i, /endpoint/i, /Enable Banking session/i, />Unsorted</]) assert.doesNotMatch(words, bad);
+});
+
+/* ================= the review of 12 Nov 2026 ================= */
+test("Revolut: a failure that names Netlify settings is said in Luke's words, in the tile, Data health, Read now and Connect", async () => {
+  const B = await import("../netlify/lib/bank.mjs");
+  const ask = "Revolut's settings on Netlify need fixing: ask Claude.";
+  for (const [said, kind] of [[B.SAY.keyRefused, "refused"], [B.SAY.keyBad, "key"], [B.SAY.noBank, "no_bank"]]) {
+    const st = bst({ lastError: said, errorKind: kind, lastRunAt: "2026-11-12T10:00:00.000Z" });
+    assert.equal(L.bankView(st, BNOW).error, ask);
+    assert.equal(L.bankHealth(st, "", BNOW).text, "The last read failed: " + ask);
+    assert.deepEqual(L.syncWords({ ok: false, error: said, errorKind: kind }, BNOW), { ok: false, text: ask });
+    assert.equal(L.bankSays(kind, said), ask);
+    assert.equal(L.bankSays("", said), ask, "the words are caught even without the kind");
+  }
+  assert.equal(L.bankSays("", B.SAY.unreachable), B.SAY.unreachable, "a sentence in Luke's words is kept");
+  /* nothing Luke can see names a setting */
+  const page = [L.bankView(bst({ configured: false, connected: false }), BNOW).note, ...Object.values(B.SAY).map((x) => L.bankSays(B.errorKind(x), x))].join(" ");
+  assert.doesNotMatch(page, /ENABLE_BANKING|PEM|base64|redeploy|application/i);
+  const staff = readFileSync(new URL("../js/hq-staff.js", import.meta.url), "utf8");
+  assert.match(staff, /L\.bankSays\(r\.kind, r\.error\)/, "Connect's error goes through bankSays");
+});
+
+test("Revolut: ?bank=connected says 'connected' only while connected, and reads by itself only right after connecting", () => {
+  const flag = L.bankFlag("?bank=connected"), f = { kind: flag.kind, line: flag.line, auto: true };
+  const justNow = new Date(BNOW - 2 * 60000).toISOString();
+  assert.deepEqual(L.bankFlagAfter(f, bst({ connectedAt: justNow }), BNOW), { flag: { kind: "connected", line: flag.line, auto: false }, sync: true });
+  assert.deepEqual(L.bankFlagAfter(f, bst({ connected: false, daysLeft: null, connectedAt: null }), BNOW), { flag: null, sync: false }, "not connected: the line goes, no read");
+  assert.deepEqual(L.bankFlagAfter(f, bst({ connected: false, needsApproval: true, connectedAt: justNow }), BNOW), { flag: null, sync: false });
+  assert.deepEqual(L.bankFlagAfter(f, bst({ connectedAt: new Date(BNOW - 3 * 86400000).toISOString() }), BNOW), { flag: null, sync: false }, "an old link or bookmark: no read, no line");
+  assert.deepEqual(L.bankFlagAfter(f, bst(), BNOW), { flag: null, sync: false }, "no connectedAt known: no read");
+  assert.deepEqual(L.bankFlagAfter({ kind: "connected", line: flag.line, auto: false }, bst({ connectedAt: justNow }), BNOW).sync, false, "once only");
+  const failed = { kind: "failed", line: "x", auto: false };
+  assert.deepEqual(L.bankFlagAfter(failed, bst({ connected: false }), BNOW), { flag: failed, sync: false });
+  assert.deepEqual(L.bankFlagAfter(null, bst(), BNOW), { flag: null, sync: false });
+});
+
+test("Revolut: once the reader is set up, the desk's own 'Revolut:' lines are not said again under its tile", () => {
+  const inc = { problems: ["Revolut: blocked. Waiting for the bank reader", "Revolut: not checked today (HQ)", "Wise: not checked today (Ledger)"], unknown: [] };
+  assert.deepEqual(L.incomeProblems(inc, bst()), ["Wise: not checked today (Ledger)"]);
+  assert.deepEqual(L.incomeProblems(inc, bst({ connected: false, needsApproval: true })), ["Wise: not checked today (Ledger)"], "the tile and Today say the approval");
+  assert.deepEqual(L.incomeProblems(inc, bst({ configured: false })), inc.problems, "no reader yet: the desk's lines are all there is");
+  assert.deepEqual(L.incomeProblems(inc, null), inc.problems);
+  const att = L.attention({ sheet: null, ov: null, board: boardOf({ income: { ...boardOf().income, ...inc } }), bank: bst() });
+  assert.deepEqual(att.map((a) => a.text), ["Income: Wise: not checked today (Ledger)"]);
+  /* the sample: no broken "Bank" beside the connected Revolut */
+  const sb = sampleBoard(NOW).income;
+  assert.ok(!sb.accounts.some((a) => /bank/i.test(a.name) || a.verdict === "blocked"), JSON.stringify(sb.accounts.map((a) => [a.name, a.verdict])));
+  assert.deepEqual(L.incomeProblems(sb, bst()).filter((p) => /bank|blocked/i.test(p)), []);
+});
+
+test("Revolut: a payment to sort that may be a pending statement's money is offered as that statement first", () => {
+  const e = { id: "i1", payer: "NLR Payments BV", amount: 112.01, currency: "EUR", date: "2026-11-10", pendingMatch: { id: "i2", payer: "Northlight Records", amount: 112.01, currency: "EUR", date: "2026-11-02" } };
+  assert.equal(L.pendingAnswer(e), "It's the pending Northlight Records statement (EUR 112.01, Mon 2 Nov)");
+  assert.equal(L.pendingAnswer({ ...e, pendingMatch: undefined }), "");
+  assert.match(L.pendingQuestion(e), /^Is NLR Payments BV's EUR 112\.01 \(Tue 10 Nov\) the money of the pending Northlight Records statement \(EUR 112\.01, Mon 2 Nov\)\? The statement becomes received on Tue 10 Nov, it leaves Pending/);
+  assert.equal(L.pendingSorted(e.pendingMatch), "Sorted as the Northlight Records statement: received");
+  const staff = readFileSync(new URL("../js/hq-staff.js", import.meta.url), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
+  assert.match(staff, /pending_id: /, "the page sends pending_id");
+  assert.match(staff, /function reloadBoard\(fresh\) \{\s*if \(loading\) return fresh \? loading\.then\(/, "a write never reuses a board asked for before it");
+  assert.match(staff, /addEventListener\("pageshow"/, "Back from Revolut frees the buttons");
 });

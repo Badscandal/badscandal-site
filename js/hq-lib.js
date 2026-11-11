@@ -178,7 +178,7 @@
     out = cap.concat(releaseAttention(sheet, o.board), out.filter(function (x) { return x.key !== "cap"; }));
     /* the staff desk: messages waiting on Luke go first (he can act on them now), and with them a song in
        Spotify for Artists only he can say what it is (review, 11 Nov 2026: it sat ninth of ten); the rest after */
-    var st = staffAttention(o.board).concat(bankAttention(o.bank, o.board)), first = function (x) { return x.key === "msgs" || x.key === "spotify"; };
+    var st = staffAttention(o.board, o.bank).concat(bankAttention(o.bank, o.board)), first = function (x) { return x.key === "msgs" || x.key === "spotify"; };
     return st.filter(first).concat(out, st.filter(function (x) { return !first(x); }));
   }
 
@@ -477,14 +477,14 @@
   /* ---- Today ---- */
   /* "Needs attention" from the staff desk: messages waiting on Luke, income problems (3 at most,
      then "+N more"), the bots' connector switched off. */
-  function staffAttention(board) {
+  function staffAttention(board, bank) {
     if (!board) return [];
     var out = [], n = ((board.waiting && board.waiting.luke) || []).length;
     if (n) out.push({ key: "msgs", text: n === 1 ? "1 message is waiting on you" : n + " messages are waiting on you", href: "#messages" });
     /* v2: a song Spotify for Artists shows that never went through the pipeline is a question for Luke */
     var su = board.sightings && board.sightings.unknown;
     if (su) out.push({ key: "spotify", text: su === 1 ? "Spotify for Artists shows 1 song that didn't go through the pipeline: say what it is" : "Spotify for Artists shows " + su + " songs that didn't go through the pipeline: say what they are", href: "#releases/spotify" });
-    var p = incomeProblems(board.income);
+    var p = incomeProblems(board.income, bank);
     p.slice(0, 3).forEach(function (x, i) { out.push({ key: "income:" + i, text: "Income: " + x, href: "#money" }); });
     if (p.length > 3) out.push({ key: "income:more", text: "Income: +" + (p.length - 3) + " more", href: "#money" });
     if (board.connector && board.connector.botsOn === false) out.push({ key: "connector", text: "The bots' connector is switched off", href: "#team" });
@@ -540,11 +540,15 @@
     return { text: "Not read", attn: false };
   }
   /* what to look at, as the desk found it; a payer nobody has named yet is said in our own words
-     ("New payer not on the list: …") instead of the desk's line about it */
-  function incomeProblems(inc) {
+     ("New payer not on the list: …") instead of the desk's line about it. bank = Revolut's state
+     (GET /api/bank/status): once the reader is set up, the desk's own lines about its "Revolut" account
+     ("Revolut: blocked. …", "Revolut: not checked today") go, because the Revolut tile, bankAttention
+     and Data health say Revolut's state from the reader itself */
+  function incomeProblems(inc, bank) {
     /* the desk's "N payments in Revolut that nobody has sorted yet" has its own block ("To sort") and
        its own line on Today (bankAttention), so it is not said a third time here */
-    var out = ((inc && inc.problems) || []).filter(function (p) { return !/^New payer\(s\) not on the list/.test(p) && !/ that nobody has sorted yet$/.test(p); });
+    var reader = !!(bank && bank.configured);
+    var out = ((inc && inc.problems) || []).filter(function (p) { return !/^New payer\(s\) not on the list/.test(p) && !/ that nobody has sorted yet$/.test(p) && !(reader && /^Revolut:/i.test(p)); });
     var u = (inc && inc.unknown) || [];
     if (u.length) out.push((u.length === 1 ? "New payer not on the list: " : "New payers not on the list: ") + u.join(", "));
     return out;
@@ -936,6 +940,15 @@
   var PREVIEW = "Connecting Revolut only works on badscandal.com itself, not on a preview.";
   /* the six kinds of income a payment can be sorted as (the desk's CATEGORIES) */
   var SORT_TYPES = ["Self-releases", "Label deals", "Publishing", "Production", "Salary", "Other"];
+  /* A failure that names Netlify settings (the private key, the application id, the bank's name) is
+     for Claude and the logs; Luke is told what to do instead. kind = the server's errorKind (status,
+     sync) or kind (connect): key | refused | no_bank. The words are checked too, in case a sentence
+     that names a setting ever comes without its kind. */
+  var SETTINGS_WORDS = "Revolut's settings on Netlify need fixing: ask Claude.";
+  function bankSays(kind, text) {
+    if (kind === "key" || kind === "refused" || kind === "no_bank" || /ENABLE_BANKING_|\bPEM\b|base64|redeploy/i.test(String(text || ""))) return SETTINGS_WORDS;
+    return text || "";
+  }
   function endsWords(n) { return n === 0 ? "approval ends today" : n === 1 ? "approval ends tomorrow" : "approval ends in " + n + " days"; }
   /* the reader's last read failed: an error, and no full read since it */
   function bankFailed(st) { var ok = t(st && st.lastOkAt), run = t(st && st.lastRunAt); return !!(st && st.lastError && (ok == null || (run != null && run > ok))); }
@@ -973,7 +986,7 @@
     else {
       v.attn = !!st.expiring;
       v.buttons = (st.expiring && here ? ["approve"] : []).concat("sync", "disconnect");
-      if (bankFailed(st)) v.error = st.lastError;
+      if (bankFailed(st)) v.error = bankSays(st.errorKind, st.lastError);
     }
     if (!here && (st.needsApproval || !st.connected || st.expiring)) v.note = PREVIEW;
     return v;
@@ -982,26 +995,40 @@
   function bankButton(k) { return BANK_BUTTON[k] || ""; }
   /* The bank sends Luke back to /hq?bank=connected|failed|device#money. -> { kind, line, search (the
      address without the flag, for history.replaceState), had } */
-  var FLAG_LINE = { connected: "Revolut is connected. The first read is running.", failed: "That didn't connect. Press Connect Revolut to try again.",
-    device: "Finish on the device you started on: press Connect Revolut here." };
+  var FLAG_LINE = { connected: "Revolut is connected. The first read is running.", failed: "That didn't connect. Press the Revolut button below to try again.",
+    device: "Finish on the device you started on, or start again here with the Revolut button below." };
   function bankFlag(search) {
     var parts = String(search || "").replace(/^\?/, "").split("&").filter(Boolean), kind = "", had = false;
     parts = parts.filter(function (p) { var m = /^bank=(.*)$/.exec(p); if (!m) return true; had = true; if (FLAG_LINE[m[1]]) kind = m[1]; return false; });
     return { kind: kind, line: FLAG_LINE[kind] || "", search: parts.length ? "?" + parts.join("&") : "", had: had };
   }
+  /* Once Revolut's state is known: what is left of the ?bank= flag, and whether to read at once.
+     "connected" is said only while Revolut IS connected, and reads by itself only once, and only when
+     the connection is under 10 minutes old (an old link, a bookmark or the address bar's memory of
+     /hq?bank=connected never starts a read). -> { flag (null = say nothing), sync } */
+  var AUTO_READ_MS = 10 * 60000;
+  function bankFlagAfter(flag, st, now) {
+    now = now || Date.now();
+    if (!flag || !st || flag.kind !== "connected") return { flag: flag || null, sync: false };
+    if (!st.connected) return { flag: null, sync: false };
+    var at = t(st.connectedAt), fresh = at != null && now - at >= -60000 && now - at < AUTO_READ_MS;
+    if (!fresh) return { flag: null, sync: false };
+    return { flag: { kind: flag.kind, line: flag.line, auto: false }, sync: !!flag.auto };
+  }
   /* "Read now" came back (the sync summary). -> { ok, text } */
   function syncWords(s, at) {
     if (!s || typeof s !== "object") return { ok: false, text: "Couldn't read Revolut just now. Try again." };
-    if (!s.ok || s.error) return { ok: false, text: s.error || "Couldn't read Revolut just now. Try again." };
+    if (!s.ok || s.error) return { ok: false, text: bankSays(s.errorKind, s.error) || "Couldn't read Revolut just now. Try again." };
     var n = s.newPayments || 0, hm = spStampOf(at).slice(11, 16);
     return { ok: true, text: "Read at " + hm + ": " + (n ? n + " new payment" + (n === 1 ? "" : "s") + " came in" : "nothing new came in") + (s.more ? ". The rest comes at the next read." : ".") };
   }
-  /* a payment's state in "Latest payments": counted = it is in the totals. A transfer is Luke's own
-     money; one somebody sorted as "Not income" (a refund, a gift) is said as that. */
+  /* a payment's state in "Latest payments": counted = it is in the totals. "Your own transfer" only for
+     what the bank reader itself found to be his own money (by HQ, never changed since); anything else
+     marked as a transfer (sorted as "Not income", or a bot's refund or gift) is "Not income". */
   function payStatus(e) {
     var s = e && e.status;
     if (s === "unsorted") return { text: "To sort", counted: false };
-    if (s === "transfer") { var h = (e.history || []), last = h[h.length - 1]; return { text: last && last.from === "unsorted" ? "Not income" : "Your own transfer", counted: false }; }
+    if (s === "transfer") return { text: e.by === "HQ" && !(e.history || []).length ? "Your own transfer" : "Not income", counted: false };
     s = String(s || ""); return { text: s.charAt(0).toUpperCase() + s.slice(1), counted: true };
   }
   /* the inline question before a payment is sorted (it can't be changed on the page afterwards) */
@@ -1011,6 +1038,15 @@
       : "Sort " + what + " as not income? Your own money, a refund, a gift: it never counts in the totals, and can't be changed here.";
   }
   function sortedLine(status, category) { return status === "received" ? "Sorted as income (" + category + ")" : "Sorted as not income"; }
+  /* The payment is the money of a statement already logged as pending (the desk offers it as
+     e.pendingMatch): the answer, the question before it goes, and the line in its place afterwards */
+  function pendingWhat(p) { return p.payer + " statement (" + money(p.amount, p.currency) + ", " + day(p.date) + ")"; }
+  function pendingAnswer(e) { var p = e && e.pendingMatch; return p ? "It's the pending " + pendingWhat(p) : ""; }
+  function pendingQuestion(e) {
+    var p = e.pendingMatch;
+    return "Is " + e.payer + "'s " + money(e.amount, e.currency) + " (" + day(e.date) + ") the money of the pending " + pendingWhat(p) + "? The statement becomes received on " + day(e.date) + ", it leaves Pending, and this payment is counted once, as that statement. It can't be changed here.";
+  }
+  function pendingSorted(p) { return "Sorted as the " + p.payer + " statement: received"; }
   /* "2 payments in Revolut to sort" */
   function toSortWords(inc) {
     var list = (inc && inc.unsorted) || [], n = (inc && inc.unsortedCount) || list.length;
@@ -1037,7 +1073,7 @@
     if (st.needsApproval) return R("bad", "Has to be approved again (Money)");
     if (!st.connected) return R("off", "Not connected");
     var ok = t(st.lastOkAt);
-    if (bankFailed(st)) return R("bad", "The last read failed: " + st.lastError);
+    if (bankFailed(st)) return R("bad", "The last read failed: " + bankSays(st.errorKind, st.lastError));
     if (st.expiring) return R("bad", (ok != null ? "Read " + ago(now - ok) + " · " : "") + endsWords(st.daysLeft));
     if (st.partial) return R("off", "The last read stopped part way: the rest comes at the next read");
     if (ok == null) return R("off", "Not read yet: it reads every morning at 06:50");
@@ -1063,5 +1099,7 @@
     sightConfirm: sightConfirm, sightDone: sightDone,
     /* the Revolut reader (11 Nov 2026) */
     bankLine: bankLine, bankView: bankView, bankButton: bankButton, bankFlag: bankFlag, syncWords: syncWords, payStatus: payStatus, sortQuestion: sortQuestion,
-    sortedLine: sortedLine, toSortWords: toSortWords, bankAttention: bankAttention, bankHealth: bankHealth, SORT_TYPES: SORT_TYPES };
+    sortedLine: sortedLine, toSortWords: toSortWords, bankAttention: bankAttention, bankHealth: bankHealth, SORT_TYPES: SORT_TYPES,
+    /* after the review of 12 Nov 2026 */
+    bankSays: bankSays, bankFlagAfter: bankFlagAfter, pendingAnswer: pendingAnswer, pendingQuestion: pendingQuestion, pendingSorted: pendingSorted };
 });

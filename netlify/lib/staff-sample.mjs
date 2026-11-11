@@ -32,13 +32,12 @@ const ROSTER = S.DEFAULT_ROSTER.map((b) => ({ access: "", blockers: b.name === "
 const SOURCES = [
   { id: "wise", name: "Wise", kind: "account", owner: "Ledger", cadence: "daily", state: "active", how: "read-only connection" },
   { id: "paypal", name: "PayPal", kind: "account", owner: "Ledger", cadence: "daily", state: "active", how: "read-only connection" },
-  { id: "bank", name: "Bank", kind: "account", owner: "Ledger", cadence: "daily", state: "blocked", blocker: "Not connected yet", needsLuke: "Reconnect the bank feed" },
-  { id: "northlight", name: "Northlight Records", kind: "payer", category: "Label deals", currency: "EUR", lands: "Bank", cadence: "monthly", owner: "Ledger", state: "active", match: ["northlight"] },
+  { id: "northlight", name: "Northlight Records", kind: "payer", category: "Label deals", currency: "EUR", lands: "Wise", cadence: "monthly", owner: "Ledger", state: "active", match: ["northlight"] },
   { id: "distro", name: "Sample Distro", kind: "payer", category: "Self-releases", currency: "USD", lands: "PayPal", cadence: "monthly", owner: "Drop", state: "active", match: ["sample distro"] },
   { id: "publisher", name: "Sample Publishing", kind: "payer", category: "Publishing", currency: "USD", lands: "Wise", cadence: "quarterly", owner: "Ledger", state: "active", match: ["sample publishing"] },
   /* the bank reader (11 Nov 2026): the site itself reads this one every morning */
   { id: "revolut", name: "Revolut", kind: "account", owner: "HQ", cadence: "daily", state: "active", how: "read-only, read by the site every morning" },
-  { id: "plugin", name: "Plug-in sales", kind: "payer", category: "Other", currency: "USD", lands: "Bank", cadence: "monthly", owner: "", state: "not_tracked" },
+  { id: "plugin", name: "Plug-in sales", kind: "payer", category: "Other", currency: "USD", lands: "PayPal", cadence: "monthly", owner: "", state: "not_tracked" },
 ];
 
 /* MADE-UP releases for the pipeline (11 Nov 2026; V2-V5 the same evening). Four, one of each kind:
@@ -104,10 +103,10 @@ export function sampleDesk(now = Date.now()) {
   const updates = [U(6, "Ledger", "done", "Wise and PayPal checked: 1 new payment (USD 104.04)"), U(33, "Atlas", "working", "Reading Spotify for Artists for Touch Me"), U(58, "Nova", "info", "Duties reset for today; 2 briefs read")];
   const M = (min, id, from, to, text, needs = "none", extra = {}) => ({ id, at: new Date(ago(min)).toISOString(), sp: S.spStamp(ago(min)), from, to, text, needs, re: "", options: [], kind: "note", resolved: null, ...extra });
   const messages = [
-    M(12, "msample0001a", "HQ", "Luke", "HQ check, " + today + " morning: 3 things to look at\n\nNeeds a look:\n- Kevin is blocked: TikTok login expired\n- Laura is late (due 00:30): Log YouTube subscribers\n- Income: Bank: blocked. Not connected yet\n\nRunning:\n- Duties: 3 of 6 done, 1 late, 1 blocked\n- Income logged this month: USD 104.04 + EUR 112.01 received", "none", { kind: "report" }),
+    M(12, "msample0001a", "HQ", "Luke", "HQ check, " + today + " morning: 3 things to look at\n\nNeeds a look:\n- Kevin is blocked: TikTok login expired\n- Laura is late (due 00:30): Log YouTube subscribers\n- Income: 2 payments in Revolut that nobody has sorted yet\n\nRunning:\n- Duties: 3 of 6 done, 1 late, 1 blocked\n- Income logged this month: USD 104.04 + EUR 112.01 received", "none", { kind: "report" }),
     M(40, "msample0002a", "Kevin", "Luke", "TikTok signed me out. I need the 6-digit code TikTok sends to your phone, typed into the secure form (not here).", "action"),
     M(95, "msample0003a", "Nova", "Luke", "Survivors on Fri 11 Dec? Files have to reach Drop by Fri 13 Nov.", "decision", { options: ["Yes, Fri 11 Dec", "Move it to January", "Not this one"] }),
-    M(130, "msample0004a", "Claude", "Nova", "Ledger's Bank row for this month is still pending. Ask Ledger to check the statement email again at 12:00.", "action"),
+    M(130, "msample0004a", "Claude", "Nova", "Ledger's Northlight row for this month is still pending. Ask Ledger to check the statement email again at 12:00.", "action"),
     M(125, "msample0005a", "Nova", "Claude", "Asked. Ledger will post an update when it has looked.", "none", { re: "msample0004a" }),
     M(300, "msample0006a", "Claude", "all", "From today every bot starts its run with my_day and finishes with post_update. The guide is in read_guide.", "none"),
     /* two things Luke already answered (the "You answered" block): Atlas has looked since, Drop not yet */
@@ -118,7 +117,7 @@ export function sampleDesk(now = Date.now()) {
   messages.sort((a, b) => (a.at < b.at ? 1 : -1)); /* newest first, as the real desk lists them */
   const E = (back, payer, amount, currency, status, account, category, by = "Ledger") => ({ id: "i" + back + payer.length, at: new Date(ago(back * 1440 + 90)).toISOString(), by, date: d(back), payer, amount, currency, status, category, account, reference: "", period: "", source: "", note: "" });
   const entries = [E(0, "Sample Distro", 104.04, "USD", "received", "PayPal", "Self-releases"), E(2, "Northlight Records", 112.01, "EUR", "pending", "Statement only", "Label deals"),
-    E(9, "Sample Publishing", 420.5, "USD", "received", "Wise", "Publishing"), E(34, "Northlight Records", 96.4, "EUR", "received", "Bank", "Label deals"), E(36, "Sample Distro", 88.1, "USD", "received", "PayPal", "Self-releases")];
+    E(9, "Sample Publishing", 420.5, "USD", "received", "Wise", "Publishing"), E(34, "Northlight Records", 96.4, "EUR", "received", "Wise", "Label deals"), E(36, "Sample Distro", 88.1, "USD", "received", "PayPal", "Self-releases")];
   /* MADE-UP rows as the Revolut reader files them (by HQ): two it could not place ("to sort", in no
      total) and one of Luke's own transfers between his accounts (never income) */
   const R = (back, payer, amount, status) => ({ ...E(back, payer, amount, "EUR", status, "Revolut", "Other", "HQ"), id: "irevsample" + back + payer.length, reference: "sample-tx-" + back + payer.length, note: "Read from Revolut" });

@@ -105,9 +105,10 @@ export const TOOLS = [
     description: "The written guide to this desk: who does what, the daily times, how to log income, how messages work, the rules that never bend. Read it once when you are first connected, and again whenever Nova says it changed.",
     inputSchema: obj({ bot: BOT }, ["bot"]) },
   { name: "sort_payment", title: "Say what a Revolut payment is", idempotent: true,
-    description: 'For Ledger (Sheet and Nova may too). The site reads Luke\'s personal Revolut every morning and puts every incoming payment on the desk. One it could not place has the status "unsorted": it is in the account, and nobody has said what it is, so it counts as nothing yet. Use this to say what ONE such payment is: received (it is income: give its category) or transfer (not income: Luke moving his own money, a refund, a gift, a friend paying him back). Find the id and month in income_status under "unsorted". Sort it ONLY when it is clear from the payer (a label, a distributor, a publisher, a known client = received; Luke\'s own name or his own account = transfer). When it is not clear, leave it unsorted and ask Luke with ONE send_message, needs decision, naming the payer, the date and the amount. Never guess. You can also correct a payment the site sorted itself; what Luke or another person decided cannot be changed here.',
+    description: 'For Ledger (Sheet and Nova may too). The site reads Luke\'s personal Revolut every morning and puts every incoming payment on the desk. One it could not place has the status "unsorted": it is in the account, and nobody has said what it is, so it counts as nothing yet. Use this to say what ONE such payment is: received (it is income: give its category) or transfer (not income: Luke moving his own money, a refund, a gift, a friend paying him back). Find the id and month in income_status under "unsorted". Sort it ONLY when it is clear from the payer (a label, a distributor, a publisher, a known client = received; Luke\'s own name or his own account = transfer). When it is not clear, leave it unsorted and ask Luke with ONE send_message, needs decision, naming the payer, the date and the amount. Never guess. If income_status shows a pending_match for it (a statement already logged as pending, same amount and currency) and you are sure it is that statement\'s money, sort it as received with pending_id = that statement\'s id: the statement becomes received and this row goes, so the money is never counted twice. You can also correct a payment the site sorted itself; what Luke or another person decided cannot be changed here.',
     inputSchema: obj({ bot: BOT, id: str("The payment's id from income_status (it starts with i)."), month: str("The month it is filed under, YYYY-MM (the first 7 characters of its date)."),
-      status: str("received | transfer", { enum: ["received", "transfer"] }), category: str("Only with received: Self-releases | Label deals | Publishing | Production | Salary | Other.", { enum: S.CATEGORIES }) }, ["bot", "id", "status"]) },
+      status: str("received | transfer", { enum: ["received", "transfer"] }), category: str("Only with received: Self-releases | Label deals | Publishing | Production | Salary | Other.", { enum: S.CATEGORIES }),
+      pending_id: str("Optional, only with received: the id of the pending statement this payment is the money of (income_status: pending_match). The statement keeps its own category.") }, ["bot", "id", "status"]) },
 ];
 
 /* Luke, 11 Nov 2026: "let them see my full revolut personal income to be able to actually see the
@@ -204,10 +205,11 @@ export async function callTool(tool, args, ctx) {
         sources: i.sources.map(line), problems: i.problems,
         newest_payments: i.entries.slice(0, 15).map((e) => `${e.date} · ${e.payer} · ${e.currency} ${e.amount.toFixed(2)} · ${e.status} · ${e.account} · by ${e.by}`),
         /* in the account, not yet said what they are: counted as nothing until sorted (tool sort_payment) */
-        unsorted: i.unsorted.map((e) => ({ id: e.id, month: e.date.slice(0, 7), line: `${e.date} · ${e.payer} · ${e.currency} ${e.amount.toFixed(2)} · ${e.account}` })) };
+        unsorted: i.unsorted.map((e) => ({ id: e.id, month: e.date.slice(0, 7), line: `${e.date} · ${e.payer} · ${e.currency} ${e.amount.toFixed(2)} · ${e.account}`,
+          ...(e.pendingMatch ? { pending_match: { id: e.pendingMatch.id, line: `${e.pendingMatch.date} · ${e.pendingMatch.payer} · ${e.pendingMatch.currency} ${e.pendingMatch.amount.toFixed(2)} · pending` } } : {}) })) };
     }
     case "sort_payment": {
-      const e = await S.sortIncome(store, now, roster, { by: me, id: args.id, month: args.month, status: args.status, category: args.category });
+      const e = await S.sortIncome(store, now, roster, { by: me, id: args.id, month: args.month, status: args.status, category: args.category, pending_id: args.pending_id });
       return { saved: true, id: e.id, status: e.status, category: e.category, recorded: `${e.arrived || e.date} · ${e.payer} · ${e.currency} ${e.amount.toFixed(2)} · ${e.status}` };
     }
     case "set_my_card": {
