@@ -1144,3 +1144,76 @@ Brief: `../TOUCHME-LANDING-BUILD-BRIEF.md` (outside the repo on purpose).
 * `_redirects` 404s `/package*.json`, `/netlify/*`, `/tests/*`, `/tools/*`; robots.txt
   disallows /admin, /hq, /stats, /api/.
 
+## The staff desk + the bots' connector (/mcp) (11 Nov 2026)
+
+Luke's bots (Nova, Alfred, Ledger, Sheet, Steve, Kevin, Laura, Atlas, Drop, Verse, Webmaster, Forge) are
+his staff. Until now they only wrote rows into Google Sheets and /hq only read them. The staff desk is
+what the team, Claude and Luke share ON THE SITE, kept in the Netlify Blob store `staff` (the site can't
+write the sheets and shouldn't). Nothing here can touch ads, posts, sheets or money.
+
+* **Files:** `netlify/lib/staff.mjs` (the desk: every rule, pure, store + clock passed in),
+  `netlify/lib/mcp.mjs` (the connector's protocol), `netlify/lib/staff-tools.mjs` (its twelve tools),
+  `netlify/lib/staff-sample.mjs` (made-up desk for `?sample=1` + `memoryDesk()`, the in-memory store the
+  tests use), `netlify/lib/hq-load.mjs` (the sheet/Meta/FX loader, moved out of functions/hq.mjs so the
+  connector and the check read the same picture), `netlify/functions/staff.mjs` (`/mcp`, `/api/staff/*`),
+  `netlify/functions/staffcheck.mjs` (scheduled). Tests: `tests/staff.test.mjs`, `tests/mcp.test.mjs`
+  (handler tests swap `@netlify/blobs` for `tests/fixtures/fake-blobs.mjs`).
+* **What is on the desk** (one JSON document per key; every write to a shared document goes through
+  `mutate()`: read with its etag, write only if unchanged, retry; so two bots writing in the same second
+  both land): `upd/<SP day>.json` updates · `msg/<UTC month>.json` messages · `inc/<month>.json` payments ·
+  `chk/<month>.json` "I checked this account" · `roster.json` · `sources.json` · `cards.json` ·
+  `seen/<bot>.json` · `config.json` · `guide.json`. Deploy previews use their own throwaway store.
+* **Who is calling:** Luke = the /hq login cookie (POSTs must come from our own origin). The bots =
+  Netlify env `STAFF_BOT_KEY`: ONE key for the whole team, because the bots' app ("Grok Bot": Add a custom
+  connector, Remote HTTPS, one HTTP header) shares one connector between all bots; so every call names
+  its bot in the `bot` argument, checked against the roster (`whoIs()`). Claude = `STAFF_CLAUDE_KEY`,
+  always acts as "Claude". Keys travel ONLY in `Authorization: Bearer …` (a bare key is accepted too),
+  compared in constant time (`keyOk`), never logged, never in a URL. Both keys are also in the Mac's
+  Keychain (`badscandal-staff-bots-key`, `badscandal-staff-claude-key`). Luke can switch the bots' key
+  off at once from /hq (`config.json` `botsOn`), no Netlify needed. The bots' key opens `/mcp` only.
+* **The connector, `POST /mcp`:** a hand-written Model Context Protocol server, no library, no session,
+  no streaming: every answer is one JSON body. It answers the legacy handshake (2024-11-05 .. 2025-11-25:
+  `initialize`, 202 for notifications, `ping`, `tools/list`, `tools/call`) AND the 2026-07-28 revision (no
+  handshake, `server/discover`, version in `params._meta` + the `MCP-Protocol-Version` header,
+  `resultType` on results). GET/DELETE 405, OPTIONS 204, a foreign `Origin` 403, no key 401 with
+  `WWW-Authenticate: Bearer` (and the `/.well-known/oauth-*` paths stay 404 so clients don't try OAuth).
+  A failure the bot can fix (wrong name, no amount) is a tool RESULT with `isError`, in a sentence that
+  says what to do; only an unknown tool is a protocol error. Checked with the official inspector client:
+  `npx @modelcontextprotocol/inspector --cli <url> --transport http --header "Authorization: Bearer …"
+  --method tools/list`.
+* **The twelve tools:** `my_day` (start of every run) · `post_update` (working/done/blocked/error/info;
+  a `done` or `blocked` also finishes/blocks today's duty on /hq) · `send_message` / `read_messages` /
+  `resolve_message` · `submit_income` (ONE payment per call; idempotent by account+reference, else
+  date+payer+amount+currency; pending -> received updates in place; `transfer` is never income) ·
+  `income_check` ("I looked at Wise today, 0 new": tells "nothing came in" from "nobody looked") ·
+  `income_status` · `team_board` · `luke_briefing` (for Alfred's 10:00 message) · `set_my_card` ·
+  `read_guide`. Descriptions are written for bots that follow instructions literally.
+* **Guard rails in `staff.mjs`:** names only from the roster; every text cleaned and cut; links only
+  `https://`; `secretIn()` refuses passwords, login codes, API keys, private keys, IBANs and card numbers
+  (it must NOT refuse ISRCs, UPCs, 15-digit ad account ids or "token: expired": tested); an amount that
+  can't be read is refused, never 0; currency = the three-letter code as paid, never converted; only
+  Luke can settle a decision that waits on Luke.
+* **How it meets the sheet:** `hqModel(sheets, today, fx, meta, nowHM, staff)`: the connector's updates
+  and the sheet's `Updates` tab are ONE live log (`mergeUpdates`, no doubles), and `dutiesReport(…,
+  overlay)` lets a connector `done`/`blocked` finish or block a `D-` duty the sheet still shows as to do
+  (the sheet's `done` always wins; a bot with two duties must name the duty id; yesterday's word doesn't
+  count). The Tasks tab stays Nova's; there is no second task board (a message with `needs: action` is
+  the light version).
+* **The site's own check** (`staffcheck.mjs`, `35 0,12 * * *` UTC = 09:35 and 21:35 São Paulo, production
+  only): `checkReport()` = facts only (duties done/late/blocked, bots that said nothing, bots that never
+  connected, accounts not checked, overdue/blocked sources, new payers, messages nobody answered, the
+  sheet, the Meta key, the cap, the next release) posted as ONE message from "HQ" to Luke. Alfred reads it
+  through `luke_briefing`; Claude reads it on its own two rounds (09:40 / 21:40, a local launchd job on
+  Luke's Mac: `~/.badscandal-hq/claude-rounds.sh`, Claude Code with ONLY the desk's tools allowed).
+* **`/api/staff/*`** (cookie = Luke, or Claude's key): `GET board` (everything /hq draws: `board()`),
+  `POST message`, `POST resolve`, `POST config {botsOn}` (Luke only), `PUT seed {roster, sources, guide}`
+  (the private roster notes, the list of income sources and the bots' guide live in the PRIVATE repo
+  badscandal-hq under `staff-desk/` and are loaded onto the desk; this public repo carries only the
+  built-in job cards in `DEFAULT_ROSTER` and made-up sample data). `?sample=1` = the made-up desk, needs
+  the login, never opens a store, never writes.
+* **Not served any more:** `/CLAUDE.md`, `/HANDOFF-README.md`, `/README.txt`, `/README-STORE.txt` now
+  404 (`_redirects`): this file was readable at badscandal.com/CLAUDE.md. The repo itself is still public,
+  so nothing private goes in here.
+* **Also fixed while moving the loader:** a past month's exchange rate cached mid-month is re-read once
+  the month has ended; a failed sheet read that falls back to the cached copy now says so
+  (`staleBecause`).
