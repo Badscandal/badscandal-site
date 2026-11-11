@@ -947,6 +947,11 @@ Brief: `../TOUCHME-LANDING-BUILD-BRIEF.md` (outside the repo on purpose).
   would be reached. Same token, same read-only GET, cached an hour (`meta-cache`, key
   `cap/<account>/<day>.json`). DISPLAY ONLY: nothing on the site pauses or changes ads. Google and
   TikTok (EUR) live in the bots' Ads Tracker sheet, not here.
+* **Monthly average exchange rates (11 Nov 2026)**, `netlify/lib/fx.mjs`: ECB daily reference
+  rates via api.frankfurter.dev (free, no key, GET only); a month's rate = the plain average of its
+  daily rates so far; `convert(amount, from, to, avg)`. Cached 12 h (`meta-cache`, `fx/<month>.json`).
+  Luke asked for USD<->EUR at the month's average: converted figures are ESTIMATES shown NEXT TO the
+  real amount and the rate used, never instead of it. The cap card shows the EUR estimate.
 * **90-day rule:** `netlify/functions/rollup.mjs` (daily 06:00 UTC, production
   only) folds raw keys older than 90 days into `daily/<day>.json` counts and
   deletes them; the portal merges those back for old ranges.

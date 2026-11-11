@@ -14,6 +14,7 @@ import { getDeployStore, getStore } from "@netlify/blobs";
 import { adTaps, dashboard, defaultLink, healthSummary, LINKS, mergeSummary, resolveRange, spDay, spTime, summarize, toCSV, utcDaysFor, visitLog, addDays } from "../lib/admin.mjs";
 import { HEALTH_PREFIX, LAST_ERROR_KEY, LAST_KEY, parseHealthKey } from "../lib/capi.mjs";
 import { CACHE_MS, DEFAULT_ACCOUNT, capReport, fetchInsights, spendReport } from "../lib/metaspend.mjs";
+import { convert, fetchMonthAverage, FX_TTL_MS } from "../lib/fx.mjs";
 import { checkPassword, clearCookie, COOKIE, makeSession, readCookie, sessionCookie, verifySession } from "../lib/session.mjs";
 import { parseKey, PREFIX } from "../lib/stats.mjs";
 
@@ -143,7 +144,23 @@ async function loadCap(context) {
       try { await cache.setJSON(key, got); } catch {}
     }
   }
-  return { connected: true, ...capReport(got.rows, today), fetched: spTime(got.at) };
+  const rep = capReport(got.rows, today);
+  const fx = await loadFx(context, rep.month, today).catch(() => null);
+  const eur = fx && !fx.error ? convert(rep.spent, rep.currency, "EUR", fx) : null;
+  return { connected: true, ...rep, fetched: spTime(got.at), fx: eur == null ? null : { eur, rate: fx[rep.currency], days: fx.days } };
+}
+
+/* This month's average exchange rates (ECB), cached 12 h. Estimates for reading only. */
+async function loadFx(context, month, today) {
+  const cache = context.deploy?.context === "production" ? getStore("meta-cache") : getDeployStore("meta-cache");
+  const key = `fx/${month}.json`;
+  let got = null;
+  try { got = await cache.get(key, { type: "json" }); } catch {}
+  if (got && Date.now() - got.at < FX_TTL_MS) return got.fx;
+  const fx = await fetchMonthAverage(month, today);
+  if (fx.error) return got ? got.fx : fx;
+  try { await cache.setJSON(key, { at: Date.now(), fx }); } catch {}
+  return fx;
 }
 
 /* Luke's "Don't count this device": a long-lived cookie set by the server (Safari keeps those; it

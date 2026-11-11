@@ -187,3 +187,23 @@ test("cap: month to date, left, status lines and the pace", () => {
   assert.equal(capReport([day("2026-11-01", 10)], "2026-11-02").stopDay, null, "pace that never reaches the line in this month");
   assert.equal(capReport([day("2026-11-01", 500)], "2026-11-11").perDay, 0, "ads paused for days: no pace, no false alarm");
 });
+
+/* ---------- monthly average exchange rates (ECB), 11 Nov 2026 ---------- */
+import { convert, fetchMonthAverage, fxRequest, monthAverage } from "../netlify/lib/fx.mjs";
+
+test("fx: a month's rate is the plain average of its daily ECB rates; estimates both ways", async () => {
+  assert.equal(fxRequest("2026-10", "2026-11-11"), "https://api.frankfurter.dev/v1/2026-10-01..2026-10-31?symbols=USD,GBP,BRL,DKK");
+  assert.equal(fxRequest("2026-11", "2026-11-11"), "https://api.frankfurter.dev/v1/2026-11-01..2026-11-11?symbols=USD,GBP,BRL,DKK");
+  const json = { base: "EUR", rates: { "2026-11-02": { USD: 1.10, GBP: 0.85 }, "2026-11-03": { USD: 1.14, GBP: 0.87 } } };
+  const avg = monthAverage(json);
+  assert.equal(avg.USD, 1.12); assert.equal(avg.GBP, 0.86); assert.equal(avg.days, 2); assert.equal(avg.BRL, null);
+  assert.equal(convert(112, "USD", "EUR", avg), 100);
+  assert.equal(convert(100, "EUR", "USD", avg), 112);
+  assert.equal(convert(86, "GBP", "USD", avg), 112);
+  assert.equal(convert(5, "USD", "USD", avg), 5);
+  assert.equal(convert(5, "BRL", "EUR", avg), null, "no rate, no guess");
+  let init;
+  const ok = await fetchMonthAverage("2026-11", "2026-11-11", async (u, i) => { init = i; return new Response(JSON.stringify(json), { status: 200 }); });
+  assert.equal(init.method, "GET"); assert.equal(ok.USD, 1.12); assert.equal(ok.EUR, 1);
+  assert.ok((await fetchMonthAverage("2026-12", "2026-11-11", async () => new Response('{"rates":{}}', { status: 200 }))).error);
+});

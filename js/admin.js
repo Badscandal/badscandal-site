@@ -474,8 +474,9 @@
       over: "OVER the " + money(k.cap, cc) + " cap. Every ad must be off now; tell Luke.",
     }[k.status];
     if (k.status === "ok" && k.perDay > 0) msg += " At the last days' pace (" + money(k.perDay, cc) + "/day) " + (k.stopDay ? "the " + money(k.stop, cc) + " line is reached around day " + k.stopDay + "." : "the month ends under the line.");
+    if (k.fx) msg += " About " + money(k.fx.eur, "EUR") + " at this month's average rate (1 EUR = " + k.fx.rate + " " + cc + ").";
     $("capMsg").textContent = msg;
-    $("capNote").textContent = "Meta only (the ad account's days). Google and TikTok bill in EUR and are logged by the bots in the Ads Tracker; never converted. Read from Meta " + (k.fetched ? k.fetched.slice(11, 16) + " SP" : "") + ", refreshed hourly. This page never pauses anything.";
+    $("capNote").textContent = "Meta only (the ad account's days). Google and TikTok bill in EUR and are logged by the bots in the Ads Tracker. EUR figures are estimates at the month's average ECB rate. Read from Meta " + (k.fetched ? k.fetched.slice(11, 16) + " SP" : "") + ", refreshed hourly. This page never pauses anything.";
   }
 
   function drawHealth() {
