@@ -71,8 +71,10 @@ test("mcp 2026-07-28: no handshake; discover; version and header checks; resultT
   assert.deepEqual([badV.status, badV.body.error.code, badV.body.error.data.supported[0]], [400, -32022, MODERN]);
   assert.equal((await handle(rpc("tools/call", { ...meta, name: "my_day", arguments: { bot: "Nova" } }), { "mcp-name": "post_update" }, deps)).body.error.code, -32020);
   assert.equal((await handle(rpc("tools/list", meta), { "mcp-method": "tools/call" }, deps)).body.error.code, -32020);
-  const unknown = await handle(rpc("ping", meta), {}, deps);
-  assert.deepEqual([unknown.status, unknown.body.error.code], [404, -32601], "ping is gone in 2026-07-28");
+  /* a client must never be shown "HTTP 404" by the connector (the bots' app gave up on one, 11 Nov 2026) */
+  for (const m of ["ping", "resources/list", "prompts/list", "resources/templates/list"]) { const r = await handle(rpc(m, meta), { "mcp-protocol-version": MODERN }, deps); assert.equal(r.status, 200, m); assert.equal(r.body.result.resultType, "complete", m); }
+  const unknown = await handle(rpc("nope/nope", meta), {}, deps);
+  assert.deepEqual([unknown.status, unknown.body.error.code], [200, -32601], "an unknown method is a protocol error, never a 404 page");
   assert.equal(headerText("=?base64?" + btoa("abc") + "?="), "abc"); assert.equal(headerText("plain"), "plain");
 });
 
@@ -183,4 +185,19 @@ test("/api/hq/data still answers as before through the shared loader (login, sam
   assert.equal(s.sample, true); assert.equal(s.team.duties.total, 6); assert.equal(s.team.live.ready, true); assert.ok(s.money.cap.spent > 0); assert.ok(s.health && s.metaKey);
   assert.ok(!globalThis.__asked.includes("staff"), "the sample never opens the staff desk");
   assert.equal((await get("/api/hq/summary", { cookie })).status, 404);
+});
+
+test("connector: requests that were turned away are noted (never the key), and Claude or Luke can read them", async () => {
+  await post(rpc("tools/list"), "Bearer definitely-wrong");
+  await staff(new Request("https://badscandal.com/mcp/sse", { method: "GET", headers: { authorization: "Bearer " + ENV.STAFF_BOT_KEY, "user-agent": "SomeBotApp/1.0" } }), ctx);
+  await post(rpc("initialize", { protocolVersion: "2025-06-18" }), "Bearer " + ENV.STAFF_BOT_KEY, { "user-agent": "SomeBotApp/1.0" });
+  const r = await api("trace", { headers: { authorization: "Bearer " + ENV.STAFF_CLAUDE_KEY } });
+  const { trace } = await r.json();
+  assert.equal(r.status, 200);
+  assert.ok(trace.some((t) => t.status === 401 && (t.key === "none" || t.key === "wrong")), "a request without a valid key is noted (at most one every 20 seconds, so strangers can't make the desk write)");
+  assert.ok(trace.filter((t) => t.status === 401).length <= 2, "…and only now and then");
+  assert.ok(trace.some((t) => t.status === 405 && t.path === "/mcp/sse" && t.agent === "SomeBotApp/1.0"), "a sub-path reaches the connector, not the site's 404 page");
+  assert.ok(trace.some((t) => t.method === "initialize" && t.status === 200 && t.key === "bots"));
+  assert.ok(!JSON.stringify(trace).includes(ENV.STAFF_BOT_KEY) && !JSON.stringify(trace).includes("definitely-wrong"), "no key is ever written down");
+  assert.equal((await api("trace", { headers: { authorization: "Bearer " + ENV.STAFF_BOT_KEY } })).status, 403);
 });

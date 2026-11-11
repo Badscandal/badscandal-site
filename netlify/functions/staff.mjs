@@ -57,6 +57,20 @@ function stores(context) {
 }
 const hqLoader = (st) => { let p = null; return () => p || (p = loadHq({ cache: st.cache, desk: st.desk, env: (k) => Netlify.env.get(k) })); };
 
+/* one line in the connector's trouble log for a request that was turned away (and for every first
+   contact), so a client's "HTTP 404" can be looked up. Requests without a valid key are noted at most
+   once every 20 seconds per running copy of this function: nobody outside can make the desk write. */
+let lastStranger = 0;
+async function note(context, req, status, key, method, extra) {
+  const first = method === "initialize" || method === "server/discover";
+  if (status < 400 && !first) return;
+  if (key === "none" || key === "wrong") { if (Date.now() - lastStranger < 20000) return; lastStranger = Date.now(); }
+  try {
+    await S.traceConnector(stores(context).desk, Date.now(), { http: req.method, path: new URL(req.url).pathname, method, status, key,
+      version: req.headers.get("mcp-protocol-version") || "", agent: req.headers.get("user-agent") || "", note: extra || "" });
+  } catch {}
+}
+
 async function mcp(req, context) {
   /* No Origin gate here: the key travels in a header that a page on another site cannot forge (no
      cookie is ever accepted on /mcp), and a bot platform's client that happens to send an Origin
@@ -64,15 +78,24 @@ async function mcp(req, context) {
   if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: { Allow: "POST, OPTIONS", ...NO_STORE } });
   if (!Netlify.env.get("STAFF_BOT_KEY") && !Netlify.env.get("STAFF_CLAUDE_KEY")) return json(503, { error: "The connector's keys are not set on Netlify" });
   const role = await keyRole(req);
-  if (!role) return json(401, { jsonrpc: "2.0", id: null, error: { code: -32001, message: "Missing or wrong key. Send the header Authorization: Bearer <key>." } }, { "WWW-Authenticate": 'Bearer realm="BADSCANDAL HQ"' });
-  if (req.method !== "POST") return json(405, { jsonrpc: "2.0", id: null, error: { code: -32000, message: "Use POST" } }, { Allow: "POST, OPTIONS" });
+  const who = role === "claude" ? "claude" : role === "bot" ? "bots" : bearer(req) ? "wrong" : "none";
+  if (!role) {
+    await note(context, req, 401, who, "", "no valid key in the Authorization header");
+    return json(401, { jsonrpc: "2.0", id: null, error: { code: -32001, message: "Missing or wrong key. Send the header Authorization: Bearer <key>." } }, { "WWW-Authenticate": 'Bearer realm="BADSCANDAL HQ"' });
+  }
+  if (req.method !== "POST") {
+    await note(context, req, 405, who, "", "only POST is answered");
+    return json(405, { jsonrpc: "2.0", id: null, error: { code: -32000, message: "Use POST" } }, { Allow: "POST, OPTIONS" });
+  }
   const b = await bodyOf(req);
   if (b.tooBig) return json(413, { jsonrpc: "2.0", id: null, error: { code: -32600, message: "Too large" } });
-  if (b.bad) return json(400, { jsonrpc: "2.0", id: null, error: { code: -32700, message: "Parse error: the body is not JSON" } });
+  if (b.bad) { await note(context, req, 400, who, "", "the body was not JSON"); return json(400, { jsonrpc: "2.0", id: null, error: { code: -32700, message: "Parse error: the body is not JSON" } }); }
   const st = stores(context), now = Date.now();
   const headers = Object.fromEntries([...req.headers].map(([k, v]) => [k.toLowerCase(), v]));
   const ctx = { store: st.desk, now, role, hq: hqLoader(st) };
   const out = await handle(b.value, headers, { tools: TOOLS, instructions: INSTRUCTIONS, call: (tool, args) => callTool(tool, args, ctx) });
+  const method = b.value && typeof b.value.method === "string" ? b.value.method : "";
+  await note(context, req, out.status, who, method, out.body && out.body.error ? out.body.error.message : "");
   return json(out.status, out.body);
 }
 
@@ -97,6 +120,7 @@ async function api(req, context, path) {
     if (role === "claude") await S.touchSeen(st.desk, now, "Claude", "board");
     return json(200, { ...S.board(desk, now, hqAns && hqAns.team ? hqAns : null), hqRead: !!(hqAns && hqAns.team), keys: { bots: !!Netlify.env.get("STAFF_BOT_KEY"), claude: !!Netlify.env.get("STAFF_CLAUDE_KEY") } });
   }
+  if (path === "trace" && req.method === "GET") return sample ? json(200, { sample: true, trace: [] }) : json(200, { trace: await S.getTrace(stores(context).desk) });
   if (sample) return json(200, { ok: true, sample: true }); /* the sample never writes */
 
   const st = stores(context);
@@ -133,7 +157,7 @@ async function api(req, context, path) {
 export default async (req, context) => {
   const path = new URL(req.url).pathname.replace(/\/$/, "");
   try {
-    if (path === "/mcp") return await mcp(req, context);
+    if (path === "/mcp" || path.startsWith("/mcp/")) return await mcp(req, context);
     if (path.startsWith("/api/staff/")) return await api(req, context, path.slice("/api/staff/".length));
   } catch (e) {
     console.error("staff failed", e?.name || e);
@@ -142,4 +166,4 @@ export default async (req, context) => {
   return json(404, { error: "Not found" });
 };
 
-export const config = { path: ["/mcp", "/api/staff/*"] };
+export const config = { path: ["/mcp", "/mcp/*", "/api/staff/*"] };

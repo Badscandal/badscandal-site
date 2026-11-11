@@ -71,7 +71,14 @@ export async function handle(msg, headers, deps) {
       const r = await callTool(params, deps);
       return r.error ? { status: 200, body: err(id, r.error.code, r.error.message) } : done(r.result);
     }
-    return { status: 404, body: err(id, -32601, "Method not found: " + method) };
+    /* The 2026-07-28 text says an unknown method is HTTP 404. A real client (the bots' app, 11 Nov
+       2026) showed "Connector returned HTTP 404" and gave up, so: things a client may probe for get an
+       empty answer, and anything else is a JSON-RPC error with HTTP 200, like the legacy path. */
+    if (method === "ping") return done({});
+    if (method === "resources/list") return done({ resources: [], ttlMs: 300000, cacheScope: "private" });
+    if (method === "resources/templates/list") return done({ resourceTemplates: [], ttlMs: 300000, cacheScope: "private" });
+    if (method === "prompts/list") return done({ prompts: [], ttlMs: 300000, cacheScope: "private" });
+    return { status: 200, body: err(id, -32601, "Method not found: " + method) };
   }
 
   /* legacy */

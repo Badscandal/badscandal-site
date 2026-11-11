@@ -537,6 +537,18 @@ export async function getConfig(store) {
 }
 export const setConfig = (store, now, patch) => mutate(store, "config.json", {}, (c) => { if (typeof patch.botsOn === "boolean") { c.botsOn = patch.botsOn; c.changedAt = new Date(now).toISOString(); } return { value: { botsOn: c.botsOn !== false, changedAt: c.changedAt || null } }; });
 
+/* ---------- the connector's trouble log: the last few requests that were turned away ----------
+   So "the bots' app says HTTP 404" can be looked up instead of guessed. Never the key, never the body:
+   the time, the HTTP method, the protocol method, the answer's status, whether a key came with it, the
+   protocol version asked for and the client's name. */
+export async function traceConnector(store, now, t) {
+  const row = { at: new Date(now).toISOString(), sp: spStamp(now), http: clean(t.http, 8), path: clean(t.path, 60), method: clean(t.method, 40), status: Number(t.status) || 0,
+    key: ["none", "wrong", "bots", "claude"].includes(t.key) ? t.key : "none", version: clean(t.version, 20), agent: clean(t.agent, 80), note: clean(t.note, 120) };
+  try { await mutate(store, "trace.json", [], (list) => { list.push(row); if (list.length > 40) list.splice(0, list.length - 40); return { value: row }; }, 3); } catch {}
+  return row;
+}
+export async function getTrace(store) { const { data } = await readDoc(store, "trace.json", []); return Array.isArray(data) ? data.slice().reverse() : []; }
+
 /* ---------- the guide the bots can read through the connector ---------- */
 export async function getGuide(store) { const { data } = await readDoc(store, "guide.json", null); return data && typeof data.text === "string" ? data : { text: "", at: null }; }
 export function setGuide(store, now, text) {
