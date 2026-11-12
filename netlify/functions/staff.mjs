@@ -22,6 +22,13 @@
       release/send takes anyway: true (Luke or Claude): sent with required fields missing)
      POST /api/staff/sighting        Luke answers what a song Spotify for Artists shows is  { key, answer, label?, note? }
                                      answer: self | label | notmine | mistake (Luke only, 11 Nov 2026)
+     GET  /api/staff/fields          the release form's fields and steps, without reading the desk (12 Nov
+                                     2026: #releases/new opens the form before the board has arrived)
+
+   Push alerts (12 Nov 2026, the HQ apps): after a bot's send_message to Luke that needs him, a
+   spotify_upcoming report, or Claude's POST message to Luke that needs him, a push sweep runs
+   (netlify/lib/push.mjs). It runs after the answer (context.waitUntil) when Netlify offers that, else
+   it is awaited; either way it can never fail the call.
 
    Who is calling:
      Luke   = the /hq login cookie (same as every /api/admin/* call; POSTs must come from our own page)
@@ -35,6 +42,7 @@ import { getDeployStore, getStore } from "@netlify/blobs";
 import { keyOk } from "../lib/feed.mjs";
 import { loadHq } from "../lib/hq-load.mjs";
 import { handle } from "../lib/mcp.mjs";
+import { sweep as pushSweep } from "../lib/push.mjs";
 import { COOKIE, readCookie, verifySession } from "../lib/session.mjs";
 import * as S from "../lib/staff.mjs";
 import { sampleBoard, sampleReleases, sampleSightings } from "../lib/staff-sample.mjs";
@@ -69,6 +77,16 @@ function stores(context) {
   const open = (name, strong) => (prod ? getStore(strong ? { name, consistency: "strong" } : name) : getDeployStore(strong ? { name, consistency: "strong" } : name));
   return { desk: open("staff", true), cache: open("meta-cache", false) };
 }
+/* a push sweep after something new may wait on Luke; never throws, never fails the call it follows */
+function pushAfter(context, st, now) {
+  const p = (async () => {
+    try { await pushSweep(st.desk, now, { desk: () => S.loadDesk(st.desk, now), env: (k) => Netlify.env.get(k) }); }
+    catch (e) { console.error("push sweep failed", e?.name || "Error"); }
+  })();
+  if (context && typeof context.waitUntil === "function") { try { context.waitUntil(p); return Promise.resolve(); } catch {} }
+  return p;
+}
+const asksLuke = (m) => !!m && m.to === "Luke" && m.needs !== "none";
 const hqLoader = (st) => { let p = null; return () => p || (p = loadHq({ cache: st.cache, desk: st.desk, env: (k) => Netlify.env.get(k) })); };
 
 /* one line in the connector's trouble log for a request that was turned away (and for every first
@@ -107,7 +125,12 @@ async function mcp(req, context) {
   const st = stores(context), now = Date.now();
   const headers = Object.fromEntries([...req.headers].map(([k, v]) => [k.toLowerCase(), v]));
   const ctx = { store: st.desk, now, role, hq: hqLoader(st) };
-  const out = await handle(b.value, headers, { tools: role === "claude" ? TOOLS.concat(CLAUDE_TOOLS) : TOOLS, instructions: INSTRUCTIONS, call: (tool, args) => callTool(tool, args, ctx) });
+  const call = async (tool, args) => {
+    const out = await callTool(tool, args, ctx);
+    if ((tool.name === "send_message" && asksLuke(out)) || tool.name === "spotify_upcoming") await pushAfter(context, st, now);
+    return out;
+  };
+  const out = await handle(b.value, headers, { tools: role === "claude" ? TOOLS.concat(CLAUDE_TOOLS) : TOOLS, instructions: INSTRUCTIONS, call });
   const method = b.value && typeof b.value.method === "string" ? b.value.method : "";
   await note(context, req, out.status, who, method, out.body && out.body.error ? out.body.error.message : "");
   return json(out.status, out.body);
@@ -127,6 +150,7 @@ async function api(req, context, path) {
   const now = Date.now();
   const me = role === "luke" ? "Luke" : "Claude";
 
+  if (path === "fields" && req.method === "GET") return json(200, { today: S.spDay(now), packFields: S.packFieldsOut(), releaseSteps: S.releaseStepsOut() });
   if (path === "board" && req.method === "GET") {
     if (sample) return json(200, { sample: true, ...sampleBoard(now) });
     const st = stores(context);
@@ -156,6 +180,7 @@ async function api(req, context, path) {
   try {
     if (path === "message" && req.method === "POST") {
       const r = await S.sendMessage(st.desk, now, roster, { from: me, to: a.to, text: a.text, needs: a.needs, re: a.re, options: a.options, note: a.note });
+      if (role === "claude" && asksLuke(r.message)) await pushAfter(context, st, now);
       return json(200, { ok: true, message: r.message, settled: r.settled });
     }
     if (path === "resolve" && req.method === "POST") return json(200, { ok: true, message: await S.resolveMessage(st.desk, now, roster, { id: a.id, by: me, note: a.note }) });

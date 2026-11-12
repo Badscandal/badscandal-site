@@ -390,3 +390,40 @@ test("staff api: Claude reading the board with its key counts as READ (review, 1
   assert.equal((await api("board", { headers: claude })).status, 200);
   assert.equal(await mark(), true, "Read by Claude");
 });
+
+test("send_message still succeeds when the push sweep throws (the HQ apps, 12 Nov 2026); the tool count stays 18", async () => {
+  /* a push key is set, and the push records can't be read: the sweep after the call throws */
+  const pair = await crypto.subtle.generateKey({ name: "ECDSA", namedCurve: "P-256" }, true, ["sign", "verify"]);
+  Object.assign(ENV, { APNS_KEY: Buffer.from(await crypto.subtle.exportKey("pkcs8", pair.privateKey)).toString("base64"), APNS_KEY_ID: "TESTKEY123", APNS_TEAM_ID: "TEAMTEST12" });
+  const desk = globalThis.__stores.get("staff"), real = desk.getWithMetadata;
+  let tried = 0;
+  desk.getWithMetadata = async (key, o) => { if (key.startsWith("push/")) { tried++; throw new Error("store down"); } return real.call(desk, key, o); };
+  const errors = [], logged = console.error;
+  console.error = (...a) => errors.push(a.join(" "));
+  try {
+    const r = await tool("send_message", { bot: "Nova", to: "Luke", text: "Survivors or Slow Burn first?", needs: "decision", options: ["Survivors", "Slow Burn"] });
+    assert.equal(r.isError, false);
+    assert.equal(r.structuredContent.sent, true);
+    assert.ok(tried > 0, "the sweep ran after the call (awaited when there is no waitUntil)");
+    /* with waitUntil (Netlify's own): the call answers, the sweep finishes later and never rejects */
+    const later = [];
+    const res = await staff(new Request("https://badscandal.com/mcp", { method: "POST", headers: { "content-type": "application/json", authorization: "Bearer " + ENV.STAFF_BOT_KEY },
+      body: JSON.stringify(rpc("tools/call", { name: "send_message", arguments: { bot: "Kevin", to: "Luke", text: "TikTok wants the code again.", needs: "action" } })) }), { ...ctx, waitUntil: (p) => later.push(p) });
+    assert.equal((await res.json()).result.isError, false);
+    assert.equal(later.length, 1);
+    await later[0];
+    /* Claude's message to Luke from the API sweeps too, and also never fails */
+    const c = await api("message", { method: "POST", headers: { authorization: "Bearer " + ENV.STAFF_CLAUDE_KEY, "content-type": "application/json" }, body: JSON.stringify({ to: "Luke", text: "Two questions from the team are waiting.", needs: "reply" }) });
+    assert.equal(c.status, 200);
+    /* a message to a bot doesn't wake the sender */
+    const before = tried;
+    assert.equal((await tool("send_message", { bot: "Nova", to: "Ledger", text: "Did Wise load?", needs: "reply" })).isError, false);
+    assert.equal(tried, before);
+    assert.ok(errors.every((e) => !e.includes(ENV.APNS_KEY.slice(10, 40))), "the key is never logged");
+  } finally {
+    desk.getWithMetadata = real;
+    console.error = logged;
+    for (const k of ["APNS_KEY", "APNS_KEY_ID", "APNS_TEAM_ID"]) delete ENV[k];
+  }
+  assert.equal((await (await post(rpc("tools/list"), "Bearer " + ENV.STAFF_BOT_KEY)).json()).result.tools.length, 18);
+});
