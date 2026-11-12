@@ -118,7 +118,7 @@ test("newReleaseRoute: releases/new → open, then hash becomes releases", () =>
   assert.deepEqual(L.newReleaseRoute("#releases/new/"), { open: true, replace: "#releases" });
 });
 
-test("waitWords: the line under New release", () => {
+test("waitWords: the waiting line on Today", () => {
   assert.equal(L.waitWords(0), "");
   assert.equal(L.waitWords(1), "1 thing waiting on you");
   assert.equal(L.waitWords(4), "4 things waiting on you");
@@ -132,4 +132,14 @@ test("appRegisterBody copies only the five fields", () => {
   assert.deepEqual(L.appRegisterBody(app, "ab".repeat(32)), { token: "ab".repeat(32), platform: "ios", env: "sandbox", app: "com.badscandal.hq", tz: "America/Sao_Paulo" });
   assert.deepEqual(Object.keys(L.appRegisterBody({ platform: "mac", env: "production", app: "com.badscandal.hq.mac", tz: "Europe/Dublin" }, "cd".repeat(32))), ["token", "platform", "env", "app", "tz"]);
   assert.deepEqual(L.appRegisterBody(null, "ab"), { token: "ab", platform: "", env: "", app: "", tz: "" });
+});
+
+test("Today: no New release button (Luke, 12 Nov 2026: it lives in Upcoming); the waiting line stays at the top; #releases/new still opens the form", () => {
+  const page = readFileSync(new URL("../hq.html", import.meta.url), "utf8");
+  const today = page.slice(page.indexOf('id="today"'), page.indexOf('id="brief"'));
+  assert.doesNotMatch(page, /id="newRel"|class="newrel/, "the button is gone from Today");
+  assert.match(today, /<a class="waitline" id="waitLine" href="#messages" hidden><\/a>/, "the waiting line is at the top of Today, before the briefing");
+  const upcoming = page.slice(page.indexOf('id="releases"'));
+  assert.match(upcoming, /id="relNew"[^>]*>New song</, "Upcoming keeps its own New song button");
+  assert.match(readFileSync(new URL("../js/hq-staff.js", import.meta.url), "utf8"), /window\.addEventListener\("hashchange", routeNew\)/, "the iPhone's hold-menu and the Mac's ⌘N still land on the form");
 });

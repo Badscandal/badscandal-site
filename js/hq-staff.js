@@ -687,7 +687,7 @@
     if (relFields().length) { ui.pendingNew = false; openForm(""); return; }
     if (bothFailed()) { ui.pendingNew = false; $("relMsg").textContent = NEEDS_DESK; }
   }
-  /* #releases/new (the Today button, the iPhone's "New release", the Mac's ⌘N, a bookmark): open the
+  /* #releases/new (the iPhone's "New release", the Mac's ⌘N / Dock / menu bar, a bookmark): open the
      form, then put #releases back, so the same address works again next time. This listener runs BEFORE
      the shell's (this file loads first), and the shell then shows the tab and scrolls to the top; so the
      form opens on the next tick, after that, and its scroll wins. */

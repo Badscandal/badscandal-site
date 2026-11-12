@@ -8,7 +8,7 @@
        asks for alerts and hands over its token) and registers the token. The login form -> { type:
        "ready", loggedIn: false }.
      - asks GET /api/hq/push/waiting only for the COUNT, after each logged-in refresh and when the page
-       comes back on screen, and draws the line under New release on Today ("3 things waiting on you"
+       comes back on screen, and draws the line at the top of Today ("3 things waiting on you"
        -> #messages; in a browser too) and tells the app { type: "waiting", count } for the badge.
      - registers the token from the app's "hqapp" event with POST /api/hq/push/register: once per token
        per page load, and again when the zone has changed (Luke flew from São Paulo to Dublin and opened
