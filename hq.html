@@ -945,6 +945,20 @@ textarea.fld.lyrics{min-height:220px}
 .sdeal{margin:8px 0 2px;font-size:14px;line-height:1.4;color:var(--uv);overflow-wrap:anywhere}
 .sdeal.no{color:var(--muted)}
 .sdeal .linkbtn{min-height:44px;padding:0 2px;font-size:14px}
+/* Today: New release + what is waiting on Luke (12 Nov 2026, the HQ apps). The same white pill as
+   .sendbtn, bigger; one tap -> #releases/new (the empty song form). The line under it is the same
+   count as the app badge; its dot is red because it is "needs attention". */
+.newrel-wrap{margin:0 0 18px}
+.newrel{display:flex;align-items:center;justify-content:center;gap:10px;width:100%;min-height:56px;padding:0 24px;border-radius:999px;background:var(--paper);color:var(--ink);font:700 18px var(--sans);text-decoration:none;-webkit-tap-highlight-color:transparent}
+.newrel .plus{font:400 26px/1 var(--sans);margin-top:-2px}
+.newrel:hover{background:#fff}
+.newrel:active{opacity:.85}
+.newrel:focus-visible,.waitline:focus-visible{outline:2px solid var(--paper);outline-offset:3px}
+@media(min-width:900px){.newrel{width:auto;min-width:320px;display:inline-flex}}
+.waitline{display:flex;align-items:center;gap:10px;min-height:44px;margin:6px 0 0;font-size:16px;font-weight:600;color:var(--paper);text-decoration:none}
+.waitline[hidden]{display:none}
+.waitline::before{content:"";flex:0 0 auto;width:9px;height:9px;border-radius:50%;background:var(--red)}
+.waitline::after{content:"›";color:var(--uv);font-weight:400}
 </style>
 </head>
 <body>
@@ -995,6 +1009,7 @@ textarea.fld.lyrics{min-height:220px}
   <div class="netbar" id="netBar" role="status" hidden><span id="netMsg"></span><button type="button" id="retry">Retry</button></div>
   <section class="card view" id="today" aria-labelledby="todayTitle">
     <div class="vhead"><h1 id="todayTitle">Today</h1><p class="vsub" id="todaySub"></p></div>
+    <div class="newrel-wrap"><a class="newrel" id="newRel" href="#releases/new"><span class="plus" aria-hidden="true">+</span>New release</a><a class="waitline" id="waitLine" href="#messages" hidden></a></div>
     <span id="capMonth" hidden></span>
     <div class="sheeterr" id="errToday" hidden></div>
     <div class="brief" id="brief" aria-live="polite"><p class="ph big"></p><p class="ph"></p><p class="ph"></p></div>
@@ -1210,6 +1225,7 @@ textarea.fld.lyrics{min-height:220px}
 <script src="js/hq.js" defer></script>
 <script src="js/hq-staff.js" defer></script>
 <script src="js/hq-shell.js" defer></script>
+<script src="js/hq-app.js" defer></script>
 <script src="js/hq-pages.js" defer></script>
 </body>
 </html>

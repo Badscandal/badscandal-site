@@ -135,6 +135,8 @@
     started = false;
     if (window.HQPages) window.HQPages.stop();
     setTimeout(function () { $("pw").focus(); }, 50);
+    /* the HQ apps (js/hq-app.js, 12 Nov 2026): the login form is showing */
+    try { document.dispatchEvent(new CustomEvent("hq:login")); } catch (e) {}
   }
   function showShell() {
     var was = $("shell").hidden;
@@ -168,8 +170,13 @@
       gone.forEach(function (k) { localStorage.removeItem(k); });
     } catch (e) {}
   }
+  /* inside the HQ apps, the device stops getting alerts first (js/hq-app.js: unregister while the login
+     still works, then the app clears its badge); in a browser that is nothing */
   $("logout").addEventListener("click", function () {
-    fetch("/api/admin/logout", { method: "POST", credentials: "same-origin" }).finally(function () { forget(); showLogin(""); });
+    var first = window.HQAppPage && window.HQAppPage.beforeLogout ? window.HQAppPage.beforeLogout() : null;
+    Promise.resolve(first).catch(function () {})
+      .then(function () { return fetch("/api/admin/logout", { method: "POST", credentials: "same-origin" }).catch(function () {}); })
+      .then(function () { forget(); showLogin(""); });
   });
   /* any 401 / 503 from any of the three answers lands here */
   function authFail(res) {
@@ -180,6 +187,9 @@
 
   /* ---------- loading: three answers in parallel, each drawn as it lands ---------- */
   var EVERY = 5 * 60 * 1000, timer = null, lastRefresh = 0, sheetProblem = "";
+  /* when HQ's own data last answered with a good login (the sheet or the overview, 200): the HQ apps
+     take "logged in" from this, never from another answer (js/hq-app.js, 12 Nov 2026) */
+  var dataOkAt = 0;
   function start() {
     started = true;
     /* never a blank black page: a device that has numbers kept (so it was logged in) gets the shell
@@ -194,9 +204,16 @@
   /* every 5 minutes while the page is on screen; coming back after longer than that refreshes at once */
   document.addEventListener("visibilitychange", function () { if (!document.hidden && started && Date.now() - lastRefresh > EVERY) refresh(); });
   function refresh() {
-    lastRefresh = Date.now();
+    var startedAt = lastRefresh = Date.now();
     /* the board may be the only answer that came back: Today still says what it knows */
-    var after = function () { drawDataHealth(); if (sheet || ov) drawSince(); else drawBriefing(); };
+    var after = function () {
+      drawDataHealth(); if (sheet || ov) drawSince(); else drawBriefing();
+      /* the HQ apps (js/hq-app.js, 12 Nov 2026): the answers are in. loggedIn = HQ's own data answered
+         with a good login during THIS refresh and the login form isn't showing; startedAt lets the page
+         drop a refresh that began before a Log out */
+      var loggedIn = dataOkAt >= startedAt && $("login").hidden;
+      try { document.dispatchEvent(new CustomEvent("hq:refreshed", { detail: { loggedIn: loggedIn, startedAt: startedAt } })); } catch (e) {}
+    };
     return Promise.all([loadSheet(), loadOverview(), window.HQPages ? window.HQPages.reload() : null, window.HQStaff ? window.HQStaff.reload() : null]).then(after, after);
   }
 
@@ -223,6 +240,7 @@
   function loadSheet() {
     return getJSON("/api/hq/data" + (sample ? "?sample=1" : "")).then(function (res) {
       if (authFail(res)) return;
+      if (res.s === 200) dataOkAt = Date.now();
       showShell();
       $("sample").hidden = !sample;
       if (res.s !== 200) {
@@ -270,6 +288,7 @@
     var stale = function () { return q !== rangeQuery().toString(); };
     return getJSON("/api/admin/overview?" + q).then(function (res) {
       if (authFail(res)) return;
+      if (res.s === 200) dataOkAt = Date.now();
       showShell();
       if (stale()) return;
       if (res.s !== 200) {
