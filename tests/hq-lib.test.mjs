@@ -84,6 +84,7 @@ test("offline helper: keeps only the /hq page and its scripts; never the numbers
   assert.equal(f("https://badscandal.com/js/hq.js"), true);
   assert.equal(f("https://badscandal.com/js/hq-staff.js"), true, "the staff desk's script opens offline too (cache bs-hq-v2)");
   assert.equal(f("https://badscandal.com/js/hq-app.js"), true, "the app bridge too (cache bs-hq-v3)");
+  assert.equal(f("https://badscandal.com/js/hq-cmd.js"), true, "and Search (cache bs-hq-v4)");
   assert.equal(f("https://badscandal.com/api/hq/push/waiting"), false, "what is waiting always comes from the network");
   assert.equal(f("https://badscandal.com/api/staff/board"), false, "the board always comes from the network");
   assert.equal(f("https://badscandal.com/api/staff/message", "cors", "POST"), false, "a message is never answered from a copy");

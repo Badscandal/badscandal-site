@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="robots" content="noindex,nofollow">
 <meta name="referrer" content="no-referrer">
-<meta name="theme-color" content="#050505">
+<meta name="theme-color" content="#0B0D12">
 <title>BADSCANDAL HQ</title>
 <link rel="icon" href="/favicon.ico">
 <link rel="manifest" href="/hq.webmanifest">
@@ -953,6 +953,166 @@ textarea.fld.lyrics{min-height:220px}
 .waitline[hidden]{display:none}
 .waitline::before{content:"";flex:0 0 auto;width:9px;height:9px;border-radius:50%;background:var(--red)}
 .waitline::after{content:"›";color:var(--uv);font-weight:400}
+
+/* ================= HQ v2: the redesign (12 Nov 2026) =================
+   Luke: "overhaul the dashboard … far more modern … make it nice to look at and easy to use and
+   understand"; "the HQ is just a way to watch everything so that can be updated fully" (badscandal.com
+   keeps the brand's black and white; this page is his own). Design: HQ-App
+   docs/superpowers/specs/2026-11-12-hq-redesign-design.md.
+   Colour, after Material's dark theme and Apple's dark-mode guidance: not pure black but a blue-black
+   base, raised surfaces lighter as they rise, desaturated colours, ONE accent used sparingly.
+     base #0B0D12 · tiles #151925 · raised #1D2231 · hairline #262C3B
+     text #F3F5F9 (16:1 on tiles) · secondary #AEB6C7 (8.6:1) · muted #848DA0 (5.3:1)
+     accent periwinkle #A5B4FC (8.8:1): where you are, main buttons, links, focus, chart lines
+     needs you #FF7A7A (6.9:1), its fill #B4232C (white text 6.5:1) · warning #FBBF24 · taps #1ED760
+   Every colour keeps ONE meaning; status always comes with words or an icon. This layer only restyles:
+   every id, address and tab stays. */
+:root{--ink:#0B0D12;--ink-2:#151925;--ink-3:#262C3B;--ink-4:#323A4D;--ink-5:#1D2231;
+  --paper:#F3F5F9;--muted:#848DA0;--silver:#6B7385;--uv:#AEB6C7;--grey-mark:#4A5266;
+  --accent:#A5B4FC;--accent-ink:#0B0D12;--accent-soft:rgba(165,180,252,.15);--accent-line:rgba(165,180,252,.38);
+  --red:#FF7A7A;--red-deep:#B4232C;--red-soft:rgba(255,122,122,.12);--red-line:rgba(255,122,122,.42);--amber:#FBBF24;--spot:#1ED760;
+  --glass:rgba(21,25,37,.66);--glass-2:rgba(255,255,255,.035);--glass-edge:rgba(255,255,255,.11);--glass-line:rgba(255,255,255,.07);
+  --glass-shadow:0 18px 44px rgba(3,5,10,.42);--glass-blur:blur(24px) saturate(150%);
+  --r:20px;--r-tile:26px;--r-in:16px}
+/* the atmosphere: three soft glows behind the glass (indigo, violet, teal); red no longer washes the page */
+body::before{background:radial-gradient(50% 38% at 4% 0%,rgba(99,102,241,.30),transparent 70%),radial-gradient(44% 36% at 100% 18%,rgba(168,85,247,.18),transparent 72%),
+  radial-gradient(58% 46% at 26% 100%,rgba(20,184,166,.13),transparent 72%),radial-gradient(40% 30% at 92% 92%,rgba(99,102,241,.12),transparent 70%),var(--ink)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+::selection{background:var(--accent-soft)}
+/* surfaces */
+.t-card,.htile,#shell .tile,#shell .pg .tile{border-radius:var(--r-tile)}
+#shell .pg .tile .tile,#shell .tile .tile,#shell .pg .mini,#shell .pg .ctrbox>div{border-radius:var(--r-in)}
+.t-card,.htile,#shell .tile,#shell .pg .tile,.netbar,.sheeterr,.sample,.moresheet{box-shadow:inset 0 1px 0 var(--glass-edge),var(--glass-shadow)}
+a.t-card:hover,button.t-card:hover,#shell a.tile:hover{border-color:var(--accent-line)}
+.t-card,.htile,#shell .tile{transition:border-color .2s}
+/* header: a calmer glass bar; Search as a pill on wide screens, a magnifier on phones */
+.hdr{background:rgba(11,13,18,.58);border-bottom:.5px solid var(--glass-line)}
+.hq-tag{color:var(--accent)}
+.iconbtn,.rangebox select{background:rgba(255,255,255,.055);border:.5px solid var(--glass-line);box-shadow:inset 0 1px 0 rgba(255,255,255,.07)}
+.iconbtn:hover,.rangebox select:hover{background:rgba(255,255,255,.09)}
+.cmdbtn .cmdhint{display:none}
+.cmdbtn kbd{font:500 13px var(--mono);color:var(--muted);border:.5px solid var(--glass-line);border-radius:6px;padding:1px 6px;margin-left:10px}
+@media(min-width:900px){.cmdbtn{width:auto;padding:0 14px 0 14px;gap:8px;border-radius:999px;display:flex}.cmdbtn .cmdhint{display:inline-flex;align-items:center;font:500 14px var(--sans);color:var(--uv)}}
+/* navigation: a floating pill on phones, a floating capsule on desktop; where you are = a soft accent pill */
+.nav [aria-current="page"],.nav .on{color:var(--accent)}
+.nav [aria-current="page"]::before,.nav .on::before{display:none}
+.moresheet a[aria-current="page"]{color:var(--accent)}
+@media(max-width:899px){
+  .nav{left:12px;right:12px;bottom:calc(10px + env(safe-area-inset-bottom));padding:6px;border-radius:30px;border:.5px solid var(--glass-line);
+    background:rgba(17,21,31,.74);box-shadow:inset 0 1px 0 var(--glass-edge),0 16px 40px rgba(0,0,0,.5)}
+  .nav a,.nav button{min-height:56px;border-radius:24px;font-size:13px;transition:background .2s,color .2s}
+  .nav [aria-current="page"],.nav .on{background:var(--accent-soft)}
+  main{padding-bottom:calc(112px + env(safe-area-inset-bottom))}
+  .moresheet{border-radius:28px 28px 0 0}
+}
+@media(min-width:900px){
+  .nav{background:rgba(17,21,31,.62);border-radius:26px}
+  .nav a,.nav button{border-radius:16px;color:var(--uv)}
+  .nav a:hover{background:rgba(255,255,255,.05);color:var(--paper)}
+  .nav [aria-current="page"]{background:var(--accent-soft);color:var(--accent);box-shadow:inset 0 0 0 .5px var(--accent-line)}
+}
+/* titles: one big word per tab, quieter subtitles */
+.vhead h1,.view > h2,.view > .row h2{font-size:34px;letter-spacing:-.025em}
+.t-lbl,.lbl{color:var(--muted)}
+/* buttons: the main one is the accent; the rest are glass */
+.sendbtn,.netbar button{background:var(--accent);color:var(--accent-ink)}
+.sendbtn:hover,.netbar button:hover{background:#B9C5FF}
+.copybtn,.hp-refresh{background:rgba(255,255,255,.055);border:.5px solid var(--glass-line)}
+.copybtn:hover,.hp-refresh:hover{background:rgba(255,255,255,.09)}
+.linkbtn{color:var(--accent);text-decoration-color:var(--accent-line)}
+.pill{border-color:var(--glass-line);background:rgba(255,255,255,.04);color:var(--uv)}
+.pill.hot{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.pill.warn{border-color:rgba(251,191,36,.5);color:var(--amber)}
+.fld,.rangecustom input{background:rgba(255,255,255,.045);border-color:var(--glass-line)}
+.fld:focus-visible{outline-color:var(--accent)}
+/* Today: what needs you first, then the briefing; side by side on a wide screen (bento) */
+.today-grid{display:grid;gap:16px;grid-template-columns:minmax(0,1fr)}
+.today-side{display:grid;gap:12px;align-content:start;min-width:0}
+.today-main{min-width:0}
+.today-side .attn-card,.today-side #sinceCard{margin:0}
+.today-side .sitecheck{margin:0}
+.waitline{margin:0;padding:16px 18px;border-radius:var(--r-tile);background:linear-gradient(135deg,rgba(255,122,122,.16),rgba(255,122,122,.06));
+  border:.5px solid var(--red-line);font-size:18px;box-shadow:inset 0 1px 0 rgba(255,255,255,.08)}
+.waitline::before{width:11px;height:11px;box-shadow:0 0 0 5px rgba(255,122,122,.16)}
+.attn-card.has{border:.5px solid var(--red-line);background:linear-gradient(180deg,rgba(255,122,122,.10),transparent 150px),var(--glass)}
+/* phones and tablets: one column in the order of a glance: the waiting line, the briefing, then the full
+   list of what needs you (a long list must not push the briefing off the first screen) */
+@media(max-width:1099px){
+  .today-grid{display:flex;flex-direction:column;gap:12px}
+  .today-side,.today-main{display:contents}
+  .today-grid .waitline{order:1}
+  .today-grid .brief{order:2;margin:0}
+  .today-grid .brief-actions{order:3;margin:0}
+  .today-grid .attn-card{order:4}
+  .today-grid #sinceCard{order:5}
+  .today-grid .sitecheck{order:6}
+  .today-grid .sect{order:7;margin:10px 0 0}
+  .today-grid .htiles{order:8;margin:0}
+  .today-grid .tgrid{order:9}
+}
+/* small phones: the header fits with Search in it (wordmark, Search, range, Data health, Refresh) */
+@media(max-width:439px){
+  .hdr{gap:6px;padding-left:10px;padding-right:10px}
+  .hdr-tools{gap:6px}
+  .crt-hq{width:96px}.crt-hq .crt-fallback{font-size:14px}
+  .rangebox select{padding:0 26px 0 12px;font-size:14px}.rangebox::after{right:11px}
+}
+.brief{padding:20px 22px;margin:0 0 10px;border-radius:var(--r-tile);background:var(--glass);border:.5px solid var(--glass-line);
+  -webkit-backdrop-filter:var(--glass-blur);backdrop-filter:var(--glass-blur);box-shadow:inset 0 1px 0 var(--glass-edge),var(--glass-shadow)}
+.brief p:last-child{margin-bottom:0}
+.brief p:first-child:not(.ph){background:linear-gradient(90deg,#F3F5F9,#C7D0FF);-webkit-background-clip:text;background-clip:text;color:transparent}
+.brief-actions{margin:4px 0 22px}
+.htile .hv{font-size:28px}
+.htile svg path[stroke="#B4B4B4"],.spark polyline{stroke:var(--accent)}
+.capbar{background:rgba(255,255,255,.07)}
+.capbar i{background:linear-gradient(90deg,#8B9BFA,var(--accent))}
+.t-cap.warn{border:.5px solid rgba(251,191,36,.5)} .t-cap.warn .capbar i{background:var(--amber)}
+.t-cap.stop,.t-cap.over{border:.5px solid var(--red-line)} .t-cap.stop .capbar i,.t-cap.over .capbar i{background:var(--red)}
+@media(min-width:1100px){
+  .today-grid{grid-template-columns:minmax(0,1.65fr) minmax(320px,1fr);grid-template-areas:"main side";align-items:start;gap:20px}
+  .today-side{grid-area:side;position:sticky;top:calc(var(--hdr) + 16px);max-height:calc(100vh - var(--hdr) - 32px);overflow:auto;scrollbar-width:none}
+  .today-side::-webkit-scrollbar{display:none}
+  .today-main{grid-area:main}
+  .today-main .tgrid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .today-main .t-cap{grid-column:1/-1}
+}
+/* tables: quiet rows, a soft hover */
+#shell table tr:hover td{background:rgba(255,255,255,.025)}
+#shell th{color:var(--muted)}
+/* Search (⌘K): a centred glass panel; a sheet from the top on phones */
+.cmd-scrim{position:fixed;inset:0;z-index:60;background:rgba(5,7,12,.55);-webkit-backdrop-filter:blur(3px);backdrop-filter:blur(3px)}
+.cmd{position:fixed;z-index:61;left:50%;top:max(12vh,calc(var(--hdr) + 12px));transform:translateX(-50%);width:min(640px,calc(100vw - 24px));
+  background:rgba(23,27,40,.86);-webkit-backdrop-filter:blur(30px) saturate(160%);backdrop-filter:blur(30px) saturate(160%);
+  border:.5px solid var(--glass-line);border-radius:26px;box-shadow:inset 0 1px 0 var(--glass-edge),0 30px 80px rgba(0,0,0,.6);overflow:hidden}
+.cmd-in{display:flex;align-items:center;gap:12px;padding:16px 18px;border-bottom:.5px solid var(--glass-line)}
+.cmd-in svg{flex:none;width:20px;height:20px;fill:none;stroke:var(--muted);stroke-width:1.9;stroke-linecap:round}
+.cmd-in input{flex:1;min-width:0;background:none;border:0;outline:0;color:var(--paper);font:500 18px var(--sans)}
+.cmd-in input::placeholder{color:var(--muted)}
+.cmd-in kbd,.cmd-foot span{font:500 13px var(--mono);color:var(--muted)}
+.cmd-in kbd{border:.5px solid var(--glass-line);border-radius:6px;padding:2px 7px}
+.cmd-list{list-style:none;margin:0;padding:8px;max-height:min(420px,56vh);overflow:auto}
+.cmd-o{display:flex;align-items:center;gap:12px;min-height:48px;padding:8px 12px;border-radius:14px;cursor:pointer;color:var(--paper)}
+.cmd-o[aria-selected="true"]{background:var(--accent-soft);box-shadow:inset 0 0 0 .5px var(--accent-line)}
+.cmd-k{flex:none;width:30px;height:30px;display:grid;place-items:center;border-radius:10px;background:rgba(255,255,255,.06);color:var(--uv);font:600 14px var(--sans)}
+.cmd-o.k-message .cmd-k{background:var(--red-soft);color:var(--red)}
+.cmd-o.k-action .cmd-k,.cmd-o[aria-selected="true"] .cmd-k{color:var(--accent)}
+.cmd-l{flex:1;min-width:0;font-size:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cmd-h{flex:none;font-size:13px;color:var(--muted)}
+.cmd-none{padding:18px 12px;color:var(--muted);font-size:15px}
+.cmd-foot{display:flex;gap:18px;margin:0;padding:10px 18px;border-top:.5px solid var(--glass-line)}
+@media(max-width:599px){.cmd{top:calc(env(safe-area-inset-top) + 10px);border-radius:24px}.cmd-foot{display:none}}
+/* the login: the same glass */
+.login form{background:var(--glass);border:.5px solid var(--glass-line);border-radius:var(--r-tile);padding:28px 24px;
+  -webkit-backdrop-filter:var(--glass-blur);backdrop-filter:var(--glass-blur);box-shadow:inset 0 1px 0 var(--glass-edge),var(--glass-shadow)}
+@media (prefers-reduced-transparency:reduce){
+  .brief,.cmd,.login form{-webkit-backdrop-filter:none;backdrop-filter:none;background:var(--ink-2)}
+  .nav{background:var(--ink-2)}
+}
+@supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){
+  :root{--glass:rgba(21,25,37,.97)}
+  .cmd{background:rgba(23,27,40,.98)} .nav{background:rgba(17,21,31,.97)} .hdr{background:rgba(11,13,18,.97)}
+}
+@media (prefers-reduced-motion:reduce){.nav a,.nav button,.t-card,.htile,#shell .tile{transition:none}}
 </style>
 </head>
 <body>
@@ -975,6 +1135,7 @@ textarea.fld.lyrics{min-height:220px}
     <div class="crt crt-hq"><canvas role="img" aria-label="BADSCANDAL"></canvas><span class="crt-fallback" hidden>BADSCANDAL</span></div><span class="hq-tag">HQ</span>
   </a>
   <div class="hdr-tools">
+    <button class="iconbtn cmdbtn" id="cmdBtn" type="button" aria-label="Search HQ (⌘K)" aria-haspopup="dialog" aria-expanded="false"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4.2-4.2"/></svg><span class="cmdhint" aria-hidden="true">Search<kbd>⌘K</kbd></span></button>
     <label class="rangebox"><span class="sr">Date range</span><select id="rangeSel" data-range><option value="today">Today</option><option value="7d">7 days</option><option value="30d">30 days</option><option value="month">This month</option><option value="custom">Custom</option></select></label>
     <button class="iconbtn hbtn" id="healthBtn" type="button" aria-label="Data health" aria-haspopup="dialog" aria-expanded="false"><span class="hdot" id="hDot"></span></button>
     <button class="iconbtn" id="refresh" type="button" aria-label="Refresh the numbers"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11.5A8 8 0 1 0 17.7 17.3"/><path d="M20.5 5v6.5H14"/></svg></button>
@@ -993,6 +1154,12 @@ textarea.fld.lyrics{min-height:220px}
   <p class="hp-note">Updated by itself every 5 minutes while this page is on screen.</p>
   <button class="hp-refresh" id="healthRefresh" type="button">Refresh now</button>
 </div>
+<div class="cmd-scrim" id="cmdScrim" hidden></div>
+<div class="cmd" id="cmdBox" role="dialog" aria-modal="true" aria-label="Search HQ" hidden>
+  <div class="cmd-in"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4.2-4.2"/></svg><input id="cmdInput" type="text" placeholder="Search songs, bots, tabs…" autocomplete="off" autocapitalize="off" spellcheck="false" role="combobox" aria-expanded="true" aria-controls="cmdList" aria-autocomplete="list"><kbd>esc</kbd></div>
+  <ul class="cmd-list" id="cmdList" role="listbox" aria-label="Results"></ul>
+  <p class="cmd-foot"><span>↑↓ move</span><span>↵ open</span><span>⌘K anywhere</span></p>
+</div>
 <div class="moresheet" id="moreSheet" role="dialog" aria-label="More sections" hidden><div class="grab"></div><a href="#pages" data-tab="pages"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="3.5" width="16" height="17" rx="2.5"/><path d="M8 8.5h8M8 12.5h8M8 16.5h5"/></svg><span>Pages</span></a><a href="#growth" data-tab="growth"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 17l5.5-5.5 4 4 7.5-7.5"/><path d="M15 8h5.5v5.5"/></svg><span>Growth</span></a><a href="#fans" data-tab="fans"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8.5" r="3.5"/><path d="M2.5 20c.8-3.6 3.4-5.5 6.5-5.5s5.7 1.9 6.5 5.5"/><path d="M16 5.2a3.5 3.5 0 0 1 0 6.6M18 14.8c1.9.7 3.1 2.4 3.5 5.2"/></svg><span>Fans</span></a><a href="#releases" data-tab="releases"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15.5" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg><span>Upcoming</span></a><a href="#team" data-tab="team"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 20v-1.5A3.5 3.5 0 0 1 8.5 15h7a3.5 3.5 0 0 1 3.5 3.5V20"/><circle cx="12" cy="8.5" r="3.5"/></svg><span>Team</span></a><a href="#messages" data-tab="messages"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5.5h16a1.5 1.5 0 0 1 1.5 1.5v9a1.5 1.5 0 0 1-1.5 1.5h-8l-4.5 3.5v-3.5H4A1.5 1.5 0 0 1 2.5 16V7A1.5 1.5 0 0 1 4 5.5z"/><path d="M7.5 10h9M7.5 13.5h6"/></svg><span>Messages</span><span class="nbadge" id="msgBadge2" hidden></span></a><button class="out" id="logout2" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4h4.5A1.5 1.5 0 0 1 20 5.5v13a1.5 1.5 0 0 1-1.5 1.5H14"/><path d="M10 16l-4-4 4-4M6 12h10"/></svg><span>Log out</span></button></div>
 
 <main id="main">
@@ -1003,14 +1170,19 @@ textarea.fld.lyrics{min-height:220px}
   <div class="netbar" id="netBar" role="status" hidden><span id="netMsg"></span><button type="button" id="retry">Retry</button></div>
   <section class="card view" id="today" aria-labelledby="todayTitle">
     <div class="vhead"><h1 id="todayTitle">Today</h1><p class="vsub" id="todaySub"></p></div>
-    <a class="waitline" id="waitLine" href="#messages" hidden></a>
     <span id="capMonth" hidden></span>
     <div class="sheeterr" id="errToday" hidden></div>
-    <div class="brief" id="brief" aria-live="polite"><p class="ph big"></p><p class="ph"></p><p class="ph"></p></div>
-    <a class="sitecheck" id="siteCheck" href="#messages" hidden></a>
-    <div class="brief-actions"><button class="copybtn" id="copySummary" type="button">Copy today's summary</button><span class="copied" id="copied" role="status"></span></div>
+    <!-- the redesign (12 Nov 2026): what needs Luke first (beside the briefing on a wide screen) -->
+    <div class="today-grid">
+    <div class="today-side">
+    <a class="waitline" id="waitLine" href="#messages" hidden></a>
     <section class="t-card attn-card" id="attnCard" aria-labelledby="attnTitle"><h2 class="t-lbl" id="attnTitle">Needs attention</h2><ul class="attn-list" id="attnList"><li><span class="ph"></span></li></ul></section>
     <section class="t-card" id="sinceCard" aria-labelledby="sinceTitle" hidden><h2 class="t-lbl" id="sinceTitle">Since you last looked <span id="sinceWhen"></span></h2><ul class="since-list" id="sinceList"></ul></section>
+    <a class="sitecheck" id="siteCheck" href="#messages" hidden></a>
+    </div>
+    <div class="today-main">
+    <div class="brief" id="brief" aria-live="polite"><p class="ph big"></p><p class="ph"></p><p class="ph"></p></div>
+    <div class="brief-actions"><button class="copybtn" id="copySummary" type="button">Copy today's summary</button><span class="copied" id="copied" role="status"></span></div>
     <h2 class="t-lbl sect">Headlines <span id="tilesRange"></span></h2>
     <div class="htiles" id="tiles"><div class="htile"><span class="ph big"></span></div><div class="htile"><span class="ph big"></span></div></div>
     <div class="tgrid">
@@ -1024,6 +1196,8 @@ textarea.fld.lyrics{min-height:220px}
       <div class="t-card"><p class="t-lbl">Your tasks</p><div id="forLuke"><div class="ph"></div><div class="ph"></div></div></div>
       <a class="t-card" href="#team"><p class="t-lbl">Today's duties</p><p class="t-big num" id="dutyBig"><span class="ph big"></span></p><p class="t-line" id="dutyMsg"></p></a>
     </div>
+    </div><!-- .today-main -->
+    </div><!-- .today-grid -->
   </section>
 
   <section class="card view" id="songs">
@@ -1220,6 +1394,7 @@ textarea.fld.lyrics{min-height:220px}
 <script src="js/hq-staff.js" defer></script>
 <script src="js/hq-shell.js" defer></script>
 <script src="js/hq-app.js" defer></script>
+<script src="js/hq-cmd.js" defer></script>
 <script src="js/hq-pages.js" defer></script>
 </body>
 </html>

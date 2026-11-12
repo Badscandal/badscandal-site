@@ -227,7 +227,7 @@ test("the page: Messages is the tenth tab, the new script is kept offline, and n
   assert.match(shell, /MORE = \[[^\]]*"messages"\]/);
   assert.doesNotMatch(shell, /scrollBy\(/, "the deep link is one plain jump");
   assert.doesNotMatch(page, /scroll-behavior:\s*smooth/);
-  assert.match(sw, /var CACHE = "bs-hq-v3"/); assert.match(sw, /"\/js\/hq-staff\.js"/); assert.match(sw, /"\/js\/hq-app\.js"/);
+  assert.match(sw, /var CACHE = "bs-hq-v4"/); assert.match(sw, /"\/js\/hq-cmd\.js"/); assert.match(sw, /"\/js\/hq-staff\.js"/); assert.match(sw, /"\/js\/hq-app\.js"/);
   for (const [name, src] of [["hq-staff.js", staff], ["hq.js", readFileSync(new URL("../js/hq.js", import.meta.url), "utf8")]]) assert.doesNotMatch(src, /\b(confirm|alert|prompt)\s*\(/, name + ": questions are asked on the page, never in a browser dialog");
   assert.doesNotMatch(staff, /innerHTML\s*=\s*[^;]*\b(m|th|r|w|e|s|a)\.(text|message|payer|note|name|task|blocker)\b(?![^;]*esc\()/, "board text is escaped");
   /* Luke's words: the visible text of the new parts never says MCP, token, endpoint or API */
