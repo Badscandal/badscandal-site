@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { registerHooks } from "node:module";
 import { handle, headerText, LEGACY, MODERN, toolList } from "../netlify/lib/mcp.mjs";
 import { TOOLS, INSTRUCTIONS } from "../netlify/lib/staff-tools.mjs";
+import * as S from "../netlify/lib/staff.mjs";
 import { makeSession, sessionCookie } from "../netlify/lib/session.mjs";
 import { DEFAULT_ROSTER, spDay } from "../netlify/lib/staff.mjs";
 
@@ -22,7 +23,7 @@ const rpc = (method, params, id = 1) => ({ jsonrpc: "2.0", id, method, ...(param
 
 test("mcp: the tools are short, described and flat, so any client can list them", () => {
   const list = toolList(TOOLS);
-  assert.equal(list.length, 17, "twelve, the four release tools, and spotify_upcoming (11 Nov 2026)");
+  assert.equal(list.length, 18, "twelve, the four release tools, spotify_upcoming (11 Nov 2026), and sort_payment (the bank reader)");
   for (const t of list) {
     assert.match(t.name, /^[a-z][a-z_]{2,30}$/, t.name);
     assert.ok(t.title && t.description.length > 60, t.name + " needs a real description");
@@ -32,7 +33,7 @@ test("mcp: the tools are short, described and flat, so any client can list them"
     assert.ok(!JSON.stringify(t.inputSchema).includes("$ref"));
     assert.equal(t.annotations.destructiveHint, false);
   }
-  assert.equal(new Set(list.map((t) => t.name)).size, 17);
+  assert.equal(new Set(list.map((t) => t.name)).size, 18);
   assert.equal(list.find((t) => t.name === "my_day").annotations.readOnlyHint, true);
   assert.equal(list.find((t) => t.name === "post_update").annotations.readOnlyHint, false);
 });
@@ -45,7 +46,7 @@ test("mcp legacy: initialize, the 202 for notifications, ping, tools/list, tools
   assert.deepEqual(await handle({ jsonrpc: "2.0", method: "notifications/initialized" }, {}, deps), { status: 202, body: null });
   assert.deepEqual((await handle(rpc("ping"), {}, deps)).body, { jsonrpc: "2.0", id: 1, result: {} });
   const list = await handle(rpc("tools/list", {}, "abc"), { "mcp-protocol-version": "2025-06-18" }, deps);
-  assert.equal(list.body.id, "abc"); assert.equal(list.body.result.tools.length, 17); assert.equal(list.body.result.resultType, undefined);
+  assert.equal(list.body.id, "abc"); assert.equal(list.body.result.tools.length, 18); assert.equal(list.body.result.resultType, undefined);
   const call = await handle(rpc("tools/call", { name: "my_day", arguments: { bot: "Nova" } }), {}, deps);
   assert.equal(call.body.result.isError, false); assert.deepEqual(call.body.result.structuredContent, { tool: "my_day", args: { bot: "Nova" } });
   assert.equal(call.body.result.content[0].type, "text"); assert.match(call.body.result.content[0].text, /"my_day"/);
@@ -65,7 +66,7 @@ test("mcp 2026-07-28: no handshake; discover; version and header checks; resultT
   assert.equal(disc.status, 200); assert.deepEqual(disc.body.result.supportedVersions, [MODERN]); assert.equal(disc.body.result.resultType, "complete");
   assert.equal(disc.body.result._meta["io.modelcontextprotocol/serverInfo"].name, "badscandal-hq");
   const list = await handle(rpc("tools/list", meta), { "mcp-protocol-version": MODERN }, deps);
-  assert.deepEqual([list.body.result.resultType, list.body.result.cacheScope, list.body.result.tools.length], ["complete", "private", 17]);
+  assert.deepEqual([list.body.result.resultType, list.body.result.cacheScope, list.body.result.tools.length], ["complete", "private", 18]);
   const call = await handle(rpc("tools/call", { ...meta, name: "my_day", arguments: { bot: "Nova" } }), { "mcp-protocol-version": MODERN, "mcp-method": "tools/call", "mcp-name": "=?base64?" + btoa("my_day") + "?=" }, deps);
   assert.equal(call.body.result.resultType, "complete"); assert.equal(call.body.result.isError, false);
   const badV = await handle(rpc("tools/list", { _meta: { "io.modelcontextprotocol/protocolVersion": "2030-01-01" } }), {}, deps);
@@ -203,6 +204,61 @@ test("connector: requests that were turned away are noted (never the key), and C
   assert.ok(trace.some((t) => t.method === "initialize" && t.status === 200 && t.key === "bots"));
   assert.ok(!JSON.stringify(trace).includes(ENV.STAFF_BOT_KEY) && !JSON.stringify(trace).includes("definitely-wrong"), "no key is ever written down");
   assert.equal((await api("trace", { headers: { authorization: "Bearer " + ENV.STAFF_BOT_KEY } })).status, 403);
+});
+
+test("bank reader: the bots see every incoming Revolut payment; Ledger, Sheet and Nova can sort one, the others can't (/api/staff/sort, sort_payment)", async () => {
+  const desk = globalThis.__stores.get("staff"), now = Date.now(), day = S.spDay(now), month = day.slice(0, 7);
+  const rev = { bot: "HQ", date: day, currency: "EUR", account: "Revolut", note: "Read from Revolut" };
+  const friend = (await S.submitIncome(desk, now, S.DEFAULT_ROSTER, { ...rev, payer: "Made-up Mum", amount: 40, status: "unsorted", reference: "tx-mum" })).entry;
+  const client = (await S.submitIncome(desk, now, S.DEFAULT_ROSTER, { ...rev, payer: "Made-up Client Ltd", amount: 250, status: "unsorted", reference: "tx-client" })).entry;
+  const own = (await S.submitIncome(desk, now, S.DEFAULT_ROSTER, { ...rev, payer: "Made-up Self", amount: 300, status: "transfer", reference: "tx-own" })).entry;
+  await S.submitIncome(desk, now, S.DEFAULT_ROSTER, { ...rev, payer: "Sample Records", amount: 70, status: "received", reference: "tx-label", category: "Label deals" });
+  /* Luke, 11 Nov 2026: the bots see his full Revolut income: every row, sorted or not */
+  const bot = (await tool("income_status", { bot: "Nova" })).structuredContent;
+  const seen = JSON.stringify(bot);
+  assert.ok(seen.includes("Made-up Mum") && seen.includes("Made-up Self") && seen.includes("Sample Records"), seen);
+  assert.deepEqual(bot.unsorted.find((u) => u.id === friend.id), { id: friend.id, month, line: `${day} · Made-up Mum · EUR 40.00 · Revolut` });
+  const botTools = (await (await post(rpc("tools/list"), "Bearer " + ENV.STAFF_BOT_KEY)).json()).result.tools;
+  assert.ok(botTools.some((t) => t.name === "sort_payment"));
+  assert.deepEqual(botTools.find((t) => t.name === "submit_income").inputSchema.properties.status.enum, ["received", "pending", "transfer"], "nobody files a payment as unsorted by hand: only the bank reader does");
+  assert.match((await tool("submit_income", { bot: "Nova", date: day, payer: "Someone", amount: 5, currency: "EUR", account: "Wise", status: "unsorted" })).content[0].text, /received, pending or transfer/);
+  /* a bot whose job is not the money can look but not sort, neither with the tool nor by sending the payment again */
+  assert.match((await tool("sort_payment", { bot: "Echo", id: friend.id, month, status: "transfer" })).content[0].text, /Only Luke, Claude, Ledger, Sheet, Nova can sort/);
+  assert.match((await tool("submit_income", { bot: "Echo", date: day, payer: "Made-up Mum", amount: 40, currency: "EUR", account: "Revolut", reference: "tx-mum", status: "received" })).content[0].text, /unsorted\. Only Ledger, Sheet, Nova, Claude or Luke/);
+  /* a money bot sorts one as income (this file's roster is Nova + Echo by now: Nova is one of Ledger, Sheet, Nova) */
+  const sortedC = (await tool("sort_payment", { bot: "Nova", id: client.id, month, status: "received", category: "Production" })).structuredContent;
+  assert.deepEqual([sortedC.saved, sortedC.status, sortedC.category], [true, "received", "Production"]);
+  assert.match((await tool("sort_payment", { bot: "Nova", id: client.id, month, status: "received" })).content[0].text, /already sorted|category must be/);
+  /* Claude sorts through the same tool; what a person or a bot decided stays */
+  const claude = "Bearer " + ENV.STAFF_CLAUDE_KEY;
+  const sorted = (await tool("sort_payment", { bot: "Claude", id: friend.id, month, status: "received", category: "Other" }, claude)).structuredContent;
+  assert.deepEqual([sorted.saved, sorted.status, sorted.category], [true, "received", "Other"]);
+  assert.match((await tool("sort_payment", { bot: "Claude", id: friend.id, month, status: "transfer" }, claude)).content[0].text, /already sorted/, "what a person decided stays");
+  const after = (await tool("income_status", { bot: "Nova" })).structuredContent;
+  assert.equal(after.unsorted.length, 0);
+  /* Luke, on /hq: corrects what the bank reader itself decided (its own-transfer rule was wrong) */
+  const sort = (body, headers) => api("sort", { method: "POST", headers: { "content-type": "application/json", ...headers }, body: JSON.stringify(body) });
+  assert.equal((await sort({ id: own.id, month, status: "received", category: "Salary" }, { authorization: "Bearer " + ENV.STAFF_BOT_KEY })).status, 403);
+  assert.equal((await sort({ id: own.id, month, status: "received", category: "Salary" }, { cookie, origin: "https://evil.example" })).status, 403);
+  const r = await sort({ id: own.id, month, status: "received", category: "Salary" }, { cookie, origin: "https://badscandal.com" });
+  const e = (await r.json()).entry;
+  assert.deepEqual([r.status, e.status, e.category, e.history.at(-1).by, e.history.at(-1).from], [200, "received", "Salary", "Luke", "transfer"]);
+  assert.equal((await sort({ id: own.id, month, status: "transfer" }, { cookie })).status, 400, "once Luke has said, it stays");
+  assert.equal((await sort({ id: "i" + "0".repeat(12), month, status: "transfer" }, { cookie })).status, 404);
+  /* the money of a statement already logged as pending: income_status offers it, sort_payment and /api/staff/sort take pending_id */
+  const R = S.DEFAULT_ROSTER, stmt = { date: day, currency: "EUR", account: "Statement only", status: "pending", category: "Label deals" };
+  const p1 = (await S.submitIncome(desk, now, R, { ...stmt, bot: "Ledger", payer: "Made-up Label One", amount: 88.5 })).entry;
+  const c1 = (await S.submitIncome(desk, now, R, { ...rev, payer: "MLO Payments", amount: 88.5, status: "unsorted", reference: "tx-mlo" })).entry;
+  const p2 = (await S.submitIncome(desk, now, R, { ...stmt, bot: "Ledger", payer: "Made-up Label Two", amount: 66 })).entry;
+  const c2 = (await S.submitIncome(desk, now, R, { ...rev, payer: "MLT Payments", amount: 66, status: "unsorted", reference: "tx-mlt" })).entry;
+  const offered = (await tool("income_status", { bot: "Nova" })).structuredContent.unsorted.find((u) => u.id === c1.id);
+  assert.deepEqual(offered.pending_match, { id: p1.id, line: `${day} · Made-up Label One · EUR 88.50 · pending` });
+  const m1 = (await tool("sort_payment", { bot: "Nova", id: c1.id, month, status: "received", pending_id: p1.id })).structuredContent;
+  assert.deepEqual([m1.saved, m1.id, m1.status, m1.category], [true, p1.id, "received", "Label deals"]);
+  const r2 = await sort({ id: c2.id, month, status: "received", pending_id: p2.id }, { cookie, origin: "https://badscandal.com" });
+  assert.deepEqual([r2.status, (await r2.json()).entry.id], [200, p2.id]);
+  const left = (await tool("income_status", { bot: "Nova" })).structuredContent;
+  assert.deepEqual([left.unsorted.length, left.pending_this_month], [0, "nothing logged"], "both statements landed; nothing is pending and nothing to sort");
 });
 
 /* ---- the release pipeline (11 Nov 2026): the four tools and /api/staff/release*, end to end ---- */

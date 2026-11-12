@@ -37,7 +37,11 @@
       /* the release pipeline: busy / error / the inline question per card, notes, open disclosures, the form */
       rel: { busy: "", err: {}, ask: null, note: {}, open: {}, fold: {}, full: {}, loading: {} }, form: null,
       /* In Spotify for Artists (v2): the question being answered, the label typed, what was answered */
-      spot: { k: "", answer: "", label: "", busy: "", err: {}, done: {} } };
+      spot: { k: "", answer: "", label: "", busy: "", err: {}, done: {} },
+      /* Revolut (11 Nov 2026): the tile's button in flight, its inline "Disconnect?", the last error and
+         what the last "Read now" brought; the payment being sorted, errors per payment, and what was
+         sorted (id -> the line in its place, kept 10 minutes like an answered message) */
+      bank: { busy: "", ask: false, err: "", done: "" }, sort: { id: "", kind: "", cat: "", stmt: false, busy: false }, sortErr: {}, sorted: {} };
   }
   var PEOPLE = ["Luke", "Claude", "HQ", "all"];
   var KEEP_MS = 10 * 60000; /* how long "Sent to Nova at 17:03" stays in the place of what was answered */
@@ -45,8 +49,12 @@
   var cap = function (s) { s = String(s || ""); return s.charAt(0).toUpperCase() + s.slice(1); };
 
   /* ---------- loading: with the other answers, on start and on every refresh ---------- */
-  function reload() {
-    if (loading) return loading;
+  /* the desk's board and Revolut's state, side by side: either may fail without the other */
+  /* fresh (after a write: a sort, a Read now): never reuse an answer asked for BEFORE the write was
+     saved; wait for it, then ask again */
+  function reload(fresh) { return Promise.all([reloadBoard(fresh), loadBank(fresh)]); }
+  function reloadBoard(fresh) {
+    if (loading) return fresh ? loading.then(function () { return reloadBoard(); }) : loading;
     loading = HQ.getJSON("/api/staff/board" + (HQ.sample ? "?sample=1" : "")).then(function (res) {
       loading = null; tried = true;
       if (HQ.authFail(res)) return;
@@ -70,6 +78,7 @@
   }
   function clear() {
     board = null; problem = ""; tried = false; goodAt = null; ui = fresh();
+    bank = null; bankProblem = ""; bankTried = false; bankFlagNow = null;
     $("msgText").value = ""; counter(); $("msgErr").textContent = ""; $("msgOk").textContent = "";
     $("waitList").innerHTML = $("threadList").innerHTML = $("dutyList").innerHTML = $("incomeBody").innerHTML = '<div class="ph"></div>';
     $("answeredList").innerHTML = ""; $("answeredCard").hidden = true;
@@ -404,21 +413,24 @@
   function drawIncome() {
     var el = $("incomeBody");
     if (!board) {
-      el.innerHTML = tried ? '<div class="tile mfail"><p>Couldn\'t load the money coming in.</p><button class="sendbtn" type="button" data-retry>Retry</button></div>' : '<div class="ph big"></div><div class="ph"></div>';
+      el.innerHTML = '<div class="acct">' + bankTile() + "</div>" + (tried ? '<div class="tile mfail"><p>Couldn\'t load the money coming in.</p><button class="sendbtn" type="button" data-retry>Retry</button></div>' : '<div class="ph big"></div><div class="ph"></div>');
       return;
     }
-    var inc = board.income || {}, today = board.today, accounts = inc.accounts || [], sources = inc.sources || [], entries = inc.entries || [];
+    var inc = board.income || {}, today = board.today, sources = inc.sources || [], entries = inc.entries || [];
+    /* the desk's own "Revolut" account tile gives way to the reader's tile (one tile per account) */
+    var accounts = (inc.accounts || []).filter(function (a) { return !/^revolut$/i.test(String(a.name || "").trim()); });
     if (L.incomeEmpty(inc) && !accounts.length) {
-      el.innerHTML = '<div class="tile"><p class="empty2">Nothing has been submitted yet. This fills in when Ledger starts submitting payments through the connector.</p></div>';
+      el.innerHTML = '<div class="acct">' + bankTile() + '</div><div class="tile"><p class="empty2">Nothing has been submitted yet. This fills in when Ledger starts submitting payments through the connector.</p></div>';
       return;
     }
     var month = inc.month ? new Date(inc.month + "-15T12:00:00Z").toLocaleDateString("en-GB", { month: "long", timeZone: "UTC" }) : "this month";
     var probs = L.incomeProblems(inc), h = "";
-    if (accounts.length) h += '<div class="acct">' + accounts.map(function (a) {
+    h += '<div class="acct">' + bankTile() + accounts.map(function (a) {
       var l = L.accountLine(a, today);
       return '<div class="tile' + (l.attn ? " attn-t" : "") + '"><p class="an">' + esc(a.name) + '</p><p class="al">' + esc(cap(l.text)) + "</p>" + (a.needsLuke ? '<p class="al need">Needs you: ' + esc(a.needsLuke) + "</p>" : "") + "</div>";
     }).join("") + "</div>";
     h += '<div class="inmonth"><div class="tile"><p class="t-lbl">Received in ' + esc(month) + "</p>" + amountLines(inc.received, "Nothing yet") + '</div><div class="tile"><p class="t-lbl">Pending</p>' + amountLines(inc.pending, "Nothing pending") + "</div></div>";
+    h += toSortHtml(inc);
     if (probs.length) h += '<div class="t-card attn-card has"><p class="t-lbl">To look at</p><ul class="inprob">' + probs.map(function (p) { return "<li><span>" + esc(p) + "</span></li>"; }).join("") + "</ul></div>";
     h += '<h4 class="lblh">Where money comes from</h4><div class="tile"><div class="scroll"><table class="stack" id="srcTable">' +
       (sources.length ? "<tr><th>Source</th><th>Type</th><th>Usually paid</th><th>Last payment</th><th>This month</th><th>State</th></tr>" + sources.map(function (s) {
@@ -426,25 +438,205 @@
         return "<tr><td><b>" + esc(s.name) + "</b></td><td>" + esc(s.category || "–") + "</td><td>" + esc(L.cadenceWord(s.cadence)) + "</td><td>" + esc(cap(L.payLine(s.last))) + "</td><td>" + esc(mt.length ? mt.join(" + ") : "Nothing yet") +
           "</td><td>" + (st.attn ? '<span class="attn">' + esc(st.text) + "</span>" : esc(st.text)) + (s.needsLuke ? '<small class="need">Needs you: ' + esc(s.needsLuke) + "</small>" : "") + "</td></tr>";
       }).join("") : '<tr><td class="empty">No sources are on the list yet.</td></tr>') + "</table></div></div>";
-    var rows = entries.slice(0, ui.payAll ? 60 : 15), stat = function (e) { return e.status === "transfer" ? "Transfer (not income)" : cap(e.status); };
+    /* transfers and payments still to sort say so in words, their amount greyed: never in the totals */
+    var rows = entries.slice(0, ui.payAll ? 60 : 15), stat = function (e) { return L.payStatus(e).text; }, nc = function (e) { return L.payStatus(e).counted ? "" : " nc"; };
     h += '<h4 class="lblh">Latest payments</h4><div class="tile">' + (!rows.length ? '<p class="empty2">No payments have been submitted yet.</p>'
       : '<div class="scroll paywide"><table id="payTable"><tr><th>Date</th><th>Payer</th><th class="r">Amount</th><th>Status</th><th>Account</th><th>Logged by</th></tr>' + rows.map(function (e) {
-        return "<tr><td>" + esc(L.day(e.date)) + "</td><td><b>" + esc(e.payer) + "</b>" + (e.note ? "<small>" + esc(e.note) + "</small>" : "") + '</td><td class="r"><b>' + esc(L.money(e.amount, e.currency)) + "</b></td><td>" +
+        return "<tr><td>" + esc(L.day(e.date)) + "</td><td><b>" + esc(e.payer) + "</b>" + (e.note ? "<small>" + esc(e.note) + "</small>" : "") + '</td><td class="r' + nc(e) + '"><b>' + esc(L.money(e.amount, e.currency)) + "</b></td><td>" +
           esc(stat(e)) + "</td><td>" + esc(e.account || "–") + "</td><td>" + esc(e.by || "–") + "</td></tr>";
       }).join("") + '</table></div><ul class="paylist">' + rows.map(function (e) {
-        return "<li><b>" + esc(e.payer) + '</b><span class="pa">' + esc(L.money(e.amount, e.currency)) + '</span><span class="pm">' + esc([L.day(e.date), e.account, e.by ? "by " + e.by : ""].filter(Boolean).join(" · ")) +
+        return "<li><b>" + esc(e.payer) + '</b><span class="pa' + nc(e) + '">' + esc(L.money(e.amount, e.currency)) + '</span><span class="pm">' + esc([L.day(e.date), e.account, e.by ? "by " + e.by : ""].filter(Boolean).join(" · ")) +
           '</span><span class="ps">' + esc(stat(e)) + "</span>" + (e.note ? '<span class="pn">' + esc(e.note) + "</span>" : "") + "</li>";
       }).join("") + "</ul>") +
       (entries.length > rows.length ? '<button class="copybtn more-row" type="button" data-pay-more>Show more (' + (Math.min(60, entries.length) - rows.length) + ")</button>" : "") + "</div>";
+    /* a redraw (the 5-minute refresh, the answer to a sort) must not lose where Luke is: focus goes
+       back to the same control, or to the line that took a sorted payment's place */
+    var act = document.activeElement, keep = act && el.contains(act) ? (act.id ? "#" + act.id : act.getAttribute("data-sort") ? '[data-sort="' + act.getAttribute("data-sort") + '"][data-id="' + safe(act.getAttribute("data-id")) + '"]' + (act.getAttribute("data-cat") ? '[data-cat="' + act.getAttribute("data-cat").replace(/[^a-z -]/gi, "") + '"]' : "")
+      : act.getAttribute("data-bank") ? '[data-bank="' + act.getAttribute("data-bank") + '"]' : "") : "";
     el.innerHTML = h;
     HQ.stack("srcTable");
+    if (keep) { var back = el.querySelector(keep); if (back) back.focus({ preventScroll: true }); }
   }
   $("incomeBody").addEventListener("click", function (ev) {
     var b = ev.target.closest && ev.target.closest("button");
     if (!b) return;
     if (b.hasAttribute("data-retry")) reload();
     if (b.hasAttribute("data-pay-more")) { ui.payAll = true; drawIncome(); }
+    if (b.hasAttribute("data-bank")) bankClick(b.getAttribute("data-bank"));
+    if (b.hasAttribute("data-sort")) sortClick(b.getAttribute("data-sort"), b.getAttribute("data-id") || "", b.getAttribute("data-cat") || "");
   });
+
+  /* ================= Revolut: the bank reader (11 Nov 2026) =================
+     GET /api/bank/status, asked with the board and refreshed with it (a failure never breaks the page:
+     the tile says so and the rest of Money is drawn as usual). Buttons: Connect Revolut / Approve again
+     (POST /api/bank/connect, then the browser goes to Revolut's approval page), Read now (POST
+     /api/bank/sync), Disconnect (POST /api/bank/disconnect, behind an inline question). Nothing here can
+     move money: the reader is read-only. In ?sample=1 the state is made up and every button is off. */
+  var bank = null, bankProblem = "", bankTried = false, bankLoading = null;
+  /* the bank sends Luke back to /hq?bank=connected|failed|device#money: say it once, then take the flag
+     out of the address so a refresh doesn't say it (or read) again */
+  var bankFlagNow = (function () {
+    var f = L.bankFlag(location.search);
+    if (f.had) { try { history.replaceState(history.state, "", location.pathname + f.search + location.hash); } catch (e) {} }
+    return f.kind ? { kind: f.kind, line: f.line, auto: f.kind === "connected" } : null;
+  })();
+  function loadBank(fresh) {
+    if (bankLoading) return fresh ? bankLoading.then(function () { return loadBank(); }) : bankLoading;
+    bankLoading = HQ.getJSON("/api/bank/status" + (HQ.sample ? "?sample=1" : "")).then(function (res) {
+      bankLoading = null; bankTried = true;
+      if (HQ.authFail(res)) return;
+      if (res.s === 200 && res.j && typeof res.j.configured === "boolean") { bank = res.j; bankProblem = ""; }
+      else bankProblem = "Couldn't be read (" + res.s + ")";
+      /* "connected" is said only while Revolut is connected, and reads at once only right after a real
+         Connect (an old link or bookmark to /hq?bank=connected does neither) */
+      var after = bank ? L.bankFlagAfter(bankFlagNow, bank, Date.now()) : { flag: bankFlagNow, sync: false };
+      bankFlagNow = after.flag;
+      drawIncome(); HQ.boardChanged();
+      if (after.sync && !HQ.sample) bankSync();
+    }, function () { bankLoading = null; bankTried = true; bankProblem = "No connection"; drawIncome(); HQ.boardChanged(); });
+    return bankLoading;
+  }
+  function bankPost(path) {
+    if (HQ.sample) return Promise.resolve({ ok: false, error: "This is the sample: nothing is sent." });
+    return HQ.postJSON("/api/bank/" + path, {}).then(function (res) {
+      if (HQ.authFail(res)) return { ok: false, error: "You were logged out. Log in and try again." };
+      if (res.s === 200 && res.j) return { ok: true, j: res.j };
+      return { ok: false, kind: (res.j && typeof res.j.kind === "string" && res.j.kind) || "", error: (res.j && typeof res.j.error === "string" && res.j.error) || "That didn't work (" + res.s + "). Try again." };
+    }, function () { return { ok: false, error: "No connection. Nothing was sent: try again." }; });
+  }
+  function bankFocus(sel) { var el = $("incomeBody").querySelector(sel); if (el) el.focus(); }
+  function bankSync() {
+    if (ui.bank.busy) return;
+    ui.bank.busy = "sync"; ui.bank.err = ""; ui.bank.done = ""; ui.bank.ask = false; drawIncome();
+    bankPost("sync").then(function (r) {
+      ui.bank.busy = "";
+      var w = r.ok ? L.syncWords(r.j, Date.now()) : { ok: false, text: r.error };
+      if (w.ok) ui.bank.done = w.text; else ui.bank.err = w.text;
+      if (bankFlagNow && bankFlagNow.kind === "connected") bankFlagNow = null; /* "the first read is running" has its answer */
+      drawIncome();
+      reload(true); /* what came in: the list to sort, the totals, the tile's line */
+    });
+  }
+  function bankConnect() {
+    if (ui.bank.busy) return;
+    ui.bank.busy = "connect"; ui.bank.err = ""; ui.bank.done = ""; bankFlagNow = null; drawIncome();
+    bankPost("connect").then(function (r) {
+      var to = r.ok && r.j && typeof r.j.url === "string" && /^https:\/\//.test(r.j.url) ? r.j.url : "";
+      if (!to) { ui.bank.busy = ""; ui.bank.err = r.ok ? "Revolut's approval page didn't come back. Try again." : L.bankSays(r.kind, r.error); drawIncome(); return; }
+      location.assign(to); /* Revolut asks Luke to approve read-only access, then sends him back here */
+    });
+  }
+  /* Back from Revolut's page without approving: a browser that restores the page as it was would keep
+     every Revolut button greyed out on "Opening Revolut…" */
+  window.addEventListener("pageshow", function (ev) { if (ev.persisted && ui.bank.busy === "connect") { ui.bank.busy = ""; drawIncome(); } });
+  function bankClick(act) {
+    if (act === "retry") { loadBank(); return; }
+    if (HQ.sample || !bank || ui.bank.busy) return;
+    if (act === "sync") bankSync();
+    else if (act === "connect" || act === "approve") bankConnect();
+    else if (act === "disconnect") { ui.bank.ask = true; ui.bank.err = ""; drawIncome(); bankFocus('[data-bank="disc-no"]'); }
+    else if (act === "disc-no") { ui.bank.ask = false; drawIncome(); bankFocus('[data-bank="disconnect"]'); }
+    else if (act === "disc-yes") {
+      ui.bank.busy = "disconnect"; drawIncome();
+      bankPost("disconnect").then(function (r) {
+        ui.bank.busy = "";
+        if (!r.ok) { ui.bank.err = r.error; drawIncome(); return; }
+        ui.bank.ask = false; ui.bank.done = "Disconnected at " + hhmm(Date.now()) + ". The payments already read stay here.";
+        loadBank(true);
+      });
+    }
+  }
+  /* the tile among the account tiles */
+  function bankTile() {
+    var head = '<p class="an">Revolut</p>';
+    if (!bank) {
+      if (!bankTried) return '<div class="tile bank" id="bankTile">' + head + '<div class="ph"></div></div>';
+      return '<div class="tile bank" id="bankTile">' + head + '<p class="al">Couldn\'t read Revolut\'s state just now. The rest of Money is fine.</p>' +
+        '<div class="conn-acts"><button class="copybtn" type="button" data-bank="retry">Try again</button></div></div>';
+    }
+    var v = L.bankView(bank, Date.now()), b = ui.bank, dis = HQ.sample || b.busy ? " disabled" : "";
+    var BUSY = { sync: "Reading…", connect: "Opening Revolut…", approve: "Opening Revolut…" };
+    var acts = b.ask
+      ? '<div class="confirm" role="group" aria-label="Disconnect Revolut"><p>Disconnect Revolut? The site stops reading it and gives the approval back. The payments already read stay here.</p>' +
+        '<div class="conn-acts"><button class="sendbtn" type="button" data-bank="disc-yes"' + dis + ">" + (b.busy === "disconnect" ? "Disconnecting…" : "Yes, disconnect") + "</button>" +
+        '<button class="copybtn" type="button" data-bank="disc-no"' + (b.busy ? " disabled" : "") + ">Keep it</button></div></div>"
+      : v.buttons.length ? '<div class="conn-acts">' + v.buttons.map(function (k, i) {
+        var busyNow = b.busy === k || (b.busy === "connect" && k === "approve");
+        return '<button class="' + (k === "disconnect" ? "linkbtn" : i === 0 ? "sendbtn" : "copybtn") + '" type="button" data-bank="' + k + '"' + dis + ">" + esc(busyNow ? BUSY[k] || "Saving…" : L.bankButton(k)) + "</button>";
+      }).join("") + "</div>" : "";
+    var flag = bankFlagNow ? '<p class="rdone' + (bankFlagNow.kind === "connected" ? "" : " bad") + '" role="status">' + esc(bankFlagNow.line) + "</p>" : "";
+    /* the tile is headed "Revolut" already: its line starts "Read today at 06:50 · …" */
+    return '<div class="tile bank' + (v.attn ? " attn-t" : "") + '" id="bankTile">' + head + '<p class="al">' + esc(cap(v.line.replace(/^Revolut: /, ""))) + "</p>" +
+      (v.error ? '<p class="al">' + esc(v.error) + "</p>" : "") +
+      (bankProblem ? '<p class="al">Couldn\'t check again just now: this is what was read before.</p>' : "") +
+      (v.accounts.length ? '<p class="al bacc">Reads ' + esc(v.accounts.join(", ")) + ". Read only: it can never move money.</p>" : "") +
+      flag + (b.done ? '<p class="rdone" role="status">' + esc(b.done) + "</p>" : "") + acts +
+      (v.note ? '<p class="al">' + esc(v.note) + "</p>" : "") + '<p class="ferr" role="alert">' + esc(b.err) + "</p>" +
+      (HQ.sample && v.buttons.length ? '<p class="fok bnote">Sample: these buttons do nothing here.</p>' : "") + "</div>";
+  }
+
+  /* "To sort": in the account, nobody has said what it is yet, so it counts as nothing. "It's income"
+     asks the kind of income, "Not income" asks once; then POST /api/staff/sort and the payment leaves
+     the list, a line taking its place ("Sorted as income (Production)"), and the totals are read again. */
+  function sortedNow() { return Object.keys(ui.sorted).map(function (k) { return ui.sorted[k]; }).filter(function (x) { return Date.now() - x.at < KEEP_MS; }); }
+  function toSortHtml(inc) {
+    var all = inc.unsorted || [], left = all.filter(function (e) { return !ui.sorted[e.id]; }), stubs = sortedNow();
+    var n = Math.max(0, (inc.unsortedCount || all.length) - (all.length - left.length));
+    if (!n && !stubs.length) return "";
+    var rows = stubs.map(function (x) { return '<li class="landed" role="status" tabindex="-1" id="sort-' + esc(safe(x.id)) + '"><span>' + esc(x.line) + '<span class="lsub">' + esc(x.sub) + "</span></span></li>"; })
+      .concat(left.map(sortRow));
+    return '<section class="tile tosort" aria-labelledby="toSortH"><h4 class="t-lbl" id="toSortH">To sort' + (n ? " · " + n : "") + "</h4>" +
+      '<p class="tsub">In the account, and nobody has said what it is yet. It counts as nothing until it is sorted.</p>' +
+      (HQ.sample ? '<p class="mnote">This is the sample: sorting is switched off here.</p>' : "") +
+      '<ul class="sortlist">' + rows.join("") + "</ul>" +
+      (n > left.length ? '<p class="tsub">Showing the newest ' + left.length + " of " + n + ". Sort these and the next ones show.</p>" : !left.length ? '<p class="tsub">Nothing left to sort.</p>' : "") + "</section>";
+  }
+  function sortRow(e) {
+    var s = ui.sort.id === e.id ? ui.sort : null, busy = !!(s && s.busy), dis = HQ.sample || busy ? " disabled" : "", id = esc(e.id);
+    /* the money of a statement already logged as pending (the desk offers it): the first answer */
+    var stmt = e.pendingMatch ? '<button class="copybtn stmt" type="button" data-sort="stmt" data-id="' + id + '" aria-pressed="' + !!(s && s.stmt) + '"' + dis + ">" + esc(L.pendingAnswer(e)) + "</button>" : "";
+    var top = '<div class="srow"><div class="sl"><b>' + esc(e.payer) + '</b><span class="pm">' + esc(L.day(e.date) + (e.account ? " · " + e.account : "")) + '</span></div><span class="pa">' + esc(L.money(e.amount, e.currency)) + "</span></div>";
+    var body;
+    if (!s) body = '<div class="sacts"><button class="copybtn" type="button" data-sort="income" data-id="' + id + '"' + off() + ">It's income</button>" +
+      '<button class="copybtn" type="button" data-sort="not" data-id="' + id + '"' + off() + ">Not income</button></div>";
+    else if (s.kind === "income") body = '<div class="confirm" role="group" aria-label="What kind of income"><p>' + (stmt ? "Which statement or kind of income is it?" : "What kind of income is it?") + '</p><div class="stypes">' + stmt +
+      L.SORT_TYPES.map(function (c) { return '<button class="copybtn" type="button" data-sort="cat" data-id="' + id + '" data-cat="' + esc(c) + '" aria-pressed="' + (s.cat === c) + '"' + dis + ">" + esc(c) + "</button>"; }).join("") + "</div>" +
+      (s.stmt ? '<p class="sq">' + esc(L.pendingQuestion(e)) + "</p>" : s.cat ? '<p class="sq">' + esc(L.sortQuestion(e, "received", s.cat)) + "</p>" : "") +
+      '<div class="conn-acts"><button class="sendbtn" type="button" data-sort="yes" data-id="' + id + '"' + (s.cat || s.stmt ? dis : " disabled") + ">" + (busy ? "Saving…" : s.stmt ? "Yes, it's that statement" : "Yes, it's income") + "</button>" +
+      '<button class="copybtn" type="button" data-sort="no" data-id="' + id + '"' + (busy ? " disabled" : "") + ">Cancel</button></div></div>";
+    else body = '<div class="confirm" role="group" aria-label="Not income"><p>' + esc(L.sortQuestion(e, "transfer")) + "</p>" +
+      '<div class="conn-acts"><button class="sendbtn" type="button" data-sort="yes" data-id="' + id + '"' + dis + ">" + (busy ? "Saving…" : "Yes, not income") + "</button>" +
+      '<button class="copybtn" type="button" data-sort="no" data-id="' + id + '"' + (busy ? " disabled" : "") + ">Cancel</button></div></div>";
+    return '<li id="sort-' + esc(safe(e.id)) + '">' + top + body + '<p class="ferr" role="alert">' + esc(ui.sortErr[e.id] || "") + "</p></li>";
+  }
+  function sortClick(act, id, cat) {
+    if (!board || HQ.sample || (ui.sort.busy && act !== "no")) return;
+    var inc = board.income || {}, e = (inc.unsorted || []).filter(function (x) { return x.id === id; })[0];
+    if (!e) return;
+    var sel = function (a) { return '[data-sort="' + a + '"][data-id="' + safe(id) + '"]'; };
+    if (act === "income" || act === "not") { ui.sort = { id: id, kind: act, cat: "", stmt: false, busy: false }; delete ui.sortErr[id]; drawIncome(); bankFocus(act === "not" ? sel("no") : e.pendingMatch ? sel("stmt") : '[data-sort="cat"][data-id="' + safe(id) + '"]'); return; }
+    if (act === "no") { var k = ui.sort.kind; ui.sort = { id: "", kind: "", cat: "", stmt: false, busy: false }; drawIncome(); bankFocus(sel(k === "not" ? "not" : "income")); return; }
+    if (act === "cat" && ui.sort.id === id) { ui.sort.cat = L.SORT_TYPES.indexOf(cat) >= 0 ? cat : ""; ui.sort.stmt = false; drawIncome(); bankFocus('[data-sort="cat"][data-id="' + safe(id) + '"][aria-pressed="true"]'); return; }
+    if (act === "stmt" && ui.sort.id === id && e.pendingMatch) { ui.sort.stmt = true; ui.sort.cat = ""; drawIncome(); bankFocus(sel("stmt")); return; }
+    if (act !== "yes" || ui.sort.id !== id) return;
+    var status = ui.sort.kind === "income" ? "received" : "transfer", category = ui.sort.cat, pm = status === "received" && ui.sort.stmt ? e.pendingMatch : null;
+    if (status === "received" && !category && !pm) return;
+    ui.sort.busy = true; drawIncome();
+    write("sort", { id: id, month: String(e.date).slice(0, 7), status: status, category: status === "received" && !pm ? category : undefined, pending_id: pm ? pm.id : undefined }).then(function (r) {
+      ui.sort.busy = false;
+      if (!r.ok) { ui.sortErr[id] = r.error; drawIncome(); return; }
+      delete ui.sortErr[id];
+      ui.sort = { id: "", kind: "", cat: "", stmt: false, busy: false };
+      ui.sorted[id] = { id: id, at: Date.now(), line: pm ? L.pendingSorted(pm) : L.sortedLine(status, category), sub: e.payer + " · " + L.money(e.amount, e.currency) + " · " + L.day(e.date) };
+      /* at once, before the board catches up: out of the list, the status in "Latest payments" (the
+         money of a statement: this row is gone and the statement is received) */
+      if (pm) inc.entries = (inc.entries || []).filter(function (x) { return x.id !== id; }).map(function (x) { return x.id === pm.id ? Object.assign({}, x, { status: "received", arrived: e.date, account: e.account }) : x; });
+      else (inc.entries || []).forEach(function (x) { if (x.id === id) { x.status = status; if (status === "received") x.category = category; x.history = (x.history || []).concat({ by: "Luke", from: "unsorted", to: status }); } });
+      draw();
+      bankFocus("#sort-" + safe(id));
+      reload(true); /* the totals with it counted (or not) */
+    });
+  }
 
   /* ================= Releases: the release pipeline (11 Nov 2026) =================
      Luke: "when a new song is ready we want all the info every bot needs ... and that they auto
@@ -984,5 +1176,7 @@
     }, 80);
   }
 
-  window.HQStaff = { reload: reload, clear: clear, drawWorkers: drawWorkers, drawReleases: drawReleases, addDetails: addDetails, board: function () { return board; }, problem: function () { return problem; } };
+  window.HQStaff = { reload: reload, clear: clear, drawWorkers: drawWorkers, drawReleases: drawReleases, addDetails: addDetails, board: function () { return board; }, problem: function () { return problem; },
+    /* Revolut's state (GET /api/bank/status) for Today and Data health */
+    bank: function () { return bank; }, bankProblem: function () { return bankProblem; } };
 })();
