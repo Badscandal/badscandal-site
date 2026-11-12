@@ -1819,8 +1819,9 @@ branch `hq-app` (spec + plan in HQ-App `docs/superpowers/`); live only on Luke's
   `#releases` back in the address (`HQLib.newReleaseRoute`), so the same address works again next time.
   A new form already open with typing in it is scrolled to, never wiped. The form no longer waits for the
   board: it opens from `GET /api/staff/fields` (`{today, packFields, releaseSteps}`, Luke's cookie or
-  Claude's key, reads no desk); only Save and Send wait for the board, with "Loading the team…" under them.
-  "The form needs the team's desk" shows only when BOTH loads failed.
+  Claude's key, reads no desk), as soon as either the fields or the board lands; only Save and Send wait
+  for the board, with "Loading the team…" under them. "The form needs the team's desk" shows only when
+  BOTH loads failed (a new try of the fields clears an old failure while it is on its way).
 * **The waiting line:** under the button, "3 things waiting on you" (`HQLib.waitWords`) -> `#messages`,
   in the browser too. Same count as the app badge. The Messages counters still count messages only.
 * **The waiting rule, ONE function:** `S.waitingOnLuke(desk, today, now?)` in `netlify/lib/staff.mjs` ->
@@ -1834,41 +1835,58 @@ branch `hq-app` (spec + plan in HQ-App `docs/superpowers/`); live only on Luke's
 * **The bridge (the contract the two apps are built to):** the app sets `window.HQApp = {platform: ios|mac,
   env: sandbox|production, app, version, tz}` before the page runs, only on badscandal.com and our deploy
   previews. The page (`js/hq-app.js`, after js/hq-shell.js; does nothing native without `window.HQApp`)
-  posts to `webkit.messageHandlers.hqApp`: `{type:"ready", loggedIn:true}` once the data loaded with a
-  good login (the app then asks for alert permission and hands over its token), `{type:"ready",
-  loggedIn:false}` on the login form, `{type:"waiting", count}` (the badge) after every refresh and when
-  the page comes back on screen, `{type:"loggedOut"}` after Log out. The app hands its token over as
-  `window.dispatchEvent(new CustomEvent("hqapp", {detail: {type: "token", token}}))`; the page registers
-  it once per token per page load, only while logged in. Log out unregisters the device first (js/hq.js
-  waits for `HQAppPage.beforeLogout()`, at most 3 s). The app's offline page posts `{type:"retry"}`. To
-  open an address the app sets `location.hash` when it is already on /hq, else loads `/hq<hash>`. js/hq.js
-  fires `hq:refreshed` and `hq:login` document events for this. `hq-sw.js` cache is `bs-hq-v3`.
+  posts to `webkit.messageHandlers.hqApp`: `{type:"ready", loggedIn:true}` once HQ's OWN data answered
+  with a good login (js/hq.js fires `hq:refreshed` with `{loggedIn, startedAt}`: the sheet or the overview
+  came back 200 during that refresh and the login form isn't showing; `/api/hq/push/waiting` only ever
+  supplies the count), then the app asks for alert permission and hands over its token; `{type:"ready",
+  loggedIn:false}` on the login form (`hq:login`); `{type:"waiting", count}` (the badge) after every
+  logged-in refresh and when the page comes back on screen; `{type:"loggedOut"}` after Log out. The app
+  hands its token over as `window.dispatchEvent(new CustomEvent("hqapp", {detail: {type: "token",
+  token}}))`; the page registers it once per token per page load, only while logged in, and again when
+  the zone has changed on coming back to the page (`window.HQApp.tz`, which the apps update when they
+  come to the front; else the device's own `Intl` zone), so quiet hours follow Luke. Log out: a
+  registration on its way finishes, then the device is unregistered, then `loggedOut` (js/hq.js waits for
+  `HQAppPage.beforeLogout()`, at most 3 s); anything that started before Log out and answers after it is
+  dropped (a session counter), so a device can't register again. The app's offline page posts
+  `{type:"retry"}`. To open an address the app sets `location.hash` when it is already on /hq, else loads
+  `/hq<hash>`. `hq-sw.js` cache is `bs-hq-v3`.
 * **The endpoints** (`netlify/lib/push-api.mjs`, routed by `netlify/functions/hq.mjs` after its login
   check: the /hq cookie only; every POST must come from our own Origin; `?sample=1` never writes):
   `POST /api/hq/push/register {token, platform, env, app, tz}` -> `{ok:true}` · `POST
   /api/hq/push/unregister {token}` -> `{ok:true}` · `GET /api/hq/push/waiting` -> `{count, items:[{key,
   kind, id, text, href}]}` (`?sample=1` = the made-up desk) · `POST /api/hq/push/test` -> `{ok, sent,
-  skipped?}` ("Test from HQ: alerts work." to every device) · `POST /api/hq/push/key {key, keyId}` ->
+  skipped?, reasons?}` ("Test from HQ: alerts work." to every device; `reasons` counts Apple's other
+  answers, e.g. `{"403 InvalidProviderToken": 2}`, so a wrong key or environment shows) · `POST /api/hq/push/key {key, keyId}` ->
   `{ok:true}`, WRITE-ONLY (no GET; checked by importing it with WebCrypto; nothing ever answers with it).
 * **Devices** (`netlify/lib/push.mjs`, Blob `push/devices.json` on the `staff` store): token 64–200 hex,
   platform ios|mac, env sandbox|production, app one of the two bundle ids, tz an IANA zone (else São
   Paulo); the same token is one device (its zone and seenAt updated); the newest 10 by seenAt are kept.
+  Every write replaces the list (`mutate()` takes `{replace: doc}`), so a stored value that isn't a list
+  is replaced, never written back.
 * **Sending** (`netlify/lib/apns.mjs`, no dependencies: `node:http2` + WebCrypto): an ES256 provider
-  token (`{alg:"ES256", kid}` . `{iss: team, iat}`, reused 50 minutes), sandbox devices to
+  token (`{alg:"ES256", kid}` . `{iss: team, iat}`, iat rounded DOWN to a 30-minute boundary so every
+  running copy of the functions signs with the same one; Apple refuses a token that changes more often
+  than every 20 minutes; a 403 ExpiredProviderToken / InvalidProviderToken drops the cached one), sandbox devices to
   `api.sandbox.push.apple.com`, production to `api.push.apple.com`, `apns-topic` = the device's app,
   `apns-push-type: alert`, priority 10 (5 for a silent badge update), 10 s timeout. Payload `{aps: {alert:
   {title: "HQ", body}, badge, sound: "default", "thread-id": "hq-waiting"}, href}`; silent = `{aps:
   {badge}}`. Apple saying 410 / BadDeviceToken / Unregistered / DeviceTokenNotForTopic removes THAT device
-  only.
+  only. Apple's other answers are logged as counts ("push sweep: 403 InvalidProviderToken x2; 0 accepted"),
+  never a token or the key. Luke's key is a Sandbox key: right for the cable / development installs.
 * **When it buzzes** (`sweep()`, state in Blob `push/alerted.json` `{keys: {<key>: first alerted}, lastBuzz,
-  overnight: {<token>: n}}`): each waiting item alerts ONCE (recorded before sending, so two sweeps at once
-  send once; keys no longer waiting are forgotten after 30 days). One new item buzzes with its text and
+  overnight: {<token>: [keys]}}`): each waiting item alerts ONCE (recorded before sending, so two sweeps at
+  once send once; keys no longer waiting are forgotten after 30 days). **A refused setup burns nothing:**
+  when NO device accepted and none was dead (Apple refused the key, a timeout, no network), this sweep's
+  keys are taken back (only where the stored time is still this sweep's) and lastBuzz goes back, so the
+  next sweep tries again. One new item buzzes with its text and
   `href`; several at once say "<n> new things are waiting on you" -> `#messages`; the badge is always the
   full count. **Flood guard:** at most one buzz per 10 minutes; anything new inside that window is a silent
   badge update (8 questions in a minute = 1 buzz + 7 silent, badge 8). **Quiet hours 23:00–08:00 on each
   device's own zone** (the one it last registered with; Luke moves between São Paulo and Dublin): silent,
-  counted; `morning()` sends that device ONE "<n> things are waiting on you" at its local 08:xx (only what
-  is still waiting; "1 thing is waiting on you"), then resets. **No key, a broken key or no device:** nothing
+  each item kept by key for that device; `morning()` sends it ONE "<n> things are waiting on you" at its
+  local 08:xx, n = those overnight items still waiting ("1 thing is waiting on you"; nothing when none is),
+  then forgets them. It keeps to the 10-minute rule: after a buzz in the last 10 minutes (the hourly job
+  runs its sweep first) the summary is dropped, and when it buzzes it sets lastBuzz. **No key, a broken key or no device:** nothing
   is sent, nothing is recorded (`{skipped}`), nothing throws.
 * **What runs a sweep:** a bot's `send_message` to Luke that needs him, any `spotify_upcoming` report, and
   Claude's `POST /api/staff/message` to Luke that needs him (`netlify/functions/staff.mjs` `pushAfter`:
@@ -1885,7 +1903,10 @@ branch `hq-app` (spec + plan in HQ-App `docs/superpowers/`); live only on Luke's
   in memory, the request, a fake http2), `tests/push.test.mjs` (once, flood, quiet hours by zone, the 08:00
   summary, dead tokens, no key, register limits), `tests/push-api.test.mjs` (login, Origin, round trip, the
   key never answered, `/api/staff/fields`), `tests/mcp.test.mjs` (a sweep that throws never fails
-  `send_message`), `tests/hq-lib.test.mjs` (`newReleaseRoute`, `waitWords`, `appRegisterBody`). 296 tests
-  on branch `hq-app`. Apple is never called by a test.
+  `send_message`), `tests/hq-lib.test.mjs` (`newReleaseRoute`, `waitWords`, `appRegisterBody`), and after
+  the review of 12 Nov 2026 `tests/hq-app.test.mjs` (js/hq-app.js in a sandbox: logged in only from HQ's
+  refresh, the zone following Luke, Log out winning over late answers) and `tests/hq-newrelease.test.mjs`
+  (js/hq-staff.js in a sandbox: the form opens from the fields, an old failed try doesn't count). 305
+  tests on branch `hq-app`. Apple is never called by a test.
 * **Not done here:** the site check does not mention "push not set up" (it would change the report Alfred
   reads); `send_message`'s note to bots still says Luke is not told on his phone straight away.
