@@ -1,7 +1,7 @@
 /* A small sender for Apple's push service (APNs), 12 Nov 2026, for the HQ apps (iPhone + Mac).
    No dependencies: node:http2 and WebCrypto only.
 
-     apnsJwt      the ES256 provider token ({alg, kid} . {iss: team, iat}), reused for 50 minutes
+     apnsJwt      the ES256 provider token ({alg, kid} . {iss: team, iat}), iat on a 30-minute boundary
                   (Apple refuses one older than an hour, and one renewed more often than every 20 min)
      apnsRequest  what one push looks like on the wire (pure)
      sendApns     sends it; { status, reason, dead }. dead = Apple says this token will never work again
@@ -31,17 +31,25 @@ export async function importPushKey(keyB64) {
   return crypto.subtle.importKey("pkcs8", der, { name: "ECDSA", namedCurve: "P-256" }, false, ["sign"]);
 }
 
+/* The provider token. iat is rounded DOWN to a 30-minute boundary, so every running copy of the
+   functions (Netlify starts several) signs with the same iat: Apple refuses a token older than an hour
+   (TooOld / ExpiredProviderToken) and one that changes more often than every 20 minutes
+   (TooManyProviderTokenUpdates). Each copy keeps its token until the next boundary; Apple refusing it
+   (403 ExpiredProviderToken / InvalidProviderToken) clears it (clearJwtCache, called by push.mjs). */
+export const PROVIDER_REFUSED = new Set(["ExpiredProviderToken", "InvalidProviderToken"]);
 let cache = null; /* { id, iat, jwt } */
+export function clearJwtCache() { cache = null; }
 export async function apnsJwt({ keyB64, keyId, teamId, nowSec }) {
   const id = keyId + "|" + teamId + "|" + keyB64;
-  if (cache && cache.id === id && nowSec >= cache.iat && nowSec - cache.iat < 50 * 60) return cache.jwt;
+  const iat = Math.floor(nowSec / 1800) * 1800;
+  if (cache && cache.id === id && cache.iat === iat) return cache.jwt;
   const key = await importPushKey(keyB64);
   const head = b64url(enc.encode(JSON.stringify({ alg: "ES256", kid: keyId })));
-  const claims = b64url(enc.encode(JSON.stringify({ iss: teamId, iat: nowSec })));
+  const claims = b64url(enc.encode(JSON.stringify({ iss: teamId, iat })));
   /* WebCrypto's ECDSA signature is already r||s (64 bytes), which is what a JWS wants */
   const sig = await crypto.subtle.sign({ name: "ECDSA", hash: "SHA-256" }, key, enc.encode(head + "." + claims));
   const jwt = head + "." + claims + "." + b64url(new Uint8Array(sig));
-  cache = { id, iat: nowSec, jwt };
+  cache = { id, iat, jwt };
   return jwt;
 }
 

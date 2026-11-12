@@ -4,7 +4,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
-import { apnsJwt, apnsRequest, sendApns, payloadOf, pushKey, pushKeyFromText } from "../netlify/lib/apns.mjs";
+import { apnsJwt, apnsRequest, clearJwtCache, sendApns, payloadOf, pushKey, pushKeyFromText } from "../netlify/lib/apns.mjs";
 import { memoryDesk } from "../netlify/lib/staff-sample.mjs";
 
 const b64 = (buf) => Buffer.from(buf).toString("base64");
@@ -26,11 +26,19 @@ test("apnsJwt: three parts, ES256 header with the key id, Apple's claims, and it
   assert.equal(unb64url(parts[2]).length, 64, "a JWS ES256 signature is r||s, 64 bytes");
   const ok = await crypto.subtle.verify({ name: "ECDSA", hash: "SHA-256" }, k.publicKey, unb64url(parts[2]), new TextEncoder().encode(parts[0] + "." + parts[1]));
   assert.equal(ok, true);
-  /* reused for 50 minutes, then made again */
-  assert.equal(await apnsJwt({ keyB64: k.keyB64, keyId: "ABC123DEFG", teamId: "TEAM123456", nowSec: 1_800_000_000 + 49 * 60 }), jwt);
-  const later = await apnsJwt({ keyB64: k.keyB64, keyId: "ABC123DEFG", teamId: "TEAM123456", nowSec: 1_800_000_000 + 51 * 60 });
-  assert.notEqual(later, jwt);
-  assert.equal(JSON.parse(unb64url(later.split(".")[1])).iat, 1_800_000_000 + 51 * 60);
+  /* iat is rounded down to a 30-minute boundary, so every running copy of the functions signs with the
+     SAME iat (Apple refuses a provider token that changes more often than every 20 minutes); reused
+     inside the window, made again in the next one */
+  assert.equal(await apnsJwt({ keyB64: k.keyB64, keyId: "ABC123DEFG", teamId: "TEAM123456", nowSec: 1_800_000_000 + 10 * 60 }), jwt);
+  clearJwtCache(); /* another copy of the function, its own empty cache */
+  const other = await apnsJwt({ keyB64: k.keyB64, keyId: "ABC123DEFG", teamId: "TEAM123456", nowSec: 1_800_000_000 + 29 * 60 });
+  assert.equal(JSON.parse(unb64url(other.split(".")[1])).iat, 1_800_000_000, "the same iat in another copy, 29 minutes later");
+  const later = await apnsJwt({ keyB64: k.keyB64, keyId: "ABC123DEFG", teamId: "TEAM123456", nowSec: 1_800_000_000 + 31 * 60 });
+  assert.notEqual(later, other);
+  assert.equal(JSON.parse(unb64url(later.split(".")[1])).iat, 1_800_000_000 + 30 * 60);
+  assert.equal(await apnsJwt({ keyB64: k.keyB64, keyId: "ABC123DEFG", teamId: "TEAM123456", nowSec: 1_800_000_000 + 59 * 60 }), later, "cached");
+  clearJwtCache();
+  assert.notEqual(await apnsJwt({ keyB64: k.keyB64, keyId: "ABC123DEFG", teamId: "TEAM123456", nowSec: 1_800_000_000 + 59 * 60 }), later, "a cleared cache signs again (ECDSA signatures differ each time)");
   /* the key pasted as the whole .p8 text (armour and line breaks) works the same */
   const pem = "-----BEGIN " + "PRIVATE KEY-----\n" /* split: the repo guard greps for the armour */ + k.keyB64.match(/.{1,64}/g).join("\n") + "\n-----END PRIVATE KEY-----\n";
   assert.equal(pushKeyFromText(pem), k.keyB64);

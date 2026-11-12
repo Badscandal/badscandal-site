@@ -196,14 +196,17 @@ export async function mutate(store, key, fallback, fn, tries = 12) {
     const base = JSON.parse(JSON.stringify(cur.data));
     const out = await fn(base);
     if (out && out.skip) return out.value;
-    const res = await store.setJSON(key, base, cur.etag ? { onlyIfMatch: cur.etag } : { onlyIfNew: true });
+    /* { replace: <doc> } writes that document instead of the (edited) copy: for a document whose stored
+       shape is broken (a list that isn't a list), which can't be fixed in place */
+    const doc = out && Object.prototype.hasOwnProperty.call(out, "replace") ? out.replace : base;
+    const res = await store.setJSON(key, doc, cur.etag ? { onlyIfMatch: cur.etag } : { onlyIfNew: true });
     if (res && res.modified === false) continue; /* changed under us */
     /* The store's client answers "modified" for ANY reply that isn't "changed under you", a failed
        write included. A write counts only with the new version's tag, or when reading it back
        shows exactly what was written. */
     if (res && res.etag) return out ? out.value : undefined;
     const back = await readDoc(store, key, fallback).catch(() => null);
-    if (back && JSON.stringify(back.data) === JSON.stringify(base)) return out ? out.value : undefined;
+    if (back && JSON.stringify(back.data) === JSON.stringify(doc)) return out ? out.value : undefined;
     fail("The desk could not save that. Nothing was saved. Try again in a moment.", "busy");
   }
   fail("The desk is busy. Nothing was saved. Try again in a moment.", "busy");
