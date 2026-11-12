@@ -1966,3 +1966,10 @@ fully"). Every id, address and tab stays, so the apps, bookmarks and tests keep 
   blur support fall back to near-solid panels; nothing new animates beyond short colour transitions.
 * **Not changed yet:** the native apps' own background and offline page are still `#050505` black (a
   rebuild in HQ-App changes them).
+* **Growth & Fans, one page (12 Nov 2026, Luke: "growth and fans can be on the same page"):** the Fans
+  tab is gone; its part (`#growth-fans`: "Fans forming", `#fansSub`, `#errFans`, `#fanTable`, same ids)
+  sits under the followers in the `growth` view, titled "Growth & Fans" in the rail and the More sheet.
+  `js/hq-shell.js` `TABS` / `MORE` lost `fans`; `ALIAS = { fans: "growth/fans" }` sends an old `#fans` link
+  or bookmark there; `TAB_HREF.Fans` and Search's "Fans" go to `#growth/fans`. Nine tabs now (the tests
+  that pinned ten say so). Also: a deep link opened from scratch jumps again once HQ's first load is in
+  (it used to be pushed out of view by the numbers loading above it).

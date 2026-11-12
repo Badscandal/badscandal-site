@@ -6,8 +6,11 @@
 (function () {
   "use strict";
   var $ = function (id) { return document.getElementById(id); };
-  var TABS = ["today", "songs", "ads", "pages", "growth", "fans", "releases", "money", "team", "messages"];
-  var MORE = ["pages", "growth", "fans", "releases", "team", "messages"];
+  var TABS = ["today", "songs", "ads", "pages", "growth", "releases", "money", "team", "messages"];
+  var MORE = ["pages", "growth", "releases", "team", "messages"];
+  /* addresses that moved: Fans is a part of the Growth & Fans page since 12 Nov 2026 (Luke: "growth and
+     fans can be on the same page"); an old #fans link or bookmark lands on that part */
+  var ALIAS = { fans: "growth/fans" };
   var KEY = "bs_hq_tab";
 
   function tabFromHash() {
@@ -38,6 +41,8 @@
     if (tab === "pages") window.dispatchEvent(new Event("resize"));
   }
   function route() {
+    var moved = ALIAS[(location.hash || "").replace(/^#/, "").split("/")[0]];
+    if (moved) history.replaceState(null, "", location.pathname + location.search + "#" + moved);
     var t = tabFromHash();
     if (!t) {
       var last = "today";
@@ -49,6 +54,16 @@
     show(t);
   }
   window.addEventListener("hashchange", route);
+  /* a deep link opened from scratch (#growth/fans, #songs/touchme, #team/nova…) jumps before the numbers
+     above it have loaded, and they then push it out of view: once HQ's first load is in, jump again */
+  var firstLoad = true;
+  document.addEventListener("hq:refreshed", function () {
+    if (!firstLoad) return;
+    firstLoad = false;
+    var tab = tabFromHash(), sub = subFromHash();
+    var el = tab && sub && document.getElementById((tab === "songs" ? "song-" : tab + "-") + sub);
+    if (el) el.scrollIntoView({ block: "start" });
+  });
 
   /* More (phones) */
   function openMore() { $("moreSheet").hidden = false; $("scrim").hidden = false; $("moreBtn").setAttribute("aria-expanded", "true"); var a = $("moreSheet").querySelector("a"); if (a) a.focus(); }

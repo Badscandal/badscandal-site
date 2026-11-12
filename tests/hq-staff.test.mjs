@@ -223,7 +223,7 @@ test("the page: Messages is the tenth tab, the new script is kept offline, and n
   assert.ok(page.indexOf('js/hq.js"') < page.indexOf('js/hq-staff.js"') && page.indexOf('js/hq-staff.js"') < page.indexOf('js/hq-shell.js"'), "after hq.js (it uses window.HQ), before the shell routes");
   assert.equal(page.split('href="#messages" data-tab="messages"').length - 1, 2, "in the rail and in the More sheet");
   assert.ok(page.indexOf('href="#team"') < page.indexOf('href="#messages"'), "after the nine");
-  assert.match(shell, /TABS = \["today", "songs", "ads", "pages", "growth", "fans", "releases", "money", "team", "messages"\]/);
+  assert.match(shell, /TABS = \["today", "songs", "ads", "pages", "growth", "releases", "money", "team", "messages"\]/);
   assert.match(shell, /MORE = \[[^\]]*"messages"\]/);
   assert.doesNotMatch(shell, /scrollBy\(/, "the deep link is one plain jump");
   assert.doesNotMatch(page, /scroll-behavior:\s*smooth/);

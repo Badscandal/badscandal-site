@@ -14,7 +14,8 @@ const hrefs = (list) => list.map((x) => x.href || "action:" + x.action);
 
 test("cmdIndex: every tab, the actions, songs, bots, releases and what waits on Luke", () => {
   const tabs = items.filter((x) => x.kind === "tab");
-  assert.deepEqual(tabs.map((x) => x.href), ["#today", "#songs", "#ads", "#pages", "#growth", "#fans", "#releases", "#money", "#team", "#messages"]);
+  assert.deepEqual(tabs.map((x) => x.href), ["#today", "#songs", "#ads", "#pages", "#growth", "#growth/fans", "#releases", "#money", "#team", "#messages"]);
+  assert.deepEqual(tabs.slice(4, 6).map((x) => x.label), ["Growth & Fans", "Fans"], "Fans is a section of Growth & Fans, still found by its name");
   assert.equal(tabs.find((x) => x.href === "#releases").label, "Upcoming");
   const acts = items.filter((x) => x.kind === "action");
   assert.deepEqual(acts.map((x) => x.label), ["New song", "Refresh the numbers", "Data health", "Copy today's summary"]);
