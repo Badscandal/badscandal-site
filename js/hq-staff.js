@@ -52,7 +52,7 @@
   /* the desk's board and Revolut's state, side by side: either may fail without the other */
   /* fresh (after a write: a sort, a Read now): never reuse an answer asked for BEFORE the write was
      saved; wait for it, then ask again */
-  function reload(fresh) { return Promise.all([reloadBoard(fresh), loadBank(fresh)]); }
+  function reload(fresh) { if (!fields) loadFields(); return Promise.all([reloadBoard(fresh), loadBank(fresh)]); }
   function reloadBoard(fresh) {
     if (loading) return fresh ? loading.then(function () { return reloadBoard(); }) : loading;
     loading = HQ.getJSON("/api/staff/board" + (HQ.sample ? "?sample=1" : "")).then(function (res) {
@@ -77,7 +77,7 @@
     draw();
   }
   function clear() {
-    board = null; problem = ""; tried = false; goodAt = null; ui = fresh();
+    board = null; problem = ""; tried = false; goodAt = null; ui = fresh(); fields = null; fieldsFailed = false;
     bank = null; bankProblem = ""; bankTried = false; bankFlagNow = null;
     $("msgText").value = ""; counter(); $("msgErr").textContent = ""; $("msgOk").textContent = "";
     $("waitList").innerHTML = $("threadList").innerHTML = $("dutyList").innerHTML = $("incomeBody").innerHTML = '<div class="ph"></div>';
@@ -87,6 +87,9 @@
   }
   function draw() {
     drawWorkers(); drawMessages(); drawIncome(); drawBadges(); drawReleases();
+    /* New release waiting for the desk; Save and Send wake up when it lands (only then: a refresh must not
+       redraw the buttons under Luke's finger) */
+    pendingNew(); if (ui.form && ui.form.footFor !== footKey()) drawFoot();
     HQ.boardChanged(); /* Today's attention + site check, Data health, and Team's fallback when there is no board */
   }
 
@@ -648,7 +651,51 @@
   var relById = {};
   /* what Luke typed and hasn't saved stays on this device, one copy per release (L.formKey); logout
      clears every bs_hq_last_* */
-  function relFields() { return (board && board.packFields) || []; }
+  function relFields() { return (board && board.packFields) || (fields && fields.packFields) || []; }
+  /* New release opens before the board is there (12 Nov 2026, the HQ apps: "#releases/new" from a cold
+     start). GET /api/staff/fields gives the form its fields, steps and today without reading the desk;
+     only Save and Send wait for the board ("Loading the team…"). */
+  var fields = null, fieldsLoading = null, fieldsFailed = false;
+  function loadFields() {
+    if (fields) return Promise.resolve(fields);
+    if (fieldsLoading) return fieldsLoading;
+    fieldsLoading = HQ.getJSON("/api/staff/fields").then(function (res) {
+      fieldsLoading = null;
+      /* a 401 here is left to the board's own answer, which shows the login */
+      if (res.s === 200 && res.j && Array.isArray(res.j.packFields) && res.j.packFields.length) { fields = res.j; fieldsFailed = false; } else fieldsFailed = true;
+      return fields;
+    }, function () { fieldsLoading = null; fieldsFailed = true; return null; });
+    return fieldsLoading;
+  }
+  function formBase() { return board || fields || { today: "", releaseSteps: [] }; }
+  /* the form can't be opened at all only when BOTH the board and the fields failed */
+  function bothFailed() { return fieldsFailed && tried && !board; }
+  var NEEDS_DESK = "The form needs the team's desk, which couldn't be loaded. Try Refresh.";
+  /* New release: the empty song form. A new form already open (with what Luke typed) is kept: it is
+     scrolled to, never wiped. */
+  function openNew() {
+    if (ui.form && !ui.form.id) { $("relForm").scrollIntoView({ block: "start" }); var t = $("rf-title"); if (t) t.focus({ preventScroll: true }); return; }
+    if (relFields().length) { ui.pendingNew = false; openForm(""); return; }
+    ui.pendingNew = true;
+    $("relMsg").textContent = "Opening the form…";
+    loadFields().then(pendingNew, pendingNew);
+  }
+  function pendingNew() {
+    if (!ui.pendingNew) return;
+    if (relFields().length) { ui.pendingNew = false; openForm(""); return; }
+    if (bothFailed()) { ui.pendingNew = false; $("relMsg").textContent = NEEDS_DESK; }
+  }
+  /* #releases/new (the Today button, the iPhone's "New release", the Mac's ⌘N, a bookmark): open the
+     form, then put #releases back, so the same address works again next time. Runs after the shell has
+     shown the tab (its hashchange listener comes later, and it scrolls to the top). */
+  function routeNew() {
+    var r = L.newReleaseRoute(location.hash);
+    if (!r.open) return;
+    try { history.replaceState(history.state, "", location.pathname + location.search + r.replace); } catch (e) {}
+    setTimeout(openNew, 0);
+  }
+  window.addEventListener("hashchange", routeNew);
+  document.addEventListener("DOMContentLoaded", routeNew);
   function hhmm(ms) { return L.spStampOf(ms).slice(11, 16); }
   var isLink = function (v) { return /^https:\/\//.test(String(v || "")); };
   function outLink(url, text, cls) { return isLink(url) ? '<a' + (cls ? ' class="' + cls + '"' : "") + ' href="' + esc(url) + '" target="_blank" rel="noopener noreferrer">' + esc(text) + "</a>" : esc(text); }
@@ -963,7 +1010,7 @@
   function forgetForm(id) { try { localStorage.removeItem(L.formKey(id)); } catch (e) {} }
   /* preset (v2, Songs' "Add its details"): { title, date } for a new one, filled in already */
   function openForm(id, preset) {
-    if (!board || !relFields().length) { $("relMsg").textContent = "The form needs the team's desk, which couldn't be loaded. Try Refresh."; return; }
+    if (!relFields().length || (id && !board)) { $("relMsg").textContent = id || bothFailed() ? NEEDS_DESK : "Loading the team…"; return; }
     var v = id ? fullOf(relById[id]) : null, vals = {};
     if (id && !v) { $("relMsg").textContent = "Couldn't open that release's details. Try again."; return; }
     relFields().forEach(function (f) { vals[f.key] = v && v.pack && v.pack[f.key] != null ? String(v.pack[f.key]) : ""; });
@@ -991,9 +1038,9 @@
     $("relForm").hidden = true; $("relForm").innerHTML = ""; $("relNew").setAttribute("aria-expanded", "false");
   }
   /* the release day has passed: a song already out, recorded for whose song it is (v2) */
-  var outNow = function (F) { return F.status !== "scheduled" && /^\d{4}-\d{2}-\d{2}$/.test(F.date || "") && F.date < board.today; };
+  var outNow = function (F) { return F.status !== "scheduled" && /^\d{4}-\d{2}-\d{2}$/.test(F.date || "") && F.date < formBase().today; };
   /* "needed to send" follows the desk's rule: the label and the split only "With a label" (v2) */
-  var NEED = function (f) { return L.needWord(f, ui.form.vals, board.releaseSteps, outNow(ui.form)); };
+  var NEED = function (f) { return L.needWord(f, ui.form.vals, formBase().releaseSteps, outNow(ui.form)); };
   function fieldHtml(f) {
     var F = ui.form, id = "rf-" + safe(f.key), val = F.vals[f.key] || "", need = NEED(f), hint = f.hint ? '<p class="fhint" id="' + id + '-h">' + esc(f.hint) + "</p>" : "";
     if (!L.fieldShown(f, F.vals)) return "";
@@ -1012,8 +1059,8 @@
   }
   function dayNoteHtml() {
     var F = ui.form;
-    if (F.status === "scheduled") return '<p class="dnote q">' + (F.date && F.date <= board.today ? "Out already." : "Already with the team. To move it, use Change the date on its card: that moves every open step and tells the team.") + "</p>";
-    var dn = L.releaseDayNote(F.date, board.today);
+    if (F.status === "scheduled") return '<p class="dnote q">' + (F.date && F.date <= formBase().today ? "Out already." : "Already with the team. To move it, use Change the date on its card: that moves every open step and tells the team.") + "</p>";
+    var dn = L.releaseDayNote(F.date, formBase().today);
     return (dn.line ? '<p class="dnote' + (dn.bad ? " bad" : "") + '">' + esc(dn.line) + "</p>" : "") + dn.notes.map(function (n) { return '<p class="dnote' + (dn.bad ? " bad" : " q") + '">' + esc(n) + "</p>"; }).join("");
   }
   function drawForm() {
@@ -1038,19 +1085,22 @@
     $("relForm").innerHTML = h + '<div class="rf-foot" id="rfFoot"></div>';
     drawFoot();
   }
+  function footKey() { return (board ? "b" : "") + (tried ? "t" : ""); }
   function drawFoot() {
     var F = ui.form, el = $("rfFoot");
     if (!F || !el) return;
-    var sched = F.status === "scheduled", dis = HQ.sample || F.busy ? " disabled" : "", out = outNow(F);
+    F.footFor = footKey();
+    var sched = F.status === "scheduled", dis = HQ.sample || F.busy || !board ? " disabled" : "", out = outNow(F);
     var h = (F.err ? '<p class="ferr" role="alert">' + esc(F.err) + "</p>" : "") + (F.ok ? '<p class="fok" role="status">' + esc(F.ok) + "</p>" : "");
     if (F.anyway) /* refused with something missing (v2): fill it in, or send anyway (it stays on the card as a warning) */
       h += '<div class="confirm" role="group" aria-label="Send anyway?"><p>' + esc(L.missingSentence(F.anyway, true) + " What you typed is saved.") + '</p><div class="conn-acts"><button class="sendbtn" type="button" data-rf-act="anyway-yes"' + dis + ">" +
         (F.busy === "send" ? "Sending…" : out ? "Record it anyway" : "Send anyway") + '</button><button class="copybtn" type="button" data-rf-act="anyway-no"' + (F.busy ? " disabled" : "") + ">Not yet</button></div></div>";
-    else if (F.ask) h += '<div class="confirm" role="group" aria-label="Confirm sending"><p>' + esc(L.sendQuestion(F.title, F.date, board.today)) + '</p><div class="conn-acts"><button class="sendbtn" type="button" data-rf-act="send-yes"' + dis + ">" + (F.busy === "send" ? "Sending…" : out ? "Yes, record it" : "Yes, send it") + '</button><button class="copybtn" type="button" data-rf-act="send-no"' + (F.busy ? " disabled" : "") + ">Not yet</button></div></div>";
-    else h += '<div class="conn-acts">' + (sched ? "" : '<button class="sendbtn" type="button" data-rf-act="send"' + dis + ">" + (F.busy === "send" ? "Saving…" : esc(L.sendButton(F.date, board.today))) + "</button>") +
+    else if (F.ask) h += '<div class="confirm" role="group" aria-label="Confirm sending"><p>' + esc(L.sendQuestion(F.title, F.date, formBase().today)) + '</p><div class="conn-acts"><button class="sendbtn" type="button" data-rf-act="send-yes"' + dis + ">" + (F.busy === "send" ? "Sending…" : out ? "Yes, record it" : "Yes, send it") + '</button><button class="copybtn" type="button" data-rf-act="send-no"' + (F.busy ? " disabled" : "") + ">Not yet</button></div></div>";
+    else h += '<div class="conn-acts">' + (sched ? "" : '<button class="sendbtn" type="button" data-rf-act="send"' + dis + ">" + (F.busy === "send" ? "Saving…" : esc(L.sendButton(F.date, formBase().today))) + "</button>") +
       '<button class="copybtn" type="button" data-rf-act="save"' + dis + ">" + (F.busy === "save" ? "Saving…" : sched ? "Save changes" : "Save for later") + "</button>" +
       '<button class="linkbtn" type="button" data-rf-act="close"' + (F.busy ? " disabled" : "") + ">Close</button></div>";
     if (HQ.sample) h += '<p class="fok" style="margin:12px 0 0">This is the sample: saving and sending are switched off here.</p>';
+    else if (!board) h += '<p class="fok" role="status" style="margin:12px 0 0">' + (tried ? "Couldn't load the team's desk yet, so Save and Send wait for it. Try Refresh." : "Loading the team…") + "</p>";
     el.innerHTML = h;
   }
   function markMiss() {
@@ -1065,7 +1115,7 @@
   /* save (and, for Send, then check what's missing and ask before it goes) */
   function saveForm(thenSend) {
     var F = ui.form;
-    if (!F || HQ.sample || F.busy) return;
+    if (!F || HQ.sample || F.busy || !board) return;
     F.title = F.title.trim(); F.ok = ""; F.err = ""; F.anyway = null;
     if (!F.title) { F.err = "Give the release its title first."; F.miss = ["title"]; drawFoot(); markMiss(); focusFirstMiss(); return; }
     var body = { title: F.title, pack: L.packChanges(relFields(), F.orig.vals, F.vals) };
@@ -1100,7 +1150,7 @@
   /* anyway (v2): sent with what is still missing, which stays on the card as a warning */
   function sendForm(anyway) {
     var F = ui.form;
-    if (!F || !F.id || HQ.sample || F.busy) return;
+    if (!F || !F.id || HQ.sample || F.busy || !board) return;
     F.busy = "send"; drawFoot();
     write("release/send", anyway ? { id: F.id, anyway: true } : { id: F.id }).then(function (r) {
       F.busy = "";
@@ -1122,10 +1172,7 @@
       reload();
     });
   }
-  $("relNew").addEventListener("click", function () {
-    if (ui.form && !ui.form.id) { $("relForm").scrollIntoView({ block: "start" }); var t = $("rf-title"); if (t) t.focus({ preventScroll: true }); return; }
-    openForm("");
-  });
+  $("relNew").addEventListener("click", openNew);
   $("relForm").addEventListener("input", onFormInput);
   $("relForm").addEventListener("change", onFormInput);
   function onFormInput(ev) {

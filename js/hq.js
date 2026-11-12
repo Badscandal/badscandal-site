@@ -135,6 +135,8 @@
     started = false;
     if (window.HQPages) window.HQPages.stop();
     setTimeout(function () { $("pw").focus(); }, 50);
+    /* the HQ apps (js/hq-app.js, 12 Nov 2026): the login form is showing */
+    try { document.dispatchEvent(new CustomEvent("hq:login")); } catch (e) {}
   }
   function showShell() {
     var was = $("shell").hidden;
@@ -168,8 +170,13 @@
       gone.forEach(function (k) { localStorage.removeItem(k); });
     } catch (e) {}
   }
+  /* inside the HQ apps, the device stops getting alerts first (js/hq-app.js: unregister while the login
+     still works, then the app clears its badge); in a browser that is nothing */
   $("logout").addEventListener("click", function () {
-    fetch("/api/admin/logout", { method: "POST", credentials: "same-origin" }).finally(function () { forget(); showLogin(""); });
+    var first = window.HQAppPage && window.HQAppPage.beforeLogout ? window.HQAppPage.beforeLogout() : null;
+    Promise.resolve(first).catch(function () {})
+      .then(function () { return fetch("/api/admin/logout", { method: "POST", credentials: "same-origin" }).catch(function () {}); })
+      .then(function () { forget(); showLogin(""); });
   });
   /* any 401 / 503 from any of the three answers lands here */
   function authFail(res) {
@@ -196,7 +203,11 @@
   function refresh() {
     lastRefresh = Date.now();
     /* the board may be the only answer that came back: Today still says what it knows */
-    var after = function () { drawDataHealth(); if (sheet || ov) drawSince(); else drawBriefing(); };
+    var after = function () {
+      drawDataHealth(); if (sheet || ov) drawSince(); else drawBriefing();
+      /* the HQ apps (js/hq-app.js, 12 Nov 2026): the answers are in; what is waiting on Luke is asked next */
+      try { document.dispatchEvent(new CustomEvent("hq:refreshed")); } catch (e) {}
+    };
     return Promise.all([loadSheet(), loadOverview(), window.HQPages ? window.HQPages.reload() : null, window.HQStaff ? window.HQStaff.reload() : null]).then(after, after);
   }
 

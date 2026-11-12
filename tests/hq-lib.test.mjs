@@ -83,6 +83,8 @@ test("offline helper: keeps only the /hq page and its scripts; never the numbers
   assert.equal(f("https://badscandal.com/hq", "navigate"), true);
   assert.equal(f("https://badscandal.com/js/hq.js"), true);
   assert.equal(f("https://badscandal.com/js/hq-staff.js"), true, "the staff desk's script opens offline too (cache bs-hq-v2)");
+  assert.equal(f("https://badscandal.com/js/hq-app.js"), true, "the app bridge too (cache bs-hq-v3)");
+  assert.equal(f("https://badscandal.com/api/hq/push/waiting"), false, "what is waiting always comes from the network");
   assert.equal(f("https://badscandal.com/api/staff/board"), false, "the board always comes from the network");
   assert.equal(f("https://badscandal.com/api/staff/message", "cors", "POST"), false, "a message is never answered from a copy");
   assert.equal(f("https://badscandal.com/api/hq/data"), false, "the numbers always come from the network");
@@ -102,4 +104,32 @@ test("hq: a song that is out says Released (in /hq, never on the public song pag
   for (const bad of ["", null, "soon", "30/10/2026"]) assert.equal(L.releaseWords(bad, "2026-11-11"), null, "no date: nothing is claimed");
   const song = readFileSync(new URL("../touchme.html", import.meta.url), "utf8");
   assert.ok(!/Released \d|id="rel"/.test(song), "the public song page carries no Released line");
+});
+
+/* ---------- the HQ apps (12 Nov 2026): New release on Today, #releases/new, the waiting line, the app bridge ---------- */
+test("newReleaseRoute: releases/new → open, then hash becomes releases", () => {
+  assert.deepEqual(L.newReleaseRoute("#releases/new"), { open: true, replace: "#releases" });
+  /* the quick action used twice in a row: the page put #releases back, so #releases/new is a change again */
+  const after = L.newReleaseRoute("#releases/new").replace;
+  assert.deepEqual(L.newReleaseRoute(after), { open: false, replace: null });
+  assert.deepEqual(L.newReleaseRoute("#releases/new"), { open: true, replace: "#releases" });
+  for (const h of ["", "#", "#releases", "#today", "#releases/medaseubody", "#releases/news", "#messages/new", "releases/new#x", null, undefined])
+    assert.deepEqual(L.newReleaseRoute(h), { open: false, replace: null }, String(h));
+  assert.deepEqual(L.newReleaseRoute("#releases/new/"), { open: true, replace: "#releases" });
+});
+
+test("waitWords: the line under New release", () => {
+  assert.equal(L.waitWords(0), "");
+  assert.equal(L.waitWords(1), "1 thing waiting on you");
+  assert.equal(L.waitWords(4), "4 things waiting on you");
+  assert.equal(L.waitWords(null), "");
+  assert.equal(L.waitWords(-2), "");
+  assert.equal(L.waitWords("3"), "3 things waiting on you");
+});
+
+test("appRegisterBody copies only the five fields", () => {
+  const app = { platform: "ios", env: "sandbox", app: "com.badscandal.hq", version: "1.0", tz: "America/Sao_Paulo", secret: "x", extra: { a: 1 } };
+  assert.deepEqual(L.appRegisterBody(app, "ab".repeat(32)), { token: "ab".repeat(32), platform: "ios", env: "sandbox", app: "com.badscandal.hq", tz: "America/Sao_Paulo" });
+  assert.deepEqual(Object.keys(L.appRegisterBody({ platform: "mac", env: "production", app: "com.badscandal.hq.mac", tz: "Europe/Dublin" }, "cd".repeat(32))), ["token", "platform", "env", "app", "tz"]);
+  assert.deepEqual(L.appRegisterBody(null, "ab"), { token: "ab", platform: "", env: "", app: "", tz: "" });
 });

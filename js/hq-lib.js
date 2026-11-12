@@ -1081,6 +1081,25 @@
     return R("ok", "Read " + ago(now - ok) + " · " + endsWords(st.daysLeft));
   }
 
+  /* ---------- the HQ apps (12 Nov 2026) ---------- */
+  /* #releases/new opens the empty song form, then the address goes back to #releases, so the same
+     address (the iPhone's "New release", the Mac's ⌘N) works again the next time */
+  function newReleaseRoute(hash) {
+    return /^#releases\/new\/?$/.test(String(hash == null ? "" : hash)) ? { open: true, replace: "#releases" } : { open: false, replace: null };
+  }
+  /* the line under New release on Today, and the app badge's count in words */
+  function waitWords(n) {
+    n = Number(n);
+    if (!isFinite(n) || n < 1) return "";
+    n = Math.floor(n);
+    return n === 1 ? "1 thing waiting on you" : n + " things waiting on you";
+  }
+  /* what the page sends to POST /api/hq/push/register: the token + the four things the app says about itself */
+  function appRegisterBody(app, token) {
+    var a = app || {}, s = function (v) { return typeof v === "string" ? v : ""; };
+    return { token: s(token), platform: s(a.platform), env: s(a.env), app: s(a.app), tz: s(a.tz) };
+  }
+
   return { ago: ago, spMs: spMs, releaseWords: releaseWords, releaseDetail: releaseDetail, healthRows: healthRows, healthState: healthState, median: median, change: change, money: money, attention: attention, briefing: briefing,
     snapshot: snapshot, changesSince: changesSince, tiles: tiles, summaryText: summaryText, shortStep: shortStep, day: day,
     slug: slug, workerLabel: workerLabel, sortWorkers: sortWorkers, workerView: workerView, dutyWhen: dutyWhen, workerCounts: workerCounts, seenLine: seenLine, connectorLine: connectorLine,
@@ -1101,5 +1120,7 @@
     bankLine: bankLine, bankView: bankView, bankButton: bankButton, bankFlag: bankFlag, syncWords: syncWords, payStatus: payStatus, sortQuestion: sortQuestion,
     sortedLine: sortedLine, toSortWords: toSortWords, bankAttention: bankAttention, bankHealth: bankHealth, SORT_TYPES: SORT_TYPES,
     /* after the review of 12 Nov 2026 */
-    bankSays: bankSays, bankFlagAfter: bankFlagAfter, pendingAnswer: pendingAnswer, pendingQuestion: pendingQuestion, pendingSorted: pendingSorted };
+    bankSays: bankSays, bankFlagAfter: bankFlagAfter, pendingAnswer: pendingAnswer, pendingQuestion: pendingQuestion, pendingSorted: pendingSorted,
+    /* the HQ apps (12 Nov 2026) */
+    newReleaseRoute: newReleaseRoute, waitWords: waitWords, appRegisterBody: appRegisterBody };
 });
