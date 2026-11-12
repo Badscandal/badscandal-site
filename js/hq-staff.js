@@ -52,7 +52,8 @@
   /* the desk's board and Revolut's state, side by side: either may fail without the other */
   /* fresh (after a write: a sort, a Read now): never reuse an answer asked for BEFORE the write was
      saved; wait for it, then ask again */
-  function reload(fresh) { if (!fields) loadFields(); return Promise.all([reloadBoard(fresh), loadBank(fresh)]); }
+  /* the fields are asked once (they don't change); a New release waiting for them opens as soon as they land */
+  function reload(fresh) { if (!fields) loadFields().then(pendingNew, pendingNew); return Promise.all([reloadBoard(fresh), loadBank(fresh)]); }
   function reloadBoard(fresh) {
     if (loading) return fresh ? loading.then(function () { return reloadBoard(); }) : loading;
     loading = HQ.getJSON("/api/staff/board" + (HQ.sample ? "?sample=1" : "")).then(function (res) {
@@ -659,6 +660,7 @@
   function loadFields() {
     if (fields) return Promise.resolve(fields);
     if (fieldsLoading) return fieldsLoading;
+    fieldsFailed = false; /* a new try: an old failure doesn't count while it is on its way */
     fieldsLoading = HQ.getJSON("/api/staff/fields").then(function (res) {
       fieldsLoading = null;
       /* a 401 here is left to the board's own answer, which shows the login */
@@ -686,8 +688,9 @@
     if (bothFailed()) { ui.pendingNew = false; $("relMsg").textContent = NEEDS_DESK; }
   }
   /* #releases/new (the Today button, the iPhone's "New release", the Mac's ⌘N, a bookmark): open the
-     form, then put #releases back, so the same address works again next time. Runs after the shell has
-     shown the tab (its hashchange listener comes later, and it scrolls to the top). */
+     form, then put #releases back, so the same address works again next time. This listener runs BEFORE
+     the shell's (this file loads first), and the shell then shows the tab and scrolls to the top; so the
+     form opens on the next tick, after that, and its scroll wins. */
   function routeNew() {
     var r = L.newReleaseRoute(location.hash);
     if (!r.open) return;
