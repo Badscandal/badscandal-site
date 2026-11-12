@@ -1675,6 +1675,36 @@ export function slimRelease(v) {
 export const packFieldsOut = () => PACK_FIELDS.map((f) => ({ key: f.key, label: f.label, short: f.short, kind: f.kind, required: f.required, requiredWhen: f.requiredWhen, showWhen: f.showWhen, neededBy: f.neededBy, choices: f.choices, hint: f.hint, fill: f.fill, group: f.group, max: f.max }));
 export const releaseStepsOut = () => RELEASE_STEPS.map((s) => ({ key: s.key, label: s.label, owner: s.owner, days: s.days, ...(s.after ? { after: s.after } : {}) }));
 
+/* What is waiting on Luke (12 Nov 2026, the HQ apps): ONE rule for the app badge, GET
+   /api/hq/push/waiting and the push alerts (netlify/lib/push.mjs). luke_briefing keeps its own output.
+     message  an open question to Luke (needs decision / reply / action, not settled)  -> #messages/<id>
+     spotify  a song in Spotify for Artists Luke has to say something about (unknown or retry) -> #releases
+     step     his own release step (teasers) on a release the team is working on, due today or late
+   The text shows on a lock screen: it says who and what kind, NEVER the message itself (no amounts,
+   payers, account names or lyrics). Oldest first. now (optional) = the clock for the sightings' claims. */
+const ASKS = { decision: "asked you to decide something", reply: "is waiting for your reply", action: "needs you to do something" };
+export function waitingOnLuke(desk, today, now = null) {
+  const out = [];
+  for (const m of waitingOn(desk.messages || [], "Luke")) {
+    if (!ASKS[m.needs]) continue;
+    out.push({ key: "m:" + m.id, kind: "message", id: m.id, text: `${clean(m.from, 40)} ${ASKS[m.needs]}`, href: "#messages/" + m.id, at: m.at || null });
+  }
+  const sv = sightingsView(desk.sightings || null, desk.releases || [], today, now);
+  for (const x of sv.items) {
+    if (x.state !== "unknown" && x.state !== "retry") continue;
+    out.push({ key: "s:" + x.key, kind: "spotify", id: x.key, text: `${clean(x.title, 80)} is in Spotify for Artists: say what it is`, href: "#releases", at: x.firstSeen || null });
+  }
+  for (const r of desk.releases || []) {
+    if (r.status !== "scheduled") continue;
+    const v = releaseView(r, today);
+    if (!releaseActive(v)) continue;
+    const st = v.steps.find((s) => s.key === "teasers");
+    if (!st || finished(st) || !st.due || st.due > today) continue;
+    out.push({ key: "t:" + v.id, kind: "step", id: v.id, text: `${clean(v.title, 80)}: your teaser clips are ${st.due < today ? "late" : "due"}`, href: "#releases/" + v.id, at: st.due });
+  }
+  return out.sort((a, b) => (a.at == null ? 1 : b.at == null ? -1 : a.at < b.at ? -1 : a.at > b.at ? 1 : 0));
+}
+
 export function board(desk, now, hq) {
   const today = spDay(now), nowHM = spHM(now);
   const views = (desk.releases || []).map((r) => releaseView(r, today, { sightings: desk.sightings || null }));
