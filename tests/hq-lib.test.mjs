@@ -144,3 +144,14 @@ test("Today: no New release button (Luke, 12 Nov 2026: it lives in Upcoming); th
   assert.match(upcoming, /id="relNew"[^>]*>New song</, "Upcoming keeps its own New song button");
   assert.match(readFileSync(new URL("../js/hq-staff.js", import.meta.url), "utf8"), /window\.addEventListener\("hashchange", routeNew\)/, "the iPhone's hold-menu and the Mac's ⌘N still land on the form");
 });
+
+test("Growth and Fans are one page (Luke, 12 Nov 2026); #fans still lands on the Fans part", () => {
+  const page = readFileSync(new URL("../hq.html", import.meta.url), "utf8");
+  const shell = readFileSync(new URL("../js/hq-shell.js", import.meta.url), "utf8");
+  assert.doesNotMatch(page, /id="fans"|data-tab="fans"|href="#fans"/, "no Fans tab of its own");
+  const growth = page.slice(page.indexOf('<section class="card view" id="growth"'), page.indexOf("</section>", page.indexOf('id="growth-fans"')));
+  for (const id of ["growthList", "growth-fans", "fansSub", "errFans", "fanTable"]) assert.match(growth, new RegExp('id="' + id + '"'), id + " is on the Growth & Fans page");
+  assert.equal((page.match(/data-tab="growth"[^]*?<span>([^<]+)<\/span>/g) || []).map((x) => x.match(/<span>([^<]+)<\/span>$/)[1]).join(","), "Growth &amp; Fans,Growth &amp; Fans", "rail and More sheet");
+  assert.match(shell, /ALIAS = \{ fans: "growth\/fans" \}/, "old #fans links and bookmarks go to #growth/fans");
+  assert.equal(L.cmdResults(L.cmdIndex({}), "fans")[0].href, "#growth/fans");
+});

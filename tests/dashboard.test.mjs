@@ -37,8 +37,9 @@ test("/admin, /admin.html and /stats are permanent, forced redirects to /hq; rob
   const h = readFileSync(new URL("../_headers", import.meta.url), "utf8");
   assert.match(h, /^\/hq\n  X-Robots-Tag: noindex, nofollow\n  X-Frame-Options: DENY/m);
   const page = readFileSync(new URL("../hq.html", import.meta.url), "utf8");
-  for (const id of ["loginForm", "today", "songs", "ads", "pages", "growth", "fans", "releases", "money", "team"]) assert.match(page, new RegExp('id="' + id + '"'), id);
-  const order = ["today", "songs", "ads", "pages", "growth", "fans", "releases", "money", "team"].map((s) => page.indexOf('href="#' + s + '"'));
+  /* Growth and Fans are one page since 12 Nov 2026 (Luke: "growth and fans can be on the same page") */
+  for (const id of ["loginForm", "today", "songs", "ads", "pages", "growth", "growth-fans", "releases", "money", "team"]) assert.match(page, new RegExp('id="' + id + '"'), id);
+  const order = ["today", "songs", "ads", "pages", "growth", "releases", "money", "team"].map((s) => page.indexOf('href="#' + s + '"'));
   assert.deepEqual([...order].sort((a, b) => a - b), order, "the chip nav is in Luke's order");
 });
 

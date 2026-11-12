@@ -109,7 +109,7 @@
     /* v2 (11 Nov 2026, evening): the song showing in Spotify for Artists, before the pitch */
     "Showing as upcoming in Spotify for Artists": "Spotify for Artists" };
   function shortStep(label) { return SHORT[label] || String(label || "").toLowerCase(); }
-  var TAB_HREF = { Growth: "#growth", Songs: "#songs", Royalties: "#money", Fans: "#fans", Releases: "#releases", Tasks: "#team", Spend: "#money", Income: "#money" };
+  var TAB_HREF = { Growth: "#growth", Songs: "#songs", Royalties: "#money", Fans: "#growth/fans", Releases: "#releases", Tasks: "#team", Spend: "#money", Income: "#money" };
   function metaCur(ov) { return (ov && ((ov.yesterday && ov.yesterday.currency) || (ov.spend && ov.spend.currency))) || "USD"; }
 
   /* "Needs attention": every rule is here. Each item: { key, text, href }.
@@ -1106,7 +1106,7 @@
      picks the best matches for what was typed: accents and capitals don't count, a match at the start
      beats one inside, and nothing typed shows what waits on Luke first. */
   var CMD_TABS = [["today", "Today", "home briefing start"], ["songs", "Songs", "spotify streams tracks"], ["ads", "Ads", "meta cap spend cost tap"],
-    ["pages", "Pages", "visits page counter people"], ["growth", "Growth", "followers instagram tiktok"], ["fans", "Fans", "comments dms"],
+    ["pages", "Pages", "visits page counter people"], ["growth", "Growth & Fans", "followers instagram tiktok fans"], ["growth/fans", "Fans", "fans forming comments dms"],
     ["releases", "Upcoming", "releases pipeline new song"], ["money", "Money", "income revolut payments royalties"], ["team", "Team", "bots duties staff"],
     ["messages", "Messages", "inbox questions board"]];
   function cmdNorm(v) { var s = String(v == null ? "" : v); try { s = s.normalize("NFD").replace(/[\u0300-\u036f]/g, ""); } catch (e) {} return s.toLowerCase().replace(/\s+/g, " ").trim(); }
