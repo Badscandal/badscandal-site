@@ -1087,7 +1087,7 @@
   function newReleaseRoute(hash) {
     return /^#releases\/new\/?$/.test(String(hash == null ? "" : hash)) ? { open: true, replace: "#releases" } : { open: false, replace: null };
   }
-  /* the line under New release on Today, and the app badge's count in words */
+  /* the line at the top of Today, and the app badge's count in words */
   function waitWords(n) {
     n = Number(n);
     if (!isFinite(n) || n < 1) return "";

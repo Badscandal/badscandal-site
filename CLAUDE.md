@@ -1811,18 +1811,40 @@ something is waiting on him. So /hq now runs inside two small native apps, "HQ" 
 lives in the PRIVATE repo `Badscandal/badscandal-hq-app` (folder `Desktop/Claude Works/BADSCANDAL/HQ-App`),
 never here: this repo is public and published whole.** The apps load the live `https://badscandal.com/hq`
 (or a deploy preview in a test build), so every change here reaches them without a rebuild. Built on
-branch `hq-app` (spec + plan in HQ-App `docs/superpowers/`); live only on Luke's "publish".
+branch `hq-app` (spec + plan in HQ-App `docs/superpowers/`).
 
-* **New release, in one step:** Today starts with a big white "New release" (`#newRel`) that goes to
-  `#releases/new`. That address (also the iPhone's hold-the-icon "New release", the Mac's ⌘N / Dock menu /
-  menu-bar item, or a bookmark) opens Upcoming with the empty song form and the title focused, then puts
+**Where it stands (12 Nov 2026, evening):**
+* **LIVE.** PR #18 published on Luke's word ("can't you publish now"), squash-merged as `d003a25` at
+  15:42 São Paulo, after a fresh review whose 7 defects were fixed first. The same evening Luke had Today's
+  big "New release" button taken off ("it lives in the upcoming section"; PR #19): the hold-the-icon /
+  ⌘N address `#releases/new` and the waiting line stay.
+* **The apps are installed** on Luke's iPhone (by cable, development build, sandbox push) and his Mac
+  (/Applications + Dock). Their code, READMEs and the push-key helper are in HQ-App; its `README.md` is the
+  status page for the apps.
+* **Still to do, Luke with Claude:** create the Apple push key (.p8, a Sandbox key is right for these
+  installs) and run `HQ-App/helpers/1 - Put the push key on the site.command`, then send one test alert
+  (`POST /api/hq/push/test` from his logged-in HQ; `reasons` says what Apple answered). Until then nothing
+  buzzes and nothing breaks.
+* **Next, after alerts work: the HQ redesign** (Luke, 12 Nov 2026: "overhaul the dashboard and improve
+  QOL … far more modern … be creative, make it nice to look at and easy to use and understand"; "do
+  research on what's most visually pleasing" for colours). **His colour decision: badscandal.com (what
+  customers see) stays exactly as it is, in the brand's monochrome; /hq is only his, so it is free of the
+  brand rule** ("the HQ is just a way to watch everything so that can be updated fully"). His nine
+  reference images are in HQ-App `docs/references/2026-11-12-dashboard/` (frosted glass on dark grey or
+  black, bento tiles, pill navigation, a "Search or Ask" bar, soft single-line charts). Plan: a short
+  colour research pass, two or three palettes shown on a mock of Today for Luke to pick, then the redesign
+  on a branch with a preview, live only on his "publish".
+
+* **New release, in one step:** the address `#releases/new` (the iPhone's hold-the-icon "New release", the
+  Mac's ⌘N / Dock menu / menu-bar item, or a bookmark; Today's own button was removed on Luke's word, the
+  form's button is "New song" in Upcoming) opens Upcoming with the empty song form and the title focused, then puts
   `#releases` back in the address (`HQLib.newReleaseRoute`), so the same address works again next time.
   A new form already open with typing in it is scrolled to, never wiped. The form no longer waits for the
   board: it opens from `GET /api/staff/fields` (`{today, packFields, releaseSteps}`, Luke's cookie or
   Claude's key, reads no desk), as soon as either the fields or the board lands; only Save and Send wait
   for the board, with "Loading the team…" under them. "The form needs the team's desk" shows only when
   BOTH loads failed (a new try of the fields clears an old failure while it is on its way).
-* **The waiting line:** under the button, "3 things waiting on you" (`HQLib.waitWords`) -> `#messages`,
+* **The waiting line:** at the top of Today, "3 things waiting on you" (`HQLib.waitWords`) -> `#messages`,
   in the browser too. Same count as the app badge. The Messages counters still count messages only.
 * **The waiting rule, ONE function:** `S.waitingOnLuke(desk, today, now?)` in `netlify/lib/staff.mjs` ->
   `[{key, kind, id, text, href, at}]`, oldest first: `message` (open decision / reply / action to Luke;
@@ -1906,7 +1928,7 @@ branch `hq-app` (spec + plan in HQ-App `docs/superpowers/`); live only on Luke's
   `send_message`), `tests/hq-lib.test.mjs` (`newReleaseRoute`, `waitWords`, `appRegisterBody`), and after
   the review of 12 Nov 2026 `tests/hq-app.test.mjs` (js/hq-app.js in a sandbox: logged in only from HQ's
   refresh, the zone following Luke, Log out winning over late answers) and `tests/hq-newrelease.test.mjs`
-  (js/hq-staff.js in a sandbox: the form opens from the fields, an old failed try doesn't count). 305
-  tests on branch `hq-app`. Apple is never called by a test.
+  (js/hq-staff.js in a sandbox: the form opens from the fields, an old failed try doesn't count). 306
+  tests after the button came off. Apple is never called by a test.
 * **Not done here:** the site check does not mention "push not set up" (it would change the report Alfred
   reads); `send_message`'s note to bots still says Luke is not told on his phone straight away.
