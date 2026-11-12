@@ -1932,3 +1932,36 @@ branch `hq-app` (spec + plan in HQ-App `docs/superpowers/`).
   tests after the button came off. Apple is never called by a test.
 * **Not done here:** the site check does not mention "push not set up" (it would change the report Alfred
   reads); `send_message`'s note to bots still says Luke is not told on his phone straight away.
+
+## The HQ redesign, v2 look (12 Nov 2026, branch `hq-redesign`, a DRAFT until Luke says "publish")
+
+Luke: "i want you to decide just make a full overhaul i'll review later". Design (Claude's calls):
+HQ-App `docs/superpowers/specs/2026-11-12-hq-redesign-design.md`. **Only /hq changes: badscandal.com keeps
+the brand's black and white** (Luke: "the HQ is just a way to watch everything so that can be updated
+fully"). Every id, address and tab stays, so the apps, bookmarks and tests keep working.
+
+* **The look is ONE layer at the end of hq.html's `<style>`** ("HQ v2: the redesign"): it redefines the
+  tokens and restyles; the layers above it are history. Colour (Material's dark theme + Apple's dark-mode
+  guidance): blue-black base `#0B0D12`, tiles `#151925`, raised `#1D2231`, hairline `#262C3B`; text
+  `#F3F5F9` / `#AEB6C7` / `#848DA0` (16:1 / 8.6:1 / 5.3:1); ONE accent, periwinkle `--accent #A5B4FC`
+  (where you are, the main buttons, links, focus, chart lines); `--red #FF7A7A` (fill `#B4232C`) = needs
+  you, ONLY; `--amber #FBBF24` = warning (the cap at 750); `--spot #1ED760` = Spotify taps. Soft indigo,
+  violet and teal glows behind the glass; the red wash is gone. Radii 26 px tiles, pills everywhere.
+  SVG chart lines are recoloured from CSS (`.htile svg path[stroke="#B4B4B4"]`, `.spark polyline`).
+* **Today, needs-you first:** `.today-grid` = `.today-side` (the waiting line, Needs attention, Since you
+  last looked, the site check) + `.today-main` (the briefing in a glass card, Copy today's summary, the
+  headline tiles, the cap / next release / tasks / duties). From 1100 px they sit side by side (the side
+  column sticky); below that one column in glance order (`display: contents` + `order`): waiting line,
+  briefing, the full attention list, then the tiles.
+* **Navigation:** the phone bar floats as a glass pill; the desktop rail is a glass capsule; where you are
+  = a soft accent pill (no more red bar).
+* **Search (⌘K / Ctrl+K, "/", or the magnifier; "Search ⌘K" pill on desktop):** `js/hq-cmd.js` +
+  `#cmdBox`. Jumps to any tab, song (`HQ.songIndex()`, the ids Songs gives its cards), bot, release or
+  message waiting on Luke, or runs New song / Refresh / Data health / Copy today's summary. Built only from
+  what the page loaded; rules `HQLib.cmdIndex` / `cmdResults` (tests/hq-cmd.test.mjs: nothing typed =
+  what waits on you first; accents and capitals ignored; a match at the start beats one inside, then the
+  shorter name). `hq-sw.js` cache `bs-hq-v4`.
+* The login card, buttons, pills and fields follow the same glass and accent. Reduced transparency and no
+  blur support fall back to near-solid panels; nothing new animates beyond short colour transitions.
+* **Not changed yet:** the native apps' own background and offline page are still `#050505` black (a
+  rebuild in HQ-App changes them).

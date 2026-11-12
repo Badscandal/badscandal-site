@@ -1100,6 +1100,62 @@
     return { token: s(token), platform: s(a.platform), env: s(a.env), app: s(a.app), tz: s(a.tz) };
   }
 
+  /* ---------- "Search or Ask" (the HQ redesign, 12 Nov 2026) ----------
+     One bar (⌘K, or the magnifier) that jumps anywhere. cmdIndex builds the list from what the page has
+     already loaded (o.board = the staff board, o.songs = [{name, id}] as Songs draws them); cmdResults
+     picks the best matches for what was typed: accents and capitals don't count, a match at the start
+     beats one inside, and nothing typed shows what waits on Luke first. */
+  var CMD_TABS = [["today", "Today", "home briefing start"], ["songs", "Songs", "spotify streams tracks"], ["ads", "Ads", "meta cap spend cost tap"],
+    ["pages", "Pages", "visits page counter people"], ["growth", "Growth", "followers instagram tiktok"], ["fans", "Fans", "comments dms"],
+    ["releases", "Upcoming", "releases pipeline new song"], ["money", "Money", "income revolut payments royalties"], ["team", "Team", "bots duties staff"],
+    ["messages", "Messages", "inbox questions board"]];
+  function cmdNorm(v) { var s = String(v == null ? "" : v); try { s = s.normalize("NFD").replace(/[\u0300-\u036f]/g, ""); } catch (e) {} return s.toLowerCase().replace(/\s+/g, " ").trim(); }
+  function cmdIndex(o) {
+    o = o || {};
+    var out = [], seen = {}, b = o.board || null;
+    var add = function (x) { var k = x.href || "action:" + x.action; if (seen[k]) return; seen[k] = 1; out.push(x); };
+    CMD_TABS.forEach(function (t) { add({ kind: "tab", label: t[1], hint: "Tab", href: "#" + t[0], words: t[2] }); });
+    add({ kind: "action", label: "New song", hint: "Start a release", href: "#releases/new", words: "new release add" });
+    add({ kind: "action", label: "Refresh the numbers", hint: "Action", action: "refresh", words: "reload update" });
+    add({ kind: "action", label: "Data health", hint: "Action", action: "health", words: "status sheet meta key" });
+    add({ kind: "action", label: "Copy today's summary", hint: "Action", action: "copy", words: "whatsapp share" });
+    var cut = function (t, n) { t = String(t || "").replace(/\s+/g, " ").trim(); return t.length > n ? t.slice(0, n - 1) + "…" : t; };
+    var needWord = { decision: "Decide", reply: "Reply", action: "To do" };
+    if (b && b.waiting && Array.isArray(b.waiting.luke)) b.waiting.luke.forEach(function (m) {
+      add({ kind: "message", label: cut(m.from + ": " + m.text, 80), hint: needWord[m.needs] || "Waiting", href: "#messages/" + m.id, words: "waiting " + (m.needs || "") });
+    });
+    (o.songs || []).forEach(function (s) { if (s && s.name && s.id) add({ kind: "song", label: s.name, hint: "Song", href: "#songs/" + s.id, words: "song" }); });
+    if (b && Array.isArray(b.releases)) b.releases.forEach(function (r) {
+      if (!r || r.status === "cancelled" || !r.id) return;
+      add({ kind: "release", label: r.title, hint: r.status === "draft" ? "In the pipeline" : r.released ? "Out" : "Upcoming", href: "#releases/" + r.id, words: "release" });
+    });
+    if (b && Array.isArray(b.staff)) b.staff.forEach(function (w) { if (w && w.name) add({ kind: "bot", label: w.name, hint: w.role || "Bot", href: "#team/" + String(w.name).toLowerCase(), words: "bot" }); });
+    return out;
+  }
+  var CMD_BONUS = { tab: 5, action: 4, message: 3, release: 2, song: 2, bot: 1 };
+  function cmdResults(items, query, max) {
+    max = max || 8;
+    var q = cmdNorm(query);
+    if (!q) {
+      var first = (items || []).filter(function (x) { return x.kind === "message"; });
+      return first.concat((items || []).filter(function (x) { return x.kind === "tab" || x.kind === "action"; })).slice(0, max);
+    }
+    var scored = [];
+    (items || []).forEach(function (x, i) {
+      var l = cmdNorm(x.label), w = cmdNorm(x.words), score = 0;
+      if (l === q) score = 100;
+      else if (l.indexOf(q) === 0) score = 80;
+      else if ((" " + l).indexOf(" " + q) >= 0) score = 60;
+      else if (l.indexOf(q) >= 0) score = 40;
+      else if ((" " + w).indexOf(" " + q) >= 0) score = 25;
+      if (score) scored.push({ x: x, s: score, k: CMD_BONUS[x.kind] || 0, i: i });
+    });
+    /* how well it matched, then the shorter name (typing "nov" means Nova, not a long message from Nova),
+       then the kind (a tab before a bot) */
+    scored.sort(function (a, b) { return b.s - a.s || a.x.label.length - b.x.label.length || b.k - a.k || a.i - b.i; });
+    return scored.slice(0, max).map(function (y) { return y.x; });
+  }
+
   return { ago: ago, spMs: spMs, releaseWords: releaseWords, releaseDetail: releaseDetail, healthRows: healthRows, healthState: healthState, median: median, change: change, money: money, attention: attention, briefing: briefing,
     snapshot: snapshot, changesSince: changesSince, tiles: tiles, summaryText: summaryText, shortStep: shortStep, day: day,
     slug: slug, workerLabel: workerLabel, sortWorkers: sortWorkers, workerView: workerView, dutyWhen: dutyWhen, workerCounts: workerCounts, seenLine: seenLine, connectorLine: connectorLine,
@@ -1122,5 +1178,7 @@
     /* after the review of 12 Nov 2026 */
     bankSays: bankSays, bankFlagAfter: bankFlagAfter, pendingAnswer: pendingAnswer, pendingQuestion: pendingQuestion, pendingSorted: pendingSorted,
     /* the HQ apps (12 Nov 2026) */
-    newReleaseRoute: newReleaseRoute, waitWords: waitWords, appRegisterBody: appRegisterBody };
+    newReleaseRoute: newReleaseRoute, waitWords: waitWords, appRegisterBody: appRegisterBody,
+    /* the HQ redesign (12 Nov 2026): Search or Ask */
+    cmdIndex: cmdIndex, cmdResults: cmdResults };
 });

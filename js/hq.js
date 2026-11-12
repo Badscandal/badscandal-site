@@ -736,6 +736,13 @@
     /* for js/hq-staff.js (11 Nov 2026) */
     postJSON: postJSON, copyText: copyText, link: link, stack: stack, drawFeed: drawFeed, sheet: function () { return sheet; },
     sheetReleaseCard: sheetReleaseCard, releasesBroken: function () { return broken("Releases"); },
+    /* the songs as Songs names its cards (id = the card's song-<id>): for Search (js/hq-cmd.js) */
+    songIndex: function () {
+      var out = [], seen = {};
+      (ov && ov.songs ? ov.songs : []).forEach(function (p) { var k = adKey(p.title); if (k && !seen[k]) { seen[k] = 1; out.push({ name: p.title, id: p.id }); } });
+      (sheet && sheet.songs ? sheet.songs : []).forEach(function (s) { var k = adKey(s.song); if (k && !seen[k]) { seen[k] = 1; out.push({ name: s.song, id: k }); } });
+      return out;
+    },
     /* the staff desk answered (or was cleared): Today's attention, the site-check line and Data health read it */
     boardChanged: function () { if (sheet || ov) { drawBriefing(); drawSongs(); } drawDataHealth(); if (!staffBoard()) drawLive(); } };
   /* hq-pages.js is loaded with defer right after this file: start once both are in */
