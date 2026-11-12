@@ -1933,9 +1933,10 @@ branch `hq-app` (spec + plan in HQ-App `docs/superpowers/`).
 * **Not done here:** the site check does not mention "push not set up" (it would change the report Alfred
   reads); `send_message`'s note to bots still says Luke is not told on his phone straight away.
 
-## The HQ redesign, v2 look (12 Nov 2026, branch `hq-redesign`, a DRAFT until Luke says "publish")
+## The HQ redesign, v2 look (12 Nov 2026, LIVE: PR #20, `d4472d1`)
 
-Luke: "i want you to decide just make a full overhaul i'll review later". Design (Claude's calls):
+Luke: "i want you to decide just make a full overhaul i'll review later", then "deploy it" (merged the
+same evening; his review comes on the live page). Design (Claude's calls):
 HQ-App `docs/superpowers/specs/2026-11-12-hq-redesign-design.md`. **Only /hq changes: badscandal.com keeps
 the brand's black and white** (Luke: "the HQ is just a way to watch everything so that can be updated
 fully"). Every id, address and tab stays, so the apps, bookmarks and tests keep working.
