@@ -275,7 +275,7 @@ test("release pipeline: Luke's routes, the bots' four tools, refusals as sentenc
   assert.equal(made.status, 200);
   const id = made.body.release.id;
   assert.equal((await tool("luke_briefing", { bot: "Alfred" })).structuredContent.next_release, "not read", "only a draft on the desk and the sheet unread: never \"none planned\"");
-  assert.deepEqual([id, made.body.release.status, made.body.release.packTotal, made.body.release.daysToGo], ["nightdrive", "draft", 17, 30]);
+  assert.deepEqual([id, made.body.release.status, made.body.release.packTotal, made.body.release.daysToGo], ["nightdrive", "draft", 18, 30]);
   const badLink = await rel("release", { id, pack: { artwork: "http://example.com/c.jpg" } });
   assert.deepEqual([badLink.status, badLink.body.error], [400, "Artwork must be a link that starts with https:// (copy it from the browser's address bar). Nothing was saved."]);
   const early = await rel("release/send", { id });
@@ -303,7 +303,7 @@ test("release pipeline: Luke's routes, the bots' four tools, refusals as sentenc
   assert.equal((await tool("releases", { bot: "Nova" })).structuredContent.releases[0].all_steps.length, 10);
   assert.deepEqual((await tool("releases", { bot: "x" }, "Bearer " + ENV.STAFF_CLAUDE_KEY)).structuredContent.releases.map((r) => r.song).sort(), ["Hidden Draft", "Night Drive"]);
   const pack = (await tool("release_pack", { bot: "Verse", song: "night drive" })).structuredContent;
-  assert.equal(pack.pack.length, 28); assert.equal(pack.pack.find((f) => f.field === "wav").value, "https://example.com/n.wav");
+  assert.equal(pack.pack.length, 29); assert.equal(pack.pack.find((f) => f.field === "wav").value, "https://example.com/n.wav");
   assert.match(pack.pack.find((f) => f.field === "lyrics").state, /missing \(needed for "Lyrics live"\)/);
   assert.match((await tool("release_pack", { bot: "Drop", song: "Hidden Draft" })).content[0].text, /There is no release called "Hidden Draft"\. The releases on the desk are: Night Drive \(nightdrive\)\./);
   const wrongBot = await tool("release_step", { bot: "Atlas", song: "Night Drive", step: "upload", status: "done" });
@@ -330,7 +330,7 @@ test("release pipeline: Luke's routes, the bots' four tools, refusals as sentenc
   const moved = await rel("release/date", { id, date: day(37) });
   assert.deepEqual([moved.body.moved, moved.body.release.date, moved.body.release.steps[0].due], [true, day(37), done.due.slice(-11, -1)]);
   const b = await (await api("board", { headers: { cookie } })).json();
-  assert.equal(b.packFields.length, 28); assert.equal(b.releaseSteps.length, 10); assert.ok(Array.isArray(b.answered));
+  assert.equal(b.packFields.length, 29); assert.equal(b.releaseSteps.length, 10); assert.ok(Array.isArray(b.answered));
   assert.equal(b.releases[0].id, "nightdrive"); assert.deepEqual([b.releases[0].slim, b.releases[0].log], [true, []]); assert.equal(b.staff.find((w) => w.name === "Drop").releaseSteps[0].key, "approved");
   assert.ok(b.messages.some((m) => m.to === "all" && m.from === "HQ" && /^New release from Luke: Night Drive/.test(m.text) && m.seen === null));
   const gone = await rel("release/cancel", { id }, claude);
@@ -345,7 +345,7 @@ test("release pipeline: Luke's routes, the bots' four tools, refusals as sentenc
   globalThis.__asked.length = 0;
   for (const p of ["release", "release/send", "release/date", "release/cancel", "release/step"]) assert.deepEqual((await rel(p + "?sample=1", { id: "x", title: "y" })).body, { ok: true, sample: true }, p);
   const sb = await (await api("board?sample=1", { headers: { cookie } })).json();
-  assert.equal(sb.releases.length, 4); assert.equal(sb.answered.length, 2); assert.equal(sb.packFields.length, 28);
+  assert.equal(sb.releases.length, 4); assert.equal(sb.answered.length, 2); assert.equal(sb.packFields.length, 29);
   assert.deepEqual([sb.sightings.items.length, sb.sightings.unknown], [2, 1]);
   const sw = await (await api("release?id=touchme&sample=1", { headers: { cookie } })).json();
   assert.deepEqual([sw.sample, sw.release.id, /^\(sample\)/.test(sw.release.pack.lyrics)], [true, "touchme", true]);

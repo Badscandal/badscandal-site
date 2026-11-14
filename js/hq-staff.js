@@ -36,6 +36,8 @@
       landed: {}, tsent: {},
       /* the release pipeline: busy / error / the inline question per card, notes, open disclosures, the form */
       rel: { busy: "", err: {}, ask: null, note: {}, open: {}, fold: {}, full: {}, loading: {} }, form: null,
+      /* planning (14 Nov 2026): the month shown and the day picked on the calendar */
+      cal: { ym: "", sel: "" },
       /* In Spotify for Artists (v2): the question being answered, the label typed, what was answered */
       spot: { k: "", answer: "", label: "", busy: "", err: {}, done: {} },
       /* Revolut (11 Nov 2026): the tile's button in flight, its inline "Disconnect?", the last error and
@@ -814,12 +816,25 @@
   function dealHtml(v) { var d = L.dealWords(v.deal); return '<p class="rdeal' + (d.known ? "" : " no") + '">' + esc(d.known ? d.text : "Whose release it is: not filled in yet") + "</p>"; }
   /* In the pipeline: a draft Luke is still filling. Title, its day, whose it is, what is still missing,
      "Finish and send". A draft whose day has passed says that sending records it as already out. */
+  /* a draft's planned day, judged by the team's rule (14 Nov 2026): too close, too near another song, not a
+     Friday; with something wrong (or no day yet), the better days, one tap away */
+  function planHtml(v, today) {
+    var advice = L.planAdvice(v.date, today, board.releases, { except: v.id });
+    var better = !v.date || advice.some(function (a) { return a.bad; }) ? L.suggestDates(today, board.releases, { except: v.id, n: 3 }) : [];
+    return advice.map(function (a) { return '<p class="dnote' + (a.bad ? " bad" : " q") + '">' + esc(a.text) + "</p>"; }).join("") +
+      (better.length ? '<div class="pchips"><span class="pchips-l">' + (v.date ? "Better days:" : "Suggested days:") + "</span>" + better.map(function (x) {
+        return '<button class="pchip' + (x.best ? " best" : "") + '" type="button" data-plan="use" data-id="' + esc(v.id) + '" data-date="' + esc(x.date) + '">' + esc(x.words) + "<small>" + esc(x.weeks + " weeks" + (x.note ? " · holidays" : "")) + "</small></button>";
+      }).join("") + "</div>" : "");
+  }
   function pipeCard(v) {
     var today = board.today, off = HQ.sample ? " disabled" : "", asking = ui.rel.ask && ui.rel.ask.id === v.id, past = !!v.date && v.date < today;
     return '<article class="tile relcard" id="releases-' + esc(safe(v.id)) + '"><div class="bhead"><div><h3>' + esc(v.title) + "</h3>" +
       '<p class="rwhen">' + esc(L.releaseWhen(v.date, today, true)) + "</p>" + dealHtml(v) + "</div>" + '<span class="pill">Draft</span></div>' +
       (ui.rel.note[v.id] ? '<p class="rdone" role="status">' + esc(ui.rel.note[v.id]) + "</p>" : "") +
-      (past ? '<p class="rwhere">' + esc(L.whereLine(v)) + "</p>" : "") + packHtml(v) +
+      (past ? '<p class="rwhere">' + esc(L.whereLine(v)) + "</p>" : "") +
+      /* its planned day, judged by the team's rule (14 Nov 2026): too close, too near another song, not a Friday */
+      planHtml(v, today) +
+      packHtml(v) +
       (asking ? relAsk(v) : '<div class="racts"><button class="sendbtn" type="button" data-rel="edit" data-id="' + esc(v.id) + '">Finish and send</button>' +
         '<button class="copybtn" type="button" data-rel="cancel" data-id="' + esc(v.id) + '"' + off + ">Cancel the draft</button></div>") +
       '<p class="ferr" role="alert">' + esc(ui.rel.err[v.id] || "") + "</p>" + relPack(v) + "</article>";
@@ -845,6 +860,51 @@
       (asking ? relAsk(v) : '<div class="racts">' + acts.join("") + "</div>") +
       '<p class="ferr" role="alert">' + esc(ui.rel.err[v.id] || "") + "</p>" + relPack(v) + "</article>";
   }
+  /* ---------- Planning (14 Nov 2026, Luke: "a calender with team reccomendations … scheduled correctly well
+     in advance … when i upload it should suggest dates") ----------
+     At the top of Upcoming: the next good release days (HQLib.suggestDates; a draft with no day yet, like
+     Survivors, gets "Use Fri 18 Dec for Survivors"), the calendar (HQLib.calendarMonth: release days and
+     every open step on its day; tap a day for its list), and how long things take (HQLib.PLAN_TIMELINE). */
+  function drawPlan() {
+    var el = $("relPlan");
+    if (!el || !board || !Array.isArray(board.releases)) return;
+    var today = board.today, rels = board.releases;
+    var sugg = L.suggestDates(today, rels);
+    var noDay = rels.filter(function (v) { return v.status === "draft" && !v.date; });
+    var nextHtml = '<section class="tile plan-next"><h3 class="lblh">Next good release days</h3><p class="secsub">Fridays at least ' + (L.PLAN_RULE.recommend / 7) + " weeks out and 2 weeks clear of every other song.</p>" +
+      '<div class="pchips">' + sugg.map(function (x) {
+        return '<button class="pchip' + (x.best ? " best" : "") + '" type="button" data-plan="new" data-date="' + esc(x.date) + '">' + esc(x.words) + "<small>" + esc(x.weeks + " weeks" + (x.note ? " · holidays" : "")) + "</small></button>";
+      }).join("") + "</div>" +
+      noDay.map(function (v) {
+        var s = L.suggestDates(today, rels, { except: v.id, n: 1 })[0];
+        return s ? '<p class="plan-draft"><b>' + esc(v.title) + "</b> has no release day yet. " + '<button class="linkbtn" type="button" data-plan="use" data-id="' + esc(v.id) + '" data-date="' + esc(s.date) + '">Use ' + esc(s.words) + " for " + esc(v.title) + "</button></p>" : "";
+      }).join("") + (HQ.sample ? '<p class="fok">Sample: the form opens, nothing is saved.</p>' : "") + "</section>";
+    var m = L.calendarMonth(ui.cal.ym || today.slice(0, 7), rels, today);
+    var sel = ui.cal.sel && m.weeks.some(function (w) { return w.some(function (c) { return c.date === ui.cal.sel; }); }) ? ui.cal.sel : "";
+    var cell = function (c) {
+      var rel = c.items.filter(function (x) { return x.kind === "release"; }), steps = c.items.filter(function (x) { return x.kind === "step"; });
+      var late = steps.some(function (x) { return x.late; });
+      return '<button class="cday' + (c.inMonth ? "" : " out") + (c.today ? " now" : "") + (c.date === sel ? " sel" : "") + (rel.length ? " rel" : "") + '" type="button" data-cal="' + esc(c.date) + '" aria-label="' +
+        esc(L.day(c.date) + (rel.length ? ", release: " + rel.map(function (x) { return x.title; }).join(", ") : "") + (steps.length ? ", " + steps.length + " step" + (steps.length === 1 ? "" : "s") : "")) + '">' +
+        '<span class="cn">' + c.day + "</span>" +
+        rel.map(function (x) { return '<span class="crel' + (x.draft ? " draft" : "") + '">' + esc(x.title) + "</span>"; }).join("") +
+        (steps.length ? '<span class="cdots' + (late ? " late" : "") + '">' + steps.slice(0, 4).map(function () { return "<i></i>"; }).join("") + (steps.length > 4 ? "+" : "") + "</span>" : "") + "</button>";
+    };
+    var selCell = sel ? m.weeks.reduce(function (a, w) { return a.concat(w); }, []).filter(function (c) { return c.date === sel; })[0] : null;
+    var dayList = selCell ? '<div class="cal-day"><h4>' + esc(L.day(sel)) + "</h4>" + (selCell.items.length ? '<ul class="cal-items">' + selCell.items.map(function (x) {
+        return x.kind === "release" ? '<li class="r"><a href="#releases/' + esc(safe(x.id)) + '"><b>' + esc(x.title) + "</b> comes out" + (x.draft ? " (draft: not sent yet)" : "") + "</a></li>"
+          : '<li class="' + (x.late ? "late" : "") + '"><a href="#releases/' + esc(safe(x.id)) + '"><b>' + esc(x.owner) + "</b> · " + esc(x.label) + " · " + esc(x.title) + (x.late ? " · late" : "") + "</a></li>";
+      }).join("") + "</ul>" : '<p class="empty2">Nothing due that day.</p>') + "</div>" : '<p class="cal-hint">Tap a day to see what is due.</p>';
+    var calHtml = '<section class="tile plan-cal" aria-labelledby="calTitle"><div class="cal-head"><button class="iconbtn" type="button" data-calnav="' + esc(m.prev) + '" aria-label="Previous month">‹</button>' +
+      '<h3 id="calTitle">' + esc(m.title) + '</h3><button class="iconbtn" type="button" data-calnav="' + esc(m.next) + '" aria-label="Next month">›</button></div>' +
+      '<div class="cal-grid" role="grid"><span class="cw">Mon</span><span class="cw">Tue</span><span class="cw">Wed</span><span class="cw">Thu</span><span class="cw">Fri</span><span class="cw">Sat</span><span class="cw">Sun</span>' +
+      m.weeks.map(function (w) { return w.map(cell).join(""); }).join("") + "</div>" +
+      '<p class="cal-key"><span class="k rel">Release day</span><span class="k dot">Team steps due</span><span class="k late">Late</span></p>' + dayList + "</section>";
+    var timeHtml = '<details class="tile plan-time"' + (ui.rel.fold.timeline ? " open" : "") + ' data-fold="timeline"><summary>How long things take, and the team\'s rule</summary><ul class="tl">' +
+      L.PLAN_TIMELINE.map(function (x) { return "<li><b>" + esc(x.what) + "</b><span>" + esc(x.time) + "</span></li>"; }).join("") + "</ul>" +
+      '<p class="tl-rule"><b>The team\'s rule:</b> Drop sends a song to RouteNote 4 weeks before its release day (3 weeks at the very least), songs come out on Fridays, and there are 2 weeks between two songs: a week as Out now, then a week as the next one. Atlas pitches the day the song shows in Spotify for Artists.</p></details>';
+    el.innerHTML = '<div class="plangrid">' + nextHtml + calHtml + "</div>" + timeHtml;
+  }
   /* -> true when the desk drew the tab (js/hq.js draws the sheet's list when it didn't) */
   function drawReleases() {
     if (!board || !Array.isArray(board.releases)) return false;
@@ -869,6 +929,7 @@
       (lists.cancelled.length ? '<details class="relfold" data-fold="cancelled"' + (ui.rel.fold.cancelled ? " open" : "") + "><summary>Cancelled (" + lists.cancelled.length + ")</summary>" + lists.cancelled.map(function (v) {
         return '<p class="rcanc"><b>' + esc(v.title) + "</b> · " + esc(v.date ? L.day(v.date) : "no release day") + "</p>"; }).join("") + "</details>" : "");
     drawSpotify();
+    drawPlan();
     if (fk) { var el = $("releases").querySelector('[data-reldate="' + fk.replace(/[^a-z0-9]/gi, "") + '"]'); if (el) el.focus(); }
     return true;
   }
@@ -1020,6 +1081,24 @@
       write("release/step", { id: id, step: key, status: want, note: st.status === "blocked" ? "" : st.note || "", link: "" }).then(function (r) { relDone(r, id); });
     }
   });
+  $("releases").addEventListener("click", function (ev) {
+    var b = ev.target.closest && ev.target.closest("[data-calnav],[data-cal],[data-plan]");
+    if (!b || !board) return;
+    var nav = b.getAttribute("data-calnav"), d = b.getAttribute("data-cal"), plan = b.getAttribute("data-plan"), date = b.getAttribute("data-date") || "";
+    if (nav) { ui.cal.ym = nav; ui.cal.sel = ""; drawPlan(); var again = $("relPlan").querySelector('[data-calnav="' + nav.replace(/[^0-9-]/g, "") + '"]') || $("calTitle"); if (again && again.focus) again.focus(); return; }
+    if (d) { ui.cal.sel = ui.cal.sel === d ? "" : d; drawPlan(); var c = $("relPlan").querySelector('[data-cal="' + d.replace(/[^0-9-]/g, "") + '"]'); if (c) c.focus(); return; }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return;
+    if (plan === "new") {
+      /* a new song on that day; a new form already open keeps what was typed and takes the day */
+      if (ui.form && !ui.form.id) { ui.form.date = date; drawForm(); $("relForm").scrollIntoView({ block: "start" }); return; }
+      openForm("", { date: date }); return;
+    }
+    if (plan === "use") {
+      var id = b.getAttribute("data-id");
+      var go = function () { openForm(id); if (ui.form && ui.form.id === id && ui.form.status !== "scheduled") { ui.form.date = date; drawForm(); keepForm(); } };
+      if (relById[id] && fullOf(relById[id])) go(); else { b.disabled = true; b.textContent = "Opening…"; loadFull(id).then(function (f) { if (f) go(); else drawPlan(); }); }
+    }
+  });
   $("releases").addEventListener("change", function (ev) {
     var id = ev.target.getAttribute && ev.target.getAttribute("data-reldate");
     if (!id || !ui.rel.ask || ui.rel.ask.id !== id) return;
@@ -1088,8 +1167,16 @@
   function dayNoteHtml() {
     var F = ui.form;
     if (F.status === "scheduled") return '<p class="dnote q">' + (F.date && F.date <= formBase().today ? "Out already." : "Already with the team. To move it, use Change the date on its card: that moves every open step and tells the team.") + "</p>";
-    var dn = L.releaseDayNote(F.date, formBase().today);
-    return (dn.line ? '<p class="dnote' + (dn.bad ? " bad" : "") + '">' + esc(dn.line) + "</p>" : "") + dn.notes.map(function (n) { return '<p class="dnote' + (dn.bad ? " bad" : " q") + '">' + esc(n) + "</p>"; }).join("");
+    var today = formBase().today, dn = L.releaseDayNote(F.date, today);
+    /* a day ahead: the team's advice (planAdvice: too close, another song too near, not a Friday,
+       the holidays) instead of the older notes; a day gone: "already out" as before */
+    var advice = dn.out || dn.bad ? dn.notes.map(function (n) { return { bad: dn.bad, text: n }; }) : L.planAdvice(F.date, today, board ? board.releases : [], { except: F.id });
+    var sugg = board ? L.suggestDates(today, board.releases, { except: F.id }) : [];
+    return (dn.line ? '<p class="dnote' + (dn.bad ? " bad" : "") + '">' + esc(dn.line) + "</p>" : "") +
+      advice.map(function (a) { return '<p class="dnote' + (a.bad ? " bad" : " q") + '">' + esc(a.text) + "</p>"; }).join("") +
+      (sugg.length && (!F.date || advice.some(function (a) { return a.bad; })) ? '<div class="pchips"><span class="pchips-l">' + (F.date ? "Better days:" : "Suggested days:") + "</span>" + sugg.map(function (x) {
+        return '<button class="pchip' + (x.best ? " best" : "") + '" type="button" data-rf-act="pickdate" data-date="' + esc(x.date) + '">' + esc(x.words) + "<small>" + esc(x.weeks + " weeks" + (x.note ? " · holidays" : "")) + "</small></button>";
+      }).join("") + "</div>" : "");
   }
   function drawForm() {
     var F = ui.form;
@@ -1225,6 +1312,17 @@
     var b = ev.target.closest && ev.target.closest("[data-rf-act]");
     if (!b || !ui.form) return;
     var act = b.getAttribute("data-rf-act");
+    if (act === "pickdate") {
+      /* a suggested day (14 Nov 2026): set it, as if typed in the date field */
+      var F = ui.form, d = b.getAttribute("data-date") || "";
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(d) || F.status === "scheduled") return;
+      F.date = d; var inp = $("rf-date"); if (inp) inp.value = d;
+      if (F.miss.indexOf("date") >= 0) { F.miss = F.miss.filter(function (x) { return x !== "date"; }); markMiss(); }
+      if (F.ask) { F.ask = false; drawFoot(); }
+      $("rfDay").innerHTML = dayNoteHtml(); keepForm();
+      if (inp) inp.focus({ preventScroll: true });
+      return;
+    }
     if (act === "later") { ui.form.later = true; ui.form.open.later = true; drawForm(); var i = $("relForm").querySelector('details[data-fg="later"] input'); if (i) i.focus(); }
     else if (act === "close") { var id = ui.form.id; closeForm(true); if (id) jumpTo(id); else $("relNew").focus(); }
     else if (act === "save") saveForm(false);

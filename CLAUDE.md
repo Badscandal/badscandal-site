@@ -2000,3 +2000,45 @@ Luke: "that label part should only appear to write if we don't check self releas
 WITH_LABEL`, like `label` and `split`: none of the four shows for a self-release or before the kind is
 picked. `distributorOf()` treats a self-release as RouteNote whatever is stored, so a label's name typed
 before switching to self-release can't make it look delivered by a label (tested in tests/hq-staff.test.mjs).
+
+## Planning releases: the calendar, the team's rule, suggested days (14 Nov 2026)
+
+Luke: "a calender with team reccomendations for next release timelines on how long it takes for things to
+get to the store from routenote etc, and delays issues etc … scheduled correctly well in advance drop should
+handle that area … when i upload it should suggest dates", plus who does what (below); "yes do everything …
+build it and piblish it don't forget about suvivors".
+
+* **The team's rule** (from RouteNote's and Spotify's own guidance: RouteNote checks a release in 2–3 working
+  days, Spotify and Apple have it 2–5 days after approval, other stores up to 2–4 weeks, the pitch must be in
+  7+ days before release and 2+ weeks is better, the holidays are slower): **send to RouteNote 4 weeks
+  before the release day (3 at the very least), songs come out on Fridays, 2 weeks between two songs** (a
+  week as Out now, a week as the next one). `HQLib.PLAN_RULE` {recommend 28, minimum 21, gap 14} and
+  `PLAN_TIMELINE` (the "How long things take" list). Holiday weeks = 15 Dec to 8 Jan.
+* **Upcoming opens on the plan** (`#relPlan`, `drawPlan()` in js/hq-staff.js): "Next good release days"
+  (`HQLib.suggestDates(today, releases, {except, n})`: Fridays from today + 28, none within 14 days of a song
+  that holds a day (sent or drafted, not cancelled); tapping one opens a new song on that day); the
+  calendar (`HQLib.calendarMonth(ym, releases, today)`: Monday-first weeks, release days (drafts in italics)
+  and every open step on its due day, late ones red; a waiting step has no day; tap a day for its list,
+  each line linking to its release); "How long things take, and the team's rule" folded.
+* **Suggested days where they're needed** (`HQLib.planAdvice(date, today, releases, {except})`: too close
+  (under 21 days: red; under 28: a note), another song within 2 weeks (red), not a Friday (with the
+  nearest), holiday weeks): under the form's release day (with "Suggested days" / "Better days" to tap) and
+  on each draft's card (in the made-up sample, Survivors' Mon 14 Dec is 6 days after Slow Burn and not a
+  Friday, so its card offers better days; a tap opens its form with that day). A draft with no day yet gets
+  "<song> has no release day yet. Use Fri … for <song>" in the plan.
+* **Who does what** (Luke's words, in the connector's `INSTRUCTIONS`, which every bot gets on connecting,
+  and in their my_day steps): Drop submits everything to RouteNote and keeps the schedule; Atlas sends the
+  pitch the SAME DAY the song shows in Spotify for Artists and improves Luke's words first; Laura uploads the
+  **visualiser** (new pack field `visualiser`, Luke's link, needed by her `video` step) and writes its
+  description like the other visualisers; Webmaster makes each song page in release order, a week after the
+  previous song's release day (its Out now week), and the home page switches 7 days after a release; Verse
+  the lyrics.
+* **Server rules (netlify/lib/staff.mjs):** `freeWaiting` makes a freed step (the pitch) due the day it is
+  freed; `pageDue(date, prevDate, today)` + `prevReleaseDate(list, id, date)`: the page step is due a week
+  after the previous release, never later than the day before its own, never in the past; send, move and
+  cancel re-order every page step not started yet (`reorderPages`). `releaseView().missing`: after the
+  required fields, the most urgent first (a waiting step's fields last); a field whose step is finished is
+  no longer missing. The pack has 29 fields now ("N of 18 filled").
+* **Not done here:** the bots' written guide (private repo badscandal-hq `staff-desk/GUIDE.md`, re-seeded with
+  `PUT /api/staff/seed` and Claude's key) still has the old wording: update it there. The home card's switch
+  (Out now for 7 days, then the next song) is Webmaster's job in listen.json; the public page is unchanged.
