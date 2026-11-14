@@ -117,13 +117,17 @@
       : '<div class="conn-acts"><button class="copybtn" type="button" data-key="ask"' + off() + ">" + (c.on ? "Switch the bots' key off" : "Switch it back on") + "</button>" +
         (HQ.sample ? '<span class="fok">Sample: the switch does nothing here.</span>' : "") + "</div>";
     el.hidden = false;
+    if ($("connFold")) { $("connFold").hidden = false; $("connState").textContent = c.on ? "on" : "OFF"; $("connState").className = c.on ? "" : "off"; if (!c.on) $("connFold").open = true; }
     el.innerHTML = '<p class="conn-line"><b class="' + (c.on ? "" : "off") + '">' + esc(c.head) + "</b> · " + esc(c.rest) + "</p>" +
       c.notes.map(function (n) { return '<p class="conn-note">' + esc(n) + "</p>"; }).join("") + ask + '<p class="ferr" role="alert">' + esc(ui.keyErr) + "</p>";
   }
-  var shown = []; /* the cards as drawn (for "Copy message for Nova") */
-  function workerCard(w) {
-    var id = L.slug(w.name), bad = w.state === "blocked" || w.state === "late", now = Date.now();
-    var lastMs = w.last ? L.spMs(w.last.at) : null;
+  var shown = []; /* the bots as drawn (for "Copy message for Nova") */
+  /* Team, simpler (13 Nov 2026, Luke: "the team section … making more sense being simpler and better"):
+     the bots in three groups (HQLib.teamGroups). Stuck ones get a short card saying only what is wrong
+     (botProblems) and "Copy message for Nova"; everyone else is one line (botNext). Every card and line
+     opens to everything about that bot (botDetail). Deep link #team/<bot> opens it. */
+  function botDetail(w) {
+    var now = Date.now(), lastMs = w.last ? L.spMs(w.last.at) : null;
     var counts = L.workerCounts(w), sched = (w.schedule || []).filter(function (x) { return x && x.what; });
     var why = [];
     if (w.why) why.push("<p>" + esc(w.why) + "</p>");
@@ -132,10 +136,7 @@
     if (w.writes) why.push("<p><b>Writes</b>" + esc(w.writes) + "</p>");
     if (w.access) why.push("<p><b>Access</b>" + esc(w.access) + "</p>");
     if (w.blockers) why.push("<p><b>Known blockers</b>" + esc(w.blockers) + "</p>");
-    if (!why.length) why.push("<p>Nothing is written down for this bot yet.</p>");
-    return '<article class="tile botcard" id="team-' + esc(id) + '"><div class="bhead"><div><h3>' + esc(w.name) + "</h3>" + (w.role ? '<p class="brole">' + esc(w.role) + "</p>" : "") +
-      '</div><span class="bstate ' + w.state + '">' + esc(L.workerLabel(w.state)) + "</span></div>" +
-      ((w.duties || []).length ? '<ul class="bduties">' + w.duties.map(function (d) {
+    return ((w.duties || []).length ? '<p class="bsub">Today\'s duties</p><ul class="bduties">' + w.duties.map(function (d) {
         return '<li class="' + (d.status === "blocked" || d.late ? "bad" : d.status === "done" ? "done" : "") + '"><span class="bt">' + esc(d.task) + (d.blocker ? "<small>Blocked: " + esc(d.blocker) + "</small>" : "") +
           '</span><span class="bw">' + esc(L.dutyWhen(d)) + "</span></li>"; }).join("") + "</ul>" : "") +
       relSteps(w) +
@@ -143,8 +144,23 @@
       (w.card && w.card.workingOn ? '<p class="bline"><b>Working on</b><span>' + esc(w.card.workingOn) + "</span></p>" : "") +
       (w.card && w.card.needs ? '<p class="bline need"><b>Needs</b><span>' + esc(w.card.needs) + "</span></p>" : "") +
       '<p class="bmeta">' + (counts ? "<span>" + esc(counts) + "</span>" : "") + "<span>" + esc(L.seenLine(w, now)) + "</span></p>" +
-      (bad ? '<button class="copybtn" type="button" data-nova="' + esc(id) + '">Copy message for Nova</button>' : "") +
-      '<details class="bwhy" data-why="' + esc(id) + '"' + (ui.why[id] ? " open" : "") + "><summary>Why this bot</summary>" + why.join("") + "</details></article>";
+      '<div class="bwhytext"><p class="bsub">Why this bot</p>' + (why.length ? why.join("") : "<p>Nothing is written down for this bot yet.</p>") + "</div>";
+  }
+  var head = function (w) {
+    return '<span class="bn"><b>' + esc(w.name) + "</b>" + (w.role ? "<small>" + esc(w.role) + "</small>" : "") + "</span>";
+  };
+  function stuckCard(w) {
+    var id = L.slug(w.name), probs = L.botProblems(w, board.today);
+    return '<article class="tile stuckcard" id="team-' + esc(id) + '"><div class="bhead">' + head(w) + '<span class="bstate ' + w.state + '">' + esc(L.workerLabel(w.state)) + "</span></div>" +
+      (probs.length ? '<ul class="bprobs">' + probs.map(function (p) { return "<li><b>" + esc(p.what) + "</b><span>" + esc(p.why) + "</span></li>"; }).join("") + "</ul>" : "") +
+      (w.card && w.card.needs ? '<p class="bneed"><b>Needs</b>' + esc(w.card.needs) + "</p>" : "") +
+      '<button class="copybtn" type="button" data-nova="' + esc(id) + '">Copy message for Nova</button>' +
+      '<details class="bmore" data-why="' + esc(id) + '"' + (ui.why[id] ? " open" : "") + "><summary>Everything about " + esc(w.name) + "</summary>" + botDetail(w) + "</details></article>";
+  }
+  function botRow(w) {
+    var id = L.slug(w.name);
+    return '<details class="botrow" id="team-' + esc(id) + '" data-why="' + esc(id) + '"' + (ui.why[id] ? " open" : "") + '><summary><span class="bdot ' + w.state + '" aria-hidden="true"></span>' + head(w) +
+      '<span class="bl">' + esc(L.botNext(w, board.today)) + '</span><span class="bstate ' + w.state + '">' + esc(L.workerLabel(w.state)) + '</span></summary><div class="browbody">' + botDetail(w) + "</div></details>";
   }
   /* a bot's open release steps, under its duties: the same words as the release card */
   function relSteps(w) {
@@ -164,7 +180,16 @@
     $("liveNote").hidden = board.hqRead !== false;
     $("liveNote").textContent = "The sheet isn't being read right now, so today's duties and open tasks are missing from these cards.";
     shown = L.sortWorkers((board.staff || []).map(function (w) { return L.workerView(w, sheet, board.today); }));
-    $("dutyList").innerHTML = shown.length ? shown.map(workerCard).join("") : '<p class="empty">No bots are on the list yet.</p>';
+    var g = L.teamGroups(shown), c = L.teamCounts(shown);
+    $("teamSum").innerHTML = !shown.length ? "" :
+      '<div class="ts' + (c.stuck ? " bad" : "") + '"><b>' + c.stuck + "</b><span>Stuck</span></div>" +
+      '<div class="ts' + (c.quiet ? " warn" : "") + '"><b>' + c.quiet + "</b><span>Haven't checked in</span></div>" +
+      '<div class="ts ok"><b>' + c.onTrack + "</b><span>On track</span></div>";
+    $("dutyList").innerHTML = !shown.length ? '<p class="empty">No bots are on the list yet.</p>' :
+      (g.stuck.length ? '<h3 class="lblh">Stuck</h3><p class="secsub">Only what is wrong. Copy the message for Nova, or open a card for everything.</p><div class="botgrid">' + g.stuck.map(stuckCard).join("") + "</div>"
+        : '<p class="allgood">Nobody is stuck right now.</p>') +
+      (g.quiet.length ? '<h3 class="lblh">Haven\'t checked in today</h3><div class="botlist">' + g.quiet.map(botRow).join("") + "</div>" : "") +
+      (g.onTrack.length ? '<h3 class="lblh">On track</h3><div class="botlist">' + g.onTrack.map(botRow).join("") + "</div>" : "");
     HQ.drawFeed(L.liveFeed(board, sheet), board.today);
     return true;
   }

@@ -1973,3 +1973,22 @@ fully"). Every id, address and tab stays, so the apps, bookmarks and tests keep 
   or bookmark there; `TAB_HREF.Fans` and Search's "Fans" go to `#growth/fans`. Nine tabs now (the tests
   that pinned ten say so). Also: a deep link opened from scratch jumps again once HQ's first load is in
   (it used to be pushed out of view by the numbers loading above it).
+
+## Team, simpler (13 Nov 2026)
+
+Luke: "the team section … making more sense being simpler and better" (then "yes": Claude decides).
+* **Three numbers on top** (`#teamSum`): Stuck (blocked or late; red), Haven't checked in (quiet; amber),
+  On track (green). Rules `HQLib.teamGroups` / `teamCounts` (tests/hq-team.test.mjs).
+* **Stuck** bots get a short card (`.stuckcard`) with ONLY what is wrong (`HQLib.botProblems`: blocked duties
+  and steps first, then late ones, "Late (due 00:30)" / "<song> · late by 2 days"; a waiting step is never a
+  problem; a blocked bot with nothing listed shows its own last word), "Needs …" from its card, "Copy
+  message for Nova", and "Everything about <bot>" folded. Nobody stuck -> "Nobody is stuck right now."
+* **Everyone else** is ONE line (`.botrow`, a `<details>`): dot, name, job, `HQLib.botNext` ("Next: Lyrics
+  live · Me Dá Seu Body · Sun 15 Nov", "Working on: …", "All done today", "No update today", "Nothing to do
+  today"), the state pill; it opens to `botDetail()` (duties, release steps, latest update, working on,
+  needs, counts, connector last used, why this bot). Deep link `#team/<bot>` opens the line (js/hq-shell.js
+  opens a `<details>` it jumps to). The "Why this bot" text sits inside the detail (no nested folds).
+* **The bots' connector switch** moved to the bottom, folded (`#connFold`, "Bots' connector: on"); it opens
+  by itself when the key is OFF. Latest updates, Open tasks and Tasks per person stay as they were.
+* Fixed: a long step state ("waiting: the song is not in Spotify for Artists yet") squeezed the step's name
+  to one letter per line; it now wraps under it.

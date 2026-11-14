@@ -653,7 +653,7 @@
   function drawLive() {
     if (window.HQStaff && window.HQStaff.drawWorkers()) return; /* the staff desk drew it */
     var L = window.HQLib;
-    $("connCard").hidden = true;
+    $("connCard").hidden = true; if ($("connFold")) $("connFold").hidden = true; if ($("teamSum")) $("teamSum").innerHTML = "";
     if (!sheet) {
       $("liveNote").hidden = true;
       $("dutyList").innerHTML = '<p class="empty">This fills in once the sheet is connected.</p>';
