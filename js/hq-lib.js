@@ -1100,6 +1100,53 @@
     return { token: s(token), platform: s(a.platform), env: s(a.env), app: s(a.app), tz: s(a.tz) };
   }
 
+  /* ---------- Team, simpler (13 Nov 2026, Luke: "the team section … making more sense being simpler and
+     better") ----------
+     Three groups instead of twelve equal cards: STUCK (blocked or late: a short card each, saying only
+     what is wrong), HAVEN'T CHECKED IN (quiet: one line each) and ON TRACK (one line each). Each line
+     opens to the full detail. The views are workerView()s, already in sortWorkers() order. */
+  function teamGroups(views) {
+    var g = { stuck: [], quiet: [], onTrack: [] };
+    (views || []).forEach(function (w) { (w.state === "blocked" || w.state === "late" ? g.stuck : w.state === "quiet" ? g.quiet : g.onTrack).push(w); });
+    return g;
+  }
+  function teamCounts(views) {
+    var g = teamGroups(views);
+    return { stuck: g.stuck.length, quiet: g.quiet.length, onTrack: g.onTrack.length, total: (views || []).length };
+  }
+  /* what is wrong with a stuck bot: blocked things first, then late ones; a waiting step is never a
+     problem (it waits for Spotify for Artists, not for the bot) -> [{what, why}] */
+  function botProblems(w, today) {
+    var blocked = [], late = [];
+    (w && w.duties || []).forEach(function (d) {
+      if (d.status === "blocked") blocked.push({ what: d.task, why: "Blocked" + (d.blocker ? ": " + d.blocker : "") });
+      else if (d.late && d.status !== "done") late.push({ what: d.task, why: "Late" + (d.due ? " (due " + d.due + ")" : "") });
+    });
+    (w && w.releaseSteps || []).forEach(function (st) {
+      var ss = stepState(st, today);
+      if (st.status === "blocked") blocked.push({ what: st.label, why: (st.title ? st.title + " · " : "") + "blocked" + (st.note ? ": " + st.note : "") });
+      else if (ss.bad && !ss.waiting) late.push({ what: st.label, why: (st.title ? st.title + " · " : "") + ss.text });
+    });
+    var out = blocked.concat(late);
+    if (!out.length && w && w.state === "blocked" && w.last && w.last.status === "blocked") out.push({ what: "Said it is blocked", why: w.last.message || "" });
+    return out;
+  }
+  /* one line for a bot that isn't stuck: what it is doing or doing next */
+  function botNext(w, today) {
+    if (!w) return "";
+    if (w.state === "paused") return "Paused";
+    var duties = w.duties || [], steps = (w.releaseSteps || []).filter(function (st) { return st.status !== "done" && st.status !== "skipped"; });
+    var working = steps.filter(function (st) { return st.status === "working"; })[0];
+    if (working) return "Working on: " + working.label + (working.title ? " · " + working.title : "");
+    var duty = duties.filter(function (d) { return d.status !== "done"; })[0];
+    if (duty) return "Next: " + duty.task + (duty.due ? " · " + duty.due : "");
+    var step = steps.filter(function (st) { return !st.waiting; })[0];
+    if (w.state === "done" || (duties.length && !duty && w.state !== "quiet")) return "All done today";
+    if (w.state === "quiet" && !step) return "No update today";
+    if (step) return "Next: " + step.label + (step.title ? " · " + step.title : "") + (step.due ? " · " + day(step.due) : "");
+    return w.state === "idle" ? "Nothing to do today" : workerLabel(w.state);
+  }
+
   /* ---------- "Search or Ask" (the HQ redesign, 12 Nov 2026) ----------
      One bar (⌘K, or the magnifier) that jumps anywhere. cmdIndex builds the list from what the page has
      already loaded (o.board = the staff board, o.songs = [{name, id}] as Songs draws them); cmdResults
@@ -1180,5 +1227,7 @@
     /* the HQ apps (12 Nov 2026) */
     newReleaseRoute: newReleaseRoute, waitWords: waitWords, appRegisterBody: appRegisterBody,
     /* the HQ redesign (12 Nov 2026): Search or Ask */
-    cmdIndex: cmdIndex, cmdResults: cmdResults };
+    cmdIndex: cmdIndex, cmdResults: cmdResults,
+    /* Team, simpler (13 Nov 2026) */
+    teamGroups: teamGroups, teamCounts: teamCounts, botProblems: botProblems, botNext: botNext };
 });

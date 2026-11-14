@@ -1116,6 +1116,61 @@ a.t-card:hover,button.t-card:hover,#shell a.tile:hover{border-color:var(--accent
   .cmd{background:rgba(23,27,40,.98)} .nav{background:rgba(17,21,31,.97)} .hdr{background:rgba(11,13,18,.97)}
 }
 @media (prefers-reduced-motion:reduce){.nav a,.nav button,.t-card,.htile,#shell .tile{transition:none}}
+
+/* ================= Team, simpler (13 Nov 2026) =================
+   Luke: "the team section … making more sense being simpler and better". Three numbers on top; the
+   stuck bots as short cards saying only what is wrong; everyone else one line each that opens to the
+   detail; the connector switch folded at the bottom. */
+.teamsum{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:0 0 6px}
+.teamsum:empty{display:none}
+.teamsum .ts{background:var(--glass);border:.5px solid var(--glass-line);border-radius:20px;padding:14px 16px;box-shadow:inset 0 1px 0 var(--glass-edge)}
+.teamsum .ts b{display:block;font-size:32px;line-height:1.05;font-weight:800;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+.teamsum .ts span{display:block;margin-top:4px;font-size:14px;color:var(--uv)}
+.teamsum .ts.bad{border-color:var(--red-line);background:linear-gradient(160deg,rgba(255,122,122,.14),transparent 70%),var(--glass)}
+.teamsum .ts.bad b{color:var(--red)} .teamsum .ts.warn b{color:var(--amber)} .teamsum .ts.ok b{color:var(--spot)}
+.allgood{margin:18px 0 0;padding:16px 18px;border-radius:20px;background:var(--glass);border:.5px solid var(--glass-line);font-size:16px;color:var(--uv)}
+.stuckcard{border:.5px solid var(--red-line)!important}
+.stuckcard .bhead,.botrow > summary{display:flex;align-items:center;gap:12px}
+.stuckcard .bhead{justify-content:space-between}
+.bn{display:flex;flex-direction:column;min-width:0}
+.bn b{font-size:17px;font-weight:700} .bn small{font-size:13px;color:var(--muted)}
+.bprobs{list-style:none;margin:12px 0 0;padding:0}
+.bprobs li{padding:10px 0;border-top:.5px solid var(--glass-line);font-size:15px;line-height:1.4}
+.bprobs li:first-child{border-top:0}
+.bprobs b{display:block;font-weight:600;color:var(--paper)}
+.bprobs span{display:block;margin-top:2px;font-size:14px;color:var(--red);overflow-wrap:anywhere}
+.bneed{margin:6px 0 0;font-size:15px;color:var(--uv)} .bneed b{color:var(--paper);margin-right:8px}
+.stuckcard .copybtn{width:100%;margin-top:14px}
+.bmore{margin-top:10px;border-top:.5px solid var(--glass-line)}
+.bmore > summary,.connfold > summary{min-height:44px;display:flex;align-items:center;cursor:pointer;font-size:14px;font-weight:600;color:var(--accent);list-style:none}
+.bmore > summary::-webkit-details-marker,.connfold > summary::-webkit-details-marker,.botrow > summary::-webkit-details-marker{display:none}
+.bmore > summary::after,.connfold > summary::after,.botrow > summary::after{content:"›";margin-left:auto;padding-left:10px;font-size:20px;color:var(--muted);transition:transform .2s}
+.bmore[open] > summary::after,.connfold[open] > summary::after,.botrow[open] > summary::after{transform:rotate(90deg)}
+.botlist{display:grid;gap:8px}
+@media(min-width:1180px){.botlist{grid-template-columns:repeat(2,minmax(0,1fr));align-items:start}}
+.botrow{background:var(--glass);border:.5px solid var(--glass-line);border-radius:18px;box-shadow:inset 0 1px 0 var(--glass-edge);min-width:0}
+.botrow > summary{min-height:62px;padding:10px 14px 10px 16px;cursor:pointer;list-style:none}
+.botrow > summary .bn{flex:0 0 112px}
+.bdot{flex:none;width:10px;height:10px;border-radius:50%;background:var(--grey-mark)}
+.bdot.quiet{background:var(--amber)}
+.bstate.quiet{color:var(--amber);border-color:rgba(251,191,36,.5);background:none} /* quiet is a warning, not an emergency */ .bdot.todo,.bdot.working{background:var(--accent)} .bdot.done{background:var(--spot)}
+.bl{flex:1;min-width:0;font-size:15px;color:var(--uv);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.botrow > summary .bstate{flex:none}
+.browbody{padding:0 16px 14px;border-top:.5px solid var(--glass-line)}
+.bwhytext p{margin:6px 0;font-size:14px;color:var(--uv);line-height:1.45} .bwhytext p b{display:block;color:var(--paper);font-weight:600}
+.connfold{margin-top:22px;padding:6px 18px!important}
+.connfold > summary{color:var(--paper)} #connState{margin-left:6px;color:var(--spot)} #connState.off{color:var(--red)}
+.connfold #connCard{padding:4px 0 12px}
+/* the duty / step lines: a long state ("waiting: the song is not in Spotify for Artists yet") wraps under
+   the name instead of squeezing it to one letter per line */
+.bduties li{flex-wrap:wrap}
+.bduties .bw{flex:0 1 auto;max-width:100%;white-space:normal;text-align:right;margin-left:auto}
+@media(max-width:599px){
+  .botrow > summary{flex-wrap:wrap;row-gap:4px}
+  .botrow > summary .bn{flex:1 1 auto}
+  .bl{order:3;flex-basis:100%;padding-left:22px;white-space:normal}
+}
+@media (prefers-reduced-motion:reduce){.bmore > summary::after,.connfold > summary::after,.botrow > summary::after{transition:none}}
 </style>
 </head>
 <body>
@@ -1360,14 +1415,15 @@ a.t-card:hover,button.t-card:hover,#shell a.tile:hover{border-color:var(--accent
     <p class="secsub">Ad spend and income per month, from the sheet.</p>
     <div class="tile"><div class="scroll"><table class="stack" id="moneyTable"></table></div></div><div id="moneyDetail"></div></section>
   <section class="card view" id="team"><h2>Team</h2><p class="sub" id="teamSub"></p><div class="sheeterr" id="errTeam" hidden></div>
-    <div class="tile" id="connCard" hidden></div>
-    <h3 class="lblh">The bots today</h3>
     <p class="note2" id="liveNote" hidden></p>
-    <div class="botgrid" id="dutyList"><div class="ph big"></div><div class="ph"></div></div>
+    <div class="teamsum" id="teamSum"></div>
+    <div id="dutyList"><div class="ph big"></div><div class="ph"></div></div>
     <h3 class="lblh">Latest updates</h3>
     <div class="tile"><ul class="feed" id="liveFeed"><li><span class="ph"></span></li></ul></div>
     <div data-wrap hidden><h3 class="lblh">Open tasks</h3><div class="tile"><div class="scroll"><table class="stack" id="taskTable"></table></div></div></div>
-    <div data-wrap hidden><h3 class="lblh">Tasks per person</h3><div class="tile"><div class="scroll"><table class="stack" id="teamTable"></table></div></div></div></section>
+    <div data-wrap hidden><h3 class="lblh">Tasks per person</h3><div class="tile"><div class="scroll"><table class="stack" id="teamTable"></table></div></div></div>
+    <!-- the bots' key switch: a setting, so it sits at the bottom, folded (opens by itself when the key is off) -->
+    <details class="tile connfold" id="connFold" hidden><summary>Bots' connector: <span id="connState"></span></summary><div id="connCard" hidden></div></details></section>
   <section class="card view" id="messages"><h2>Messages</h2><p class="sub">One board for you, Claude and every bot. What waits on you is on top.</p>
     <div class="mwrap">
       <p class="mnote" id="msgSample" hidden>This is the sample: sending, answering and marking as done are switched off here.</p>
