@@ -757,8 +757,10 @@ export const PACK_FIELDS = [
   F("kind", "Self-release or with a label", "Self-release or label", "choice", "deal", { required: true, choices: [SELF_KIND, LABEL_KIND], hint: "With a label = a label owns part of it or delivers it to the stores." }),
   F("label", "The label", "Label", "line", "deal", { requiredWhen: WITH_LABEL, max: 120, hint: "The label's name, as on the contract." }),
   F("split", "The split (who owns what)", "Split", "line", "deal", { requiredWhen: WITH_LABEL, hint: 'For example "BADSCANDAL 50% · Sample Records 50%".' }),
-  F("distributor", "Who delivers it to the stores", "Distributor", "line", "deal", { max: 120, hint: `Leave empty: a self-release goes through ${SELF_DISTRIBUTOR}, a label release is delivered by the label. Write "RouteNote" if we deliver a label release ourselves.` }),
-  F("deal", "The deal in a few words (contract, date signed, where the money comes from)", "The deal", "text", "deal", { max: 600, hint: 'Optional. For example "Contract signed 3 Mar 2026; the label pays royalties twice a year".' }),
+  /* who delivers it and the deal's words are label questions: shown only "With a label" (14 Nov 2026, Luke:
+     "that label part should only appear to write if we don't check self release") */
+  F("distributor", "Who delivers it to the stores", "Distributor", "line", "deal", { showWhen: WITH_LABEL, max: 120, hint: `Leave empty when the label delivers it to the stores. Write "RouteNote" if we deliver it ourselves.` }),
+  F("deal", "The deal in a few words (contract, date signed, where the money comes from)", "The deal", "text", "deal", { showWhen: WITH_LABEL, max: 600, hint: 'Optional. For example "Contract signed 3 Mar 2026; the label pays royalties twice a year".' }),
   F("wav", "Master WAV (link)", "Master WAV", "link", "files", { required: true, hint: "A download link to the final master, as a WAV file (Dropbox, Google Drive...). It must start with https://" }),
   F("artwork", "Artwork, 3000 x 3000 (link)", "Artwork", "link", "files", { required: true, hint: "A link to the cover: square, 3000 x 3000 pixels, JPG or PNG. No store logos or web addresses on it." }),
   F("folder", "Folder with the release files (link)", "Folder", "link", "files", { hint: "Optional. One shared folder with the master, the cover, stems and clips." }),
@@ -857,6 +859,8 @@ export const requiredNow = (f, pack) => !!f.required || (!!f.requiredWhen && (pa
    release; "" while the kind is not recorded */
 export function distributorOf(pack) {
   const p = pack || {};
+  /* a self-release is always ours (RouteNote): a distributor typed while it was a label release doesn't count */
+  if (p.kind === SELF_KIND) return SELF_DISTRIBUTOR;
   if (filled(p.distributor)) return p.distributor;
   return p.kind === LABEL_KIND ? p.label || "the label" : p.kind === SELF_KIND ? SELF_DISTRIBUTOR : "";
 }

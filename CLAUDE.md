@@ -1992,3 +1992,11 @@ Luke: "the team section … making more sense being simpler and better" (then "y
   by itself when the key is OFF. Latest updates, Open tasks and Tasks per person stay as they were.
 * Fixed: a long step state ("waiting: the song is not in Spotify for Artists yet") squeezed the step's name
   to one letter per line; it now wraps under it.
+
+## The release form: label questions only with a label (14 Nov 2026)
+
+Luke: "that label part should only appear to write if we don't check self release". `PACK_FIELDS`
+`distributor` ("Who delivers it to the stores") and `deal` ("The deal in a few words") now carry `showWhen:
+WITH_LABEL`, like `label` and `split`: none of the four shows for a self-release or before the kind is
+picked. `distributorOf()` treats a self-release as RouteNote whatever is stored, so a label's name typed
+before switching to self-release can't make it look delivered by a label (tested in tests/hq-staff.test.mjs).

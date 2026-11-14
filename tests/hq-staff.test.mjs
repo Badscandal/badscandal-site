@@ -484,7 +484,16 @@ test("v2: the form follows the desk's rule: the label and the split only 'With a
   const fields = sampleBoard(NOW).packFields, f = (k) => fields.find((x) => x.key === k), steps = sampleBoard(NOW).releaseSteps;
   const self = { kind: "Self-release" }, lab = { kind: "With a label" };
   assert.equal(L.fieldShown(f("label"), self), false); assert.equal(L.fieldShown(f("split"), {}), false);
-  assert.equal(L.fieldShown(f("label"), lab), true); assert.equal(L.fieldShown(f("wav"), self), true); assert.equal(L.fieldShown(f("distributor"), self), true);
+  assert.equal(L.fieldShown(f("label"), lab), true); assert.equal(L.fieldShown(f("wav"), self), true);
+  /* 14 Nov 2026, Luke: "that label part should only appear to write if we don't check self release":
+     who delivers it and the deal's words are label questions too */
+  for (const k of ["label", "split", "distributor", "deal"]) {
+    assert.equal(L.fieldShown(f(k), self), false, k + " is hidden for a self-release");
+    assert.equal(L.fieldShown(f(k), {}), false, k + " is hidden before the kind is picked");
+    assert.equal(L.fieldShown(f(k), lab), true, k + " shows with a label");
+  }
+  assert.equal(S.distributorOf({ kind: "Self-release", distributor: "Sample Records" }), "RouteNote (badscandaladmin)", "a label's name left over from before can't make a self-release look delivered by a label");
+  assert.equal(S.distributorOf({ kind: "With a label", label: "Sample Records", distributor: "RouteNote" }), "RouteNote", "we deliver a label release ourselves");
   assert.equal(L.fieldRequired(f("split"), lab), true); assert.equal(L.fieldRequired(f("split"), self), false);
   assert.equal(L.fieldRequired(f("copyright"), self), true, "the copyright line is needed to send a self-release (v2)");
   /* review, 11 Nov 2026: not for a label release the label delivers, and shown on the form whatever the kind */
