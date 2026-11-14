@@ -641,7 +641,7 @@
       return "<tr><td><b>" + esc(o.owner) + "</b></td><td class='r'>" + o.open + "</td><td class='r'>" + (o.late ? "<b>" + o.late + "</b>" : 0) + "</td><td class='r'>" + (o.blocked ? "<b>" + o.blocked + "</b>" : 0) + "</td><td>" + (o.lastLogged ? esc(day(o.lastLogged)) + (o.quiet > 2 ? " · <b>quiet " + o.quiet + " days</b>" : "") : "–") + "</td></tr>";
     }).join("") : "");
     setTable("taskTable", t.tasks.length ? "<tr><th>Task</th><th>Owner</th><th>Deadline</th><th>Status</th></tr>" + t.tasks.map(function (x) {
-      return "<tr><td>" + (x.late ? "<b>" + esc(x.task) + "</b>" : esc(x.task)) + (x.blocker ? "<small>Blocked: " + esc(x.blocker) + "</small>" : "") + "</td><td>" + esc(x.owner) + "</td><td>" + esc(x.deadline ? day(x.deadline.slice(0, 10)) : "–") + (x.late ? " · <b class='attn'>late</b>" : "") + "</td><td><span class='mlabel" + (x.status === "blocked" ? " mine" : "") + "'>" + esc(TASK_WORD[x.status] || x.status) + "</span></td></tr>";
+      return "<tr><td>" + (x.late ? "<b>" + esc(x.task) + "</b>" : esc(x.task)) + (x.blocker ? "<small>Blocked: " + esc(x.blocker) + "</small>" : x.note ? "<small>" + esc(x.by || x.owner) + ": " + esc(x.note) + "</small>" : "") + "</td><td>" + esc(x.owner) + "</td><td>" + esc(x.deadline ? day(x.deadline.slice(0, 10)) : "–") + (x.late ? " · <b class='attn'>late</b>" : "") + "</td><td><span class='mlabel" + (x.status === "blocked" ? " mine" : "") + "'>" + esc(TASK_WORD[x.status] || x.status) + "</span></td></tr>";
     }).join("") : broken("Tasks") ? "" : '<tr><td class="empty">No open tasks in the sheet.</td></tr>');
   }
 

@@ -13,7 +13,7 @@ import { hqModel, HQ_TABS } from "./hq.mjs";
 import { sampleMeta, sampleSheets } from "./hq-sample.mjs";
 import { EXPIRED_CODE, keyHealth, readKeyHealth, readMeta } from "./metaread.mjs";
 import { DEFAULT_ACCOUNT } from "./metaspend.mjs";
-import { dutyOverlay, getSightings, listReleases, listUpdates, releaseView, spDay, spHM } from "./staff.mjs";
+import { dutyOverlay, getSightings, getTaskOverlay, listReleases, listUpdates, releaseView, spDay, spHM } from "./staff.mjs";
 import { sampleReleases, sampleSightings } from "./staff-sample.mjs";
 
 /* the sheet is read at most every 2 minutes so the bots' live updates show quickly; one batch read
@@ -75,9 +75,9 @@ const live = (list, today, sightings) => list.filter((r) => r && r.status !== "c
 async function staffSide(desk, now) {
   if (!desk) return null;
   try {
-    const [updates, releases, sightings] = await Promise.all([listUpdates(desk, now, 3), listReleases(desk).catch(() => []), getSightings(desk).catch(() => undefined)]);
+    const [updates, releases, sightings, taskOverlay] = await Promise.all([listUpdates(desk, now, 3), listReleases(desk).catch(() => []), getSightings(desk).catch(() => undefined), getTaskOverlay(desk).catch(() => null)]);
     /* undefined = the report could not be read: the sheet's late pitch is then left as the sheet says */
-    return { updates, overlay: dutyOverlay(updates, spDay(now)), releases: live(releases, spDay(now), sightings || null), now, ...(sightings === undefined ? {} : { sightings }) };
+    return { updates, overlay: dutyOverlay(updates, spDay(now)), taskOverlay, releases: live(releases, spDay(now), sightings || null), now, ...(sightings === undefined ? {} : { sightings }) };
   } catch { return null; }
 }
 

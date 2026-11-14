@@ -18,15 +18,14 @@ async function sent(d, title, date, now = NOW, pack = FULL) {
   return (await S.sendRelease(d, now, R, { by: "Luke", id: r.id })).release;
 }
 
-test("the visualiser: Luke's link on the form, for Laura's YouTube step", () => {
+test("the visualiser: Luke's link on the form, for Laura's YouTube step (optional: never 'missing', 14 Nov 2026)", () => {
   const f = S.PACK_FIELDS.find((x) => x.key === "visualiser");
-  assert.deepEqual([f.kind, f.group, f.neededBy, f.required, f.fill], ["link", "files", "video", false, []]);
+  assert.deepEqual([f.kind, f.group, f.neededBy, f.required, f.fill], ["link", "files", "", false, []]);
   assert.match(f.hint, /Laura/);
   assert.match(f.hint, /description/);
   assert.throws(() => S.packValue("visualiser", "http://example.com/v.mp4"), /https/);
   const v = S.releaseView({ id: "x", title: "X", date: "2026-12-18", status: "scheduled", pack: FULL, steps: S.scheduleSteps("2026-12-18", "2026-11-14").steps }, "2026-11-14");
-  const miss = v.missing.find((m) => m.key === "visualiser");
-  assert.deepEqual([miss.required, miss.owner, miss.step], [false, "Laura", "Video scheduled on YouTube"], "missing for Laura's step, not needed to send");
+  assert.equal(v.missing.find((m) => m.key === "visualiser"), undefined, "a song with no visualiser is not missing anything for Laura");
 });
 
 test("the pitch is due the day the song shows in Spotify for Artists, whatever its planned day", async () => {
@@ -38,6 +37,19 @@ test("the pitch is due the day the song shows in Spotify for Artists, whatever i
   const after = (await S.listReleases(d)).find((x) => x.id === r.id);
   assert.equal(step(after, "spotify").status, "done");
   assert.equal(step(after, "pitch").due, "2026-11-19", "the pitch goes the same day it shows");
+});
+
+test("a song that shows in Spotify for Artists AFTER its pitch's planned day: the pitch is due that day, not late (14 Nov 2026, the bots)", async () => {
+  const d = memoryDesk();
+  const r = await sent(d, "Late Show", "2026-12-11"); /* pitch planned for Fri 27 Nov */
+  assert.equal(step(r, "pitch").due, "2026-11-27");
+  const shows = NOW + 16 * DAY; /* it only shows on Mon 30 Nov */
+  await S.reportSightings(d, shows, R, { by: "Atlas", releases: [{ title: "Late Show", date: "2026-12-11" }] });
+  const after = (await S.listReleases(d)).find((x) => x.id === r.id);
+  const p = S.releaseView(after, "2026-11-30").steps.find((s) => s.key === "pitch");
+  assert.deepEqual([p.due, p.late, p.waiting, p.dueIn], ["2026-11-30", false, false, 0], "due today, not late, on the day it shows");
+  const next = S.releaseView(after, "2026-12-01").steps.find((s) => s.key === "pitch");
+  assert.equal(next.late, true, "late from the next day if Atlas still hasn't sent it");
 });
 
 test("Webmaster's song page is due a week after the previous song comes out (in release order), never after its own day", async () => {

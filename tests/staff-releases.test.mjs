@@ -185,8 +185,8 @@ test("releases: the view says what is missing (required first), what is late, an
   r.steps[0].status = "done"; r.steps[1].status = "blocked"; r.steps[1].note = "needs a new cover";
   const v = S.releaseView(r, today);
   assert.deepEqual([v.daysToGo, v.weekday, v.dateWords, v.released], [13, "Wed", "Wed 25 Nov", false]);
-  assert.deepEqual(v.missing.map((m) => [m.key, m.required, m.neededBy]), [["lyrics", false, "lyrics"], ["visualiser", false, "video"], ["instruments", false, "pitch"], ["story", false, "pitch"]],
-    "the video link is Laura's result, not her input: never missing, like the ISRC; the visualiser (14 Nov 2026) is her input; most urgent first, the waiting pitch's last");
+  assert.deepEqual(v.missing.map((m) => [m.key, m.required, m.neededBy]), [["lyrics", false, "lyrics"], ["instruments", false, "pitch"], ["story", false, "pitch"]],
+    "the video link is Laura's result, not her input: never missing, like the ISRC; the visualiser is optional, never missing (14 Nov 2026, the bots); most urgent first, the waiting pitch's last");
   assert.deepEqual([v.missing[0].step, v.missing[0].owner, v.missing[0].due], ["Lyrics live", "Verse", "2026-11-15"]);
   assert.deepEqual([v.packFilled, v.packTotal], [8, 18], "the team's 'later' fields and the deal are not counted");
   assert.deepEqual(v.counts, { done: 1, total: 10, late: 2, blocked: 1, skipped: 0, waiting: 1 });

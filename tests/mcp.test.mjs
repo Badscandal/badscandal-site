@@ -23,7 +23,7 @@ const rpc = (method, params, id = 1) => ({ jsonrpc: "2.0", id, method, ...(param
 
 test("mcp: the tools are short, described and flat, so any client can list them", () => {
   const list = toolList(TOOLS);
-  assert.equal(list.length, 18, "twelve, the four release tools, spotify_upcoming (11 Nov 2026), and sort_payment (the bank reader)");
+  assert.equal(list.length, 19, "twelve, the four release tools, spotify_upcoming (11 Nov 2026), sort_payment (the bank reader) and task_update (14 Nov 2026)");
   for (const t of list) {
     assert.match(t.name, /^[a-z][a-z_]{2,30}$/, t.name);
     assert.ok(t.title && t.description.length > 60, t.name + " needs a real description");
@@ -33,7 +33,7 @@ test("mcp: the tools are short, described and flat, so any client can list them"
     assert.ok(!JSON.stringify(t.inputSchema).includes("$ref"));
     assert.equal(t.annotations.destructiveHint, false);
   }
-  assert.equal(new Set(list.map((t) => t.name)).size, 18);
+  assert.equal(new Set(list.map((t) => t.name)).size, 19);
   assert.equal(list.find((t) => t.name === "my_day").annotations.readOnlyHint, true);
   assert.equal(list.find((t) => t.name === "post_update").annotations.readOnlyHint, false);
 });
@@ -46,9 +46,9 @@ test("mcp legacy: initialize, the 202 for notifications, ping, tools/list, tools
   assert.deepEqual(await handle({ jsonrpc: "2.0", method: "notifications/initialized" }, {}, deps), { status: 202, body: null });
   assert.deepEqual((await handle(rpc("ping"), {}, deps)).body, { jsonrpc: "2.0", id: 1, result: {} });
   const list = await handle(rpc("tools/list", {}, "abc"), { "mcp-protocol-version": "2025-06-18" }, deps);
-  assert.equal(list.body.id, "abc"); assert.equal(list.body.result.tools.length, 18); assert.equal(list.body.result.resultType, undefined);
+  assert.equal(list.body.id, "abc"); assert.equal(list.body.result.tools.length, 19); assert.equal(list.body.result.resultType, undefined);
   const call = await handle(rpc("tools/call", { name: "my_day", arguments: { bot: "Nova" } }), {}, deps);
-  assert.equal(call.body.result.isError, false); assert.deepEqual(call.body.result.structuredContent, { tool: "my_day", args: { bot: "Nova" } });
+  assert.equal(call.body.result.isError, false); assert.deepEqual(JSON.parse(call.body.result.content[0].text), { tool: "my_day", args: { bot: "Nova" } }); assert.equal(call.body.result.structuredContent, undefined, "one copy, not two (14 Nov 2026)");
   assert.equal(call.body.result.content[0].type, "text"); assert.match(call.body.result.content[0].text, /"my_day"/);
   assert.equal((await handle(rpc("tools/call", { name: "nope" }), {}, deps)).body.error.code, -32602, "unknown tool = a protocol error");
   const missing = await handle(rpc("tools/call", { name: "post_update", arguments: { bot: "Nova" } }), {}, deps);
@@ -66,7 +66,7 @@ test("mcp 2026-07-28: no handshake; discover; version and header checks; resultT
   assert.equal(disc.status, 200); assert.deepEqual(disc.body.result.supportedVersions, [MODERN]); assert.equal(disc.body.result.resultType, "complete");
   assert.equal(disc.body.result._meta["io.modelcontextprotocol/serverInfo"].name, "badscandal-hq");
   const list = await handle(rpc("tools/list", meta), { "mcp-protocol-version": MODERN }, deps);
-  assert.deepEqual([list.body.result.resultType, list.body.result.cacheScope, list.body.result.tools.length], ["complete", "private", 18]);
+  assert.deepEqual([list.body.result.resultType, list.body.result.cacheScope, list.body.result.tools.length], ["complete", "private", 19]);
   const call = await handle(rpc("tools/call", { ...meta, name: "my_day", arguments: { bot: "Nova" } }), { "mcp-protocol-version": MODERN, "mcp-method": "tools/call", "mcp-name": "=?base64?" + btoa("my_day") + "?=" }, deps);
   assert.equal(call.body.result.resultType, "complete"); assert.equal(call.body.result.isError, false);
   const badV = await handle(rpc("tools/list", { _meta: { "io.modelcontextprotocol/protocolVersion": "2030-01-01" } }), {}, deps);
@@ -81,7 +81,7 @@ test("mcp 2026-07-28: no handshake; discover; version and header checks; resultT
 });
 
 const post = (body, key, extra = {}) => staff(new Request("https://badscandal.com/mcp", { method: "POST", headers: { "content-type": "application/json", accept: "application/json, text/event-stream", ...(key ? { authorization: key } : {}), ...extra }, body: typeof body === "string" ? body : JSON.stringify(body) }), ctx);
-const tool = async (name, args, key = "Bearer " + ENV.STAFF_BOT_KEY) => { const r = await post(rpc("tools/call", { name, arguments: args }), key); return (await r.json()).result; };
+const tool = async (name, args, key = "Bearer " + ENV.STAFF_BOT_KEY) => { const r = await post(rpc("tools/call", { name, arguments: args }), key); const res = (await r.json()).result; if (res && !res.isError && res.content) try { res.data = JSON.parse(res.content[0].text); } catch {} return res; };
 
 test("connector: no key, no entry; the key rides in the header only; browsers and other methods are turned away", async () => {
   const none = await post(rpc("tools/list"));
@@ -107,37 +107,37 @@ test("connector: no key, no entry; the key rides in the header only; browsers an
 
 test("connector: a bot's whole day, end to end (the sheet isn't connected in this test, and that is said, not hidden)", async () => {
   const day = await tool("my_day", { bot: "ledger" });
-  assert.equal(day.isError, false); assert.equal(day.structuredContent.you, "Ledger"); assert.equal(day.structuredContent.rules.length, 8); assert.match(day.structuredContent.note, /could not be read/);
+  assert.equal(day.isError, false); assert.equal(day.data.you, "Ledger"); assert.equal(day.data.rules.length, 8); assert.match(day.data.note, /could not be read/);
   assert.match((await tool("my_day", { bot: "Luke" })).content[0].text, /not a name on the team/);
   assert.equal((await tool("my_day", { bot: "Manny" })).isError, true);
-  assert.equal((await tool("post_update", { bot: "Ledger", status: "working", message: "Checking Wise and PayPal" })).structuredContent.saved, true);
+  assert.equal((await tool("post_update", { bot: "Ledger", status: "working", message: "Checking Wise and PayPal" })).data.saved, true);
   assert.match((await tool("post_update", { bot: "Ledger", status: "blocked", message: "PayPal password: abc12345" })).content[0].text, /Never write passwords/);
   const pay = { bot: "Ledger", date: "2026-11-10", payer: "Sample Distro", amount: 104.04, currency: "USD", account: "PayPal", reference: "TX-9" };
-  assert.equal((await tool("submit_income", pay)).structuredContent.saved, true);
-  const again = (await tool("submit_income", pay)).structuredContent;
+  assert.equal((await tool("submit_income", pay)).data.saved, true);
+  const again = (await tool("submit_income", pay)).data;
   assert.deepEqual([again.saved, again.duplicate], [false, true]);
   assert.match((await tool("submit_income", { ...pay, amount: "not read" })).content[0].text, /amount must be a positive number/);
-  assert.equal((await tool("income_check", { bot: "Ledger", account: "Wise", new_payments: 0 })).structuredContent.saved, true);
-  const inc = (await tool("income_status", { bot: "Alfred" })).structuredContent;
+  assert.equal((await tool("income_check", { bot: "Ledger", account: "Wise", new_payments: 0 })).data.saved, true);
+  const inc = (await tool("income_status", { bot: "Alfred" })).data;
   assert.equal(inc.received_this_month, "USD 104.04"); assert.equal(inc.payments_logged_this_month, 1); assert.match(inc.newest_payments[0], /Sample Distro · USD 104\.04 · received · PayPal · by Ledger/);
-  const sent = (await tool("send_message", { bot: "Nova", to: "Luke", text: "Survivors on Fri 11 Dec?", needs: "decision", options: ["Yes", "January"] })).structuredContent;
+  const sent = (await tool("send_message", { bot: "Nova", to: "Luke", text: "Survivors on Fri 11 Dec?", needs: "decision", options: ["Yes", "January"] })).data;
   assert.equal(sent.sent, true); assert.match(sent.note, /Alfred's next message/);
-  const ask = (await tool("send_message", { bot: "Nova", to: "Ledger", text: "Did Wise load today?", needs: "reply" })).structuredContent;
-  assert.equal((await tool("read_messages", { bot: "Ledger" })).structuredContent.waiting_on_you.length, 1);
-  assert.equal((await tool("send_message", { bot: "Ledger", to: "Nova", text: "Yes.", reply_to: ask.id })).structuredContent.answered, ask.id);
+  const ask = (await tool("send_message", { bot: "Nova", to: "Ledger", text: "Did Wise load today?", needs: "reply" })).data;
+  assert.equal((await tool("read_messages", { bot: "Ledger" })).data.waiting_on_you.length, 1);
+  assert.equal((await tool("send_message", { bot: "Ledger", to: "Nova", text: "Yes.", reply_to: ask.id })).data.answered, ask.id);
   assert.match((await tool("resolve_message", { bot: "Nova", id: sent.id })).content[0].text, /Only Luke/);
   assert.match((await tool("resolve_message", { bot: "Atlas", id: ask.id })).content[0].text, /waiting on Ledger, not on you/, "a bot can't close what isn't its own");
-  assert.equal((await tool("set_my_card", { bot: "Atlas", working_on: "Backfilling Touch Me" })).structuredContent.saved, true);
-  const team = (await tool("team_board", { bot: "Nova" })).structuredContent;
+  assert.equal((await tool("set_my_card", { bot: "Atlas", working_on: "Backfilling Touch Me" })).data.saved, true);
+  const team = (await tool("team_board", { bot: "Nova" })).data;
   assert.equal(team.team.length, 12); assert.equal(team.duties, "not read"); assert.equal(team.waiting_on_luke.length, 1);
   assert.equal(team.team.find((w) => w.name === "Ledger").last_update.includes("working: Checking Wise"), true); assert.equal(team.team.find((w) => w.name === "Atlas").working_on, "Backfilling Touch Me");
   assert.match(team.team.find((w) => w.name === "Ledger").last_used_the_desk, /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/, "São Paulo time, not UTC"); assert.equal(team.team.find((w) => w.name === "Verse").last_used_the_desk, "never");
-  const brief = (await tool("luke_briefing", { bot: "Alfred" })).structuredContent;
+  const brief = (await tool("luke_briefing", { bot: "Alfred" })).data;
   assert.equal(brief.ad_spend, "not read", "a number that could not be read is never 0"); assert.equal(brief.decisions_waiting_on_luke[0].options.length, 2); assert.equal(brief.income_this_month.received, "USD 104.04");
   assert.match((await tool("read_guide", { bot: "Verse" })).content[0].text, /has not been loaded/);
   /* Claude's key acts as Claude whatever name is given */
-  const c = (await tool("send_message", { bot: "Nova", to: "Nova", text: "Please confirm the Updates tab.", needs: "action" }, "Bearer " + ENV.STAFF_CLAUDE_KEY)).structuredContent;
-  assert.equal((await tool("read_messages", { bot: "Nova" })).structuredContent.waiting_on_you[0].from, "Claude"); assert.equal(c.sent, true);
+  const c = (await tool("send_message", { bot: "Nova", to: "Nova", text: "Please confirm the Updates tab.", needs: "action" }, "Bearer " + ENV.STAFF_CLAUDE_KEY)).data;
+  assert.equal((await tool("read_messages", { bot: "Nova" })).data.waiting_on_you[0].from, "Claude"); assert.equal(c.sent, true);
   assert.equal((await tool("post_update", { bot: "Claude", status: "info", message: "hello there" }, "Bearer " + ENV.STAFF_CLAUDE_KEY)).isError, true);
 });
 
@@ -214,7 +214,7 @@ test("bank reader: the bots see every incoming Revolut payment; Ledger, Sheet an
   const own = (await S.submitIncome(desk, now, S.DEFAULT_ROSTER, { ...rev, payer: "Made-up Self", amount: 300, status: "transfer", reference: "tx-own" })).entry;
   await S.submitIncome(desk, now, S.DEFAULT_ROSTER, { ...rev, payer: "Sample Records", amount: 70, status: "received", reference: "tx-label", category: "Label deals" });
   /* Luke, 11 Nov 2026: the bots see his full Revolut income: every row, sorted or not */
-  const bot = (await tool("income_status", { bot: "Nova" })).structuredContent;
+  const bot = (await tool("income_status", { bot: "Nova" })).data;
   const seen = JSON.stringify(bot);
   assert.ok(seen.includes("Made-up Mum") && seen.includes("Made-up Self") && seen.includes("Sample Records"), seen);
   assert.deepEqual(bot.unsorted.find((u) => u.id === friend.id), { id: friend.id, month, line: `${day} · Made-up Mum · EUR 40.00 · Revolut` });
@@ -226,15 +226,15 @@ test("bank reader: the bots see every incoming Revolut payment; Ledger, Sheet an
   assert.match((await tool("sort_payment", { bot: "Echo", id: friend.id, month, status: "transfer" })).content[0].text, /Only Luke, Claude, Ledger, Sheet, Nova can sort/);
   assert.match((await tool("submit_income", { bot: "Echo", date: day, payer: "Made-up Mum", amount: 40, currency: "EUR", account: "Revolut", reference: "tx-mum", status: "received" })).content[0].text, /unsorted\. Only Ledger, Sheet, Nova, Claude or Luke/);
   /* a money bot sorts one as income (this file's roster is Nova + Echo by now: Nova is one of Ledger, Sheet, Nova) */
-  const sortedC = (await tool("sort_payment", { bot: "Nova", id: client.id, month, status: "received", category: "Production" })).structuredContent;
+  const sortedC = (await tool("sort_payment", { bot: "Nova", id: client.id, month, status: "received", category: "Production" })).data;
   assert.deepEqual([sortedC.saved, sortedC.status, sortedC.category], [true, "received", "Production"]);
   assert.match((await tool("sort_payment", { bot: "Nova", id: client.id, month, status: "received" })).content[0].text, /already sorted|category must be/);
   /* Claude sorts through the same tool; what a person or a bot decided stays */
   const claude = "Bearer " + ENV.STAFF_CLAUDE_KEY;
-  const sorted = (await tool("sort_payment", { bot: "Claude", id: friend.id, month, status: "received", category: "Other" }, claude)).structuredContent;
+  const sorted = (await tool("sort_payment", { bot: "Claude", id: friend.id, month, status: "received", category: "Other" }, claude)).data;
   assert.deepEqual([sorted.saved, sorted.status, sorted.category], [true, "received", "Other"]);
   assert.match((await tool("sort_payment", { bot: "Claude", id: friend.id, month, status: "transfer" }, claude)).content[0].text, /already sorted/, "what a person decided stays");
-  const after = (await tool("income_status", { bot: "Nova" })).structuredContent;
+  const after = (await tool("income_status", { bot: "Nova" })).data;
   assert.equal(after.unsorted.length, 0);
   /* Luke, on /hq: corrects what the bank reader itself decided (its own-transfer rule was wrong) */
   const sort = (body, headers) => api("sort", { method: "POST", headers: { "content-type": "application/json", ...headers }, body: JSON.stringify(body) });
@@ -251,13 +251,13 @@ test("bank reader: the bots see every incoming Revolut payment; Ledger, Sheet an
   const c1 = (await S.submitIncome(desk, now, R, { ...rev, payer: "MLO Payments", amount: 88.5, status: "unsorted", reference: "tx-mlo" })).entry;
   const p2 = (await S.submitIncome(desk, now, R, { ...stmt, bot: "Ledger", payer: "Made-up Label Two", amount: 66 })).entry;
   const c2 = (await S.submitIncome(desk, now, R, { ...rev, payer: "MLT Payments", amount: 66, status: "unsorted", reference: "tx-mlt" })).entry;
-  const offered = (await tool("income_status", { bot: "Nova" })).structuredContent.unsorted.find((u) => u.id === c1.id);
+  const offered = (await tool("income_status", { bot: "Nova" })).data.unsorted.find((u) => u.id === c1.id);
   assert.deepEqual(offered.pending_match, { id: p1.id, line: `${day} · Made-up Label One · EUR 88.50 · pending` });
-  const m1 = (await tool("sort_payment", { bot: "Nova", id: c1.id, month, status: "received", pending_id: p1.id })).structuredContent;
+  const m1 = (await tool("sort_payment", { bot: "Nova", id: c1.id, month, status: "received", pending_id: p1.id })).data;
   assert.deepEqual([m1.saved, m1.id, m1.status, m1.category], [true, p1.id, "received", "Label deals"]);
   const r2 = await sort({ id: c2.id, month, status: "received", pending_id: p2.id }, { cookie, origin: "https://badscandal.com" });
   assert.deepEqual([r2.status, (await r2.json()).entry.id], [200, p2.id]);
-  const left = (await tool("income_status", { bot: "Nova" })).structuredContent;
+  const left = (await tool("income_status", { bot: "Nova" })).data;
   assert.deepEqual([left.unsorted.length, left.pending_this_month], [0, "nothing logged"], "both statements landed; nothing is pending and nothing to sort");
 });
 
@@ -274,7 +274,7 @@ test("release pipeline: Luke's routes, the bots' four tools, refusals as sentenc
   const made = await rel("release", { title: "Night Drive", date: day(30), pack: { wav: "https://example.com/n.wav", genre: "Dance" } });
   assert.equal(made.status, 200);
   const id = made.body.release.id;
-  assert.equal((await tool("luke_briefing", { bot: "Alfred" })).structuredContent.next_release, "not read", "only a draft on the desk and the sheet unread: never \"none planned\"");
+  assert.equal((await tool("luke_briefing", { bot: "Alfred" })).data.next_release, "not read", "only a draft on the desk and the sheet unread: never \"none planned\"");
   assert.deepEqual([id, made.body.release.status, made.body.release.packTotal, made.body.release.daysToGo], ["nightdrive", "draft", 18, 30]);
   const badLink = await rel("release", { id, pack: { artwork: "http://example.com/c.jpg" } });
   assert.deepEqual([badLink.status, badLink.body.error], [400, "Artwork must be a link that starts with https:// (copy it from the browser's address bar). Nothing was saved."]);
@@ -296,30 +296,30 @@ test("release pipeline: Luke's routes, the bots' four tools, refusals as sentenc
   await rel("release", { title: "Hidden Draft", date: day(40) }); /* a draft is Luke's, never shown to the bots */
 
   /* the bots, through /mcp */
-  const list = (await tool("releases", { bot: "Drop" })).structuredContent;
+  const list = (await tool("releases", { bot: "Drop" })).data;
   assert.deepEqual(list.releases.map((r) => r.song), ["Night Drive"]);
   assert.deepEqual(list.releases[0].your_steps.map((s) => s.step), ["upload", "approved"]);
   assert.ok(!list.releases[0].all_steps, "only Nova and Claude see every step");
-  assert.equal((await tool("releases", { bot: "Nova" })).structuredContent.releases[0].all_steps.length, 10);
-  assert.deepEqual((await tool("releases", { bot: "x" }, "Bearer " + ENV.STAFF_CLAUDE_KEY)).structuredContent.releases.map((r) => r.song).sort(), ["Hidden Draft", "Night Drive"]);
-  const pack = (await tool("release_pack", { bot: "Verse", song: "night drive" })).structuredContent;
+  assert.equal((await tool("releases", { bot: "Nova" })).data.releases[0].all_steps.length, 10);
+  assert.deepEqual((await tool("releases", { bot: "x" }, "Bearer " + ENV.STAFF_CLAUDE_KEY)).data.releases.map((r) => r.song).sort(), ["Hidden Draft", "Night Drive"]);
+  const pack = (await tool("release_pack", { bot: "Verse", song: "night drive" })).data;
   assert.equal(pack.pack.length, 29); assert.equal(pack.pack.find((f) => f.field === "wav").value, "https://example.com/n.wav");
   assert.match(pack.pack.find((f) => f.field === "lyrics").state, /missing \(needed for "Lyrics live"\)/);
   assert.match((await tool("release_pack", { bot: "Drop", song: "Hidden Draft" })).content[0].text, /There is no release called "Hidden Draft"\. The releases on the desk are: Night Drive \(nightdrive\)\./);
   const wrongBot = await tool("release_step", { bot: "Atlas", song: "Night Drive", step: "upload", status: "done" });
   assert.equal(wrongBot.isError, true); assert.match(wrongBot.content[0].text, /is Drop's step\. Only Drop, Nova, Claude or Luke can mark it/);
   assert.match((await tool("release_step", { bot: "Drop", song: "Night Drive", step: "approved", status: "blocked" })).content[0].text, /needs a note: say exactly what is needed and from whom/);
-  const done = (await tool("release_step", { bot: "Drop", song: "nightdrive", step: "upload", status: "done", link: "https://example.com/rn" })).structuredContent;
+  const done = (await tool("release_step", { bot: "Drop", song: "nightdrive", step: "upload", status: "done", link: "https://example.com/rn" })).data;
   assert.deepEqual([done.saved, done.step, done.state], [true, "upload", "done"]);
-  assert.equal((await tool("release_fill", { bot: "Drop", song: "Night Drive", field: "isrc", value: "SAMPLE0000009" })).structuredContent.value, "SAMPLE0000009");
+  assert.equal((await tool("release_fill", { bot: "Drop", song: "Night Drive", field: "isrc", value: "SAMPLE0000009" })).data.value, "SAMPLE0000009");
   assert.match((await tool("release_fill", { bot: "Drop", song: "Night Drive", field: "lyrics", value: "la la" })).content[0].text, /Lyrics is filled by Luke or Claude only, not by you/);
   assert.match((await tool("release_step", { bot: "Drop", song: "Night Drive" })).content[0].text, /^Missing: step, status\./);
-  const myDay = (await tool("my_day", { bot: "Drop" })).structuredContent;
+  const myDay = (await tool("my_day", { bot: "Drop" })).data;
   assert.deepEqual(myDay.release_steps.map((s) => s.step), ["approved"]);
   assert.match(myDay.next, /^You have 1 open release step; the soonest is "Approved by RouteNote \(nothing waiting\)" for Night Drive/);
-  assert.ok(!/release step/.test((await tool("my_day", { bot: "Steve" })).structuredContent.next));
-  assert.deepEqual((await tool("team_board", { bot: "Nova" })).structuredContent.releases, [{ song: "Night Drive", date: (await tool("releases", { bot: "Nova" })).structuredContent.releases[0].release_day, done: "1 of 10", late: 0, blocked: 0, late_steps: [], warnings: [] }]);
-  const nr = (await tool("luke_briefing", { bot: "Alfred" })).structuredContent.next_release;
+  assert.ok(!/release step/.test((await tool("my_day", { bot: "Steve" })).data.next));
+  assert.deepEqual((await tool("team_board", { bot: "Nova" })).data.releases, [{ song: "Night Drive", date: (await tool("releases", { bot: "Nova" })).data.releases[0].release_day, done: "1 of 10", late: 0, blocked: 0, late_steps: [], warnings: [] }]);
+  const nr = (await tool("luke_briefing", { bot: "Alfred" })).data.next_release;
   assert.equal(nr.song, "Night Drive", "with the sheet unread, the desk's own next release…");
   assert.match(nr.source, /^the desk only: the sheet's Releases tab was not read/, "…saying the sheet's own list could not be checked");
 
@@ -359,7 +359,7 @@ test("v2: Atlas's Spotify for Artists report, Luke's answer at /api/staff/sighti
   const rel = async (path, body, headers = { cookie }) => { const r = await api(path, { method: "POST", headers: { "content-type": "application/json", ...headers }, body: JSON.stringify(body) }); return { status: r.status, body: await r.json() }; };
   assert.equal((await tool("spotify_upcoming", { bot: "Drop", releases: [] })).isError, true, "only Atlas or Nova");
   const rep = await tool("spotify_upcoming", { bot: "Atlas", releases: [{ title: "Velvet Night", date: day(16), shown_as: "BADSCANDAL · Sample Distro" }] });
-  assert.deepEqual([rep.isError, rep.structuredContent.songs], [false, 1]);
+  assert.deepEqual([rep.isError, rep.data.songs], [false, 1]);
   assert.equal((await tool("spotify_upcoming", { bot: "Atlas", releases: [] })).isError, false, "an empty list is a report");
   await tool("spotify_upcoming", { bot: "Atlas", releases: [{ title: "Velvet Night", date: day(16), shown_as: "BADSCANDAL · Sample Distro" }] });
   const b = await (await api("board", { headers: { cookie } })).json();
@@ -391,7 +391,7 @@ test("staff api: Claude reading the board with its key counts as READ (review, 1
   assert.equal(await mark(), true, "Read by Claude");
 });
 
-test("send_message still succeeds when the push sweep throws (the HQ apps, 12 Nov 2026); the tool count stays 18", async () => {
+test("send_message still succeeds when the push sweep throws (the HQ apps, 12 Nov 2026); the tool count is 19 (task_update, 14 Nov 2026)", async () => {
   /* a push key is set, and the push records can't be read: the sweep after the call throws */
   const pair = await crypto.subtle.generateKey({ name: "ECDSA", namedCurve: "P-256" }, true, ["sign", "verify"]);
   Object.assign(ENV, { APNS_KEY: Buffer.from(await crypto.subtle.exportKey("pkcs8", pair.privateKey)).toString("base64"), APNS_KEY_ID: "TESTKEY123", APNS_TEAM_ID: "TEAMTEST12" });
@@ -403,7 +403,7 @@ test("send_message still succeeds when the push sweep throws (the HQ apps, 12 No
   try {
     const r = await tool("send_message", { bot: "Nova", to: "Luke", text: "Survivors or Slow Burn first?", needs: "decision", options: ["Survivors", "Slow Burn"] });
     assert.equal(r.isError, false);
-    assert.equal(r.structuredContent.sent, true);
+    assert.equal(r.data.sent, true);
     assert.ok(tried > 0, "the sweep ran after the call (awaited when there is no waitUntil)");
     /* with waitUntil (Netlify's own): the call answers, the sweep finishes later and never rejects */
     const later = [];
@@ -425,5 +425,5 @@ test("send_message still succeeds when the push sweep throws (the HQ apps, 12 No
     console.error = logged;
     for (const k of ["APNS_KEY", "APNS_KEY_ID", "APNS_TEAM_ID"]) delete ENV[k];
   }
-  assert.equal((await (await post(rpc("tools/list"), "Bearer " + ENV.STAFF_BOT_KEY)).json()).result.tools.length, 18);
+  assert.equal((await (await post(rpc("tools/list"), "Bearer " + ENV.STAFF_BOT_KEY)).json()).result.tools.length, 19);
 });
