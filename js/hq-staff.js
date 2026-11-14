@@ -242,8 +242,18 @@
           (busy ? "Sending…" : "Send this answer") + '</button><button class="copybtn" type="button" data-act="opt-no" data-k="' + esc(k) + '"' + dis + ">Cancel</button></div></div>"
         : '<div class="mopts">' + m.options.map(function (o, i) { return '<button class="copybtn" type="button" data-act="opt" data-k="' + esc(k) + '" data-i="' + i + '"' + dis + ">" + esc(o) + "</button>"; }).join("") + "</div>";
     }
-    return '<article class="wmsg" id="wait-' + esc(safe(m.id)) + '"><p class="mhead"><span><b>' + esc(m.from) + "</b> " + esc(L.needWords(m)) + '</span><span class="mtime">' + esc(when(m)) + "</span></p>" + about +
-      '<p class="mtext">' + esc(m.text) + "</p>" + opts +
+    /* numbered questions (14 Nov 2026): one answer box per open question, one button for them all */
+    var qs = L.questionLines(m), qhtml = "";
+    if (qs.length) {
+      qhtml = '<ol class="mqs">' + qs.map(function (q) {
+        var f = "qa:" + m.id + ":" + q.n;
+        return "<li><p class=\"mq\">" + esc(q.q) + "</p>" + (q.open
+          ? '<label class="flbl" for="' + esc(safe(f)) + '">Your answer to question ' + q.n + '</label><textarea class="fld" rows="2" maxlength="600" id="' + esc(safe(f)) + '" data-f="' + esc(f) + '"' + dis + ">" + esc(ui.drafts[f] || "") + "</textarea>"
+          : '<p class="ma">' + esc(q.answer) + "</p>") + "</li>";
+      }).join("") + "</ol>" + '<p class="mabout">' + esc(L.questionsLeft(m)) + '</p><div class="macts"><button class="sendbtn" type="button" data-act="qsend" data-k="' + esc(k) + '"' + dis + ">" + (busy ? "Sending…" : "Send answers") + "</button></div>";
+    }
+    return '<article class="wmsg" id="wait-' + esc(safe(m.id)) + '"><p class="mhead"><span><b>' + esc(m.from) + "</b> " + esc(L.needWords(m)) + (m.about ? " · about " + esc(m.about) : "") + '</span><span class="mtime">' + esc(when(m)) + "</span></p>" + about +
+      '<p class="mtext">' + esc(m.text) + "</p>" + opts + qhtml +
       (ui.reply === k ? replyBox(k, m) : '<div class="macts"><button class="copybtn" type="button" data-act="reply" data-k="' + esc(k) + '"' + dis + '>Reply</button><button class="copybtn" type="button" data-act="done" data-k="' + esc(k) + '"' + dis + ">" +
         (busy ? "Saving…" : "Mark as done") + "</button></div>") + errLine(k) + "</article>";
   }
@@ -257,7 +267,7 @@
   function seenMark(m) { var s = L.seenWords(m, board.today); return s ? '<span class="mseen' + (s.seen ? " yes" : "") + '">' + esc(s.text) + "</span>" : ""; }
   function head(m) {
     var lab = L.waitLabel(m);
-    return '<p class="mhead"><span><b>' + esc(m.from) + '</b> <span class="arrow">→</span> <b>' + esc(m.to === "all" ? "Everyone" : m.to) + '</b></span><span class="mtime">' + esc(when(m)) + "</span>" +
+    return '<p class="mhead"><span><b>' + esc(m.from) + "</b>" + (m.via ? " (via " + esc(m.via) + ")" : "") + ' <span class="arrow">→</span> <b>' + esc(m.to === "all" ? "Everyone" : m.to) + '</b></span><span class="mtime">' + esc(when(m)) + "</span>" +
       (lab ? '<span class="mlabel' + (lab.mine ? " mine" : lab.open ? " open" : "") + '">' + esc(lab.text) + "</span>" : "") + seenMark(m) + "</p>";
   }
   /* "You answered": the last two days, each with when it went and whether the bot has READ it since */
@@ -280,7 +290,9 @@
         (p.head ? '<p class="mtext">' + esc(open && p.rest ? p.head + "\n" + p.rest : p.head) + "</p>" : "") +
         (p.rest ? '<button class="linkbtn" type="button" data-act="more" data-k="' + esc(k) + '" aria-expanded="' + open + '">' + (open ? "Show less" : "Show all (" + p.more + " more line" + (p.more === 1 ? "" : "s") + ")") + "</button>" : "") + "</article>";
     }
-    return '<article class="t-card thread" id="messages-' + esc(id) + '">' + head(th) + '<p class="mtext">' + esc(th.text) + "</p>" +
+    var tq = L.questionLines(th);
+    return '<article class="t-card thread" id="messages-' + esc(id) + '">' + head(th) + (th.about ? '<p class="mabout">About ' + esc(th.about) + "</p>" : "") + '<p class="mtext">' + esc(th.text) + "</p>" +
+      (tq.length ? '<ol class="mqs">' + tq.map(function (q) { return '<li><p class="mq">' + esc(q.q) + '</p><p class="ma' + (q.open ? " open" : "") + '">' + esc(q.open ? "No answer yet" : q.answer) + "</p></li>"; }).join("") + "</ol>" : "") +
       ((th.options || []).length ? '<p class="mabout">Choices: ' + esc(th.options.join(" · ")) + "</p>" : "") +
       ((th.replies || []).length ? '<ul class="treplies">' + th.replies.map(function (r) { return "<li>" + head(r) + '<p class="mtext">' + esc(r.text) + "</p></li>"; }).join("") + "</ul>" : "") +
       (ui.tsent[k] && Date.now() - ui.tsent[k].at < KEEP_MS ? '<p class="landed tsent" role="status"><span>' + esc(ui.tsent[k].line) + "</span></p>" : "") +
@@ -329,8 +341,10 @@
      the first message of its thread, which closed an unrelated request at the top of the thread). The desk
      shows answers at any depth in their thread, and settles the message itself: the answer says
      settled: true when it did. note = the option Luke picked, kept with the closed message. */
-  function answer(m, text, note) {
-    return write("message", { to: m.from === "Luke" ? m.to : m.from, text: text, needs: "none", re: m.id, note: note || "" });
+  function answer(m, text, note, answers) {
+    var body = { to: m.from === "Luke" ? m.to : m.from, text: text, needs: "none", re: m.id, note: note || "" };
+    if (answers) body.answers = answers;
+    return write("message", body);
   }
   var waitsOnLuke = function (x) { return !!x && !x.resolved && x.to === "Luke" && !!x.needs && x.needs !== "none"; };
   $("messages").addEventListener("input", function (ev) { var k = ev.target.getAttribute && ev.target.getAttribute("data-f"); if (k) ui.drafts[k] = ev.target.value; });
@@ -387,6 +401,18 @@
         if (waits && r.j.settled) land(target, "reply", text);
         else if (waits) stillWaiting(target, "Your reply");
         else drawMessages();
+        reload();
+      });
+    }
+    else if (act === "qsend") {
+      var got = {}, lines = [];
+      L.questionLines(m).forEach(function (q) { var t = String(ui.drafts["qa:" + m.id + ":" + q.n] || "").trim(); if (q.open && t) { got[q.n] = t; lines.push(q.n + ". " + t); } });
+      if (!lines.length) { ui.err[k] = "Write at least one answer first."; drawMessages(); return; }
+      ui.busy = k; drawMessages();
+      answer(m, lines.join("\n"), "", got).then(function (r) {
+        if (!settle(r, function () { Object.keys(got).forEach(function (n) { delete ui.drafts["qa:" + m.id + ":" + n]; }); })) return;
+        if (r.j.settled) land(m, "reply", lines.join("\n"));
+        else stillWaiting(m, "Your answers");
         reload();
       });
     }

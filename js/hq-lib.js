@@ -474,6 +474,16 @@
     return open.length ? open[open.length - 1] : th;
   }
 
+  /* a message with numbered questions (14 Nov 2026): each with its answer, and how many are still open */
+  function questionLines(m) {
+    return ((m && m.questions) || []).map(function (q, i) { var a = String(q.answer || ""); return { n: i + 1, q: q.q, answer: a, open: !a }; });
+  }
+  function questionsLeft(m) {
+    var all = questionLines(m), left = all.filter(function (x) { return x.open; }).length;
+    if (!all.length || !left) return "";
+    return left + " of " + all.length + " question" + (all.length === 1 ? "" : "s") + " still need" + (left === 1 ? "s" : "") + " an answer";
+  }
+
   /* ---- Today ---- */
   /* "Needs attention" from the staff desk: messages waiting on Luke, income problems (3 at most,
      then "+N more"), the bots' connector switched off. */
@@ -1287,7 +1297,7 @@
     snapshot: snapshot, changesSince: changesSince, tiles: tiles, summaryText: summaryText, shortStep: shortStep, day: day,
     slug: slug, workerLabel: workerLabel, sortWorkers: sortWorkers, workerView: workerView, dutyWhen: dutyWhen, workerCounts: workerCounts, seenLine: seenLine, connectorLine: connectorLine,
     novaMessage: novaMessage, liveFeed: liveFeed, spWhen: spWhen, waitLabel: waitLabel, needWords: needWords, reportParts: reportParts, siteCheckLine: siteCheckLine, composeNames: composeNames,
-    threadRoot: threadRoot, answerTarget: answerTarget, stepButton: stepButton, formKey: formKey, staffAttention: staffAttention, staffHealth: staffHealth, curList: curList, cadenceWord: cadenceWord, accountLine: accountLine, sourceState: sourceState, payLine: payLine,
+    threadRoot: threadRoot, answerTarget: answerTarget, questionLines: questionLines, questionsLeft: questionsLeft, stepButton: stepButton, formKey: formKey, staffAttention: staffAttention, staffHealth: staffHealth, curList: curList, cadenceWord: cadenceWord, accountLine: accountLine, sourceState: sourceState, payLine: payLine,
     incomeEmpty: incomeEmpty, incomeProblems: incomeProblems,
     /* replies that visibly land + the release pipeline (11 Nov 2026) */
     spStampOf: spStampOf, seenWords: seenWords, sentLine: sentLine, answeredList: answeredList, CLAUDE_ROUNDS: CLAUDE_ROUNDS,

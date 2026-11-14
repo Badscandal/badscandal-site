@@ -179,7 +179,7 @@ async function api(req, context, path) {
   const a = b.value;
   try {
     if (path === "message" && req.method === "POST") {
-      const r = await S.sendMessage(st.desk, now, roster, { from: me, to: a.to, text: a.text, needs: a.needs, re: a.re, options: a.options, note: a.note });
+      const r = await S.sendMessage(st.desk, now, roster, { from: me, to: a.to, text: a.text, needs: a.needs, re: a.re, options: a.options, note: a.note, answers: a.answers, questions: a.questions, about: a.about });
       if (role === "claude" && asksLuke(r.message)) await pushAfter(context, st, now);
       return json(200, { ok: true, message: r.message, settled: r.settled });
     }
