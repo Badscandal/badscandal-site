@@ -1147,6 +1147,86 @@
     return w.state === "idle" ? "Nothing to do today" : workerLabel(w.state);
   }
 
+  /* ---------- Planning releases (14 Nov 2026) ----------
+     Luke: "a calender with team reccomendations for next release timelines on how long it takes for things
+     to get to the store from routenote etc, and delays issues etc … scheduled correctly well in advance …
+     when i upload it should suggest dates". The team's rule, from RouteNote's and Spotify's own guidance:
+     RouteNote checks a release in 2–3 working days, Spotify and Apple have it 2–5 days after approval,
+     other stores take up to 2–4 weeks, the pitch must be in 7+ days before release (2+ weeks is better),
+     and the holidays are slower. So: send to RouteNote 4 weeks before (3 at the very least), Fridays, and
+     2 weeks between two songs (a week as Out now, a week as the next one). */
+  var PLAN_RULE = { recommend: 28, minimum: 21, gap: 14, weekday: "Friday" };
+  var PLAN_TIMELINE = [
+    { what: "RouteNote checks the release", time: "2–3 working days (longer when they're busy; a rejection starts it again)" },
+    { what: "Spotify and Apple Music have it", time: "2–5 days after approval" },
+    { what: "Other stores (Amazon, Deezer, TikTok…)", time: "up to 2–4 weeks after approval" },
+    { what: "It shows in Spotify for Artists as upcoming", time: "a few days after Spotify gets it" },
+    { what: "Spotify pitch", time: "at least 7 days before release, 2+ weeks is better: Atlas sends it the day it shows" },
+    { what: "Lyrics live", time: "once the song is in the stores; due 10 days before release" },
+    { what: "Holiday weeks (mid-December to early January)", time: "everything is slower: allow an extra week" },
+  ];
+  var ymd = function (d) { return new Date(String(d) + "T12:00:00Z"); };
+  var plusDays = function (d, n) { return new Date(ymd(d).getTime() + n * 86400000).toISOString().slice(0, 10); };
+  var daysApart = function (a, b) { return Math.round((ymd(b) - ymd(a)) / 86400000); };
+  function holiday(d) { var md = String(d).slice(5); return md >= "12-15" || md <= "01-08"; }
+  /* the other songs that hold a release day: sent or drafted with a day, not cancelled, not the one being planned */
+  function heldDays(releases, except) {
+    return (releases || []).filter(function (r) { return r && r.id !== except && r.status !== "cancelled" && !r.alreadyOut && isDay(r.date); });
+  }
+  function suggestDates(today, releases, o) {
+    o = o || {};
+    var n = o.n || 3, held = heldDays(releases, o.except), out = [];
+    var d = plusDays(today, PLAN_RULE.recommend);
+    while (ymd(d).getUTCDay() !== 5) d = plusDays(d, 1);
+    for (var i = 0; i < 80 && out.length < n; i++, d = plusDays(d, 7)) {
+      var clash = held.some(function (r) { return Math.abs(daysApart(r.date, d)) < PLAN_RULE.gap; });
+      if (clash) continue;
+      out.push({ date: d, words: day(d), weeks: Math.round(daysApart(today, d) / 7), best: !out.length, note: holiday(d) ? "Holiday weeks: the stores are slower" : "" });
+    }
+    return out;
+  }
+  function planAdvice(date, today, releases, o) {
+    o = o || {};
+    if (!isDay(date) || date < today) return [];
+    var out = [], n = daysApart(today, date);
+    if (n < PLAN_RULE.minimum) out.push({ bad: true, text: "Only " + plural(n, "day") + " away: RouteNote and the stores need 3 weeks at the very least (4 is the team's rule). The Spotify pitch may miss." });
+    else if (n < PLAN_RULE.recommend) out.push({ bad: false, text: n + " days away: it can work, but 4 weeks is the team's rule." });
+    heldDays(releases, o.except).filter(function (r) { return Math.abs(daysApart(r.date, date)) < PLAN_RULE.gap; }).forEach(function (r) {
+      out.push({ bad: true, text: r.title + " comes out on " + day(r.date) + ": leave 2 weeks between songs (a week as Out now, a week as next)." });
+    });
+    var wd = ymd(date).getUTCDay();
+    if (wd !== 5) { var back = (wd + 2) % 7, fwd = (5 - wd + 7) % 7; out.push({ bad: false, text: "Songs come out on Fridays: " + day(plusDays(date, fwd <= back ? fwd : -back)) + " is the nearest." }); }
+    if (holiday(date)) out.push({ bad: false, text: "Holiday weeks: the stores are slower, allow an extra week." });
+    return out;
+  }
+  var MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+  function calendarMonth(ym, releases, today) {
+    if (!/^\d{4}-\d{2}$/.test(String(ym || "")) || Number(String(ym).slice(5)) < 1 || Number(String(ym).slice(5)) > 12) ym = String(today).slice(0, 7);
+    var y = Number(ym.slice(0, 4)), mo = Number(ym.slice(5, 7));
+    var first = ym + "-01", lead = (ymd(first).getUTCDay() + 6) % 7, start = plusDays(first, -lead);
+    var pad = function (v) { return (v < 10 ? "0" : "") + v; };
+    var prev = mo === 1 ? (y - 1) + "-12" : y + "-" + pad(mo - 1), next = mo === 12 ? (y + 1) + "-01" : y + "-" + pad(mo + 1);
+    var live = (releases || []).filter(function (r) { return r && r.status !== "cancelled"; });
+    var weeks = [], d = start;
+    while (weeks.length < 6) {
+      var row = [];
+      for (var i = 0; i < 7; i++, d = plusDays(d, 1)) {
+        var items = [];
+        live.forEach(function (r) { if (r.date === d) items.push({ kind: "release", id: r.id, title: r.title, draft: r.status === "draft" }); });
+        live.forEach(function (r) {
+          (r.steps || []).forEach(function (st) {
+            if (st.due !== d || st.status === "done" || st.status === "skipped" || st.waiting) return;
+            items.push({ kind: "step", id: r.id, title: r.title, label: st.label, owner: st.owner, late: d < today });
+          });
+        });
+        row.push({ date: d, day: Number(d.slice(8)), inMonth: d.slice(0, 7) === ym, today: d === today, items: items });
+      }
+      weeks.push(row);
+      if (d.slice(0, 7) !== ym) break;
+    }
+    return { ym: ym, title: MONTHS[mo - 1] + " " + y, prev: prev, next: next, weeks: weeks };
+  }
+
   /* ---------- "Search or Ask" (the HQ redesign, 12 Nov 2026) ----------
      One bar (⌘K, or the magnifier) that jumps anywhere. cmdIndex builds the list from what the page has
      already loaded (o.board = the staff board, o.songs = [{name, id}] as Songs draws them); cmdResults
@@ -1229,5 +1309,7 @@
     /* the HQ redesign (12 Nov 2026): Search or Ask */
     cmdIndex: cmdIndex, cmdResults: cmdResults,
     /* Team, simpler (13 Nov 2026) */
-    teamGroups: teamGroups, teamCounts: teamCounts, botProblems: botProblems, botNext: botNext };
+    teamGroups: teamGroups, teamCounts: teamCounts, botProblems: botProblems, botNext: botNext,
+    /* planning releases (14 Nov 2026) */
+    PLAN_RULE: PLAN_RULE, PLAN_TIMELINE: PLAN_TIMELINE, suggestDates: suggestDates, planAdvice: planAdvice, calendarMonth: calendarMonth };
 });

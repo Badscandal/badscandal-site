@@ -1171,6 +1171,60 @@ a.t-card:hover,button.t-card:hover,#shell a.tile:hover{border-color:var(--accent
   .bl{order:3;flex-basis:100%;padding-left:22px;white-space:normal}
 }
 @media (prefers-reduced-motion:reduce){.bmore > summary::after,.connfold > summary::after,.botrow > summary::after{transition:none}}
+
+/* ================= Planning releases (14 Nov 2026) =================
+   Upcoming opens on the plan: the next good release days, the calendar, how long things take. */
+.relplan{margin:4px 0 8px}
+.plangrid{display:grid;gap:12px;grid-template-columns:minmax(0,1fr)}
+@media(min-width:1000px){.plangrid{grid-template-columns:minmax(0,1fr) minmax(0,1.6fr);align-items:start}}
+.plan-next .lblh{margin-top:0}
+.pchips{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:10px 0 0}
+.pchips-l{font-size:14px;color:var(--muted);margin-right:2px}
+.pchip{display:inline-flex;flex-direction:column;align-items:flex-start;min-height:48px;padding:7px 14px;border-radius:16px;border:.5px solid var(--glass-line);background:rgba(255,255,255,.05);color:var(--paper);font:600 15px var(--sans);cursor:pointer;text-align:left}
+.pchip small{font-size:13px;font-weight:500;color:var(--muted)}
+.pchip.best{background:var(--accent-soft);border-color:var(--accent-line);color:var(--accent)}
+.pchip:hover{background:rgba(255,255,255,.09)}
+.plan-draft{margin:14px 0 0;font-size:15px;color:var(--uv)} .plan-draft b{color:var(--paper)}
+.plan-draft .linkbtn{font-size:15px}
+.cal-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:0 0 10px}
+.cal-head h3{margin:0;font-size:18px;font-weight:700}
+.cal-head .iconbtn{font-size:22px;line-height:1}
+.cal-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px}
+.cw{font:500 13px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--muted);text-align:center;padding:2px 0 4px}
+.cday{position:relative;display:flex;flex-direction:column;align-items:stretch;gap:3px;min-height:64px;padding:6px 5px;border-radius:12px;border:.5px solid transparent;background:rgba(255,255,255,.03);color:var(--paper);font:500 13px var(--sans);text-align:left;cursor:pointer;min-width:0}
+.cday:hover{background:rgba(255,255,255,.07)}
+.cday.out{opacity:.38}
+.cday .cn{font-size:14px;font-weight:600;font-variant-numeric:tabular-nums}
+.cday.now .cn{display:inline-grid;place-items:center;width:24px;height:24px;border-radius:50%;background:var(--accent);color:var(--accent-ink)}
+.cday.sel{border-color:var(--accent-line);background:var(--accent-soft)}
+.cday.rel{background:linear-gradient(160deg,rgba(165,180,252,.20),rgba(165,180,252,.06))}
+.crel{display:block;font-size:13px;font-weight:700;line-height:1.2;color:var(--accent);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.crel.draft{color:var(--uv);font-style:italic}
+.cdots{display:flex;flex-wrap:wrap;gap:3px;align-items:center;font-size:13px;color:var(--muted)}
+.cdots i{width:6px;height:6px;border-radius:50%;background:var(--uv)}
+.cdots.late i{background:var(--red)}
+.cal-key{display:flex;flex-wrap:wrap;gap:14px;margin:10px 0 0;font-size:13px;color:var(--muted)}
+.cal-key .k::before{content:"";display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px;vertical-align:1px}
+.cal-key .rel::before{background:var(--accent)} .cal-key .dot::before{background:var(--uv)} .cal-key .late::before{background:var(--red)}
+.cal-hint{margin:10px 0 0;font-size:14px;color:var(--muted)}
+.cal-day{margin:12px 0 0;padding:12px 0 0;border-top:.5px solid var(--glass-line)}
+.cal-day h4{margin:0 0 6px;font-size:15px}
+.cal-items{list-style:none;margin:0;padding:0}
+.cal-items li a{display:block;padding:8px 0;font-size:15px;color:var(--uv);text-decoration:none;border-top:.5px solid var(--glass-line)}
+.cal-items li:first-child a{border-top:0}
+.cal-items li b{color:var(--paper)} .cal-items li.r a{color:var(--accent)} .cal-items li.r b{color:var(--accent)} .cal-items li.late a{color:var(--red)}
+.plan-time{margin-top:12px}
+.plan-time > summary{min-height:44px;display:flex;align-items:center;cursor:pointer;font-size:15px;font-weight:600;list-style:none}
+.plan-time > summary::-webkit-details-marker{display:none}
+.plan-time > summary::after{content:"›";margin-left:auto;font-size:20px;color:var(--muted);transition:transform .2s}
+.plan-time[open] > summary::after{transform:rotate(90deg)}
+.tl{list-style:none;margin:6px 0 0;padding:0}
+.tl li{display:grid;grid-template-columns:minmax(0,1fr);gap:2px;padding:9px 0;border-top:.5px solid var(--glass-line);font-size:15px}
+@media(min-width:720px){.tl li{grid-template-columns:minmax(0,1fr) minmax(0,1.3fr);gap:16px}}
+.tl li b{font-weight:600} .tl li span{color:var(--uv)}
+.tl-rule{margin:12px 0 4px;font-size:15px;line-height:1.45;color:var(--uv)} .tl-rule b{color:var(--paper)}
+@media(max-width:599px){.cday{min-height:52px;padding:5px 3px}.crel{font-size:13px;white-space:normal;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}.cdots i{width:5px;height:5px}}
+@media (prefers-reduced-motion:reduce){.plan-time > summary::after{transition:none}}
 </style>
 </head>
 <body>
@@ -1394,7 +1448,9 @@ a.t-card:hover,button.t-card:hover,#shell a.tile:hover{border-color:var(--accent
        yet), In Spotify for Artists (what Atlas last saw there). Songs that are out live in Songs. -->
   <section class="card view" id="releases"><h2>Upcoming</h2><p class="sub" id="relSub">Every song on its way out: its files and details, and each bot's step with its date.</p><div class="sheeterr" id="errReleases" hidden></div>
     <p class="mnote" id="relSample" hidden>This is the sample: the form opens, but saving, sending, changing a date, marking steps and answering are switched off here.</p>
-    <h3 class="sech relh first">In the pipeline</h3>
+    <!-- planning (14 Nov 2026): the next good release days, the calendar, how long things take -->
+    <div class="relplan" id="relPlan"></div>
+    <h3 class="sech relh">In the pipeline</h3>
     <p class="secsub">Songs being prepared. Fill in what you have; “Send to the team” moves a song to Upcoming.</p>
     <div class="relbar"><button class="sendbtn" id="relNew" type="button" aria-controls="relForm" aria-expanded="false">New song</button><span class="fok" id="relMsg" role="status"></span></div>
     <form class="t-card relform" id="relForm" aria-labelledby="rfTitleH" novalidate hidden></form>
