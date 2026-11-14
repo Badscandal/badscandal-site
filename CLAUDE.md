@@ -2023,8 +2023,9 @@ build it and piblish it don't forget about suvivors".
 * **Suggested days where they're needed** (`HQLib.planAdvice(date, today, releases, {except})`: too close
   (under 21 days: red; under 28: a note), another song within 2 weeks (red), not a Friday (with the
   nearest), holiday weeks): under the form's release day (with "Suggested days" / "Better days" to tap) and
-  on each draft's card (Survivors: its Mon 14 Dec is 6 days after Slow Burn and not a Friday, so the card
-  offers better days; a tap opens its form with that day).
+  on each draft's card (in the made-up sample, Survivors' Mon 14 Dec is 6 days after Slow Burn and not a
+  Friday, so its card offers better days; a tap opens its form with that day). A draft with no day yet gets
+  "<song> has no release day yet. Use Fri … for <song>" in the plan.
 * **Who does what** (Luke's words, in the connector's `INSTRUCTIONS`, which every bot gets on connecting,
   and in their my_day steps): Drop submits everything to RouteNote and keeps the schedule; Atlas sends the
   pitch the SAME DAY the song shows in Spotify for Artists and improves Luke's words first; Laura uploads the
