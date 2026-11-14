@@ -763,6 +763,9 @@ export const PACK_FIELDS = [
   F("deal", "The deal in a few words (contract, date signed, where the money comes from)", "The deal", "text", "deal", { showWhen: WITH_LABEL, max: 600, hint: 'Optional. For example "Contract signed 3 Mar 2026; the label pays royalties twice a year".' }),
   F("wav", "Master WAV (link)", "Master WAV", "link", "files", { required: true, hint: "A download link to the final master, as a WAV file (Dropbox, Google Drive...). It must start with https://" }),
   F("artwork", "Artwork, 3000 x 3000 (link)", "Artwork", "link", "files", { required: true, hint: "A link to the cover: square, 3000 x 3000 pixels, JPG or PNG. No store logos or web addresses on it." }),
+  /* the visualiser (14 Nov 2026, Luke: "should be visualiser for laura and i add the link there for her to
+     upload to YT, and she should put the description on yt like the other visualisers") */
+  F("visualiser", "Visualiser video (link)", "Visualiser", "link", "files", { neededBy: "video", fill: [], hint: "A download link to the visualiser video (Dropbox, Google Drive...). Laura uploads it to YouTube and writes the description like the other visualisers. It must start with https://" }),
   F("folder", "Folder with the release files (link)", "Folder", "link", "files", { hint: "Optional. One shared folder with the master, the cover, stems and clips." }),
   F("language", "Language of the lyrics", "Language", "line", "stores", { required: true, hint: 'For example "Portuguese", "English", or "Instrumental".' }),
   F("explicit", "Explicit lyrics?", "Explicit", "choice", "stores", { required: true, choices: ["No", "Yes", "Clean version"], hint: "Yes if the lyrics swear or are sexual. RouteNote asks for it." }),
@@ -910,12 +913,35 @@ function packSecrets(f, out) {
    late is compressed, never born late. tight = sent fewer than 21 days before its day.
    o.labelDelivers: the RouteNote upload and approval are "skipped" (the label delivers it).
    o.alreadyOut: a song recorded after it came out (for its deal): every step skipped, no dates. */
+/* Webmaster's song page (14 Nov 2026, Luke: "web masters job is to create the link for the song before it
+   comes out … in order of what song is next and one week after the previous song releases"): due a week
+   after the previous song's release day (that song has had its week as "Out now"), never later than the
+   day before its own release; with no song before it, a week before its own day. Never in the past. */
+export function pageDue(date, prevDate, today) {
+  let want = isDay(prevDate) ? addDays(prevDate, 7) : addDays(date, -7);
+  if (want >= date) want = addDays(date, -1);
+  return want < today ? today : want;
+}
+/* the release that comes out last before `date` (scheduled, not recorded-after-it-came-out), not `id` */
+export function prevReleaseDate(list, id, date) {
+  const before = (list || []).filter((x) => x && x.id !== id && x.status === "scheduled" && !x.alreadyOut && isDay(x.date) && x.date < date).map((x) => x.date).sort();
+  return before.length ? before[before.length - 1] : null;
+}
+/* after a release is sent, moved or cancelled: every song page not started yet follows the release order */
+function reorderPages(list, today) {
+  for (const r of list || []) {
+    if (!r || r.status !== "scheduled" || r.alreadyOut || !isDay(r.date)) continue;
+    const st = (r.steps || []).find((x) => x.key === "page");
+    if (st && st.status === "todo") st.due = pageDue(r.date, prevReleaseDate(list, r.id, r.date), today);
+  }
+}
 export function scheduleSteps(date, today, o = {}) {
   if (o.alreadyOut) return { steps: RELEASE_STEPS.map((s) => ({ key: s.key, label: s.label, owner: s.owner, due: null, status: "skipped", note: OUT_NOTE, link: "", at: null, by: null })), tight: false };
   const steps = RELEASE_STEPS.map((s) => {
     const want = addDays(date, -s.days);
     const skip = o.labelDelivers && (s.key === "upload" || s.key === "approved");
-    return { key: s.key, label: s.label, owner: s.owner, due: want < today ? today : want, status: skip ? "skipped" : "todo", note: skip ? LABEL_NOTE : "", link: "", at: null, by: null };
+    const due = s.key === "page" ? pageDue(date, o.prevDate, today) : want < today ? today : want;
+    return { key: s.key, label: s.label, owner: s.owner, due, status: skip ? "skipped" : "todo", note: skip ? LABEL_NOTE : "", link: "", at: null, by: null };
   });
   return { steps, tight: daysBetween(today, date) < 21 };
 }
@@ -928,10 +954,11 @@ function waitingFor(steps, s) {
   return a && !finished(a) ? a : null;
 }
 const waitWords = (a) => (a.key === "spotify" ? "waiting: the song is not in Spotify for Artists yet" : `waiting for "${a.label}"`);
-/* the moment a step is done (or skipped), the steps that waited for it become ordinary steps, due no
-   earlier than today: they are never born late */
+/* the moment a step is done (or skipped), the steps that waited for it become ordinary steps, due TODAY:
+   never born late, and the Spotify pitch goes the day the song shows in Spotify for Artists (14 Nov 2026,
+   Luke: "spotify pitch should be sent immediately when the song becomes available in spotify") */
 function freeWaiting(r, key, today) {
-  for (const s of r.steps || []) if (STEP[s.key] && STEP[s.key].after === key && !finished(s) && s.due && s.due < today) s.due = today;
+  for (const s of r.steps || []) if (STEP[s.key] && STEP[s.key].after === key && !finished(s) && s.due) s.due = today;
 }
 /* label release or not, after a change of the pack on a release already sent: the upload and the
    approval follow the deal (only while nobody has started them) */
@@ -983,10 +1010,15 @@ export function releaseView(r, today, o = {}) {
   for (const f of PACK_FIELDS) if (requiredNow(f, pack) && !filled(pack[f.key]) && (!out || f.group === "deal")) missing.push({ key: f.key, label: f.label, short: f.short, required: true, neededBy: "", step: "", owner: "", due: null });
   for (const f of PACK_FIELDS) if (!out && !requiredNow(f, pack) && f.neededBy && !filled(pack[f.key])) {
     const st = steps.find((x) => x.key === f.neededBy);
-    if (st && st.status === "skipped") continue; /* the label delivers it: nothing of ours needs the field */
+    if (st && finished(st)) continue; /* the label delivers it, or the step is done already: nothing needs the field any more */
     if (!st && labelDelivers(pack) && (f.neededBy === "upload" || f.neededBy === "approved")) continue; /* nor in a draft */
     missing.push({ key: f.key, label: f.label, short: f.short, required: false, neededBy: f.neededBy, step: STEP[f.neededBy].label, owner: STEP[f.neededBy].owner, due: dueOf(f.neededBy) });
   }
+  /* after what is needed to send, the most urgent first: the field whose step is due soonest (14 Nov 2026).
+     A step that waits (the pitch, for Spotify for Artists) has no real day yet: its fields go last. */
+  const firstOpt = missing.findIndex((m) => !m.required);
+  const when = (m) => { const st = steps.find((x) => x.key === m.neededBy); return st && st.waiting ? "9" : m.due || "9"; };
+  if (firstOpt >= 0) missing.splice(firstOpt, missing.length - firstOpt, ...missing.slice(firstOpt).map((m, i) => [m, i]).sort((a, b) => (when(a[0]) < when(b[0]) ? -1 : when(a[0]) > when(b[0]) ? 1 : a[1] - b[1])).map((x) => x[0]));
   /* "Pack: 14 of 17 filled": the fields Luke fills about the song; the team's "later" fields and the
      deal (shown on its own line) are not counted */
   const own = PACK_FIELDS.filter((f) => f.group !== "later" && f.group !== "deal");
@@ -1228,7 +1260,7 @@ export async function sendRelease(store, now, roster, a) {
       e.missing = miss.map((m) => m.key); e.anyway = !noDay; throw e;
     }
     const alreadyOut = r.date < today;
-    const s = scheduleSteps(r.date, today, { alreadyOut, labelDelivers: labelDelivers(r.pack) });
+    const s = scheduleSteps(r.date, today, { alreadyOut, labelDelivers: labelDelivers(r.pack), prevDate: prevReleaseDate(list, r.id, r.date) });
     /* sentWithout (11 Nov 2026, review): what "send anyway" left out, kept on the release. Only this makes the
        "Sent without …" warning: a release sent before a field was required was never sent without it. */
     Object.assign(r, { status: "scheduled", sentAt: at, updatedAt: at, steps: s.steps, tight: s.tight, sentWithout: miss.map((m) => m.key), ...(alreadyOut ? { alreadyOut: true } : {}) });
@@ -1239,6 +1271,7 @@ export async function sendRelease(store, now, roster, a) {
     const without = miss.length ? ` without ${joinWords(miss.map((m) => m.short))} (sent anyway)` : "";
     logIt(r, at, by, alreadyOut ? `${by} recorded it as already out (${dayWords(r.date)}): no steps` + without
       : `${by} sent it to the team for ${dayWords(r.date)}` + (s.tight ? ` (${daysBetween(today, r.date)} days before release: the early steps are due today)` : "") + without);
+    reorderPages(list, today);
     return { value: { release: r, already: false, alreadyOut, without: miss.map((m) => m.key) } };
   });
   if (out.already || out.alreadyOut) return { ...out, told: null };
@@ -1267,7 +1300,7 @@ export async function moveRelease(store, now, roster, a) {
     if (from === date) return { skip: true, value: { release: r, moved: false } };
     let added = false, doneOutside = [];
     if (r.status === "scheduled" && !r.alreadyOut) {
-      const s = scheduleSteps(date, today);
+      const s = scheduleSteps(date, today, { prevDate: prevReleaseDate(list, r.id, date) });
       /* a release sent before the Spotify step existed gets it now, when Luke moves it (11 Nov 2026) */
       if (!r.steps.some((x) => x.key === "spotify")) {
         const n = s.steps.find((x) => x.key === "spotify"), at2 = r.steps.findIndex((x) => x.key === "pitch");
@@ -1283,6 +1316,7 @@ export async function moveRelease(store, now, roster, a) {
     }
     r.date = date; r.updatedAt = at;
     logIt(r, at, by, (from ? `${by} moved the date from ${dayWords(from)} to ${dayWords(date)}` : `${by} set the release day to ${dayWords(date)}`) + (added ? "; added the step \"Showing as upcoming in Spotify for Artists\"" + (added === "skipped" ? " (skipped: the pitch was already sent)" : "") : ""));
+    reorderPages(list, today);
     return { value: { release: r, moved: true, from, doneOutside } };
   });
   if (!out.moved || out.release.status !== "scheduled" || out.release.alreadyOut) return { ...out, told: null };
@@ -1303,6 +1337,7 @@ export async function cancelRelease(store, now, roster, a) {
     const was = r.status;
     r.status = "cancelled"; r.updatedAt = at;
     logIt(r, at, by, `${by} cancelled it`);
+    reorderPages(list, spDay(now));
     return { value: { release: r, was } };
   });
   if (out.was !== "scheduled") return { ...out, told: null };

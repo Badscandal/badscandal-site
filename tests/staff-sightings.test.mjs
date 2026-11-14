@@ -208,7 +208,7 @@ test("warnings: each sentence, most urgent first", () => {
   /* a blocked step */
   assert.deepEqual(warn(made("2026-12-05", "2026-11-01", { set: S2("upload", { status: "blocked", note: "Needs the cover" }) })), ["Uploaded to RouteNote with the release date is blocked (Drop): Needs the cover"]);
   /* something missing that a step needs within 3 days */
-  assert.deepEqual(warn(made("2026-11-24", "2026-11-01", { pack: FULL, set: S2("spotify", { status: "done" }) })).filter((w) => /missing/.test(w)), ["Lyrics are missing and Lyrics live is due Sat 14 Nov", "Mood, instruments and the song in two lines are missing and Spotify pitch sent was due Tue 10 Nov"]);
+  assert.deepEqual(warn(made("2026-11-24", "2026-11-01", { pack: FULL, set: S2("spotify", { status: "done" }) })).filter((w) => /missing/.test(w)), ["Mood, instruments and the song in two lines are missing and Spotify pitch sent was due Tue 10 Nov", "Lyrics are missing and Lyrics live is due Sat 14 Nov"] /* most urgent first: the pitch was due first (14 Nov 2026) */);
   assert.deepEqual(warn(made("2026-12-05", "2026-11-01", { pack: { ...FULL, lyrics: "la", instruments: "i" }, set: { spotify: { status: "done" }, pitch: { due: "2026-11-14" } } })), ["Mood and the song in two lines are missing and Spotify pitch sent is due Sat 14 Nov"]);
   /* not in Spotify for Artists, 14 days or fewer before release */
   const s14 = made("2026-11-26", "2026-11-01");

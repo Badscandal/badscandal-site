@@ -330,14 +330,14 @@ test("releases: a step's state in words; red only for late and blocked", () => {
 test("releases: what's missing, the card's pill, and the same sentence the desk refuses with", async () => {
   const b = sampleBoard(NOW), v = (id) => b.releases.find((r) => r.id === id);
   const mdsb = L.packLine(v("medaseubody"), b.today);
-  assert.match(mdsb.filled, /^\d+ of 17 filled$/);
+  assert.match(mdsb.filled, /^\d+ of 18 filled$/);
   assert.equal(mdsb.items[0].text, "Lyrics (needed for the lyrics, Sat 14 Nov)");
   assert.equal(mdsb.attn, true, "the lyrics are needed within 3 days");
-  assert.deepEqual(mdsb.items.map((x) => x.text.split(" ")[0] + ":" + x.attn), ["Lyrics:true", "The:false"], "lyrics soon; the pitch WAITS for Spotify for Artists (v2), so its field is neither dated nor red; the video link is Laura's to fill, never missing");
-  assert.equal(mdsb.items[1].text, "The song in two lines (needed for the Spotify pitch)");
+  assert.deepEqual(mdsb.items.map((x) => x.text.split(" ")[0] + ":" + x.attn), ["Lyrics:true", "Visualiser:false", "The:false"], "lyrics soon; the visualiser for Laura's step (14 Nov 2026) after it; the pitch WAITS for Spotify for Artists (v2), so its field is neither dated nor red and comes last; the video link itself is Laura's result, never missing");
+  assert.equal(mdsb.items[2].text, "The song in two lines (needed for the Spotify pitch)");
   const draft = L.packLine(v("survivors"), b.today);
   assert.equal(draft.attn, false, "a draft is not late"); assert.equal(draft.items.length, 4); assert.ok(draft.more > 0);
-  assert.equal(L.packLine(v("touchme"), b.today).text, v("touchme").packFilled + " of 17 filled");
+  assert.equal(L.packLine(v("touchme"), b.today).text, v("touchme").packFilled + " of 18 filled");
   assert.equal(L.missingWords({ short: "Copyright line", step: "Uploaded to RouteNote with the release date", due: "2026-11-20" }), "Copyright line (needed for the RouteNote upload, Fri 20 Nov)");
   assert.equal(L.missingWords({ short: "Artwork", step: "" }), "Artwork");
   assert.deepEqual(L.relPill(v("medaseubody"), b.today), { text: "1 blocked", bad: true, rel: false });
@@ -369,7 +369,7 @@ test("releases: the form sends only what changed, so a field the team filled mea
   assert.deepEqual(g.map((x) => x.title), ["Whose release is it", "The files", "For the stores", "Lyrics", "For the pitch (can wait)", "Later, the team fills these", "Notes"]);
   assert.equal(g.reduce((n, x) => n + x.fields.length, 0), fields.length, "every field of the desk is on the form, once");
   assert.deepEqual(g[0].fields.map((f) => f.key), ["kind", "label", "split", "distributor", "deal"], "whose release it is comes first (v2)");
-  assert.deepEqual(g[1].fields.map((f) => f.key), ["wav", "artwork", "folder"]);
+  assert.deepEqual(g[1].fields.map((f) => f.key), ["wav", "artwork", "visualiser", "folder"]);
   assert.deepEqual(L.formGroups([{ key: "bpm", group: "new-group" }])[0].title, "Notes", "a field in a group the page doesn't know still shows");
 });
 
