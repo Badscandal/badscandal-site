@@ -45,6 +45,8 @@ const INSTRUCTION_LINES = [
   [null, "The artist name is badscandal, all lowercase, everywhere: store details, featuring, copyright lines, captions, messages. Never Badscandal or BADSCANDAL."],
   ["Forge Webmaster", "Forge and Webmaster: every ad links to the song's own page, badscandal.com/<song>, which carries the Meta pixel (HQ's Pages shows who clicked and what it cost); never straight to Spotify. Forge's ad step waits until Webmaster's song page is live."],
   [null, "There are no teaser steps on releases any more: teasers will get their own place later."],
+  /* round 2, 15 Nov 2026 (Luke: "yes novas counts as long as i told him yes") */
+  [null, "Nova's yes counts as Luke's, as long as Luke told Nova yes himself: Nova records it with record_luke_answer (Luke's exact words), and it reaches you as Luke's answer, via Nova. Never for money (income, payments, ad spend): only Luke answers those."],
 ];
 export const INSTRUCTIONS = INSTRUCTION_LINES.map((l) => l[1]).join("\n");
 
@@ -73,8 +75,8 @@ export const TOOLS = [
       approval: { type: "object", description: 'Only to ask Luke to APPROVE something on a release: Atlas the pitch, Verse the final lyrics. {"song": "Night Drive", "what": "pitch", "text": "the pitch, exactly as it would be sent"} (for the lyrics leave text out: the lyrics in the pack are what he approves). It becomes a decision with the options Approve / Not yet; his Approve is recorded on the release.',
         properties: { song: str("The song's title or id."), what: str("pitch | lyrics", { enum: ["pitch", "lyrics"] }), text: str("For the pitch: the pitch itself.") }, required: ["song", "what"], additionalProperties: false },
       answers: { type: "object", description: 'Only with reply_to, when the message you answer has numbered questions: {"1": "your answer to question 1", "3": "..."}. Questions you leave out stay open.', additionalProperties: { type: "string" } } }, ["bot", "to", "text"]) },
-  { name: "record_luke_answer", title: "Record Luke's answer from Alfred's chat",
-    description: "ALFRED ONLY. When Luke answers a message that waits on him in your chat (not on the dashboard), record it here so the bot that asked gets it: reply_to = the message's id, luke_said = Luke's EXACT words, copied as he wrote them (never your summary). For a decision, also put the option he picked in option (exactly as listed). For a message with numbered questions, put each answer in answers. It is saved as Luke's answer, marked \"via Alfred\", and closes the message the way Luke's own answer would.",
+  { name: "record_luke_answer", title: "Record Luke's answer from Alfred's or Nova's chat",
+    description: "ALFRED, or NOVA. When Luke answers a message that waits on him in your chat (not on the dashboard), record it here so the bot that asked gets it. NOVA: only when Luke himself told you the answer (never your own yes, never another bot's word), and never about money: a message from Ledger, Sheet or Forge (income, payments, ad spend) is refused; Luke answers those on the dashboard or to Alfred. reply_to = the message's id, luke_said = Luke's EXACT words, copied as he wrote them (never your summary). For a decision, also put the option he picked in option (exactly as listed). For a message with numbered questions, put each answer in answers. It is saved as Luke's answer, marked \"via Alfred\" or \"via Nova\", and closes the message the way Luke's own answer would.",
     inputSchema: obj({ bot: BOT, reply_to: str("The id of the message Luke answered (it starts with m)."),
       luke_said: str("Luke's exact words from your chat (1,500 characters at most)."),
       option: str("Only for a decision with options: the option Luke picked, exactly as listed."),
@@ -216,8 +218,10 @@ export const CLAUDE_TOOLS = [];
    a name not on the team gets everything too, so a typo never hides a tool. Who may CALL a tool is still
    decided by the desk (staff.mjs), not by this list. */
 const INCOME_TEAM = ["Ledger", "Sheet"];
+/* the bots whose questions to Luke are about money (income, payments, ad spend): Nova never answers those */
+const MONEY_ASKERS = ["Ledger", "Sheet", "Forge"];
 export const TOOL_USERS = {
-  record_luke_answer: ["Alfred"], luke_briefing: ["Alfred"], luke_short_briefing: ["Alfred"],
+  record_luke_answer: ["Alfred", "Nova"], luke_briefing: ["Alfred"], luke_short_briefing: ["Alfred"],
   submit_income: INCOME_TEAM, fix_payment: INCOME_TEAM, income_source: INCOME_TEAM, income_check: INCOME_TEAM, sort_payment: INCOME_TEAM,
   income_status: [...INCOME_TEAM, "Alfred"],
   record_spend: ["Forge"], log_growth: ["Steve", "Atlas", "Kevin", "Laura"],
@@ -318,9 +322,11 @@ export async function callTool(tool, args, ctx) {
         note: r.message.to === "Luke" ? "Luke sees this on the dashboard and in Alfred's next message. It is not sent to his phone straight away." : "Saved on the board." };
     }
     case "record_luke_answer": {
-      if (me !== "Alfred") throw new S.StaffError("Only Alfred records Luke's answers from his chat. Everyone else: Luke answers on the dashboard.", "not_allowed");
+      if (me !== "Alfred" && me !== "Nova") throw new S.StaffError("Only Alfred or Nova records Luke's answers from their chat. Everyone else: Luke answers on the dashboard.", "not_allowed");
       const p = await S.getMessage(store, args.reply_to);
       if (p.to !== "Luke" || !S.isOpen(p)) throw new S.StaffError("That message is not waiting on Luke (it was not sent to him, or it is already handled). Nothing was saved.", "not_allowed");
+      /* Nova's yes counts as Luke's when Luke told Nova himself, never for money (Luke, 15 Nov 2026) */
+      if (me === "Nova" && MONEY_ASKERS.includes(p.from)) throw new S.StaffError(`That is a money question from ${p.from}: Nova never answers money for Luke. Luke answers it on the dashboard or to Alfred. Nothing was saved.`, "not_allowed");
       let note = "";
       if (args.option != null && String(args.option).trim()) {
         const want = String(args.option).trim().toLowerCase();
@@ -328,9 +334,9 @@ export async function callTool(tool, args, ctx) {
         if (!hit) throw new S.StaffError(`option must be one of the options of that message: ${(p.options || []).join(" | ") || "it has none: leave option out"}.`);
         note = hit;
       }
-      const r = await S.sendMessage(store, now, roster, { from: "Luke", via: "Alfred", to: p.from, text: args.luke_said, re: p.id, note, answers: args.answers });
+      const r = await S.sendMessage(store, now, roster, { from: "Luke", via: me, to: p.from, text: args.luke_said, re: p.id, note, answers: args.answers });
       const left = Array.isArray(r.parent && r.parent.questions) ? r.parent.questions.filter((q) => !q.answer).length : 0;
-      return { saved: true, id: r.message.id, closed: r.settled, to: p.from, ...(r.approved && !r.approved.error ? { approved: `${r.approved.what === "pitch" ? "The pitch" : "The final lyrics"}: recorded as approved by Luke (via Alfred)` } : {}), ...(left ? { still_open: `${left} question${left === 1 ? "" : "s"} still need${left === 1 ? "s" : ""} Luke's answer` } : {}), shown_on: "badscandal.com/hq, Messages (as Luke's answer, via Alfred)" };
+      return { saved: true, id: r.message.id, closed: r.settled, to: p.from, ...(r.approved && !r.approved.error ? { approved: `${r.approved.what === "pitch" ? "The pitch" : "The final lyrics"}: recorded as approved by Luke (via ${me})` } : {}), ...(left ? { still_open: `${left} question${left === 1 ? "" : "s"} still need${left === 1 ? "s" : ""} Luke's answer` } : {}), shown_on: `badscandal.com/hq, Messages (as Luke's answer, via ${me})` };
     }
     case "resolve_message": {
       const p = await S.resolveMessage(store, now, roster, { id: args.id, by: me, note: args.note });
@@ -403,7 +409,9 @@ export async function callTool(tool, args, ctx) {
     case "income_status": {
       const i = await S.incomeState(store, now);
       const line = (s) => ({ name: s.name, id: s.id, category: s.category, lands_in: s.lands, expected: s.cadence, owner: s.owner, state: s.verdict, why: s.why,
-        last_payment: s.last ? `${s.last.date} ${s.last.currency} ${s.last.amount.toFixed(2)} (${s.last.status})` : "none logged", this_month: cur(s.monthTotal), ...(s.needsLuke ? { needs_luke: s.needsLuke } : {}) });
+        last_payment: s.last ? `${s.last.date} ${s.last.currency} ${s.last.amount.toFixed(2)} (${s.last.status})` : "none logged", this_month: cur(s.monthTotal), ...(s.needsLuke ? { needs_luke: s.needsLuke } : {}),
+        /* round 2: each account of a source paid into several (RouteNote's two) */
+        ...(s.byAccount ? { by_account: s.byAccount.map((a) => `${a.account}: ` + (a.last ? `${a.last.date} ${a.last.currency} ${a.last.amount.toFixed(2)} (${a.last.status})` : "none logged")) } : {}) });
       return { month: i.month, received_this_month: cur(i.received), pending_this_month: cur(i.pending), payments_logged_this_month: i.count,
         /* batch 4: the music's own money (no salary), what is owed and ready to pay out, statements under the payout line */
         royalties_only_this_month: cur(i.royaltiesOnly), payable_this_month: cur(i.payable), statement_only_this_month: cur(i.statementOnly),

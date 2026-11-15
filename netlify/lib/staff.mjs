@@ -567,7 +567,18 @@ export function threads(messages) {
 /* ---------- income: one record per payment, and "checked, nothing new" ---------- */
 const incKey = (month) => `inc/${month}.json`;
 const chkKey = (month) => `chk/${month}.json`;
-const sameMoney = (x, e) => low(x.payer) === low(e.payer) && x.amount === e.amount && x.currency === e.currency;
+/* a payer's name without punctuation or a company ending: "Sample Holdings LLC" = "Sample Holdings" (round 2,
+   15 Nov 2026, Luke: "merge the duplicate payers but money should be counted once") */
+const COMPANY_END = /\s+(llc|ltd|limited|inc|incorporated|corp|corporation|co|company|gmbh|sa|sl|ltda|eireli|me|plc|pty|bv|srl)$/;
+export function payerName(p) {
+  let n = low(p).normalize("NFKD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, " ").trim();
+  for (let i = 0; i < 3 && COMPANY_END.test(n); i++) n = n.replace(COMPANY_END, "").trim();
+  return n;
+}
+/* one payer = the same name as above. Two DIFFERENT names are never merged, even under one source: a
+   label paying "via" another company is its own payer (Luke, 15 Nov 2026: one such pair "should be separate") */
+const STATEMENT = /^statement/i;
+const sameMoney = (x, e) => x.amount === e.amount && x.currency === e.currency && payerName(x.payer) === payerName(e.payer);
 /* Is x the payment e? Same account + reference; or the same day, payer and amount, unless both carry
    a reference and the references differ (two real payments of the same size on one day). */
 export function samePayment(x, e) {
@@ -864,6 +875,13 @@ export function incomeReport(entries, checks, sources, today, older = []) {
   const received = {}, pending = {}, byCat = {}, payable = {}, statementOnly = {}, royaltiesOnly = {};
   /* a payment counts on the day it arrived (a pending statement that later landed keeps both dates) */
   entries = entries.map((e) => (e.arrived && e.arrived !== e.date ? { ...e, statement: e.date, date: e.arrived } : e));
+  /* round 2: one payment logged twice under two names of its payer (before the desk knew they were one)
+     counts once. Kept: a decided status before an unsorted one, else the first logged. */
+  const twice = [];
+  { const RANK = { received: 0, payable: 1, pending: 2, "statement only": 3, transfer: 4, unsorted: 5 }, kept = [];
+    const order = [...entries].sort((a, b) => (RANK[a.status] ?? 6) - (RANK[b.status] ?? 6) || ((a.at || "") < (b.at || "") ? -1 : (a.at || "") > (b.at || "") ? 1 : 0));
+    for (const e of order) { const k = kept.find((x) => samePayment(x, e)); if (k) twice.push([k, e]); else kept.push(e); }
+    if (twice.length) entries = entries.filter((e) => kept.includes(e)); }
   for (const e of entries) {
     if (e.date.slice(0, 7) !== month || e.status === "transfer" || e.status === "unsorted") continue;
     /* batch 4: a statement under the payout line counts nowhere yet; payable is owed (with pending) */
@@ -891,7 +909,15 @@ export function incomeReport(entries, checks, sources, today, older = []) {
       else if (lastLook < today) { verdict = daysBetween(lastLook, today) > 1 ? "overdue" : "due"; why = `Last checked ${lastLook}`; }
     } else if (!last) { verdict = s.cadence === "irregular" ? "quiet" : "never"; why = "No payment logged yet"; }
     else if (DUE_DAYS[s.cadence] && daysBetween(last.date, today) > DUE_DAYS[s.cadence]) { verdict = "overdue"; why = `Last payment ${last.date}; expected ${s.cadence}`; }
-    return { id: s.id, name: s.name, kind: s.kind, category: s.category, currency: s.currency, lands: s.lands, ...(s.accounts ? { accounts: s.accounts } : {}), ...(s.editedBy ? { editedBy: s.editedBy, editedAt: s.editedAt } : {}),
+    /* round 2 (Luke: "hq should show the second routenote account"): a source paid into several accounts
+       shows each one, with its last payment (the seed's accounts first, then any other seen on a payment) */
+    const accts = [...(s.kind !== "account" && Array.isArray(s.accounts) ? s.accounts : [])];
+    if (accts.length) for (const e of mine) if (e.account && !STATEMENT.test(e.account) && !accts.some((a) => payerName(a) === payerName(e.account))) accts.push(e.account);
+    const byAccount = accts.length > 1 ? accts.map((acc) => {
+      const l = mine.filter((e) => payerName(e.account) === payerName(acc) && e.status !== "transfer" && e.status !== "unsorted").reduce((a, e) => (!a || e.date > a.date ? e : a), null);
+      return { account: acc, last: l ? { date: l.date, amount: l.amount, currency: l.currency, status: l.status } : null };
+    }) : null;
+    return { id: s.id, name: s.name, kind: s.kind, category: s.category, currency: s.currency, lands: s.lands, ...(s.accounts ? { accounts: s.accounts } : {}), ...(byAccount ? { byAccount } : {}), ...(s.editedBy ? { editedBy: s.editedBy, editedAt: s.editedAt } : {}),
       cadence: s.cadence, owner: s.owner, how: s.how, state: s.state,
       blocker: s.blocker, needsLuke: s.needsLuke, last: last ? { date: last.date, amount: last.amount, currency: last.currency, status: last.status } : null,
       checked: chk ? { day: chk.day, by: chk.by, new: chk.new } : null, lastLook, monthTotal, verdict, why };
@@ -905,6 +931,7 @@ export function incomeReport(entries, checks, sources, today, older = []) {
   for (const s of src) if (s.verdict === "overdue") problems.push(`${s.name}: ${s.why}`);
   for (const s of list) if (s.verdict === "blocked") problems.push(`${s.name}: blocked. ${s.blocker}`.trim());
   if (unknown.length) problems.push(`New payer(s) not on the list of sources: ${unknown.join(", ")}`);
+  if (twice.length) problems.push(`${twice.length === 1 ? "1 payment was" : twice.length + " payments were"} logged twice under two payer names, counted once: ${twice.slice(0, 5).map(([k, e]) => `${k.payer} = ${e.payer} (${e.currency} ${e.amount}, ${e.date})`).join("; ")}`);
   const oldPending = entries.filter((e) => (e.status === "pending" || e.status === "payable") && daysBetween(e.date, today) > 30).length;
   if (oldPending) problems.push(`${oldPending} pending payment${oldPending === 1 ? "" : "s"} older than 30 days`);
   /* seen in an account (the bank reader), not yet said what it is: listed apart, in no total */
