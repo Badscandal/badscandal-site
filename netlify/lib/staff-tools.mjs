@@ -27,6 +27,11 @@ export const INSTRUCTIONS = [
   "Laura: when the pack has a visualiser link, upload it to YouTube for the release and write its description like the other visualisers.",
   "Webmaster: make each song page (badscandal.com/<song>) before the song comes out, in the order the songs come out: a week after the previous song's release day. The home page shows a song as Out now for 7 days after its release day, then switches to the next upcoming song.",
   "Verse: the lyrics, live by their step's day. Only Luke writes them into the pack.",
+  /* batch 3 (14 Nov 2026) */
+  "Kevin (TikTok), Steve (Instagram), Laura (YouTube): post the teaser once Luke has approved the clips (your step waits until then), on your step's day; set that day with release_step due if it should be another one, and mark it done with the post's link.",
+  "release_step: put the post, store page or video in link, and when the work was done on an earlier day, that day in done_on (YYYY-MM-DD).",
+  "Drop: keep where each song is at the distributor with store_status (uploaded, in moderation, rejected with RouteNote's reason, resubmitted, approved, delivered, live). After a rejection, once it is fixed, ask Luke with store_status ready_to_resubmit: he answers Yes or Not yet.",
+  "Atlas (the pitch) and Verse (the final lyrics): ask Luke for his approval with send_message and approval; release_pack shows what he approved, when, and the exact text. Never treat anything else as his approval.",
 ].join("\n");
 
 export const TOOLS = [
@@ -50,6 +55,8 @@ export const TOOLS = [
       options: { type: "array", items: { type: "string" }, description: "Only with needs: decision, for ONE question. The 2 to 4 choices Luke can pick from, your recommendation first." },
       questions: { type: "array", items: { type: "string" }, description: "When you ask SEVERAL things: one entry per question, 2 to 6 (300 characters each). Each gets its own answer; the message closes only when every one is answered. Not with options, not to all." },
       about: str("Optional. The bot this message is about, when it is addressed to someone else (for example a decision for Luke about Forge's ads): the message and its answer reach that bot too."),
+      approval: { type: "object", description: 'Only to ask Luke to APPROVE something on a release: Atlas the pitch, Verse the final lyrics. {"song": "Night Drive", "what": "pitch", "text": "the pitch, exactly as it would be sent"} (for the lyrics leave text out: the lyrics in the pack are what he approves). It becomes a decision with the options Approve / Not yet; his Approve is recorded on the release.',
+        properties: { song: str("The song's title or id."), what: str("pitch | lyrics", { enum: ["pitch", "lyrics"] }), text: str("For the pitch: the pitch itself.") }, required: ["song", "what"], additionalProperties: false },
       answers: { type: "object", description: 'Only with reply_to, when the message you answer has numbered questions: {"1": "your answer to question 1", "3": "..."}. Questions you leave out stay open.', additionalProperties: { type: "string" } } }, ["bot", "to", "text"]) },
   { name: "record_luke_answer", title: "Record Luke's answer from Alfred's chat",
     description: "ALFRED ONLY. When Luke answers a message that waits on him in your chat (not on the dashboard), record it here so the bot that asked gets it: reply_to = the message's id, luke_said = Luke's EXACT words, copied as he wrote them (never your summary). For a decision, also put the option he picked in option (exactly as listed). For a message with numbered questions, put each answer in answers. It is saved as Luke's answer, marked \"via Alfred\", and closes the message the way Luke's own answer would.",
@@ -118,14 +125,24 @@ export const TOOLS = [
     description: "Mark ONE of YOUR OWN steps of a release (from my_day or releases). status working = you started it. status done = it is really done in the store or on the platform (uploaded, approved, pitched, live), NOT \"started\" and NOT \"I asked someone\"; put the link that proves it in link when there is one. status blocked = you cannot go on: say in note exactly what is needed and from whom. status todo = undo a mistake. status skipped = the step does not apply to this release (Nova only, with the reason in note). A step that is \"waiting\" (the pitch, until the song shows in Spotify for Artists) cannot be marked done yet. The step spotify (Showing as upcoming in Spotify for Artists) is done by Atlas's spotify_upcoming report, not by this tool (the staff guide's Atlas part names the only two exceptions). Never mark another bot's step (Nova only: when the owner told you it is done and cannot reach the desk; say so in the note). Luke's own step (teasers) is his approval: only Luke marks it done. This also writes a line in the live log Luke sees.",
     inputSchema: obj({ bot: BOT, song: str("The song's title or its id."),
       step: str(`Which step: ${S.RELEASE_STEPS.map((s) => `${s.key} (${s.label}, ${s.owner})`).join("; ")}.`, { enum: S.RELEASE_STEPS.map((s) => s.key) }),
-      status: str("working | done | blocked | todo | skipped (skipped: Nova only)", { enum: S.STEP_STATUS }),
+      status: str("working | done | blocked | todo | skipped (skipped: Nova only). Leave it out only when you set due alone.", { enum: S.STEP_STATUS }),
       note: str("Optional, except with blocked: then say exactly what is needed and from whom. One or two lines, no passwords or codes."),
-      link: str("Optional. An https link that shows it is done (the store page, the pitch, the video, the song page).") }, ["bot", "song", "step", "status"]) },
+      link: str("Optional. An https link that shows it is done (the store page, the pitch, the post, the video, the song page). It is kept and shown to everyone."),
+      done_on: str("Optional, only with status done: the day it was really done, YYYY-MM-DD, when that was before today (for example the upload was done before the pack reached the desk)."),
+      due: str("Only for a step with its own day (the teaser posts): the day you will post it, YYYY-MM-DD, up to the release day. Your step, or Nova for anyone.") }, ["bot", "song", "step"]) },
   { name: "release_fill", title: "Fill one field of a release pack",
     description: `Fill ONE field of a release pack that you are responsible for, once you have the real value: ${S.PACK_FIELDS.filter((f) => f.fill.length).map((f) => `${f.key} (${f.short}): ${f.fill.join(" or ")}`).join("; ")}. Nova may fill any of these. Copy the value exactly as the store or platform shows it; links must start with https://. Every other field is filled by Luke on the dashboard: if one is wrong or missing, send Luke a message.`,
     inputSchema: obj({ bot: BOT, song: str("The song's title or its id."),
       field: str("Which field.", { enum: S.PACK_FIELDS.filter((f) => f.fill.length).map((f) => f.key) }),
       value: str("The value, exactly as shown in the store or platform (for lyrics: the whole text, line by line).") }, ["bot", "song", "field", "value"]) },
+  { name: "store_status", title: "Where a song is at the distributor",
+    description: "DROP (Nova may do it for him): say where ONE release is at the distributor, each time it changes: not uploaded, uploaded, in moderation, rejected, resubmitted, approved, delivered, live. Every change is kept as its history (the moderation log Luke sees). With rejected, put what RouteNote said, in its words, in reason. When a rejected song is fixed and ready to go again, call it with status rejected and ready_to_resubmit true (and what changed in note): Luke is asked Yes, resubmit / Not yet, and his answer comes back to you in my_day. Do not resubmit before he says yes.",
+    inputSchema: obj({ bot: BOT, song: str("The song's title or its id."),
+      status: str(S.STORE_STATUS.join(" | "), { enum: S.STORE_STATUS }),
+      reason: str("Required with rejected: what RouteNote said, in its words (300 characters at most)."),
+      note: str("Optional. One line, for example what you changed before resubmitting."),
+      on: str("Optional. The day it happened, YYYY-MM-DD, when not today."),
+      ready_to_resubmit: { type: "boolean", description: "Only with status rejected: the song is fixed; ask Luke whether to resubmit it." } }, ["bot", "song", "status"]) },
   { name: "spotify_upcoming", title: "Report what Spotify for Artists shows as upcoming", idempotent: true,
     description: "Atlas, once a day (Nova may report for him): open Spotify for Artists, Music, Upcoming, and send EVERYTHING listed there right now, one entry per song: title exactly as shown, release date as YYYY-MM-DD, and shown_as = the artist line and the label or distributor text exactly as shown. Each report REPLACES the last one, so always send the whole list (20 at most). If nothing is upcoming there, send an empty list: that is a real report (\"I looked; nothing is upcoming\"). If you could NOT open Spotify for Artists, do NOT call this: post_update with status blocked and say why. A song in the pipeline that shows there gets its step \"Showing as upcoming in Spotify for Artists\" done automatically (that opens the Spotify pitch); a song that is not in the pipeline becomes a question for Luke. Example: releases [{\"title\": \"Night Drive\", \"date\": \"2026-12-11\", \"shown_as\": \"BADSCANDAL · RouteNote\"}].",
     inputSchema: obj({ bot: BOT,
@@ -165,12 +182,24 @@ const BUILT_IN_GUIDE = "The staff guide has not been loaded onto the desk yet. U
    Spotify for Artists): never late */
 /* the same words in my_day, releases and release_pack (11 Nov 2026, review) */
 const WAIT_SPOTIFY = "the song to show as upcoming in Spotify for Artists";
-const waitFor = (s) => (s.waitingFor === "spotify" || !s.waitingFor ? WAIT_SPOTIFY : `the step "${(S.RELEASE_STEPS.find((x) => x.key === s.waitingFor) || {}).label || s.waitingFor}"`);
+const waitFor = (s) => (s.waitingFor === "spotify" || !s.waitingFor ? WAIT_SPOTIFY : s.waitingFor === "teasers" ? "Luke to approve the teaser clips" : `the step "${(S.RELEASE_STEPS.find((x) => x.key === s.waitingFor) || {}).label || s.waitingFor}"`);
 const SPOT_HOW = "done by your spotify_upcoming report, not by release_step";
 const stepState = (s) => (s.status === "done" ? "done" : s.status === "skipped" ? "skipped" : s.status === "blocked" ? "blocked" : s.waiting ? "waiting" : s.late ? "late" : s.status === "working" ? "working" : "to do");
 const when = (d) => (d ? `${S.dayWords(d)} (${d})` : "no date yet");
-const stepOut = (s) => ({ step: s.key, label: s.label, owner: s.owner, due: when(s.due), state: stepState(s), ...(s.note ? { note: s.note } : {}), ...(s.link ? { link: s.link } : {}), ...(s.status === "done" && s.by ? { done_by: s.by } : {}),
+const stepOut = (s, pack) => ({ step: s.key, label: s.label, owner: s.owner, due: when(s.due), state: stepState(s), ...(s.note ? { note: s.note } : {}), ...(s.link ? { link: s.link } : {}), ...(s.status === "done" && s.by ? { done_by: s.by } : {}),
+  ...(s.status === "done" && s.doneOn ? { done_on: when(s.doneOn) } : {}), ...(s.key === "live" && pack && pack.spotifyTrack ? { spotify_track: pack.spotifyTrack } : {}),
   ...(s.waiting ? { waiting_for: waitFor(s) } : {}), ...(s.key === "spotify" && !["done", "skipped"].includes(s.status) ? { how: SPOT_HOW } : {}) });
+/* batch 3: Luke's approvals and the distributor's history, as Atlas, Verse and Drop read them */
+/* "Sat 14 Nov 12:01" (São Paulo) */
+const stampWords = (iso) => { const t = S.spStamp(Date.parse(iso)); return `${S.dayWords(t.slice(0, 10))} ${t.slice(11, 16)}`; };
+const approvalOut = (ap, what) => {
+  if (!ap) return { approved: false, state: `not approved yet: ask Luke with send_message and approval (what: ${what})` };
+  const by = "Luke" + (ap.via ? ` (via ${ap.via})` : "");
+  if (what === "lyrics" && ap.current === false) return { approved: false, state: `approved by ${by} on ${stampWords(ap.at)}, but the lyrics changed since: ask Luke again`, by };
+  return { approved: true, by, on: stampWords(ap.at), ...(what === "pitch" ? { text: ap.text } : { matches_the_pack: true }), ...(ap.words ? { luke_said: ap.words } : {}) };
+};
+const storeOut = (st) => (st.status || st.legacy ? { status: st.status || st.legacy, ...(st.since ? { since: when(st.since) } : {}), ...(st.reason ? { reason: st.reason } : {}),
+  history: st.history.map((h) => `${S.dayWords(h.on)}: ${h.status}` + (h.reason ? `: ${h.reason}` : "") + (h.note ? ` (${h.note})` : "") + ` (${h.by})`) } : { status: "not recorded yet" });
 const dealOut = (d) => (d && d.kind ? { kind: d.kind, ...(d.label ? { label: d.label } : {}), ...(d.split ? { split: d.split } : {}), delivered_by: d.distributor } : "not recorded yet");
 /* what Spotify for Artists showed in Atlas's last report, as the bots read it (V4) */
 const s4aOut = (sv) => ({ reported_at: sv.never ? "never" : sv.sp, ...(sv.stale ? { stale: "older than 48 hours" } : {}),
@@ -191,6 +220,9 @@ export async function callTool(tool, args, ctx) {
   const config = ctx.role === "claude" ? null : await S.getConfig(store);
   if (config && !config.botsOn) throw new S.StaffError("Luke has switched the bots' connector off. Stop, and tell Nova.", "off");
   await S.touchSeen(store, now, me, tool.name);
+  /* releases sent before a step existed get it before anyone reads them (batch 3: the teaser posts); one
+     read when nothing is missing, and never a reason to fail the call */
+  await S.upgradeReleases(store, now).catch(() => null);
   /* "read" (V6): only the tools that hand over the caller's messages say it has read them. The marker it
      had before is read first: my_day and Alfred's luke_briefing hand over everything written since then
      (messages_for_you), so "Read by Ledger" never stands under an answer Ledger was not given. */
@@ -209,7 +241,7 @@ export async function callTool(tool, args, ctx) {
       return { saved: true, id: u.id, at: u.sp, bot: u.bot, status: u.status, message: u.message, shown_on: "badscandal.com/hq, Team" };
     }
     case "send_message": {
-      const r = await S.sendMessage(store, now, roster, { from: me, to: args.to, text: args.text, needs: args.needs, re: args.reply_to, options: args.options, questions: args.questions, about: args.about, answers: args.answers });
+      const r = await S.sendMessage(store, now, roster, { from: me, to: args.to, text: args.text, needs: args.needs, re: args.reply_to, options: args.options, questions: args.questions, about: args.about, answers: args.answers, approval: args.approval });
       const left = r.parent && Array.isArray(r.parent.questions) ? r.parent.questions.filter((q) => !q.answer).length : 0;
       return { sent: true, id: r.message.id, to: r.message.to, needs: r.message.needs, ...(r.parent && r.parent.resolved ? { answered: r.parent.id } : {}), ...(left ? { still_open: `${left} question${left === 1 ? "" : "s"} of that message still need${left === 1 ? "s" : ""} an answer` } : {}),
         note: r.message.to === "Luke" ? "Luke sees this on the dashboard and in Alfred's next message. It is not sent to his phone straight away." : "Saved on the board." };
@@ -227,7 +259,7 @@ export async function callTool(tool, args, ctx) {
       }
       const r = await S.sendMessage(store, now, roster, { from: "Luke", via: "Alfred", to: p.from, text: args.luke_said, re: p.id, note, answers: args.answers });
       const left = Array.isArray(r.parent && r.parent.questions) ? r.parent.questions.filter((q) => !q.answer).length : 0;
-      return { saved: true, id: r.message.id, closed: r.settled, to: p.from, ...(left ? { still_open: `${left} question${left === 1 ? "" : "s"} still need${left === 1 ? "s" : ""} Luke's answer` } : {}), shown_on: "badscandal.com/hq, Messages (as Luke's answer, via Alfred)" };
+      return { saved: true, id: r.message.id, closed: r.settled, to: p.from, ...(r.approved && !r.approved.error ? { approved: `${r.approved.what === "pitch" ? "The pitch" : "The final lyrics"}: recorded as approved by Luke (via Alfred)` } : {}), ...(left ? { still_open: `${left} question${left === 1 ? "" : "s"} still need${left === 1 ? "s" : ""} Luke's answer` } : {}), shown_on: "badscandal.com/hq, Messages (as Luke's answer, via Alfred)" };
     }
     case "resolve_message": {
       const p = await S.resolveMessage(store, now, roster, { id: args.id, by: me, note: args.note });
@@ -295,7 +327,8 @@ export async function callTool(tool, args, ctx) {
       return { you: me, today, releases: show.sort((a, b) => ((a.date || "9") < (b.date || "9") ? -1 : 1)).map((v) => ({ song: v.title, id: v.id, status: v.status === "draft" ? "draft (not sent to the team yet)" : v.released ? "released" : "coming",
           release_day: when(v.date), days_to_go: v.daysToGo, where: v.where, deal: dealOut(v.deal), ...(v.tight ? { tight: "Sent late: steps that should already be done were due the day it was sent." } : {}),
           warnings: v.warnings, missing: v.missing.map(missingOut), steps_done: `${v.counts.done} of ${v.counts.total}`,
-          your_steps: v.steps.filter((s) => s.owner === me).map(stepOut), ...(chase ? { all_steps: v.steps.map(stepOut) } : {}) })),
+          at_the_distributor: v.store.status || v.store.legacy || "not recorded yet",
+          your_steps: v.steps.filter((s) => s.owner === me).map((s) => stepOut(s, v.pack)), ...(chase ? { all_steps: v.steps.map((s) => stepOut(s, v.pack)) } : {}) })),
         spotify_for_artists: s4aOut(S.sightingsView(sightings, raw, today, now)),
         how: "Read a song's whole pack with release_pack. Mark your own step with release_step. Fill your own fields with release_fill." };
     }
@@ -307,7 +340,9 @@ export async function callTool(tool, args, ctx) {
         release_day: when(v.date), days_to_go: v.daysToGo, where: v.where, deal: dealOut(v.deal), warnings: v.warnings,
         pack: S.PACK_FIELDS.map((f) => ({ field: f.key, label: f.label, value: pack[f.key] || "", ...(pack[f.key] ? {} : { state: S.requiredNow(f, pack) ? "missing (required)" : f.neededBy ? `missing (needed for "${S.RELEASE_STEPS.find((x) => x.key === f.neededBy).label}")` : "not filled yet" }),
           filled_by: f.fill.length ? f.fill.join(" or ") + " (or Luke)" : "Luke" })),
-        missing: v.missing.map(missingOut), steps: v.steps.map(stepOut),
+        missing: v.missing.map(missingOut), steps: v.steps.map((s) => stepOut(s, pack)),
+        approvals: { pitch: approvalOut(v.approvals.pitch, "pitch"), lyrics: approvalOut(v.approvals.lyrics, "lyrics") },
+        store: storeOut(v.store),
         how: "Everything you need for your step should be here. If a field you need is missing: mark your step blocked with release_step, naming the field, and send Luke ONE message naming the field (only once). Mark your step with release_step." };
     }
     case "spotify_upcoming": {
@@ -321,10 +356,17 @@ export async function callTool(tool, args, ctx) {
         shown_on: "badscandal.com/hq, Upcoming" };
     }
     case "release_step": {
-      const r = await S.setStep(store, now, roster, { by: me, id: args.song, step: args.step, status: args.status, note: args.note, link: args.link });
+      const r = await S.setStep(store, now, roster, { by: me, id: args.song, step: args.step, status: args.status, note: args.note, link: args.link, done_on: args.done_on, due: args.due });
       const want = String(args.step || "").trim().toLowerCase();
       const st = S.releaseView(r, today).steps.find((s) => s.key === want || s.label.toLowerCase() === want);
-      return { saved: true, song: r.title, step: st.key, label: st.label, state: stepState(st), due: when(st.due), ...(st.note ? { note: st.note } : {}), shown_on: "badscandal.com/hq, Upcoming and the live log" };
+      return { saved: true, song: r.title, step: st.key, label: st.label, state: stepState(st), due: when(st.due), ...(st.note ? { note: st.note } : {}), ...(st.link ? { link: st.link } : {}),
+        ...(st.status === "done" && st.doneOn ? { done_on: when(st.doneOn) } : {}), shown_on: "badscandal.com/hq, Upcoming and the live log" };
+    }
+    case "store_status": {
+      const r = await S.setStoreStatus(store, now, roster, { by: me, id: args.song, status: args.status, reason: args.reason, note: args.note, on: args.on, ready_to_resubmit: args.ready_to_resubmit });
+      return { saved: true, song: r.release.title, status: r.store.status, ...(r.store.reason ? { reason: r.store.reason } : {}), history: r.store.history.length,
+        ...(r.asked ? { asked_luke: r.asked, note: r.already ? "Luke was already asked and hasn't answered yet: his answer comes back to you in my_day." : "Luke is asked: Yes, resubmit / Not yet. His answer comes back to you in my_day. Do not resubmit before he says yes." } : {}),
+        shown_on: "badscandal.com/hq, Upcoming" };
     }
     case "release_fill": {
       const r = await S.fillRelease(store, now, roster, { by: me, id: args.song, field: args.field, value: args.value });
@@ -364,8 +406,8 @@ export async function callTool(tool, args, ctx) {
         ...(sheetNote ? { note: sheetNote } : {}) };
       const w = b.staff.find((x) => x.name === me);
       const since = now - 36 * 3600000;
-      const rs = w.releaseSteps.map((s) => ({ song: s.title, step: s.key, label: s.label, due: when(s.due), state: stepState(s), ...(s.note ? { note: s.note } : {}),
-        ...(s.waiting ? { waiting_for: WAIT_SPOTIFY } : {}), ...(s.key === "spotify" ? { how: SPOT_HOW } : {}) }));
+      const rs = w.releaseSteps.map((s) => ({ song: s.title, step: s.key, label: s.label, due: when(s.due), state: stepState(s), ...(s.note ? { note: s.note } : {}), ...(s.link ? { link: s.link } : {}),
+        ...(s.spotifyTrack ? { spotify_track: s.spotifyTrack } : {}), ...(s.waiting ? { waiting_for: waitFor(s) } : {}), ...(s.key === "spotify" ? { how: SPOT_HOW } : {}) }));
       /* the soonest step the bot can work on now; a waiting one is not something to do today */
       const firstRs = w.releaseSteps.find((s) => !s.waiting);
       const notes = desk.messages.filter((m) => m.to === "all" && Date.parse(m.at) > since).slice(0, 5);
@@ -381,7 +423,7 @@ export async function callTool(tool, args, ctx) {
         release_steps: rs, rules: RULES,
         next: (spotNext ? `Report what Spotify for Artists shows as upcoming with spotify_upcoming: the first report that lists ${firstRs.title} marks "${firstRs.label}" done (due ${when(firstRs.due)}${firstRs.late ? ", LATE" : ""}). Do not mark it with release_step.${rs.length > 1 ? ` You have ${rs.length} open release steps in all: see release_steps.` : ""} `
           : firstRs ? `You have ${rs.length} open release step${rs.length === 1 ? "" : "s"}; the soonest is "${firstRs.label}" for ${firstRs.title}, due ${when(firstRs.due)}${firstRs.late ? " (LATE)" : ""}. Read the pack with release_pack, do it, then mark it with release_step (done only when it is really done). `
-          : rs.length ? `Your release step${rs.length === 1 ? " is" : "s are"} waiting for the song to show as upcoming in Spotify for Artists: nothing to do on ${rs.length === 1 ? "it" : "them"} yet. ` : "") +
+          : rs.length ? `Your release step${rs.length === 1 ? " is" : "s are"} waiting for ${rs.every((x) => x.waiting_for === rs[0].waiting_for) ? rs[0].waiting_for : "the step before"}: nothing to do on ${rs.length === 1 ? "it" : "them"} yet. ` : "") +
           (me === "Atlas" && !spotNext ? "Every day: report what Spotify for Artists shows as upcoming with spotify_upcoming. " : "") +
           "Do your duty, then call post_update with status done and the number. If you are stuck, post_update with status blocked and say what is needed.",
         ...(sheetNote ? { note: sheetNote } : !w.duties.length && !w.paused ? { note: "The task board has no duty row for you today. Do your daily duty at your usual time anyway, and tell Nova the row is missing." } : {}) };

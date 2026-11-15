@@ -241,7 +241,7 @@ export function mergeReleases(sheetReleases, deskReleases, today, sightings, now
       const skipped = s.status === "skipped";
       const late = typeof s.late === "boolean" ? s.late : !skipped && s.status !== "done" && !!s.due && s.due < today;
       return { label: s.label, owner: s.owner, due: s.due || null, done: s.status === "done" || skipped, late,
-        note: s.status === "blocked" ? "blocked: " + (s.note || "") : s.note || "", ...(skipped ? { skipped: true } : {}), ...(s.waiting ? { waiting: true, waitingText: s.waitingText || "waiting" } : {}) };
+        note: s.status === "blocked" ? "blocked: " + (s.note || "") : s.note || "", ...(skipped ? { skipped: true } : {}), ...(s.link ? { link: s.link } : {}), ...(s.doneOn ? { doneOn: s.doneOn } : {}), ...(s.waiting ? { waiting: true, waitingText: s.waitingText || "waiting" } : {}) };
     });
     return { song: v.title, slug: v.id, date, status: (v.pack && v.pack.storeStatus) || "",
       daysToGo: date ? daysBetween(today, date) : null,

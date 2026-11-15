@@ -154,6 +154,7 @@ async function api(req, context, path) {
   if (path === "board" && req.method === "GET") {
     if (sample) return json(200, { sample: true, ...sampleBoard(now) });
     const st = stores(context);
+    await S.upgradeReleases(st.desk, now).catch(() => null); /* batch 3: steps added since a release was sent */
     const [desk, hqAns] = await Promise.all([S.loadDesk(st.desk, now), hqLoader(st)().catch(() => null)]);
     /* the board hands Claude every message, so it counts as Claude having READ them (11 Nov 2026, review:
        a round that reads the desk this way left Luke's answers to Claude "Not read yet" for good) */
@@ -195,7 +196,12 @@ async function api(req, context, path) {
       if (path === "release/date") { const r = await S.moveRelease(st.desk, now, roster, { by: me, id: a.id, date: a.date }); return json(200, { ok: true, release: view(r.release), moved: r.moved, told: !!r.told }); }
       if (path === "release/cancel") { const r = await S.cancelRelease(st.desk, now, roster, { by: me, id: a.id }); return json(200, { ok: true, release: view(r.release), told: !!r.told }); }
       if (path === "release/remove") return json(200, { ok: true, ...(await S.removeRelease(st.desk, now, roster, { by: me, id: a.id })) });
-      if (path === "release/step") return json(200, { ok: true, release: view(await S.setStep(st.desk, now, roster, { by: me, id: a.id, step: a.step, status: a.status, note: a.note, link: a.link })) });
+      if (path === "release/step") return json(200, { ok: true, release: view(await S.setStep(st.desk, now, roster, { by: me, id: a.id, step: a.step, status: a.status, note: a.note, link: a.link, done_on: a.done_on, due: a.due })) });
+      /* Luke's approval of the pitch or the final lyrics (batch 3): Luke only, never Claude's key */
+      if (path === "release/approve") {
+        if (role !== "luke") return json(403, { error: "Only Luke approves the pitch or the final lyrics" });
+        return json(200, { ok: true, release: view(await S.approveRelease(st.desk, now, roster, { by: me, id: a.id, what: a.what, text: a.text, withdraw: a.withdraw === true })) });
+      }
     }
     if (path === "sighting" && req.method === "POST") {
       if (role !== "luke") return json(403, { error: "Only Luke answers what a song in Spotify for Artists is" });
