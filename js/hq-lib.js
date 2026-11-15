@@ -527,6 +527,25 @@
   /* ---- Money coming in ---- */
   /* { USD: 104.04, EUR: 112.01 } -> ["USD 104.04", "EUR 112.01"]: each currency as given, never added, never converted */
   function curList(o) { return Object.keys(o || {}).sort().map(function (c) { return money(o[c], c); }); }
+  /* ---------- batch 4 (15 Nov 2026): money ---------- */
+  var MONTHS_L = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  function monthWords(m) { return /^\d{4}-\d{2}$/.test(m || "") ? MONTHS_L[Number(m.slice(5, 7)) - 1] + " " + m.slice(0, 4) : ""; }
+  /* the cap's rate in words: the team's fixed one, or the ECB average so far (which moves) */
+  function capRateLine(cap) {
+    var r = cap && cap.rateUsed;
+    if (!r || !r.value) return "";
+    return "Rate: " + r.value + " USD per EUR (" + (r.from === "ECB average" ? "ECB average for " + monthWords(r.month) + ", so far" : r.from + ", " + monthWords(r.month)) + ")";
+  }
+  function capMissingLine(cap) { return cap && cap.notRead && cap.notRead.length ? "Not read: " + cap.notRead.join(", ") : ""; }
+  /* a duty done with a number it couldn't read: done, never red */
+  function dutyGapsLine(d) { return d && d.gaps ? "Done, with gaps: " + d.gaps : ""; }
+  /* the money coming in, four lines: what arrived, the music's own share of it (no salary), what is owed to
+     us (pending + payable), statements still under the payout line */
+  function incomeTotals(i) {
+    var row = function (label, o, hint) { var l = curList(o); return { label: label, text: l.length ? l.join(" + ") : "nothing", empty: !l.length, hint: hint }; };
+    return [row("Received", i && i.received, ""), row("Royalties (no salary)", i && i.royaltiesOnly, "Received, without salary"),
+      row("Owed to us", i && i.pending, "Pending and payable"), row("Statements only", i && i.statementOnly, "Not payable yet: under the payout line")];
+  }
   var CADENCE = { daily: "Every day", monthly: "Every month", quarterly: "Every 3 months", irregular: "Irregular" };
   function cadenceWord(c) { return CADENCE[c] || "Irregular"; }
   /* an account tile: "checked today by Ledger · 0 new" / "not checked today". attn only for never / overdue / blocked */
@@ -1075,6 +1094,9 @@
     var s = e && e.status;
     if (s === "unsorted") return { text: "To sort", counted: false };
     if (s === "transfer") return { text: e.by === "HQ" && !(e.history || []).length ? "Your own transfer" : "Not income", counted: false };
+    /* batch 4: a statement under the payout line counts nowhere yet; payable is owed to us */
+    if (s === "statement only") return { text: "Statement only (not payable yet)", counted: false };
+    if (s === "payable") return { text: "Payable (owed to us)", counted: true };
     s = String(s || ""); return { text: s.charAt(0).toUpperCase() + s.slice(1), counted: true };
   }
   /* the inline question before a payment is sorted (it can't be changed on the page afterwards) */
@@ -1333,7 +1355,7 @@
     snapshot: snapshot, changesSince: changesSince, tiles: tiles, summaryText: summaryText, shortStep: shortStep, day: day,
     slug: slug, workerLabel: workerLabel, sortWorkers: sortWorkers, workerView: workerView, dutyWhen: dutyWhen, workerCounts: workerCounts, seenLine: seenLine, connectorLine: connectorLine,
     novaMessage: novaMessage, liveFeed: liveFeed, spWhen: spWhen, waitLabel: waitLabel, needWords: needWords, reportParts: reportParts, siteCheckLine: siteCheckLine, composeNames: composeNames,
-    threadRoot: threadRoot, answerTarget: answerTarget, questionLines: questionLines, questionsLeft: questionsLeft, stepButton: stepButton, formKey: formKey, storeLine: storeLine, storeHistory: storeHistory, approvalLines: approvalLines, resubmitAsk: resubmitAsk, staffAttention: staffAttention, staffHealth: staffHealth, curList: curList, cadenceWord: cadenceWord, accountLine: accountLine, sourceState: sourceState, payLine: payLine,
+    threadRoot: threadRoot, answerTarget: answerTarget, questionLines: questionLines, questionsLeft: questionsLeft, stepButton: stepButton, formKey: formKey, storeLine: storeLine, storeHistory: storeHistory, capRateLine: capRateLine, capMissingLine: capMissingLine, dutyGapsLine: dutyGapsLine, incomeTotals: incomeTotals, approvalLines: approvalLines, resubmitAsk: resubmitAsk, staffAttention: staffAttention, staffHealth: staffHealth, curList: curList, cadenceWord: cadenceWord, accountLine: accountLine, sourceState: sourceState, payLine: payLine,
     incomeEmpty: incomeEmpty, incomeProblems: incomeProblems,
     /* replies that visibly land + the release pipeline (11 Nov 2026) */
     spStampOf: spStampOf, seenWords: seenWords, sentLine: sentLine, answeredList: answeredList, CLAUDE_ROUNDS: CLAUDE_ROUNDS,

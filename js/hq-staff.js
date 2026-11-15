@@ -139,7 +139,7 @@
     if (w.access) why.push("<p><b>Access</b>" + esc(w.access) + "</p>");
     if (w.blockers) why.push("<p><b>Known blockers</b>" + esc(w.blockers) + "</p>");
     return ((w.duties || []).length ? '<p class="bsub">Today\'s duties</p><ul class="bduties">' + w.duties.map(function (d) {
-        return '<li class="' + (d.status === "blocked" || d.late ? "bad" : d.status === "done" ? "done" : "") + '"><span class="bt">' + esc(d.task) + (d.blocker ? "<small>Blocked: " + esc(d.blocker) + "</small>" : "") +
+        return '<li class="' + (d.status === "blocked" || d.late ? "bad" : d.status === "done" ? "done" : "") + '"><span class="bt">' + esc(d.task) + (d.blocker ? "<small>Blocked: " + esc(d.blocker) + "</small>" : "") + (d.gaps ? "<small>" + esc(window.HQLib.dutyGapsLine(d)) + "</small>" : "") +
           '</span><span class="bw">' + esc(L.dutyWhen(d)) + "</span></li>"; }).join("") + "</ul>" : "") +
       relSteps(w) +
       (w.last ? '<p class="blast"><b>' + esc(lastMs ? L.ago(now - lastMs) : w.last.at) + "</b> " + HQ.link(w.last.link, w.last.message) + "</p>" : "") +
@@ -490,13 +490,17 @@
       var l = L.accountLine(a, today);
       return '<div class="tile' + (l.attn ? " attn-t" : "") + '"><p class="an">' + esc(a.name) + '</p><p class="al">' + esc(cap(l.text)) + "</p>" + (a.needsLuke ? '<p class="al need">Needs you: ' + esc(a.needsLuke) + "</p>" : "") + "</div>";
     }).join("") + "</div>";
-    h += '<div class="inmonth"><div class="tile"><p class="t-lbl">Received in ' + esc(month) + "</p>" + amountLines(inc.received, "Nothing yet") + '</div><div class="tile"><p class="t-lbl">Pending</p>' + amountLines(inc.pending, "Nothing pending") + "</div></div>";
+    /* batch 4: what arrived, the music's own share (no salary), what is owed to us, statements not payable yet */
+    var keys = { "Received": "received", "Royalties (no salary)": "royaltiesOnly", "Owed to us": "pending", "Statements only": "statementOnly" };
+    h += '<div class="inmonth">' + L.incomeTotals(inc).map(function (t) {
+      return '<div class="tile"><p class="t-lbl">' + esc(t.label === "Received" ? "Received in " + month : t.label) + "</p>" + amountLines(inc[keys[t.label]], "Nothing") + (t.hint ? '<p class="t-hint">' + esc(t.hint) + "</p>" : "") + "</div>";
+    }).join("") + "</div>";
     h += toSortHtml(inc);
     if (probs.length) h += '<div class="t-card attn-card has"><p class="t-lbl">To look at</p><ul class="inprob">' + probs.map(function (p) { return "<li><span>" + esc(p) + "</span></li>"; }).join("") + "</ul></div>";
     h += '<h4 class="lblh">Where money comes from</h4><div class="tile"><div class="scroll"><table class="stack" id="srcTable">' +
       (sources.length ? "<tr><th>Source</th><th>Type</th><th>Usually paid</th><th>Last payment</th><th>This month</th><th>State</th></tr>" + sources.map(function (s) {
         var st = L.sourceState(s), mt = L.curList(s.monthTotal);
-        return "<tr><td><b>" + esc(s.name) + "</b></td><td>" + esc(s.category || "–") + "</td><td>" + esc(L.cadenceWord(s.cadence)) + "</td><td>" + esc(cap(L.payLine(s.last))) + "</td><td>" + esc(mt.length ? mt.join(" + ") : "Nothing yet") +
+        return "<tr><td><b>" + esc(s.name) + "</b>" + (s.lands ? "<small>Lands in " + esc(s.lands) + (s.editedBy ? " · updated by " + esc(s.editedBy) : "") + "</small>" : "") + "</td><td>" + esc(s.category || "–") + "</td><td>" + esc(L.cadenceWord(s.cadence)) + "</td><td>" + esc(cap(L.payLine(s.last))) + "</td><td>" + esc(mt.length ? mt.join(" + ") : "Nothing yet") +
           "</td><td>" + (st.attn ? '<span class="attn">' + esc(st.text) + "</span>" : esc(st.text)) + (s.needsLuke ? '<small class="need">Needs you: ' + esc(s.needsLuke) + "</small>" : "") + "</td></tr>";
       }).join("") : '<tr><td class="empty">No sources are on the list yet.</td></tr>') + "</table></div></div>";
     /* transfers and payments still to sort say so in words, their amount greyed: never in the totals */
