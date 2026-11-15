@@ -338,7 +338,24 @@ export async function sendMessage(store, now, roster, a) {
   const re = a.re ? clean(a.re, 20) : "";
   const options = (Array.isArray(a.options) ? a.options : []).map((o) => clean(o, 240)).filter(Boolean).slice(0, 4);
   const kind = ["report", "note"].includes(low(a.kind)) ? low(a.kind) : "note";
-  const m = { id: newId("m", now), at: new Date(now).toISOString(), sp: spStamp(now), from, to, text, needs, re, options, kind, resolved: null };
+  /* several questions in one message, each answered on its own (14 Nov 2026, the bots: Luke's one-word
+     "Correct" closed Verse's 4 questions, 3 of them unanswered) */
+  const qs = Array.isArray(a.questions) ? a.questions.map((q) => clean(q, 300)).filter(Boolean) : [];
+  if (Array.isArray(a.questions) && a.questions.length) {
+    if (to === "all") fail("Questions need one name in to (Luke, Claude or a bot), not all.");
+    if (qs.length < 2 || qs.length > 6) fail("questions must be 2 to 6 questions. One question goes in text.");
+    if (options.length) fail("Use options for ONE question, or questions for several, not both.");
+    if (from !== "HQ") noSecrets(qs.join("\n"));
+    if (needs === "none") needs = "reply";
+  }
+  /* about (14 Nov 2026): the bot a message to Luke is about; it and the answer reach that bot too */
+  let about = a.about != null && String(a.about).trim() ? whoIs(a.about, roster) : "";
+  const via = a.via ? whoIs(a.via, roster) : "";
+  const answers = answersOf(a.answers);
+  if (answers && !re) fail("answers only go with reply_to: the id of the message whose questions you answer.");
+  if (answers) for (const t of Object.values(answers)) noSecrets(t);
+  const m = { id: newId("m", now), at: new Date(now).toISOString(), sp: spStamp(now), from, to, text, needs, re, options, kind, resolved: null,
+    ...(qs.length >= 2 ? { questions: qs.map((q) => ({ q, answer: "", by: "", at: "" })) } : {}), ...(answers ? { answers } : {}), ...(via ? { via } : {}) };
   /* what Luke's answer settles the message with (an option he picked); "answered" otherwise */
   const settleNote = from === "Luke" ? clean(a.note, 240) : "";
   if (settleNote) noSecrets(settleNote);
@@ -346,8 +363,17 @@ export async function sendMessage(store, now, roster, a) {
   if (re) {
     if (!pm) fail("re must be the id of the message you are answering");
     const cur = await readDoc(store, msgKey(pm), []);
-    if (!(Array.isArray(cur.data) ? cur.data : []).some((x) => x.id === re)) fail("There is no message with that id", "not_found");
+    const p0 = (Array.isArray(cur.data) ? cur.data : []).find((x) => x.id === re);
+    if (!p0) fail("There is no message with that id", "not_found");
+    if (answers) {
+      const n = (p0.questions || []).length;
+      if (!n) fail("That message has no numbered questions: answer it in text.");
+      for (const k of Object.keys(answers)) if (Number(k) < 1 || Number(k) > n) fail(`There is no question ${k}: that message has ${n} questions.`);
+      if (from !== "Luke" && from !== p0.to) fail(`Those questions are for ${p0.to}: only ${p0.to} (or Luke) answers them.`);
+    }
+    if (!about && p0.about) about = p0.about; /* the answer to a message about a bot reaches that bot too */
   }
+  if (about) m.about = about;
   /* The answer is saved FIRST, and only then is the message it answers settled (fixed 11 Nov 2026): a
      full board or a busy desk must never close the question while losing the answer to it. */
   await mutate(store, msgKey(m.at.slice(0, 7)), [], (list) => {
@@ -363,6 +389,13 @@ export async function sendMessage(store, now, roster, a) {
       parent = await mutate(store, msgKey(pm), [], (list) => {
         const p = list.find((x) => x.id === re);
         if (!p) return { skip: true, value: null };
+        /* numbered questions: only answers fill them, and the message closes when every one has one */
+        if (Array.isArray(p.questions) && p.questions.length) {
+          if (!answers || p.resolved) return { skip: true, value: p };
+          for (const [k, t] of Object.entries(answers)) { const q = p.questions[Number(k) - 1]; if (q) Object.assign(q, { answer: t, by: from, at: m.at, ...(via ? { via } : {}) }); }
+          if (p.questions.every((q) => q.answer)) p.resolved = { by: from, at: m.at, note: `all ${p.questions.length} answered` };
+          return { value: p };
+        }
         /* an answer from the person it was waiting on settles a "reply". Luke's answer settles ANYTHING
            that waits on him (11 Nov 2026, Luke: "when i reply to a message right now nothing happens"):
            a plain reply to an action or a decision used to leave it sitting in "Waiting on you". */
@@ -377,6 +410,21 @@ export async function sendMessage(store, now, roster, a) {
     }
   }
   return { message: m, parent, settled: !!(parent && parent.resolved && parent.resolved.at === m.at) };
+}
+/* answers: {"1": "yes", "3": "no"} or ["yes", "", "no"] -> {"1": "yes", "3": "no"} (null = none given) */
+function answersOf(x) {
+  if (x == null) return null;
+  const pairs = Array.isArray(x) ? x.map((t, i) => [String(i + 1), t]) : typeof x === "object" ? Object.entries(x) : null;
+  if (!pairs) fail('answers must be a list (["yes", "", "no"]) or numbered ({"1": "yes", "3": "no"}).');
+  const out = {};
+  for (const [k, t] of pairs) {
+    const v = cleanText(t, 600);
+    if (!v) continue;
+    if (!/^\d{1,2}$/.test(String(k).trim())) fail(`There is no question ${clean(k, 10)}: number the answers 1, 2, 3...`);
+    out[String(Number(k))] = v;
+  }
+  if (!Object.keys(out).length) fail("answers is empty: give at least one answer.");
+  return out;
 }
 export async function resolveMessage(store, now, roster, a) {
   const by = whoIs(a.by, roster, { people: true });
@@ -738,9 +786,18 @@ export async function incomeState(store, now) {
 export async function setCard(store, now, roster, a) {
   const bot = whoIs(a.bot, roster);
   const card = { workingOn: cleanText(a.working_on, 400), needs: cleanText(a.needs, 400), at: new Date(now).toISOString() };
-  noSecrets(card.workingOn, card.needs);
-  await mutate(store, "cards.json", {}, (all) => { all[low(bot)] = card; return { value: card }; });
-  return { bot, ...card };
+  /* blockers (14 Nov 2026): the bot's own word on what stands in its way. It replaces the blocker written
+     in its roster profile; "" clears it. Left out, the last word stands. */
+  const setB = a.blockers !== undefined && a.blockers !== null;
+  if (setB) { card.blockers = cleanText(a.blockers, 300); card.blockersAt = card.at; }
+  noSecrets(card.workingOn, card.needs, card.blockers || "");
+  const saved = await mutate(store, "cards.json", {}, (all) => {
+    const old = all[low(bot)];
+    const c = !setB && old && typeof old.blockers === "string" ? { ...card, blockers: old.blockers, blockersAt: old.blockersAt || "" } : card;
+    all[low(bot)] = c;
+    return { value: c };
+  });
+  return { bot, ...saved };
 }
 export async function touchSeen(store, now, bot, tool) {
   try { await store.setJSON(`seen/${low(bot).replace(/[^a-z0-9]/g, "")}.json`, { at: new Date(now).toISOString(), tool: clean(tool, 40) }); } catch {}
@@ -767,7 +824,7 @@ export async function lastRead(store, name) {
    first. more = how many older ones did not fit (read_messages has them). */
 export function messagesFor(messages, name, since, max = 30) {
   const mine = new Set(messages.filter((m) => m.from === name).map((m) => m.id));
-  const all = messages.filter((m) => m.from !== name && (!since || m.at > since) && (m.to === name || m.to === "all" || (!!m.re && mine.has(m.re))))
+  const all = messages.filter((m) => m.from !== name && (!since || m.at > since) && (m.to === name || m.to === "all" || m.about === name || (!!m.re && mine.has(m.re))))
     .sort((a, b) => (a.at < b.at ? 1 : -1));
   return { list: all.slice(0, max).reverse(), more: Math.max(0, all.length - max) };
 }
@@ -1731,13 +1788,20 @@ export function workers(roster, { hq, updates, messages, cards, seen, today, now
     else if (b.time && nowHM && nowHM > b.time && !todays.length) state = "quiet";
     const s = seen[b.name] || null;
     return { name: b.name, role: b.role || "", why: b.why || "", duty: b.duty || "", time: b.time || "", schedule: b.schedule || [], writes: b.writes || "", access: b.access || "",
-      blockers: b.blockers || "", paused: b.state === "paused", state, duties: items, tasks: open.slice(0, 12), lateTasks: open.filter((t) => t.late).length,
+      blockers: cards[k] && typeof cards[k].blockers === "string" ? cards[k].blockers : b.blockers || "", paused: b.state === "paused", state, duties: items, tasks: open.slice(0, 12), lateTasks: open.filter((t) => t.late).length,
       last: last ? { at: last.sp, status: last.status, message: last.message, link: last.link } : null, updatesToday: todays.length,
-      card: cards[k] || null, waiting: asks.map((m) => ({ id: m.id, from: m.from, text: m.text.slice(0, 200), needs: m.needs, at: m.sp })),
+      card: cardNow(cards[k], today), waiting: asks.map((m) => ({ id: m.id, from: m.from, text: m.text.slice(0, 200), needs: m.needs, at: m.sp })),
       releaseSteps: relSteps, seen: s ? s.at : null, connected: !!s };
   });
 }
 
+/* a card's "needs" not said again for 2 days stops being an ask (14 Nov 2026, the bots: "needs Luke"
+   text written once never cleared); it is kept as oldNeeds */
+function cardNow(card, today) {
+  if (!card) return null;
+  const day = card.at ? spDay(Date.parse(card.at)) : null;
+  return card.needs && day && daysBetween(day, today) >= 2 ? { ...card, needs: "", oldNeeds: card.needs } : card;
+}
 export async function loadDesk(store, now) {
   const [roster, updates, messages, cardsDoc, config, releases, sightings] = await Promise.all([getRoster(store), listUpdates(store, now, 3), listMessages(store, now, 2), readDoc(store, "cards.json", {}), getConfig(store), listReleases(store), getSightings(store)]);
   const [seen, read, income] = await Promise.all([getSeen(store, roster), getRead(store, roster), incomeState(store, now)]);

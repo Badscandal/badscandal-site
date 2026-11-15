@@ -113,6 +113,10 @@ export function sampleDesk(now = Date.now()) {
     M(200, "msample0007a", "Atlas", "Luke", "OK to pitch Me Dá Seu Body as Dance / House?", "decision", { options: ["Yes", "Pick another genre"], resolved: { by: "Luke", at: new Date(ago(150)).toISOString(), note: "Yes" } }),
     M(240, "msample0008a", "Drop", "Luke", "RouteNote wants the Me Dá Seu Body cover without the web address on it. Can you put a new one in the folder?", "action", { resolved: { by: "Luke", at: new Date(ago(50)).toISOString(), note: "answered" } }),
     M(50, "msample0009a", "Luke", "Drop", "New cover is in the folder now.", "none", { re: "msample0008a" }),
+    /* made-up numbered questions (14 Nov 2026): one answered, two still open */
+    M(70, "msample0010a", "Verse", "Luke", "Three things about the Me Dá Seu Body lyrics before they go live.", "reply", { questions: [
+      { q: "Is the hook sung 4 times, not 5?", answer: "Yes, 4 times", by: "Luke", at: new Date(ago(65)).toISOString() },
+      { q: "Is the second verse in Portuguese?", answer: "", by: "", at: "" }, { q: "Does the bridge repeat at the end?", answer: "", by: "", at: "" }] }),
   ];
   messages.sort((a, b) => (a.at < b.at ? 1 : -1)); /* newest first, as the real desk lists them */
   const E = (back, payer, amount, currency, status, account, category, by = "Ledger") => ({ id: "i" + back + payer.length, at: new Date(ago(back * 1440 + 90)).toISOString(), by, date: d(back), payer, amount, currency, status, category, account, reference: "", period: "", source: "", note: "" });

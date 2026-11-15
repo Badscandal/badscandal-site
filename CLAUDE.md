@@ -1230,9 +1230,9 @@ write the sheets and shouldn't). Nothing here can touch ads, posts, sheets or mo
   `income_check` ("I looked at Wise today, 0 new": tells "nothing came in" from "nobody looked") ·
   `income_status` · `team_board` · `luke_briefing` (for Alfred's 10:00 message) · `set_my_card` ·
   `read_guide` · then `releases`, `release_pack`, `release_step`, `release_fill`, `spotify_upcoming` (the
-  release pipeline section), `sort_payment` (the Revolut section) and `task_update` (14 Nov 2026, below).
-  Descriptions are written for bots that follow instructions literally. `tests/mcp.test.mjs` asserts the
-  count (19) in five places.
+  release pipeline section), `sort_payment` (the Revolut section), `task_update` and `record_luke_answer`
+  (14 Nov 2026, below). Descriptions are written for bots that follow instructions literally.
+  `tests/mcp.test.mjs` asserts the count (20) in five places.
 * **Guard rails in `staff.mjs`:** names only from the roster; every text cleaned and cut; links only
   `https://`; `secretIn()` refuses passwords, login codes, API keys, private keys, IBANs and card numbers
   (it must NOT refuse ISRCs, UPCs, 15-digit ad account ids or "token: expired": tested); an amount that
@@ -2076,3 +2076,32 @@ Batch 1 (tests: `tests/bots-batch1.test.mjs`, plus a late-pitch case in `staff-s
   fixes that need Luke or Claude's key (not code): Love You's record, Me Dá Seu Body's pack, Laura's lyric
   video link, the income rows. The bots' GUIDE.md (private repo) should mention task_update and the new
   read_messages filters.
+
+## The bots' feedback, batch 2 of 5: decisions and stale asks (14 Nov 2026, branch `hq-bots-batch2`)
+
+Stacked on batch 1 (branch `hq-bots-batch2` starts from `hq-bots-batch1`). Tests: `tests/bots-batch2.test.mjs`.
+* **Numbered questions:** `send_message` takes `questions` (2 to 6, 300 characters each; not with
+  `options`, not to all; needs none becomes reply). Stored as `m.questions = [{q, answer, by, at, via?}]`.
+  An answer is a reply with `answers` ({"1": "...", "3": "..."} or a list; `answersOf()`), saved on the
+  answer message too (`m.answers`). In `sendMessage`'s settle step a message with questions is filled
+  ONLY by answers and closes (`resolved.note` "all N answered") when every question has one: a plain
+  reply (Luke's one-word "Correct") no longer closes it. Only the one it was sent to, or Luke, answers;
+  a question number that doesn't exist and answers to a message without questions are refused. Luke's
+  "Mark as done" still closes it. Tool results carry `still_open`.
+* **`about`** (a roster bot) on `send_message`: the message and every answer to it (`about` is copied
+  onto the answer) reach that bot: `S.messagesFor` counts `m.about === name`, so it shows in that bot's
+  `messages_for_you` / `unread`. HQ shows "about Forge".
+* **`record_luke_answer` (tool 20, Alfred only):** Luke's EXACT words from Alfred's chat, saved as a
+  message from Luke with `via: "Alfred"` answering a message that waits on Luke; `option` (must be one of
+  the listed options, becomes the settle note) and `answers` (numbered questions). HQ shows "Luke (via
+  Alfred)".
+* **Stale blockers and asks:** `set_my_card` takes `blockers` ("" clears): stored on the card
+  (`blockers`, `blockersAt`) and it REPLACES the roster profile's blocker in `workers()`; left out, the
+  last word stands. `my_day` shows `your_known_blockers` + how to clear it. A card's `needs` not said
+  again for 2 days is dropped from the card (`cardNow()`, kept as `oldNeeds`). The income sources'
+  `needsLuke` lines (Ledger's old codes) are batch 4 (owner-editable sources).
+* **HQ page:** `HQLib.questionLines(m)` / `questionsLeft(m)`; "Waiting on you" shows each question with
+  its own answer box and one "Send answers" button (`data-act="qsend"`, posts `answers`); the board
+  thread lists every question with its answer or "No answer yet". `/api/staff/message` passes
+  `answers`, `questions`, `about`. The sample has a made-up Verse message with 3 questions (1 answered),
+  so the sample now has 3 things waiting on Luke (pins in hq-cmd, mcp and staff tests updated).
