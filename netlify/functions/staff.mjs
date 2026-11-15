@@ -46,7 +46,7 @@ import { sweep as pushSweep } from "../lib/push.mjs";
 import { COOKIE, readCookie, verifySession } from "../lib/session.mjs";
 import * as S from "../lib/staff.mjs";
 import { sampleBoard, sampleReleases, sampleSightings } from "../lib/staff-sample.mjs";
-import { callTool, CLAUDE_TOOLS, INSTRUCTIONS, TOOLS } from "../lib/staff-tools.mjs";
+import { callTool, CLAUDE_TOOLS, INSTRUCTIONS, TOOLS, toolsFor, instructionsFor } from "../lib/staff-tools.mjs";
 
 const NO_STORE = { "Cache-Control": "no-store", "X-Robots-Tag": "noindex, nofollow" };
 const json = (status, data, extra = {}) => new Response(data === null ? null : JSON.stringify(data), { status, headers: { ...(data === null ? {} : { "Content-Type": "application/json; charset=utf-8" }), ...NO_STORE, ...extra } });
@@ -125,12 +125,27 @@ async function mcp(req, context) {
   const st = stores(context), now = Date.now();
   const headers = Object.fromEntries([...req.headers].map(([k, v]) => [k.toLowerCase(), v]));
   const ctx = { store: st.desk, now, role, hq: hqLoader(st) };
+  /* batch 5: /mcp/<bot> (or /mcp?bot=<bot>) = that bot's own tools and instruction lines; a call there
+     without `bot` is that bot's, and another bot's name is refused. /mcp, a name not on the team, and
+     Claude's key keep the whole list. */
+  const url = new URL(req.url);
+  const asked = decodeURIComponent((url.pathname.replace(/\/$/, "").split("/")[2] || url.searchParams.get("bot") || "")).trim().slice(0, 40);
+  const roster = role === "bot" && asked ? await S.getRoster(st.desk) : [];
+  const own = (roster.find((r) => r.name.toLowerCase() === asked.toLowerCase()) || {}).name || "";
+  const tools = role === "claude" ? TOOLS.concat(CLAUDE_TOOLS) : own ? toolsFor(own, roster) : TOOLS;
+  const instructions = own ? instructionsFor(own, roster) : INSTRUCTIONS;
+  const msg = b.value;
+  if (own && msg && msg.method === "tools/call" && msg.params && typeof msg.params === "object") {
+    const a = msg.params.arguments && typeof msg.params.arguments === "object" && !Array.isArray(msg.params.arguments) ? msg.params.arguments : {};
+    if (a.bot === undefined || a.bot === null || String(a.bot).trim() === "") msg.params.arguments = { ...a, bot: own };
+  }
   const call = async (tool, args) => {
+    if (own && String(args.bot || "").trim().toLowerCase().replace(/\s*\(.*$/, "") !== own.toLowerCase()) throw new S.StaffError(`This connector address is ${own}'s (badscandal.com/mcp/${own.toLowerCase()}): call with bot "${own}", or use your own address. Nothing was done.`, "not_allowed");
     const out = await callTool(tool, args, ctx);
     if ((tool.name === "send_message" && asksLuke(out)) || tool.name === "spotify_upcoming") await pushAfter(context, st, now);
     return out;
   };
-  const out = await handle(b.value, headers, { tools: role === "claude" ? TOOLS.concat(CLAUDE_TOOLS) : TOOLS, instructions: INSTRUCTIONS, call });
+  const out = await handle(msg, headers, { tools, instructions, call });
   const method = b.value && typeof b.value.method === "string" ? b.value.method : "";
   await note(context, req, out.status, who, method, out.body && out.body.error ? out.body.error.message : "");
   return json(out.status, out.body);

@@ -2209,3 +2209,50 @@ Tests: `tests/bots-batch4.test.mjs`. The connector has 25 tools now (`fix_paymen
 * **Royalties only:** `incomeReport().royaltiesOnly` = received without the Salary category. Money shows four
   tiles (`HQLib.incomeTotals`): Received, Royalties (no salary), Owed to us, Statements only; `income_status`
   gives `royalties_only_this_month`, `payable_this_month`, `statement_only_this_month`.
+
+## The bots' feedback, batch 5 of 5: tidy-ups (15 Nov 2026, branch `hq-bots-batch5`)
+
+Tests: `tests/bots-batch5.test.mjs`. 26 tools (`tests/mcp.test.mjs` pins 26).
+
+* **Each bot gets only its own tools at its own address.** The whole list was ~40 KB on every run, mostly
+  income tools the social bots never use. `staff-tools.mjs` `TOOL_USERS` names the bots each special tool is
+  for (any tool not in it is for everyone): Alfred `record_luke_answer`, `luke_briefing`, `luke_short_briefing`,
+  `income_status`; Ledger + Sheet the income tools; Forge `record_spend`; Steve, Atlas, Kevin, Laura
+  `log_growth`; Drop `store_status`; Atlas `spotify_upcoming`. `toolsFor(bot, roster)` gives the list (in the
+  shared order); Nova, an empty name and a name not on the team get everything (a typo never hides a tool).
+  `INSTRUCTION_LINES` tags each instruction line with its bots; `INSTRUCTIONS` (all lines, the same text as
+  before plus three new lines) is still what `/mcp` sends, and `instructionsFor(bot, roster)` gives the shared
+  lines plus the bot's own (Nova: all). **The address:** `POST /mcp/<bot>` (or `/mcp?bot=<bot>`, any case) with
+  the same bots' key lists only that bot's tools and lines; a `tools/call` there without `bot` is filled in as
+  that bot, another bot's name is refused ("This connector address is Kevin's …"), a tool that isn't his is
+  "Unknown tool". Plain `/mcp`, a name not on the team and Claude's key keep everything, so a connector set up
+  the old way is unchanged. Kevin's list is about half the size. Who may CALL a tool is still decided by the
+  desk (`staff.mjs`), not by the list. To use it, each bot's connector URL becomes
+  `https://badscandal.com/mcp/<its name>` (only if the bots' app allows a connector per bot; the shared one
+  keeps working).
+* **The duty reset.** Nova reset the duties at 08:05, after Ledger's 07:30 and Sheet's 08:00 runs, so they found
+  no row. `DEFAULT_ROSTER`: Nova's reset is at 07:00 (her card's time too), before every other bot's time.
+  `S.dutyResetTime(roster)` = the time of the "reset" line on Nova's card (so the seeded card decides);
+  the site check says "(Nova resets them at <that time>)". A `done` posted before the rows exist already
+  counted (the overlay is applied when the board is read: by duty id, or by bot when it has one duty), now
+  pinned by a test; `my_day` before the reset (no duty rows for anyone yet) says "Today's duty rows are not on
+  the board yet: Nova puts them there at 07:00. Do your daily duty now anyway and post_update with status done:
+  it counts …" instead of "tell Nova the row is missing" (which stays for after the reset time).
+* **Role text (`DEFAULT_ROSTER`):** Drop = "Where every release is at the distributor" (no royalties; upload 4
+  weeks before, 3 at the latest; writes the timeline and each song's store status); Ledger's card says it owns
+  the royalties (since 11 Nov) and its 5th-of-the-month report includes them; Forge logs Meta, Google and TikTok
+  (`record_spend`); Webmaster's daily check no longer mentions pre-saves (the rule stays in RULES) and his page
+  is due a week after the previous release; Webmaster's time is 09:20 only. **The private seed
+  (badscandal-hq `staff-desk/`) replaces this roster on the live desk and needs the same changes at the next
+  re-seed.** The site check adds "Times disagree: <bot>'s duty is due 09:10 on the board, 09:20 on the team
+  card" when NONE of a bot's duty times is on its card (a second duty at another hour, like Forge's evening cap
+  check, is fine).
+* **Alfred's short briefing = a separate tool, `luke_short_briefing`** (read-only; listed for Alfred, Nova
+  gets everything). `luke_briefing` is untouched (a test pins its keys and order). Answers `ad_spend` (one line:
+  month, spent of cap, left, status, the rate used, "estimated: …" with why; "not read: …" without the sheet),
+  `income` (received; owed to us; how many problems), `decisions` (the top 3 things waiting on Luke by deadline:
+  an approval -> that step's due day, a "ready to resubmit" -> the release day; then the oldest without a
+  deadline; options and "(by Fri 27 Nov)"), `more_decisions` ("N more …"), `needs_luke_sign_in` (ONE list,
+  each line once: every bot's blockers, card needs, duty blockers and today's blocked/error updates, and the
+  cap's missing reads, that mention signing in, logging in, 2FA, a phone/verification/security code or an
+  expired session; "nothing" when empty). It hands over NO messages and doesn't move Alfred's read marker.
