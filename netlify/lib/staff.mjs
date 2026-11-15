@@ -348,13 +348,37 @@ export async function sendMessage(store, now, roster, a) {
     if (from !== "HQ") noSecrets(qs.join("\n"));
     if (needs === "none") needs = "reply";
   }
+  /* approval (14 Nov 2026, batch 3): asks Luke to approve the pitch (Atlas) or the final lyrics (Verse) of a
+     release; a decision with the options Approve / Not yet. His Approve records the approval on the release. */
+  let approval = null;
+  if (a.approval != null) {
+    const ap = a.approval;
+    if (typeof ap !== "object" || Array.isArray(ap)) fail('approval must be {"song": "...", "what": "pitch" or "lyrics", "text": "the pitch"}.');
+    const what = low(ap.what);
+    if (!APPROVALS[what]) fail("approval.what must be pitch or lyrics.");
+    if (to !== "Luke") fail("An approval request goes to Luke: put Luke in to.");
+    if (!APPROVALS[what].asks.includes(from)) fail(what === "pitch" ? "The pitch is Atlas's to put to Luke: only Atlas asks him to approve it (Nova may ask for him)." : "The final lyrics are Verse's to put to Luke: only Verse asks him to approve them (Nova may ask for him).", "not_allowed");
+    const r = findRelease(await listReleases(store), ap.song, { drafts: true });
+    if (r.status === "cancelled") fail(`${r.title} was cancelled. Nothing was sent.`);
+    let atext = "";
+    if (what === "pitch") {
+      atext = cleanText(ap.text, 3000);
+      if (atext.length < 10) fail("approval.text must be the pitch itself, exactly as it would be sent. Nothing was sent.");
+      noSecrets(atext);
+    } else if (!filled((r.pack || {}).lyrics)) fail(`There are no lyrics in the pack for ${r.title} yet: only Luke (or Claude) fills them in. Nothing was sent.`);
+    approval = { id: r.id, title: r.title, what, ...(atext ? { text: atext } : {}) };
+    needs = "decision";
+  }
   /* about (14 Nov 2026): the bot a message to Luke is about; it and the answer reach that bot too */
   let about = a.about != null && String(a.about).trim() ? whoIs(a.about, roster) : "";
   const via = a.via ? whoIs(a.via, roster) : "";
   const answers = answersOf(a.answers);
   if (answers && !re) fail("answers only go with reply_to: the id of the message whose questions you answer.");
   if (answers) for (const t of Object.values(answers)) noSecrets(t);
-  const m = { id: newId("m", now), at: new Date(now).toISOString(), sp: spStamp(now), from, to, text, needs, re, options, kind, resolved: null,
+  const opts = approval ? APPROVE_OPTIONS.slice() : options;
+  /* release + ask: set only by the desk itself (store_status's "ready to resubmit"), never by a tool argument */
+  const tag = a.ask === "resubmit" && a.release ? { release: clean(a.release, 60), ask: "resubmit" } : {};
+  const m = { id: newId("m", now), at: new Date(now).toISOString(), sp: spStamp(now), from, to, text, needs, re, options: opts, kind, resolved: null, ...(approval ? { approval } : {}), ...tag,
     ...(qs.length >= 2 ? { questions: qs.map((q) => ({ q, answer: "", by: "", at: "" })) } : {}), ...(answers ? { answers } : {}), ...(via ? { via } : {}) };
   /* what Luke's answer settles the message with (an option he picked); "answered" otherwise */
   const settleNote = from === "Luke" ? clean(a.note, 240) : "";
@@ -409,7 +433,30 @@ export async function sendMessage(store, now, roster, a) {
       parent = null;
     }
   }
-  return { message: m, parent, settled: !!(parent && parent.resolved && parent.resolved.at === m.at) };
+  const settled = !!(parent && parent.resolved && parent.resolved.at === m.at);
+  /* what Luke's pick does on the release (batch 3). The answer is already saved and the message closed:
+     a failure here never throws (the answer would be sent twice); it is returned instead. */
+  let approved = null, releaseNote = null;
+  if (settled && from === "Luke") {
+    const pick = low(settleNote);
+    try {
+      if (parent.approval && pick === "approve") {
+        await approveRelease(store, now, roster, { by: "Luke", via, id: parent.approval.id, what: parent.approval.what, text: parent.approval.text, msg: parent.id, words: low(text) !== pick ? text : "" });
+        approved = { what: parent.approval.what, id: parent.approval.id };
+      }
+      if (parent.ask === "resubmit" && parent.release) {
+        const at = m.at, said = settleNote || text.slice(0, 120);
+        await mutate(store, REL_KEY, [], (list) => {
+          const r = list.find((x) => x.id === parent.release);
+          if (!r) return { skip: true, value: null };
+          logIt(r, at, "Luke", `Luke answered ${parent.from}: ${said}` + (via ? ` (via ${via})` : ""));
+          return { value: r };
+        });
+        releaseNote = said;
+      }
+    } catch (e) { approved = approved || (parent.approval ? { error: e && e.message ? e.message : "not recorded" } : null); }
+  }
+  return { message: m, parent, settled, ...(approved ? { approved } : {}), ...(releaseNote ? { releaseNote } : {}) };
 }
 /* answers: {"1": "yes", "3": "no"} or ["yes", "", "no"] -> {"1": "yes", "3": "no"} (null = none given) */
 function answersOf(x) {
@@ -883,6 +930,9 @@ export const SELF_KIND = "Self-release";
 /* who delivers a self-release when the pack doesn't say (Luke's spec, 11 Nov 2026) */
 export const SELF_DISTRIBUTOR = "RouteNote (badscandaladmin)";
 const WITH_LABEL = { field: "kind", equals: LABEL_KIND };
+/* where the song is at the distributor (14 Nov 2026, batch 3): a FIXED list, kept with history
+   (r.storeLog, newest last), which is also Drop's moderation log (what RouteNote said, and why) */
+export const STORE_STATUS = ["not uploaded", "uploaded", "in moderation", "rejected", "resubmitted", "approved", "delivered", "live"];
 export const PACK_FIELDS = [
   /* Whose release is it (11 Nov 2026, Luke: "i want it to be if it's self release or released with
      label; for instance touch me: [the label] own 50% of that"). First on the form. */
@@ -921,7 +971,7 @@ export const PACK_FIELDS = [
   F("story", "The song in two lines (for the pitch)", "The song in two lines", "text", "pitch", { neededBy: "pitch", max: 400, hint: "Can wait. What the song is about and why it matters, for Atlas's Spotify pitch." }),
   F("isrc", "ISRC", "ISRC", "line", "later", { fill: ["Drop"], max: 40, hint: "Drop fills it from RouteNote." }),
   F("upc", "UPC", "UPC", "line", "later", { fill: ["Drop"], max: 40, hint: "Drop fills it from RouteNote." }),
-  F("storeStatus", "Status at the distributor", "Status at the distributor", "line", "later", { fill: ["Drop"], hint: 'Drop keeps it current, for example "in review at RouteNote".' }),
+  F("storeStatus", "Status at the distributor", "Status at the distributor", "choice", "later", { fill: ["Drop"], choices: STORE_STATUS, hint: "Drop keeps it current with store_status (a rejection with RouteNote's reason). Every change is kept." }),
   F("spotifyTrack", "Spotify track link", "Spotify track link", "link", "later", { fill: ["Atlas", "Webmaster"], hint: "https://open.spotify.com/track/... once the song is out." }),
   /* Laura's RESULT, not her input (11 Nov 2026): never "missing" before her step, like the ISRC */
   F("video", "Video (link)", "Video", "link", "later", { fill: ["Laura"], hint: "Laura fills it once the video is scheduled." }),
@@ -943,6 +993,12 @@ export const RELEASE_STEPS = [
   { key: "page", label: "Song page live on badscandal.com", owner: "Webmaster", days: 7 },
   { key: "video", label: "Video scheduled on YouTube", owner: "Laura", days: 7 },
   { key: "teasers", label: "Teaser clips approved for posting", owner: "Luke", days: 3 },
+  /* the social bots post the teasers (14 Nov 2026, the bots' feedback, batch 3): each waits on Luke's
+     approval and keeps its OWN day (ownDay: its owner or Nova sets it; freed early, it is not pulled
+     forward). 3 days before release = 21 Nov for a 24 Nov song, the day the bots asked for. */
+  { key: "teaser_tiktok", label: "Teaser posted on TikTok", owner: "Kevin", days: 3, after: "teasers", ownDay: true },
+  { key: "teaser_instagram", label: "Teaser posted on Instagram", owner: "Steve", days: 3, after: "teasers", ownDay: true },
+  { key: "teaser_youtube", label: "Teaser posted on YouTube", owner: "Laura", days: 3, after: "teasers", ownDay: true },
   { key: "ads", label: "Ad drafts ready, inside the cap", owner: "Forge", days: 1 },
   { key: "live", label: "Release day: Spotify link on the song page and the home card", owner: "Webmaster", days: 0 },
 ];
@@ -1087,12 +1143,52 @@ function waitingFor(steps, s) {
   const a = steps.find((x) => x.key === after);
   return a && !finished(a) ? a : null;
 }
-const waitWords = (a) => (a.key === "spotify" ? "waiting: the song is not in Spotify for Artists yet" : `waiting for "${a.label}"`);
+const waitWords = (a) => (a.key === "spotify" ? "waiting: the song is not in Spotify for Artists yet" : a.key === "teasers" ? "waiting: Luke has not approved the teaser clips yet" : `waiting for "${a.label}"`);
 /* the moment a step is done (or skipped), the steps that waited for it become ordinary steps, due TODAY:
    never born late, and the Spotify pitch goes the day the song shows in Spotify for Artists (14 Nov 2026,
    Luke: "spotify pitch should be sent immediately when the song becomes available in spotify") */
 function freeWaiting(r, key, today) {
-  for (const s of r.steps || []) if (STEP[s.key] && STEP[s.key].after === key && !finished(s) && s.due) s.due = today;
+  /* a step with its own day (a teaser post) keeps a later day; only a day already gone becomes today */
+  for (const s of r.steps || []) if (STEP[s.key] && STEP[s.key].after === key && !finished(s) && s.due) s.due = STEP[s.key].ownDay && s.due > today ? s.due : today;
+}
+/* Steps added to the pipeline after a release was sent (the teaser posts, 14 Nov 2026): put in their place
+   on every release still to come, due on their usual day (today if that has passed: never born late).
+   Finished steps are never touched; a draft, a cancelled song or one already out gets nothing. The Spotify
+   step is not added here: it comes with "Change the date" (moveRelease), with its own rule for a pitch
+   already sent. Returns the keys added. */
+const LATER_STEPS = ["teaser_tiktok", "teaser_instagram", "teaser_youtube"];
+function addLaterSteps(r, today) {
+  if (!r || r.status !== "scheduled" || r.alreadyOut || !isDay(r.date) || r.date <= today || !Array.isArray(r.steps)) return [];
+  const have = new Set(r.steps.map((s) => s.key)), add = LATER_STEPS.filter((k) => !have.has(k));
+  if (!add.length) return [];
+  const fresh = scheduleSteps(r.date, today).steps;
+  for (const k of add) {
+    const n = { ...fresh.find((x) => x.key === k) };
+    /* in its place: after the last step that comes before it in RELEASE_STEPS */
+    const order = RELEASE_STEPS.map((x) => x.key), before = order.slice(0, order.indexOf(k));
+    let at = -1;
+    r.steps.forEach((s, i) => { if (before.includes(s.key)) at = i; });
+    r.steps.splice(at + 1, 0, n);
+  }
+  return add;
+}
+/* Once per release: the desk's releases get the steps added since they were sent. Reads first and writes
+   only when something is missing, so calling it before every answer costs one read. */
+export async function upgradeReleases(store, now) {
+  const today = spDay(now), at = new Date(now).toISOString();
+  const list = await listReleases(store);
+  if (!list.some((r) => addLaterSteps(JSON.parse(JSON.stringify(r)), today).length)) return { added: [] };
+  return mutate(store, REL_KEY, [], (rows) => {
+    const added = [];
+    for (const r of rows) {
+      const keys = addLaterSteps(r, today);
+      if (!keys.length) continue;
+      if (r.steps.some((s) => s.key === "teasers" && finished(s))) freeWaiting(r, "teasers", today);
+      logIt(r, at, "HQ", `HQ added the teaser posts: ${joinWords(keys.map((k) => STEP[k].label.replace("Teaser posted on ", "")))} (${joinWords(keys.map((k) => STEP[k].owner))})`);
+      added.push({ id: r.id, title: r.title, steps: keys });
+    }
+    return added.length ? { value: { added } } : { skip: true, value: { added } };
+  });
 }
 /* label release or not, after a change of the pack on a release already sent: the upload and the
    approval follow the deal (only while nobody has started them) */
@@ -1169,10 +1265,18 @@ export function releaseView(r, today, o = {}) {
     counts: { done: steps.filter((s) => s.status === "done").length, total: steps.filter((s) => s.status !== "skipped").length, late: steps.filter((s) => s.late).length,
       blocked: steps.filter((s) => s.status === "blocked").length, skipped: steps.filter((s) => s.status === "skipped").length, waiting: steps.filter((s) => s.waiting).length },
     next: next ? { key: next.key, label: next.label, owner: next.owner, due: next.due, dueIn: next.dueIn, status: next.status, late: next.late, waiting: next.waiting, note: next.note || "" } : null,
+    /* batch 3: the status at the distributor with its history, and Luke's approvals (the lyrics' one says
+       whether the pack's lyrics are still the ones he approved) */
+    store: storeOf(r),
+    approvals: approvalsOf(r),
     log: (r.log || []).slice().reverse() };
   v.warnings = releaseWarnings(v, o.sightings || null, today);
   v.where = whereWords(v, today);
   return v;
+}
+function approvalsOf(r) {
+  const a = r.approvals || {}, lyr = (r.pack || {}).lyrics || "";
+  return { pitch: a.pitch ? { ...a.pitch } : null, lyrics: a.lyrics ? { ...a.lyrics, current: a.lyrics.text === lyr } : null };
 }
 /* a release the team is still working on: sent, not a song recorded after it came out, and not out
    for more than 14 days */
@@ -1225,6 +1329,8 @@ export function warningsOf(v, sightings, today) {
   const days = v.daysToGo;
   if (days === 0 && live && !finished(live)) out.push({ kind: "today", rank: 0, text: "Out today and the Spotify link is not on the song page yet" });
   for (const s of v.steps) if (s.status === "blocked") out.push({ kind: "blocked", rank: 1, text: `${s.label} is blocked (${s.owner})` + (s.note ? `: ${s.note.replace(/\s+/g, " ").slice(0, 160)}` : "") });
+  /* batch 3: the distributor turned it down, and it hasn't been fixed yet */
+  if (v.store && v.store.status === "rejected") out.push({ kind: "rejected", rank: 1, text: "Rejected at the distributor" + (v.store.reason ? `: ${v.store.reason.replace(/\s+/g, " ").slice(0, 160)}` : "") + (v.store.by ? ` (${v.store.by})` : "") });
   const pitchTooLate = pitch && !finished(pitch) && days > 0 && days < 7;
   /* only while the pitch is still to go (11 Nov 2026, review): a pitch already sent (an older release
      moved, or marked by Luke) can't be held up by it */
@@ -1285,6 +1391,29 @@ export function findRelease(list, song, { drafts = true } = {}) {
   fail(`There is no release called "${clean(song, 60)}". ` + (names.length ? `The releases on the desk are: ${names.join(", ")}.` : "There are no releases on the desk yet."));
 }
 const logIt = (r, at, by, what) => { r.log = (r.log || []).concat({ at, by, what: clean(what, 240) }).slice(-LIMITS.releaseLog); }; /* the last 30 changes */
+/* the store status's history (batch 3): one entry per change, the current status mirrored in the pack's
+   storeStatus (so every older reader, HQ's merged list included, still works). The last 40 are kept. */
+function storeEntry(r, e) {
+  r.storeLog = (r.storeLog || []).concat({ status: e.status, on: e.on, at: e.at, by: e.by, ...(e.reason ? { reason: e.reason } : {}), ...(e.note ? { note: e.note } : {}) }).slice(-40);
+  r.pack = r.pack || {};
+  r.pack.storeStatus = e.status;
+}
+/* what the view, the tools and HQ show: the status now (with the reason when it is a rejection), the
+   history newest first, and an old free-text status written before the fixed list (legacy) */
+function storeOf(r) {
+  const log = Array.isArray(r.storeLog) ? r.storeLog : [];
+  const last = log[log.length - 1] || null, cur = (r.pack || {}).storeStatus || "";
+  const legacy = !last && cur && !STORE_STATUS.includes(cur) ? cur : "";
+  const status = last ? last.status : STORE_STATUS.includes(cur) ? cur : "";
+  return { status, since: last ? last.on : null, by: last ? last.by : "", reason: last && last.status === "rejected" ? last.reason || "" : "", note: last ? last.note || "" : "",
+    ...(legacy ? { legacy } : {}), history: log.slice().reverse() };
+}
+/* approvals (batch 3): "Pitch approved" and "Final lyrics approved". Only Luke (Alfred may record his
+   words); who may ASK Luke for each */
+export const APPROVALS = { pitch: { label: "Pitch approved", asks: ["Atlas", "Nova", "Claude"] }, lyrics: { label: "Final lyrics approved", asks: ["Verse", "Nova", "Claude"] } };
+export const APPROVE_OPTIONS = ["Approve", "Not yet"];
+export const RESUBMIT_OPTIONS = ["Yes, resubmit", "Not yet"];
+
 /* one note to the whole team; a full board must not undo the release change that was already saved.
    Sent by "HQ", the site itself (11 Nov 2026): it names who did it, and it is not a message Luke typed,
    so it doesn't read as one on his own board. */
@@ -1335,6 +1464,7 @@ export async function saveRelease(store, now, roster, a) {
       r.pack = r.pack || {};
       const changed = Object.keys(values).filter((k) => (r.pack[k] || "") !== values[k]);
       for (const k of changed) { if (values[k]) r.pack[k] = values[k]; else delete r.pack[k]; }
+      if (changed.includes("storeStatus") && values.storeStatus) storeEntry(r, { status: values.storeStatus, on: today, at, by });
       if (changed.length) changes.push(`changed ${joinWords(changed.map((k) => FIELD[k].short))}`);
       /* the deal changed on a release already sent: the upload and the approval follow it, and Drop is told */
       if (changed.some((k) => k === "kind" || k === "distributor")) {
@@ -1509,6 +1639,7 @@ export async function fillRelease(store, now, roster, a) {
   if (!mayFill(f, by)) fail(`${f.short} is filled by ${f.fill.length ? f.fill.join(" or ") + " (or Nova, Luke or Claude)" : "Luke or Claude only"}, not by you. If it is wrong or missing, send ${f.fill.length ? f.fill[0] : "Luke"} a message.`, "not_allowed");
   const value = packValue(key, a.value);
   if (!value) fail(`value is empty. Write the ${f.short} itself.`);
+  if (key === "storeStatus" && value === "rejected") fail("A rejection needs RouteNote's reason: use store_status with status rejected and the reason. Nothing was saved.");
   const at = new Date(now).toISOString();
   return mutate(store, REL_KEY, [], (list) => {
     const r = findRelease(list, a.id || a.song, { drafts: by === "Luke" || by === "Claude" });
@@ -1516,6 +1647,7 @@ export async function fillRelease(store, now, roster, a) {
     r.pack = r.pack || {};
     if (r.pack[key] === value) return { skip: true, value: r };
     const had = filled(r.pack[key]);
+    if (key === "storeStatus") storeEntry(r, { status: value, on: spDay(now), at, by });
     r.pack[key] = value; r.updatedAt = at;
     logIt(r, at, by, `${by} ${had ? "changed" : "filled"} ${f.short}`);
     return { value: r };
@@ -1525,8 +1657,20 @@ export async function fillRelease(store, now, roster, a) {
 /* the step's owner, Nova, Claude or Luke marks a step. A bot's mark is also a line in the live log. */
 export async function setStep(store, now, roster, a) {
   const by = whoIs(a.by, roster, { people: true });
-  const status = low(a.status);
-  if (!STEP_STATUS.includes(status)) fail(`status must be one of: ${STEP_STATUS.join(", ")}. Use done only when it is really done.`);
+  const today0 = spDay(now);
+  /* due (14 Nov 2026, batch 3): a step with its own day (a teaser post): its owner or Nova sets the day.
+     Sent alone, it changes only the day. */
+  const due = a.due != null && String(a.due).trim() ? clean(a.due, 10) : "";
+  if (due && !isDay(due)) fail("due must be a date written YYYY-MM-DD, for example 2026-11-21. Nothing was saved.");
+  if (due && due < today0) fail(`${dayWords(due)} has already passed. Pick today or a later day. Nothing was saved.`);
+  const status = a.status == null || String(a.status).trim() === "" ? (due ? "" : low(a.status)) : low(a.status);
+  if (status !== "" && !STEP_STATUS.includes(status) || (!status && !due)) fail(`status must be one of: ${STEP_STATUS.join(", ")}. Use done only when it is really done.`);
+  /* done_on (14 Nov 2026, batch 3): the real day it was done, when that was before today (a pack sent
+     late: the upload was done days earlier, and must not read "done today") */
+  const doneOn = a.done_on != null && String(a.done_on).trim() ? clean(a.done_on, 10) : "";
+  if (doneOn && !isDay(doneOn)) fail("done_on must be a date written YYYY-MM-DD, for example 2026-11-09. Nothing was saved.");
+  if (doneOn && status !== "done") fail("done_on goes only with status done: the day the step was really done. Nothing was saved.");
+  if (doneOn && doneOn > today0) fail(`done_on can't be in the future (${dayWords(doneOn)}). Nothing was saved.`);
   const note = cleanText(a.note, 240);
   const rawLink = clean(a.link, 400), link = httpsLink(rawLink);
   if (rawLink && !link) fail("link must start with https:// . Nothing was saved.");
@@ -1543,17 +1687,30 @@ export async function setStep(store, now, roster, a) {
     const st = (r.steps || []).find((s) => s.key === want || low(s.label) === want);
     if (!st) fail(`"${clean(a.step, 60)}" is not a step of this release. The steps are: ${r.steps.map((s) => s.key).join(", ")}.`);
     if (by !== st.owner && !["Nova", "Claude", "Luke"].includes(by)) fail(`"${st.label}" is ${st.owner}'s step. Only ${st.owner}, Nova, Claude or Luke can mark it. Mark only your own steps.`, "not_allowed");
+    if (due) {
+      if (!STEP[st.key] || !STEP[st.key].ownDay) fail(`"${st.label}" has no day of its own: it is dated from the release day. Only the teaser posts have their own day. Nothing was saved.`, "not_allowed");
+      if (due > r.date) fail(`${dayWords(due)} is after the release day (${dayWords(r.date)}). Pick a day up to the release day. Nothing was saved.`);
+    }
+    if (!status) {
+      /* only the day */
+      if (st.due === due) return { skip: true, value: { release: r, st, changed: false } };
+      const from = st.due;
+      st.due = due; r.updatedAt = at;
+      logIt(r, at, by, `${by}: ${st.label} — day set to ${dayWords(due)}` + (from ? ` (was ${dayWords(from)})` : ""));
+      return { value: { release: r, st, changed: false } };
+    }
     /* Luke's own step is his approval ("Only Luke approves ... public posts"): nobody else marks it done */
     if (st.owner === "Luke" && (status === "done" || status === "skipped") && by !== "Luke") fail(`"${st.label}" is Luke's own approval: only Luke can mark it ${status}, on his dashboard. If it is ready for him, send Luke ONE message.`, "not_allowed");
     /* the pitch can't really have gone out before the song shows in Spotify for Artists (11 Nov 2026):
        a bot is told what comes first; Luke and Claude may still record what they know */
     const w = waitingFor(r.steps, st);
     if (w && status === "done" && !PEOPLE.includes(by)) fail(`"${st.label}" is waiting for "${w.label}" (${w.owner}): it can't be done before that. When the song shows as upcoming in Spotify for Artists, Atlas reports it with spotify_upcoming and the pitch opens.`, "waiting");
-    if (st.status === status && st.note === note && (!link || st.link === link)) return { skip: true, value: { release: r, st, changed: false } };
-    Object.assign(st, { status, note, ...(link ? { link } : {}), at, by });
+    if (st.status === status && st.note === note && (!link || st.link === link) && (!doneOn || st.doneOn === doneOn) && (!due || st.due === due)) return { skip: true, value: { release: r, st, changed: false } };
+    Object.assign(st, { status, note, ...(link ? { link } : {}), ...(due ? { due } : {}), at, by });
+    if (doneOn) st.doneOn = doneOn; else if (status !== "done") delete st.doneOn; /* reopened: the old day goes with it */
     if (finished(st)) freeWaiting(r, st.key, today);
     r.updatedAt = at;
-    logIt(r, at, by, `${by}: ${st.label} — ${status === "todo" ? "reopened" : status}` + (note ? ` (${note})` : ""));
+    logIt(r, at, by, `${by}: ${st.label} — ${status === "todo" ? "reopened" : status}` + (doneOn ? ` on ${dayWords(doneOn)}` : "") + (note ? ` (${note})` : ""));
     return { value: { release: r, st, changed: true } };
   });
   if (changed && !PEOPLE.includes(by)) {
@@ -1562,6 +1719,85 @@ export async function setStep(store, now, roster, a) {
     } catch {} /* the step is saved; a full live log must not undo it */
   }
   return r;
+}
+
+/* Drop (Nova, Claude, Luke): where the song is at the distributor, from the fixed list, with history.
+   A rejection carries RouteNote's reason in its words. on = the day it happened, when not today.
+   ready_to_resubmit (only while it is rejected): asks Luke "Ready to resubmit?" as ONE decision (Yes,
+   resubmit / Not yet); his answer goes back to Drop like any answer. Asked again while that is open, the
+   same question is returned, not a second one. */
+export async function setStoreStatus(store, now, roster, a) {
+  const by = whoIs(a.by, roster, { people: true });
+  if (!["Drop", "Nova", "Claude", "Luke"].includes(by)) fail("The status at the distributor is Drop's to keep (Nova may set it for him). If it is wrong, tell Drop.", "not_allowed");
+  const status = STORE_STATUS.find((x) => x === low(clean(a.status, 40)));
+  if (!status) fail(`status must be one of: ${STORE_STATUS.join(", ")}. Nothing was saved.`);
+  const reason = cleanText(a.reason, 300), note = cleanText(a.note, 300);
+  const today = spDay(now), at = new Date(now).toISOString();
+  const on = a.on != null && String(a.on).trim() ? clean(a.on, 10) : today;
+  if (!isDay(on)) fail("on must be a date written YYYY-MM-DD, for example 2026-11-12. Nothing was saved.");
+  if (on > today) fail(`on can't be in the future (${dayWords(on)}). Nothing was saved.`);
+  noSecrets(reason, note);
+  const ready = a.ready_to_resubmit === true || low(a.ready_to_resubmit) === "true";
+  if (ready && status !== "rejected") fail("ready_to_resubmit goes only after a rejection, with status rejected: it asks Luke whether to resubmit. Nothing was saved.");
+  const out = await mutate(store, REL_KEY, [], (list) => {
+    const r = findRelease(list, a.id || a.song, { drafts: by === "Luke" || by === "Claude" });
+    if (r.status === "cancelled") fail(`${r.title} was cancelled. Nothing was saved.`);
+    const cur = storeOf(r);
+    /* asking Luke about a rejection already recorded: no new entry (the note goes in the question) */
+    if (ready && cur.status === "rejected" && !reason) return { skip: true, value: { release: r, store: cur } };
+    if (status === "rejected" && reason.length < 3) fail("A rejection needs its reason: write what RouteNote said, in its words, in reason. Nothing was saved.");
+    /* the same status again with nothing new: no new entry */
+    if (cur.status === status && !reason && !note && on === today) return { skip: true, value: { release: r, store: cur } };
+    storeEntry(r, { status, on, at, by, reason, note });
+    r.updatedAt = at;
+    logIt(r, at, by, `${by}: at the distributor: ${status}` + (on !== today ? ` on ${dayWords(on)}` : "") + (reason ? ` (${reason})` : ""));
+    return { value: { release: r, store: storeOf(r) } };
+  });
+  if (!ready) return out;
+  const r = out.release, st = storeOf(r);
+  const open = (await listMessages(store, now)).find((m) => m.ask === "resubmit" && m.release === r.id && isOpen(m));
+  if (open) return { ...out, asked: open.id, already: true };
+  const sentMsg = await sendMessage(store, now, roster, { from: by, to: "Luke", needs: "decision", options: RESUBMIT_OPTIONS, release: r.id, ask: "resubmit",
+    text: `${r.title} (out ${dayWords(r.date)}): ready to resubmit to the distributor? It was rejected` + (st.reason ? `: "${st.reason}"` : "") + "." + (note ? ` What changed: ${note}` : "") });
+  return { ...out, asked: sentMsg.message.id, already: false };
+}
+
+/* Luke approves the pitch or the final lyrics (batch 3): who, when, the exact text. Through Alfred: via
+   "Alfred" and Luke's own words. The lyrics are approved as they are in the pack at that moment (the view
+   says when they changed since). withdraw: takes the approval back. Nobody else approves. */
+export async function approveRelease(store, now, roster, a) {
+  const by = whoIs(a.by, roster, { people: true });
+  if (by !== "Luke") fail("Only Luke approves the pitch or the final lyrics. Ask him with send_message and approval, and his answer records it.", "not_allowed");
+  const what = low(a.what);
+  if (!APPROVALS[what]) fail("what must be pitch or lyrics.");
+  const via = a.via ? whoIs(a.via, roster) : "";
+  const words = cleanText(a.words, 600);
+  const at = new Date(now).toISOString();
+  let text = "";
+  if (!a.withdraw && what === "pitch") {
+    text = cleanText(a.text, 3000);
+    if (text.length < 10) fail("Write the pitch itself, exactly as it is approved, in text. Nothing was saved.");
+    noSecrets(text);
+  }
+  return mutate(store, REL_KEY, [], (list) => {
+    const r = list.find((x) => x.id === clean(a.id, 60)) || findRelease(list, a.id || a.song);
+    if (r.status === "cancelled") fail(`${r.title} was cancelled. Nothing was saved.`);
+    r.approvals = r.approvals || {};
+    if (a.withdraw) {
+      if (!r.approvals[what]) return { skip: true, value: r };
+      delete r.approvals[what]; r.updatedAt = at;
+      logIt(r, at, by, `Luke took back the approval: ${APPROVALS[what].label.toLowerCase()}`);
+      return { value: r };
+    }
+    if (what === "lyrics") {
+      text = (r.pack || {}).lyrics || "";
+      if (!filled(text)) fail(`There are no lyrics in the pack for ${r.title} yet: Luke fills them in first. Nothing was saved.`);
+    }
+    r.approvals[what] = { by: "Luke", ...(via ? { via } : {}), at, text, ...(words ? { words } : {}), ...(a.msg ? { msg: clean(a.msg, 20) } : {}) };
+    r.updatedAt = at;
+    logIt(r, at, by, `Luke approved the ${what === "pitch" ? "pitch" : "final lyrics"}` + (via ? ` (via ${via})` : ""));
+    return { value: r };
+  });
 }
 
 /* ---------- what Spotify for Artists shows as upcoming (V4, 11 Nov 2026) ----------
@@ -1775,7 +2011,8 @@ export function workers(roster, { hq, updates, messages, cards, seen, today, now
     const open = tasks.filter((t) => low(t.owner) === k);
     const asks = waitingOn(messages, b.name);
     const relSteps = releases.filter(releaseActive).flatMap((r) => r.steps.filter((s) => !finished(s) && low(s.owner) === k)
-      .map((s) => ({ id: r.id, title: r.title, key: s.key, label: s.label, due: s.due, dueIn: s.dueIn, status: s.status, late: s.late, note: s.note || "", waiting: !!s.waiting })))
+      .map((s) => ({ id: r.id, title: r.title, key: s.key, label: s.label, due: s.due, dueIn: s.dueIn, status: s.status, late: s.late, note: s.note || "", waiting: !!s.waiting,
+        ...(s.waitingFor ? { waitingFor: s.waitingFor } : {}), ...(s.link ? { link: s.link } : {}), ...(s.key === "live" && r.pack && r.pack.spotifyTrack ? { spotifyTrack: r.pack.spotifyTrack } : {}) })))
       .sort((a, b) => (a.due < b.due ? -1 : a.due > b.due ? 1 : 0));
     let state = "idle";
     if (b.state === "paused") state = "paused";
@@ -1852,11 +2089,13 @@ function releaseOrder(views) {
    ONE whole release (GET /api/staff/release?id=) when Luke opens its details or its form. */
 export function slimRelease(v) {
   const { lyrics, ...pack } = v.pack || {};
-  return { ...v, pack, lyricsChars: lyrics ? String(lyrics).length : 0, log: [], logCount: (v.log || []).length, slim: true };
+  /* the approved lyrics are lyrics too: their length only */
+  const ap = v.approvals && v.approvals.lyrics ? (({ text, ...rest }) => ({ ...rest, textChars: String(text || "").length }))(v.approvals.lyrics) : null;
+  return { ...v, pack, lyricsChars: lyrics ? String(lyrics).length : 0, log: [], logCount: (v.log || []).length, slim: true, ...(v.approvals ? { approvals: { ...v.approvals, lyrics: ap } } : {}) };
 }
 /* what the page needs to build the form and the pipeline without hard-coding either */
 export const packFieldsOut = () => PACK_FIELDS.map((f) => ({ key: f.key, label: f.label, short: f.short, kind: f.kind, required: f.required, requiredWhen: f.requiredWhen, showWhen: f.showWhen, neededBy: f.neededBy, choices: f.choices, hint: f.hint, fill: f.fill, group: f.group, max: f.max }));
-export const releaseStepsOut = () => RELEASE_STEPS.map((s) => ({ key: s.key, label: s.label, owner: s.owner, days: s.days, ...(s.after ? { after: s.after } : {}) }));
+export const releaseStepsOut = () => RELEASE_STEPS.map((s) => ({ key: s.key, label: s.label, owner: s.owner, days: s.days, ...(s.after ? { after: s.after } : {}), ...(s.ownDay ? { ownDay: true } : {}) }));
 
 /* What is waiting on Luke (12 Nov 2026, the HQ apps): ONE rule for the app badge, GET
    /api/hq/push/waiting and the push alerts (netlify/lib/push.mjs). luke_briefing keeps its own output.
@@ -1956,7 +2195,7 @@ export function checkReport({ desk, hq, hqState, now }) {
   for (const v of (desk.releases || []).map((r) => releaseView(r, today, { sightings })).filter(releaseActive)) {
     for (const st of v.steps) if (st.status === "blocked") problems.push(`${v.title}: ${st.label} is blocked (${st.owner})` + (st.note ? `: ${st.note.replace(/\s+/g, " ").slice(0, 120)}` : ""));
     /* the warnings that say what lateness MEANS (V5): said instead of the plain late line for that step */
-    const warn = warningsOf(v, sightings, today).filter((w) => ["today", "twice", "pitch", "spotify", "date", "without", "split"].includes(w.kind));
+    const warn = warningsOf(v, sightings, today).filter((w) => ["today", "twice", "rejected", "pitch", "spotify", "date", "without", "split"].includes(w.kind));
     const said = new Set([...(warn.some((w) => w.kind === "pitch") ? ["pitch"] : []), ...(warn.some((w) => w.kind === "spotify") ? ["spotify"] : [])]);
     const late = v.steps.filter((st) => st.late && st.status !== "blocked" && !said.has(st.key));
     if (late.length === 1) problems.push(`${v.title}: ${late[0].label} is late (${late[0].owner}, due ${dayWords(late[0].due)})`);

@@ -46,7 +46,9 @@ const SOURCES = [
      not showing in Spotify for Artists yet, so the pitch is waiting;
    - Slow Burn: an upcoming label release with a split; the label delivers it (upload and approval
      skipped), it shows in Spotify for Artists (the matched item of the report), so its pitch is open;
-   - Touch Me: out 12 days ago, every step done, with its (made-up) deal.
+   - Touch Me: out 12 days ago, every step done, with its (made-up) deal and both of Luke's approvals.
+   Batch 3 (14 Nov 2026): Me Dá Seu Body's distributor history (uploaded, in moderation, rejected with a
+   made-up reason) and Drop's "ready to resubmit?" question (sampleDesk's messages).
    Links point at example.com; the "lyrics" are placeholder words; the labels and splits are invented. */
 export function sampleReleases(now = Date.now()) {
   const today = S.spDay(now);
@@ -59,7 +61,9 @@ export function sampleReleases(now = Date.now()) {
 
   const mdsbDate = d(13), mdsbSent = d(-9);
   const mdsb = { id: "medaseubody", title: "Me Dá Seu Body", date: mdsbDate, status: "scheduled", createdAt: iso(-11), createdBy: "Luke", updatedAt: iso(-1), sentAt: iso(-9), tight: false,
-    pack: { kind: "Self-release", ...files("medaseubody"), ...stores, mood: "late night, warm, flirty", instruments: "synth bass, drum machine, vocal chops", isrc: "SAMPLE0000002", storeStatus: "in review at RouteNote", page: "https://badscandal.com/medaseubody" },
+    pack: { kind: "Self-release", ...files("medaseubody"), ...stores, mood: "late night, warm, flirty", instruments: "synth bass, drum machine, vocal chops", isrc: "SAMPLE0000002", storeStatus: "rejected", page: "https://badscandal.com/medaseubody" },
+    storeLog: [{ status: "uploaded", on: d(-8), at: iso(-8), by: "Drop" }, { status: "in moderation", on: d(-7), at: iso(-7), by: "Drop" },
+      { status: "rejected", on: d(-2), at: iso(-2), by: "Drop", reason: "(sample) The cover has a web address on it" }],
     steps: steps(mdsbDate, mdsbSent, {
       upload: { status: "done", note: "Uploaded with the release date", link: "https://example.com/sample/routenote", at: iso(-8), by: "Drop" },
       approved: { status: "blocked", note: "RouteNote wants a cover without the web address on it. Needs a new cover from Luke.", at: iso(-2), by: "Drop" },
@@ -82,6 +86,8 @@ export function sampleReleases(now = Date.now()) {
       ...files("touchme"), ...stores, language: "English", lyrics: "(sample) Made-up words for the sample only.\nNothing here is a real lyric.", mood: "euphoric", instruments: "synths, drums", story: "A made-up two-line story for the sample.\nNothing here is real.",
       isrc: "SAMPLE0000001", upc: "0000000000001", storeStatus: "live", spotifyTrack: "https://open.spotify.com/track/sample", video: "https://example.com/sample/touchme-video", page: "https://badscandal.com/touchme" },
     steps: steps(tmDate, tmSent, Object.fromEntries(S.RELEASE_STEPS.map((st) => [st.key, { status: "done", at: iso(-12 - st.days), by: st.owner }]))),
+    storeLog: [{ status: "approved", on: d(-30), at: iso(-30), by: "Drop" }, { status: "live", on: tmDate, at: iso(-12), by: "Drop" }],
+    approvals: { pitch: { by: "Luke", at: iso(-25), text: "(sample) A made-up pitch for the sample only." }, lyrics: { by: "Luke", via: "Alfred", at: iso(-20), text: "(sample) Made-up words for the sample only.\nNothing here is a real lyric.", words: "(sample) yes, final" } },
     log: [L(-40, "Luke", "Luke sent it to the team for " + S.dayWords(tmDate)), L(-12, "Webmaster", "Webmaster: Release day: Spotify link on the song page and the home card — done")] };
   return [surv, mdsb, sb, tm];
 }
@@ -117,6 +123,8 @@ export function sampleDesk(now = Date.now()) {
     M(70, "msample0010a", "Verse", "Luke", "Three things about the Me Dá Seu Body lyrics before they go live.", "reply", { questions: [
       { q: "Is the hook sung 4 times, not 5?", answer: "Yes, 4 times", by: "Luke", at: new Date(ago(65)).toISOString() },
       { q: "Is the second verse in Portuguese?", answer: "", by: "", at: "" }, { q: "Does the bridge repeat at the end?", answer: "", by: "", at: "" }] }),
+    /* batch 3: Drop asks whether to resubmit the rejected song (made up) */
+    M(20, "msample0011a", "Drop", "Luke", "Me Dá Seu Body: ready to resubmit to the distributor? It was rejected: \"(sample) The cover has a web address on it\". What changed: the new cover from the folder is uploaded.", "decision", { options: S.RESUBMIT_OPTIONS.slice(), release: "medaseubody", ask: "resubmit" }),
   ];
   messages.sort((a, b) => (a.at < b.at ? 1 : -1)); /* newest first, as the real desk lists them */
   const E = (back, payer, amount, currency, status, account, category, by = "Ledger") => ({ id: "i" + back + payer.length, at: new Date(ago(back * 1440 + 90)).toISOString(), by, date: d(back), payer, amount, currency, status, category, account, reference: "", period: "", source: "", note: "" });

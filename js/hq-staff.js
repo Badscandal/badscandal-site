@@ -252,8 +252,12 @@
           : '<p class="ma">' + esc(q.answer) + "</p>") + "</li>";
       }).join("") + "</ol>" + '<p class="mabout">' + esc(L.questionsLeft(m)) + '</p><div class="macts"><button class="sendbtn" type="button" data-act="qsend" data-k="' + esc(k) + '"' + dis + ">" + (busy ? "Sending…" : "Send answers") + "</button></div>";
     }
-    return '<article class="wmsg" id="wait-' + esc(safe(m.id)) + '"><p class="mhead"><span><b>' + esc(m.from) + "</b> " + esc(L.needWords(m)) + (m.about ? " · about " + esc(m.about) : "") + '</span><span class="mtime">' + esc(when(m)) + "</span></p>" + about +
-      '<p class="mtext">' + esc(m.text) + "</p>" + opts + qhtml +
+    /* batch 3: what Luke is asked to approve (the pitch in full; the lyrics are in the pack), and Drop's resubmit question */
+    var ap = m.approval ? '<div class="mappr"><p class="mq">' + esc((m.approval.what === "pitch" ? "The pitch for " : "The final lyrics of ") + m.approval.title) + "</p>" +
+      (m.approval.text ? '<blockquote class="mpitch">' + esc(m.approval.text) + "</blockquote>" : '<p class="mabout">The lyrics as they are in Files and details (Upcoming › ' + esc(m.approval.title) + " › See the files and details).</p>") + "</div>" : "";
+    var tag = m.approval ? " · approval" : m.ask === "resubmit" ? " · ready to resubmit" : "";
+    return '<article class="wmsg" id="wait-' + esc(safe(m.id)) + '"><p class="mhead"><span><b>' + esc(m.from) + "</b> " + esc(L.needWords(m)) + esc(tag) + (m.about ? " · about " + esc(m.about) : "") + '</span><span class="mtime">' + esc(when(m)) + "</span></p>" + about +
+      '<p class="mtext">' + esc(m.text) + "</p>" + ap + opts + qhtml +
       (ui.reply === k ? replyBox(k, m) : '<div class="macts"><button class="copybtn" type="button" data-act="reply" data-k="' + esc(k) + '"' + dis + '>Reply</button><button class="copybtn" type="button" data-act="done" data-k="' + esc(k) + '"' + dis + ">" +
         (busy ? "Saving…" : "Mark as done") + "</button></div>") + errLine(k) + "</article>";
   }
@@ -865,6 +869,47 @@
         '<button class="copybtn" type="button" data-rel="cancel" data-id="' + esc(v.id) + '"' + off + ">Cancel the draft</button></div>") +
       '<p class="ferr" role="alert">' + esc(ui.rel.err[v.id] || "") + "</p>" + relPack(v) + "</article>";
   }
+  /* ---------- batch 3 (14 Nov 2026): the distributor's history, Luke's approvals, "ready to resubmit" ---------- */
+  /* where the song is at the distributor, then its history folded (Drop's moderation log) */
+  function storeHtml(v) {
+    var line = L.storeLine(v.store), hist = L.storeHistory(v.store);
+    if (!line) return "";
+    return '<div class="rstore"><p class="rstore-now' + (v.store.status === "rejected" ? " bad" : "") + '">' + esc(line) + "</p>" +
+      (hist.length > 1 ? '<details class="bwhy" data-fold="store:' + esc(v.id) + '"' + (ui.rel.fold["store:" + v.id] ? " open" : "") + "><summary>What the distributor said (" + hist.length + ")</summary><ul class=\"rlog\">" +
+        hist.map(function (h) { return "<li>" + esc(h) + "</li>"; }).join("") + "</ul></details>" : "") + "</div>";
+  }
+  /* Luke's two approvals; he can approve the final lyrics here (the pitch comes from Atlas, as a question
+     with its text), and take an approval back. Each asks first. */
+  function approvalsHtml(v) {
+    if (v.status !== "scheduled") return "";
+    var a = ui.rel.ask, busy = ui.rel.busy === "ask:" + v.id, dis = HQ.sample || busy ? " disabled" : "";
+    var hasLyrics = !!(v.lyricsChars || (v.pack && v.pack.lyrics));
+    var rows = L.approvalLines(v).map(function (x) {
+      var btn = "";
+      if (x.ok) btn = '<button class="linkbtn" type="button" data-rel="unapprove" data-id="' + esc(v.id) + '" data-what="' + x.key + '"' + dis + ">Take it back</button>";
+      else if (x.key === "lyrics" && hasLyrics) btn = '<button class="copybtn" type="button" data-rel="approve" data-id="' + esc(v.id) + '" data-what="lyrics"' + dis + ">" + (x.stale ? "Approve them again" : "Approve the final lyrics") + "</button>";
+      return '<li class="' + (x.ok ? "ok" : x.stale ? "stale" : "") + '"><span>' + esc(x.text) + "</span>" + (btn ? '<span class="racts2">' + btn + "</span>" : "") + "</li>";
+    }).join("");
+    var conf = "";
+    if (a && a.id === v.id && (a.kind === "approve" || a.kind === "unapprove")) {
+      var q = a.kind === "approve" ? "Approve the lyrics of " + v.title + " as they are in Files and details now? Verse sees that they are final." : "Take back your approval of the " + (a.what === "pitch" ? "pitch" : "final lyrics") + " of " + v.title + "?";
+      conf = '<div class="confirm" role="group" aria-label="Confirm"><p>' + esc(q) + '</p><div class="conn-acts"><button class="sendbtn" type="button" data-rel="' + a.kind + '-yes" data-id="' + esc(v.id) + '"' + dis + ">" +
+        (busy ? "Saving…" : a.kind === "approve" ? "Yes, approve" : "Yes, take it back") + '</button><button class="copybtn" type="button" data-rel="no" data-id="' + esc(v.id) + '"' + (busy ? " disabled" : "") + ">Cancel</button></div></div>";
+    }
+    return '<div class="rappr"><b>Your approvals</b><ul>' + rows + "</ul>" + conf + "</div>";
+  }
+  /* Drop asks whether to resubmit a rejected song: Yes / Not yet, right on the card (it is also in Waiting on
+     you); the answer goes back to Drop like any answer */
+  function resubmitHtml(v) {
+    var m = L.resubmitAsk(board, v.id);
+    if (!m) return "";
+    var a = ui.rel.ask, busy = ui.rel.busy === "ask:" + v.id, dis = HQ.sample || busy ? " disabled" : "";
+    var picked = a && a.id === v.id && a.kind === "resubmit" ? (m.options || [])[a.i] : null;
+    return '<div class="rask" role="group" aria-label="Ready to resubmit?"><p class="rask-h"><b>Ready to resubmit?</b> ' + esc(m.from) + " asks</p><p>" + esc(m.text) + "</p>" +
+      (picked != null ? '<div class="confirm"><p>Answer “' + esc(picked) + "”? " + esc(m.from) + ' will see it.</p><div class="conn-acts"><button class="sendbtn" type="button" data-rel="resubmit-yes" data-id="' + esc(v.id) + '"' + dis + ">" + (busy ? "Sending…" : "Send this answer") + "</button>" +
+        '<button class="copybtn" type="button" data-rel="no" data-id="' + esc(v.id) + '"' + (busy ? " disabled" : "") + ">Cancel</button></div></div>"
+        : '<div class="mopts">' + (m.options || []).map(function (o, i) { return '<button class="copybtn" type="button" data-rel="resubmit" data-id="' + esc(v.id) + '" data-i="' + i + '"' + dis + ">" + esc(o) + "</button>"; }).join("") + "</div>") + "</div>";
+  }
   /* Upcoming: a song sent to the team. Where it is at (one line), its warnings (red: each one a fact
      with a consequence), every step, then the files and details. */
   function relCard(v) {
@@ -879,11 +924,12 @@
       (ui.rel.note[v.id] ? '<p class="rdone" role="status">' + esc(ui.rel.note[v.id]) + "</p>" : "") +
       (where ? '<p class="rwhere">' + esc(where) + "</p>" : "") +
       (warn.length ? '<ul class="rwarn" aria-label="Warnings">' + warn.map(function (w) { return "<li>" + esc(w) + "</li>"; }).join("") + "</ul>" : "") +
+      resubmitHtml(v) + storeHtml(v) +
       /* out, and every step done: one line instead of ten (the steps are history now) */
       (v.released && v.counts && v.counts.total && v.counts.done === v.counts.total ? '<p class="rnote">All ' + v.counts.total + " steps done.</p>"
         : (v.steps || []).length ? '<ol class="rsteps" aria-label="Steps">' + v.steps.map(function (s) { return relStep(v, s); }).join("") + "</ol>" : "") +
-      packHtml(v) +
-      (asking ? relAsk(v) : '<div class="racts">' + acts.join("") + "</div>") +
+      approvalsHtml(v) + packHtml(v) +
+      (asking && (ui.rel.ask.kind === "date" || ui.rel.ask.kind === "cancel") ? relAsk(v) : '<div class="racts">' + acts.join("") + "</div>") +
       '<p class="ferr" role="alert">' + esc(ui.rel.err[v.id] || "") + "</p>" + relPack(v) + "</article>";
   }
   /* ---------- Planning (14 Nov 2026, Luke: "a calender with team reccomendations … scheduled correctly well
@@ -1091,6 +1137,26 @@
       write("release/date", { id: id, date: to }).then(function (r) {
         relDone(r, id, function (j) { ui.rel.ask = null; ui.rel.note[id] = "Moved from " + L.day(from) + " to " + L.day(to) + " at " + hhmm(Date.now()) + ". Every step that isn't done has a new date." + (j.told ? " The team was told." : ""); });
       });
+    }
+    /* batch 3: approve / take back (Luke only: POST release/approve), and the answer to "ready to resubmit?" */
+    if (act === "approve" || act === "unapprove") { ui.rel.ask = { id: id, kind: act, what: b.getAttribute("data-what") === "pitch" ? "pitch" : "lyrics" }; delete ui.rel.err[id]; drawReleases(); focusSel('[data-rel="' + act + '-yes"][data-id="' + sid + '"]'); return; }
+    if ((act === "approve-yes" || act === "unapprove-yes") && ui.rel.ask && ui.rel.ask.id === id) {
+      var what = ui.rel.ask.what, back = act === "unapprove-yes";
+      ui.rel.busy = "ask:" + id; drawReleases();
+      write("release/approve", { id: id, what: what, withdraw: back }).then(function (r) {
+        relDone(r, id, function () { ui.rel.ask = null; ui.rel.note[id] = (back ? "Approval taken back" : "Final lyrics approved") + " at " + hhmm(Date.now()) + "."; });
+      });
+      return;
+    }
+    if (act === "resubmit") { ui.rel.ask = { id: id, kind: "resubmit", i: Number(b.getAttribute("data-i")) }; delete ui.rel.err[id]; drawReleases(); focusSel('[data-rel="resubmit-yes"][data-id="' + sid + '"]'); return; }
+    if (act === "resubmit-yes" && ui.rel.ask && ui.rel.ask.id === id) {
+      var m = L.resubmitAsk(board, id), pick = m && (m.options || [])[ui.rel.ask.i];
+      if (!m || pick == null) return;
+      ui.rel.busy = "ask:" + id; drawReleases();
+      write("message", { to: m.from, text: String(pick), needs: "none", re: m.id, note: String(pick).slice(0, 240) }).then(function (r) {
+        relDone(r, id, function () { ui.rel.ask = null; m.resolved = { by: "Luke", at: new Date().toISOString(), note: pick }; ui.rel.note[id] = "Sent to " + m.from + " at " + hhmm(Date.now()) + ": " + pick + "."; });
+      });
+      return;
     }
     if (act === "cancel-yes" && ui.rel.ask && ui.rel.ask.id === id) {
       ui.rel.busy = "ask:" + id; drawReleases();

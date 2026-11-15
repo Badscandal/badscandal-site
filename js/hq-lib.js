@@ -107,7 +107,9 @@
     "Song page live on badscandal.com": "song page", "Video scheduled on YouTube": "video", "Teaser clips approved for posting": "teaser clips",
     "Ad drafts ready, inside the cap": "ad drafts", "Release day: Spotify link on the song page and the home card": "release-day links",
     /* v2 (11 Nov 2026, evening): the song showing in Spotify for Artists, before the pitch */
-    "Showing as upcoming in Spotify for Artists": "Spotify for Artists" };
+    "Showing as upcoming in Spotify for Artists": "Spotify for Artists",
+    /* batch 3 (14 Nov 2026): the social bots' teaser posts */
+    "Teaser posted on TikTok": "TikTok teaser", "Teaser posted on Instagram": "Instagram teaser", "Teaser posted on YouTube": "YouTube teaser" };
   function shortStep(label) { return SHORT[label] || String(label || "").toLowerCase(); }
   var TAB_HREF = { Growth: "#growth", Songs: "#songs", Royalties: "#money", Fans: "#growth/fans", Releases: "#releases", Tasks: "#team", Spend: "#money", Income: "#money" };
   function metaCur(ov) { return (ov && ((ov.yesterday && ov.yesterday.currency) || (ov.spend && ov.spend.currency))) || "USD"; }
@@ -663,7 +665,8 @@
     if (st.waiting && st.status !== "done" && st.status !== "blocked") return { text: st.waitingText || "waiting: the song is not in Spotify for Artists yet", bad: false, done: false, waiting: true };
     var n = typeof st.dueIn === "number" ? st.dueIn : isDay(st.due) && isDay(today) ? dayDiff(today, st.due) : null;
     if (st.status === "done") {
-      var when = st.at ? day(spStampOf(st.at).slice(0, 10)).replace(/^\w+ /, "") : "";
+      /* done_on (batch 3): the real day, when the bot said it was earlier than when it marked it */
+      var when = isDay(st.doneOn) ? day(st.doneOn).replace(/^\w+ /, "") : st.at ? day(spStampOf(st.at).slice(0, 10)).replace(/^\w+ /, "") : "";
       return { text: "done" + (when ? " " + when : "") + (st.by ? " by " + st.by : ""), bad: false, done: true };
     }
     if (st.status === "blocked") return { text: "blocked" + (st.note ? ": " + st.note : ""), bad: true, done: false };
@@ -671,6 +674,37 @@
     if (n == null) return { text: pre + "no date yet", bad: false, done: false };
     if (n < 0) return { text: pre + "late by " + plural(-n, "day"), bad: true, done: false };
     return { text: pre + (n === 0 ? "due today" : n === 1 ? "due tomorrow" : "due in " + n + " days"), bad: false, done: false };
+  }
+  /* ---------- batch 3 (14 Nov 2026): the distributor's history, Luke's approvals, "ready to resubmit" ---------- */
+  /* "At the distributor: rejected · since Sat 14 Nov (Drop) · The artwork has a web address on it"; an old
+     free-text status as it was written; "" when nothing is recorded */
+  function storeLine(st) {
+    if (!st) return "";
+    if (!st.status) return st.legacy ? "At the distributor: " + st.legacy : "";
+    return "At the distributor: " + st.status + (isDay(st.since) ? " · since " + day(st.since) : "") + (st.by ? " (" + st.by + ")" : "") + (st.reason ? " · " + st.reason : "");
+  }
+  /* the history, newest first: "Sat 14 Nov · rejected: The artwork has a web address on it (Drop)" */
+  function storeHistory(st) {
+    return (st && st.history || []).map(function (h) {
+      return (isDay(h.on) ? day(h.on) + " · " : "") + h.status + (h.reason ? ": " + h.reason : "") + (h.note ? " (" + h.note + ")" : "") + (h.by ? " (" + h.by + ")" : "");
+    });
+  }
+  /* the two approvals in words: [{key, text, ok, stale}] (ok = approved and still current) */
+  var APPROVAL_WORDS = [["pitch", "Pitch"], ["lyrics", "Final lyrics"]];
+  function approvalLines(v) {
+    var a = v && v.approvals || {};
+    return APPROVAL_WORDS.map(function (w) {
+      var ap = a[w[0]];
+      if (!ap) return { key: w[0], text: w[1] + ": not approved yet", ok: false, stale: false };
+      var on = ap.at ? day(spStampOf(ap.at).slice(0, 10)) : "", stale = w[0] === "lyrics" && ap.current === false;
+      return { key: w[0], text: w[1] + " approved by Luke" + (ap.via ? " (via " + ap.via + ")" : "") + (on ? ", " + on : "") + (stale ? ", but changed since" : ""), ok: !stale, stale: stale };
+    });
+  }
+  /* Drop's open "ready to resubmit?" question about this release, or null */
+  function resubmitAsk(board, id) {
+    var list = board && board.messages || [];
+    for (var i = 0; i < list.length; i++) { var m = list[i]; if (m && m.ask === "resubmit" && m.release === id && !m.resolved && m.to === "Luke") return m; }
+    return null;
   }
   /* the button on one step of a release card, or null (11 Nov 2026). Every step of a release that went
      out keeps its button, also after its release day: the site's check keeps naming an unfinished step
@@ -787,7 +821,9 @@
     (steps || []).forEach(function (s) {
       var last = byDays[byDays.length - 1], w = s.days === 0 ? "" : shortStep(s.label);
       if (s.days === 0) return;
-      if (last && last.days === s.days) last.words.push(w); else byDays.push({ days: s.days, words: [w] });
+      /* the three teaser posts (batch 3) read as one: "3 teaser clips and the teaser posts" */
+      if (s.after === "teasers") { if (last && last.days === s.days) { if (!last.posts) last.words.push("the teaser posts"); last.posts = true; return; } w = "the teaser posts"; }
+      if (last && last.days === s.days) last.words.push(w); else byDays.push({ days: s.days, words: [w], posts: s.after === "teasers" });
     });
     return byDays.length ? "Counting back from release day: " + byDays.map(function (x, i) { return x.days + (i ? "" : " days") + " " + x.words.join(" and "); }).join(", ") + "." : "";
   }
@@ -1297,7 +1333,7 @@
     snapshot: snapshot, changesSince: changesSince, tiles: tiles, summaryText: summaryText, shortStep: shortStep, day: day,
     slug: slug, workerLabel: workerLabel, sortWorkers: sortWorkers, workerView: workerView, dutyWhen: dutyWhen, workerCounts: workerCounts, seenLine: seenLine, connectorLine: connectorLine,
     novaMessage: novaMessage, liveFeed: liveFeed, spWhen: spWhen, waitLabel: waitLabel, needWords: needWords, reportParts: reportParts, siteCheckLine: siteCheckLine, composeNames: composeNames,
-    threadRoot: threadRoot, answerTarget: answerTarget, questionLines: questionLines, questionsLeft: questionsLeft, stepButton: stepButton, formKey: formKey, staffAttention: staffAttention, staffHealth: staffHealth, curList: curList, cadenceWord: cadenceWord, accountLine: accountLine, sourceState: sourceState, payLine: payLine,
+    threadRoot: threadRoot, answerTarget: answerTarget, questionLines: questionLines, questionsLeft: questionsLeft, stepButton: stepButton, formKey: formKey, storeLine: storeLine, storeHistory: storeHistory, approvalLines: approvalLines, resubmitAsk: resubmitAsk, staffAttention: staffAttention, staffHealth: staffHealth, curList: curList, cadenceWord: cadenceWord, accountLine: accountLine, sourceState: sourceState, payLine: payLine,
     incomeEmpty: incomeEmpty, incomeProblems: incomeProblems,
     /* replies that visibly land + the release pipeline (11 Nov 2026) */
     spStampOf: spStampOf, seenWords: seenWords, sentLine: sentLine, answeredList: answeredList, CLAUDE_ROUNDS: CLAUDE_ROUNDS,

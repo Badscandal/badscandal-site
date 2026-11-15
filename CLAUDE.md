@@ -2105,3 +2105,57 @@ Stacked on batch 1 (branch `hq-bots-batch2` starts from `hq-bots-batch1`). Tests
   thread lists every question with its answer or "No answer yet". `/api/staff/message` passes
   `answers`, `questions`, `about`. The sample has a made-up Verse message with 3 questions (1 answered),
   so the sample now has 3 things waiting on Luke (pins in hq-cmd, mcp and staff tests updated).
+
+## The bots' feedback, batch 3 of 5: releases (14 Nov 2026, branch `hq-bots-batch3`)
+
+Tests: `tests/bots-batch3.test.mjs` (plus a route check in `tests/mcp.test.mjs`). The connector has 21 tools now.
+* **Teaser posts:** three new `RELEASE_STEPS` after Luke's `teasers`: `teaser_tiktok` (Kevin), `teaser_instagram`
+  (Steve), `teaser_youtube` (Laura), "Teaser posted on …", 3 days before release (21 Nov for a 24 Nov song),
+  `after: "teasers"` (they WAIT for Luke's approval: "waiting: Luke has not approved the teaser clips yet") and
+  `ownDay: true`: the owner or Nova sets the day with `release_step due` (today .. the release day; only these
+  steps; sent alone it changes only the day). `freeWaiting` keeps an own-day step's later day (the pitch is still
+  pulled to today). 13 steps in all.
+* **Releases already sent get them:** `S.upgradeReleases(store, now)` adds the missing teaser posts (in their place,
+  due on their day or today, never born late) to every scheduled release still to come; finished steps untouched;
+  drafts, cancelled songs and songs already out get nothing; one log line from "HQ". It reads first and writes only
+  when something is missing. Called before every tool call (`callTool`), before `GET /api/staff/board` and in the
+  site check. `S.board()`/`loadDesk()` themselves never add a step.
+* **`done_on`:** `release_step` (and `POST release/step`) take `done_on` (YYYY-MM-DD, only with done, not in the
+  future), stored as the step's `doneOn` (dropped when reopened, kept when marked done again). HQ: "Done 9 Nov by
+  Drop" (`HQLib.stepState`); tools: `done_on`.
+* **Links everywhere:** a step's `link` is kept when a later mark has none, and shown in `release_pack`, `releases`,
+  `my_day` (now also on open steps), the `release_step` answer and HQ's merged list (`mergeReleases` keeps `link`
+  and `doneOn`). Webmaster's `live` step carries `spotify_track` (the pack's Spotify track link).
+* **Approvals:** `r.approvals.pitch` / `.lyrics` = `{by: "Luke", via?, at, text, words?, msg?}`. Only Luke sets them:
+  `S.approveRelease` (Luke only; the lyrics are approved as they are in the pack at that moment; `withdraw` takes
+  one back), reached three ways: (1) a bot asks with `send_message approval {song, what, text}` (Atlas or Nova for
+  the pitch, with the pitch's text; Verse or Nova for the lyrics; to Luke only): a decision with `APPROVE_OPTIONS`
+  Approve / Not yet, `m.approval` on the message; when Luke picks Approve, `sendMessage` records it (`approved` in
+  its result; a failure there never throws, the answer is already saved); (2) Alfred's `record_luke_answer` with
+  option Approve, recorded "via Alfred" with Luke's words; (3) `POST /api/staff/release/approve {id, what, text?,
+  withdraw?}` (Luke's cookie only, Claude's key 403): the "Approve the final lyrics" / "Take it back" buttons on the
+  card. The view's lyrics approval has `current` (false once the pack's lyrics changed). `release_pack` gives Atlas
+  and Verse `approvals` (approved, by, on, the pitch's text / matches_the_pack, or "changed since: ask Luke again").
+  The board's slim copy carries the approved lyrics' length only (`textChars`).
+* **The store status, with history (Drop's moderation log):** `S.STORE_STATUS` = not uploaded, uploaded, in
+  moderation, rejected, resubmitted, approved, delivered, live. The pack field `storeStatus` is a `choice` of
+  these now (free text refused); every change appends to `r.storeLog` (`{status, on, at, by, reason?, note?}`, 40
+  kept) and mirrors the current status into `pack.storeStatus`, so the sheet merge and older readers still work.
+  Written by the new tool **`store_status`** (tool 21: Drop, or Nova; Claude and Luke too) with `reason` (required
+  with rejected: what RouteNote said), `note`, `on` (an earlier day); by `release_fill storeStatus` (not
+  rejected: that needs the reason); and by Luke's form (`saveRelease`). The view's `store` = `{status, since, by,
+  reason, note, legacy?, history (newest first)}`; an old free-text value shows as `legacy`. A rejected song has
+  the warning "Rejected at the distributor: <reason> (Drop)" (kind `rejected`, also in the site check).
+* **Ready to resubmit:** `store_status` with status rejected and `ready_to_resubmit: true` (only after a rejection)
+  sends Luke ONE decision from Drop (`RESUBMIT_OPTIONS` Yes, resubmit / Not yet; `m.release`, `m.ask: "resubmit"`,
+  set only by the desk); asked again while open, the same id comes back. Luke answers on the release card (Yes /
+  Not yet with a confirm, `HQLib.resubmitAsk`) or in Waiting on you; the answer goes back to Drop like any answer
+  and a line goes in the release's log ("Luke answered Drop: Yes, resubmit").
+* **HQ page:** the release card shows the resubmit question, "At the distributor: …" with "What the distributor
+  said (N)" folded (`HQLib.storeLine`, `storeHistory`), the teaser posts, and "Your approvals" (`HQLib.approvalLines`)
+  under the steps. Waiting on you shows the pitch to approve in full (`.mpitch`) and tags "approval" / "ready to
+  resubmit". `stepsSummary` says "3 teaser clips and the teaser posts". The sample: Me Dá Seu Body uploaded, in
+  moderation, rejected (made-up reason) with Drop's resubmit question (4 things wait on Luke in the sample now);
+  Touch Me has both approvals and its store history.
+* **INSTRUCTIONS** gained four lines (the teaser posts, `done_on`/links, `store_status`, approvals). The bots'
+  written guide (private repo) should say the same.
