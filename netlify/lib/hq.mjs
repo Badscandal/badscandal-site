@@ -280,18 +280,20 @@ export function dutiesReport(tasks, today, nowHM = "", overlay = null) {
     .map((t) => {
       const m = /(\d{1,2}):(\d{2})/.exec(norm(t.deadline).slice(10)), due = m ? m[1].padStart(2, "0") + ":" + m[2] : "";
       let status = /^(done|yes|ok|✓|✔)$/i.test(norm(t.status)) ? "done" : /block/i.test(norm(t.status)) ? "blocked" : "todo";
-      let blocker = norm(t.blocker), via = "", working = false;
+      let blocker = norm(t.blocker), via = "", working = false, gaps = "";
+      /* "done with gaps" (batch 4): done, with what could not be read (in the blocker column) */
+      if (/^done with gaps\b/i.test(norm(t.status))) { status = "done"; gaps = blocker; blocker = ""; }
       /* by duty id only from the duty's OWN bot; a bot with one duty may leave the id out; the newer word wins */
       const byId = overlay ? (overlay.byDuty || {})[key(t.id)] : null, byBot = overlay && perOwner[key(t.owner)] === 1 ? (overlay.byBot || {})[key(t.owner)] : null;
       const mine = byId && (!byId.bot || byId.bot === key(t.owner)) ? byId : null;
       const said = mine && byBot ? ((byBot.iso || "") > (mine.iso || "") ? byBot : mine) : mine || byBot;
       if (said && status !== "done") {
-        if (said.status === "done") { status = "done"; via = "connector"; }
+        if (said.status === "done") { status = "done"; via = "connector"; gaps = said.gaps || ""; }
         else if (said.status === "blocked") { status = "blocked"; blocker = blocker || said.message; via = "connector"; }
         else if (said.status === "working") working = true;
       }
       return { id: norm(t.id), owner: norm(t.owner) || "?", task: t.task, blocker, status, due,
-        late: status === "todo" && !!due && !!nowHM && nowHM > due, updated: norm(t.updated), ...(via ? { via } : {}), ...(working ? { working } : {}) };
+        late: status === "todo" && !!due && !!nowHM && nowHM > due, updated: norm(t.updated), ...(via ? { via } : {}), ...(working ? { working } : {}), ...(gaps ? { gaps } : {}) };
     });
   const owners = {};
   for (const d of list) { const o = owners[d.owner] || (owners[d.owner] = { owner: d.owner, done: 0, todo: 0, blocked: 0, late: 0, items: [] }); o.items.push(d); o[d.status]++; if (d.late) o.late++; }
@@ -349,9 +351,36 @@ export function teamReport(tasks, sheets, today, overlay = null) {
     forLuke: list.filter((t) => /^luke$/i.test(t.owner)) };
 }
 
+/* ---------- the team's fixed rate (15 Nov 2026, the bots' feedback, batch 4) ----------
+   The cap's EUR (Google, TikTok) used to be converted at the ECB average of the month SO FAR, which moves
+   every working day: one day's total read 473.40, 473.47 and 473.83. The sheet's tab "Rates" holds the
+   month's FIXED rate in B1 (USD per 1 EUR; A1 = its label). A number that can't be that is not used. */
+export function fixedRate(values) {
+  if (!Array.isArray(values) || !values.length) return { error: "no Rates tab in the sheet" };
+  const row = Array.isArray(values[0]) ? values[0] : [];
+  const raw = norm(row[1]), n = num(raw);
+  if (n == null) return { error: `Rates!B1 can't be read (${raw ? raw.slice(0, 20) : "empty"})` };
+  if (n < 0.9 || n > 1.6) return { error: `Rates!B1 (${n}) doesn't look like USD per 1 EUR` };
+  return { rate: n, label: norm(row[0]).slice(0, 80), from: "Rates!B1" };
+}
+const WD = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"], MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const dayWords = (d) => (DAY.test(d || "") ? `${WD[new Date(d + "T12:00:00Z").getUTCDay()]} ${Number(d.slice(8, 10))} ${MON[Number(d.slice(5, 7)) - 1]}` : d);
+/* Forge's record_spend rows (the desk) replace the sheet's rows for that platform and day (never added to
+   them); a "not read" from the desk is a missing read until a number for that platform and day exists. */
+export function mergeDeskSpend(rows, desk) {
+  const list = Array.isArray(desk) ? desk : [];
+  const got = list.filter((x) => x && x.amount != null && DAY.test(x.date || ""));
+  const k = (p, d) => key(p) + "|" + d;
+  const replaced = new Set(got.map((x) => k(x.platform, x.date)));
+  const out = rows.filter((r) => !replaced.has(k(r.platform, (r.date || "").slice(0, 10))))
+    .concat(got.map((x) => ({ date: x.date, platform: x.platform, campaign: "desk: " + (x.account || x.platform), spend: String(x.amount), currency: x.currency || "USD" })));
+  const notRead = list.filter((x) => x && x.amount == null && x.notRead && DAY.test(x.date || "")).map((x) => ({ platform: x.platform, date: x.date, why: x.notRead }));
+  return { rows: out, notRead };
+}
+
 /* ---------- money: spend and income per month, the combined cap ---------- */
 /* fx: { "2026-11": {USD, GBP, ...} } monthly averages (units per 1 EUR). */
-export function moneyReport(spend, income, royalties, today, fx = {}) {
+export function moneyReport(spend, income, royalties, today, fx = {}, o = {}) {
   const months = {};
   const M = (m) => months[m] || (months[m] = { month: m, spend: {}, income: {}, pending: {}, royalties: {} });
   const add = (o, k, cur, a) => { const x = o[k] || (o[k] = {}); x[cur] = round((x[cur] || 0) + a); };
@@ -386,20 +415,33 @@ export function moneyReport(spend, income, royalties, today, fx = {}) {
     const s = est(m.spend, m.month, "EUR"), i = est(m.income, m.month, "EUR");
     return { ...m, rate: (fx[m.month] || {}).USD || null, spendEur: s, incomeEur: i, netEur: s.missing || i.missing ? null : round(i.amount - s.amount) };
   });
-  /* the cap: Meta + Google + TikTok this month, all counted in USD (EUR at the month's average) */
-  const now = months[today.slice(0, 7)] || { spend: {} };
-  const capUsd = est(now.spend, today.slice(0, 7), CAP.currency);
+  /* the cap: Meta + Google + TikTok this month, all counted in USD. EUR at the sheet's FIXED rate (batch 4,
+     15 Nov 2026), else at the month's ECB average so far (then the figure is an estimate, and says why) */
+  const cm = today.slice(0, 7), fixed = o.fixed && o.fixed.rate ? o.fixed : null;
+  const now = months[cm] || { spend: {} };
   const native = {};
   for (const cur of Object.values(now.spend)) for (const [c, a] of Object.entries(cur)) native[c] = round((native[c] || 0) + a);
+  const why = [], toUsd = (a, c) => (c === CAP.currency ? a : c === "EUR" && fixed ? a * fixed.rate : convert(a, c, CAP.currency, fx[cm]));
+  let capMissing = false, spentRaw = 0;
+  for (const [c, a] of Object.entries(native)) { const v = toUsd(a, c); if (v == null) capMissing = true; else spentRaw += v; }
+  const capUsd = { amount: round(spentRaw), missing: capMissing };
+  const foreign = Object.keys(native).filter((c) => c !== CAP.currency);
+  if (foreign.includes("EUR") && !fixed) why.push(`no fixed rate in the sheet's Rates tab${o.fixed && o.fixed.error ? ` (${o.fixed.error})` : ""}: EUR at the ECB average so far`);
+  const others = foreign.filter((c) => c !== "EUR");
+  if (others.length) why.push(`${others.join(", ")} at the ECB average so far`);
+  if (capMissing) why.push("no rate for " + foreign.filter((c) => toUsd(1, c) == null).join(", "));
+  const notRead = (o.notRead || []).filter((x) => (x.date || "").slice(0, 7) === cm).map((x) => `${x.platform} ${dayWords(x.date)}` + (x.why ? `: ${x.why}` : ""));
+  if (notRead.length) why.push(`${notRead.length} read${notRead.length === 1 ? "" : "s"} missing`);
+  const rateUsed = !foreign.includes("EUR") ? null : fixed ? { value: fixed.rate, from: fixed.from, label: fixed.label, month: cm } : { value: (fx[cm] || {}).USD || null, from: "ECB average", month: cm };
   const spent = capUsd.amount;
   const dd = Number(today.slice(8, 10)), dim = new Date(Date.UTC(Number(today.slice(0, 4)), Number(today.slice(5, 7)), 0)).getUTCDate();
   const last3 = [1, 2, 3].map((k) => addDays(today, -k)).filter((d) => d.slice(0, 7) === today.slice(0, 7));
-  const perDay = last3.length ? sum(last3.map((d) => { const x = days[d] || {}; return sum(Object.entries(x).map(([c, a]) => convert(a, c, CAP.currency, fx[today.slice(0, 7)]) || 0)); })) / last3.length : 0;
+  const perDay = last3.length ? sum(last3.map((d) => { const x = days[d] || {}; return sum(Object.entries(x).map(([c, a]) => toUsd(a, c) || 0)); })) / last3.length : 0;
   const stopDay = perDay > 0 && spent < CAP.stop ? dd + Math.ceil((CAP.stop - spent) / perDay) : null;
   return {
     months: list,
     cap: {
-      month: today.slice(0, 7), ...CAP, spent, native, estimated: Object.keys(native).some((c) => c !== CAP.currency), missingRate: capUsd.missing,
+      month: today.slice(0, 7), ...CAP, spent, native, estimated: why.length > 0, estimatedWhy: why, rateUsed, notRead, missingRate: capUsd.missing,
       rate: (fx[today.slice(0, 7)] || {}).USD || null,
       left: round(CAP.amount - spent), pct: Math.round((spent / CAP.amount) * 1000) / 10,
       status: spent >= CAP.amount ? "over" : spent >= CAP.stop ? "stop" : spent >= CAP.warn ? "warn" : "ok",
@@ -456,10 +498,33 @@ export function mergeUpdates(sheetRows, staffUpdates) {
   const inSheet = new Set((sheetRows || []).map(k));
   return (sheetRows || []).concat((staffUpdates || []).map((u) => ({ time: u.sp, bot: u.bot, status: u.status, message: u.message, link: u.link || "" })).filter((r) => !inSheet.has(k(r))));
 }
+/* log_growth's rows (the desk, batch 4) in the sheet's own shape: a sheet row of the same day (and platform
+   or song) keeps its numbers and only gains the ones it lacks; a day the sheet doesn't have is added */
+const GROWTH_COLS = { followers: "followers", change: "change", views: "views", best_post: "best_post", best_post_link: "best_post_link" };
+const SONG_COLS = { streams: "spotify_streams", listeners: "spotify_listeners", saves: "saves", playlist_adds: "playlist_adds" };
+function mergeDeskGrowth(t, rows) {
+  for (const x of rows) {
+    if (!x || !DAY.test(x.date || "")) continue;
+    const song = x.kind === "song", tab = song ? t.Songs : t.Growth, cols = song ? SONG_COLS : GROWTH_COLS;
+    const same = tab.find((r) => r.date === x.date && (song ? sameSong(r.song, x.song) : key(r.platform) === key(x.platform)));
+    const row = same || (song ? { date: x.date, song: x.song } : { date: x.date, platform: x.platform, account: x.account || "" });
+    for (const [k, col] of Object.entries(cols)) if (x[k] != null && x[k] !== "" && !norm(row[col])) row[col] = String(x[k]);
+    row.logged_by = row.logged_by || x.by || "";
+    if (!same) tab.push(row);
+  }
+}
 export function hqModel(sheets, today, fx = {}, meta, nowHM = "", staff = null) {
   const t = Object.fromEntries(HQ_TABS.map((n) => [n, rowsToObjects(sheets[n])]));
-  const ms = metaSpend(t.Spend, meta);
+  /* batch 4: Forge's desk rows over the sheet's; Meta's own read over both (metaSpend) */
+  const dk = mergeDeskSpend(t.Spend, staff && staff.spend);
+  const ms = metaSpend(dk.rows, meta);
   t.Spend = ms.rows;
+  /* the reads still missing: a sheet row that says "not read", and a desk "not read" with no number since */
+  const has = new Set(t.Spend.filter((r) => num(r.spend) != null).map((r) => key(r.platform) + "|" + (r.date || "").slice(0, 10)));
+  const notRead = t.Spend.filter((r) => num(r.spend) == null && /not read/i.test(norm(r.spend)) && DAY.test((r.date || "").slice(0, 10))).map((r) => ({ platform: r.platform || "?", date: r.date.slice(0, 10), why: "" }))
+    .concat(dk.notRead).filter((x, i, a) => !has.has(key(x.platform) + "|" + x.date) && a.findIndex((y) => key(y.platform) === key(x.platform) && y.date === x.date) === i);
+  /* batch 4: log_growth's rows join the Growth and Songs tabs */
+  if (staff && Array.isArray(staff.growth)) mergeDeskGrowth(t, staff.growth);
   const deskReleases = staff && Array.isArray(staff.releases) ? staff.releases : [];
   /* a song's release date: the desk's first (it is the one the team works to), then the sheet's */
   const relDates = deskReleases.filter((v) => v.status === "scheduled" && v.date).map((v) => ({ song: v.title, release_date: v.date }));
@@ -475,7 +540,7 @@ export function hqModel(sheets, today, fx = {}, meta, nowHM = "", staff = null) 
   const fans = fansReport(t.Fans);
   const releases = mergeReleases(releasesReport(t.Releases, today), deskReleases, today, staff && "sightings" in staff ? staff.sightings : undefined, staff && staff.now != null ? staff.now : undefined);
   const team = teamReport(t.Tasks, [t.Growth, t.Songs, t.Fans, t.Royalties], today, staff ? staff.taskOverlay || null : null);
-  const money = { ...moneyReport(t.Spend, t.Income, t.Royalties, today, fx), metaSource: ms.source };
+  const money = { ...moneyReport(t.Spend, t.Income, t.Royalties, today, fx, { fixed: fixedRate(sheets.Rates), notRead }), metaSource: ms.source };
   const empty = HQ_TABS.filter((n) => !t[n].length);
   team.duties = dutiesReport(t.Tasks, today, nowHM, staff ? staff.overlay : null);
   const sheetUpdates = sheets.Updates == null ? null : rowsToObjects(sheets.Updates);

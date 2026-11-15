@@ -34,7 +34,11 @@ export const UPDATE_STATUS = ["done", "working", "blocked", "error", "info"];
 export const NEEDS = ["none", "reply", "action", "decision"];
 export const CATEGORIES = ["Self-releases", "Label deals", "Publishing", "Production", "Salary", "Other"];
 /* unsorted (bank reader, 11 Nov 2026): seen in an account, nobody has said what it is yet; counts in neither received nor pending */
-export const INCOME_STATUS = ["received", "pending", "transfer", "unsorted"];
+/* batch 4 (15 Nov 2026): "statement only" = a statement, not payable yet (under the payout line), counted
+   nowhere yet; "payable" = owed to us and ready to be paid out, counted with pending ("owed to us") */
+export const INCOME_STATUS = ["received", "pending", "transfer", "statement only", "payable", "unsorted"];
+/* a statement whose money hasn't arrived yet: when it lands, the same payment turns received */
+export const OWED = ["pending", "payable", "statement only"];
 export const CADENCE = ["daily", "monthly", "quarterly", "irregular"];
 export const SOURCE_STATE = ["active", "blocked", "unknown", "not_tracked"];
 export const PEOPLE = ["Luke", "Claude", "HQ"]; /* not bots; HQ = the site's own check (three times a day since 11 Nov 2026) */
@@ -255,8 +259,12 @@ export async function postUpdate(store, now, roster, a, extra = {}) {
   if (!UPDATE_STATUS.includes(status)) fail(`status must be one of: ${UPDATE_STATUS.join(", ")}`);
   const message = clean(a.message, 240);
   if (message.length < 3) fail("message is empty. Say what you did or what is in the way, with the number if there is one.");
-  noSecrets(message, a.link);
-  const u = { id: newId("u", now), at: new Date(now).toISOString(), sp: spStamp(now), bot, status, message, link: httpsLink(a.link), duty: /^[Dd]-[\w-]{1,30}$/.test(clean(a.duty, 40)) ? clean(a.duty, 40) : "", ...(extra.release ? { release: clean(extra.release, 60) } : {}) };
+  /* gaps (batch 4): done, but one number could not be read (TikTok views come a day late): the duty is
+     done, not blocked, and says what is missing */
+  const gaps = clean(a.gaps, 240);
+  if (gaps && status !== "done") fail("gaps goes only with status done: the duty is done except for what you name in gaps. Nothing was saved.");
+  noSecrets(message, a.link, gaps);
+  const u = { id: newId("u", now), at: new Date(now).toISOString(), sp: spStamp(now), bot, status, message, link: httpsLink(a.link), duty: /^[Dd]-[\w-]{1,30}$/.test(clean(a.duty, 40)) ? clean(a.duty, 40) : "", ...(gaps ? { gaps } : {}), ...(extra.release ? { release: clean(extra.release, 60) } : {}) };
   await mutate(store, `upd/${spDay(now)}.json`, [], (list) => {
     /* a looping bot is told to stop; it never pushes the others' lines out */
     if (list.filter((x) => x.bot === bot).length >= LIMITS.updatesPerBotPerDay) fail(`${bot} has already posted ${LIMITS.updatesPerBotPerDay} updates today, which is the limit. Something is repeating: stop, and tell Nova.`, "limit");
@@ -280,7 +288,7 @@ export function dutyOverlay(updates, today) {
   for (const u of [...updates].sort((a, b) => (a.at < b.at ? -1 : 1))) {
     if (!u.sp || u.sp.slice(0, 10) !== today || !["done", "blocked", "working", "error"].includes(u.status)) continue;
     if (u.release) continue; /* "Survivors: Lyrics live — done" is about a release step, not today's duty */
-    const v = { status: u.status === "error" ? "blocked" : u.status, message: u.message, at: u.sp, iso: u.at, bot: low(u.bot) };
+    const v = { status: u.status === "error" ? "blocked" : u.status, message: u.message, at: u.sp, iso: u.at, bot: low(u.bot), ...(u.gaps ? { gaps: u.gaps } : {}) };
     if (u.duty) byDuty[low(u.duty)] = v;
     byBot[low(u.bot)] = v; /* the bot's latest word, with or without a duty id */
   }
@@ -573,7 +581,7 @@ export async function submitIncome(store, now, roster, a) {
   if (!/^[A-Z]{3}$/.test(currency)) fail("currency must be the three-letter code the money was paid in (EUR, USD, GBP, BRL...). Never convert.");
   const status = low(a.status) || "received";
   if (!INCOME_STATUS.includes(status)) fail(`status must be one of: ${INCOME_STATUS.join(", ")}`);
-  if (status === "unsorted" && by !== "HQ") fail("status must be received, pending or transfer"); /* only the bank reader files a payment as unsorted */
+  if (status === "unsorted" && by !== "HQ") fail("status must be received, pending, transfer, statement only or payable"); /* only the bank reader files a payment as unsorted */
   const category = CATEGORIES.find((c) => low(c) === low(a.category)) || (a.category ? null : "Other");
   if (!category) fail(`category must be one of: ${CATEGORIES.join(", ")}`);
   const account = clean(a.account, 40);
@@ -594,10 +602,10 @@ export async function submitIncome(store, now, roster, a) {
     for (let i = 0; i < 4; i++, m = prevMonth(m)) {
       const hit = await mutate(store, incKey(m), [], (list) => {
         if (list.some((x) => samePayment(x, e))) return { skip: true, value: null }; /* the exact payment is there: the normal path below handles it */
-        const old = pid ? list.find((x) => x.id === pid && x.status === "pending" && x.amount === e.amount && x.currency === e.currency && x.date <= date)
-          : list.find((x) => x.status === "pending" && sameMoney(x, e) && x.date <= date && !(x.reference && e.reference && low(x.reference) !== low(e.reference)));
+        const old = pid ? list.find((x) => x.id === pid && OWED.includes(x.status) && x.amount === e.amount && x.currency === e.currency && x.date <= date)
+          : list.find((x) => OWED.includes(x.status) && sameMoney(x, e) && x.date <= date && !(x.reference && e.reference && low(x.reference) !== low(e.reference)));
         if (!old) return { skip: true, value: null };
-        old.history = (old.history || []).concat({ at: e.at, by, from: "pending", to: "received" }).slice(-10);
+        old.history = (old.history || []).concat({ at: e.at, by, from: old.status, to: "received" }).slice(-10);
         old.status = "received"; old.arrived = date; old.account = account; old.updatedAt = e.at;
         /* a statement keeps its own reference; the account's transaction id is kept beside it */
         if (e.reference && !old.reference) old.reference = e.reference;
@@ -615,7 +623,7 @@ export async function submitIncome(store, now, roster, a) {
       /* the same payment again: never added twice. It may gain its reference; pending may become
          received; received never goes back to pending (a statement email read again). */
       const gainsRef = !!e.reference && !old.reference;
-      const moves = old.status !== e.status && !(old.status === "received" && e.status === "pending") && e.status !== "unsorted"; /* a later "unsorted" never overwrites a decided status */
+      const moves = old.status !== e.status && !(old.status === "received" && OWED.includes(e.status)) && e.status !== "unsorted"; /* a later "unsorted" never overwrites a decided status */
       if (!moves && !gainsRef && !(e.note && e.note !== old.note)) return { skip: true, value: { entry: old, added: false, updated: false } };
       if (moves && old.status === "unsorted" && by !== "HQ" && !SORTERS.includes(by)) fail("That payment is unsorted. Only Ledger, Sheet, Nova, Claude or Luke say what it is, with the tool sort_payment. Nothing was changed.", "not_allowed");
       if (moves) { if (old.status === "unsorted") old.category = e.category; old.history = (old.history || []).concat({ at: e.at, by, from: old.status, to: e.status }).slice(-10); old.status = e.status; }
@@ -657,7 +665,7 @@ export const UNSORTED_MONTHS = 12;
 const PAY_ID = /^i[0-9a-z]{8,16}$/;
 /* Is the statement p (pending) the money of the credit e? Same amount and currency, dated on or before
    it, in its month or the three before (the rule the bank reader's own upgrade uses). */
-const pendingFits = (p, e) => p.status === "pending" && p.amount === e.amount && p.currency === e.currency && p.date <= e.date && monthsBack(e.date.slice(0, 7), 4).includes(String(p.date).slice(0, 7));
+const pendingFits = (p, e) => OWED.includes(p.status) && p.amount === e.amount && p.currency === e.currency && p.date <= e.date && monthsBack(e.date.slice(0, 7), 4).includes(String(p.date).slice(0, 7));
 const monthsBack = (m, n) => { const out = []; for (let i = 0; i < n; i++, m = prevMonth(m)) out.push(m); return out; };
 /* a.pending_id (with status received): the payment is the money of THAT statement, logged earlier as
    pending. The statement is upgraded as the bank reader's own upgrade does it (received, arrived = the
@@ -728,9 +736,96 @@ async function mergePending(store, now, by, e, month, pid) {
   if (month !== up.date.slice(0, 7)) await mutate(store, incKey(month), [], (list) => (drop(list) ? { value: null } : { skip: true, value: null }));
   return up;
 }
+/* batch 4 (15 Nov 2026): a payment already on the desk, corrected by the bot that submitted it (or Ledger,
+   Sheet, Nova, Claude, Luke), within its own month, with the reason kept beside what changed */
+const FIX_FIELDS = ["date", "payer", "amount", "currency", "status", "category", "account", "reference", "note"];
+export async function fixIncome(store, now, roster, a) {
+  const by = whoIs(a.by, roster, { people: true });
+  const id = clean(a.id, 20), month = clean(a.month, 7);
+  if (!/^\d{4}-\d{2}$/.test(month)) fail("month must be the payment's month, YYYY-MM, as income_status lists it under your_payments.");
+  const reason = clean(a.reason, 240);
+  if (reason.length < 3) fail("reason is empty: say in one line what was wrong. Nothing was changed.");
+  noSecrets(reason);
+  const want = {};
+  if (a.date != null && String(a.date).trim()) { const d = clean(a.date, 10); if (!DAY.test(d)) fail("date must be YYYY-MM-DD."); if (d.slice(0, 7) !== month) fail(`date must stay in the same month (${month}). For another month, tell Claude. Nothing was changed.`); want.date = d; }
+  if (a.payer != null && String(a.payer).trim()) want.payer = clean(a.payer, 80);
+  if (a.amount != null && String(a.amount).trim()) { const n = amountOf(a.amount); if (n == null || n <= 0) fail("amount must be a positive number, written like 112.01."); want.amount = n; }
+  if (a.currency != null && String(a.currency).trim()) { const c = clean(a.currency, 12).toUpperCase(); if (!/^[A-Z]{3}$/.test(c)) fail("currency must be the three-letter code the money was paid in."); want.currency = c; }
+  if (a.status != null && String(a.status).trim()) { const st = low(a.status); if (!INCOME_STATUS.includes(st) || st === "unsorted") fail(`status must be one of: ${INCOME_STATUS.filter((x) => x !== "unsorted").join(", ")}.`); want.status = st; }
+  if (a.category != null && String(a.category).trim()) { const c = CATEGORIES.find((x) => low(x) === low(a.category)); if (!c) fail(`category must be one of: ${CATEGORIES.join(", ")}.`); want.category = c; }
+  if (a.account != null && String(a.account).trim()) want.account = clean(a.account, 40);
+  if (a.reference != null) want.reference = clean(a.reference, 80);
+  if (a.note != null) want.note = clean(a.note, 240);
+  noSecrets(want.payer || "", want.note || "");
+  if (want.reference) { const what = secretIn(want.reference, { reference: true }); if (what) fail(`reference looks like ${what}. It must be the payment's own transaction id, nothing else.`, "secret"); }
+  const at = new Date(now).toISOString();
+  return mutate(store, incKey(month), [], (list) => {
+    const e = list.find((x) => x.id === id);
+    if (!e) fail(`There is no payment with the id "${id}" in ${month}. Find it under your_payments in income_status.`, "not_found");
+    if (e.by !== by && !SORTERS.includes(by)) fail(`That payment was submitted by ${e.by}: only ${e.by}, Ledger, Sheet, Nova, Claude or Luke fix it. Tell ${e.by}.`, "not_allowed");
+    if (e.status === "unsorted") fail("That payment is unsorted: say what it is with sort_payment, not fix_payment.", "not_allowed");
+    const changed = {};
+    for (const k of FIX_FIELDS) if (k in want && (e[k] ?? "") !== want[k]) changed[k] = [e[k] ?? "", want[k]];
+    if (!Object.keys(changed).length) return { skip: true, value: { entry: e, fixed: [] } };
+    for (const k of Object.keys(changed)) e[k] = want[k];
+    e.fixes = (e.fixes || []).concat({ at, by, reason, changed }).slice(-10);
+    e.updatedAt = at;
+    return { value: { entry: e, fixed: Object.keys(changed) } };
+  });
+}
 export async function getSources(store) {
-  const { data } = await readDoc(store, "sources.json", []);
-  return Array.isArray(data) ? data : [];
+  const [{ data }, ed] = await Promise.all([readDoc(store, "sources.json", []), readDoc(store, "srcedit.json", {})]);
+  const edits = ed.data && typeof ed.data === "object" ? ed.data : {};
+  /* the bots' own edits (batch 4) on top of the private seed: a re-seed never wipes them */
+  return (Array.isArray(data) ? data : []).map((s) => {
+    const e = edits[s.id];
+    if (!e) return s;
+    const { by, at, ...f } = e;
+    const out = { ...s, ...f, editedBy: by, editedAt: at };
+    if (Array.isArray(f.accounts) && f.accounts.length) out.lands = f.accounts.join(" + ");
+    return out;
+  });
+}
+/* batch 4 (15 Nov 2026): the bot that owns a source (or Ledger, Sheet, Nova, Claude, Luke) says where its
+   money lands (one or several accounts), its state and why, its category, and clears a "needs Luke" that
+   no longer stands. Kept in srcedit.json, on top of the seed. */
+export const SOURCE_EDITORS = ["Ledger", "Sheet", "Nova", "Claude", "Luke"];
+export async function editSource(store, now, roster, a) {
+  const by = whoIs(a.by, roster, { people: true });
+  const want = low(clean(a.source, 60));
+  const list = await getSources(store);
+  const s = list.find((x) => x.id === want || low(x.name) === want);
+  if (!s) fail(`There is no income source called "${clean(a.source, 60)}". The sources are: ${list.map((x) => x.name).join(", ") || "none yet"}.`);
+  if (!SOURCE_EDITORS.includes(by) && by !== s.owner) fail(`${s.name} is edited by its owner (${s.owner || "nobody named"}), Ledger, Sheet or Nova. If something about it is wrong, tell ${s.owner || "Ledger"}.`, "not_allowed");
+  const f = {};
+  if (a.state != null && String(a.state).trim() !== "") {
+    const st = low(a.state).replace(/[ -]/g, "_");
+    if (!SOURCE_STATE.includes(st)) fail(`state must be one of: ${SOURCE_STATE.join(", ")}. Nothing was saved.`);
+    f.state = st;
+  }
+  if (a.reason != null) f.blocker = clean(a.reason, 200);
+  if (f.state === "blocked" && (f.blocker || "").length < 3) fail("A blocked source needs its reason: say what is in the way and who can fix it. Nothing was saved.");
+  if (f.state && f.state !== "blocked" && a.reason == null) f.blocker = "";
+  if (a.needs_luke != null) f.needsLuke = clean(a.needs_luke, 200);
+  if (a.category != null && String(a.category).trim() !== "") {
+    const c = CATEGORIES.find((x) => low(x) === low(a.category));
+    if (!c) fail(`category must be one of: ${CATEGORIES.join(", ")}.`);
+    f.category = c;
+  }
+  if (a.accounts != null) {
+    const acc = (Array.isArray(a.accounts) ? a.accounts : [a.accounts]).map((x) => clean(x, 40)).filter(Boolean);
+    if (!acc.length || acc.length > 4) fail("accounts must be 1 to 4 account names, for example [\"PayPal\", \"Wise\"].");
+    f.accounts = acc;
+  } else if (a.lands != null && clean(a.lands, 40)) f.accounts = [clean(a.lands, 40)];
+  if (!Object.keys(f).length) fail("Nothing to change: give state, reason, accounts, category or needs_luke.");
+  noSecrets(JSON.stringify(f));
+  const at = new Date(now).toISOString();
+  await mutate(store, "srcedit.json", {}, (doc) => {
+    const d = doc && typeof doc === "object" && !Array.isArray(doc) ? doc : {};
+    d[s.id] = { ...(d[s.id] || {}), ...f, by, at };
+    return { replace: d, value: d[s.id] };
+  });
+  return (await getSources(store)).find((x) => x.id === s.id);
 }
 export function setSources(store, list) {
   if (!Array.isArray(list) || list.length > 80) fail("sources must be a list (80 at most)");
@@ -759,13 +854,17 @@ const DUE_DAYS = { daily: 2, monthly: 45, quarterly: 110 };
 export function incomeReport(entries, checks, sources, today, older = []) {
   const month = today.slice(0, 7);
   const add = (o, cur, a) => { o[cur] = round((o[cur] || 0) + a); };
-  const received = {}, pending = {}, byCat = {};
+  const received = {}, pending = {}, byCat = {}, payable = {}, statementOnly = {}, royaltiesOnly = {};
   /* a payment counts on the day it arrived (a pending statement that later landed keeps both dates) */
   entries = entries.map((e) => (e.arrived && e.arrived !== e.date ? { ...e, statement: e.date, date: e.arrived } : e));
   for (const e of entries) {
     if (e.date.slice(0, 7) !== month || e.status === "transfer" || e.status === "unsorted") continue;
-    add(e.status === "pending" ? pending : received, e.currency, e.amount);
+    /* batch 4: a statement under the payout line counts nowhere yet; payable is owed (with pending) */
+    if (e.status === "statement only") { add(statementOnly, e.currency, e.amount); continue; }
+    add(e.status === "pending" || e.status === "payable" ? pending : received, e.currency, e.amount);
+    if (e.status === "payable") add(payable, e.currency, e.amount);
     if (e.status === "received") add(byCat[e.category] || (byCat[e.category] = {}), e.currency, e.amount);
+    if (e.status === "received" && e.category !== "Salary") add(royaltiesOnly, e.currency, e.amount); /* the music's own money: no salary */
   }
   const lastCheck = {};
   for (const c of checks) { const k = low(c.account); if (!lastCheck[k] || c.at > lastCheck[k].at) lastCheck[k] = c; }
@@ -776,7 +875,7 @@ export function incomeReport(entries, checks, sources, today, older = []) {
     const lastLogged = mine.reduce((a, e) => (!a || e.at > a ? e.at : a), null); /* the last time anything was logged for it, as a São Paulo day */
     const lastLook = [lastLogged && spDay(Date.parse(lastLogged)), chk && chk.day].filter(Boolean).sort().pop() || null;
     const monthTotal = {};
-    for (const e of mine) if (e.date.slice(0, 7) === month && e.status !== "transfer" && e.status !== "unsorted") add(monthTotal, e.currency, e.amount);
+    for (const e of mine) if (e.date.slice(0, 7) === month && e.status !== "transfer" && e.status !== "unsorted" && e.status !== "statement only") add(monthTotal, e.currency, e.amount);
     let verdict = "ok", why = "";
     if (s.state === "not_tracked") { verdict = "not_tracked"; why = "Nobody is logging this yet"; }
     else if (s.state === "blocked") { verdict = "blocked"; why = s.blocker || "Blocked"; }
@@ -785,7 +884,8 @@ export function incomeReport(entries, checks, sources, today, older = []) {
       else if (lastLook < today) { verdict = daysBetween(lastLook, today) > 1 ? "overdue" : "due"; why = `Last checked ${lastLook}`; }
     } else if (!last) { verdict = s.cadence === "irregular" ? "quiet" : "never"; why = "No payment logged yet"; }
     else if (DUE_DAYS[s.cadence] && daysBetween(last.date, today) > DUE_DAYS[s.cadence]) { verdict = "overdue"; why = `Last payment ${last.date}; expected ${s.cadence}`; }
-    return { id: s.id, name: s.name, kind: s.kind, category: s.category, currency: s.currency, lands: s.lands, cadence: s.cadence, owner: s.owner, how: s.how, state: s.state,
+    return { id: s.id, name: s.name, kind: s.kind, category: s.category, currency: s.currency, lands: s.lands, ...(s.accounts ? { accounts: s.accounts } : {}), ...(s.editedBy ? { editedBy: s.editedBy, editedAt: s.editedAt } : {}),
+      cadence: s.cadence, owner: s.owner, how: s.how, state: s.state,
       blocker: s.blocker, needsLuke: s.needsLuke, last: last ? { date: last.date, amount: last.amount, currency: last.currency, status: last.status } : null,
       checked: chk ? { day: chk.day, by: chk.by, new: chk.new } : null, lastLook, monthTotal, verdict, why };
   });
@@ -798,7 +898,7 @@ export function incomeReport(entries, checks, sources, today, older = []) {
   for (const s of src) if (s.verdict === "overdue") problems.push(`${s.name}: ${s.why}`);
   for (const s of list) if (s.verdict === "blocked") problems.push(`${s.name}: blocked. ${s.blocker}`.trim());
   if (unknown.length) problems.push(`New payer(s) not on the list of sources: ${unknown.join(", ")}`);
-  const oldPending = entries.filter((e) => e.status === "pending" && daysBetween(e.date, today) > 30).length;
+  const oldPending = entries.filter((e) => (e.status === "pending" || e.status === "payable") && daysBetween(e.date, today) > 30).length;
   if (oldPending) problems.push(`${oldPending} pending payment${oldPending === 1 ? "" : "s"} older than 30 days`);
   /* seen in an account (the bank reader), not yet said what it is: listed apart, in no total */
   const pool = entries.concat(older || []);
@@ -808,14 +908,14 @@ export function incomeReport(entries, checks, sources, today, older = []) {
   const edge = monthsBack(month, UNSORTED_MONTHS).pop(), leaving = unsorted.filter((e) => e.date.slice(0, 7) <= edge).length;
   if (leaving) problems.push(`${leaving} unsorted payment${leaving === 1 ? "" : "s"} from ${MONTH[Number(edge.slice(5, 7)) - 1]} ${edge.slice(0, 4)} drop${leaving === 1 ? "s" : ""} off "To sort" when this month ends: sort ${leaving === 1 ? "it" : "them"} before then`);
   /* the money of a statement logged as pending? Offered only when every statement that fits is the same payer's (the oldest is taken, as the bank reader does) */
-  const pend = pool.filter((p) => p.status === "pending");
+  const pend = pool.filter((p) => OWED.includes(p.status));
   const withMatch = (e) => {
     const fit = pend.filter((p) => pendingFits(p, e)).sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
     if (!fit.length || new Set(fit.map((p) => low(p.payer))).size > 1) return e;
     const p = fit[0];
     return { ...e, pendingMatch: { id: p.id, payer: p.payer, amount: p.amount, currency: p.currency, date: p.date } };
   };
-  return { month, received, pending, byCategory: byCat, count: entries.filter((e) => e.date.slice(0, 7) === month).length, unsorted: unsorted.slice(0, 40).map(withMatch), unsortedCount: unsorted.length,
+  return { month, received, pending, payable, statementOnly, royaltiesOnly, byCategory: byCat, count: entries.filter((e) => e.date.slice(0, 7) === month).length, unsorted: unsorted.slice(0, 40).map(withMatch), unsortedCount: unsorted.length,
     entries: [...entries].sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : a.at < b.at ? 1 : -1)).slice(0, 60),
     accounts, sources: src, unknown, problems,
     lastEntryAt: entries.reduce((a, e) => (!a || e.at > a ? e.at : a), null) };
@@ -827,6 +927,136 @@ export async function incomeState(store, now) {
     Promise.all(months.map((k) => readDoc(store, incKey(k), []))), Promise.all(months.slice(0, 2).map((k) => readDoc(store, chkKey(k), []))), getSources(store)]);
   const flat = (docs) => docs.flatMap((d) => (Array.isArray(d.data) ? d.data : []));
   return incomeReport(flat(inc.slice(0, 4)), flat(chk), sources, today, flat(inc.slice(4)));
+}
+
+/* ---------- batch 4 (15 Nov 2026): ad spend and growth numbers the bots log on the desk ----------
+   The site can't write the team's sheets; these rows live on the desk and HQ reads them WITH the sheet's
+   (hq.mjs mergeDeskSpend / mergeDeskGrowth): a desk row replaces the sheet's for the same platform and day
+   (spend), or fills the numbers the sheet's row lacks (growth). */
+export const SPEND_PLATFORMS = ["Meta", "Google", "TikTok"];
+export const SPENDERS = ["Forge", "Nova", "Claude", "Luke"];
+const spendKey = (month) => `spend/${month}.json`;
+export async function recordSpend(store, now, roster, a) {
+  const by = whoIs(a.by, roster, { people: true });
+  if (!SPENDERS.includes(by)) fail("Ad spend is Forge's to record (Nova may do it for him). Tell Forge.", "not_allowed");
+  const platform = SPEND_PLATFORMS.find((p) => low(p) === low(a.platform));
+  if (!platform) fail("platform must be Meta, Google or TikTok.");
+  const account = clean(a.account, 60) || platform;
+  const date = clean(a.date, 10), today = spDay(now);
+  if (!isDay(date)) fail("date must be the day the money was spent, YYYY-MM-DD.");
+  if (date > today) fail("date is in the future.");
+  const has = a.amount != null && String(a.amount).trim() !== "";
+  const notRead = clean(a.not_read, 120);
+  let amount = null, currency = "";
+  if (has) {
+    amount = amountOf(a.amount);
+    if (amount == null || amount < 0) fail('amount must be a number, written like 112.01 (a point for the cents, no thousands separator). 0 for a day with no ads. If you could not read it, send not_read with the reason instead.');
+    currency = clean(a.currency, 12).toUpperCase();
+    if (!/^[A-Z]{3}$/.test(currency)) fail("currency must be the three-letter code the account is billed in (USD, EUR...). Never convert.");
+  } else if (notRead.length < 3) fail("Give amount or not_read: the amount with its currency, or why the number could not be read.");
+  noSecrets(account, notRead);
+  const at = new Date(now).toISOString();
+  return mutate(store, spendKey(date.slice(0, 7)), [], (list) => {
+    const old = list.find((x) => x.platform === platform && low(x.account) === low(account) && x.date === date);
+    if (old) {
+      if (!has) return { skip: true, value: { entry: old, added: false, updated: false, duplicate: true } }; /* a number already there stays */
+      if (old.amount === amount && old.currency === currency) return { skip: true, value: { entry: old, added: false, updated: false, duplicate: true } };
+      if (old.amount != null) old.was = old.amount;
+      Object.assign(old, { amount, currency, notRead: "", by, at });
+      return { value: { entry: old, added: false, updated: true, duplicate: false } };
+    }
+    if (list.length >= 500) fail("This month's spend list is full. Tell Claude.", "limit");
+    const e = { id: newId("s", now), platform, account, date, amount, currency, notRead: has ? "" : notRead, by, at };
+    list.push(e);
+    return { value: { entry: e, added: true, updated: false, duplicate: false } };
+  });
+}
+/* this month's and last month's spend rows (the cap's month and the one before) */
+export async function listSpend(store, now) {
+  const m = spDay(now).slice(0, 7);
+  const docs = await Promise.all([m, prevMonth(m)].map((k) => readDoc(store, spendKey(k), [])));
+  return docs.flatMap((d) => (Array.isArray(d.data) ? d.data : []));
+}
+
+export const GROWERS = ["Steve", "Atlas", "Kevin", "Laura", "Nova", "Claude"];
+const GROWTH_NUM = ["followers", "views"], SONG_NUM = ["streams", "listeners", "saves", "playlist_adds"];
+const growKey = (month) => `grow/${month}.json`;
+/* a count: "1240" or "1,240" (never "about 1k", never a guess) */
+function countOf(v, name) {
+  const t = String(v).trim().replace(/\s/g, "");
+  if (!/^(\d{1,3}(,\d{3})+|\d+)$/.test(t)) fail(`${name} must be a number as shown (for example 1240 or 1,240), never an estimate. If you could not read it, leave it out and name it in gaps.`);
+  return Number(t.replace(/,/g, ""));
+}
+const fmtN = (n) => Number(n).toLocaleString("en-US");
+const shortDay = (d) => `${Number(d.slice(8, 10))} ${MONTH[Number(d.slice(5, 7)) - 1]}`;
+export async function listGrowth(store, now, months = 2) {
+  let m = spDay(now).slice(0, 7);
+  const keys = [];
+  for (let i = 0; i < months; i++) { keys.push(growKey(m)); m = prevMonth(m); }
+  const docs = await Promise.all(keys.map((k) => readDoc(store, k, [])));
+  return docs.flatMap((d) => (Array.isArray(d.data) ? d.data : []));
+}
+/* One call: the day's Growth (platform) or Songs (song) numbers. The change in followers is worked out
+   against the last reading before that day (the desk's, or a.prev from the sheet when it is later); the
+   same numbers again are skipped; a later call fills what was missing; the duty is marked done (with its
+   gaps) through post_update. a.gaps: {field: why} for numbers that could not be read. */
+export async function logGrowth(store, now, roster, a) {
+  const by = whoIs(a.by, roster, { people: true });
+  if (!GROWERS.includes(by)) fail("Growth and song numbers are logged by Steve, Atlas, Kevin or Laura (or Nova for them).", "not_allowed");
+  const date = clean(a.date, 10), today = spDay(now);
+  if (!isDay(date)) fail("date must be the day the numbers are for, YYYY-MM-DD.");
+  if (date > today) fail("date is in the future.");
+  const platform = clean(a.platform, 40), song = clean(a.song, 120);
+  if (!!platform === !!song) fail("Give platform OR song: platform for followers and views (Growth), song for its Spotify numbers (Songs).");
+  const kind = song ? "song" : "growth", names = song ? SONG_NUM : GROWTH_NUM;
+  const vals = {};
+  for (const n of names) if (a[n] != null && String(a[n]).trim() !== "") vals[n] = countOf(a[n], n);
+  const extra = {};
+  if (!song) {
+    if (a.best_post != null && clean(a.best_post, 200)) extra.best_post = clean(a.best_post, 200);
+    if (a.best_post_link != null && String(a.best_post_link).trim()) { const l = httpsLink(clean(a.best_post_link, 400)); if (!l) fail("best_post_link must start with https://"); extra.best_post_link = l; }
+  }
+  const gin = a.gaps == null ? {} : typeof a.gaps === "string" ? { note: a.gaps } : a.gaps;
+  if (typeof gin !== "object" || Array.isArray(gin)) fail('gaps must be {"views": "why it could not be read"}.');
+  const gaps = {};
+  for (const [k, v] of Object.entries(gin)) { const w = clean(v, 160); if (w) gaps[clean(k, 30)] = w; }
+  if (!Object.keys(vals).length && !Object.keys(extra).length) fail(`There are no numbers in this call. Send at least one of: ${names.join(", ")}.`);
+  const account = clean(a.account, 60);
+  noSecrets(platform, song, account, JSON.stringify(gaps), extra.best_post || "");
+  const key = song ? "s:" + songKey(song) : "g:" + low(platform);
+  const at = new Date(now).toISOString();
+  const earlier = (await listGrowth(store, now, 3)).filter((x) => x.key === key && x.date < date && x.followers != null).sort((x, y) => (x.date < y.date ? 1 : -1))[0];
+  const prevF = a.prev && isDay(a.prev.date) && a.prev.date < date && (!earlier || a.prev.date > earlier.date) && a.prev.followers != null ? a.prev.followers : earlier ? earlier.followers : null;
+  const res = await mutate(store, growKey(date.slice(0, 7)), [], (list) => {
+    const old = list.find((x) => x.key === key && x.date === date);
+    if (old) {
+      const filled = [], replaced = [];
+      for (const [k, v] of Object.entries({ ...vals, ...extra })) {
+        if (old[k] == null || old[k] === "") { old[k] = v; filled.push(k); delete (old.gaps || {})[k]; }
+        else if (old[k] !== v) { (old.was || (old.was = {}))[k] = old[k]; old[k] = v; replaced.push(k); }
+      }
+      for (const [k, w] of Object.entries(gaps)) if (old[k] == null) (old.gaps || (old.gaps = {}))[k] = w;
+      if (!filled.length && !replaced.length) return { skip: true, value: { row: old, duplicate: true, filled, replaced } };
+      if (!song && (filled.includes("followers") || replaced.includes("followers"))) old.change = prevF != null ? old.followers - prevF : null;
+      old.updatedAt = at; old.by = by;
+      return { value: { row: old, duplicate: false, filled, replaced } };
+    }
+    if (list.length >= 2000) fail("This month's growth list is full. Tell Claude.", "limit");
+    const row = { id: newId("g", now), key, kind, date, ...(song ? { song } : { platform, account }), ...Object.fromEntries(names.map((n) => [n, vals[n] ?? null])), ...extra,
+      ...(song ? {} : { change: vals.followers != null && prevF != null ? vals.followers - prevF : null }), gaps, by, at };
+    list.push(row);
+    return { value: { row, duplicate: false, filled: [], replaced: [], added: true } };
+  });
+  if (res.duplicate) return res;
+  /* the duty: done (with its gaps), through the same live log as post_update */
+  const r = res.row, words = [];
+  if (!song && r.followers != null && (res.added || res.filled.includes("followers") || res.replaced.includes("followers"))) words.push(`${fmtN(r.followers)} followers` + (r.change != null ? ` (${r.change >= 0 ? "+" : ""}${fmtN(r.change)})` : ""));
+  for (const n of names) if (n !== "followers" && r[n] != null && (res.added || res.filled.includes(n) || res.replaced.includes(n))) words.push(`${n.replace("_", " ")} ${fmtN(r[n])}`);
+  const gapText = Object.entries(r.gaps || {}).map(([k, w]) => `${k}: ${w}`).join("; ");
+  const msg = `${song || platform} ${shortDay(date)}: ${words.join(", ") || "numbers filled in"}` + (res.added ? "" : " (filled in)");
+  let duty = null;
+  try { await postUpdate(store, now, roster, { bot: by, status: "done", message: msg, duty: a.duty, gaps: gapText }); duty = gapText ? "done, with gaps" : "done"; } catch { duty = "not marked: the live log is full"; }
+  return { ...res, duty, gapText };
 }
 
 /* ---------- cards (what a bot says it is working on) and last-seen ---------- */

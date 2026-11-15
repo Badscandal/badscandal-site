@@ -348,7 +348,7 @@ test("ready to resubmit: Drop asks once, Luke answers Yes or Not yet, and the an
 
 /* ---------- the connector and HQ's words ---------- */
 test("the connector: 21 tools, the new rules in INSTRUCTIONS; HQ's short words for the new steps", () => {
-  assert.equal(TOOLS.length, 21);
+  assert.ok(TOOLS.length >= 21, "21 with batch 3 (more since: batch 4)");
   assert.ok(tool("store_status"));
   const text = INSTRUCTIONS;
   assert.match(text, /teaser/i);

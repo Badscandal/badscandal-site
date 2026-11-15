@@ -2159,3 +2159,53 @@ Tests: `tests/bots-batch3.test.mjs` (plus a route check in `tests/mcp.test.mjs`)
   Touch Me has both approvals and its store history.
 * **INSTRUCTIONS** gained four lines (the teaser posts, `done_on`/links, `store_status`, approvals). The bots'
   written guide (private repo) should say the same.
+
+## The bots' feedback, batch 4 of 5: money (15 Nov 2026, branch `hq-bots-batch4`, stacked on batch 3)
+
+Tests: `tests/bots-batch4.test.mjs`. The connector has 25 tools now (`fix_payment`, `income_source`, `record_spend`,
+`log_growth`). `luke_briefing`'s shape is unchanged (its ad_spend numbers now come from the one figure below).
+* **One ad spend figure** (`hq.mjs`): the cap's EUR (Google, TikTok) used to be converted at the ECB average of the
+  month so far, which moves daily (473.40 / 473.47 / 473.83 in one day). Now `fixedRate(sheets.Rates)` reads the
+  team's FIXED monthly rate from the sheet's optional tab **"Rates", B1 = USD per 1 EUR** (A1 = its label; read on
+  its own like "Updates" in `hq-load.mjs`, so a missing tab breaks nothing; a value outside 0.9..1.6 is refused as
+  "doesn't look like USD per 1 EUR"). `moneyReport(..., o = {fixed, notRead})`: `cap.rateUsed` `{value, from:
+  "Rates!B1" | "ECB average", label, month}` (null when everything is USD), `cap.notRead` (the reads still
+  missing: a sheet Spend row whose spend says "not read", or Forge's `not_read`, until a number for that platform
+  and day exists), `cap.estimated` = anything missing (`cap.estimatedWhy`: no fixed rate, another currency at the
+  ECB average, a missing rate, N reads missing). The months list (EUR estimates per month) is unchanged. The card
+  says "Rate: 1.1 USD per EUR (Rates!B1, Nov 2026)", "Not read: …", "Estimated: …" (`HQLib.capRateLine`,
+  `capMissingLine`). The sample sheet has a made-up Rates tab (1.08). **Assumption to confirm with Luke/Sheet:**
+  that Rates!B1 in the HQ sheet is the USD-per-EUR rate.
+* **`record_spend`** (Forge; Nova, Claude, Luke): ONE platform (Meta, Google, TikTok) and day, the account's own
+  currency, `amount` (0 = no ads) or `not_read` (why). Desk doc `spend/<month>.json`, one row per platform +
+  account + day (the same again: duplicate; a new amount: updated, `was` kept). `hq.mjs mergeDeskSpend` puts the
+  desk's rows IN PLACE of the sheet's for that platform and day (never added to them); Meta's own read still wins
+  for Meta days (`metaSpend` runs after). The tool answers `month_to_date` from `ctx.hq()` (read after the row is
+  saved), or "not read just now" without the sheet.
+* **"Done with gaps":** `post_update` takes `gaps` (only with done); `dutyOverlay` and `dutiesReport` carry it,
+  the duty is done (never red) with `gaps`; the sheet's own status "done with gaps" counts as done (the blocker
+  column = the gaps). HQ: "Done, with gaps: …" under the duty (`HQLib.dutyGapsLine`).
+* **`log_growth`** (Steve, Atlas, Kevin, Laura; Nova, Claude): ONE platform (followers, views, best post) or song
+  (streams, listeners, saves, playlist adds) for one day; counts as shown ("1,240" ok, "about 1k" refused); what
+  couldn't be read goes in `gaps` {field: why}. Desk doc `grow/<month>.json`, key `g:<platform>` / `s:<songKey>`.
+  `change` (followers) against the last reading before that day: the desk's, or the sheet's from `ctx.hq()`
+  (`a.prev`) when later. The same numbers again: duplicate, nothing posted; a later call fills missing fields
+  (their gaps close) or corrects one (`was`). Then it posts ONE `done` update (with `gaps`) for the duty
+  (`duty` id when the bot has several). `hq.mjs mergeDeskGrowth`: a desk row fills only what the sheet's row of
+  that day lacks; a day the sheet doesn't have is added (Growth and Songs).
+* **Income sources the owner edits:** `income_source` / `S.editSource` (the source's owner, Ledger, Sheet, Nova,
+  Claude, Luke): `accounts` (1-4; `lands` = them joined with " + "), `state` (blocked needs a reason; any other
+  state clears the old blocker), `reason`, `category`, `needs_luke` ("" clears it: Ledger's old Tipalti /
+  inGrooves / Symphonic asks). Kept in `srcedit.json` and laid over the seed in `getSources()`, so `PUT
+  /api/staff/seed` never wipes them (`editedBy`, `editedAt`). Money's source table shows "Lands in … · updated by …".
+* **`fix_payment`** / `S.fixIncome`: the bot that submitted a payment (or Ledger, Sheet, Nova, Claude, Luke)
+  corrects date (same month), payer, amount, currency, status, category, account, reference, note, with a
+  `reason`; `e.fixes` keeps `{at, by, reason, changed: {field: [old, new]}}` (10). Unsorted payments still go
+  through `sort_payment`. `income_status` lists `your_payments` (id, month, line) for it.
+* **New statuses:** `INCOME_STATUS` adds "statement only" (a statement under the payout line: in NO total) and
+  "payable" (owed, ready to pay out: counted with pending as "owed to us", and in its own `payable` total).
+  `OWED` = pending, payable, statement only: any of them turns received when the money lands (the same matching
+  as pending). HQ greys "Statement only (not payable yet)".
+* **Royalties only:** `incomeReport().royaltiesOnly` = received without the Salary category. Money shows four
+  tiles (`HQLib.incomeTotals`): Received, Royalties (no salary), Owed to us, Statements only; `income_status`
+  gives `royalties_only_this_month`, `payable_this_month`, `statement_only_this_month`.

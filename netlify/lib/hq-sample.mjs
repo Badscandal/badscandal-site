@@ -67,7 +67,9 @@ export function sampleSheets(today, now = Date.now()) {
     [ago(41), "Kevin", "blocked", "TikTok login expired: needs Luke's phone code", ""],
     [ago(55), "Nova", "info", "Standup: 3 logged, 1 blocked (Kevin), Laura not yet", ""],
     [ago(190), "Drop", "done", "Me Dá Seu Body: RouteNote status still In Review", ""]];
-  return { Growth, Songs, Fans, Releases, Tasks, Royalties, Spend, Income, Updates };
+  /* the team's fixed monthly rate (batch 4, 15 Nov 2026): MADE UP for the sample */
+  const Rates = [["EUR to USD, this month (sample, made up)", "1.08"]];
+  return { Growth, Songs, Fans, Releases, Tasks, Royalties, Spend, Income, Updates, Rates };
 }
 
 /* A MADE-UP Meta read for /hq?sample=1 (11 Nov 2026): Meta's "own" numbers = the sample sheet's Meta

@@ -13,7 +13,7 @@ import { hqModel, HQ_TABS } from "./hq.mjs";
 import { sampleMeta, sampleSheets } from "./hq-sample.mjs";
 import { EXPIRED_CODE, keyHealth, readKeyHealth, readMeta } from "./metaread.mjs";
 import { DEFAULT_ACCOUNT } from "./metaspend.mjs";
-import { dutyOverlay, getSightings, getTaskOverlay, listReleases, listUpdates, releaseView, spDay, spHM } from "./staff.mjs";
+import { dutyOverlay, getSightings, getTaskOverlay, listGrowth, listReleases, listSpend, listUpdates, releaseView, spDay, spHM } from "./staff.mjs";
 import { sampleReleases, sampleSightings } from "./staff-sample.mjs";
 
 /* the sheet is read at most every 2 minutes so the bots' live updates show quickly; one batch read
@@ -75,9 +75,10 @@ const live = (list, today, sightings) => list.filter((r) => r && r.status !== "c
 async function staffSide(desk, now) {
   if (!desk) return null;
   try {
-    const [updates, releases, sightings, taskOverlay] = await Promise.all([listUpdates(desk, now, 3), listReleases(desk).catch(() => []), getSightings(desk).catch(() => undefined), getTaskOverlay(desk).catch(() => null)]);
+    const [updates, releases, sightings, taskOverlay, spend, growth] = await Promise.all([listUpdates(desk, now, 3), listReleases(desk).catch(() => []), getSightings(desk).catch(() => undefined), getTaskOverlay(desk).catch(() => null),
+      listSpend(desk, now).catch(() => []), listGrowth(desk, now).catch(() => [])]);
     /* undefined = the report could not be read: the sheet's late pitch is then left as the sheet says */
-    return { updates, overlay: dutyOverlay(updates, spDay(now)), taskOverlay, releases: live(releases, spDay(now), sightings || null), now, ...(sightings === undefined ? {} : { sightings }) };
+    return { updates, overlay: dutyOverlay(updates, spDay(now)), taskOverlay, releases: live(releases, spDay(now), sightings || null), now, spend, growth, ...(sightings === undefined ? {} : { sightings }) };
   } catch { return null; }
 }
 
@@ -97,10 +98,12 @@ export async function loadHq({ cache, desk = null, env, now = Date.now(), sample
   let readError = "";
   if (!got || now - got.at > SHEET_TTL || fresh) {
     const read = await readTabs(rawKey, sheetId, HQ_TABS, fetchImpl);
-    /* the bots' live log is its own read: a missing "Updates" tab must never break the rest */
+    /* the bots' live log is its own read: a missing "Updates" tab must never break the rest; so is the
+       team's fixed monthly rate (batch 4, 15 Nov 2026: tab "Rates", B1 = USD per 1 EUR) */
     if (!read.error) {
-      const up = await readTabs(rawKey, sheetId, ["Updates"], fetchImpl);
+      const [up, rt] = await Promise.all([readTabs(rawKey, sheetId, ["Updates"], fetchImpl), readTabs(rawKey, sheetId, ["Rates"], fetchImpl)]);
       read.sheets.Updates = up.error ? null : up.sheets.Updates || [];
+      read.sheets.Rates = rt.error ? null : rt.sheets.Rates || [];
     }
     if (read.error) {
       console.error("hq sheet: " + read.error);

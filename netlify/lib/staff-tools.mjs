@@ -32,6 +32,10 @@ export const INSTRUCTIONS = [
   "release_step: put the post, store page or video in link, and when the work was done on an earlier day, that day in done_on (YYYY-MM-DD).",
   "Drop: keep where each song is at the distributor with store_status (uploaded, in moderation, rejected with RouteNote's reason, resubmitted, approved, delivered, live). After a rejection, once it is fixed, ask Luke with store_status ready_to_resubmit: he answers Yes or Not yet.",
   "Atlas (the pitch) and Verse (the final lyrics): ask Luke for his approval with send_message and approval; release_pack shows what he approved, when, and the exact text. Never treat anything else as his approval.",
+  /* batch 4 (15 Nov 2026) */
+  "Steve, Atlas, Kevin, Laura: log each day's numbers with log_growth (one call per platform or song); a number you could not read goes in gaps with why, and your duty counts as done with gaps. post_update takes gaps too: one missing number is never a reason for blocked.",
+  "Forge: record each platform's daily spend with record_spend (not_read with why when you could not read it). The month's total against the cap is the one record_spend and the dashboard give, at the team's fixed rate: never add it up yourself.",
+  "Ledger and Sheet: keep your income sources current with income_source (where the money lands, state, reason; clear needs_luke when it no longer stands), and correct a payment with fix_payment (with the reason). Statuses: statement only (not payable yet) and payable (owed, ready to pay out).",
 ].join("\n");
 
 export const TOOLS = [
@@ -44,7 +48,8 @@ export const TOOLS = [
       status: str("working | done | blocked | error | info", { enum: S.UPDATE_STATUS }),
       message: str('What happened, in one line (240 characters at most). Good: "Touch Me row for Mon 9 Nov written: 3,540 streams". Bad: "done".'),
       duty: str('Optional. The id of the duty this is about, from my_day (it starts with "D-"). Leave empty if you have only one duty today.'),
-      link: str("Optional. An https link to the row, post or page this is about.") }, ["bot", "status", "message"]) },
+      link: str("Optional. An https link to the row, post or page this is about."),
+      gaps: str('Only with status done: what you could NOT read, and why (for example "views: TikTok shows them a day late"). The duty counts as done, with its gaps; never use blocked for one missing number.') }, ["bot", "status", "message"]) },
   { name: "send_message", title: "Send a message",
     description: "Write to Luke, Claude, another bot, or the whole team (to: all). Use needs to say what you expect: reply (a question), action (please do this), decision (Luke must choose: give 2 to 4 options) or none (just so you know). To answer a message, put its id in reply_to. Messages to Luke reach him through the dashboard and Alfred's 10:00 message: keep them short and say exactly what you need.",
     inputSchema: obj({ bot: BOT,
@@ -92,11 +97,38 @@ export const TOOLS = [
       amount: { type: "number", description: "The amount as paid, for example 112.01. Positive. Not converted." },
       currency: str("Three-letter code of the currency it was paid in: EUR, USD, GBP, BRL..."),
       account: str('Where it landed: "Wise", "PayPal", "Revolut", "Bank", or "Statement only" when you only saw a statement.'),
-      status: str("received | pending | transfer. Default received.", { enum: ["received", "pending", "transfer"] }),
+      status: str("received | pending | transfer | statement only | payable. Default received. statement only = a statement under the payout line (not owed yet); payable = owed to us and ready to pay out.", { enum: S.INCOME_STATUS.filter((x) => x !== "unsorted") }),
       category: str("Self-releases | Label deals | Publishing | Production | Salary | Other. Default Other.", { enum: S.CATEGORIES }),
       reference: str("The payment's own reference or transaction id from the account, if it shows one. This is what stops double counting. Not an account number."),
       period: str('Optional. What the payment covers, for example "2026-Q3" or "Sep 2026".'),
       note: str("Optional. One line of anything Luke should know about this payment.") }, ["bot", "date", "payer", "amount", "currency", "account"]) },
+  /* batch 4 (15 Nov 2026) */
+  { name: "fix_payment", title: "Fix a payment already on the desk",
+    description: "Correct ONE payment you (or another bot) already submitted: a wrong amount, currency, payer, status (for example a transfer that is really income), category (for example a salary filed as Publishing), account, reference, note, or day within its month. Find its id and month under your_payments in income_status. Only the bot that submitted it, Ledger, Sheet or Nova fix it. Say what was wrong in reason. Only the fields you send change; the old values are kept with your reason.",
+    inputSchema: obj({ bot: BOT, id: str("The payment's id (it starts with i), from income_status."), month: str("Its month, YYYY-MM, from income_status."),
+      reason: str("What was wrong, in one line."), date: str("Optional. The right day, YYYY-MM-DD, same month."), payer: str("Optional. The right payer."),
+      amount: { type: "number", description: "Optional. The right amount." }, currency: str("Optional. The right three-letter currency."),
+      status: str("Optional. received | pending | transfer | statement only | payable", { enum: S.INCOME_STATUS.filter((x) => x !== "unsorted") }),
+      category: str("Optional.", { enum: S.CATEGORIES }), account: str("Optional. Where it landed."), reference: str("Optional. The payment's own transaction id."), note: str("Optional. One line.") }, ["bot", "id", "month", "reason"]) },
+  { name: "income_source", title: "Update an income source you look after",
+    description: "For the bot that owns an income source (Ledger, Sheet; Nova may too): say where its money lands (accounts: one or several, for example RouteNote's two PayPal accounts), whether it is active, blocked (with the reason) or not tracked, its category, and clear a needs_luke ask that no longer stands (send it empty). Only what you send changes. Luke sees it on the dashboard, Money.",
+    inputSchema: obj({ bot: BOT, source: str("The source's name or id, as income_status lists it."),
+      accounts: { type: "array", items: { type: "string" }, description: 'Where its money lands, 1 to 4 accounts, for example ["PayPal", "Wise"].' },
+      state: str("active | blocked | unknown | not_tracked", { enum: S.SOURCE_STATE }), reason: str("Why it is blocked (required with blocked), or empty to clear."),
+      category: str("Optional.", { enum: S.CATEGORIES }), needs_luke: str('What only Luke can do for it; send "" (empty) when nothing is needed any more.') }, ["bot", "source"]) },
+  { name: "record_spend", title: "Record a day's ad spend",
+    description: "FORGE (Nova may do it for him): ONE platform's spend for ONE day, exactly as the ad account shows it, in the account's own currency (never converted). 0 for a day with no ads. If you could not read it, send not_read with why (for example \"signed out\") instead of an amount: the dashboard lists it as missing and marks the month's total estimated. Sending the same day again with a new amount corrects it. The answer is the month so far against the USD 1,000 cap, worked out on the site with the team's fixed monthly rate: use that figure, never your own sum.",
+    inputSchema: obj({ bot: BOT, platform: str("Meta | Google | TikTok", { enum: S.SPEND_PLATFORMS }), account: str("The ad account's name as shown."),
+      date: str("The day, YYYY-MM-DD."), amount: { type: "number", description: "The day's spend as shown, for example 12.40. 0 for no ads." },
+      currency: str("The account's three-letter currency: USD, EUR..."), not_read: str("Only when you could not read the amount: why, in a few words.") }, ["bot", "platform", "date"]) },
+  { name: "log_growth", title: "Log a day's growth or song numbers",
+    description: "STEVE, ATLAS, KEVIN, LAURA: ONE call per platform (Growth: followers, views, the best post) or per song (Songs: Spotify streams, listeners, saves, playlist adds) for ONE day, numbers exactly as shown. The change in followers is worked out for you. Anything you could not read: leave it out and name it in gaps with why (TikTok views come a day late; Instagram has no daily views on the web): your duty is marked done, with gaps, never blocked. Sending the same numbers again does nothing; a later call for the same day fills in what was missing. Put your duty id (D-...) in duty if you have more than one duty today.",
+    inputSchema: obj({ bot: BOT, date: str("The day the numbers are for, YYYY-MM-DD."),
+      platform: str("For Growth: TikTok, Instagram, YouTube..."), account: str("For Growth: the account handle."),
+      followers: str("Followers as shown, for example 1240 or 1,240."), views: str("Views as shown."), best_post: str("Optional. The day's best post, in a few words."), best_post_link: str("Optional. Its https link."),
+      song: str("For Songs: the song's title."), streams: str("Spotify streams for that day."), listeners: str("Spotify listeners."), saves: str("Saves."), playlist_adds: str("Playlist adds."),
+      gaps: { type: "object", description: 'What could not be read, and why: {"views": "TikTok shows them a day late"}.', additionalProperties: { type: "string" } },
+      duty: str('Optional. Your duty id from my_day (it starts with "D-").') }, ["bot", "date"]) },
   { name: "income_check", title: "Say an account was checked",
     description: 'Call this once per account, every day, after you looked at it, EVEN WHEN NOTHING IS NEW. It is how the dashboard tells "checked, nothing came in" from "nobody looked". new_payments is how many new payments you found (each one also goes through submit_income).',
     inputSchema: obj({ bot: BOT, account: str('The account you checked: "Wise", "PayPal", "Statement emails", "RouteNote"...'),
@@ -294,17 +326,52 @@ export async function callTool(tool, args, ctx) {
         recorded: `${e.arrived || e.date} · ${e.payer} · ${e.currency} ${e.amount.toFixed(2)} · ${e.status} · ${e.account} · ${e.category}` + (e.arrived && e.arrived !== e.date ? ` (statement of ${e.date})` : ""),
         note: r.added ? "Recorded." : r.updated ? "This payment was already on the desk; its status was updated." : "This payment was already on the desk. Nothing was added twice." };
     }
+    case "fix_payment": {
+      const r = await S.fixIncome(store, now, roster, { by: me, id: args.id, month: args.month, reason: args.reason, date: args.date, payer: args.payer, amount: args.amount, currency: args.currency,
+        status: args.status, category: args.category, account: args.account, reference: args.reference, note: args.note });
+      const e = r.entry;
+      return { saved: r.fixed.length > 0, fixed: r.fixed, ...(r.fixed.length ? {} : { note: "Nothing was different: nothing changed." }),
+        now: `${e.arrived || e.date} · ${e.payer} · ${e.currency} ${e.amount.toFixed(2)} · ${e.status} · ${e.account} · ${e.category}` };
+    }
+    case "income_source": {
+      const src = await S.editSource(store, now, roster, { by: me, source: args.source, accounts: args.accounts, state: args.state, reason: args.reason, category: args.category, needs_luke: args.needs_luke });
+      return { saved: true, source: src.name, lands_in: src.lands, state: src.state, ...(src.blocker ? { reason: src.blocker } : {}), category: src.category, needs_luke: src.needsLuke || "nothing", shown_on: "badscandal.com/hq, Money" };
+    }
+    case "record_spend": {
+      const r = await S.recordSpend(store, now, roster, { by: me, platform: args.platform, account: args.account, date: args.date, amount: args.amount, currency: args.currency, not_read: args.not_read });
+      const e = r.entry;
+      /* the month so far as the site works it out (the team's fixed rate), read AFTER this row was saved */
+      const hq = ctx.hq ? await ctx.hq().catch(() => null) : null;
+      const cap = hq && hq.money ? hq.money.cap : null;
+      return { saved: r.added || r.updated, ...(r.duplicate ? { duplicate: true } : {}), ...(r.updated ? { updated: true } : {}),
+        recorded: `${e.platform} ${e.date}: ` + (e.amount != null ? `${e.currency} ${e.amount.toFixed(2)}` : `not read (${e.notRead})`),
+        month_to_date: cap ? { spent: `${cap.currency} ${cap.spent.toFixed(2)}`, cap: `${cap.currency} ${cap.amount}`, left: `${cap.currency} ${cap.left.toFixed(2)}`, status: cap.status,
+          rate: cap.rateUsed ? `${cap.rateUsed.value} USD per EUR (${cap.rateUsed.from})` : "no conversion needed", not_read: cap.notRead || [], estimated: !!cap.estimated }
+          : "not read just now: the team's sheet could not be read" };
+    }
+    case "log_growth": {
+      const prev = me !== "Claude" && args.platform && ctx.hq ? await ctx.hq().then((h) => { const g = h && h.growth ? h.growth.find((p) => String(p.platform).toLowerCase() === String(args.platform).trim().toLowerCase()) : null; return g && g.lastDay ? { date: g.lastDay, followers: g.followers } : null; }).catch(() => null) : null;
+      const r = await S.logGrowth(store, now, roster, { by: me, date: args.date, platform: args.platform, account: args.account, followers: args.followers, views: args.views, best_post: args.best_post, best_post_link: args.best_post_link,
+        song: args.song, streams: args.streams, listeners: args.listeners, saves: args.saves, playlist_adds: args.playlist_adds, gaps: args.gaps, duty: args.duty, prev });
+      if (r.duplicate) return { saved: false, duplicate: true, note: "Those numbers were already logged for that day. Nothing was added." };
+      return { saved: true, ...(r.row.change != null && r.row.kind === "growth" ? { change: r.row.change } : {}), ...(r.filled && r.filled.length ? { filled: r.filled } : {}), ...(r.replaced && r.replaced.length ? { corrected: r.replaced } : {}),
+        duty: r.duty, ...(r.gapText ? { gaps: r.gapText } : {}), shown_on: "badscandal.com/hq, Growth and Songs" };
+    }
     case "income_check": {
       const c = await S.incomeCheck(store, now, roster, { ...args, bot: me });
       return { saved: true, account: c.account, day: c.day, new_payments: c.new, note: c.new > 0 ? "Now make sure each of those payments went through submit_income." : "Recorded as checked, nothing new." };
     }
     case "income_status": {
       const i = await S.incomeState(store, now);
-      const line = (s) => ({ name: s.name, category: s.category, lands_in: s.lands, expected: s.cadence, owner: s.owner, state: s.verdict, why: s.why,
+      const line = (s) => ({ name: s.name, id: s.id, category: s.category, lands_in: s.lands, expected: s.cadence, owner: s.owner, state: s.verdict, why: s.why,
         last_payment: s.last ? `${s.last.date} ${s.last.currency} ${s.last.amount.toFixed(2)} (${s.last.status})` : "none logged", this_month: cur(s.monthTotal), ...(s.needsLuke ? { needs_luke: s.needsLuke } : {}) });
       return { month: i.month, received_this_month: cur(i.received), pending_this_month: cur(i.pending), payments_logged_this_month: i.count,
+        /* batch 4: the music's own money (no salary), what is owed and ready to pay out, statements under the payout line */
+        royalties_only_this_month: cur(i.royaltiesOnly), payable_this_month: cur(i.payable), statement_only_this_month: cur(i.statementOnly),
         accounts: i.accounts.map((a) => ({ name: a.name, owner: a.owner, checked_today: a.lastLook === today, last_checked: a.lastLook || "never", state: a.verdict })),
         sources: i.sources.map(line), problems: i.problems,
+        /* what you submitted yourself, with the id and month fix_payment needs */
+        your_payments: i.entries.filter((e) => e.by === me).slice(0, 15).map((e) => ({ id: e.id, month: (e.statement || e.date).slice(0, 7), line: `${e.date} · ${e.payer} · ${e.currency} ${e.amount.toFixed(2)} · ${e.status} · ${e.account} · ${e.category}` })),
         newest_payments: i.entries.slice(0, 15).map((e) => `${e.date} · ${e.payer} · ${e.currency} ${e.amount.toFixed(2)} · ${e.status} · ${e.account} · by ${e.by}`),
         /* in the account, not yet said what they are: counted as nothing until sorted (tool sort_payment) */
         unsorted: i.unsorted.map((e) => ({ id: e.id, month: e.date.slice(0, 7), line: `${e.date} · ${e.payer} · ${e.currency} ${e.amount.toFixed(2)} · ${e.account}`,

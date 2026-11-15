@@ -502,7 +502,13 @@
     $("capLeft").textContent = c.left >= 0 ? money(c.left, c.currency) + " left" : money(-c.left, c.currency) + " over";
     paintBar(c, "capFill2", "capWarn2", "capStop2");
     var msg = capMessage(c);
-    if (c.estimated) msg += " Billed: " + amounts(c.native) + (c.rate ? " (EUR counted at this month's average, 1 EUR = " + c.rate + " USD)." : " (no rate yet, EUR part not counted).");
+    /* batch 4 (15 Nov 2026): one figure, at the team's fixed rate; it says which rate, what is missing, and why it
+       is an estimate when it is one */
+    if (Object.keys(c.native || {}).some(function (k) { return k !== c.currency; })) msg += " Billed: " + amounts(c.native) + ".";
+    var rl = window.HQLib.capRateLine(c), ml = window.HQLib.capMissingLine(c);
+    if (rl) msg += " " + rl + ".";
+    if (ml) msg += " " + ml + ".";
+    if (c.estimated) msg += " Estimated: " + (c.estimatedWhy && c.estimatedWhy.length ? c.estimatedWhy.join("; ") : "something is missing") + ".";
     if (c.lastDay) msg += " Last day logged: " + day(c.lastDay) + ".";
     $("capMsg").textContent = msg;
     var src = sheet.money.metaSource, plat = c.byPlatform || {};
@@ -675,7 +681,7 @@
     else $("dutyList").innerHTML = cards.length ? L.sortWorkers(cards).map(function (w) {
       return '<article class="tile botcard" id="team-' + esc(L.slug(w.name)) + '"><div class="bhead"><h3>' + esc(w.name) + '</h3><span class="bstate ' + w.state + '">' + esc(L.workerLabel(w.state)) + "</span></div>" +
         (w.duties.length ? '<ul class="bduties">' + w.duties.map(function (d) {
-          return '<li class="' + (d.status === "blocked" || d.late ? "bad" : d.status === "done" ? "done" : "") + '"><span class="bt">' + esc(d.task) + (d.blocker ? "<small>Blocked: " + esc(d.blocker) + "</small>" : "") + '</span><span class="bw">' + esc(L.dutyWhen(d)) + "</span></li>"; }).join("") + "</ul>" : "") +
+          return '<li class="' + (d.status === "blocked" || d.late ? "bad" : d.status === "done" ? "done" : "") + '"><span class="bt">' + esc(d.task) + (d.blocker ? "<small>Blocked: " + esc(d.blocker) + "</small>" : "") + (d.gaps ? "<small>" + esc(window.HQLib.dutyGapsLine(d)) + "</small>" : "") + '</span><span class="bw">' + esc(L.dutyWhen(d)) + "</span></li>"; }).join("") + "</ul>" : "") +
         (w.last ? '<p class="blast"><b>' + esc(spAgo(w.last.lastAt)) + "</b> " + (w.last.link ? link(w.last.link, w.last.message) : esc(w.last.message)) + "</p>" : "") + "</article>";
     }).join("") : '<p class="empty">No duties for today yet. Nova sets them every morning at 08:05.</p>';
     drawFeed(live.ready ? live.feed : null, sheet.today);
