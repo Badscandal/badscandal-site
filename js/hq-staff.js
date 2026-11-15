@@ -862,16 +862,24 @@
   }
   function pipeCard(v) {
     var today = board.today, off = HQ.sample ? " disabled" : "", asking = ui.rel.ask && ui.rel.ask.id === v.id, past = !!v.date && v.date < today;
+    var advice = L.planAdvice(v.date, today, board.releases, { except: v.id }), bad = advice.filter(function (a) { return a.bad; });
+    var better = !v.date || bad.length ? L.suggestDates(today, board.releases, { except: v.id, n: 3 }) : [];
+    var pk = L.packLine(v, today), miss = (v.missing || []).length;
     return '<article class="tile relcard" id="releases-' + esc(safe(v.id)) + '"><div class="bhead"><div><h3>' + esc(v.title) + "</h3>" +
       '<p class="rwhen">' + esc(L.releaseWhen(v.date, today, true)) + "</p>" + dealHtml(v) + "</div>" + '<span class="pill">Draft</span></div>' +
       (ui.rel.note[v.id] ? '<p class="rdone" role="status">' + esc(ui.rel.note[v.id]) + "</p>" : "") +
-      (past ? '<p class="rwhere">' + esc(L.whereLine(v)) + "</p>" : "") +
-      /* its planned day, judged by the team's rule (14 Nov 2026): too close, too near another song, not a Friday */
-      planHtml(v, today) +
-      packHtml(v) +
+      (past ? '<p class="rstat">' + esc(L.whereLine(v)) + "</p>" : "") +
+      /* the overhaul: one line for the files (what is still missing, by name), the day's problems in red with
+         better days one tap away; everything filled in is under "See the files and details" */
+      '<p class="rstat' + (pk.attn ? " bad" : "") + '">' + esc(pk.filled + (miss ? " · still missing: " + pk.items.map(function (x) { return x.text; }).join(", ") + (pk.more ? " +" + pk.more + " more" : "") : " · ready to send")) + "</p>" +
+      advice.map(function (a) { return '<p class="dnote' + (a.bad ? " bad" : " q") + '">' + esc(a.text) + "</p>"; }).join("") +
+      (better.length ? '<div class="pchips"><span class="pchips-l">' + (v.date ? "Better days:" : "Suggested days:") + "</span>" + better.map(function (x) {
+        return '<button class="pchip' + (x.best ? " best" : "") + '" type="button" data-plan="use" data-id="' + esc(v.id) + '" data-date="' + esc(x.date) + '">' + esc(x.words) + "<small>" + esc(x.weeks + " weeks" + (x.note ? " · holidays" : "")) + "</small></button>";
+      }).join("") + "</div>" : "") +
       (asking ? relAsk(v) : '<div class="racts"><button class="sendbtn" type="button" data-rel="edit" data-id="' + esc(v.id) + '">Finish and send</button>' +
-        '<button class="copybtn" type="button" data-rel="cancel" data-id="' + esc(v.id) + '"' + off + ">Cancel the draft</button></div>") +
-      '<p class="ferr" role="alert">' + esc(ui.rel.err[v.id] || "") + "</p>" + relPack(v) + "</article>";
+        '<button class="linkbtn" type="button" data-rel="cancel" data-id="' + esc(v.id) + '"' + off + ">Cancel the draft</button></div>") +
+      '<p class="ferr" role="alert">' + esc(ui.rel.err[v.id] || "") + "</p>" +
+      relPack(v) + "</article>";
   }
   /* ---------- batch 3 (14 Nov 2026): the distributor's history, Luke's approvals, "ready to resubmit" ---------- */
   /* where the song is at the distributor, then its history folded (Drop's moderation log) */
@@ -914,27 +922,43 @@
         '<button class="copybtn" type="button" data-rel="no" data-id="' + esc(v.id) + '"' + (busy ? " disabled" : "") + ">Cancel</button></div></div>"
         : '<div class="mopts">' + (m.options || []).map(function (o, i) { return '<button class="copybtn" type="button" data-rel="resubmit" data-id="' + esc(v.id) + '" data-i="' + i + '"' + dis + ">" + esc(o) + "</button>"; }).join("") + "</div>") + "</div>";
   }
-  /* Upcoming: a song sent to the team. Where it is at (one line), its warnings (red: each one a fact
-     with a consequence), every step, then the files and details. */
+  /* Coming up: a song sent to the team (the overhaul, 15 Nov 2026). The card itself: its day, whose it is, a
+     progress bar and ONE status line (the most urgent problem, else the next step); Drop's "ready to resubmit?"
+     stays in sight because it waits on Luke. Everything else (the warnings, the distributor, every step, the
+     approvals, the files) folds behind "Steps and details", remembered per song. */
   function relCard(v) {
     var today = board.today, pill = L.upcomingPill(v, today), live = v.status === "scheduled" && !v.released, off = HQ.sample ? " disabled" : "";
     var acts = ['<button class="copybtn" type="button" data-rel="edit" data-id="' + esc(v.id) + '">Edit the details</button>'];
-    if (live) acts.push('<button class="copybtn" type="button" data-rel="date" data-id="' + esc(v.id) + '"' + off + ">Change the date</button>",
-      '<button class="copybtn" type="button" data-rel="cancel" data-id="' + esc(v.id) + '"' + off + ">Cancel release</button>");
-    var asking = ui.rel.ask && ui.rel.ask.id === v.id, warn = v.warnings || [], where = L.whereLine(v);
+    if (live) acts.push('<button class="linkbtn" type="button" data-rel="date" data-id="' + esc(v.id) + '"' + off + ">Change the date</button>",
+      '<button class="linkbtn" type="button" data-rel="cancel" data-id="' + esc(v.id) + '"' + off + ">Cancel release</button>");
+    var asking = ui.rel.ask && ui.rel.ask.id === v.id, warn = v.warnings || [], st = L.relStatus(v, today), pr = L.relProgress(v), g = L.stepGroups(v);
+    var allDone = v.released && v.counts && v.counts.total && v.counts.done === v.counts.total;
+    var stepList = function (list) { return '<ol class="rsteps" aria-label="Steps">' + list.map(function (s) { return relStep(v, s); }).join("") + "</ol>"; };
+    var steps = allDone ? '<p class="rnote">All ' + v.counts.total + " steps done.</p>"
+      : (g.open.length ? '<p class="bsub">Still to do (' + g.open.length + ")</p>" + stepList(g.open) : "") +
+        (g.done.length ? '<details class="bwhy" data-fold="done:' + esc(v.id) + '"' + (ui.rel.fold["done:" + v.id] ? " open" : "") + "><summary>Done or not ours (" + g.done.length + ")</summary>" + stepList(g.done) + "</details>" : "");
     return '<article class="tile relcard" id="releases-' + esc(safe(v.id)) + '"><div class="bhead"><div><h3>' + esc(v.title) + "</h3>" +
       '<p class="rwhen">' + esc(L.releaseWhen(v.date, today)) + "</p>" + dealHtml(v) + "</div>" +
       '<span class="' + (pill.bad ? "bstate late" : "pill" + (pill.rel ? " rel" : "")) + '">' + esc(pill.text) + "</span></div>" +
       (ui.rel.note[v.id] ? '<p class="rdone" role="status">' + esc(ui.rel.note[v.id]) + "</p>" : "") +
-      (where ? '<p class="rwhere">' + esc(where) + "</p>" : "") +
-      (warn.length ? '<ul class="rwarn" aria-label="Warnings">' + warn.map(function (w) { return "<li>" + esc(w) + "</li>"; }).join("") + "</ul>" : "") +
-      resubmitHtml(v) + storeHtml(v) +
-      /* out, and every step done: one line instead of ten (the steps are history now) */
-      (v.released && v.counts && v.counts.total && v.counts.done === v.counts.total ? '<p class="rnote">All ' + v.counts.total + " steps done.</p>"
-        : (v.steps || []).length ? '<ol class="rsteps" aria-label="Steps">' + v.steps.map(function (s) { return relStep(v, s); }).join("") + "</ol>" : "") +
-      approvalsHtml(v) + packHtml(v) +
+      (pr.total ? '<div class="rprog"><div class="rbar" role="progressbar" aria-valuemin="0" aria-valuemax="' + pr.total + '" aria-valuenow="' + pr.done + '" aria-label="' + esc(pr.text) + '"><i style="width:' + pr.pct + '%"></i></div><span>' + esc(pr.text) + "</span></div>" : "") +
+      '<p class="rstat' + (st.bad ? " bad" : "") + '">' + esc(st.text) + (st.more ? ' <span class="rmore">+' + st.more + " more</span>" : "") + "</p>" +
+      resubmitHtml(v) +
+      '<details class="rfold" data-fold="card:' + esc(v.id) + '"' + (ui.rel.fold["card:" + v.id] ? " open" : "") + "><summary>Steps and details</summary>" +
+      (warn.length > 1 ? '<ul class="rwarn" aria-label="Warnings">' + warn.map(function (w) { return "<li>" + esc(w) + "</li>"; }).join("") + "</ul>" : "") +
+      storeHtml(v) + steps + approvalsHtml(v) + packHtml(v) + relPack(v) + "</details>" +
       (asking && (ui.rel.ask.kind === "date" || ui.rel.ask.kind === "cancel") ? relAsk(v) : '<div class="racts">' + acts.join("") + "</div>") +
-      '<p class="ferr" role="alert">' + esc(ui.rel.err[v.id] || "") + "</p>" + relPack(v) + "</article>";
+      '<p class="ferr" role="alert">' + esc(ui.rel.err[v.id] || "") + "</p></article>";
+  }
+  /* Needs you (the overhaul): what on this tab waits on Luke, first; each one opens its card (or the message,
+     or Spotify for Artists). Nothing waiting: the line says so, quietly. */
+  function drawNow() {
+    var el = $("relNow");
+    if (!el) return;
+    var asks = L.upcomingAsks(board, board.today);
+    el.innerHTML = asks.length ? '<section class="tile relnow" aria-labelledby="relNowH"><h3 class="lblh" id="relNowH">Needs you (' + asks.length + ")</h3><ul>" + asks.map(function (x) {
+      return '<li><button class="relnow-i" type="button" data-now="' + esc(x.go) + '" data-id="' + esc(x.id) + '"' + (x.msg ? ' data-msg="' + esc(x.msg) + '"' : "") + "><span>" + esc(x.text) + '</span><span aria-hidden="true">›</span></button></li>';
+    }).join("") + "</ul></section>" : '<p class="relnow-ok">Nothing on this tab needs you right now.</p>';
   }
   /* ---------- Planning (14 Nov 2026, Luke: "a calender with team reccomendations … scheduled correctly well
      in advance … when i upload it should suggest dates") ----------
@@ -987,7 +1011,6 @@
     var sheet = HQ.sheet(), lists = L.releaseLists(board, sheet);
     relById = {}; board.releases.forEach(function (v) { relById[v.id] = v; });
     $("relSample").hidden = !HQ.sample;
-    $("relSub").textContent = L.stepsSummary(board.releaseSteps) || "Every song on its way out: its files and details, and each bot's step with its date.";
     /* a redraw must not take the caret out of the date field being picked */
     var act = document.activeElement, fk = act && act.getAttribute ? act.getAttribute("data-reldate") : null;
     $("relPipe").innerHTML = lists.pipeline.length ? lists.pipeline.map(pipeCard).join("") : '<p class="empty2">Nothing is being prepared right now. Start one with New song.</p>';
@@ -1006,6 +1029,7 @@
         return '<p class="rcanc"><b>' + esc(v.title) + "</b> · " + esc(v.date ? L.day(v.date) : "no release day") + "</p>"; }).join("") + "</details>" : "");
     drawSpotify();
     drawPlan();
+    drawNow();
     if (fk) { var el = $("releases").querySelector('[data-reldate="' + fk.replace(/[^a-z0-9]/gi, "") + '"]'); if (el) el.focus(); }
     return true;
   }
@@ -1103,7 +1127,8 @@
       reload();
     });
   });
-  function jumpTo(id) {
+  function jumpTo(id, open) {
+    if (open && relById[id]) { ui.rel.fold["card:" + id] = true; drawReleases(); }
     var el = $("releases-" + safe(id));
     if (!el) return;
     el.scrollIntoView({ block: "start" });
@@ -1118,6 +1143,15 @@
     drawReleases(); HQ.boardChanged();
     reload();
   }
+  /* Needs you: each item opens its card (unfolded), the message, or Spotify for Artists */
+  $("relNow").addEventListener("click", function (ev) {
+    var b = ev.target.closest && ev.target.closest("[data-now]");
+    if (!b) return;
+    var go = b.getAttribute("data-now"), id = b.getAttribute("data-id");
+    if (go === "message") { location.hash = "#messages/" + (b.getAttribute("data-msg") || ""); return; }
+    if (go === "spotify") { var sp = $("releases-spotify"); if (sp) sp.scrollIntoView({ block: "start" }); return; }
+    jumpTo(id, true);
+  });
   $("releases").addEventListener("click", function (ev) {
     var b = ev.target.closest && ev.target.closest("[data-rel]");
     if (!b || !board) return;
