@@ -186,7 +186,7 @@ test("/api/hq/data still answers as before through the shared loader (login, sam
   const s = await (await get("/api/hq/data?sample=1", { cookie })).json();
   assert.equal(s.sample, true); assert.equal(s.team.duties.total, 6); assert.equal(s.team.live.ready, true); assert.ok(s.money.cap.spent > 0); assert.ok(s.health && s.metaKey);
   assert.deepEqual(s.releases.map((r) => [r.song, !!r.desk]), [["Touch Me", true], ["Me Dá Seu Body", true], ["Slow Burn", true], ["Survivors", false]], "the made-up desk releases join the made-up sheet, one entry per song");
-  assert.deepEqual(s.songs.find((x) => x.song === "Touch Me").deal, { kind: "With a label", label: "Sample Records", split: "BADSCANDAL 50% · Sample Records 50%", distributor: "RouteNote", id: "touchme" }, "Songs says whose song it is");
+  assert.deepEqual(s.songs.find((x) => x.song === "Touch Me").deal, { kind: "With a label", label: "Sample Records", split: "badscandal 50% · Sample Records 50%", distributor: "RouteNote", id: "touchme" }, "Songs says whose song it is");
   assert.ok(!globalThis.__asked.includes("staff"), "the sample never opens the staff desk");
   assert.equal((await get("/api/hq/summary", { cookie })).status, 404);
 });
@@ -285,7 +285,7 @@ test("release pipeline: Luke's routes, the bots' four tools, refusals as sentenc
   const filled = await rel("release", { id, pack: { kind: "Self-release", artwork: "https://example.com/c.jpg", language: "English", explicit: "No", writers: "Sample Writer: music and lyrics", copyright: "℗ 2026 Sample · © 2026 Sample" } }, claude);
   assert.equal(filled.body.release.log[0].by, "Claude");
   const sent = await rel("release/send", { id });
-  assert.deepEqual([sent.status, sent.body.release.status, sent.body.release.steps.length, sent.body.already, sent.body.told], [200, "scheduled", 13, false, true]);
+  assert.deepEqual([sent.status, sent.body.release.status, sent.body.release.steps.length, sent.body.already, sent.body.told], [200, "scheduled", 9, false, true]);
   assert.equal((await rel("release/send", { id })).body.already, true);
   /* ONE whole release for the page (the board's copy has no lyrics and no log) */
   const whole = await api("release?id=" + id, { headers: { cookie } });
@@ -300,11 +300,11 @@ test("release pipeline: Luke's routes, the bots' four tools, refusals as sentenc
   assert.deepEqual(list.releases.map((r) => r.song), ["Night Drive"]);
   assert.deepEqual(list.releases[0].your_steps.map((s) => s.step), ["upload", "approved"]);
   assert.ok(!list.releases[0].all_steps, "only Nova and Claude see every step");
-  assert.equal((await tool("releases", { bot: "Nova" })).data.releases[0].all_steps.length, 13);
+  assert.equal((await tool("releases", { bot: "Nova" })).data.releases[0].all_steps.length, 9);
   assert.deepEqual((await tool("releases", { bot: "x" }, "Bearer " + ENV.STAFF_CLAUDE_KEY)).data.releases.map((r) => r.song).sort(), ["Hidden Draft", "Night Drive"]);
   const pack = (await tool("release_pack", { bot: "Verse", song: "night drive" })).data;
   assert.equal(pack.pack.length, 29); assert.equal(pack.pack.find((f) => f.field === "wav").value, "https://example.com/n.wav");
-  assert.match(pack.pack.find((f) => f.field === "lyrics").state, /missing \(needed for "Lyrics live"\)/);
+  assert.match(pack.pack.find((f) => f.field === "lyrics").state, /missing \(needed for "Lyrics live on Musixmatch"\)/);
   assert.match((await tool("release_pack", { bot: "Drop", song: "Hidden Draft" })).content[0].text, /There is no release called "Hidden Draft"\. The releases on the desk are: Night Drive \(nightdrive\)\./);
   const wrongBot = await tool("release_step", { bot: "Atlas", song: "Night Drive", step: "upload", status: "done" });
   assert.equal(wrongBot.isError, true); assert.match(wrongBot.content[0].text, /is Drop's step\. Only Drop, Nova, Claude or Luke can mark it/);
@@ -313,21 +313,22 @@ test("release pipeline: Luke's routes, the bots' four tools, refusals as sentenc
   assert.deepEqual([done.saved, done.step, done.state], [true, "upload", "done"]);
   assert.equal((await tool("release_fill", { bot: "Drop", song: "Night Drive", field: "isrc", value: "SAMPLE0000009" })).data.value, "SAMPLE0000009");
   assert.match((await tool("release_fill", { bot: "Drop", song: "Night Drive", field: "lyrics", value: "la la" })).content[0].text, /Lyrics is filled by Luke or Claude only, not by you/);
-  assert.match((await tool("release_step", { bot: "Drop", song: "Night Drive" })).content[0].text, /^Missing: step\./);
+  assert.match((await tool("release_step", { bot: "Drop", song: "Night Drive" })).content[0].text, /^Missing: step, status\./);
   const myDay = (await tool("my_day", { bot: "Drop" })).data;
   assert.deepEqual(myDay.release_steps.map((s) => s.step), ["approved"]);
   assert.match(myDay.next, /^You have 1 open release step; the soonest is "Approved by RouteNote \(nothing waiting\)" for Night Drive/);
-  /* batch 3: Steve posts the Instagram teaser, once Luke has approved the clips */
-  assert.match((await tool("my_day", { bot: "Steve" })).data.next, /^Your release step is waiting for Luke to approve the teaser clips: nothing to do on it yet\./);
-  assert.deepEqual((await tool("team_board", { bot: "Nova" })).data.releases, [{ song: "Night Drive", date: (await tool("releases", { bot: "Nova" })).data.releases[0].release_day, done: "1 of 13", late: 0, blocked: 0, late_steps: [], warnings: [] }]);
+  /* 15 Nov 2026: Forge's ads wait for Webmaster's song page (the ads link to it) */
+  assert.match((await tool("my_day", { bot: "Forge" })).data.next, /^Your release step is waiting for Webmaster's song page \(badscandal\.com\/<song>\) to be live: the ads link to it: nothing to do on it yet\./);
+  assert.match((await tool("release_step", { bot: "Forge", song: "Night Drive", step: "ads", status: "done" })).content[0].text, /is waiting for "Song page live on badscandal\.com" \(Webmaster\).*The ads link to the song page/);
+  assert.deepEqual((await tool("team_board", { bot: "Nova" })).data.releases, [{ song: "Night Drive", date: (await tool("releases", { bot: "Nova" })).data.releases[0].release_day, done: "1 of 9", late: 0, blocked: 0, late_steps: [], warnings: [] }]);
   const nr = (await tool("luke_briefing", { bot: "Alfred" })).data.next_release;
   assert.equal(nr.song, "Night Drive", "with the sheet unread, the desk's own next release…");
   assert.match(nr.source, /^the desk only: the sheet's Releases tab was not read/, "…saying the sheet's own list could not be checked");
 
   /* Luke marks a step, moves the date, cancels */
-  const step = await rel("release/step", { id, step: "teasers", status: "done" });
-  assert.equal(step.body.release.steps.find((s) => s.key === "teasers").by, "Luke");
-  assert.equal((await rel("release/step", { id, step: "teasers", status: "nope" })).status, 400);
+  const step = await rel("release/step", { id, step: "video", status: "done" });
+  assert.equal(step.body.release.steps.find((s) => s.key === "video").by, "Luke");
+  assert.equal((await rel("release/step", { id, step: "video", status: "nope" })).status, 400);
   const moved = await rel("release/date", { id, date: day(37) });
   assert.deepEqual([moved.body.moved, moved.body.release.date, moved.body.release.steps[0].due], [true, day(37), done.due.slice(-11, -1)]);
   /* batch 3: Luke's approval (Luke only: never Claude's key), and a step's real done day */
@@ -338,7 +339,7 @@ test("release pipeline: Luke's routes, the bots' four tools, refusals as sentenc
   const dn = await rel("release/step", { id, step: "lyrics", status: "done", done_on: day(-1) });
   assert.equal(dn.body.release.steps.find((s) => s.key === "lyrics").doneOn, day(-1));
   const b = await (await api("board", { headers: { cookie } })).json();
-  assert.equal(b.packFields.length, 29); assert.equal(b.releaseSteps.length, 13); assert.ok(Array.isArray(b.answered));
+  assert.equal(b.packFields.length, 29); assert.equal(b.releaseSteps.length, 9); assert.ok(Array.isArray(b.answered));
   assert.equal(b.releases[0].id, "nightdrive"); assert.deepEqual([b.releases[0].slim, b.releases[0].log], [true, []]); assert.equal(b.staff.find((w) => w.name === "Drop").releaseSteps[0].key, "approved");
   assert.ok(b.messages.some((m) => m.to === "all" && m.from === "HQ" && /^New release from Luke: Night Drive/.test(m.text) && m.seen === null));
   const gone = await rel("release/cancel", { id }, claude);

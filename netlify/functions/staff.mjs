@@ -169,7 +169,7 @@ async function api(req, context, path) {
   if (path === "board" && req.method === "GET") {
     if (sample) return json(200, { sample: true, ...sampleBoard(now) });
     const st = stores(context);
-    await S.upgradeReleases(st.desk, now).catch(() => null); /* batch 3: steps added since a release was sent */
+    await S.upgradeReleases(st.desk, now).catch(() => null); /* releases sent before the pipeline changed (15 Nov 2026) */
     const [desk, hqAns] = await Promise.all([S.loadDesk(st.desk, now), hqLoader(st)().catch(() => null)]);
     /* the board hands Claude every message, so it counts as Claude having READ them (11 Nov 2026, review:
        a round that reads the desk this way left Luke's answers to Claude "Not read yet" for good) */

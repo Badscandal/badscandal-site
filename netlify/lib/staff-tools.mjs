@@ -14,7 +14,7 @@ const obj = (properties, required) => ({ type: "object", properties, required, a
 /* Each line with the bots it is for (null = everyone). /mcp gives every line (INSTRUCTIONS, unchanged);
    /mcp/<bot> gives that bot the shared lines and its own (instructionsFor, batch 5). */
 const INSTRUCTION_LINES = [
-  [null, "This is the BADSCANDAL HQ staff desk: the one place where the bot team, Claude and Luke leave word for each other. It feeds Luke's dashboard at badscandal.com/hq."],
+  [null, "This is the badscandal HQ staff desk: the one place where the bot team, Claude and Luke leave word for each other. It feeds Luke's dashboard at badscandal.com/hq."],
   [null, "Every call needs `bot`: your own team name. Start every run with my_day. When you start or finish a duty, or get stuck, call post_update."],
   [null, "Rules: never write a password, login code, key, card or bank account number here. Never guess a number: if you could not see it, say so with status \"blocked\". Every amount keeps the currency it was paid in. Only Luke approves money, logins, account settings and public posts."],
   [null, "Your T- tasks (open_tasks in my_day): when one is finished, call task_update with status done (or blocked, with what is needed); daily D- duties go through post_update."],
@@ -28,9 +28,8 @@ const INSTRUCTION_LINES = [
   ["Atlas", "Atlas: send the Spotify pitch the same day the song shows in Spotify for Artists; don't wait for its planned day. Before you send it, improve Luke's words from the pack (mood, instruments, story): keep his meaning and make it clear and strong."],
   ["Laura", "Laura: when the pack has a visualiser link, upload it to YouTube for the release and write its description like the other visualisers."],
   ["Webmaster", "Webmaster: make each song page (badscandal.com/<song>) before the song comes out, in the order the songs come out: a week after the previous song's release day. The home page shows a song as Out now for 7 days after its release day, then switches to the next upcoming song."],
-  ["Verse", "Verse: the lyrics, live by their step's day. Only Luke writes them into the pack."],
+  ["Verse", "Verse: the lyrics go on Musixmatch only once the song is out and shows there. Your lyrics step waits until the release day; from that day check Musixmatch every day and add Luke's approved text (the pack's lyrics) the day the song appears. A song not on Musixmatch yet is not a block. Only Luke writes the lyrics into the pack."],
   /* batch 3 (14 Nov 2026) */
-  ["Kevin Steve Laura", "Kevin (TikTok), Steve (Instagram), Laura (YouTube): post the teaser once Luke has approved the clips (your step waits until then), on your step's day; set that day with release_step due if it should be another one, and mark it done with the post's link."],
   [null, "release_step: put the post, store page or video in link, and when the work was done on an earlier day, that day in done_on (YYYY-MM-DD)."],
   ["Drop", "Drop: keep where each song is at the distributor with store_status (uploaded, in moderation, rejected with RouteNote's reason, resubmitted, approved, delivered, live). After a rejection, once it is fixed, ask Luke with store_status ready_to_resubmit: he answers Yes or Not yet."],
   ["Atlas Verse", "Atlas (the pitch) and Verse (the final lyrics): ask Luke for his approval with send_message and approval; release_pack shows what he approved, when, and the exact text. Never treat anything else as his approval."],
@@ -42,6 +41,10 @@ const INSTRUCTION_LINES = [
   [null, "A duty you finish before Nova has put today's duty rows on the board still counts: post_update with status done as usual, and it is marked done once the row appears."],
   ["Nova", "Nova: reset today's duty rows at 07:00 São Paulo, before Ledger's 07:30 run, so every bot finds its row."],
   ["Alfred", "Alfred: for a short message use luke_short_briefing (the cap, income, the top 3 decisions by deadline, every sign-in Luke has to do); luke_briefing is the full one."],
+  /* the pipeline, 15 Nov 2026 (Luke) */
+  [null, "The artist name is badscandal, all lowercase, everywhere: store details, featuring, copyright lines, captions, messages. Never Badscandal or BADSCANDAL."],
+  ["Forge Webmaster", "Forge and Webmaster: every ad links to the song's own page, badscandal.com/<song>, which carries the Meta pixel (HQ's Pages shows who clicked and what it cost); never straight to Spotify. Forge's ad step waits until Webmaster's song page is live."],
+  [null, "There are no teaser steps on releases any more: teasers will get their own place later."],
 ];
 export const INSTRUCTIONS = INSTRUCTION_LINES.map((l) => l[1]).join("\n");
 
@@ -165,14 +168,13 @@ export const TOOLS = [
     description: "The whole pack of ONE release: every field with its label (the master WAV link, the artwork link, the lyrics in full, the writers, the details for RouteNote, the pitch notes, ISRC, UPC...) and every step with its owner, due date and state. Use it before you work on a release step: everything you need should be here. If something you need is missing: mark your step blocked with release_step, naming the field, and send Luke ONE message naming the field (only once, not every run).",
     inputSchema: obj({ bot: BOT, song: str('The song\'s title or its id, for example "Me Dá Seu Body" or "medaseubody". Accents and capitals do not matter.') }, ["bot", "song"]) },
   { name: "release_step", title: "Mark one of my release steps",
-    description: "Mark ONE of YOUR OWN steps of a release (from my_day or releases). status working = you started it. status done = it is really done in the store or on the platform (uploaded, approved, pitched, live), NOT \"started\" and NOT \"I asked someone\"; put the link that proves it in link when there is one. status blocked = you cannot go on: say in note exactly what is needed and from whom. status todo = undo a mistake. status skipped = the step does not apply to this release (Nova only, with the reason in note). A step that is \"waiting\" (the pitch, until the song shows in Spotify for Artists) cannot be marked done yet. The step spotify (Showing as upcoming in Spotify for Artists) is done by Atlas's spotify_upcoming report, not by this tool (the staff guide's Atlas part names the only two exceptions). Never mark another bot's step (Nova only: when the owner told you it is done and cannot reach the desk; say so in the note). Luke's own step (teasers) is his approval: only Luke marks it done. This also writes a line in the live log Luke sees.",
+    description: "Mark ONE of YOUR OWN steps of a release (from my_day or releases). status working = you started it. status done = it is really done in the store or on the platform (uploaded, approved, pitched, live), NOT \"started\" and NOT \"I asked someone\"; put the link that proves it in link when there is one. status blocked = you cannot go on: say in note exactly what is needed and from whom. status todo = undo a mistake. status skipped = the step does not apply to this release (Nova only, with the reason in note). A step that is \"waiting\" (the pitch, until the song shows in Spotify for Artists; the ads, until the song page is live; the lyrics, until the release day) cannot be marked done yet. The step spotify (Showing as upcoming in Spotify for Artists) is done by Atlas's spotify_upcoming report, not by this tool (the staff guide's Atlas part names the only two exceptions). Never mark another bot's step (Nova only: when the owner told you it is done and cannot reach the desk; say so in the note). This also writes a line in the live log Luke sees.",
     inputSchema: obj({ bot: BOT, song: str("The song's title or its id."),
       step: str(`Which step: ${S.RELEASE_STEPS.map((s) => `${s.key} (${s.label}, ${s.owner})`).join("; ")}.`, { enum: S.RELEASE_STEPS.map((s) => s.key) }),
-      status: str("working | done | blocked | todo | skipped (skipped: Nova only). Leave it out only when you set due alone.", { enum: S.STEP_STATUS }),
+      status: str("working | done | blocked | todo | skipped (skipped: Nova only).", { enum: S.STEP_STATUS }),
       note: str("Optional, except with blocked: then say exactly what is needed and from whom. One or two lines, no passwords or codes."),
       link: str("Optional. An https link that shows it is done (the store page, the pitch, the post, the video, the song page). It is kept and shown to everyone."),
-      done_on: str("Optional, only with status done: the day it was really done, YYYY-MM-DD, when that was before today (for example the upload was done before the pack reached the desk)."),
-      due: str("Only for a step with its own day (the teaser posts): the day you will post it, YYYY-MM-DD, up to the release day. Your step, or Nova for anyone.") }, ["bot", "song", "step"]) },
+      done_on: str("Optional, only with status done: the day it was really done, YYYY-MM-DD, when that was before today (for example the upload was done before the pack reached the desk).") }, ["bot", "song", "step", "status"]) },
   { name: "release_fill", title: "Fill one field of a release pack",
     description: `Fill ONE field of a release pack that you are responsible for, once you have the real value: ${S.PACK_FIELDS.filter((f) => f.fill.length).map((f) => `${f.key} (${f.short}): ${f.fill.join(" or ")}`).join("; ")}. Nova may fill any of these. Copy the value exactly as the store or platform shows it; links must start with https://. Every other field is filled by Luke on the dashboard: if one is wrong or missing, send Luke a message.`,
     inputSchema: obj({ bot: BOT, song: str("The song's title or its id."),
@@ -250,7 +252,8 @@ const BUILT_IN_GUIDE = "The staff guide has not been loaded onto the desk yet. U
    Spotify for Artists): never late */
 /* the same words in my_day, releases and release_pack (11 Nov 2026, review) */
 const WAIT_SPOTIFY = "the song to show as upcoming in Spotify for Artists";
-const waitFor = (s) => (s.waitingFor === "spotify" || !s.waitingFor ? WAIT_SPOTIFY : s.waitingFor === "teasers" ? "Luke to approve the teaser clips" : `the step "${(S.RELEASE_STEPS.find((x) => x.key === s.waitingFor) || {}).label || s.waitingFor}"`);
+const WAIT_OTHER = { page: "Webmaster's song page (badscandal.com/<song>) to be live: the ads link to it", release: "the release day: then check Musixmatch every day and add the lyrics the day the song shows there" };
+const waitFor = (s) => (s.waitingFor === "spotify" || !s.waitingFor ? WAIT_SPOTIFY : WAIT_OTHER[s.waitingFor] ? WAIT_OTHER[s.waitingFor] : `the step "${(S.RELEASE_STEPS.find((x) => x.key === s.waitingFor) || {}).label || s.waitingFor}"`);
 const SPOT_HOW = "done by your spotify_upcoming report, not by release_step";
 const stepState = (s) => (s.status === "done" ? "done" : s.status === "skipped" ? "skipped" : s.status === "blocked" ? "blocked" : s.waiting ? "waiting" : s.late ? "late" : s.status === "working" ? "working" : "to do");
 const when = (d) => (d ? `${S.dayWords(d)} (${d})` : "no date yet");
@@ -288,8 +291,8 @@ export async function callTool(tool, args, ctx) {
   const config = ctx.role === "claude" ? null : await S.getConfig(store);
   if (config && !config.botsOn) throw new S.StaffError("Luke has switched the bots' connector off. Stop, and tell Nova.", "off");
   await S.touchSeen(store, now, me, tool.name);
-  /* releases sent before a step existed get it before anyone reads them (batch 3: the teaser posts); one
-     read when nothing is missing, and never a reason to fail the call */
+  /* releases sent before the pipeline changed are brought up to date before anyone reads them (15 Nov
+     2026: no teaser steps, lyrics after the release); one read when nothing is old, and never a reason to fail the call */
   await S.upgradeReleases(store, now).catch(() => null);
   /* "read" (V6): only the tools that hand over the caller's messages say it has read them. The marker it
      had before is read first: my_day and Alfred's luke_briefing hand over everything written since then

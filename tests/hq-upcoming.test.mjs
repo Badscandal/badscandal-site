@@ -14,16 +14,18 @@ const rel = (o = {}) => ({ id: "night", title: "Night Drive", date: "2026-12-11"
   steps: [step("upload", "Uploaded to RouteNote with the release date", "Drop", "2026-11-13", { status: "done", by: "Drop" }),
     step("spotify", "Showing as upcoming in Spotify for Artists", "Atlas", "2026-11-26"),
     step("pitch", "Spotify pitch sent", "Atlas", "2026-11-27", { waiting: true, waitingText: "waiting: the song is not in Spotify for Artists yet" }),
-    step("teasers", "Teaser clips approved for posting", "Luke", "2026-12-08")], ...o });
+    step("video", "Video scheduled on YouTube", "Laura", "2026-12-04")], ...o });
 
 test("relStatus: one line, the most urgent first: a warning (with how many more), else the next step someone can do", () => {
   assert.deepEqual(L.relStatus(rel({ warnings: ["Lyrics live is 2 days late (Verse)", "Sent 12 days before release"] }), TODAY),
     { text: "Lyrics live is 2 days late (Verse)", bad: true, more: 1 });
   /* no warnings: the soonest open step that isn't waiting */
   assert.deepEqual(L.relStatus(rel(), TODAY), { text: "Next: Spotify for Artists · Atlas · Thu 26 Nov", bad: false, more: 0 });
-  /* Luke's own step says You */
-  const mine = rel({ steps: [step("teasers", "Teaser clips approved for posting", "Luke", "2026-11-20")] });
-  assert.equal(L.relStatus(mine, TODAY).text, "Next: teaser clips · You · Fri 20 Nov");
+  const vid = rel({ steps: [step("video", "Video scheduled on YouTube", "Laura", "2026-11-20")] });
+  assert.equal(L.relStatus(vid, TODAY).text, "Next: video · Laura · Fri 20 Nov");
+  /* the lyrics wait for the release day (15 Nov 2026) */
+  const ly = rel({ steps: [step("lyrics", "Lyrics live on Musixmatch", "Verse", "2026-12-18", { waiting: true, waitingText: "waiting: starts on the release day, once the song shows on Musixmatch" })] });
+  assert.equal(L.relStatus(ly, TODAY).text, "Waiting: starts on the release day, once the song shows on Musixmatch");
   /* a late step with no warning (an old copy): red, with how late */
   const late = rel({ steps: [step("lyrics", "Lyrics live", "Verse", "2026-11-12")] });
   assert.deepEqual(L.relStatus(late, TODAY), { text: "Late: lyrics · Verse · 3 days", bad: true, more: 0 });
@@ -56,9 +58,9 @@ test("stepGroups: what is still to do (soonest first, problems on top) apart fro
 test("upcomingAsks: what on this tab waits on Luke, each with where it goes", () => {
   const board = {
     today: TODAY,
-    releases: [rel({ steps: [step("teasers", "Teaser clips approved for posting", "Luke", "2026-11-20")] }),
-      rel({ id: "slow", title: "Slow Fade", date: "2026-12-25", steps: [step("teasers", "Teaser clips approved for posting", "Luke", "2026-12-22")] }),
-      rel({ id: "old", title: "Old One", date: "2026-11-01", released: true, steps: [step("teasers", "Teaser clips approved for posting", "Luke", "2026-10-29")] }),
+    releases: [rel(),
+      rel({ id: "slow", title: "Slow Fade", date: "2026-12-25" }),
+      rel({ id: "old", title: "Old One", date: "2026-11-01", released: true }),
       { id: "surv", title: "Survivors", status: "draft", steps: [] }],
     messages: [
       { id: "m1", from: "Drop", to: "Luke", ask: "resubmit", release: "night", resolved: null, needs: "decision", text: "Resubmit?" },
@@ -69,12 +71,8 @@ test("upcomingAsks: what on this tab waits on Luke, each with where it goes", ()
   assert.deepEqual(L.upcomingAsks(board, TODAY), [
     { kind: "resubmit", id: "night", text: "Night Drive: Drop asks whether to resubmit it to the distributor", go: "card" },
     { kind: "approval", id: "slow", text: "Slow Fade: Atlas asks you to approve the pitch", go: "message", msg: "m2" },
-    { kind: "step", id: "night", text: "Night Drive: your teaser clips, due Fri 20 Nov", go: "card" },
     { kind: "spotify", id: "velvet", text: "Velvet Night is in Spotify for Artists: say what it is", go: "spotify" },
-  ], "Slow Fade's teasers are 37 days off: not yet; an out song and a draft ask nothing");
-  /* late: said as late */
-  const late = { today: TODAY, releases: [rel({ steps: [step("teasers", "Teaser clips approved for posting", "Luke", "2026-11-13")] })], messages: [] };
-  assert.equal(L.upcomingAsks(late, TODAY)[0].text, "Night Drive: your teaser clips are 2 days late");
+  ], "an out song and a draft ask nothing; no release step is Luke's (the teaser step went, 15 Nov 2026)");
   assert.deepEqual(L.upcomingAsks({ today: TODAY, releases: [], messages: [] }, TODAY), []);
   assert.deepEqual(L.upcomingAsks(null, TODAY), []);
 });

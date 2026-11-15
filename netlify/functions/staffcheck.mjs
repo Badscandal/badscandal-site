@@ -20,7 +20,7 @@ export default async () => {
   const now = Date.now();
   const desk = getStore({ name: "staff", consistency: "strong" }), cache = getStore("meta-cache");
   try {
-    await S.upgradeReleases(desk, now).catch(() => null); /* batch 3: the teaser posts on releases already sent */
+    await S.upgradeReleases(desk, now).catch(() => null); /* releases sent before the pipeline changed (15 Nov 2026: no teaser steps, lyrics after the release) */
     const [d, hqAns] = await Promise.all([S.loadDesk(desk, now), loadHq({ cache, desk, env: (k) => Netlify.env.get(k), now, fresh: true }).catch(() => null)]);
     const hq = hqAns && hqAns.team ? hqAns : null;
     const r = S.checkReport({ desk: d, hq, hqState: hqAns || { connected: false }, now });

@@ -52,7 +52,7 @@ test("deal: a label release the label delivers has its RouteNote upload and appr
   const r = await sent(d, "Slow Burn", "2026-11-20", LABEL); /* 8 days out: every early step is due today */
   assert.deepEqual(["upload", "approved"].map((k) => [step(r, k).status, step(r, k).note]), [["skipped", "The label delivers this one"], ["skipped", "The label delivers this one"]]);
   const later = S.releaseView((await S.listReleases(d))[0], "2026-11-15");
-  assert.deepEqual([step(later, "upload").late, step(later, "upload").skipped, later.counts.total, later.counts.skipped], [false, true, 11, 2], "skipped is never late and never counted as a step to do");
+  assert.deepEqual([step(later, "upload").late, step(later, "upload").skipped, later.counts.total, later.counts.skipped], [false, true, 7, 2], "skipped is never late and never counted as a step to do");
   assert.notEqual(later.next.key, "upload");
   const b = S.board(await S.loadDesk(d, NOW + 3 * DAY), NOW + 3 * DAY, null);
   assert.deepEqual(b.staff.find((w) => w.name === "Drop").releaseSteps, []);
@@ -76,7 +76,7 @@ test("skipped: only Luke, Claude or Nova, always with a note; never late, never 
   const x = await S.setStep(d, NOW, R, { by: "Nova", id: r.id, step: "video", status: "skipped", note: "No video for this one" });
   assert.deepEqual([step(x, "video").status, step(x, "video").by], ["skipped", "Nova"]);
   const v = S.releaseView(x, "2026-11-19");
-  assert.deepEqual([step(v, "video").late, v.counts.total, v.counts.skipped], [false, 12, 1]);
+  assert.deepEqual([step(v, "video").late, v.counts.total, v.counts.skipped], [false, 8, 1]);
   const b = S.board(await S.loadDesk(d, NOW + 7 * DAY), NOW + 7 * DAY, null);
   assert.deepEqual(b.staff.find((w) => w.name === "Laura").releaseSteps.filter((s) => s.key === "video"), [], "a skipped step is not Laura's to do");
   assert.equal((await S.listUpdates(d, NOW, 1)).find((u) => u.bot === "Nova").status, "info", "a skip is a plain line in the live log, never a done");
@@ -196,19 +196,21 @@ test("the pitch WAITS while the song is not in Spotify for Artists, and is an or
   assert.equal(S.releaseView((await S.listReleases(d))[0], "2026-11-13").steps.find((s) => s.key === "pitch").late, true, "and late from tomorrow");
   /* a release from before the Spotify step: its pitch never waits */
   const old = { id: "o", title: "Old", date: "2026-11-25", status: "scheduled", pack: FULL, steps: S.scheduleSteps("2026-11-25", "2026-11-01").steps.filter((s) => s.key !== "spotify" && !s.key.startsWith("teaser_")) };
-  assert.deepEqual([old.steps.length, S.releaseView(old, TODAY).steps.find((s) => s.key === "pitch").late], [9, true]);
+  assert.deepEqual([old.steps.length, S.releaseView(old, TODAY).steps.find((s) => s.key === "pitch").late], [8, true]);
 });
 
 /* ---------- V5: warnings ---------- */
 test("warnings: each sentence, most urgent first", () => {
   const S2 = (k, o) => ({ [k]: o });
   /* a late step */
-  assert.deepEqual(warn(made("2026-12-05", "2026-11-01", { set: S2("lyrics", { due: "2026-11-10" }) })), ["Lyrics live is 2 days late (Verse)"]);
-  assert.deepEqual(warn(made("2026-12-05", "2026-11-01", { set: S2("lyrics", { due: "2026-11-11" }) })), ["Lyrics live is 1 day late (Verse)"]);
+  assert.deepEqual(warn(made("2026-12-05", "2026-11-01", { set: S2("video", { due: "2026-11-10" }) })), ["Video scheduled on YouTube is 2 days late (Laura)"]);
+  assert.deepEqual(warn(made("2026-12-05", "2026-11-01", { set: S2("video", { due: "2026-11-11" }) })), ["Video scheduled on YouTube is 1 day late (Laura)"]);
+  /* the lyrics wait for the release day (15 Nov 2026): never late before it, whatever their day says */
+  assert.deepEqual(warn(made("2026-12-05", "2026-11-01", { set: S2("lyrics", { due: "2026-11-10" }) })), []);
   /* a blocked step */
   assert.deepEqual(warn(made("2026-12-05", "2026-11-01", { set: S2("upload", { status: "blocked", note: "Needs the cover" }) })), ["Uploaded to RouteNote with the release date is blocked (Drop): Needs the cover"]);
   /* something missing that a step needs within 3 days */
-  assert.deepEqual(warn(made("2026-11-24", "2026-11-01", { pack: FULL, set: S2("spotify", { status: "done" }) })).filter((w) => /missing/.test(w)), ["Mood, instruments and the song in two lines are missing and Spotify pitch sent was due Tue 10 Nov", "Lyrics are missing and Lyrics live is due Sat 14 Nov"] /* most urgent first: the pitch was due first (14 Nov 2026) */);
+  assert.deepEqual(warn(made("2026-11-24", "2026-11-01", { pack: FULL, set: S2("spotify", { status: "done" }) })).filter((w) => /missing/.test(w)), ["Mood, instruments and the song in two lines are missing and Spotify pitch sent was due Tue 10 Nov"] /* the lyrics are needed after the release now (15 Nov 2026) */);
   assert.deepEqual(warn(made("2026-12-05", "2026-11-01", { pack: { ...FULL, lyrics: "la", instruments: "i" }, set: { spotify: { status: "done" }, pitch: { due: "2026-11-14" } } })), ["Mood and the song in two lines are missing and Spotify pitch sent is due Sat 14 Nov"]);
   /* not in Spotify for Artists, 14 days or fewer before release */
   const s14 = made("2026-11-26", "2026-11-01");
@@ -228,8 +230,8 @@ test("warnings: each sentence, most urgent first", () => {
   const noSplit = warn(made("2026-12-30", TODAY, { pack: { ...LABEL, split: "", lyrics: "la", mood: "m", instruments: "i", story: "s" }, sched: { labelDelivers: true } }));
   assert.deepEqual(noSplit, ["A label release with no split recorded: write down who owns what (us and Sample Records)"]);
   /* order: blocked before late before missing */
-  const many = warn(made("2026-11-25", "2026-11-01", { pack: FULL, set: { approved: { status: "blocked", note: "cover" }, upload: { due: "2026-11-10" } } }));
-  assert.deepEqual(many.map((w) => w.split(" ")[0]), ["Approved", "Uploaded", "Not", "Lyrics"]);
+  const many = warn(made("2026-11-25", "2026-11-01", { pack: FULL, set: { approved: { status: "blocked", note: "cover" }, upload: { due: "2026-11-10" }, spotify: { status: "done" }, pitch: { due: "2026-11-14" } } }));
+  assert.deepEqual(many.map((w) => w.split(" ")[0]), ["Approved", "Uploaded", "Mood,"]);
   assert.deepEqual(warn({ ...made("2026-11-25", "2026-11-01"), status: "draft" }), [], "a draft has no warnings");
 });
 
@@ -388,7 +390,7 @@ test("team_board: each release lists its late steps and its warnings", async () 
   const rel = (await call(d, "team_board", { bot: "Nova" })).releases[0];
   assert.deepEqual(rel.late_steps, ["Uploaded to RouteNote with the release date (Drop)", "Approved by RouteNote (nothing waiting) (Drop)", "Showing as upcoming in Spotify for Artists (Atlas)"]);
   assert.deepEqual(rel.warnings, ["Uploaded to RouteNote with the release date is 8 days late (Drop)", "Approved by RouteNote (nothing waiting) is 3 days late (Drop)",
-    "Not showing in Spotify for Artists yet, 13 days before release: the pitch cannot be sent until it does", "Lyrics are missing and Lyrics live is due Sun 15 Nov"]);
+    "Not showing in Spotify for Artists yet, 13 days before release: the pitch cannot be sent until it does"], "the lyrics are needed after the release now (15 Nov 2026)");
 });
 
 test("moving the date names the steps already done with the old date outside the desk", async () => {
@@ -427,19 +429,19 @@ test("an older release (no kind, no Spotify step) still reads, is never given a 
   const { kind, copyright, ...pack } = FULL;
   await d.setJSON("releases.json", [{ id: "oldsong", title: "Old Song", date: "2026-12-11", status: "scheduled", createdAt: "2026-11-01T12:00:00Z", createdBy: "Luke", updatedAt: "2026-11-01T12:00:00Z", sentAt: "2026-11-01T12:00:00Z", tight: false, pack, steps, log: [] }]);
   const v = S.releaseView((await S.listReleases(d))[0], TODAY);
-  assert.deepEqual([v.steps.length, v.deal.kind, v.steps.find((s) => s.key === "pitch").waiting], [9, "", false]);
+  assert.deepEqual([v.steps.length, v.deal.kind, v.steps.find((s) => s.key === "pitch").waiting], [8, "", false]);
   /* review, 11 Nov 2026: it was never "sent without" anything (nothing was required then) */
   assert.ok(!v.warnings.some((w) => /Sent without/.test(w)), v.warnings.join("\n"));
   assert.ok(v.warnings.includes("Not recorded yet: self-release or label"));
   const rep = S.checkReport({ desk: await S.loadDesk(d, NOW), hq: null, hqState: null, now: NOW });
   assert.ok(!rep.problems.some((p) => /Old Song: (Sent without|Not recorded yet)/.test(p)), "kept out of the site's check: " + rep.problems.join("\n"));
   assert.equal((await S.sendRelease(d, NOW, R, { by: "Luke", id: "oldsong" })).already, true, "sending again changes nothing");
-  assert.equal(S.board(await S.loadDesk(d, NOW), NOW, null).releases[0].steps.length, 9, "reading never adds a step");
+  assert.equal(S.board(await S.loadDesk(d, NOW), NOW, null).releases[0].steps.length, 8, "reading never adds a step");
   const m = await S.moveRelease(d, NOW, R, { by: "Luke", id: "oldsong", date: "2026-12-18" });
-  assert.deepEqual(m.release.steps.map((s) => s.key), ["upload", "approved", "spotify", "pitch", "lyrics", "page", "video", "teasers", "ads", "live"]);
+  assert.deepEqual(m.release.steps.map((s) => s.key), ["upload", "approved", "spotify", "pitch", "page", "video", "ads", "live", "lyrics"]);
   assert.equal(step(m.release, "spotify").due, "2026-12-03");
   assert.match(m.release.log.at(-1).what, /; added the step "Showing as upcoming in Spotify for Artists"$/);
-  assert.equal((await S.moveRelease(d, NOW, R, { by: "Luke", id: "oldsong", date: "2026-12-25" })).release.steps.length, 10, "once");
+  assert.equal((await S.moveRelease(d, NOW, R, { by: "Luke", id: "oldsong", date: "2026-12-25" })).release.steps.length, 9, "once");
 });
 
 /* ---------- fixes after the two reviews (11 Nov 2026) ---------- */

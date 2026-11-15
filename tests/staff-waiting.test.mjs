@@ -63,24 +63,11 @@ test("waitingOnLuke: spotify unknown and retry count, answered and pipeline don'
   assert.deepEqual(await waiting(memoryDesk()), []);
 });
 
-test("waitingOnLuke: teasers due today or late counts; tomorrow, done, skipped, draft and cancelled don't", async () => {
+test("waitingOnLuke: no release step waits on Luke any more (the teaser step went, 15 Nov 2026)", async () => {
   const d = memoryDesk();
-  const due = await sent(d, "Due Song", day(3));
-  const late = await sent(d, "Late Song", day(1), NOW - 5 * DAY); /* sent 5 days ago: teasers were due 2 days ago */
-  await sent(d, "Tomorrow Song", day(4));
-  const doneR = await sent(d, "Done Song", day(3));
-  await S.setStep(d, NOW, R, { by: "Luke", id: doneR.id, step: "teasers", status: "done" });
-  const skipR = await sent(d, "Skip Song", day(3));
-  await S.setStep(d, NOW, R, { by: "Luke", id: skipR.id, step: "teasers", status: "skipped", note: "No clips for this one" });
-  await S.saveRelease(d, NOW, R, { by: "Luke", title: "Draft Song", date: day(3), pack: FULL });
-  const gone = await sent(d, "Gone Song", day(3));
-  await S.cancelRelease(d, NOW, R, { by: "Luke", id: gone.id });
-
-  const w = await waiting(d);
-  assert.deepEqual(w.map((x) => x.key), ["t:" + late.id, "t:" + due.id], "oldest first: the late one leads");
-  assert.deepEqual(w[1], { key: "t:" + due.id, kind: "step", id: due.id, text: "Due Song: your teaser clips are due", href: "#releases/" + due.id, at: day(0) });
-  assert.equal(w[0].text, "Late Song: your teaser clips are late");
-  assert.equal(w[0].at, day(-2));
+  await sent(d, "Due Song", day(3));
+  await sent(d, "Late Song", day(1), NOW - 5 * DAY);
+  assert.deepEqual(await waiting(d), []);
 });
 
 test("waitingOnLuke: alert text never carries amounts", async () => {

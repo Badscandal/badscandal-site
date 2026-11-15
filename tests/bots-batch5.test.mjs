@@ -65,7 +65,8 @@ test("toolsFor: a bot gets the shared tools plus its own; the shared list stays 
 test("instructionsFor: the shared lines plus the bot's own; the whole text is unchanged for /mcp", () => {
   const k = instructionsFor("Kevin", R);
   assert.match(k, /Every call needs `bot`/);
-  assert.match(k, /Kevin \(TikTok\)/, "his teaser line");
+  assert.match(instructionsFor("Laura", R), /Laura: when the pack has a visualiser/, "Laura's own line");
+  assert.doesNotMatch(k, /Laura: when the pack has a visualiser/);
   assert.match(k, /log_growth/, "his growth line");
   assert.doesNotMatch(k, /Ledger and Sheet: keep your income sources/);
   assert.doesNotMatch(k, /Drop: you submit everything to RouteNote/);
@@ -82,7 +83,8 @@ test("the connector at /mcp/<bot>: that bot's list; calls fill in and check the 
   const mine = await (await post("/mcp/kevin", rpc("tools/list"))).json();
   assert.deepEqual(mine.result.tools.map((t) => t.name), names(toolsFor("Kevin", R)));
   const init = await (await post("/mcp/Kevin", rpc("initialize", { protocolVersion: "2025-06-18" }))).json();
-  assert.match(init.result.instructions, /Kevin \(TikTok\)/);
+  assert.match(init.result.instructions, /Steve, Atlas, Kevin, Laura: log each day/);
+  assert.doesNotMatch(init.result.instructions, /Laura: when the pack has a visualiser/);
   assert.doesNotMatch(init.result.instructions, /Ledger and Sheet: keep/);
   /* a call without bot is Kevin's; another bot's name is refused; a tool that isn't his is unknown here */
   const day = await (await post("/mcp/kevin", rpc("tools/call", { name: "my_day", arguments: {} }))).json();

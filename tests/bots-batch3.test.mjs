@@ -32,114 +32,8 @@ async function sent(d, title = "Night Drive", date = "2026-11-24", pack = PACK, 
 }
 const view = async (d, id, today = TODAY) => S.releaseView((await S.listReleases(d)).find((x) => x.id === id), today);
 const step = (v, key) => v.steps.find((s) => s.key === key);
-const TEASERS = ["teaser_tiktok", "teaser_instagram", "teaser_youtube"];
 
-/* ---------- 1. the teaser posts ---------- */
-test("three teaser-post steps (Kevin, Steve, Laura) wait on Luke's approval and are due 3 days before release", async () => {
-  const t = S.RELEASE_STEPS.filter((s) => TEASERS.includes(s.key));
-  assert.deepEqual(t.map((s) => [s.key, s.owner, s.days, s.after, s.ownDay]), [["teaser_tiktok", "Kevin", 3, "teasers", true], ["teaser_instagram", "Steve", 3, "teasers", true], ["teaser_youtube", "Laura", 3, "teasers", true]]);
-  assert.deepEqual(t.map((s) => s.label), ["Teaser posted on TikTok", "Teaser posted on Instagram", "Teaser posted on YouTube"]);
-  /* right after Luke's approval, before the ads */
-  const keys = S.RELEASE_STEPS.map((s) => s.key);
-  assert.deepEqual(keys.slice(keys.indexOf("teasers"), keys.indexOf("teasers") + 5), ["teasers", ...TEASERS, "ads"]);
-  const d = memoryDesk();
-  const r = await sent(d);
-  const v = await view(d, r.id);
-  for (const k of TEASERS) {
-    const s = step(v, k);
-    assert.equal(s.due, "2026-11-21", "the bots asked for 21 Nov for a 24 Nov song");
-    assert.equal(s.waiting, true);
-    assert.equal(s.waitingFor, "teasers");
-    assert.match(s.waitingText, /Luke.*teaser clips/i);
-  }
-  /* a bot can't post-and-mark before Luke approved the clips */
-  await fails(S.setStep(d, NOW, R, { by: "Kevin", id: r.id, step: "teaser_tiktok", status: "done" }), /waiting.*Teaser clips approved/i);
-  /* Luke approves early (18 Nov): each post keeps its own day, it is not pulled forward to the approval day */
-  await S.setStep(d, NOW + 4 * DAY, R, { by: "Luke", id: r.id, step: "teasers", status: "done" });
-  const v2 = await view(d, r.id, "2026-11-18");
-  assert.ok(TEASERS.every((k) => step(v2, k).due === "2026-11-21" && !step(v2, k).waiting && !step(v2, k).late));
-  await S.setStep(d, NOW + 7 * DAY, R, { by: "Kevin", id: r.id, step: "teaser_tiktok", status: "done", link: "https://example.com/tiktok/post" });
-  assert.equal(step(await view(d, r.id, "2026-11-21"), "teaser_tiktok").link, "https://example.com/tiktok/post");
-});
-
-test("a late approval frees the teaser posts for that day, never born late", async () => {
-  const d = memoryDesk();
-  const r = await sent(d);
-  await S.setStep(d, Date.parse("2026-11-22T15:00:00Z"), R, { by: "Luke", id: r.id, step: "teasers", status: "done" });
-  const v = await view(d, r.id, "2026-11-22");
-  assert.ok(TEASERS.every((k) => step(v, k).due === "2026-11-22" && !step(v, k).late));
-});
-
-test("each teaser post has its own day: its owner (or Nova) sets it, never after release day or in the past", async () => {
-  const d = memoryDesk();
-  const r = await sent(d);
-  const res = await call(d, "release_step", { bot: "Kevin", song: "Night Drive", step: "teaser_tiktok", due: "2026-11-20" });
-  assert.equal(res.due, "Fri 20 Nov (2026-11-20)");
-  await S.setStep(d, NOW, R, { by: "Nova", id: r.id, step: "teaser_youtube", due: "2026-11-23" });
-  const v = await view(d, r.id);
-  assert.deepEqual(TEASERS.map((k) => step(v, k).due), ["2026-11-20", "2026-11-21", "2026-11-23"]);
-  assert.equal(step(v, "teaser_tiktok").status, "todo", "setting the day alone doesn't change the state");
-  await fails(S.setStep(d, NOW, R, { by: "Kevin", id: r.id, step: "teaser_tiktok", due: "2026-11-25" }), /release day/i);
-  await fails(S.setStep(d, NOW, R, { by: "Kevin", id: r.id, step: "teaser_tiktok", due: "2026-11-10" }), /passed/i);
-  await fails(S.setStep(d, NOW, R, { by: "Kevin", id: r.id, step: "teaser_tiktok", due: "20 Nov" }), /YYYY-MM-DD/);
-  await fails(S.setStep(d, NOW, R, { by: "Drop", id: r.id, step: "upload", due: "2026-11-20" }), /own day/i);
-  await fails(S.setStep(d, NOW, R, { by: "Steve", id: r.id, step: "teaser_tiktok", due: "2026-11-20" }), /Kevin's step/);
-  await fails(S.setStep(d, NOW, R, { by: "Kevin", id: r.id, step: "teaser_tiktok" }), /status must be one of/);
-  assert.equal(tool("release_step").inputSchema.properties.due.type, "string");
-  assert.deepEqual(tool("release_step").inputSchema.required, ["bot", "song", "step"]);
-});
-
-test("releases already sent get the teaser posts once; finished steps, drafts and songs already out are left alone", async () => {
-  const d = memoryDesk();
-  const r = await sent(d);
-  await S.setStep(d, NOW, R, { by: "Drop", id: r.id, step: "upload", status: "done", note: "Uploaded" });
-  const out = await sent(d, "Old Song", "2026-11-10"); /* recorded as already out */
-  await S.saveRelease(d, NOW, R, { by: "Luke", title: "A Draft", date: "2026-12-18", pack: { kind: "Self-release" } });
-  /* as stored before batch 3: ten steps */
-  const list = await S.listReleases(d);
-  for (const x of list) x.steps = (x.steps || []).filter((s) => !TEASERS.includes(s.key));
-  await d.setJSON("releases.json", list);
-  const before = JSON.stringify(list.find((x) => x.id === r.id).steps.find((s) => s.key === "upload"));
-
-  const up = await S.upgradeReleases(d, NOW);
-  assert.deepEqual(up.added, [{ id: r.id, title: "Night Drive", steps: TEASERS }]);
-  const after = (await S.listReleases(d)).find((x) => x.id === r.id);
-  assert.deepEqual(after.steps.map((s) => s.key), S.RELEASE_STEPS.map((s) => s.key), "in their place, right after Luke's approval");
-  assert.equal(JSON.stringify(after.steps.find((s) => s.key === "upload")), before, "Drop's finished step is untouched");
-  assert.ok(after.steps.filter((s) => TEASERS.includes(s.key)).every((s) => s.due === "2026-11-21" && s.status === "todo"));
-  assert.match(after.log[after.log.length - 1].what, /teaser/i);
-  const all = await S.listReleases(d);
-  assert.equal(all.find((x) => x.id === out.id).steps.length, 10, "a song already out gets nothing new to do");
-  assert.equal(all.find((x) => x.title === "A Draft").steps.length, 0);
-  /* idempotent: the second time writes nothing */
-  const etag = d._map.get("releases.json").etag;
-  assert.deepEqual((await S.upgradeReleases(d, NOW)).added, []);
-  assert.equal(d._map.get("releases.json").etag, etag);
-  /* a release whose posts' day already passed gets them due today, never born late */
-  const d2 = memoryDesk();
-  const soon = await sent(d2, "Soon Song", "2026-11-16");
-  const l2 = await S.listReleases(d2);
-  l2[0].steps = l2[0].steps.filter((s) => !TEASERS.includes(s.key));
-  await d2.setJSON("releases.json", l2);
-  await S.upgradeReleases(d2, NOW);
-  assert.ok((await S.listReleases(d2)).find((x) => x.id === soon.id).steps.filter((s) => TEASERS.includes(s.key)).every((s) => s.due === TODAY));
-});
-
-test("the tools upgrade an old release before answering: Kevin's my_day shows his teaser post", async () => {
-  const d = memoryDesk();
-  const r = await sent(d);
-  const list = await S.listReleases(d);
-  list[0].steps = list[0].steps.filter((s) => !TEASERS.includes(s.key));
-  await d.setJSON("releases.json", list);
-  const day = await call(d, "my_day", { bot: "Kevin" });
-  const t = day.release_steps.find((s) => s.step === "teaser_tiktok");
-  assert.equal(t.song, "Night Drive");
-  assert.equal(t.state, "waiting");
-  assert.match(t.waiting_for, /Luke.*teaser clips/i);
-  assert.match(day.next, /waiting/i);
-  assert.ok(!/Spotify for Artists/.test(t.waiting_for), "not the Spotify wording: it waits for Luke");
-  assert.equal((await S.listReleases(d)).find((x) => x.id === r.id).steps.length, 13);
-});
+/* ---------- 1. the teaser posts: removed 15 Nov 2026 (Luke), see tests/hq-pipeline-tidy.test.mjs ---------- */
 
 /* ---------- 2. the real done date ---------- */
 test("done_on: work finished before a late pack was sent shows its real day", async () => {
@@ -351,9 +245,7 @@ test("the connector: 21 tools, the new rules in INSTRUCTIONS; HQ's short words f
   assert.ok(TOOLS.length >= 21, "21 with batch 3 (more since: batch 4)");
   assert.ok(tool("store_status"));
   const text = INSTRUCTIONS;
-  assert.match(text, /teaser/i);
   assert.match(text, /store_status/);
   assert.match(text, /approval/i);
   assert.match(text, /done_on/);
-  assert.deepEqual(["Teaser posted on TikTok", "Teaser posted on Instagram", "Teaser posted on YouTube"].map(L.shortStep), ["TikTok teaser", "Instagram teaser", "YouTube teaser"]);
 });

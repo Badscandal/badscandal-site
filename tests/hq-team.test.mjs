@@ -37,7 +37,7 @@ test("botProblems: only what is wrong, in words, blocked before late; nothing fo
 
 test("botNext: one line for the compact row", () => {
   assert.equal(L.botNext(bot("Forge"), b.today), "Next: Check the monthly ad cap · 23:30");
-  assert.equal(L.botNext(bot("Verse"), b.today), "Next: Lyrics live · Me Dá Seu Body · Sun 15 Nov");
+  assert.equal(L.botNext(bot("Verse"), b.today), "No update today", "the lyrics wait for the release day (15 Nov 2026): nothing to do yet");
   assert.equal(L.botNext(bot("Webmaster"), b.today), "Working on: Song page live on badscandal.com · Me Dá Seu Body", "a step already being worked on comes first");
   assert.equal(L.botNext(bot("Steve"), b.today), "All done today");
   assert.equal(L.botNext(bot("Ledger"), b.today), "All done today");
