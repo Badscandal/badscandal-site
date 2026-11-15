@@ -48,9 +48,9 @@ export const LIMITS = { updatesPerBotPerDay: 60, messagesPerSenderPerDay: 40, me
 /* The team as the repo may show it: names and one public line each. The full roster (why each bot
    is needed, its tools, its times) is seeded into the store and replaces this. */
 export const DEFAULT_ROSTER = [
-  { name: "Nova", role: "Chief of staff", duty: "Runs the team's day and the task board", time: "08:00",
+  { name: "Nova", role: "Chief of staff", duty: "Runs the team's day and the task board", time: "07:00",
     why: "Without Nova nobody resets the day's duties, chases what is missing or writes the evening wrap-up. She is Claude's contact and the one who passes instructions to every other bot.",
-    schedule: [{ time: "08:00", what: "Read new briefs and the messages on the desk" }, { time: "08:05", what: "Reset today's duties on the task board, each with its time" }, { time: "09:00", what: "Standup: logged, or the blocker" },
+    schedule: [{ time: "07:00", what: "Reset today's duties on the task board, each with its time (before Ledger's 07:30 run)" }, { time: "08:00", what: "Read new briefs and the messages on the desk" }, { time: "09:00", what: "Standup: logged, or the blocker" },
       { time: "09:45", what: "Check the month's ad spend against the cap" }, { time: "12:00", what: "Chase anything missing" }, { time: "21:00", what: "Wrap-up: mark what slipped, write the daily report" }, { time: "Sunday", what: "Weekly numbers and the weekly report" }],
     writes: "The task board and the release timeline; the daily report" },
   { name: "Alfred", role: "Luke's assistant", duty: "One message to Luke a day, plus urgent alerts", time: "10:00",
@@ -58,8 +58,8 @@ export const DEFAULT_ROSTER = [
     schedule: [{ time: "10:00", what: "The daily message: ad spend against the cap, income, what needs Luke, who didn't log, the next release" }, { time: "any time", what: "Alert at USD 750, at USD 900 and above USD 1,000 of ad spend" }],
     writes: "Nothing: Alfred reports, he doesn't log" },
   { name: "Ledger", role: "Income", duty: "Logs every new payment", time: "07:30",
-    why: "Sees every payment the day it lands, so income is never found weeks later and nothing is missed or counted twice.",
-    schedule: [{ time: "07:30", what: "Check every money account and the statement emails; submit each new payment; say each account was checked" }, { time: "5th", what: "Monthly income report" }, { time: "20th", what: "Chase every pending payment" }],
+    why: "Sees every payment the day it lands, royalties included (Ledger owns them since 11 Nov 2026), so income is never found weeks later and nothing is missed or counted twice.",
+    schedule: [{ time: "07:30", what: "Check every money account and the statement emails; submit each new payment; say each account was checked" }, { time: "5th", what: "Monthly income report, royalties per song and per store included" }, { time: "20th", what: "Chase every pending payment" }],
     writes: "Payments on the desk; rows for the income sheet" },
   { name: "Sheet", role: "Income sheet", duty: "Keeps the income sheet complete", time: "08:00",
     why: "Keeps the books tidy: every payment Ledger found has its source, category, currency, amount and status, so the monthly totals can be trusted.",
@@ -76,18 +76,18 @@ export const DEFAULT_ROSTER = [
   { name: "Atlas", role: "Spotify and stores", duty: "Daily numbers for every released song", time: "09:15",
     why: "Streams per song, day by day, are the number the whole plan is steered by. Atlas also sends every Spotify playlist pitch.",
     schedule: [{ time: "09:15", what: "One row per released song for the newest full day, plus the Spotify followers row" }, { time: "14 days before a release", what: "Send the Spotify pitch (never later than 7 days before)" }], writes: "The Songs and Growth tabs; the release timeline's pitch step" },
-  { name: "Drop", role: "Distribution", duty: "Release status and royalties", time: "09:20",
-    why: "Gets each self-release into the stores on time and reports what each song earned.",
-    schedule: [{ time: "09:20", what: "Status of every unreleased song" }, { time: "21 days before a release", what: "Upload" }, { time: "5th", what: "Royalties per song and per store" }], writes: "The release timeline and the Royalties tab" },
+  { name: "Drop", role: "Distribution", duty: "Where every release is at the distributor", time: "09:20",
+    why: "Gets each self-release into the stores on time and keeps where each song is at the distributor (uploaded, in moderation, approved, live), telling Luke the moment a date can't be kept.",
+    schedule: [{ time: "09:20", what: "Status of every unreleased song at the distributor (store_status)" }, { time: "4 weeks before a release", what: "Upload to RouteNote (3 weeks at the latest)" }], writes: "The release timeline and each song's store status" },
   { name: "Verse", role: "Lyrics", duty: "Lyrics live before each release", time: "09:20",
     why: "Lyrics showing in the apps on release day; only needed when a release is 14 days away or less.",
     schedule: [{ time: "09:20", what: "Lyrics status when a release is 14 days away or less; done 10 days before" }], writes: "The release timeline's lyrics step" },
   { name: "Webmaster", role: "Website", duty: "Daily check that the site is up and clean", time: "09:20",
     why: "Every ad and the bio link land on our own pages; if a page is down, the ad money is wasted.",
-    schedule: [{ time: "09:20", what: "Home page, every song page and the dashboard answer; no pre-save or Feature.fm link anywhere" }, { time: "7 days before a release", what: "Song page live" }, { time: "Release day", what: "Add the Spotify link" }], writes: "Its own duty row; the song pages" },
+    schedule: [{ time: "09:20", what: "Home page, every song page and the dashboard answer" }, { time: "a week after the previous release", what: "The next song's page live" }, { time: "Release day", what: "Add the Spotify link" }], writes: "Its own duty row; the song pages" },
   { name: "Forge", role: "Ads", duty: "Logs ad spend, checks the cap before any launch", time: "09:30",
-    why: "Keeps ad spend inside USD 1,000 a month: logs what Google and TikTok spent and checks the cap before anything launches.",
-    schedule: [{ time: "09:30", what: "Yesterday's Google and TikTok spend" }, { time: "Monday", what: "Compare the month's Meta total with Ads Manager" }, { time: "before any launch", what: "Month to date + planned budgets must stay under the cap" }, { time: "at USD 900", what: "Switch every ad off (never delete) and confirm" }], writes: "The Ads Tracker's daily log" },
+    why: "Keeps ad spend inside USD 1,000 a month: logs what Meta, Google and TikTok spent and checks the cap before anything launches.",
+    schedule: [{ time: "09:30", what: "Yesterday's Meta, Google and TikTok spend (record_spend)" }, { time: "Monday", what: "Compare the month's Meta total with Ads Manager" }, { time: "before any launch", what: "Month to date + planned budgets must stay under the cap" }, { time: "at USD 900", what: "Switch every ad off (never delete) and confirm" }], writes: "The Ads Tracker's daily log" },
 ];
 
 /* ---------- small helpers ---------- */
@@ -223,6 +223,13 @@ export async function getRoster(store) {
   return list.filter((b) => b && b.name).map((b) => ({ ...b, name: clean(b.name, 40) }));
 }
 export const botNames = (roster) => roster.map((b) => b.name);
+/* When Nova resets the day's duty rows: the time of the "reset" line on her card (07:00 since batch 5,
+   15 Nov 2026: at 08:05 Ledger's 07:30 and Sheet's 08:00 runs found no row). "" when her card has none. */
+export function dutyResetTime(roster) {
+  const nova = (roster || []).find((b) => b && low(b.name) === "nova");
+  const line = nova && Array.isArray(nova.schedule) ? nova.schedule.find((x) => x && /reset/i.test(x.what || "") && /^\d{2}:\d{2}$/.test(x.time || "")) : null;
+  return line ? line.time : "";
+}
 /* "nova", " Nova ", "NOVA (chief of staff)" -> "Nova"; unknown -> a plain error listing the names */
 export function whoIs(name, roster, { people = false } = {}) {
   const want = low(name).replace(/\s*\(.*$/, "");
@@ -2397,8 +2404,16 @@ export function checkReport({ desk, hq, hqState, now }) {
   const withDuty = b.staff.filter((w) => w.duties.length);
   const d = hq && hq.team ? hq.team.duties : null;
   if (d && d.total) say(d.late === 0 && d.blocked === 0, `Duties: ${d.done} of ${d.total} done` + (d.late ? `, ${d.late} late` : "") + (d.blocked ? `, ${d.blocked} blocked` : ""));
-  else if (hq) problems.push("Duties: the Tasks tab has no duty rows for today (Nova resets them at 08:05)");
+  else if (hq) problems.push("Duties: the Tasks tab has no duty rows for today" + (dutyResetTime(desk.roster) ? ` (Nova resets them at ${dutyResetTime(desk.roster)})` : ""));
   else problems.push("Duties: not read (the team's sheet could not be read)");
+  /* a bot whose duty times on the board match none of its card's times (batch 5: Webmaster showed as both
+     09:10 and 09:20): named, so Nova or the card is put right. A second duty at another hour (Forge's
+     evening cap check) is fine as long as one matches. */
+  for (const w of withDuty) {
+    const card = [w.time, ...(w.schedule || []).map((x) => x.time)].filter((t) => /^\d{2}:\d{2}$/.test(t || ""));
+    const off = w.duties.filter((x) => x.due && card.length && !card.includes(x.due));
+    if (off.length && off.length === w.duties.filter((x) => x.due).length && w.time) problems.push(`Times disagree: ${w.name}'s duty is due ${off.map((x) => x.due).join(", ")} on the board, ${w.time} on the team card`);
+  }
   for (const w of withDuty) for (const x of w.duties) {
     if (x.status === "blocked") problems.push(`${w.name} is blocked: ${x.blocker || x.task}`);
     else if (x.late) problems.push(`${w.name} is late (due ${x.due}): ${x.task}`);
