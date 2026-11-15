@@ -134,7 +134,7 @@ export function sampleDesk(now = Date.now()) {
     E(3, "Sample Collecting Society", 61.2, "USD", "payable", "Statement only", "Publishing"), E(4, "Sample Small Store", 7.35, "USD", "statement only", "Statement only", "Self-releases")];
   /* MADE-UP rows as the Revolut reader files them (by HQ): two it could not place ("to sort", in no
      total) and one of Luke's own transfers between his accounts (never income) */
-  const R = (back, payer, amount, status) => ({ ...E(back, payer, amount, "EUR", status, "Revolut", "Other", "HQ"), id: "irevsample" + back + payer.length, reference: "sample-tx-" + back + payer.length, note: "Read from Revolut" });
+  const R = (back, payer, amount, status) => ({ ...E(back, payer, amount, "EUR", status, "Revolut", "Other", "HQ"), id: "irevsample" + back + payer.length + "x" + amount, reference: "sample-tx-" + back + payer.length + "x" + amount, note: "Read from Revolut" });
   entries.push(R(0, "A. Example", 60, "unsorted"), R(1, "Made-up Studio Ltd", 350, "unsorted"), R(1, "Own savings pocket", 200, "transfer"));
   const checks = [{ at: new Date(ago(6)).toISOString(), day: today, by: "Ledger", account: "Wise", new: 0, note: "" }, { at: new Date(ago(6)).toISOString(), day: today, by: "Ledger", account: "PayPal", new: 1, note: "" },
     { at: new Date(ago(200)).toISOString(), day: today, by: "HQ", account: "Revolut", new: 2, note: "" }];

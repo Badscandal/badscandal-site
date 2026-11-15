@@ -500,7 +500,7 @@
     h += '<h4 class="lblh">Where money comes from</h4><div class="tile"><div class="scroll"><table class="stack" id="srcTable">' +
       (sources.length ? "<tr><th>Source</th><th>Type</th><th>Usually paid</th><th>Last payment</th><th>This month</th><th>State</th></tr>" + sources.map(function (s) {
         var st = L.sourceState(s), mt = L.curList(s.monthTotal);
-        return "<tr><td><b>" + esc(s.name) + "</b>" + (s.lands ? "<small>Lands in " + esc(s.lands) + (s.editedBy ? " · updated by " + esc(s.editedBy) : "") + "</small>" : "") + "</td><td>" + esc(s.category || "–") + "</td><td>" + esc(L.cadenceWord(s.cadence)) + "</td><td>" + esc(cap(L.payLine(s.last))) + "</td><td>" + esc(mt.length ? mt.join(" + ") : "Nothing yet") +
+        return "<tr><td><b>" + esc(s.name) + "</b>" + (s.lands ? "<small>Lands in " + esc(s.lands) + (s.editedBy ? " · updated by " + esc(s.editedBy) : "") + "</small>" : "") + (s.byAccount ? "<small>" + esc(L.accountsLine(s)) + "</small>" : "") + "</td><td>" + esc(s.category || "–") + "</td><td>" + esc(L.cadenceWord(s.cadence)) + "</td><td>" + esc(cap(L.payLine(s.last))) + "</td><td>" + esc(mt.length ? mt.join(" + ") : "Nothing yet") +
           "</td><td>" + (st.attn ? '<span class="attn">' + esc(st.text) + "</span>" : esc(st.text)) + (s.needsLuke ? '<small class="need">Needs you: ' + esc(s.needsLuke) + "</small>" : "") + "</td></tr>";
       }).join("") : '<tr><td class="empty">No sources are on the list yet.</td></tr>') + "</table></div></div>";
     /* transfers and payments still to sort say so in words, their amount greyed: never in the totals */

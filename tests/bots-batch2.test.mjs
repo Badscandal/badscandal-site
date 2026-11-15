@@ -88,7 +88,7 @@ test("record_luke_answer: Alfred saves Luke's exact words from his chat, as Luke
   const r2 = await call(d, "record_luke_answer", { bot: "Alfred", reply_to: dec.id, luke_said: "january is better", option: "January" });
   assert.equal(r2.closed, true);
   assert.equal((await S.getMessage(d, dec.id)).resolved.note, "January");
-  await assert.rejects(call(d, "record_luke_answer", { bot: "Nova", reply_to: ask.id, luke_said: "yes" }), /Alfred/);
+  await assert.rejects(call(d, "record_luke_answer", { bot: "Kevin", reply_to: ask.id, luke_said: "yes" }), /Alfred/);
   const toNova = await call(d, "send_message", { bot: "Kevin", to: "Nova", text: "Can you check?", needs: "reply" });
   await assert.rejects(call(d, "record_luke_answer", { bot: "Alfred", reply_to: toNova.id, luke_said: "yes" }), /waiting on Luke/);
   assert.match(tool("record_luke_answer").description, /exact words/i);

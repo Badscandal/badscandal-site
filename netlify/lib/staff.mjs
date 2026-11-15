@@ -567,12 +567,29 @@ export function threads(messages) {
 /* ---------- income: one record per payment, and "checked, nothing new" ---------- */
 const incKey = (month) => `inc/${month}.json`;
 const chkKey = (month) => `chk/${month}.json`;
-const sameMoney = (x, e) => low(x.payer) === low(e.payer) && x.amount === e.amount && x.currency === e.currency;
+/* a payer's name without punctuation or a company ending: "Sample Holdings LLC" = "Sample Holdings" (round 2,
+   15 Nov 2026, Luke: "merge the duplicate payers but money should be counted once") */
+const COMPANY_END = /\s+(llc|ltd|limited|inc|incorporated|corp|corporation|co|company|gmbh|sa|sl|ltda|eireli|me|plc|pty|bv|srl)$/;
+export function payerName(p) {
+  let n = low(p).normalize("NFKD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, " ").trim();
+  for (let i = 0; i < 3 && COMPANY_END.test(n); i++) n = n.replace(COMPANY_END, "").trim();
+  return n;
+}
+/* one payer: the same name (as above), or two names of the same known source ("Starlit Records via Northwind"
+   and "Northwind Music Ltd" both match the Northwind source) */
+const STATEMENT = /^statement/i;
+function samePayer(x, e, sources) {
+  if (payerName(x.payer) === payerName(e.payer)) return true;
+  const of = (p) => (sources || []).find((s) => s.kind !== "account" && srcMatches(s, p.payer));
+  const a = of(x), b = of(e);
+  return !!a && !!b && a.id === b.id;
+}
+const sameMoney = (x, e, sources) => x.amount === e.amount && x.currency === e.currency && samePayer(x, e, sources);
 /* Is x the payment e? Same account + reference; or the same day, payer and amount, unless both carry
    a reference and the references differ (two real payments of the same size on one day). */
-export function samePayment(x, e) {
+export function samePayment(x, e, sources = []) {
   if (x.reference && e.reference) return low(x.account) === low(e.account) && low(x.reference) === low(e.reference);
-  return x.date === e.date && sameMoney(x, e);
+  return x.date === e.date && sameMoney(x, e, sources);
 }
 export const dedupeKey = (e) => (e.reference ? low(e.account) + "|ref|" + low(e.reference) : [e.date, low(e.payer), e.amount, e.currency].join("|"));
 export async function submitIncome(store, now, roster, a) {
@@ -597,6 +614,7 @@ export async function submitIncome(store, now, roster, a) {
     reference: clean(a.reference, 80), period: clean(a.period, 40), source: clean(a.source, 40), note: clean(a.note, 240) };
   noSecrets(e.payer, e.note, e.period);
   { const what = secretIn(e.reference, { reference: true }); if (what) fail(`reference looks like ${what}. It must be the payment's own transaction id, nothing else.`, "secret"); }
+  const sources = await getSources(store); /* two names of one payer are one payer (round 2) */
 
   /* A statement logged as pending, whose money now shows on a LATER day: that is the same payment
      arriving, not a second one. Look for one pending entry with the same payer, amount and currency
@@ -608,9 +626,9 @@ export async function submitIncome(store, now, roster, a) {
     let m = date.slice(0, 7);
     for (let i = 0; i < 4; i++, m = prevMonth(m)) {
       const hit = await mutate(store, incKey(m), [], (list) => {
-        if (list.some((x) => samePayment(x, e))) return { skip: true, value: null }; /* the exact payment is there: the normal path below handles it */
+        if (list.some((x) => samePayment(x, e, sources))) return { skip: true, value: null }; /* the exact payment is there: the normal path below handles it */
         const old = pid ? list.find((x) => x.id === pid && OWED.includes(x.status) && x.amount === e.amount && x.currency === e.currency && x.date <= date)
-          : list.find((x) => OWED.includes(x.status) && sameMoney(x, e) && x.date <= date && !(x.reference && e.reference && low(x.reference) !== low(e.reference)));
+          : list.find((x) => OWED.includes(x.status) && sameMoney(x, e, sources) && x.date <= date && !(x.reference && e.reference && low(x.reference) !== low(e.reference)));
         if (!old) return { skip: true, value: null };
         old.history = (old.history || []).concat({ at: e.at, by, from: old.status, to: "received" }).slice(-10);
         old.status = "received"; old.arrived = date; old.account = account; old.updatedAt = e.at;
@@ -621,11 +639,11 @@ export async function submitIncome(store, now, roster, a) {
         return { value: { entry: old, added: false, updated: true } };
       });
       if (hit) return hit;
-      if (i === 0) { const cur = await readDoc(store, incKey(m), []); if ((cur.data || []).some((x) => samePayment(x, e))) break; }
+      if (i === 0) { const cur = await readDoc(store, incKey(m), []); if ((cur.data || []).some((x) => samePayment(x, e, sources))) break; }
     }
   }
   return mutate(store, incKey(date.slice(0, 7)), [], (list) => {
-    const old = list.find((x) => samePayment(x, e));
+    const old = list.find((x) => samePayment(x, e, sources));
     if (old) {
       /* the same payment again: never added twice. It may gain its reference; pending may become
          received; received never goes back to pending (a statement email read again). */
@@ -864,6 +882,13 @@ export function incomeReport(entries, checks, sources, today, older = []) {
   const received = {}, pending = {}, byCat = {}, payable = {}, statementOnly = {}, royaltiesOnly = {};
   /* a payment counts on the day it arrived (a pending statement that later landed keeps both dates) */
   entries = entries.map((e) => (e.arrived && e.arrived !== e.date ? { ...e, statement: e.date, date: e.arrived } : e));
+  /* round 2: one payment logged twice under two names of its payer (before the desk knew they were one)
+     counts once. Kept: a decided status before an unsorted one, else the first logged. */
+  const twice = [];
+  { const RANK = { received: 0, payable: 1, pending: 2, "statement only": 3, transfer: 4, unsorted: 5 }, kept = [];
+    const order = [...entries].sort((a, b) => (RANK[a.status] ?? 6) - (RANK[b.status] ?? 6) || ((a.at || "") < (b.at || "") ? -1 : (a.at || "") > (b.at || "") ? 1 : 0));
+    for (const e of order) { const k = kept.find((x) => samePayment(x, e, sources)); if (k) twice.push([k, e]); else kept.push(e); }
+    if (twice.length) entries = entries.filter((e) => kept.includes(e)); }
   for (const e of entries) {
     if (e.date.slice(0, 7) !== month || e.status === "transfer" || e.status === "unsorted") continue;
     /* batch 4: a statement under the payout line counts nowhere yet; payable is owed (with pending) */
@@ -891,7 +916,15 @@ export function incomeReport(entries, checks, sources, today, older = []) {
       else if (lastLook < today) { verdict = daysBetween(lastLook, today) > 1 ? "overdue" : "due"; why = `Last checked ${lastLook}`; }
     } else if (!last) { verdict = s.cadence === "irregular" ? "quiet" : "never"; why = "No payment logged yet"; }
     else if (DUE_DAYS[s.cadence] && daysBetween(last.date, today) > DUE_DAYS[s.cadence]) { verdict = "overdue"; why = `Last payment ${last.date}; expected ${s.cadence}`; }
-    return { id: s.id, name: s.name, kind: s.kind, category: s.category, currency: s.currency, lands: s.lands, ...(s.accounts ? { accounts: s.accounts } : {}), ...(s.editedBy ? { editedBy: s.editedBy, editedAt: s.editedAt } : {}),
+    /* round 2 (Luke: "hq should show the second routenote account"): a source paid into several accounts
+       shows each one, with its last payment (the seed's accounts first, then any other seen on a payment) */
+    const accts = [...(s.kind !== "account" && Array.isArray(s.accounts) ? s.accounts : [])];
+    if (accts.length) for (const e of mine) if (e.account && !STATEMENT.test(e.account) && !accts.some((a) => payerName(a) === payerName(e.account))) accts.push(e.account);
+    const byAccount = accts.length > 1 ? accts.map((acc) => {
+      const l = mine.filter((e) => payerName(e.account) === payerName(acc) && e.status !== "transfer" && e.status !== "unsorted").reduce((a, e) => (!a || e.date > a.date ? e : a), null);
+      return { account: acc, last: l ? { date: l.date, amount: l.amount, currency: l.currency, status: l.status } : null };
+    }) : null;
+    return { id: s.id, name: s.name, kind: s.kind, category: s.category, currency: s.currency, lands: s.lands, ...(s.accounts ? { accounts: s.accounts } : {}), ...(byAccount ? { byAccount } : {}), ...(s.editedBy ? { editedBy: s.editedBy, editedAt: s.editedAt } : {}),
       cadence: s.cadence, owner: s.owner, how: s.how, state: s.state,
       blocker: s.blocker, needsLuke: s.needsLuke, last: last ? { date: last.date, amount: last.amount, currency: last.currency, status: last.status } : null,
       checked: chk ? { day: chk.day, by: chk.by, new: chk.new } : null, lastLook, monthTotal, verdict, why };
@@ -905,6 +938,7 @@ export function incomeReport(entries, checks, sources, today, older = []) {
   for (const s of src) if (s.verdict === "overdue") problems.push(`${s.name}: ${s.why}`);
   for (const s of list) if (s.verdict === "blocked") problems.push(`${s.name}: blocked. ${s.blocker}`.trim());
   if (unknown.length) problems.push(`New payer(s) not on the list of sources: ${unknown.join(", ")}`);
+  if (twice.length) problems.push(`${twice.length === 1 ? "1 payment was" : twice.length + " payments were"} logged twice under two payer names, counted once: ${twice.slice(0, 5).map(([k, e]) => `${k.payer} = ${e.payer} (${e.currency} ${e.amount}, ${e.date})`).join("; ")}`);
   const oldPending = entries.filter((e) => (e.status === "pending" || e.status === "payable") && daysBetween(e.date, today) > 30).length;
   if (oldPending) problems.push(`${oldPending} pending payment${oldPending === 1 ? "" : "s"} older than 30 days`);
   /* seen in an account (the bank reader), not yet said what it is: listed apart, in no total */
