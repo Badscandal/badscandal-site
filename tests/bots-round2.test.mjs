@@ -74,17 +74,17 @@ test("payerName: the same company with or without its ending (LLC, Ltd, Inc) and
   assert.notEqual(S.payerName("Sample Holdings"), S.payerName("Sample Records"));
 });
 
-test("submit_income: the same payment under two spellings of one payer is kept once", async () => {
+test("submit_income: the same payment under two spellings of one payer name is kept once; different names stay apart", async () => {
   const d = memoryDesk();
   await S.setSources(d, SRC);
   const a = await sub(d, pay({ payer: "Sample Holdings LLC" }));
   const b = await sub(d, pay({ bot: "Sheet", payer: "Sample Holdings" }));
   assert.equal(a.added, true);
   assert.equal(b.added, false, "Sheet's copy is the same payment");
-  /* two names of one source (its match words): Northwind Music Ltd and Starlit Records via Northwind */
+  /* a label paying "via" another company is its own payer, even under one source (Luke: "should be separate") */
   await sub(d, pay({ payer: "Northwind Music Ltd", amount: "400", category: "Label deals" }));
   const c = await sub(d, pay({ payer: "Starlit Records via Northwind", amount: "400", category: "Label deals" }));
-  assert.equal(c.added, false);
+  assert.equal(c.added, true);
   /* a different amount, or a different day, is a different payment */
   assert.equal((await sub(d, pay({ payer: "Sample Holdings", amount: "812.31" }))).added, true);
   assert.equal((await sub(d, pay({ payer: "Sample Holdings", date: "2026-11-06" }))).added, true);
@@ -96,9 +96,12 @@ test("incomeReport: a payment already logged twice under two payer names counts 
     e({ id: "i3", at: "2026-11-06T09:00:00Z", payer: "Northwind Music Ltd", amount: 400, category: "Label deals", status: "unsorted", by: "HQ" }),
     e({ id: "i4", at: "2026-11-06T10:00:00Z", payer: "Starlit Records via Northwind", amount: 400, category: "Label deals" })];
   const r = S.incomeReport(entries, [], SRC.map((s) => ({ how: "", blocker: "", needsLuke: "", ...s })), "2026-11-15");
-  assert.deepEqual(r.received, { EUR: 1212.30 }, "812.30 once + the Northwind 400 once");
-  assert.deepEqual(r.entries.map((x) => x.id).sort(), ["i1", "i4"], "the first one logged is kept; a decided status beats unsorted");
-  assert.equal(r.unsortedCount, 0);
+  assert.deepEqual(r.received, { EUR: 1212.30 }, "812.30 once + the 400 that arrived (the two Northwind names stay two payers)");
+  assert.deepEqual(r.entries.map((x) => x.id).sort(), ["i1", "i3", "i4"], "the first one logged is kept");
+  assert.equal(r.unsortedCount, 1, "the unsorted Northwind Music row is not the Starlit payment");
+  /* the same name twice, one unsorted from the bank and one decided: the decided one is kept */
+  const two = S.incomeReport([e({ id: "u", at: "2026-11-05T09:00:00Z", status: "unsorted", by: "HQ" }), e({ id: "k", at: "2026-11-05T12:00:00Z" })], [], [], "2026-11-15");
+  assert.deepEqual([two.entries.map((x) => x.id), two.unsortedCount], [["k"], 0]);
   assert.ok(r.problems.some((p) => /logged twice/.test(p) && /counted once/.test(p)), r.problems.join(" | "));
 });
 

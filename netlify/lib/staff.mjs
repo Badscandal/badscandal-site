@@ -575,21 +575,15 @@ export function payerName(p) {
   for (let i = 0; i < 3 && COMPANY_END.test(n); i++) n = n.replace(COMPANY_END, "").trim();
   return n;
 }
-/* one payer: the same name (as above), or two names of the same known source ("Starlit Records via Northwind"
-   and "Northwind Music Ltd" both match the Northwind source) */
+/* one payer = the same name as above. Two DIFFERENT names are never merged, even under one source: a
+   label paying "via" another company is its own payer (Luke, 15 Nov 2026: one such pair "should be separate") */
 const STATEMENT = /^statement/i;
-function samePayer(x, e, sources) {
-  if (payerName(x.payer) === payerName(e.payer)) return true;
-  const of = (p) => (sources || []).find((s) => s.kind !== "account" && srcMatches(s, p.payer));
-  const a = of(x), b = of(e);
-  return !!a && !!b && a.id === b.id;
-}
-const sameMoney = (x, e, sources) => x.amount === e.amount && x.currency === e.currency && samePayer(x, e, sources);
+const sameMoney = (x, e) => x.amount === e.amount && x.currency === e.currency && payerName(x.payer) === payerName(e.payer);
 /* Is x the payment e? Same account + reference; or the same day, payer and amount, unless both carry
    a reference and the references differ (two real payments of the same size on one day). */
-export function samePayment(x, e, sources = []) {
+export function samePayment(x, e) {
   if (x.reference && e.reference) return low(x.account) === low(e.account) && low(x.reference) === low(e.reference);
-  return x.date === e.date && sameMoney(x, e, sources);
+  return x.date === e.date && sameMoney(x, e);
 }
 export const dedupeKey = (e) => (e.reference ? low(e.account) + "|ref|" + low(e.reference) : [e.date, low(e.payer), e.amount, e.currency].join("|"));
 export async function submitIncome(store, now, roster, a) {
@@ -614,7 +608,6 @@ export async function submitIncome(store, now, roster, a) {
     reference: clean(a.reference, 80), period: clean(a.period, 40), source: clean(a.source, 40), note: clean(a.note, 240) };
   noSecrets(e.payer, e.note, e.period);
   { const what = secretIn(e.reference, { reference: true }); if (what) fail(`reference looks like ${what}. It must be the payment's own transaction id, nothing else.`, "secret"); }
-  const sources = await getSources(store); /* two names of one payer are one payer (round 2) */
 
   /* A statement logged as pending, whose money now shows on a LATER day: that is the same payment
      arriving, not a second one. Look for one pending entry with the same payer, amount and currency
@@ -626,9 +619,9 @@ export async function submitIncome(store, now, roster, a) {
     let m = date.slice(0, 7);
     for (let i = 0; i < 4; i++, m = prevMonth(m)) {
       const hit = await mutate(store, incKey(m), [], (list) => {
-        if (list.some((x) => samePayment(x, e, sources))) return { skip: true, value: null }; /* the exact payment is there: the normal path below handles it */
+        if (list.some((x) => samePayment(x, e))) return { skip: true, value: null }; /* the exact payment is there: the normal path below handles it */
         const old = pid ? list.find((x) => x.id === pid && OWED.includes(x.status) && x.amount === e.amount && x.currency === e.currency && x.date <= date)
-          : list.find((x) => OWED.includes(x.status) && sameMoney(x, e, sources) && x.date <= date && !(x.reference && e.reference && low(x.reference) !== low(e.reference)));
+          : list.find((x) => OWED.includes(x.status) && sameMoney(x, e) && x.date <= date && !(x.reference && e.reference && low(x.reference) !== low(e.reference)));
         if (!old) return { skip: true, value: null };
         old.history = (old.history || []).concat({ at: e.at, by, from: old.status, to: "received" }).slice(-10);
         old.status = "received"; old.arrived = date; old.account = account; old.updatedAt = e.at;
@@ -639,11 +632,11 @@ export async function submitIncome(store, now, roster, a) {
         return { value: { entry: old, added: false, updated: true } };
       });
       if (hit) return hit;
-      if (i === 0) { const cur = await readDoc(store, incKey(m), []); if ((cur.data || []).some((x) => samePayment(x, e, sources))) break; }
+      if (i === 0) { const cur = await readDoc(store, incKey(m), []); if ((cur.data || []).some((x) => samePayment(x, e))) break; }
     }
   }
   return mutate(store, incKey(date.slice(0, 7)), [], (list) => {
-    const old = list.find((x) => samePayment(x, e, sources));
+    const old = list.find((x) => samePayment(x, e));
     if (old) {
       /* the same payment again: never added twice. It may gain its reference; pending may become
          received; received never goes back to pending (a statement email read again). */
@@ -887,7 +880,7 @@ export function incomeReport(entries, checks, sources, today, older = []) {
   const twice = [];
   { const RANK = { received: 0, payable: 1, pending: 2, "statement only": 3, transfer: 4, unsorted: 5 }, kept = [];
     const order = [...entries].sort((a, b) => (RANK[a.status] ?? 6) - (RANK[b.status] ?? 6) || ((a.at || "") < (b.at || "") ? -1 : (a.at || "") > (b.at || "") ? 1 : 0));
-    for (const e of order) { const k = kept.find((x) => samePayment(x, e, sources)); if (k) twice.push([k, e]); else kept.push(e); }
+    for (const e of order) { const k = kept.find((x) => samePayment(x, e)); if (k) twice.push([k, e]); else kept.push(e); }
     if (twice.length) entries = entries.filter((e) => kept.includes(e)); }
   for (const e of entries) {
     if (e.date.slice(0, 7) !== month || e.status === "transfer" || e.status === "unsorted") continue;
