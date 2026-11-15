@@ -238,7 +238,7 @@ export function setRoster(store, list) {
     noSecrets(JSON.stringify(b));
     return {
       name, role: clean(b.role, 60), why: cleanText(b.why, 400), duty: clean(b.duty, 200), time: /^\d{2}:\d{2}$/.test(b.time || "") ? b.time : "",
-      schedule: (Array.isArray(b.schedule) ? b.schedule : []).slice(0, 12).map((s) => ({ time: clean(s && s.time, 20), what: clean(s && s.what, 160) })).filter((s) => s.what),
+      schedule: (Array.isArray(b.schedule) ? b.schedule : []).slice(0, 12).map((s) => ({ time: clean(s && s.time, 60), what: clean(s && s.what, 160) })).filter((s) => s.what),
       writes: clean(b.writes, 200), access: clean(b.access, 300), blockers: clean(b.blockers, 300),
       state: ["active", "paused", "blocked"].includes(b.state) ? b.state : "active",
     };
@@ -287,6 +287,43 @@ export function dutyOverlay(updates, today) {
   return { byDuty, byBot };
 }
 
+/* ---------- the bots' own word on their T- tasks (14 Nov 2026, the bots' feedback) ----------
+   The sheet's task rows are written by Nova; a bot could not close its own task, so finished work
+   stayed "open" and old blockers stood for days. task_update writes here, and HQ shows it OVER the
+   sheet's row (teamReport): done takes the task off the open list, blocked sets the blocker to the
+   note, todo/working clear the blocker. tasks.json = { "T-27": {status, note, by, at, sp} }. */
+export const TASK_STATUS = ["todo", "working", "blocked", "done"];
+export async function getTaskOverlay(store) {
+  const { data } = await readDoc(store, "tasks.json", {});
+  return data && typeof data === "object" && !Array.isArray(data) ? data : {};
+}
+/* openTasks: the sheet's open T- tasks as HQ reads them ({id, owner, ...}); null = the sheet wasn't read */
+export async function setTaskStatus(store, now, roster, a, openTasks) {
+  const by = whoIs(a.by, roster, { people: true });
+  const raw = clean(a.task, 40);
+  if (/^D-/i.test(raw)) fail(`${raw} is a daily duty, not a task: finish or block a duty with post_update (status done or blocked, duty ${raw}).`);
+  if (!/^T-[\w-]{1,30}$/i.test(raw)) fail('task must be the id of one of your open tasks from my_day (it starts with "T-", for example "T-27").');
+  const id = raw.toUpperCase();
+  const status = low(a.status);
+  if (!TASK_STATUS.includes(status)) fail(`status must be one of: ${TASK_STATUS.join(", ")}`);
+  const note = clean(a.note, 240);
+  if (status === "blocked" && note.length < 3) fail("With status blocked, say in note what is needed and from whom.");
+  noSecrets(note);
+  if (!Array.isArray(openTasks)) fail("The team's Google Sheet could not be read just now, so the task can't be checked. Nothing was saved. Try again later.", "busy");
+  const t = openTasks.find((x) => String(x.id || "").toUpperCase() === id);
+  if (!t) fail(`There is no open task ${id} on the sheet. Check the id in my_day (open_tasks).`, "not_found");
+  if (low(t.owner) !== low(by) && !["Nova", "Claude", "Luke"].includes(by)) fail(`${id} is ${t.owner}'s task, not yours: only ${t.owner} (or Nova) can update it.`);
+  const row = { status, note, by, at: new Date(now).toISOString(), sp: spStamp(now) };
+  await mutate(store, "tasks.json", {}, (all) => {
+    if (!all || typeof all !== "object" || Array.isArray(all)) return { replace: { [id]: row }, value: row };
+    all[id] = row;
+    const ids = Object.keys(all);
+    if (ids.length > 300) ids.sort((x, y) => (all[x].at < all[y].at ? -1 : 1)).slice(0, ids.length - 300).forEach((k) => delete all[k]);
+    return { value: row };
+  });
+  return { id, ...row };
+}
+
 /* ---------- the message board ---------- */
 const msgKey = (month) => `msg/${month}.json`;
 export async function sendMessage(store, now, roster, a) {
@@ -299,7 +336,7 @@ export async function sendMessage(store, now, roster, a) {
   if (!NEEDS.includes(needs)) fail(`needs must be one of: ${NEEDS.join(", ")}`);
   if (to === "all" && needs !== "none") needs = "none"; /* a note to everyone can't wait on everyone */
   const re = a.re ? clean(a.re, 20) : "";
-  const options = (Array.isArray(a.options) ? a.options : []).map((o) => clean(o, 80)).filter(Boolean).slice(0, 4);
+  const options = (Array.isArray(a.options) ? a.options : []).map((o) => clean(o, 240)).filter(Boolean).slice(0, 4);
   const kind = ["report", "note"].includes(low(a.kind)) ? low(a.kind) : "note";
   const m = { id: newId("m", now), at: new Date(now).toISOString(), sp: spStamp(now), from, to, text, needs, re, options, kind, resolved: null };
   /* what Luke's answer settles the message with (an option he picked); "answered" otherwise */
@@ -365,6 +402,44 @@ export async function listMessages(store, now, months = 2, openMonths = 2) {
   for (let i = 0; i < months + openMonths; i++) { keys.push(msgKey(m)); m = prevMonth(m); }
   const docs = await Promise.all(keys.map((k) => readDoc(store, k, [])));
   return docs.flatMap((d, i) => { const list = Array.isArray(d.data) ? d.data : []; return i < months ? list : list.filter(isOpen); }).sort((a, b) => (a.at < b.at ? 1 : -1));
+}
+/* ONE message by id, whatever its age (read_messages id, 14 Nov 2026) */
+export async function getMessage(store, id) {
+  const want = clean(id, 20), month = monthOfId(want);
+  if (!month) fail("There is no message with that id. Message ids start with m, as read_messages shows them.", "not_found");
+  const { data } = await readDoc(store, msgKey(month), []);
+  const m = (Array.isArray(data) ? data : []).find((x) => x.id === want);
+  if (!m) fail("There is no message with that id.", "not_found");
+  return m;
+}
+/* "YYYY-MM-DD" or "YYYY-MM-DD HH:MM", São Paulo time -> the ISO instant it starts (null = not a time) */
+export function spInstant(s) {
+  const m = /^(\d{4}-\d{2}-\d{2})(?:[ T](\d{2}):(\d{2}))?$/.exec(String(s || "").trim());
+  if (!m) return null;
+  const guess = Date.parse(`${m[1]}T${m[2] || "00"}:${m[3] || "00"}:00Z`);
+  if (!Number.isFinite(guess)) return null;
+  const seen = Date.parse(`${spDay(guess)}T${spHM(guess)}:00Z`); /* what São Paulo's clock reads at `guess` */
+  return new Date(guess + (guess - seen)).toISOString();
+}
+const fold = (s) => String(s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+/* read_messages' filters: since, from, to, about (from or to), search (every word in the text) */
+export function filterMessages(list, roster, a = {}) {
+  const has = (k) => a[k] != null && String(a[k]).trim() !== "";
+  const name = (k) => (["all", "everyone", "team"].includes(low(a[k])) ? "all" : whoIs(a[k], roster, { people: true }));
+  let out = list;
+  if (has("since")) {
+    const t = spInstant(a.since);
+    if (!t) fail('since must be a day "YYYY-MM-DD" or a time "YYYY-MM-DD HH:MM" (São Paulo time).');
+    out = out.filter((m) => m.at >= t);
+  }
+  if (has("from")) { const n = name("from"); out = out.filter((m) => m.from === n); }
+  if (has("to")) { const n = name("to"); out = out.filter((m) => m.to === n); }
+  if (has("about")) { const n = name("about"); out = out.filter((m) => m.from === n || m.to === n); }
+  if (has("search")) {
+    const words = fold(a.search).split(/\s+/).filter(Boolean).slice(0, 8);
+    out = out.filter((m) => { const t = fold(m.text + " " + (m.options || []).join(" ")); return words.every((w) => t.includes(w)); });
+  }
+  return out;
 }
 export function isOpen(m) { return m.needs !== "none" && !m.resolved; }
 /* what is waiting on one name, oldest first */
@@ -765,7 +840,9 @@ export const PACK_FIELDS = [
   F("artwork", "Artwork, 3000 x 3000 (link)", "Artwork", "link", "files", { required: true, hint: "A link to the cover: square, 3000 x 3000 pixels, JPG or PNG. No store logos or web addresses on it." }),
   /* the visualiser (14 Nov 2026, Luke: "should be visualiser for laura and i add the link there for her to
      upload to YT, and she should put the description on yt like the other visualisers") */
-  F("visualiser", "Visualiser video (link)", "Visualiser", "link", "files", { neededBy: "video", fill: [], hint: "A download link to the visualiser video (Dropbox, Google Drive...). Laura uploads it to YouTube and writes the description like the other visualisers. It must start with https://" }),
+  /* optional, and never "needed" by any step (14 Nov 2026, the bots: it made Laura's video step look
+     blocked on Me Dá Seu Body, which has no visualiser) */
+  F("visualiser", "Visualiser video (link)", "Visualiser", "link", "files", { fill: [], hint: "Optional. A download link to the visualiser video (Dropbox, Google Drive...). Laura uploads it to YouTube and writes the description like the other visualisers. It must start with https://" }),
   F("folder", "Folder with the release files (link)", "Folder", "link", "files", { hint: "Optional. One shared folder with the master, the cover, stems and clips." }),
   F("language", "Language of the lyrics", "Language", "line", "stores", { required: true, hint: 'For example "Portuguese", "English", or "Instrumental".' }),
   F("explicit", "Explicit lyrics?", "Explicit", "choice", "stores", { required: true, choices: ["No", "Yes", "Clean version"], hint: "Yes if the lyrics swear or are sexual. RouteNote asks for it." }),

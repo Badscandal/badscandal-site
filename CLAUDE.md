@@ -1230,8 +1230,9 @@ write the sheets and shouldn't). Nothing here can touch ads, posts, sheets or mo
   `income_check` ("I looked at Wise today, 0 new": tells "nothing came in" from "nobody looked") ·
   `income_status` · `team_board` · `luke_briefing` (for Alfred's 10:00 message) · `set_my_card` ·
   `read_guide` · then `releases`, `release_pack`, `release_step`, `release_fill`, `spotify_upcoming` (the
-  release pipeline section) and `sort_payment` (the Revolut section). Descriptions are written for bots
-  that follow instructions literally. `tests/mcp.test.mjs` asserts the count (18) in four places.
+  release pipeline section), `sort_payment` (the Revolut section) and `task_update` (14 Nov 2026, below).
+  Descriptions are written for bots that follow instructions literally. `tests/mcp.test.mjs` asserts the
+  count (19) in five places.
 * **Guard rails in `staff.mjs`:** names only from the roster; every text cleaned and cut; links only
   `https://`; `secretIn()` refuses passwords, login codes, API keys, private keys, IBANs and card numbers
   (it must NOT refuse ISRCs, UPCs, 15-digit ad account ids or "token: expired": tested); an amount that
@@ -2029,7 +2030,7 @@ build it and piblish it don't forget about suvivors".
 * **Who does what** (Luke's words, in the connector's `INSTRUCTIONS`, which every bot gets on connecting,
   and in their my_day steps): Drop submits everything to RouteNote and keeps the schedule; Atlas sends the
   pitch the SAME DAY the song shows in Spotify for Artists and improves Luke's words first; Laura uploads the
-  **visualiser** (new pack field `visualiser`, Luke's link, needed by her `video` step) and writes its
+  **visualiser** (pack field `visualiser`, Luke's link; OPTIONAL and never "missing" since 14 Nov 2026) and writes its
   description like the other visualisers; Webmaster makes each song page in release order, a week after the
   previous song's release day (its Out now week), and the home page switches 7 days after a release; Verse
   the lyrics.
@@ -2042,3 +2043,36 @@ build it and piblish it don't forget about suvivors".
 * **Not done here:** the bots' written guide (private repo badscandal-hq `staff-desk/GUIDE.md`, re-seeded with
   `PUT /api/staff/seed` and Claude's key) still has the old wording: update it there. The home card's switch
   (Out now for 7 days, then the next song) is Webmaster's job in listen.json; the public page is unchanged.
+
+## The bots' feedback, batch 1 of 5: the daily friction (14 Nov 2026, branch `hq-bots-batch1`)
+
+Luke pasted the bots' feedback list and said to do it in 5 batches, reporting after each ("start with 1
+then when you finish one step let me know when you're ready to move to 2 and we work our way to 5").
+Batch 1 (tests: `tests/bots-batch1.test.mjs`, plus a late-pitch case in `staff-schedule.test.mjs`):
+* **Every tool answer goes ONCE, compact** (`mcp.mjs toolResult`): it used to send indented JSON text AND
+  the same object as `structuredContent`, so a ~35 KB answer was cut at the bots' 8 KB limit. The tools
+  declare no outputSchema, so the text alone is the answer. `tests/mcp.test.mjs`'s `tool()` helper parses
+  the text into `.data`.
+* **read_messages filters:** `since` (a day or "YYYY-MM-DD HH:MM", São Paulo time: `S.spInstant`), `from`,
+  `to`, `about` (from or to), `search` (every word, accents/capitals ignored), `unread: true` (only what came
+  for the bot since its last read: `S.messagesFor`), `id` (ONE message, any age: `S.getMessage`) and
+  `count_only: true` ("anything new?", no messages). The read marker moves only on an unfiltered read: a
+  count, an id or a filtered search never hides messages from the next `unread` read.
+* **`task_update` (tool 19):** a bot updates or closes its OWN T- task (Nova and Claude: anyone's):
+  todo | working | blocked (note required) | done. Stored in the desk doc `tasks.json`
+  (`S.setTaskStatus`, `S.getTaskOverlay`); the owner is checked against the sheet's open tasks as HQ reads
+  them (`ctx.hq()`: refused, nothing saved, when the sheet can't be read); D- duties are refused with a
+  pointer to post_update. `hq-load staffSide` passes `taskOverlay`; `hq.mjs teamReport(..., overlay)` shows
+  it over the sheet's row: done = off the open list, blocked = the note is the blocker, todo/working clear
+  an old blocker; the sheet's own "done" always wins. The HQ task table shows the bot's note; my_day's
+  open_tasks has `your_note`. A line in INSTRUCTIONS tells the bots.
+* **Cut-off text:** decision options keep 240 characters (were 80); a roster schedule's time keeps 60 (was
+  20: "7 days before a rele").
+* **Visualiser regression:** it no longer has `neededBy: "video"`, so a song with no visualiser never shows
+  Laura's step as missing anything (Me Dá Seu Body).
+* **The pitch** is due (not late) on the day the song shows in Spotify for Artists, late from the next day
+  (already true through `freeWaiting`; now pinned by a test).
+* **Still to do in batches 2-5:** decisions (2), release steps/statuses (3), money (4), tidy-ups (5). Data
+  fixes that need Luke or Claude's key (not code): Love You's record, Me Dá Seu Body's pack, Laura's lyric
+  video link, the income rows. The bots' GUIDE.md (private repo) should mention task_update and the new
+  read_messages filters.

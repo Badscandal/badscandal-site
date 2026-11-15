@@ -32,13 +32,13 @@ export function toolList(tools) {
     annotations: { title: t.title, readOnlyHint: !!t.readOnly, destructiveHint: false, idempotentHint: !!t.readOnly || !!t.idempotent, openWorldHint: false } }));
 }
 
-/* The answer of a tool: text the model reads + the same thing as data. Failures a bot can fix
-   (a wrong name, a missing amount) are results with isError, never protocol errors. */
+/* The answer of a tool: ONE compact copy as text. Until 14 Nov 2026 it went twice (indented text AND the
+   same object as structuredContent), so a big answer (~35 KB) was cut off at the bots' 8 KB limit. The
+   tools declare no outputSchema, so the text alone is the answer. Failures a bot can fix (a wrong name,
+   a missing amount) are results with isError, never protocol errors. */
 export function toolResult(value, isError = false) {
-  const text = typeof value === "string" ? value : JSON.stringify(value, null, 1);
-  const out = { content: [{ type: "text", text: text.slice(0, 60000) }], isError: !!isError };
-  if (!isError && value && typeof value === "object" && !Array.isArray(value)) out.structuredContent = value;
-  return out;
+  const text = typeof value === "string" ? value : JSON.stringify(value);
+  return { content: [{ type: "text", text: text.slice(0, 60000) }], isError: !!isError };
 }
 
 /* headers: a plain object with lowercase names. msg: the parsed JSON body.

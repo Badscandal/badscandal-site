@@ -318,10 +318,18 @@ export function liveReport(rows) {
   return { ready: true, feed: feed.slice(0, 40), bots: Object.values(by).sort((a, b) => (a.bot < b.bot ? -1 : 1)), lastAt: feed.length ? feed[0].at : null };
 }
 
-export function teamReport(tasks, sheets, today) {
-  const open = tasks.filter((t) => t.task && !isDuty(t) && !/^done$/i.test(t.status));
-  const row = (t) => ({ id: t.id || "", owner: t.owner || "?", task: t.task, deadline: t.deadline || "", status: key(t.status) || "todo", blocker: t.blocker || "",
-    late: DAY.test((t.deadline || "").slice(0, 10)) && (t.deadline || "").slice(0, 10) < today && !/^done$/i.test(t.status) });
+/* overlay (14 Nov 2026): the bots' own word on their T- tasks (staff.mjs setTaskStatus, tool task_update),
+   shown over the sheet's row: done takes it off the open list, blocked sets the blocker to the bot's note,
+   todo/working clear an old blocker. The sheet's own "done" always wins. */
+export function teamReport(tasks, sheets, today, overlay = null) {
+  const said = (t) => (overlay && t.id ? overlay[String(t.id).toUpperCase()] || null : null);
+  const open = tasks.filter((t) => t.task && !isDuty(t) && !/^done$/i.test(t.status) && !(said(t) && said(t).status === "done"));
+  const row = (t) => {
+    const o = said(t);
+    const r = { id: t.id || "", owner: t.owner || "?", task: t.task, deadline: t.deadline || "", status: key(t.status) || "todo", blocker: t.blocker || "",
+      late: DAY.test((t.deadline || "").slice(0, 10)) && (t.deadline || "").slice(0, 10) < today && !/^done$/i.test(t.status) };
+    return o ? { ...r, status: o.status, blocker: o.status === "blocked" ? o.note : "", note: o.note || "", by: o.by || "", updated: o.sp || "" } : r;
+  };
   const list = open.map(row).sort((a, b) => (b.late - a.late) || ((a.deadline || "9") < (b.deadline || "9") ? -1 : 1));
   const owners = {};
   for (const t of list) {
@@ -466,7 +474,7 @@ export function hqModel(sheets, today, fx = {}, meta, nowHM = "", staff = null) 
   const growth = growthReport(t.Growth, today);
   const fans = fansReport(t.Fans);
   const releases = mergeReleases(releasesReport(t.Releases, today), deskReleases, today, staff && "sightings" in staff ? staff.sightings : undefined, staff && staff.now != null ? staff.now : undefined);
-  const team = teamReport(t.Tasks, [t.Growth, t.Songs, t.Fans, t.Royalties], today);
+  const team = teamReport(t.Tasks, [t.Growth, t.Songs, t.Fans, t.Royalties], today, staff ? staff.taskOverlay || null : null);
   const money = { ...moneyReport(t.Spend, t.Income, t.Royalties, today, fx), metaSource: ms.source };
   const empty = HQ_TABS.filter((n) => !t[n].length);
   team.duties = dutiesReport(t.Tasks, today, nowHM, staff ? staff.overlay : null);

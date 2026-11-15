@@ -333,8 +333,8 @@ test("releases: what's missing, the card's pill, and the same sentence the desk 
   assert.match(mdsb.filled, /^\d+ of 18 filled$/);
   assert.equal(mdsb.items[0].text, "Lyrics (needed for the lyrics, Sat 14 Nov)");
   assert.equal(mdsb.attn, true, "the lyrics are needed within 3 days");
-  assert.deepEqual(mdsb.items.map((x) => x.text.split(" ")[0] + ":" + x.attn), ["Lyrics:true", "Visualiser:false", "The:false"], "lyrics soon; the visualiser for Laura's step (14 Nov 2026) after it; the pitch WAITS for Spotify for Artists (v2), so its field is neither dated nor red and comes last; the video link itself is Laura's result, never missing");
-  assert.equal(mdsb.items[2].text, "The song in two lines (needed for the Spotify pitch)");
+  assert.deepEqual(mdsb.items.map((x) => x.text.split(" ")[0] + ":" + x.attn), ["Lyrics:true", "The:false"], "lyrics soon; the visualiser is optional and never missing (14 Nov 2026, the bots); the pitch WAITS for Spotify for Artists (v2), so its field is neither dated nor red and comes last; the video link itself is Laura's result, never missing");
+  assert.equal(mdsb.items[1].text, "The song in two lines (needed for the Spotify pitch)");
   const draft = L.packLine(v("survivors"), b.today);
   assert.equal(draft.attn, false, "a draft is not late"); assert.equal(draft.items.length, 4); assert.ok(draft.more > 0);
   assert.equal(L.packLine(v("touchme"), b.today).text, v("touchme").packFilled + " of 18 filled");
