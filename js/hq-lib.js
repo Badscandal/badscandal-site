@@ -104,12 +104,10 @@
     "Lyrics ready": "lyrics", "Video scheduled, song page live": "video and page", "Ad drafts ready": "ad drafts",
     /* the release pipeline's own steps (staff desk, 11 Nov 2026): the same short words */
     "Uploaded to RouteNote with the release date": "RouteNote upload", "Approved by RouteNote (nothing waiting)": "RouteNote approval", "Lyrics live": "lyrics",
-    "Song page live on badscandal.com": "song page", "Video scheduled on YouTube": "video", "Teaser clips approved for posting": "teaser clips",
+    "Song page live on badscandal.com": "song page", "Video scheduled on YouTube": "video", "Lyrics live on Musixmatch": "lyrics",
     "Ad drafts ready, inside the cap": "ad drafts", "Release day: Spotify link on the song page and the home card": "release-day links",
     /* v2 (11 Nov 2026, evening): the song showing in Spotify for Artists, before the pitch */
-    "Showing as upcoming in Spotify for Artists": "Spotify for Artists",
-    /* batch 3 (14 Nov 2026): the social bots' teaser posts */
-    "Teaser posted on TikTok": "TikTok teaser", "Teaser posted on Instagram": "Instagram teaser", "Teaser posted on YouTube": "YouTube teaser" };
+    "Showing as upcoming in Spotify for Artists": "Spotify for Artists" };
   function shortStep(label) { return SHORT[label] || String(label || "").toLowerCase(); }
   var TAB_HREF = { Growth: "#growth", Songs: "#songs", Royalties: "#money", Fans: "#growth/fans", Releases: "#releases", Tasks: "#team", Spend: "#money", Income: "#money" };
   function metaCur(ov) { return (ov && ((ov.yesterday && ov.yesterday.currency) || (ov.spend && ov.spend.currency))) || "USD"; }
@@ -750,7 +748,8 @@
     return { open: open, done: all.filter(function (s) { return !openStep(s); }) };
   }
   /* what on the Upcoming tab waits on Luke, first on the tab: Drop's "ready to resubmit?", an approval a bot
-     asked for, his own step due within 7 days (or late), a song in Spotify for Artists nobody sent */
+     asked for, a song in Spotify for Artists nobody sent. (His own teaser step went with the teasers, 15 Nov
+     2026: no release step is Luke's now.) */
   function upcomingAsks(board, today) {
     if (!board) return [];
     var rels = (board.releases || []).filter(function (v) { return v.status === "scheduled" && !v.released && !v.alreadyOut; });
@@ -760,12 +759,6 @@
     msgs.forEach(function (m) {
       if (!m.approval) return;
       out.push({ kind: "approval", id: m.approval.id, text: m.approval.title + ": " + m.from + " asks you to approve the " + (m.approval.what === "pitch" ? "pitch" : "final lyrics"), go: "message", msg: m.id });
-    });
-    rels.forEach(function (v) {
-      (v.steps || []).filter(function (s) { return s.owner === "Luke" && openStep(s) && !s.waiting && isDay(s.due) && isDay(today) && dayDiff(today, s.due) <= 7; }).forEach(function (s) {
-        var n = dayDiff(today, s.due);
-        out.push({ kind: "step", id: v.id, text: v.title + ": your " + shortStep(s.label) + (n < 0 ? " are " + plural(-n, "day") + " late" : ", due " + day(s.due)), go: "card" });
-      });
     });
     ((board.sightings && board.sightings.items) || []).filter(function (x) { return x.state === "unknown" || x.state === "retry"; }).forEach(function (x) {
       out.push({ kind: "spotify", id: x.key, text: x.title + " is in Spotify for Artists: say what it is", go: "spotify" });
@@ -886,17 +879,18 @@
     var shown = l.slice(0, 6).map(function (x) { return x.title + (isDay(x.date) ? " (" + day(x.date).replace(/^\w+ /, "") + ")" : ""); });
     return "Out: " + shown.join(", ") + (l.length > 6 ? " and " + (l.length - 6) + " more" : "") + ".";
   }
-  /* "Counting back from release day: 21 days RouteNote upload, 16 RouteNote approval, …" */
+  /* "Counting back from release day: 21 days RouteNote upload, 16 RouteNote approval, …. After it: lyrics
+     within 7 days." (the lyrics come after the release since 15 Nov 2026) */
   function stepsSummary(steps) {
-    var byDays = [];
+    var byDays = [], after = [];
     (steps || []).forEach(function (s) {
-      var last = byDays[byDays.length - 1], w = s.days === 0 ? "" : shortStep(s.label);
       if (s.days === 0) return;
-      /* the three teaser posts (batch 3) read as one: "3 teaser clips and the teaser posts" */
-      if (s.after === "teasers") { if (last && last.days === s.days) { if (!last.posts) last.words.push("the teaser posts"); last.posts = true; return; } w = "the teaser posts"; }
-      if (last && last.days === s.days) last.words.push(w); else byDays.push({ days: s.days, words: [w], posts: s.after === "teasers" });
+      if (s.days < 0) { after.push(shortStep(s.label) + " within " + plural(-s.days, "day")); return; }
+      var last = byDays[byDays.length - 1], w = shortStep(s.label);
+      if (last && last.days === s.days) last.words.push(w); else byDays.push({ days: s.days, words: [w] });
     });
-    return byDays.length ? "Counting back from release day: " + byDays.map(function (x, i) { return x.days + (i ? "" : " days") + " " + x.words.join(" and "); }).join(", ") + "." : "";
+    var back = byDays.length ? "Counting back from release day: " + byDays.map(function (x, i) { return x.days + (i ? "" : " days") + " " + x.words.join(" and "); }).join(", ") + "." : "";
+    return back + (after.length ? (back ? " " : "") + "After it: " + joinWords(after) + "." : "");
   }
   /* today (v2): a release day that has passed is recorded as already out, not sent */
   function sendQuestion(title, date, today) {
@@ -1282,7 +1276,7 @@
     { what: "Other stores (Amazon, Deezer, TikTok…)", time: "up to 2–4 weeks after approval" },
     { what: "It shows in Spotify for Artists as upcoming", time: "a few days after Spotify gets it" },
     { what: "Spotify pitch", time: "at least 7 days before release, 2+ weeks is better: Atlas sends it the day it shows" },
-    { what: "Lyrics live", time: "once the song is in the stores; due 10 days before release" },
+    { what: "Lyrics on Musixmatch", time: "after the release: Verse watches Musixmatch from release day and adds them the day the song shows (within a week)" },
     { what: "Holiday weeks (mid-December to early January)", time: "everything is slower: allow an extra week" },
   ];
   var ymd = function (d) { return new Date(String(d) + "T12:00:00Z"); };

@@ -13,7 +13,7 @@
 
 export const LEGACY = ["2025-11-25", "2025-06-18", "2025-03-26", "2024-11-05"];
 export const MODERN = "2026-07-28";
-export const SERVER = { name: "badscandal-hq", title: "BADSCANDAL HQ", version: "1.0.0" };
+export const SERVER = { name: "badscandal-hq", title: "badscandal HQ", version: "1.0.0" };
 const META_VERSION = "io.modelcontextprotocol/protocolVersion";
 
 const err = (id, code, message, data) => ({ jsonrpc: "2.0", id: id === undefined ? null : id, error: data === undefined ? { code, message } : { code, message, data } });

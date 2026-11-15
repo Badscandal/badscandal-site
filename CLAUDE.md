@@ -2271,8 +2271,7 @@ said once; one main action per card. The sample page went from ~4,700 px to ~2,9
   (`#relPlan`: good days, calendar, how long things take) · **In Spotify for Artists** (`#relSpot`). `#relSub`
   is a fixed short sentence now (the steps' day counts are in "How long things take").
 * **Needs you** (`HQLib.upcomingAsks(board, today)`, drawn by `drawNow()`): Drop's "ready to resubmit?", an
-  approval a bot asked Luke for (open message with `approval`), Luke's own step (teasers) due within 7 days or
-  late, a song in Spotify for Artists nobody sent (unknown or retry). Each is a button: a card opens that song's
+  approval a bot asked Luke for (open message with `approval`), a song in Spotify for Artists nobody sent (unknown or retry). Each is a button: a card opens that song's
   card UNFOLDED and scrolls to it (`jumpTo(id, true)`), an approval opens `#messages/<id>`, Spotify scrolls to
   its section. Nothing waiting: "Nothing on this tab needs you right now."
 * **A sent song's card** (`relCard`): title, day, whose it is, the pill; a progress bar (`HQLib.relProgress`:
@@ -2288,3 +2287,28 @@ said once; one main action per card. The sample page went from ~4,700 px to ~2,9
   chips, Finish and send + Cancel the draft (link), then "See the files and details".
 * CSS: the block "Upcoming, overhauled" at the end of hq.html's styles (`.relnow`, `.rprog`/`.rbar`, `.rstat`,
   `.rmore`, `.rfold`). Checked in headless Chrome at 1280 and 390 px, the Needs-you taps included; no errors.
+
+## The release pipeline, tidied (15 Nov 2026)
+
+Luke, 15 Nov 2026: remove the teaser clips fully (he builds a section for them later); the lyrics go on
+Musixmatch only once the song is out (watched from release day); Forge comes after Webmaster, because the ads
+run to the song page badscandal.com/<song> with the Meta pixel (HQ's Pages shows who clicked and the cost);
+"badscandal should never be capatalised". Pinned by `tests/hq-pipeline-tidy.test.mjs`.
+
+* **Steps** (`RELEASE_STEPS`, 9): upload, approved, spotify, pitch (`after: spotify`, `asap`), page, video,
+  ads (`after: page`), live, lyrics ("Lyrics live on Musixmatch", Verse, `days: -7`, `fromRelease`). No teaser
+  steps and no release step is Luke's, so `waitingOnLuke` and `HQLib.upcomingAsks` have no "step" kind any more.
+* **Waiting** (`waitingFor(steps, s, date, today)`): an `after` step not finished, or (`fromRelease`) before the
+  release day. Words in `WAIT_WORDS` (desk) and `WAIT_OTHER` (tools). A bot can't mark a waiting step done (Luke
+  and Claude can). Freed: the pitch is due today (asap); any other step keeps its own day unless it has passed.
+* **release_step** has no `due` any more (only the teaser posts had their own day) and `status` is required.
+* **Releases already sent** (`upgradeReleases`, run by the tools, the board and the site's check): a release with
+  a teaser step or the old "Lyrics live" label loses the teaser steps, gets the lyrics renamed and due a week
+  after its day (today if that passed), a blocked lyrics step back to todo (it only waited for the song to be
+  out), and its steps in the pipeline's order; one log line "HQ … (Luke, 15 Nov 2026)". Finished steps only renamed.
+* **badscandal in lowercase** in everything the bots read (INSTRUCTIONS' first line and a rule line, the MCP
+  server title, the split and copyright hints) and in the sample data. The public pages and the HQ logo still
+  write BADSCANDAL: a separate change, only if Luke asks.
+* A bot's note cut to fit a warning ends with "…" at a word (`cutNote`).
+* The private seed's roster should get Verse's new duty line ("Lyrics on Musixmatch once each song is out")
+  at the next re-seed.

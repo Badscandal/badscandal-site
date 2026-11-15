@@ -79,9 +79,9 @@ export const DEFAULT_ROSTER = [
   { name: "Drop", role: "Distribution", duty: "Where every release is at the distributor", time: "09:20",
     why: "Gets each self-release into the stores on time and keeps where each song is at the distributor (uploaded, in moderation, approved, live), telling Luke the moment a date can't be kept.",
     schedule: [{ time: "09:20", what: "Status of every unreleased song at the distributor (store_status)" }, { time: "4 weeks before a release", what: "Upload to RouteNote (3 weeks at the latest)" }], writes: "The release timeline and each song's store status" },
-  { name: "Verse", role: "Lyrics", duty: "Lyrics live before each release", time: "09:20",
-    why: "Lyrics showing in the apps on release day; only needed when a release is 14 days away or less.",
-    schedule: [{ time: "09:20", what: "Lyrics status when a release is 14 days away or less; done 10 days before" }], writes: "The release timeline's lyrics step" },
+  { name: "Verse", role: "Lyrics", duty: "Lyrics on Musixmatch once each song is out", time: "09:20",
+    why: "Lyrics showing in the apps: they go on Musixmatch, which only lists a song once it is out.",
+    schedule: [{ time: "09:20", what: "From each release day: check Musixmatch; add Luke's approved lyrics the day the song shows there" }], writes: "The release timeline's lyrics step" },
   { name: "Webmaster", role: "Website", duty: "Daily check that the site is up and clean", time: "09:20",
     why: "Every ad and the bio link land on our own pages; if a page is down, the ad money is wasted.",
     schedule: [{ time: "09:20", what: "Home page, every song page and the dashboard answer" }, { time: "a week after the previous release", what: "The next song's page live" }, { time: "Release day", what: "Add the Spotify link" }], writes: "Its own duty row; the song pages" },
@@ -1175,7 +1175,7 @@ export const PACK_FIELDS = [
      label; for instance touch me: [the label] own 50% of that"). First on the form. */
   F("kind", "Self-release or with a label", "Self-release or label", "choice", "deal", { required: true, choices: [SELF_KIND, LABEL_KIND], hint: "With a label = a label owns part of it or delivers it to the stores." }),
   F("label", "The label", "Label", "line", "deal", { requiredWhen: WITH_LABEL, max: 120, hint: "The label's name, as on the contract." }),
-  F("split", "The split (who owns what)", "Split", "line", "deal", { requiredWhen: WITH_LABEL, hint: 'For example "BADSCANDAL 50% · Sample Records 50%".' }),
+  F("split", "The split (who owns what)", "Split", "line", "deal", { requiredWhen: WITH_LABEL, hint: 'For example "badscandal 50% · Sample Records 50%".' }),
   /* who delivers it and the deal's words are label questions: shown only "With a label" (14 Nov 2026, Luke:
      "that label part should only appear to write if we don't check self release") */
   F("distributor", "Who delivers it to the stores", "Distributor", "line", "deal", { showWhen: WITH_LABEL, max: 120, hint: `Leave empty when the label delivers it to the stores. Write "RouteNote" if we deliver it ourselves.` }),
@@ -1199,7 +1199,7 @@ export const PACK_FIELDS = [
   /* required to send a SELF-RELEASE since 11 Nov 2026 (evening): it cannot be uploaded without it. A label
      release the label delivers doesn't use it (review, 11 Nov 2026); one we upload ourselves needs it for
      the upload. showWhen: the form shows it whatever the kind (requiredWhen alone would hide it). */
-  F("copyright", "Copyright line (℗ and ©)", "Copyright line", "line", "stores", { requiredWhen: { field: "kind", equals: SELF_KIND }, showWhen: null, neededBy: "upload", hint: 'For example "℗ 2026 BADSCANDAL · © 2026 BADSCANDAL". Drop needs it for the upload.' }),
+  F("copyright", "Copyright line (℗ and ©)", "Copyright line", "line", "stores", { requiredWhen: { field: "kind", equals: SELF_KIND }, showWhen: null, neededBy: "upload", hint: 'For example "℗ 2026 badscandal · © 2026 badscandal" (always lowercase). Drop needs it for the upload.' }),
   /* Luke's words only (11 Nov 2026): Verse puts them live, it never writes them (the guide: "never write,
      guess or copy lyrics"), so no bot fills this field */
   F("lyrics", "Lyrics, full text", "Lyrics", "text", "lyrics", { neededBy: "lyrics", max: 8000, hint: "The whole text, line by line, as sung. Verse puts them live in the stores." }),
@@ -1225,19 +1225,19 @@ export const RELEASE_STEPS = [
   { key: "upload", label: "Uploaded to RouteNote with the release date", owner: "Drop", days: 21 },
   { key: "approved", label: "Approved by RouteNote (nothing waiting)", owner: "Drop", days: 16 },
   { key: "spotify", label: "Showing as upcoming in Spotify for Artists", owner: "Atlas", days: 15 },
-  { key: "pitch", label: "Spotify pitch sent", owner: "Atlas", days: 14, after: "spotify" },
-  { key: "lyrics", label: "Lyrics live", owner: "Verse", days: 10 },
+  { key: "pitch", label: "Spotify pitch sent", owner: "Atlas", days: 14, after: "spotify", asap: true },
   { key: "page", label: "Song page live on badscandal.com", owner: "Webmaster", days: 7 },
   { key: "video", label: "Video scheduled on YouTube", owner: "Laura", days: 7 },
-  { key: "teasers", label: "Teaser clips approved for posting", owner: "Luke", days: 3 },
-  /* the social bots post the teasers (14 Nov 2026, the bots' feedback, batch 3): each waits on Luke's
-     approval and keeps its OWN day (ownDay: its owner or Nova sets it; freed early, it is not pulled
-     forward). 3 days before release = 21 Nov for a 24 Nov song, the day the bots asked for. */
-  { key: "teaser_tiktok", label: "Teaser posted on TikTok", owner: "Kevin", days: 3, after: "teasers", ownDay: true },
-  { key: "teaser_instagram", label: "Teaser posted on Instagram", owner: "Steve", days: 3, after: "teasers", ownDay: true },
-  { key: "teaser_youtube", label: "Teaser posted on YouTube", owner: "Laura", days: 3, after: "teasers", ownDay: true },
-  { key: "ads", label: "Ad drafts ready, inside the cap", owner: "Forge", days: 1 },
+  /* Forge after Webmaster (15 Nov 2026, Luke: "webmaster needs to create us the link
+     www.badscandal.com/(songname) and that links to the metapixel ... our ads will run to that link"):
+     the ads wait for the song page; freed early, they keep their own day */
+  { key: "ads", label: "Ad drafts ready, inside the cap", owner: "Forge", days: 1, after: "page" },
   { key: "live", label: "Release day: Spotify link on the song page and the home card", owner: "Webmaster", days: 0 },
+  /* the lyrics come AFTER the release (15 Nov 2026, Luke: they go on only once the song is on Musixmatch,
+     "watching for release on musixmatch immediately after release"): waiting until the
+     release day (fromRelease), then due a week after it. The teaser steps (batch 3) are gone (15 Nov 2026,
+     Luke: "remove all the teaser clips fully im going to build a new section for that later"). */
+  { key: "lyrics", label: "Lyrics live on Musixmatch", owner: "Verse", days: -7, fromRelease: true },
 ];
 const STEP = Object.assign(Object.create(null), Object.fromEntries(RELEASE_STEPS.map((s) => [s.key, s])));
 /* skipped (11 Nov 2026): a step that does not apply (the label delivers it; the song was already out).
@@ -1372,59 +1372,69 @@ export function scheduleSteps(date, today, o = {}) {
   });
   return { steps, tight: daysBetween(today, date) < 21 };
 }
-/* a step whose `after` step is not finished yet (the pitch before the song shows in Spotify for
-   Artists). A release from before 11 Nov 2026 has no spotify step: its pitch never waits. */
-function waitingFor(steps, s) {
-  const after = STEP[s.key] && STEP[s.key].after;
-  if (!after || finished(s)) return null;
+/* a step that can't start yet: its `after` step is not finished (the pitch before the song shows in
+   Spotify for Artists; the ads before the song page is live), or (fromRelease) the release day hasn't come
+   (the lyrics, 15 Nov 2026). A release from before 11 Nov 2026 has no spotify step: its pitch never waits. */
+const RELEASE_DAY = { key: "release", label: "the release day", owner: "" };
+function waitingFor(steps, s, date, today) {
+  if (finished(s) || !STEP[s.key]) return null;
+  if (STEP[s.key].fromRelease && isDay(date) && isDay(today) && today < date) return RELEASE_DAY;
+  const after = STEP[s.key].after;
+  if (!after) return null;
   const a = steps.find((x) => x.key === after);
   return a && !finished(a) ? a : null;
 }
-const waitWords = (a) => (a.key === "spotify" ? "waiting: the song is not in Spotify for Artists yet" : a.key === "teasers" ? "waiting: Luke has not approved the teaser clips yet" : `waiting for "${a.label}"`);
-/* the moment a step is done (or skipped), the steps that waited for it become ordinary steps, due TODAY:
-   never born late, and the Spotify pitch goes the day the song shows in Spotify for Artists (14 Nov 2026,
-   Luke: "spotify pitch should be sent immediately when the song becomes available in spotify") */
+const WAIT_WORDS = { spotify: "waiting: the song is not in Spotify for Artists yet", page: "waiting: the song page is not live yet (the ads link to it)",
+  release: "waiting: starts on the release day, once the song shows on Musixmatch" };
+const waitWords = (a) => WAIT_WORDS[a.key] || `waiting for "${a.label}"`;
+/* the moment a step is done (or skipped), the steps that waited for it become ordinary steps: the pitch
+   (asap) is due TODAY, the day the song shows in Spotify for Artists (14 Nov 2026, Luke: "spotify pitch
+   should be sent immediately when the song becomes available in spotify"); any other step keeps its own
+   day, and only a day already gone becomes today (never born late) */
 function freeWaiting(r, key, today) {
-  /* a step with its own day (a teaser post) keeps a later day; only a day already gone becomes today */
-  for (const s of r.steps || []) if (STEP[s.key] && STEP[s.key].after === key && !finished(s) && s.due) s.due = STEP[s.key].ownDay && s.due > today ? s.due : today;
+  for (const s of r.steps || []) if (STEP[s.key] && STEP[s.key].after === key && !finished(s) && s.due) s.due = !STEP[s.key].asap && s.due > today ? s.due : today;
 }
-/* Steps added to the pipeline after a release was sent (the teaser posts, 14 Nov 2026): put in their place
-   on every release still to come, due on their usual day (today if that has passed: never born late).
-   Finished steps are never touched; a draft, a cancelled song or one already out gets nothing. The Spotify
-   step is not added here: it comes with "Change the date" (moveRelease), with its own rule for a pitch
-   already sent. Returns the keys added. */
-const LATER_STEPS = ["teaser_tiktok", "teaser_instagram", "teaser_youtube"];
-function addLaterSteps(r, today) {
-  if (!r || r.status !== "scheduled" || r.alreadyOut || !isDay(r.date) || r.date <= today || !Array.isArray(r.steps)) return [];
-  const have = new Set(r.steps.map((s) => s.key)), add = LATER_STEPS.filter((k) => !have.has(k));
-  if (!add.length) return [];
-  const fresh = scheduleSteps(r.date, today).steps;
-  for (const k of add) {
-    const n = { ...fresh.find((x) => x.key === k) };
-    /* in its place: after the last step that comes before it in RELEASE_STEPS */
-    const order = RELEASE_STEPS.map((x) => x.key), before = order.slice(0, order.indexOf(k));
-    let at = -1;
-    r.steps.forEach((s, i) => { if (before.includes(s.key)) at = i; });
-    r.steps.splice(at + 1, 0, n);
+/* The desk's releases follow the pipeline as it is now (15 Nov 2026, Luke). A release sent before it:
+   - loses the teaser steps (Luke: "remove all the teaser clips fully"), whatever their state;
+   - gets the lyrics step after the release: renamed, due a week after the release day (today if that has
+     passed), and a lyrics step blocked because the song isn't on Musixmatch yet is open again (Luke: "hes
+     not actually block[ed] the song just doesn't exist yet"); a finished one is only renamed;
+   - has its steps in the pipeline's order.
+   Recognised by its steps (a teaser step, or the old "Lyrics live" label), so it runs once per release. */
+const RETIRED_STEPS = ["teasers", "teaser_tiktok", "teaser_instagram", "teaser_youtube"];
+const OLD_LYRICS = "Lyrics live";
+const needsUpgrade = (r) => !!r && Array.isArray(r.steps) && r.steps.some((s) => RETIRED_STEPS.includes(s.key) || (s.key === "lyrics" && s.label === OLD_LYRICS));
+function upgradeOne(r, today, at) {
+  if (!needsUpgrade(r)) return false;
+  const gone = r.steps.filter((s) => RETIRED_STEPS.includes(s.key));
+  r.steps = r.steps.filter((s) => !RETIRED_STEPS.includes(s.key));
+  const ly = r.steps.find((s) => s.key === "lyrics");
+  let lyWords = "";
+  if (ly && ly.label === OLD_LYRICS) {
+    ly.label = STEP.lyrics.label;
+    if (!finished(ly) && r.status === "scheduled" && !r.alreadyOut && isDay(r.date)) {
+      const want = addDays(r.date, -STEP.lyrics.days);
+      ly.due = want < today ? today : want;
+      if (ly.status === "blocked") { ly.status = "todo"; ly.note = ""; }
+      lyWords = `the lyrics go on Musixmatch after the release (due ${dayWords(ly.due)})`;
+    }
   }
-  return add;
+  const order = RELEASE_STEPS.map((x) => x.key), at_ = (k) => (order.includes(k) ? order.indexOf(k) : order.length);
+  r.steps.sort((x, y) => at_(x.key) - at_(y.key));
+  const said = [gone.length ? "took off the teaser steps" : "", lyWords].filter(Boolean);
+  if (said.length) logIt(r, at, "HQ", `HQ ${joinWords(said)} (Luke, 15 Nov 2026)`);
+  return true;
 }
-/* Once per release: the desk's releases get the steps added since they were sent. Reads first and writes
-   only when something is missing, so calling it before every answer costs one read. */
+/* Once per release: reads first and writes only when a release still has the old steps, so calling it
+   before every answer costs one read. Returns the releases changed. */
 export async function upgradeReleases(store, now) {
   const today = spDay(now), at = new Date(now).toISOString();
   const list = await listReleases(store);
-  if (!list.some((r) => addLaterSteps(JSON.parse(JSON.stringify(r)), today).length)) return { added: [] };
+  if (!list.some(needsUpgrade)) return { changed: [] };
   return mutate(store, REL_KEY, [], (rows) => {
-    const added = [];
-    for (const r of rows) {
-      const keys = addLaterSteps(r, today);
-      if (!keys.length) continue;
-      if (r.steps.some((s) => s.key === "teasers" && finished(s))) freeWaiting(r, "teasers", today);
-      logIt(r, at, "HQ", `HQ added the teaser posts: ${joinWords(keys.map((k) => STEP[k].label.replace("Teaser posted on ", "")))} (${joinWords(keys.map((k) => STEP[k].owner))})`);
-      added.push({ id: r.id, title: r.title, steps: keys });
-    }
-    return added.length ? { value: { added } } : { skip: true, value: { added } };
+    const changed = [];
+    for (const r of rows) if (upgradeOne(r, today, at)) changed.push({ id: r.id, title: r.title });
+    return changed.length ? { value: { changed } } : { skip: true, value: { changed } };
   });
 }
 /* label release or not, after a change of the pack on a release already sent: the upload and the
@@ -1465,7 +1475,7 @@ export function releaseView(r, today, o = {}) {
   const pack = r.pack || {};
   const raw = r.steps || [];
   const steps = raw.map((s) => {
-    const w = waitingFor(raw, s), skipped = s.status === "skipped";
+    const w = waitingFor(raw, s, date, today), skipped = s.status === "skipped";
     return { ...s, late: !finished(s) && !w && !!s.due && s.due < today, dueIn: s.due ? daysBetween(today, s.due) : null, waiting: !!w,
       ...(w ? { waitingFor: w.key, waitingText: waitWords(w) } : {}), ...(skipped ? { skipped: true } : {}), ...(STEP[s.key] && STEP[s.key].after ? { after: STEP[s.key].after } : {}) };
   });
@@ -1501,7 +1511,8 @@ export function releaseView(r, today, o = {}) {
     packFilled: own.filter((f) => filled(pack[f.key])).length, packTotal: own.length, missing, steps,
     counts: { done: steps.filter((s) => s.status === "done").length, total: steps.filter((s) => s.status !== "skipped").length, late: steps.filter((s) => s.late).length,
       blocked: steps.filter((s) => s.status === "blocked").length, skipped: steps.filter((s) => s.status === "skipped").length, waiting: steps.filter((s) => s.waiting).length },
-    next: next ? { key: next.key, label: next.label, owner: next.owner, due: next.due, dueIn: next.dueIn, status: next.status, late: next.late, waiting: next.waiting, note: next.note || "" } : null,
+    next: next ? { key: next.key, label: next.label, owner: next.owner, due: next.due, dueIn: next.dueIn, status: next.status, late: next.late, waiting: next.waiting, note: next.note || "",
+      ...(next.waiting ? { waitingFor: next.waitingFor, waitingText: next.waitingText } : {}) } : null,
     /* batch 3: the status at the distributor with its history, and Luke's approvals (the lyrics' one says
        whether the pack's lyrics are still the ones he approved) */
     store: storeOf(r),
@@ -1534,7 +1545,7 @@ export function whereWords(v, today) {
   const x = v.next;
   if (!x) return `All ${v.counts.total} steps done · out ${v.dateWords}`;
   /* blocked before late (11 Nov 2026, review): "late" pointed at Drop when the step waits on Luke's cover */
-  return `${n} · next: ${x.label}, ${x.owner}, ` + (x.waiting ? "waiting: not in Spotify for Artists yet" : x.status === "blocked" ? "blocked" + (x.note ? `: ${x.note.replace(/\s+/g, " ").slice(0, 60)}` : "") : x.late ? `late since ${dayWords(x.due)}` : dayWords(x.due) || "no date yet");
+  return `${n} · next: ${x.label}, ${x.owner}, ` + (x.waiting ? (x.waitingText && x.waitingFor !== "spotify" ? x.waitingText : "waiting: not in Spotify for Artists yet") : x.status === "blocked" ? "blocked" + (x.note ? `: ${cutNote(x.note, 60)}` : "") : x.late ? `late since ${dayWords(x.due)}` : dayWords(x.due) || "no date yet");
 }
 
 /* ---------- warnings on a release (V5, 11 Nov 2026): a fact with a consequence, most urgent first ----------
@@ -1542,6 +1553,8 @@ export function whereWords(v, today) {
    twice | pitch | spotify | date | soon | without | unrecorded | split | tight. sightings: the latest Spotify for Artists report
    (sightingsView or the stored document), or null. */
 const plural = (n, w) => `${n} ${w}${n === 1 ? "" : "s"}`;
+/* a bot's note cut to fit a warning, with "…" when it was cut (15 Nov 2026: "... on the Musixmatch artist page. Will" read as broken) */
+const cutNote = (t, n) => { const x = String(t || "").replace(/\s+/g, " ").trim(); return x.length > n ? x.slice(0, n - 1).replace(/\s+\S*$/, "") + "…" : x; };
 /* sightings: the stored report (list + answers) or sightingsView (items, each with its match and answer) */
 const reportItems = (s) => (s && Array.isArray(s.items || s.list) ? s.items || s.list : null);
 const answerOf = (s, x) => (x.answer && typeof x.answer === "object" ? x.answer : ((s && s.answers) || {})[x.key]) || null;
@@ -1565,9 +1578,9 @@ export function warningsOf(v, sightings, today) {
   const live = st("live"), pitch = st("pitch"), spot = st("spotify");
   const days = v.daysToGo;
   if (days === 0 && live && !finished(live)) out.push({ kind: "today", rank: 0, text: "Out today and the Spotify link is not on the song page yet" });
-  for (const s of v.steps) if (s.status === "blocked") out.push({ kind: "blocked", rank: 1, text: `${s.label} is blocked (${s.owner})` + (s.note ? `: ${s.note.replace(/\s+/g, " ").slice(0, 160)}` : "") });
+  for (const s of v.steps) if (s.status === "blocked") out.push({ kind: "blocked", rank: 1, text: `${s.label} is blocked (${s.owner})` + (s.note ? `: ${cutNote(s.note, 160)}` : "") });
   /* batch 3: the distributor turned it down, and it hasn't been fixed yet */
-  if (v.store && v.store.status === "rejected") out.push({ kind: "rejected", rank: 1, text: "Rejected at the distributor" + (v.store.reason ? `: ${v.store.reason.replace(/\s+/g, " ").slice(0, 160)}` : "") + (v.store.by ? ` (${v.store.by})` : "") });
+  if (v.store && v.store.status === "rejected") out.push({ kind: "rejected", rank: 1, text: "Rejected at the distributor" + (v.store.reason ? `: ${cutNote(v.store.reason, 160)}` : "") + (v.store.by ? ` (${v.store.by})` : "") });
   const pitchTooLate = pitch && !finished(pitch) && days > 0 && days < 7;
   /* only while the pitch is still to go (11 Nov 2026, review): a pitch already sent (an older release
      moved, or marked by Luke) can't be held up by it */
@@ -1895,13 +1908,8 @@ export async function fillRelease(store, now, roster, a) {
 export async function setStep(store, now, roster, a) {
   const by = whoIs(a.by, roster, { people: true });
   const today0 = spDay(now);
-  /* due (14 Nov 2026, batch 3): a step with its own day (a teaser post): its owner or Nova sets the day.
-     Sent alone, it changes only the day. */
-  const due = a.due != null && String(a.due).trim() ? clean(a.due, 10) : "";
-  if (due && !isDay(due)) fail("due must be a date written YYYY-MM-DD, for example 2026-11-21. Nothing was saved.");
-  if (due && due < today0) fail(`${dayWords(due)} has already passed. Pick today or a later day. Nothing was saved.`);
-  const status = a.status == null || String(a.status).trim() === "" ? (due ? "" : low(a.status)) : low(a.status);
-  if (status !== "" && !STEP_STATUS.includes(status) || (!status && !due)) fail(`status must be one of: ${STEP_STATUS.join(", ")}. Use done only when it is really done.`);
+  const status = low(a.status);
+  if (!STEP_STATUS.includes(status)) fail(`status must be one of: ${STEP_STATUS.join(", ")}. Use done only when it is really done.`);
   /* done_on (14 Nov 2026, batch 3): the real day it was done, when that was before today (a pack sent
      late: the upload was done days earlier, and must not read "done today") */
   const doneOn = a.done_on != null && String(a.done_on).trim() ? clean(a.done_on, 10) : "";
@@ -1924,26 +1932,16 @@ export async function setStep(store, now, roster, a) {
     const st = (r.steps || []).find((s) => s.key === want || low(s.label) === want);
     if (!st) fail(`"${clean(a.step, 60)}" is not a step of this release. The steps are: ${r.steps.map((s) => s.key).join(", ")}.`);
     if (by !== st.owner && !["Nova", "Claude", "Luke"].includes(by)) fail(`"${st.label}" is ${st.owner}'s step. Only ${st.owner}, Nova, Claude or Luke can mark it. Mark only your own steps.`, "not_allowed");
-    if (due) {
-      if (!STEP[st.key] || !STEP[st.key].ownDay) fail(`"${st.label}" has no day of its own: it is dated from the release day. Only the teaser posts have their own day. Nothing was saved.`, "not_allowed");
-      if (due > r.date) fail(`${dayWords(due)} is after the release day (${dayWords(r.date)}). Pick a day up to the release day. Nothing was saved.`);
-    }
-    if (!status) {
-      /* only the day */
-      if (st.due === due) return { skip: true, value: { release: r, st, changed: false } };
-      const from = st.due;
-      st.due = due; r.updatedAt = at;
-      logIt(r, at, by, `${by}: ${st.label} — day set to ${dayWords(due)}` + (from ? ` (was ${dayWords(from)})` : ""));
-      return { value: { release: r, st, changed: false } };
-    }
     /* Luke's own step is his approval ("Only Luke approves ... public posts"): nobody else marks it done */
     if (st.owner === "Luke" && (status === "done" || status === "skipped") && by !== "Luke") fail(`"${st.label}" is Luke's own approval: only Luke can mark it ${status}, on his dashboard. If it is ready for him, send Luke ONE message.`, "not_allowed");
-    /* the pitch can't really have gone out before the song shows in Spotify for Artists (11 Nov 2026):
-       a bot is told what comes first; Luke and Claude may still record what they know */
-    const w = waitingFor(r.steps, st);
-    if (w && status === "done" && !PEOPLE.includes(by)) fail(`"${st.label}" is waiting for "${w.label}" (${w.owner}): it can't be done before that. When the song shows as upcoming in Spotify for Artists, Atlas reports it with spotify_upcoming and the pitch opens.`, "waiting");
-    if (st.status === status && st.note === note && (!link || st.link === link) && (!doneOn || st.doneOn === doneOn) && (!due || st.due === due)) return { skip: true, value: { release: r, st, changed: false } };
-    Object.assign(st, { status, note, ...(link ? { link } : {}), ...(due ? { due } : {}), at, by });
+    /* the pitch can't really have gone out before the song shows in Spotify for Artists (11 Nov 2026), the
+       ads before the song page is live, the lyrics before the song is out (15 Nov 2026): a bot is told what
+       comes first; Luke and Claude may still record what they know */
+    const w = waitingFor(r.steps, st, r.date, today0);
+    if (w && status === "done" && !PEOPLE.includes(by)) fail(`"${st.label}" ` + (w.key === "release" ? `waits for the release day (${dayWords(r.date)}): the lyrics go on Musixmatch once the song is out and shows there. Not showing yet is not a block.`
+      : `is waiting for "${w.label}" (${w.owner}): it can't be done before that.` + (w.key === "spotify" ? " When the song shows as upcoming in Spotify for Artists, Atlas reports it with spotify_upcoming and the pitch opens." : w.key === "page" ? " The ads link to the song page (badscandal.com/<song>, with the Meta pixel), so they start once Webmaster has it live." : "")), "waiting");
+    if (st.status === status && st.note === note && (!link || st.link === link) && (!doneOn || st.doneOn === doneOn)) return { skip: true, value: { release: r, st, changed: false } };
+    Object.assign(st, { status, note, ...(link ? { link } : {}), at, by });
     if (doneOn) st.doneOn = doneOn; else if (status !== "done") delete st.doneOn; /* reopened: the old day goes with it */
     if (finished(st)) freeWaiting(r, st.key, today);
     r.updatedAt = at;
@@ -2332,13 +2330,12 @@ export function slimRelease(v) {
 }
 /* what the page needs to build the form and the pipeline without hard-coding either */
 export const packFieldsOut = () => PACK_FIELDS.map((f) => ({ key: f.key, label: f.label, short: f.short, kind: f.kind, required: f.required, requiredWhen: f.requiredWhen, showWhen: f.showWhen, neededBy: f.neededBy, choices: f.choices, hint: f.hint, fill: f.fill, group: f.group, max: f.max }));
-export const releaseStepsOut = () => RELEASE_STEPS.map((s) => ({ key: s.key, label: s.label, owner: s.owner, days: s.days, ...(s.after ? { after: s.after } : {}), ...(s.ownDay ? { ownDay: true } : {}) }));
+export const releaseStepsOut = () => RELEASE_STEPS.map((s) => ({ key: s.key, label: s.label, owner: s.owner, days: s.days, ...(s.after ? { after: s.after } : {}), ...(s.fromRelease ? { fromRelease: true } : {}) }));
 
 /* What is waiting on Luke (12 Nov 2026, the HQ apps): ONE rule for the app badge, GET
    /api/hq/push/waiting and the push alerts (netlify/lib/push.mjs). luke_briefing keeps its own output.
      message  an open question to Luke (needs decision / reply / action, not settled)  -> #messages/<id>
      spotify  a song in Spotify for Artists Luke has to say something about (unknown or retry) -> #releases
-     step     his own release step (teasers) on a release the team is working on, due today or late
    The text shows on a lock screen: it says who and what kind, NEVER the message itself (no amounts,
    payers, account names or lyrics). Oldest first. now (optional) = the clock for the sightings' claims. */
 const ASKS = { decision: "asked you to decide something", reply: "is waiting for your reply", action: "needs you to do something" };
@@ -2352,14 +2349,6 @@ export function waitingOnLuke(desk, today, now = null) {
   for (const x of sv.items) {
     if (x.state !== "unknown" && x.state !== "retry") continue;
     out.push({ key: "s:" + x.key, kind: "spotify", id: x.key, text: `${clean(x.title, 80)} is in Spotify for Artists: say what it is`, href: "#releases", at: x.firstSeen || null });
-  }
-  for (const r of desk.releases || []) {
-    if (r.status !== "scheduled") continue;
-    const v = releaseView(r, today);
-    if (!releaseActive(v)) continue;
-    const st = v.steps.find((s) => s.key === "teasers");
-    if (!st || finished(st) || !st.due || st.due > today) continue;
-    out.push({ key: "t:" + v.id, kind: "step", id: v.id, text: `${clean(v.title, 80)}: your teaser clips are ${st.due < today ? "late" : "due"}`, href: "#releases/" + v.id, at: st.due });
   }
   return out.sort((a, b) => (a.at == null ? 1 : b.at == null ? -1 : a.at < b.at ? -1 : a.at > b.at ? 1 : 0));
 }

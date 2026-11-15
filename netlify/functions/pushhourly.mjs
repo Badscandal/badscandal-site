@@ -1,5 +1,5 @@
 /* The HQ apps' hourly push job (12 Nov 2026), at five past every hour, published site only:
-   1. a sweep: anything waiting on Luke that was never alerted (a teaser step that became due, something a
+   1. a sweep: anything waiting on Luke that was never alerted (a song that showed in Spotify for Artists, something a
       quiet sweep missed) alerts now, under the same once / flood / quiet-hours rules;
    2. the 08:00 summary: each device whose own clock says 08:xx and that had alerts go silently overnight
       gets ONE "<n> things are waiting on you".

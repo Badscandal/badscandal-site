@@ -56,7 +56,7 @@ export function sampleReleases(now = Date.now()) {
   const iso = (n, h = 12) => new Date(Date.parse(d(n) + "T00:00:00Z") + h * 3600000).toISOString();
   const L = (n, by, what) => ({ at: iso(n), by, what });
   const files = (slug) => ({ wav: `https://example.com/sample/${slug}-master.wav`, artwork: `https://example.com/sample/${slug}-cover-3000.jpg`, folder: `https://example.com/sample/${slug}/` });
-  const stores = { language: "Portuguese", explicit: "No", genre: "Dance", subgenre: "House", writers: "Sample Writer One: music\nSample Writer Two: lyrics", producers: "BADSCANDAL", copyright: "℗ 2026 BADSCANDAL · © 2026 BADSCANDAL" };
+  const stores = { language: "Portuguese", explicit: "No", genre: "Dance", subgenre: "House", writers: "Sample Writer One: music\nSample Writer Two: lyrics", producers: "badscandal", copyright: "℗ 2026 badscandal · © 2026 badscandal" };
   const steps = (date, sentDay, set, o) => S.scheduleSteps(date, sentDay, o).steps.map((st) => ({ ...st, ...(set[st.key] || {}) }));
 
   const mdsbDate = d(13), mdsbSent = d(-9);
@@ -72,8 +72,8 @@ export function sampleReleases(now = Date.now()) {
 
   const sbDate = d(24), sbSent = d(-2);
   const sb = { id: "slowburn", title: "Slow Burn", date: sbDate, status: "scheduled", createdAt: iso(-3), createdBy: "Luke", updatedAt: iso(0, 9), sentAt: iso(-2), tight: false,
-    pack: { kind: "With a label", label: "Sample Label", split: "BADSCANDAL 50% · Sample Label 50%", deal: "(sample) A made-up deal: contract signed in October, the label pays twice a year.",
-      ...files("slowburn"), ...stores, language: "English", copyright: "℗ 2026 Sample Label · © 2026 BADSCANDAL", mood: "slow, warm, hopeful" },
+    pack: { kind: "With a label", label: "Sample Label", split: "badscandal 50% · Sample Label 50%", deal: "(sample) A made-up deal: contract signed in October, the label pays twice a year.",
+      ...files("slowburn"), ...stores, language: "English", copyright: "℗ 2026 Sample Label · © 2026 badscandal", mood: "slow, warm, hopeful" },
     steps: steps(sbDate, sbSent, { spotify: { status: "done", note: "Showing in Spotify for Artists since " + S.dayWords(d(0)), at: iso(0, 9), by: "Atlas" } }, { labelDelivers: true }),
     log: [L(-3, "Luke", "Luke started the pack"), L(-2, "Luke", "Luke sent it to the team for " + S.dayWords(sbDate)), { at: iso(0, 9), by: "Atlas", what: "Atlas: Showing as upcoming in Spotify for Artists — done" }] };
 
@@ -82,7 +82,7 @@ export function sampleReleases(now = Date.now()) {
 
   const tmDate = d(-12), tmSent = d(-40);
   const tm = { id: "touchme", title: "Touch Me", date: tmDate, status: "scheduled", createdAt: iso(-41), createdBy: "Luke", updatedAt: iso(-12), sentAt: iso(-40), tight: false,
-    pack: { kind: "With a label", label: "Sample Records", split: "BADSCANDAL 50% · Sample Records 50%", distributor: "RouteNote", deal: "(sample) A made-up deal for the sample only.",
+    pack: { kind: "With a label", label: "Sample Records", split: "badscandal 50% · Sample Records 50%", distributor: "RouteNote", deal: "(sample) A made-up deal for the sample only.",
       ...files("touchme"), ...stores, language: "English", lyrics: "(sample) Made-up words for the sample only.\nNothing here is a real lyric.", mood: "euphoric", instruments: "synths, drums", story: "A made-up two-line story for the sample.\nNothing here is real.",
       isrc: "SAMPLE0000001", upc: "0000000000001", storeStatus: "live", spotifyTrack: "https://open.spotify.com/track/sample", video: "https://example.com/sample/touchme-video", page: "https://badscandal.com/touchme" },
     steps: steps(tmDate, tmSent, Object.fromEntries(S.RELEASE_STEPS.map((st) => [st.key, { status: "done", at: iso(-12 - st.days), by: st.owner }]))),
@@ -99,7 +99,7 @@ export function sampleSightings(now = Date.now()) {
   const d = (n) => new Date(Date.parse(today + "T12:00:00Z") + n * 86400000).toISOString().slice(0, 10);
   const item = (title, date, shownAs, firstSeen) => ({ key: S.sightKey(title, date), title, date, shownAs, firstSeen });
   return { at: new Date(at).toISOString(), sp: S.spStamp(at), by: "Atlas", note: "",
-    list: [item("Slow Burn", d(24), "BADSCANDAL · Sample Label", today), item("Velvet Night", d(16), "BADSCANDAL · Sample Distro", d(-1))], answers: {} };
+    list: [item("Slow Burn", d(24), "badscandal · Sample Label", today), item("Velvet Night", d(16), "badscandal · Sample Distro", d(-1))], answers: {} };
 }
 
 export function sampleDesk(now = Date.now()) {
