@@ -2256,3 +2256,35 @@ Tests: `tests/bots-batch5.test.mjs`. 26 tools (`tests/mcp.test.mjs` pins 26).
   each line once: every bot's blockers, card needs, duty blockers and today's blocked/error updates, and the
   cap's missing reads, that mention signing in, logging in, 2FA, a phone/verification/security code or an
   expired session; "nothing" when empty). It hands over NO messages and doesn't move Alfred's read marker.
+
+## Upcoming, overhauled (15 Nov 2026, branch `hq-upcoming-overhaul`)
+
+Luke: "its too chaotic, improve it, make it more user friendly … one shot it without my opinion and deploy
+immediately". The research it follows: what needs action goes first and top-left (dashboard eye-tracking:
+attention starts there and fades down the page); progressive disclosure (the essentials on the card, the rest
+one tap away, but status and date stay visible so no card has to be opened to know where it stands); each fact
+said once; one main action per card. The sample page went from ~4,700 px to ~2,900 px on desktop.
+
+* **Order** (`hq.html`, pinned by `tests/hq-upcoming.test.mjs`): `#relNow` **Needs you** · **Coming up** (the
+  sent songs, `#relDesk`, the sheet-only cards `#relList`, the "Out: …" line `#relOut`; the New song button sits
+  in this heading's row and opens the form here) · **In the pipeline** (drafts, `#relPipe`) · **Planning**
+  (`#relPlan`: good days, calendar, how long things take) · **In Spotify for Artists** (`#relSpot`). `#relSub`
+  is a fixed short sentence now (the steps' day counts are in "How long things take").
+* **Needs you** (`HQLib.upcomingAsks(board, today)`, drawn by `drawNow()`): Drop's "ready to resubmit?", an
+  approval a bot asked Luke for (open message with `approval`), Luke's own step (teasers) due within 7 days or
+  late, a song in Spotify for Artists nobody sent (unknown or retry). Each is a button: a card opens that song's
+  card UNFOLDED and scrolls to it (`jumpTo(id, true)`), an approval opens `#messages/<id>`, Spotify scrolls to
+  its section. Nothing waiting: "Nothing on this tab needs you right now."
+* **A sent song's card** (`relCard`): title, day, whose it is, the pill; a progress bar (`HQLib.relProgress`:
+  done of the steps that count, `role=progressbar`); ONE status line (`HQLib.relStatus`: the desk's most urgent
+  warning in red with "+N more", else "Blocked: …", "Late: … · N days", "Next: <short step> · <who|You> ·
+  <day>", "Waiting: …", "All steps done"); Drop's resubmit question stays in sight. Everything else is in the
+  fold **Steps and details** (`details.rfold`, `data-fold="card:<id>"`, remembered): all the warnings (when more
+  than one), the distributor line + history, the steps as **Still to do (N)** (blocked first, then soonest:
+  `HQLib.stepGroups`) and **Done or not ours (N)** folded, Luke's approvals, the files line, "See the files and
+  details". Under it: Edit the details (button), Change the date and Cancel release (link buttons).
+* **A draft's card** (`pipeCard`): the files on ONE line ("2 of 18 filled · still missing: Artwork, Language,
+  … +5 more", red when a step needs one within 3 days), the notes on its day (red when wrong), better days as
+  chips, Finish and send + Cancel the draft (link), then "See the files and details".
+* CSS: the block "Upcoming, overhauled" at the end of hq.html's styles (`.relnow`, `.rprog`/`.rbar`, `.rstat`,
+  `.rmore`, `.rfold`). Checked in headless Chrome at 1280 and 390 px, the Needs-you taps included; no errors.

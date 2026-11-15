@@ -720,6 +720,58 @@
     });
   }
   /* Drop's open "ready to resubmit?" question about this release, or null */
+  /* ---------- the Upcoming tab, overhauled (15 Nov 2026, Luke: "too chaotic … more user friendly") ----------
+     Each song is a compact card: its day, a progress bar and ONE status line; the rest folds behind a tap. */
+  var openStep = function (s) { return s && s.status !== "done" && s.status !== "skipped"; };
+  var byDue = function (a, b) { return (a.due || "9") < (b.due || "9") ? -1 : (a.due || "9") > (b.due || "9") ? 1 : 0; };
+  /* the one line: the most urgent warning (the desk sorts them) and how many more; else the soonest step
+     someone can do now ("Next: …", or "Late: …" when it is past its day); else what the steps wait for */
+  function relStatus(v, today) {
+    var w = (v && v.warnings) || [];
+    if (w.length) return { text: w[0], bad: true, more: w.length - 1 };
+    var steps = ((v && v.steps) || []).filter(openStep), can = steps.filter(function (s) { return !s.waiting; }).sort(byDue);
+    if (can.length) {
+      var s = can[0], who = s.owner === "Luke" ? "You" : s.owner, n = isDay(s.due) && isDay(today) ? dayDiff(today, s.due) : null;
+      if (s.status === "blocked") return { text: "Blocked: " + shortStep(s.label) + " · " + who + (s.note ? " · " + s.note : ""), bad: true, more: 0 };
+      if (n != null && n < 0) return { text: "Late: " + shortStep(s.label) + " · " + who + " · " + plural(-n, "day"), bad: true, more: 0 };
+      return { text: "Next: " + shortStep(s.label) + " · " + who + (isDay(s.due) ? " · " + day(s.due) : ""), bad: false, more: 0 };
+    }
+    if (steps.length) { var t = String(steps[0].waitingText || "waiting for the step before").replace(/^waiting: /i, ""); return { text: "Waiting: " + t, bad: false, more: 0 }; }
+    return { text: "All steps done", bad: false, more: 0 };
+  }
+  function relProgress(v) {
+    var c = (v && v.counts) || {}, done = c.done || 0, total = c.total || 0;
+    return { done: done, total: total, pct: total ? Math.round((done / total) * 100) : 0, text: total ? done + " of " + total + " steps done" : "" };
+  }
+  /* the steps in two groups: still to do (blocked first, then soonest), and done or not ours */
+  function stepGroups(v) {
+    var all = (v && v.steps) || [];
+    var open = all.filter(openStep).sort(function (a, b) { return (b.status === "blocked") - (a.status === "blocked") || byDue(a, b); });
+    return { open: open, done: all.filter(function (s) { return !openStep(s); }) };
+  }
+  /* what on the Upcoming tab waits on Luke, first on the tab: Drop's "ready to resubmit?", an approval a bot
+     asked for, his own step due within 7 days (or late), a song in Spotify for Artists nobody sent */
+  function upcomingAsks(board, today) {
+    if (!board) return [];
+    var rels = (board.releases || []).filter(function (v) { return v.status === "scheduled" && !v.released && !v.alreadyOut; });
+    var msgs = (board.messages || []).filter(function (m) { return m && m.to === "Luke" && !m.resolved; });
+    var out = [];
+    rels.forEach(function (v) { if (resubmitAsk(board, v.id)) out.push({ kind: "resubmit", id: v.id, text: v.title + ": " + resubmitAsk(board, v.id).from + " asks whether to resubmit it to the distributor", go: "card" }); });
+    msgs.forEach(function (m) {
+      if (!m.approval) return;
+      out.push({ kind: "approval", id: m.approval.id, text: m.approval.title + ": " + m.from + " asks you to approve the " + (m.approval.what === "pitch" ? "pitch" : "final lyrics"), go: "message", msg: m.id });
+    });
+    rels.forEach(function (v) {
+      (v.steps || []).filter(function (s) { return s.owner === "Luke" && openStep(s) && !s.waiting && isDay(s.due) && isDay(today) && dayDiff(today, s.due) <= 7; }).forEach(function (s) {
+        var n = dayDiff(today, s.due);
+        out.push({ kind: "step", id: v.id, text: v.title + ": your " + shortStep(s.label) + (n < 0 ? " are " + plural(-n, "day") + " late" : ", due " + day(s.due)), go: "card" });
+      });
+    });
+    ((board.sightings && board.sightings.items) || []).filter(function (x) { return x.state === "unknown" || x.state === "retry"; }).forEach(function (x) {
+      out.push({ kind: "spotify", id: x.key, text: x.title + " is in Spotify for Artists: say what it is", go: "spotify" });
+    });
+    return out;
+  }
   function resubmitAsk(board, id) {
     var list = board && board.messages || [];
     for (var i = 0; i < list.length; i++) { var m = list[i]; if (m && m.ask === "resubmit" && m.release === id && !m.resolved && m.to === "Luke") return m; }
@@ -1355,7 +1407,7 @@
     snapshot: snapshot, changesSince: changesSince, tiles: tiles, summaryText: summaryText, shortStep: shortStep, day: day,
     slug: slug, workerLabel: workerLabel, sortWorkers: sortWorkers, workerView: workerView, dutyWhen: dutyWhen, workerCounts: workerCounts, seenLine: seenLine, connectorLine: connectorLine,
     novaMessage: novaMessage, liveFeed: liveFeed, spWhen: spWhen, waitLabel: waitLabel, needWords: needWords, reportParts: reportParts, siteCheckLine: siteCheckLine, composeNames: composeNames,
-    threadRoot: threadRoot, answerTarget: answerTarget, questionLines: questionLines, questionsLeft: questionsLeft, stepButton: stepButton, formKey: formKey, storeLine: storeLine, storeHistory: storeHistory, capRateLine: capRateLine, capMissingLine: capMissingLine, dutyGapsLine: dutyGapsLine, incomeTotals: incomeTotals, approvalLines: approvalLines, resubmitAsk: resubmitAsk, staffAttention: staffAttention, staffHealth: staffHealth, curList: curList, cadenceWord: cadenceWord, accountLine: accountLine, sourceState: sourceState, payLine: payLine,
+    threadRoot: threadRoot, answerTarget: answerTarget, questionLines: questionLines, questionsLeft: questionsLeft, stepButton: stepButton, formKey: formKey, storeLine: storeLine, storeHistory: storeHistory, capRateLine: capRateLine, capMissingLine: capMissingLine, dutyGapsLine: dutyGapsLine, incomeTotals: incomeTotals, approvalLines: approvalLines, resubmitAsk: resubmitAsk, relStatus: relStatus, relProgress: relProgress, stepGroups: stepGroups, upcomingAsks: upcomingAsks, staffAttention: staffAttention, staffHealth: staffHealth, curList: curList, cadenceWord: cadenceWord, accountLine: accountLine, sourceState: sourceState, payLine: payLine,
     incomeEmpty: incomeEmpty, incomeProblems: incomeProblems,
     /* replies that visibly land + the release pipeline (11 Nov 2026) */
     spStampOf: spStampOf, seenWords: seenWords, sentLine: sentLine, answeredList: answeredList, CLAUDE_ROUNDS: CLAUDE_ROUNDS,
