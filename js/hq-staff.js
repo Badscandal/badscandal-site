@@ -496,7 +496,7 @@
       return '<div class="tile' + (l.attn ? " attn-t" : "") + '"><p class="an">' + esc(a.name) + '</p><p class="al">' + esc(cap(l.text)) + "</p>" + (a.needsLuke ? '<p class="al need">Needs you: ' + esc(a.needsLuke) + "</p>" : "") + "</div>";
     }).join("") + "</div>";
     /* batch 4: what arrived, the music's own share (no salary), what is owed to us, statements not payable yet */
-    var keys = { "Received": "received", "Royalties (no salary)": "royaltiesOnly", "Owed to us": "pending", "Statements only": "statementOnly" };
+    var keys = { "Received": "received", "Royalties (no salary)": "royaltiesOnly" };
     h += '<div class="inmonth">' + L.incomeTotals(inc).map(function (t) {
       return '<div class="tile"><p class="t-lbl">' + esc(t.label === "Received" ? "Received in " + month : t.label) + "</p>" + amountLines(inc[keys[t.label]], "Nothing") + (t.hint ? '<p class="t-hint">' + esc(t.hint) + "</p>" : "") + "</div>";
     }).join("") + "</div>";
@@ -903,7 +903,7 @@
     var hasLyrics = !!(v.lyricsChars || (v.pack && v.pack.lyrics));
     var rows = L.approvalLines(v).map(function (x) {
       var btn = "";
-      if (x.ok) btn = '<button class="linkbtn" type="button" data-rel="unapprove" data-id="' + esc(v.id) + '" data-what="' + x.key + '"' + dis + ">Take it back</button>";
+      if (x.ok && !x.sent) btn = '<button class="linkbtn" type="button" data-rel="unapprove" data-id="' + esc(v.id) + '" data-what="' + x.key + '"' + dis + ">Take it back</button>";
       else if (x.key === "lyrics" && hasLyrics) btn = '<button class="copybtn" type="button" data-rel="approve" data-id="' + esc(v.id) + '" data-what="lyrics"' + dis + ">" + (x.stale ? "Approve them again" : "Approve the final lyrics") + "</button>";
       return '<li class="' + (x.ok ? "ok" : x.stale ? "stale" : "") + '"><span>' + esc(x.text) + "</span>" + (btn ? '<span class="racts2">' + btn + "</span>" : "") + "</li>";
     }).join("");

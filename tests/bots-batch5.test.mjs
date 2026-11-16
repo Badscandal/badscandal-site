@@ -205,7 +205,8 @@ test("luke_short_briefing: the cap, income, the top 3 decisions by deadline, and
   assert.match(b.more_decisions, /1 more/);
   const signIns = b.needs_luke_sign_in.join("\n");
   assert.match(signIns, /Kevin.*phone code/);
-  assert.match(signIns, /Kevin.*TikTok login expired/);
+  /* round 3 (16 Nov 2026, Alfred): one line per account: Kevin's TikTok phone code and "TikTok login expired" are ONE sign-in */
+  assert.equal(b.needs_luke_sign_in.filter((x) => /^Kevin: .*TikTok/.test(x)).length, 1);
   assert.match(signIns, /Forge.*2FA/);
   assert.match(signIns, /Laura.*signed me out/);
   assert.match(signIns, /TikTok Fri 13 Nov: signed out/);

@@ -14,14 +14,14 @@ const rel = (o = {}) => ({ id: "night", title: "Night Drive", date: "2026-12-11"
   steps: [step("upload", "Uploaded to RouteNote with the release date", "Drop", "2026-11-13", { status: "done", by: "Drop" }),
     step("spotify", "Showing as upcoming in Spotify for Artists", "Atlas", "2026-11-26"),
     step("pitch", "Spotify pitch sent", "Atlas", "2026-11-27", { waiting: true, waitingText: "waiting: the song is not in Spotify for Artists yet" }),
-    step("video", "Video scheduled on YouTube", "Laura", "2026-12-04")], ...o });
+    step("video", "YouTube video scheduled for the release day", "Laura", "2026-12-04")], ...o });
 
 test("relStatus: one line, the most urgent first: a warning (with how many more), else the next step someone can do", () => {
   assert.deepEqual(L.relStatus(rel({ warnings: ["Lyrics live is 2 days late (Verse)", "Sent 12 days before release"] }), TODAY),
     { text: "Lyrics live is 2 days late (Verse)", bad: true, more: 1 });
   /* no warnings: the soonest open step that isn't waiting */
   assert.deepEqual(L.relStatus(rel(), TODAY), { text: "Next: Spotify for Artists · Atlas · Thu 26 Nov", bad: false, more: 0 });
-  const vid = rel({ steps: [step("video", "Video scheduled on YouTube", "Laura", "2026-11-20")] });
+  const vid = rel({ steps: [step("video", "YouTube video scheduled for the release day", "Laura", "2026-11-20")] });
   assert.equal(L.relStatus(vid, TODAY).text, "Next: video · Laura · Fri 20 Nov");
   /* the lyrics wait for the release day (15 Nov 2026) */
   const ly = rel({ steps: [step("lyrics", "Lyrics live on Musixmatch", "Verse", "2026-12-18", { waiting: true, waitingText: "waiting: starts on the release day, once the song shows on Musixmatch" })] });

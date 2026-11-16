@@ -13,22 +13,24 @@ const bot = (n) => views.find((w) => w.name === n);
 
 test("teamGroups: stuck = blocked or late; haven't checked in = quiet; the rest are on track; order kept", () => {
   const g = L.teamGroups(views);
-  assert.deepEqual(g.stuck.map((w) => w.name), ["Drop", "Kevin", "Atlas", "Laura"]);
+  /* Atlas is on track since 16 Nov 2026: his Spotify for Artists step waits while RouteNote (Drop, blocked) hasn't approved the song */
+  assert.deepEqual(g.stuck.map((w) => w.name), ["Drop", "Kevin", "Laura"]);
   assert.deepEqual(g.quiet.map((w) => w.name), ["Alfred", "Sheet", "Verse", "Webmaster"]);
-  assert.deepEqual(g.onTrack.map((w) => w.name), ["Forge", "Ledger", "Steve", "Nova"]);
+  assert.deepEqual(g.onTrack.map((w) => w.name), ["Forge", "Atlas", "Ledger", "Steve", "Nova"]);
   assert.equal(g.stuck.length + g.quiet.length + g.onTrack.length, views.length, "every bot once");
   assert.deepEqual(L.teamGroups([]), { stuck: [], quiet: [], onTrack: [] });
 });
 
 test("teamCounts: the three numbers on top", () => {
-  assert.deepEqual(L.teamCounts(views), { stuck: 4, quiet: 4, onTrack: 4, total: 12 });
+  assert.deepEqual(L.teamCounts(views), { stuck: 3, quiet: 4, onTrack: 5, total: 12 });
 });
 
 test("botProblems: only what is wrong, in words, blocked before late; nothing for a bot on track", () => {
   assert.deepEqual(L.botProblems(bot("Kevin"), b.today), [{ what: "Log TikTok followers + best post", why: "Blocked: TikTok login expired" }]);
   assert.deepEqual(L.botProblems(bot("Drop"), b.today), [{ what: "Approved by RouteNote (nothing waiting)", why: "Me Dá Seu Body · blocked: RouteNote wants a cover without the web address on it. Needs a new cover from Luke." }]);
   const atlas = L.botProblems(bot("Atlas"), b.today);
-  assert.deepEqual(atlas, [{ what: "Showing as upcoming in Spotify for Artists", why: "Me Dá Seu Body · late by 2 days" }], "a waiting step is not a problem; a done duty neither");
+  assert.deepEqual(atlas, [], "a step waiting for RouteNote's approval is not a problem (16 Nov 2026); a done duty neither");
+  assert.equal(bot("Atlas").releaseSteps.find((s) => s.key === "spotify").waitingText, "waiting: RouteNote has not approved it yet");
   assert.deepEqual(L.botProblems(bot("Laura"), b.today), [{ what: "Log YouTube subscribers", why: "Late (due 00:30)" }], "with its time when the duty has one");
   assert.deepEqual(L.botProblems(bot("Forge"), b.today), []);
   /* a blocked bot with nothing listed: its own last word says why */

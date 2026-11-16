@@ -330,14 +330,14 @@ test("releases: a step's state in words; red only for late and blocked", () => {
 test("releases: what's missing, the card's pill, and the same sentence the desk refuses with", async () => {
   const b = sampleBoard(NOW), v = (id) => b.releases.find((r) => r.id === id);
   const mdsb = L.packLine(v("medaseubody"), b.today);
-  assert.match(mdsb.filled, /^\d+ of 18 filled$/);
+  assert.match(mdsb.filled, /^\d+ of 19 filled$/);
   assert.equal(mdsb.items[0].text, "Lyrics (needed for the lyrics)", "the lyrics wait for the release day (15 Nov 2026): no day, never red");
   assert.equal(mdsb.attn, false, "nothing it needs is due within 3 days");
   assert.deepEqual(mdsb.items.map((x) => x.text.split(" ")[0] + ":" + x.attn), ["Lyrics:false", "The:false"], "lyrics soon; the visualiser is optional and never missing (14 Nov 2026, the bots); the pitch WAITS for Spotify for Artists (v2), so its field is neither dated nor red and comes last; the video link itself is Laura's result, never missing");
   assert.equal(mdsb.items[1].text, "The song in two lines (needed for the Spotify pitch)");
   const draft = L.packLine(v("survivors"), b.today);
   assert.equal(draft.attn, false, "a draft is not late"); assert.equal(draft.items.length, 4); assert.ok(draft.more > 0);
-  assert.equal(L.packLine(v("touchme"), b.today).text, v("touchme").packFilled + " of 18 filled");
+  assert.equal(L.packLine(v("touchme"), b.today).text, v("touchme").packFilled + " of 19 filled");
   assert.equal(L.missingWords({ short: "Copyright line", step: "Uploaded to RouteNote with the release date", due: "2026-11-20" }), "Copyright line (needed for the RouteNote upload, Fri 20 Nov)");
   assert.equal(L.missingWords({ short: "Artwork", step: "" }), "Artwork");
   assert.deepEqual(L.relPill(v("medaseubody"), b.today), { text: "1 blocked", bad: true, rel: false });
@@ -393,7 +393,7 @@ test("releases: one card per song (the desk's first), the sheet's own rows only 
   assert.equal(withCancelled.cancelled.length, 1); assert.equal(withCancelled.sheetOnly.length, 1, "a cancelled desk release doesn't hide the sheet's row");
   assert.deepEqual(L.releaseLists(null, null), { pipeline: [], coming: [], sheetOnly: [], out: [], sheetOut: [], openOut: [], cancelled: [] });
   /* 15 = the Spotify for Artists step (v2) */
-  assert.equal(L.stepsSummary(b.releaseSteps), "Counting back from release day: 21 days RouteNote upload, 16 RouteNote approval, 15 Spotify for Artists, 14 Spotify pitch, 7 song page and video, 1 ad drafts. After it: lyrics within 7 days.");
+  assert.equal(L.stepsSummary(b.releaseSteps), "Counting back from release day: 21 days RouteNote upload, 16 RouteNote approval, 15 Spotify for Artists, 14 Spotify pitch, 7 song page and video. After it: ads with Luke within 2 days and lyrics within 7 days.");
   assert.equal(L.stepsSummary([]), "");
   assert.equal(L.sendQuestion("Survivors", "2026-12-11"), "Send Survivors to the team for Fri 11 Dec? Every bot gets its steps and dates.");
   assert.match(L.moveQuestion("Survivors", "2026-12-11", "2026-12-18"), /^Move Survivors from Fri 11 Dec to Fri 18 Dec\? Every step that isn't done moves with it, and the team is told\.$/);
@@ -737,7 +737,7 @@ test("Revolut: payments say what they are in words; to sort and transfers never 
   assert.deepEqual(L.payStatus({ status: "transfer", by: "HQ", history: [{ by: "Nova", from: "received", to: "transfer" }] }), { text: "Not income", counted: false });
   assert.deepEqual(L.payStatus({ status: "transfer", history: [{ by: "Luke", from: "unsorted", to: "transfer" }] }), { text: "Not income", counted: false }, "sorted as not income: a refund, a gift");
   assert.deepEqual(L.payStatus({ status: "received" }), { text: "Received", counted: true });
-  assert.deepEqual(L.payStatus({ status: "pending" }), { text: "Pending", counted: true });
+  assert.deepEqual(L.payStatus({ status: "pending" }), { text: "Pending (not received yet)", counted: false }, "16 Nov 2026 (Luke): only received money is income");
   const e = { payer: "A. Example", amount: 60, currency: "EUR", date: "2026-11-11" };
   assert.equal(L.sortQuestion(e, "received", "Production"), "Sort A. Example's EUR 60.00 (Wed 11 Nov) as income (Production)? It counts as money coming in from then on, and can't be changed here.");
   assert.match(L.sortQuestion(e, "transfer"), /^Sort A\. Example's EUR 60\.00 \(Wed 11 Nov\) as not income\? /);
