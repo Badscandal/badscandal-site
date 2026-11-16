@@ -16,7 +16,12 @@
    On release day: paste the track link (https://open.spotify.com/track/…, without ?si=) into
    the song's "spotifyTrack" in songs.json, then:   node tools/new-song.mjs --rebuild
    --rebuild re-renders every song page + the edge list from songs.json (after a template edit
-   too). Images are never overwritten: a new picture gets the next -vN name. No pre-save links. */
+   too). Images are never overwritten: a new picture gets the next -vN name. No pre-save links.
+
+   Since 16 Nov 2026 it also runs on GitHub (Linux: ImageMagick + cwebp instead of `sips`), started from
+   the staff desk by tools/song-job.mjs, so Webmaster can add pages without Luke's Mac:
+     node tools/new-song.mjs --track <slug> https://open.spotify.com/track/<id>   release day in one go
+     --files-out <file>   also write the files to commit, one per line (the workflow adds exactly those) */
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync, readdirSync, statSync, writeFileSync, unlinkSync } from "node:fs";
 import { join } from "node:path";
@@ -34,8 +39,14 @@ function nextName(stem, ext) {
   return `assets/${stem}-v${used.length ? Math.max(...used) + 1 : 1}.${ext}`;
 }
 
+/* the picture tool: macOS sips on the Mac, ImageMagick elsewhere (GitHub's Linux) */
+const MAGICK = has("magick") ? "magick" : has("convert") ? "convert" : "";
+function toJpg(src, size, q, out) {
+  if (has("sips")) execFileSync("sips", ["-s", "format", "jpeg", "-s", "formatOptions", String(q), "-z", String(size), String(size), src, "--out", out], { stdio: "ignore" });
+  else execFileSync(MAGICK, [src, "-resize", `${size}x${size}!`, "-strip", "-quality", String(q), out], { stdio: "ignore" });
+}
 function images(slug, cover) {
-  if (!has("sips")) die("needs macOS `sips` to make the images (run this on the Mac)");
+  if (!has("sips") && !MAGICK) die("needs macOS `sips` or ImageMagick to make the images");
   const abs = (p) => join(ROOT, p);
   let coverWeb;
   if (has("cwebp")) {
@@ -43,14 +54,16 @@ function images(slug, cover) {
     execFileSync("cwebp", ["-quiet", "-resize", "600", "600", "-q", "80", abs(cover), "-o", abs(coverWeb)]);
   } else {
     coverWeb = nextName(`${slug}-cover-600`, "jpg");
-    execFileSync("sips", ["-s", "format", "jpeg", "-s", "formatOptions", "78", "-z", "600", "600", abs(cover), "--out", abs(coverWeb)], { stdio: "ignore" });
+    toJpg(abs(cover), 600, 78, abs(coverWeb));
   }
   /* link preview: 1200x1200 JPG, quality stepped down until it's under 195 KB */
   const share = nextName(`share-${slug}-1200`, "jpg");
   const png = join(tmpdir(), `bs-share-${process.pid}.png`);
-  execFileSync("sips", ["-s", "format", "png", "-z", "1200", "1200", abs(cover), "--out", png], { stdio: "ignore" });
+  if (has("sips")) execFileSync("sips", ["-s", "format", "png", "-z", "1200", "1200", abs(cover), "--out", png], { stdio: "ignore" });
+  else execFileSync(MAGICK, [abs(cover), "-resize", "1200x1200!", "-strip", png], { stdio: "ignore" });
   for (const q of [82, 76, 70, 64, 58, 52, 46, 40, 34]) {
-    execFileSync("sips", ["-s", "format", "jpeg", "-s", "formatOptions", String(q), png, "--out", abs(share)], { stdio: "ignore" });
+    if (has("sips")) execFileSync("sips", ["-s", "format", "jpeg", "-s", "formatOptions", String(q), png, "--out", abs(share)], { stdio: "ignore" });
+    else execFileSync(MAGICK, [png, "-strip", "-quality", String(q), abs(share)], { stdio: "ignore" });
     if (statSync(abs(share)).size < 195000) break;
   }
   unlinkSync(png);
@@ -76,10 +89,28 @@ function writeAll(data) {
 
 const data = JSON.parse(readFileSync(LIST, "utf8"));
 const args = process.argv.slice(2);
+/* --files-out <file>: the files to commit, one per line (the song-page workflow adds exactly those) */
+let filesOut = "";
+{ const i = args.indexOf("--files-out"); if (i >= 0) { filesOut = args[i + 1] || die("--files-out needs a file name"); args.splice(i, 2); } }
+const listFiles = (files) => { if (filesOut) writeFileSync(filesOut, [...new Set(files)].join("\n") + "\n"); };
 
 if (args[0] === "--rebuild") {
   const files = writeAll(data);
+  listFiles(files);
   console.log("✓ rebuilt from songs.json:\n  " + files.join("\n  "));
+  process.exit(0);
+}
+
+/* release day in one go: the track link into songs.json, then the rebuild */
+if (args[0] === "--track") {
+  const [, tslug, track] = args;
+  const song = data.songs.find((s) => s.slug === tslug);
+  if (!song) die(`"${tslug}" is not in songs.json`);
+  if (!/^https:\/\/open\.spotify\.com\/track\/[A-Za-z0-9]{22}$/.test(track || "")) die("the link must be https://open.spotify.com/track/<id> (no ?si=)");
+  song.spotifyTrack = track;
+  const files = writeAll(data);
+  listFiles(files);
+  console.log(`✓ ${song.title}: the Spotify link is on badscandal.com/${tslug}\n  ` + files.join("\n  "));
   process.exit(0);
 }
 
@@ -97,5 +128,6 @@ const bad = problems([...data.songs, song]);
 if (bad.length) { for (const f of [imgs.coverWeb, imgs.share]) unlinkSync(join(ROOT, f)); die(bad.join("\n  ")); }
 data.songs.unshift(song);
 const files = writeAll(data);
+listFiles([cover, imgs.coverWeb, imgs.share, ...files]);
 console.log(`✓ ${title} -> badscandal.com/${slug}\n\nCommit these by name (never git add -A):\n  git add ${[cover, imgs.coverWeb, imgs.share, ...files].join(" ")}\n` +
   `\nThen: npm test, git commit, git push. On release day: paste the Spotify track link into songs.json, run node tools/new-song.mjs --rebuild, commit, push.`);

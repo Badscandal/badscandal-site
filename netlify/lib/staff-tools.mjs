@@ -46,6 +46,8 @@ const INSTRUCTION_LINES = [
   ["Forge Webmaster", "Forge and Webmaster: every ad links to the song's own page, badscandal.com/<song>, which carries the Meta pixel (HQ's Pages shows who clicked and what it cost); never straight to Spotify. Forge's ad step waits until Webmaster's song page is live."],
   [null, "There are no teaser steps on releases any more: teasers will get their own place later."],
   /* round 2, 15 Nov 2026 (Luke: "yes novas counts as long as i told him yes") */
+  [null, "To add a song to the releases or change one (its title, day or details), use propose_release: Luke is asked if it is correct first, and nothing changes until he says yes. Never tell Luke a song is added or changed before that."],
+  ["Webmaster Nova", "Webmaster: song pages are made with song_page (kind new: address, title, day, cover link; kind track: the Spotify link on release day). Luke confirms, then GitHub builds and checks the page: never Luke's Mac, never by hand."],
   [null, "Nova's yes counts as Luke's, as long as Luke told Nova yes himself: Nova records it with record_luke_answer (Luke's exact words), and it reaches you as Luke's answer, via Nova. Never for money (income, payments, ad spend): only Luke answers those."],
 ];
 export const INSTRUCTIONS = INSTRUCTION_LINES.map((l) => l[1]).join("\n");
@@ -182,6 +184,28 @@ export const TOOLS = [
     inputSchema: obj({ bot: BOT, song: str("The song's title or its id."),
       field: str("Which field.", { enum: S.PACK_FIELDS.filter((f) => f.fill.length).map((f) => f.key) }),
       value: str("The value, exactly as shown in the store or platform (for lyrics: the whole text, line by line).") }, ["bot", "song", "field", "value"]) },
+  /* 16 Nov 2026 (Luke: "they should be able to add edit and change upcoming songs and should always ask me if
+     something is correct before making the addition") */
+  { name: "propose_release", title: "Propose a new song, or changes to one (Luke confirms first)", idempotent: false,
+    description: "Add a song to the releases, or change one that is on the desk (its title, its release day, or any field of its pack: the deal, links, store details, ISRC, UPC, status at the distributor...). NOTHING changes yet: Luke is asked ONE question, \"is this correct?\", with every change listed from and to, and the answers Yes, correct / No. Only his \"Yes, correct\" makes the change, in his name (on the dashboard, or through Alfred or Nova when he tells them yes); you are told on the desk when it is done, or why not. New song: give title (and date, and the pack fields you know). Change: give song (its title or id) and only what changes. send true = once he says yes, also send it to the team (needs the release day). Copy values exactly as the store, contract or Luke wrote them; never guess one. Explain in why where the information comes from (\"Luke said yes in chat at 11:40\", \"RouteNote shows UPC ...\"). One open question per song: wait for Luke's answer before asking again.",
+    inputSchema: obj({ bot: BOT,
+      song: str("To CHANGE a song on the desk: its title or id. Leave empty to ADD a new song."),
+      title: str("A new song's title, or the new title of the song you change."),
+      date: str("The release day, YYYY-MM-DD (for a new song, or the new day of the song you change)."),
+      pack: { type: "object", description: `The fields to set, each with its value (an empty value clears one), for example {"upc": "...", "featuring": "..."}. The fields: ${S.PACK_FIELDS.map((f) => `${f.key} (${f.short})`).join(", ")}.`, additionalProperties: { type: "string" } },
+      send: { type: "boolean", description: "true = once Luke says yes, also send it to the team (needs the release day)." },
+      why: str("Where this comes from, in one line (400 characters at most).") }, ["bot"]) },
+  /* 16 Nov 2026 (Luke: "a tool that can allow webmaster to use this without my computer") */
+  { name: "song_page", title: "Make a song page, or put its Spotify link on it (Luke confirms first)", idempotent: false,
+    description: "WEBMASTER (Nova may ask for him). Song pages (badscandal.com/<address>) are built by GitHub, not on Luke's Mac. kind new = a new song's page: address (slug: lowercase letters and digits, for example loveyou), title exactly as in the stores, date (the release day, YYYY-MM-DD) and cover (an https link to the square cover picture; a Dropbox link is fine). It shows a countdown and Follow on Spotify until release day, the Meta pixel and HQ's Pages count it by themselves. kind track = release day: the song's Spotify link (https://open.spotify.com/track/<id>, nothing after the id) so the button says Listen on Spotify. NOTHING happens yet: Luke is asked \"is this correct?\" with Yes, correct / No. On his yes GitHub builds the page, runs every check and puts it live in about 2 minutes; if a check fails nothing goes live. You get a message on the desk either way; then open the page to make sure, and mark your release step done with its link.",
+    inputSchema: obj({ bot: BOT,
+      kind: str("new | track", { enum: ["new", "track"] }),
+      slug: str("The address after badscandal.com/, lowercase letters and digits (for example loveyou)."),
+      title: str("kind new: the song's title exactly as in the stores."),
+      date: str("kind new: the release day, YYYY-MM-DD."),
+      cover: str("kind new: an https link to the cover picture (square JPG or PNG, 1000 pixels or more)."),
+      track: str("kind track: https://open.spotify.com/track/<id>, nothing after the id."),
+      why: str("Optional: where this comes from, in one line.") }, ["bot", "kind", "slug"]) },
   { name: "store_status", title: "Where a song is at the distributor",
     description: "DROP (Nova may do it for him): say where ONE release is at the distributor, each time it changes: not uploaded, uploaded, in moderation, rejected, resubmitted, approved, delivered, live. Every change is kept as its history (the moderation log Luke sees). With rejected, put what RouteNote said, in its words, in reason. When a rejected song is fixed and ready to go again, call it with status rejected and ready_to_resubmit true (and what changed in note): Luke is asked Yes, resubmit / Not yet, and his answer comes back to you in my_day. Do not resubmit before he says yes.",
     inputSchema: obj({ bot: BOT, song: str("The song's title or its id."),
@@ -225,7 +249,7 @@ export const TOOL_USERS = {
   submit_income: INCOME_TEAM, fix_payment: INCOME_TEAM, income_source: INCOME_TEAM, income_check: INCOME_TEAM, sort_payment: INCOME_TEAM,
   income_status: [...INCOME_TEAM, "Alfred"],
   record_spend: ["Forge"], log_growth: ["Steve", "Atlas", "Kevin", "Laura"],
-  store_status: ["Drop"], spotify_upcoming: ["Atlas"],
+  store_status: ["Drop"], spotify_upcoming: ["Atlas"], song_page: ["Webmaster"],
 };
 const onTeam = (bot, roster) => { const k = String(bot || "").trim().toLowerCase(); return k ? (roster.find((b) => b.name.toLowerCase() === k) || {}).name || "" : ""; };
 export function toolsFor(bot, roster) {
@@ -336,7 +360,7 @@ export async function callTool(tool, args, ctx) {
       }
       const r = await S.sendMessage(store, now, roster, { from: "Luke", via: me, to: p.from, text: args.luke_said, re: p.id, note, answers: args.answers });
       const left = Array.isArray(r.parent && r.parent.questions) ? r.parent.questions.filter((q) => !q.answer).length : 0;
-      return { saved: true, id: r.message.id, closed: r.settled, to: p.from, ...(r.approved && !r.approved.error ? { approved: `${r.approved.what === "pitch" ? "The pitch" : "The final lyrics"}: recorded as approved by Luke (via ${me})` } : {}), ...(left ? { still_open: `${left} question${left === 1 ? "" : "s"} still need${left === 1 ? "s" : ""} Luke's answer` } : {}), shown_on: `badscandal.com/hq, Messages (as Luke's answer, via ${me})` };
+      return { saved: true, id: r.message.id, closed: r.settled, to: p.from, ...(r.approved && !r.approved.error ? { approved: `${r.approved.what === "pitch" ? "The pitch" : "The final lyrics"}: recorded as approved by Luke (via ${me})` } : {}), ...(r.proposal ? { release: r.proposal.done ? r.proposal.text : `Not done: ${r.proposal.error}` } : {}), ...(left ? { still_open: `${left} question${left === 1 ? "" : "s"} still need${left === 1 ? "s" : ""} Luke's answer` } : {}), shown_on: `badscandal.com/hq, Messages (as Luke's answer, via ${me})` };
     }
     case "resolve_message": {
       const p = await S.resolveMessage(store, now, roster, { id: args.id, by: me, note: args.note });
@@ -481,6 +505,15 @@ export async function callTool(tool, args, ctx) {
       return { saved: true, song: r.release.title, status: r.store.status, ...(r.store.reason ? { reason: r.store.reason } : {}), history: r.store.history.length,
         ...(r.asked ? { asked_luke: r.asked, note: r.already ? "Luke was already asked and hasn't answered yet: his answer comes back to you in my_day." : "Luke is asked: Yes, resubmit / Not yet. His answer comes back to you in my_day. Do not resubmit before he says yes." } : {}),
         shown_on: "badscandal.com/hq, Upcoming" };
+    }
+    case "song_page": {
+      const r = await S.proposeSongPage(store, now, roster, { by: me, kind: args.kind, slug: args.slug, title: args.title, date: args.date, cover: args.cover, track: args.track, why: args.why });
+      return { asked: true, id: r.message.id, question: r.message.text, note: "Nothing is built yet. Luke answers Yes, correct or No; on his yes GitHub builds it (about 2 minutes) and you get a message on the desk." };
+    }
+    case "propose_release": {
+      const r = await S.proposeRelease(store, now, roster, { by: me, song: args.song, title: args.title, date: args.date, pack: args.pack, send: args.send, why: args.why });
+      return { asked: true, id: r.message.id, question: r.message.text, changes: r.changes.map((c) => `${c.label}: ${c.from ? `${c.from} → ` : ""}${c.to}`),
+        note: "Nothing has changed yet. Luke answers Yes, correct or No on the dashboard (or tells Alfred or Nova); you get a message on the desk when it is done, or why not." };
     }
     case "release_fill": {
       const r = await S.fillRelease(store, now, roster, { by: me, id: args.song, field: args.field, value: args.value });

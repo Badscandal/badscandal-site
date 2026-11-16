@@ -25,20 +25,23 @@ export function edgePaths() {
 }
 
 /* Rules every entry must follow; tests/songs.test.mjs runs this. Returns a list of problems. */
+/* paths the site already uses: never a song's address */
+export const RESERVED = new Set(["admin", "api", "assets", "css", "js", "listen", "privacy", "stats", "store", "us", "live",
+  "plugin", "activate", "index", "home", "netlify", "tests", "tools", "updatecleanslate", "404", "lukepower", "hq", "mcp", "staff"]);
+export const SLUG_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+export const TRACK_RE = /^https:\/\/open\.spotify\.com\/track\/[A-Za-z0-9]{22}$/;
 export function problems(list = DATA.songs) {
   const out = [], seen = new Set();
-  const RESERVED = new Set(["admin", "api", "assets", "css", "js", "listen", "privacy", "stats", "store", "us", "live",
-    "plugin", "activate", "index", "home", "netlify", "tests", "tools", "updatecleanslate", "404", "lukepower", "hq", "mcp", "staff"]);
   for (const s of list) {
     const at = `song "${s.slug}"`;
-    if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(s.slug || "")) out.push(`${at}: slug must be lowercase letters/digits (dashes allowed)`);
+    if (!SLUG_RE.test(s.slug || "")) out.push(`${at}: slug must be lowercase letters/digits (dashes allowed)`);
     if (RESERVED.has(s.slug)) out.push(`${at}: slug clashes with an existing site path`);
     if (seen.has(s.slug)) out.push(`${at}: listed twice`);
     seen.add(s.slug);
     if (!s.title) out.push(`${at}: no title`);
     if (!/^\d{4}-\d{2}-\d{2}$/.test(s.date || "")) out.push(`${at}: date must be YYYY-MM-DD`);
     for (const k of ["cover", "coverWeb", "share"]) if (!/^assets\/[\w.-]+-v\d+\.(jpg|webp)$/.test(s[k] || "")) out.push(`${at}: ${k} must be an assets/…-vN.jpg/webp file`);
-    if (s.spotifyTrack && !/^https:\/\/open\.spotify\.com\/track\/[A-Za-z0-9]{22}$/.test(s.spotifyTrack)) out.push(`${at}: spotifyTrack must be https://open.spotify.com/track/<id> (no ?si=)`);
+    if (s.spotifyTrack && !TRACK_RE.test(s.spotifyTrack)) out.push(`${at}: spotifyTrack must be https://open.spotify.com/track/<id> (no ?si=)`);
     if (!/^https:\/\/open\.spotify\.com\/artist\/[A-Za-z0-9]{22}$/.test(s.spotifyArtist || "")) out.push(`${at}: spotifyArtist must be https://open.spotify.com/artist/<id>`);
     for (const v of Object.values(s)) if (typeof v === "string" && /pre-?save|ffm\.to|feature\.fm|music\.badscandal\.com/i.test(v)) out.push(`${at}: no pre-save / Feature.fm links`);
   }

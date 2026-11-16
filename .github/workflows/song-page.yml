@@ -1,0 +1,47 @@
+# Song pages from the staff desk (16 Nov 2026), so Webmaster never needs Luke's Mac.
+# Started ONLY by the site (repository_dispatch "song-page"), and the site asks for it only after Luke
+# answered "Yes, correct" to Webmaster's (or Nova's) song_page question on the desk.
+# The job is passed to tools/song-job.mjs through the env variable JOB and checked again there; it is never
+# pasted into a shell line. Every test runs before anything is pushed: if one fails, nothing goes live and
+# GitHub emails the repo's owner. Files are added by name (the list the script writes), never "git add -A".
+name: Song page (from the staff desk)
+
+on:
+  repository_dispatch:
+    types: [song-page]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: song-page
+  cancel-in-progress: false
+
+jobs:
+  page:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Picture tools
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq imagemagick webp
+      - name: Install
+        run: npm ci --no-audit --no-fund
+      - name: Make the page
+        env:
+          JOB: ${{ toJSON(github.event.client_payload) }}
+        run: node tools/song-job.mjs
+      - name: Every test
+        run: npm test
+      - name: Publish
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add --pathspec-from-file=.song-files
+          git commit -F .song-commit
+          git push origin HEAD:main

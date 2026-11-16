@@ -238,7 +238,7 @@
     var opts = "";
     if (m.needs === "decision" && (m.options || []).length) {
       opts = ui.ask && ui.ask.k === k && m.options[ui.ask.i] != null
-        ? '<div class="confirm" role="group" aria-label="Confirm your answer"><p>Answer “' + esc(m.options[ui.ask.i]) + "”? " + esc(m.from) + ' will see it, and this is marked as done.</p><div class="conn-acts"><button class="sendbtn" type="button" data-act="opt-yes" data-k="' + esc(k) + '"' + dis + ">" +
+        ? '<div class="confirm" role="group" aria-label="Confirm your answer"><p>' + (m.proposal ? esc(L.proposalConfirm(m, m.options[ui.ask.i])) : "Answer “" + esc(m.options[ui.ask.i]) + "”? " + esc(m.from) + " will see it, and this is marked as done.") + '</p><div class="conn-acts"><button class="sendbtn" type="button" data-act="opt-yes" data-k="' + esc(k) + '"' + dis + ">" +
           (busy ? "Sending…" : "Send this answer") + '</button><button class="copybtn" type="button" data-act="opt-no" data-k="' + esc(k) + '"' + dis + ">Cancel</button></div></div>"
         : '<div class="mopts">' + m.options.map(function (o, i) { return '<button class="copybtn" type="button" data-act="opt" data-k="' + esc(k) + '" data-i="' + i + '"' + dis + ">" + esc(o) + "</button>"; }).join("") + "</div>";
     }
@@ -255,7 +255,12 @@
     /* batch 3: what Luke is asked to approve (the pitch in full; the lyrics are in the pack), and Drop's resubmit question */
     var ap = m.approval ? '<div class="mappr"><p class="mq">' + esc((m.approval.what === "pitch" ? "The pitch for " : "The final lyrics of ") + m.approval.title) + "</p>" +
       (m.approval.text ? '<blockquote class="mpitch">' + esc(m.approval.text) + "</blockquote>" : '<p class="mabout">The lyrics as they are in Files and details (Upcoming › ' + esc(m.approval.title) + " › See the files and details).</p>") + "</div>" : "";
-    var tag = m.approval ? " · approval" : m.ask === "resubmit" ? " · ready to resubmit" : "";
+    /* 16 Nov 2026: a bot's proposal lists every change, from and to; nothing changes before "Yes, correct" */
+    var pr = L.proposalRows(m);
+    if (pr.length) ap += '<div class="mappr"><p class="mq">' + esc(m.proposal.action === "add" ? "The new song" : "What changes on " + m.proposal.title) + '</p><dl class="mprop">' +
+      pr.map(function (r) { return "<dt>" + esc(r.label) + "</dt><dd>" + (r.from ? '<s>' + esc(r.from) + "</s> → " : "") + esc(r.to) + "</dd>"; }).join("") + "</dl>" +
+      (m.proposal.send ? '<p class="mabout">Then it goes to the team: every bot gets its steps.</p>' : "") + "</div>";
+    var tag = m.approval ? " · approval" : m.proposal ? " · is this correct?" : m.ask === "resubmit" ? " · ready to resubmit" : "";
     return '<article class="wmsg" id="wait-' + esc(safe(m.id)) + '"><p class="mhead"><span><b>' + esc(m.from) + "</b> " + esc(L.needWords(m)) + esc(tag) + (m.about ? " · about " + esc(m.about) : "") + '</span><span class="mtime">' + esc(when(m)) + "</span></p>" + about +
       '<p class="mtext">' + esc(m.text) + "</p>" + ap + opts + qhtml +
       (ui.reply === k ? replyBox(k, m) : '<div class="macts"><button class="copybtn" type="button" data-act="reply" data-k="' + esc(k) + '"' + dis + '>Reply</button><button class="copybtn" type="button" data-act="done" data-k="' + esc(k) + '"' + dis + ">" +
