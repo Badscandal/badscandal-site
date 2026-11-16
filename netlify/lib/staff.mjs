@@ -390,10 +390,13 @@ export async function sendMessage(store, now, roster, a) {
   const answers = answersOf(a.answers);
   if (answers && !re) fail("answers only go with reply_to: the id of the message whose questions you answer.");
   if (answers) for (const t of Object.values(answers)) noSecrets(t);
-  const opts = approval ? APPROVE_OPTIONS.slice() : options;
+  /* proposal: set only by proposeRelease (no tool passes it through), answered Yes, correct / No */
+  const proposal = a.proposal && typeof a.proposal === "object" && to === "Luke" ? a.proposal : null;
+  if (proposal) needs = "decision";
+  const opts = approval ? APPROVE_OPTIONS.slice() : proposal ? PROPOSE_OPTIONS.slice() : options;
   /* release + ask: set only by the desk itself (store_status's "ready to resubmit"), never by a tool argument */
   const tag = a.ask === "resubmit" && a.release ? { release: clean(a.release, 60), ask: "resubmit" } : {};
-  const m = { id: newId("m", now), at: new Date(now).toISOString(), sp: spStamp(now), from, to, text, needs, re, options: opts, kind, resolved: null, ...(approval ? { approval } : {}), ...tag,
+  const m = { id: newId("m", now), at: new Date(now).toISOString(), sp: spStamp(now), from, to, text, needs, re, options: opts, kind, resolved: null, ...(approval ? { approval } : {}), ...(proposal ? { proposal } : {}), ...tag,
     ...(qs.length >= 2 ? { questions: qs.map((q) => ({ q, answer: "", by: "", at: "" })) } : {}), ...(answers ? { answers } : {}), ...(via ? { via } : {}) };
   /* what Luke's answer settles the message with (an option he picked); "answered" otherwise */
   const settleNote = from === "Luke" ? clean(a.note, 240) : "";
@@ -451,9 +454,10 @@ export async function sendMessage(store, now, roster, a) {
   const settled = !!(parent && parent.resolved && parent.resolved.at === m.at);
   /* what Luke's pick does on the release (batch 3). The answer is already saved and the message closed:
      a failure here never throws (the answer would be sent twice); it is returned instead. */
-  let approved = null, releaseNote = null;
+  let approved = null, releaseNote = null, proposalDone = null;
   if (settled && from === "Luke") {
     const pick = low(settleNote);
+    if (parent.proposal && pick === PROPOSE_YES) proposalDone = await applyProposal(store, now, roster, parent, via);
     try {
       if (parent.approval && pick === "approve") {
         await approveRelease(store, now, roster, { by: "Luke", via, id: parent.approval.id, what: parent.approval.what, text: parent.approval.text, msg: parent.id, words: low(text) !== pick ? text : "" });
@@ -471,7 +475,7 @@ export async function sendMessage(store, now, roster, a) {
       }
     } catch (e) { approved = approved || (parent.approval ? { error: e && e.message ? e.message : "not recorded" } : null); }
   }
-  return { message: m, parent, settled, ...(approved ? { approved } : {}), ...(releaseNote ? { releaseNote } : {}) };
+  return { message: m, parent, settled, ...(approved ? { approved } : {}), ...(releaseNote ? { releaseNote } : {}), ...(proposalDone ? { proposal: proposalDone } : {}) };
 }
 /* answers: {"1": "yes", "3": "no"} or ["yes", "", "no"] -> {"1": "yes", "3": "no"} (null = none given) */
 function answersOf(x) {
@@ -1690,6 +1694,115 @@ function storeOf(r) {
 export const APPROVALS = { pitch: { label: "Pitch approved", asks: ["Atlas", "Nova", "Claude"] }, lyrics: { label: "Final lyrics approved", asks: ["Verse", "Nova", "Claude"] } };
 export const APPROVE_OPTIONS = ["Approve", "Not yet"];
 export const RESUBMIT_OPTIONS = ["Yes, resubmit", "Not yet"];
+
+/* ---------- the bots propose releases (16 Nov 2026, Luke: "give the bots better controls they should be
+   able to add edit and change upcoming songs and should always ask me if something is correct before
+   making the addition") ----------
+   A bot proposes a new song, or changes to one on the desk (title, release day, any pack field), and may
+   ask for it to be sent to the team in the same go. The desk checks everything FIRST (a proposal that
+   could never be applied never reaches Luke), then asks Luke ONE question, "Yes, correct" / "No", with
+   every change listed from and to. Only his "Yes, correct" (on the dashboard, or recorded by Alfred or
+   Nova from their chat) applies it, in Luke's name; if the song changed in the meantime nothing is
+   overwritten and the bot is told to ask again. */
+export const PROPOSE_OPTIONS = ["Yes, correct", "No"];
+const PROPOSE_YES = "yes, correct";
+const shown = (v, max = 300) => { const t = String(v == null ? "" : v); return t.length > max ? t.slice(0, max) + "…" : t; };
+export async function proposeRelease(store, now, roster, a) {
+  const by = whoIs(a.by, roster); /* the team only: Luke and Claude change songs on the dashboard themselves */
+  const today = spDay(now);
+  const list = await listReleases(store);
+  const song = clean(a.song, 120), title = clean(a.title, 120);
+  noSecrets(title);
+  const dateGiven = a.date != null && String(a.date).trim() !== "";
+  const date = clean(a.date, 10);
+  if (dateGiven && (!isDay(date) || Number.isNaN(Date.parse(date + "T12:00:00Z")))) fail("The release day must be a date written YYYY-MM-DD, for example 2026-12-11. Nothing was asked.");
+  const pack = a.pack == null ? {} : a.pack;
+  if (typeof pack !== "object" || Array.isArray(pack)) fail('pack must be the fields to set, each with its value, for example {"genre": "Dance"}.');
+  const unknown = Object.keys(pack).filter((k) => !FIELD[k]);
+  if (unknown.length) fail(`${unknown.length === 1 ? "This is not a field" : "These are not fields"} of a release: ${unknown.map((k) => clean(k, 40)).join(", ")}. The fields are: ${PACK_FIELDS.map((f) => f.key).join(", ")}. Nothing was asked.`);
+  const values = Object.fromEntries(Object.keys(pack).map((k) => [k, packValue(k, pack[k])]));
+  const why = cleanText(a.why, 400);
+  noSecrets(why);
+  const send = a.send === true;
+  const clash = (t, self) => { const k = songKey(t); return k ? list.find((x) => x !== self && x.status !== "cancelled" && (x.id === k || songKey(x.title) === k)) : null; };
+  const changes = [];
+  let p;
+  if (!song) {
+    if (!title) fail("Give the new song's title (title), or the song to change (song). Nothing was asked.");
+    const c = clash(title, null);
+    if (c) fail(`There is already a release called "${c.title}"${c.status === "draft" ? " (a draft)" : ""}: propose changes to it with song instead. Nothing was asked.`, "exists");
+    if (send && !dateGiven) fail("To send it to the team it needs its release day (date): every step is dated from it. Nothing was asked.");
+    changes.push({ key: "title", label: "Title", from: "", to: title });
+    if (dateGiven) changes.push({ key: "date", label: "Release day", from: "", to: dayWords(date) + (date < today ? " (already out)" : "") });
+    for (const [k, v] of Object.entries(values)) if (v) changes.push({ key: k, label: FIELD[k].short, from: "", to: shown(v) });
+    p = { action: "add", title, ...(dateGiven ? { date } : {}), pack: Object.fromEntries(Object.entries(values).filter(([, v]) => v)), send };
+  } else {
+    const r = findRelease(list, song, { drafts: true });
+    if (r.status === "cancelled") fail(`${r.title} was cancelled. Propose it as a new song instead. Nothing was asked.`);
+    const before = { pack: {} }, set = {};
+    if (title && title !== r.title) {
+      const c = clash(title, r);
+      if (c) fail(`There is already a release called "${c.title}". Pick another title. Nothing was asked.`, "exists");
+      changes.push({ key: "title", label: "Title", from: r.title, to: title }); before.title = r.title; set.newTitle = title;
+    }
+    if (dateGiven && date !== (r.date || "")) {
+      if (r.status === "scheduled" && !r.alreadyOut && date < today) fail(`${dayWords(date)} has already passed: a release still to come can only move to today or later. Nothing was asked.`);
+      changes.push({ key: "date", label: "Release day", from: dayWords(r.date), to: dayWords(date) }); before.date = r.date || ""; set.date = date;
+    }
+    const pk = {};
+    for (const [k, v] of Object.entries(values)) {
+      const old = (r.pack || {})[k] || "";
+      if (old === v) continue;
+      changes.push({ key: k, label: FIELD[k].short, from: shown(old), to: shown(v) }); before.pack[k] = old; pk[k] = v;
+    }
+    const sendIt = send && r.status === "draft";
+    if (sendIt && !(set.date || r.date)) fail(`To send ${r.title} to the team it needs its release day (date). Nothing was asked.`);
+    if (!changes.length && !sendIt) fail(`Nothing would change: ${r.title} already has ${Object.keys(values).length || title || dateGiven ? "those values" : "no changes in what you sent"}. Nothing was asked.`);
+    p = { action: "change", id: r.id, title: r.title, ...set, pack: pk, before, send: sendIt };
+  }
+  /* one open question per bot and song: never a pile of the same ask */
+  const key = p.id || songKey(p.title);
+  const open = (await listMessages(store, now)).find((m) => m.proposal && m.from === by && isOpen(m) && (m.proposal.id || songKey(m.proposal.title)) === key);
+  if (open) fail(`You already asked Luke about ${p.title} (message ${open.id}) and he has not answered yet. Wait for his answer (or ask Nova to remind him). Nothing was asked.`, "exists");
+  const listLine = changes.map((c) => `${c.label}: ${c.from ? `${shown(c.from, 80)} → ` : ""}${shown(c.to, 120)}`).join("; ");
+  const head = p.action === "add" ? `Add a new song: ${p.title}` + (p.date ? `, out ${dayWords(p.date)}.` : " (no release day yet).") : `Change ${p.title}:`;
+  const text = `${by} asks: is this correct? ${head}` + (p.action === "change" ? ` ${listLine}.` : changes.length > 2 ? ` ${changes.slice(2).map((c) => `${c.label}: ${shown(c.to, 120)}`).join("; ")}.` : "") +
+    (p.send ? " Then send it to the team (every bot gets its steps)." : "") + (why ? ` Why: ${why}` : "") + ` Nothing changes until you say "Yes, correct".`;
+  const r = await sendMessage(store, now, roster, { from: by, to: "Luke", needs: "decision", text, proposal: { ...p, by, changes: changes.map(({ label, from, to }) => ({ label, from, to })) } });
+  return { message: r.message, proposal: p, changes };
+}
+/* Luke said "Yes, correct": apply it in his name. Returns {done, text} or {done:false, error}; never throws
+   (the answer is already saved and the question closed). The bot that asked is told either way. */
+async function applyProposal(store, now, roster, parent, via) {
+  const p = parent.proposal, asker = parent.from, said = `proposed by ${asker}` + (via ? `, Luke said yes via ${via}` : "");
+  let out;
+  try {
+    if (p.action === "add") {
+      const r = await saveRelease(store, now, roster, { by: "Luke", title: p.title, date: p.date || "", pack: p.pack || {}, from: said });
+      let sent = "";
+      if (p.send) { const s = await sendRelease(store, now, roster, { by: "Luke", id: r.id, anyway: true }); sent = s.alreadyOut ? " It was recorded as already out." : " It went to the team: every bot has its steps."; }
+      out = { done: true, id: r.id, text: `${r.title} is on the desk${r.status === "draft" && !p.send ? " as a draft in the pipeline" : ""}.${sent}` };
+    } else {
+      const cur = (await listReleases(store)).find((x) => x.id === p.id);
+      if (!cur || cur.status === "cancelled") throw new StaffError(`${p.title} is no longer on the desk (or was cancelled).`);
+      const b = p.before || { pack: {} };
+      const moved = [];
+      if ("title" in b && cur.title !== b.title) moved.push("the title");
+      if ("date" in b && (cur.date || "") !== b.date) moved.push("the release day");
+      for (const k of Object.keys(b.pack || {})) if (((cur.pack || {})[k] || "") !== b.pack[k]) moved.push(FIELD[k] ? FIELD[k].short : k);
+      if (moved.length) throw new StaffError(`${joinWords(moved)} changed since ${asker} asked, so nothing was overwritten. ${asker}: look at it again and ask Luke again if it is still needed.`);
+      const scheduled = cur.status === "scheduled";
+      if (p.newTitle || Object.keys(p.pack || {}).length || (p.date && !scheduled)) await saveRelease(store, now, roster, { by: "Luke", id: p.id, ...(p.newTitle ? { title: p.newTitle } : {}), ...(p.date && !scheduled ? { date: p.date } : {}), pack: p.pack || {} });
+      if (p.date && scheduled) await moveRelease(store, now, roster, { by: "Luke", id: p.id, date: p.date });
+      if (p.send) await sendRelease(store, now, roster, { by: "Luke", id: p.id, anyway: true });
+      const at = new Date(now).toISOString();
+      await mutate(store, REL_KEY, [], (list) => { const r = list.find((x) => x.id === p.id); if (!r) return { skip: true, value: null }; logIt(r, at, "Luke", `Luke said yes to ${asker}'s changes` + (via ? ` (via ${via})` : "")); return { value: r }; });
+      out = { done: true, id: p.id, text: `${p.newTitle || cur.title}: the changes are made${p.date && scheduled ? " (every open step moved with the new day, and the team is told)" : ""}${p.send ? "; it went to the team" : ""}.` };
+    }
+  } catch (e) { out = { done: false, error: e && e.message ? e.message : "it could not be applied" }; }
+  try { await sendMessage(store, now, roster, { from: "HQ", to: asker, needs: "none", text: out.done ? `Done: Luke said yes. ${out.text}` : `Not done: ${out.error}` }); } catch {}
+  return out;
+}
 
 /* one note to the whole team; a full board must not undo the release change that was already saved.
    Sent by "HQ", the site itself (11 Nov 2026): it names who did it, and it is not a message Luke typed,

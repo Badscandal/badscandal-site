@@ -40,8 +40,8 @@ test("cmdIndex: every tab, the actions, songs, bots, releases and what waits on 
 test("cmdResults: nothing typed = what waits on you first, then the tabs", () => {
   const r = L.cmdResults(items, "");
   assert.equal(r.length, 8);
-  assert.deepEqual(r.slice(0, 4).map((x) => x.kind), ["message", "message", "message", "message"], "four wait on Luke in the sample (Verse's numbered questions since 14 Nov 2026; Drop's ready-to-resubmit, batch 3)");
-  assert.equal(r[4].href, "#today");
+  assert.deepEqual(r.slice(0, 5).map((x) => x.kind), ["message", "message", "message", "message", "message"], "five wait on Luke in the sample (Verse's numbered questions since 14 Nov 2026; Drop's ready-to-resubmit, batch 3; Nova's proposal, 16 Nov 2026)");
+  assert.equal(r[5].href, "#today");
 });
 
 test("cmdResults: starts-with beats contains, accents and capitals don't matter, nothing found = nothing", () => {

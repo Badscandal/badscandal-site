@@ -124,6 +124,10 @@ export function sampleDesk(now = Date.now()) {
       { q: "Is the hook sung 4 times, not 5?", answer: "Yes, 4 times", by: "Luke", at: new Date(ago(65)).toISOString() },
       { q: "Is the second verse in Portuguese?", answer: "", by: "", at: "" }, { q: "Does the bridge repeat at the end?", answer: "", by: "", at: "" }] }),
     /* batch 3: Drop asks whether to resubmit the rejected song (made up) */
+    /* 16 Nov 2026: a bot proposes a new song; Luke confirms first (made up) */
+    M(15, "msample0012p", "Nova", "Luke", "Nova asks: is this correct? Add a new song: Paper Moon, out Fri 27 Nov. Self-release or label: Self-release; Featured artists: Sample Singer; UPC: 0000000000017; Status at the distributor: in moderation. Why: (sample) Luke said yes in chat at 11:40. Nothing changes until you say \"Yes, correct\".", "decision", { options: S.PROPOSE_OPTIONS.slice(),
+      proposal: { action: "add", title: "Paper Moon", date: "2026-11-27", pack: { kind: "Self-release", featuring: "Sample Singer", upc: "0000000000017", storeStatus: "in moderation" }, send: false, by: "Nova",
+        changes: [{ label: "Title", from: "", to: "Paper Moon" }, { label: "Release day", from: "", to: "Fri 27 Nov" }, { label: "Self-release or label", from: "", to: "Self-release" }, { label: "Featured artists", from: "", to: "Sample Singer" }, { label: "UPC", from: "", to: "0000000000017" }, { label: "Status at the distributor", from: "", to: "in moderation" }] } }),
     M(20, "msample0011a", "Drop", "Luke", "Me Dá Seu Body: ready to resubmit to the distributor? It was rejected: \"(sample) The cover has a web address on it\". What changed: the new cover from the folder is uploaded.", "decision", { options: S.RESUBMIT_OPTIONS.slice(), release: "medaseubody", ask: "resubmit" }),
   ];
   messages.sort((a, b) => (a.at < b.at ? 1 : -1)); /* newest first, as the real desk lists them */

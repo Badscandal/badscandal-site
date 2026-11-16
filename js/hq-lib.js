@@ -583,6 +583,18 @@
     return out;
   }
   /* "Mon 9 Nov · USD 104.04 · received" */
+  /* a bot's proposal (16 Nov 2026): every change, "from → to" (a new value alone when there was none) */
+  function proposalRows(m) {
+    return ((m && m.proposal && m.proposal.changes) || []).map(function (c) {
+      return { label: c.label, from: c.from || "", to: c.to || "", text: c.from ? c.from + " → " + c.to : c.to };
+    });
+  }
+  /* what the inline confirm asks before the answer goes */
+  function proposalConfirm(m, option) {
+    var p = (m && m.proposal) || {};
+    if (String(option).toLowerCase() !== "yes, correct") return "Answer “" + option + "”? Nothing changes, and " + m.from + " will see it.";
+    return (p.action === "add" ? "Add " + p.title + " to the releases" : "Make these changes to " + p.title) + (p.send ? " and send it to the team" : "") + ", as " + m.from + " proposed?";
+  }
   function payLine(p) { return p ? day(p.date) + " · " + money(p.amount, p.currency) + " · " + p.status : "none logged yet"; }
   /* a source paid into several accounts (round 2, Luke: "hq should show the second routenote account"):
      "PayPal (account A): USD 640.12 payable, Wed 30 Sep · PayPal (account B): nothing logged yet" */
@@ -1408,7 +1420,7 @@
     snapshot: snapshot, changesSince: changesSince, tiles: tiles, summaryText: summaryText, shortStep: shortStep, day: day,
     slug: slug, workerLabel: workerLabel, sortWorkers: sortWorkers, workerView: workerView, dutyWhen: dutyWhen, workerCounts: workerCounts, seenLine: seenLine, connectorLine: connectorLine,
     novaMessage: novaMessage, liveFeed: liveFeed, spWhen: spWhen, waitLabel: waitLabel, needWords: needWords, reportParts: reportParts, siteCheckLine: siteCheckLine, composeNames: composeNames,
-    threadRoot: threadRoot, answerTarget: answerTarget, questionLines: questionLines, questionsLeft: questionsLeft, stepButton: stepButton, formKey: formKey, storeLine: storeLine, storeHistory: storeHistory, capRateLine: capRateLine, capMissingLine: capMissingLine, dutyGapsLine: dutyGapsLine, incomeTotals: incomeTotals, approvalLines: approvalLines, resubmitAsk: resubmitAsk, relStatus: relStatus, relProgress: relProgress, stepGroups: stepGroups, upcomingAsks: upcomingAsks, staffAttention: staffAttention, staffHealth: staffHealth, curList: curList, cadenceWord: cadenceWord, accountLine: accountLine, sourceState: sourceState, payLine: payLine, accountsLine: accountsLine,
+    threadRoot: threadRoot, answerTarget: answerTarget, questionLines: questionLines, questionsLeft: questionsLeft, stepButton: stepButton, formKey: formKey, storeLine: storeLine, storeHistory: storeHistory, capRateLine: capRateLine, capMissingLine: capMissingLine, dutyGapsLine: dutyGapsLine, incomeTotals: incomeTotals, approvalLines: approvalLines, resubmitAsk: resubmitAsk, relStatus: relStatus, relProgress: relProgress, stepGroups: stepGroups, upcomingAsks: upcomingAsks, staffAttention: staffAttention, staffHealth: staffHealth, curList: curList, cadenceWord: cadenceWord, accountLine: accountLine, sourceState: sourceState, payLine: payLine, accountsLine: accountsLine, proposalRows: proposalRows, proposalConfirm: proposalConfirm,
     incomeEmpty: incomeEmpty, incomeProblems: incomeProblems,
     /* replies that visibly land + the release pipeline (11 Nov 2026) */
     spStampOf: spStampOf, seenWords: seenWords, sentLine: sentLine, answeredList: answeredList, CLAUDE_ROUNDS: CLAUDE_ROUNDS,
