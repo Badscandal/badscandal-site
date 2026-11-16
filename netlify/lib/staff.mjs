@@ -29,6 +29,7 @@
    - Real payers, amounts and the roster's private notes live ONLY in the store: this file (the repo
      is public) carries no real data. */
 
+import { SONGS, RESERVED as SONG_RESERVED, SLUG_RE, TRACK_RE } from "./songs.mjs";
 export const TZ = "America/Sao_Paulo";
 export const UPDATE_STATUS = ["done", "working", "blocked", "error", "info"];
 export const NEEDS = ["none", "reply", "action", "decision"];
@@ -1771,13 +1772,70 @@ export async function proposeRelease(store, now, roster, a) {
   const r = await sendMessage(store, now, roster, { from: by, to: "Luke", needs: "decision", text, proposal: { ...p, by, changes: changes.map(({ label, from, to }) => ({ label, from, to })) } });
   return { message: r.message, proposal: p, changes };
 }
+/* ---------- song pages without Luke's Mac (16 Nov 2026; Luke chose "GitHub does it") ----------
+   Webmaster (or Nova) proposes a song page (kind "new": address, title, day, cover link) or the release-day
+   Spotify link (kind "track"); it is the same "is this correct?" question as proposeRelease. On "Yes,
+   correct" the site asks GitHub to build it (netlify/lib/github.mjs, set up by the function with
+   useSongDispatch). The page itself, the images and every test run on GitHub (song-page.yml). */
+let songDispatch = null;
+export const useSongDispatch = (fn) => { songDispatch = typeof fn === "function" ? fn : null; };
+export const SONG_PAGE_BOTS = ["Webmaster", "Nova"];
+export async function proposeSongPage(store, now, roster, a) {
+  const by = whoIs(a.by, roster);
+  if (!SONG_PAGE_BOTS.includes(by)) fail("Song pages are Webmaster's (Nova may ask for him). Tell Webmaster what is needed. Nothing was asked.", "not_allowed");
+  const kind = low(a.kind);
+  if (kind !== "new" && kind !== "track") fail('kind must be "new" (a new song page) or "track" (the Spotify link on release day). Nothing was asked.');
+  const slug = clean(a.slug, 60);
+  if (!SLUG_RE.test(slug)) fail(`The address must be lowercase letters and digits (dashes allowed), for example "loveyou" for badscandal.com/loveyou. Nothing was asked.`);
+  const why = cleanText(a.why, 400);
+  noSecrets(why);
+  const song = SONGS.find((x) => x.slug === slug);
+  let p, changes, head;
+  if (kind === "new") {
+    if (song) fail(`badscandal.com/${slug} already has a page (${song.title}). For its Spotify link on release day use kind "track". Nothing was asked.`, "exists");
+    if (SONG_RESERVED.has(slug)) fail(`badscandal.com/${slug} is taken by the site itself. Pick another address. Nothing was asked.`);
+    const title = clean(a.title, 120);
+    if (!title) fail("Give the song's title, exactly as in the stores. Nothing was asked.");
+    noSecrets(title);
+    const date = clean(a.date, 10);
+    if (!isDay(date) || Number.isNaN(Date.parse(date + "T12:00:00Z"))) fail("The release day must be a date written YYYY-MM-DD, for example 2026-11-27. Nothing was asked.");
+    const cover = httpsLink(a.cover);
+    if (!cover) fail("cover must be a link to the cover picture that starts with https:// (the square JPG or PNG; a Dropbox link is fine). Nothing was asked.");
+    p = { action: "page", kind, slug, title, date, cover };
+    changes = [{ label: "Address", from: "", to: `badscandal.com/${slug}` }, { label: "Title", from: "", to: title }, { label: "Release day", from: "", to: dayWords(date) }, { label: "Cover", from: "", to: cover }];
+    head = `Make the song page badscandal.com/${slug} for ${title}, out ${dayWords(date)} (a countdown and "Follow on Spotify" until then)`;
+  } else {
+    if (!song) fail(`There is no page called badscandal.com/${slug}. The song pages are: ${SONGS.map((x) => x.slug).join(", ")}. Nothing was asked.`, "not_found");
+    const track = clean(a.track, 200);
+    if (!TRACK_RE.test(track)) fail("track must be the song's Spotify link exactly like https://open.spotify.com/track/<22 letters and digits>, without ?si= or anything after it. Nothing was asked.");
+    if (song.spotifyTrack === track) fail(`badscandal.com/${slug} already has that Spotify link. Nothing was asked.`);
+    p = { action: "track", kind, slug, title: song.title, track };
+    changes = [{ label: "Spotify link", from: song.spotifyTrack || "", to: track }];
+    head = `Put the Spotify link on badscandal.com/${slug} (${song.title})`;
+  }
+  const open = (await listMessages(store, now)).find((m) => m.proposal && m.from === by && isOpen(m) && (m.proposal.action === "page" || m.proposal.action === "track") && m.proposal.slug === slug);
+  if (open) fail(`You already asked Luke about badscandal.com/${slug} (message ${open.id}) and he has not answered yet. Wait for his answer. Nothing was asked.`, "exists");
+  const text = `${by} asks: is this correct? ${head}.` + (kind === "track" ? ` Link: ${p.track}.` : ` Cover: ${p.cover}.`) + (why ? ` Why: ${why}` : "") +
+    ` On "Yes, correct" GitHub builds it, checks it and puts it live (about 2 minutes).`;
+  const r = await sendMessage(store, now, roster, { from: by, to: "Luke", needs: "decision", text, proposal: { ...p, by, changes } });
+  return { message: r.message, proposal: p, changes };
+}
+
 /* Luke said "Yes, correct": apply it in his name. Returns {done, text} or {done:false, error}; never throws
    (the answer is already saved and the question closed). The bot that asked is told either way. */
 async function applyProposal(store, now, roster, parent, via) {
   const p = parent.proposal, asker = parent.from, said = `proposed by ${asker}` + (via ? `, Luke said yes via ${via}` : "");
   let out;
   try {
-    if (p.action === "add") {
+    if (p.action === "page" || p.action === "track") {
+      if (!songDispatch) throw new StaffError("The site is not connected to GitHub here, so nothing was built.");
+      const job = p.action === "page" ? { kind: "new", slug: p.slug, title: p.title, date: p.date, cover: p.cover } : { kind: "track", slug: p.slug, track: p.track };
+      const d = await songDispatch({ ...job, by: asker, msg: parent.id });
+      if (!d || !d.ok) throw new StaffError((d && d.error) || "GitHub could not be asked. Nothing was built.");
+      out = { done: true, text: p.action === "page"
+        ? `GitHub is building badscandal.com/${p.slug} now. It checks everything and puts it live in about 2 minutes; if a check fails nothing goes live and Luke gets GitHub's email. Open the page to make sure, then mark your page step done with the link.`
+        : `GitHub is putting the Spotify link on badscandal.com/${p.slug} now (about 2 minutes). Open the page to make sure the button says Listen on Spotify and opens the song.` };
+    } else if (p.action === "add") {
       const r = await saveRelease(store, now, roster, { by: "Luke", title: p.title, date: p.date || "", pack: p.pack || {}, from: said });
       let sent = "";
       if (p.send) { const s = await sendRelease(store, now, roster, { by: "Luke", id: r.id, anyway: true }); sent = s.alreadyOut ? " It was recorded as already out." : " It went to the team: every bot has its steps."; }

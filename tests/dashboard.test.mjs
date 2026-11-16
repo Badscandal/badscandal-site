@@ -7,6 +7,7 @@ import { readFileSync } from "node:fs";
 import { registerHooks } from "node:module";
 import { dutiesReport, hqModel, sheetErrors } from "../netlify/lib/hq.mjs";
 import { sampleSheets } from "../netlify/lib/hq-sample.mjs";
+import { SONGS } from "../netlify/lib/songs.mjs";
 
 /* ---------- a fake Blobs that records every store it is asked for ---------- */
 globalThis.__blobs = new Map(); globalThis.__asked = [];
@@ -61,7 +62,9 @@ test("overview: login required; every song, yesterday, spend, cap, health and th
   assert.equal((await call("/api/admin/overview?sample=1")).status, 401, "the sample needs the login too");
   const j = await (await call("/api/admin/overview?range=7d&sample=1", { headers: { cookie } })).json();
   assert.equal(j.sample, true); assert.equal(j.days, 7);
-  assert.deepEqual(j.songs.map((s) => s.id).sort(), ["medaseubody", "touchme"]);
+  /* every song in songs.json (read from the list, so a new song page never breaks this: 16 Nov 2026) */
+  assert.deepEqual(j.songs.map((s) => s.id).sort(), SONGS.map((s) => s.slug).sort());
+  assert.ok(j.songs.some((s) => s.id === "touchme"));
   for (const s of j.songs) { assert.ok(s.people <= s.visits, "people <= visits"); assert.ok(s.taps <= s.visits); assert.ok(!("tapsByAd" in s)); }
   assert.ok(j.yesterday.taps > 0 && j.yesterday.people > 0 && j.yesterday.cpt > 0);
   assert.equal(j.spend.connected, true); assert.ok(j.spend.ads.every((a) => a.song && a.ad));
