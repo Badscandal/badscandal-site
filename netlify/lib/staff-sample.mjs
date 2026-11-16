@@ -160,7 +160,7 @@ export function sampleBankStatus(now = Date.now()) {
   const d = new Date(now), at = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 9, 50);
   const read = new Date(at <= now ? at : at - 86400000).toISOString();
   return { configured: true, connected: true, needsApproval: false, aspsp: "Revolut", validUntil: new Date(now + 86.5 * 86400000).toISOString(), daysLeft: 86, expiring: false,
-    accounts: [{ name: "Current", currency: "EUR" }, { name: "Savings", currency: "EUR" }, { name: "Current", currency: "USD" }],
+    accounts: [{ name: "Current", currency: "EUR", last4: "0001" }, { name: "Savings", currency: "EUR", last4: "0002" }, { name: "Current", currency: "USD", last4: "0003" }], /* made up */
     lastRunAt: read, lastOkAt: read, lastError: null, lastAdded: 2, partial: false, canConnectHere: true };
 }
 

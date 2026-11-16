@@ -706,7 +706,7 @@ test("bank endpoints: who may call what; the callback's two answers; nothing sec
     assert.equal(setCookie, "__Host-bs_bank_state=; Max-Age=0; Path=/; Secure; HttpOnly; SameSite=Lax", "the callback clears the cookie");
     assert.equal((await call("GET", `callback?code=${CODE}&state=${nonce}`, { jar })).location, "/hq?bank=failed#money", "used once only");
     const st = await call("GET", "status", { auth: HENV.STAFF_CLAUDE_KEY });
-    assert.deepEqual([st.body.connected, st.body.accounts], [true, [{ name: "Current", currency: "EUR" }, { name: "USD account", currency: "USD" }]]);
+    assert.deepEqual([st.body.connected, st.body.accounts], [true, [{ name: "Current", currency: "EUR", last4: "5678" }, { name: "USD account", currency: "USD", last4: "5678" }]]);
     /* sync: Luke or Claude */
     const s = await call("POST", "sync", { auth: HENV.STAFF_CLAUDE_KEY });
     assert.deepEqual([s.status, s.body.ok, s.body.added, s.body.newPayments, s.body.transfers], [200, true, 4, 3, 1]);
@@ -766,4 +766,15 @@ test("bank + desk: a payment the reader couldn't place, sorted as the money of a
   assert.deepEqual([again.added, again.updated, again.already], [0, 0, 1]);
   assert.equal((await allEntries(desk)).length, 1);
   assert.ok(!(await S.incomeState(desk, NOW + 35 * DAY)).problems.some((p) => /pending payment/.test(p)), "no false 'pending older than 30 days'");
+});
+
+/* 16 Nov 2026 (Luke's spec): which account a payment landed in, by its LAST 4 characters only */
+test("accounts: only the last 4 of the account number are kept, on the tile and on each payment's note", async () => {
+  const a = B.accountInfo("uid-x", { account_id: { iban: FAKE_IBAN }, currency: "EUR", details: "Current", name: "Sam Example" }, null);
+  assert.equal(a.last4, "5678");
+  assert.ok(!JSON.stringify(a).includes("IE29") && !JSON.stringify(a).includes("9311521"), "never the whole number");
+  assert.equal(B.accountInfo("uid-y", { all_account_ids: [{ identification: "12-34-56 87654321", scheme_name: "BBAN" }] }, null).last4, "4321");
+  assert.equal(B.accountInfo("uid-z", {}, null).last4, undefined, "no number: nothing");
+  await import("../js/hq-lib.js"); const L = globalThis.HQLib;
+  assert.deepEqual(L.bankView({ configured: true, connected: true, accounts: [{ name: "Current", currency: "EUR", last4: "5678" }], validUntil: new Date(NOW + 90 * DAY).toISOString(), daysLeft: 90, lastOkAt: new Date(NOW).toISOString(), lastRunAt: new Date(NOW).toISOString() }, NOW).accounts, ["Current · EUR ••5678"]);
 });

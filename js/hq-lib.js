@@ -1111,7 +1111,7 @@
   function bankView(st, now) {
     var v = { line: bankLine(st, now), attn: false, accounts: [], error: "", note: "", buttons: [] };
     if (!st) return v;
-    v.accounts = (st.accounts || []).map(function (a) { return [a.name, a.currency].filter(Boolean).join(" · "); }).filter(Boolean);
+    v.accounts = (st.accounts || []).map(function (a) { return [a.name, a.currency].filter(Boolean).join(" · ") + (a.last4 ? " ••" + a.last4 : ""); }).filter(Boolean);
     if (!st.configured) { v.note = "Connecting needs the Revolut settings on Netlify first."; return v; }
     var here = !!st.canConnectHere;
     if (st.needsApproval) { v.attn = true; v.buttons = here ? ["approve", "disconnect"] : ["disconnect"]; }
