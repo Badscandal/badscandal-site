@@ -154,6 +154,9 @@ async function mcp(req, context) {
 
 async function api(req, context, path) {
   const url = new URL(req.url);
+  /* a cover Webmaster put on the desk (16 Nov 2026): public, the picture only (it goes on the song page anyway;
+     GitHub fetches it to build the page). Nothing else on the desk is reachable without a key. */
+  if (req.method === "GET" && path.startsWith("cover/")) return S.coverResponse(stores(context).desk, path.slice("cover/".length));
   const luke = await isLuke(req);
   const role = luke ? "luke" : await keyRole(req);
   if (!role) return json(401, { error: "Not logged in" });

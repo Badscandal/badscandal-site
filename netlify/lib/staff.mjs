@@ -29,7 +29,8 @@
    - Real payers, amounts and the roster's private notes live ONLY in the store: this file (the repo
      is public) carries no real data. */
 
-import { SONGS, RESERVED as SONG_RESERVED, SLUG_RE, TRACK_RE } from "./songs.mjs";
+import { SONGS, RESERVED as SONG_RESERVED, SLUG_RE, TRACK_RE, homeCardSong, homeCardNow as homeCardPublished } from "./songs.mjs";
+export const homeCardNow = homeCardPublished;
 export const TZ = "America/Sao_Paulo";
 export const UPDATE_STATUS = ["done", "working", "blocked", "error", "info"];
 export const NEEDS = ["none", "reply", "action", "decision"];
@@ -461,7 +462,11 @@ export async function sendMessage(store, now, roster, a) {
   let approved = null, releaseNote = null, proposalDone = null;
   if (settled && from === "Luke") {
     const pick = low(settleNote);
-    if (parent.proposal && pick === PROPOSE_YES) proposalDone = await applyProposal(store, now, roster, parent, via);
+    if (parent.proposal && pick === PROPOSE_YES) {
+      proposalDone = await applyProposal(store, now, roster, parent, via);
+      /* the outcome stays on the question (song_pages reads it, 16 Nov 2026) */
+      try { await mutate(store, msgKey(pm), [], (list) => { const x = list.find((y) => y.id === parent.id); if (!x) return { skip: true, value: null }; x.proposalResult = { done: !!proposalDone.done, at: m.at, ...(proposalDone.error ? { error: proposalDone.error } : {}) }; return { value: x }; }); } catch {}
+    }
     try {
       if (parent.approval && pick === "approve") {
         await approveRelease(store, now, roster, { by: "Luke", via, id: parent.approval.id, what: parent.approval.what, text: parent.approval.text, msg: parent.id, words: low(text) !== pick ? text : "" });
@@ -1906,7 +1911,7 @@ export async function proposeSongPage(store, now, roster, a) {
   const by = whoIs(a.by, roster);
   if (!SONG_PAGE_BOTS.includes(by)) fail("Song pages are Webmaster's (Nova may ask for him). Tell Webmaster what is needed. Nothing was asked.", "not_allowed");
   const kind = low(a.kind);
-  if (kind !== "new" && kind !== "track") fail('kind must be "new" (a new song page) or "track" (the Spotify link on release day). Nothing was asked.');
+  if (!["new", "track", "card"].includes(kind)) fail('kind must be "new" (a new song page), "track" (the Spotify link on release day) or "card" (the song on the home card). Nothing was asked.');
   const slug = clean(a.slug, 60);
   if (!SLUG_RE.test(slug)) fail(`The address must be lowercase letters and digits (dashes allowed), for example "loveyou" for badscandal.com/loveyou. Nothing was asked.`);
   const why = cleanText(a.why, 400);
@@ -1926,6 +1931,16 @@ export async function proposeSongPage(store, now, roster, a) {
     p = { action: "page", kind, slug, title, date, cover };
     changes = [{ label: "Address", from: "", to: `badscandal.com/${slug}` }, { label: "Title", from: "", to: title }, { label: "Release day", from: "", to: dayWords(date) }, { label: "Cover", from: "", to: cover }];
     head = `Make the song page badscandal.com/${slug} for ${title}, out ${dayWords(date)} (a countdown and "Follow on Spotify" until then)`;
+  } else if (kind === "card") {
+    /* the home card (16 Nov 2026): only a song with its own page; the rule says which song is due */
+    if (!song) fail(`There is no page called badscandal.com/${slug}: a song needs its page before it can go on the home card. The song pages are: ${SONGS.map((x) => x.slug).join(", ")}. Nothing was asked.`, "not_found");
+    const now0 = homeCardPublished();
+    if (now0.slug === slug) fail(`${song.title} is already on the home card. Nothing was asked.`, "exists");
+    const rule = homeCardSong(SONGS, spDay(now));
+    p = { action: "card", kind, slug, title: song.title };
+    changes = [{ label: "Home card", from: now0.title || "", to: song.title }];
+    head = `Put ${song.title} on the home card (badscandal.com), ` + (song.date > spDay(now) ? `with its countdown to ${dayWords(song.date)}` : `out since ${dayWords(song.date)}`) +
+      (rule ? `. The rule says: ${rule.why}` + (rule.slug !== slug ? ` (so it would be ${rule.title})` : "") : "");
   } else {
     if (!song) fail(`There is no page called badscandal.com/${slug}. The song pages are: ${SONGS.map((x) => x.slug).join(", ")}. Nothing was asked.`, "not_found");
     const track = clean(a.track, 200);
@@ -1935,12 +1950,102 @@ export async function proposeSongPage(store, now, roster, a) {
     changes = [{ label: "Spotify link", from: song.spotifyTrack || "", to: track }];
     head = `Put the Spotify link on badscandal.com/${slug} (${song.title})`;
   }
-  const open = (await listMessages(store, now)).find((m) => m.proposal && m.from === by && isOpen(m) && (m.proposal.action === "page" || m.proposal.action === "track") && m.proposal.slug === slug);
-  if (open) fail(`You already asked Luke about badscandal.com/${slug} (message ${open.id}) and he has not answered yet. Wait for his answer. Nothing was asked.`, "exists");
-  const text = `${by} asks: is this correct? ${head}.` + (kind === "track" ? ` Link: ${p.track}.` : ` Cover: ${p.cover}.`) + (why ? ` Why: ${why}` : "") +
+  const open = (await listMessages(store, now)).find((m) => m.proposal && isOpen(m) && (kind === "card" ? m.proposal.action === "card" : m.from === by && (m.proposal.action === "page" || m.proposal.action === "track") && m.proposal.slug === slug));
+  if (open) fail(kind === "card" ? `Luke has not answered the last home-card question yet (message ${open.id}). Wait for his answer. Nothing was asked.` : `You already asked Luke about badscandal.com/${slug} (message ${open.id}) and he has not answered yet. Wait for his answer. Nothing was asked.`, "exists");
+  const text = `${by} asks: is this correct? ${head}.` + (kind === "track" ? ` Link: ${p.track}.` : kind === "new" ? ` Cover: ${p.cover}.` : "") + (why ? ` Why: ${why}` : "") +
     ` On "Yes, correct" GitHub builds it, checks it and puts it live (about 2 minutes).`;
   const r = await sendMessage(store, now, roster, { from: by, to: "Luke", needs: "decision", text, proposal: { ...p, by, changes } });
   return { message: r.message, proposal: p, changes };
+}
+
+/* What happened to each song-page request (song_pages, 16 Nov 2026, Webmaster: so routines don't ask twice):
+   newest first, from the last two months of messages. A request Luke said yes to is "live" once the published
+   site has it (the song in songs.json, its Spotify link, or the home card), checked against the site as
+   deployed (a GitHub publish redeploys it); else "sent to GitHub … not live yet". */
+export async function songPages(store, now) {
+  const list = (await listMessages(store, now, 2)).filter((m) => m.proposal && ["page", "track", "card"].includes(m.proposal.action));
+  const card = homeCardPublished();
+  const live = (p) => (p.action === "page" ? SONGS.some((x) => x.slug === p.slug) : p.action === "track" ? SONGS.some((x) => x.slug === p.slug && x.spotifyTrack === p.track) : card.slug === p.slug);
+  return list.sort((a, b) => (a.at < b.at ? 1 : -1)).map((m) => {
+    const p = m.proposal, r = m.proposalResult;
+    let state;
+    if (isOpen(m)) state = "waiting on Luke";
+    else if (!r && m.resolved && low(m.resolved.note) !== PROPOSE_YES) state = "Luke said no";
+    else if (r && !r.done) state = `not sent: ${r.error || "it could not be sent"}`;
+    else if (live(p)) state = "live";
+    else state = `sent to GitHub ${r && r.at ? spStamp(Date.parse(r.at)).slice(5) : ""}: not live yet` + (r && r.at && now - Date.parse(r.at) > 15 * 60000 ? " (over 15 minutes: a check may have failed, and Luke gets GitHub's email)" : "");
+    return { id: m.id, asked: m.sp, by: m.from, what: p.action === "card" ? `home card: ${p.title}` : p.action === "track" ? `Spotify link on ${p.title}` : `new page: ${p.title}`,
+      address: `badscandal.com/${p.slug}`, state };
+  });
+}
+
+/* ---------- covers on the desk (16 Nov 2026, Webmaster: a Drive link answered with a sign-in page) ----------
+   Webmaster (or Nova) sends the cover itself (base64) or a link the site can open; the desk keeps it
+   (covers/<id>.json: type + base64) and answers with a public link, https://badscandal.com/api/staff/cover/<id>.<ext>,
+   for song_page. Only a real JPG, PNG or WebP, at least 1000 px on each side when its size can be read, 4 MB at
+   most; the newest 40 are kept. A cover is public on purpose: it goes on the song page anyway. */
+export const COVER_BOTS = ["Webmaster", "Nova"];
+const COVER_MAX = 4 * 1024 * 1024;
+const COVER_TYPES = { jpg: "image/jpeg", png: "image/png", webp: "image/webp" };
+function pictureOf(buf) {
+  const b = Buffer.from(buf);
+  if (b.length > 24 && b.slice(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) return { ext: "png", w: b.readUInt32BE(16), h: b.readUInt32BE(20) };
+  if (b.length > 12 && b.slice(0, 4).toString("latin1") === "RIFF" && b.slice(8, 12).toString("latin1") === "WEBP") return { ext: "webp", w: null, h: null };
+  if (b.length > 4 && b[0] === 0xff && b[1] === 0xd8) {
+    for (let i = 2; i + 9 < b.length;) {
+      if (b[i] !== 0xff) { i++; continue; }
+      const mk = b[i + 1];
+      if (mk >= 0xc0 && mk <= 0xcf && ![0xc4, 0xc8, 0xcc].includes(mk)) return { ext: "jpg", h: b.readUInt16BE(i + 5), w: b.readUInt16BE(i + 7) };
+      if (mk === 0xd8 || mk === 0x01 || (mk >= 0xd0 && mk <= 0xd7)) { i += 2; continue; }
+      i += 2 + b.readUInt16BE(i + 2);
+    }
+    return { ext: "jpg", w: null, h: null };
+  }
+  return null;
+}
+export async function uploadCover(store, now, roster, a, fetchImpl = fetch) {
+  const by = whoIs(a.by, roster);
+  if (!COVER_BOTS.includes(by)) fail("Covers are uploaded by Webmaster (Nova may for him). Tell Webmaster. Nothing was saved.", "not_allowed");
+  const song = clean(a.song, 120);
+  if (!song) fail("Say which song the cover is for (song). Nothing was saved.");
+  let buf;
+  const b64 = String(a.image_base64 || "").replace(/^data:[^,]*,/, "").replace(/\s+/g, "");
+  if (b64) {
+    if (b64.length > Math.ceil(COVER_MAX / 3) * 4 + 8) fail("The picture is over 4 MB. Send a smaller JPG (3000 x 3000 at about 85% quality is fine). Nothing was saved.");
+    buf = Buffer.from(b64, "base64");
+  } else if (a.url) {
+    const url = httpsLink(a.url);
+    if (!url) fail("url must start with https://. Nothing was saved.");
+    let res;
+    try { res = await fetchImpl(url, { redirect: "follow", signal: AbortSignal.timeout ? AbortSignal.timeout(15000) : undefined }); } catch { fail("The site could not open that link. Send the picture itself in image_base64. Nothing was saved."); }
+    if (!res.ok) fail(`That link answered ${res.status}. Send the picture itself in image_base64. Nothing was saved.`);
+    if (Number((res.headers && res.headers.get && res.headers.get("content-length")) || 0) > COVER_MAX) fail("The picture is over 4 MB. Nothing was saved.");
+    buf = Buffer.from(await res.arrayBuffer());
+  } else fail("Send the cover as image_base64 or url: image_base64 = the file itself, url = a link the site can open without signing in. Nothing was saved.");
+  if (buf.length > COVER_MAX) fail("The picture is over 4 MB. Send a smaller JPG (3000 x 3000 at about 85% quality is fine). Nothing was saved.");
+  const pic = pictureOf(buf);
+  if (!pic) fail("That is not a JPG, PNG or WebP picture (a share page or a sign-in page instead of the file?). Send the picture itself. Nothing was saved.");
+  if (pic.w != null && (pic.w < 1000 || pic.h < 1000)) fail(`The picture is ${pic.w} x ${pic.h}: a cover needs at least 1000 pixels on each side (3000 x 3000 is best). Nothing was saved.`);
+  const id = newId("c", now) + Math.floor(Math.random() * 1e4).toString(36);
+  const at = new Date(now).toISOString();
+  await store.setJSON(`covers/${id}.json`, { type: COVER_TYPES[pic.ext], b64: buf.toString("base64") });
+  const gone = await mutate(store, "covers.json", [], (list) => {
+    list.unshift({ id, ext: pic.ext, song, by, at, bytes: buf.length, w: pic.w, h: pic.h });
+    const old = list.splice(40);
+    return { value: old };
+  });
+  for (const x of gone || []) { try { await store.delete(`covers/${x.id}.json`); } catch {} }
+  return { id, link: `https://badscandal.com/api/staff/cover/${id}.${pic.ext}`, width: pic.w, height: pic.h, bytes: buf.length };
+}
+/* GET /api/staff/cover/<id>.<ext>: public, the picture only, never anything else on the desk */
+export async function coverResponse(store, name) {
+  const m = /^(c[a-z0-9]{4,40})\.(jpg|png|webp)$/.exec(String(name || ""));
+  const nf = () => new Response("Not found", { status: 404, headers: { "content-type": "text/plain" } });
+  if (!m) return nf();
+  let doc = null;
+  try { doc = await store.get(`covers/${m[1]}.json`, { type: "json" }); } catch {}
+  if (!doc || !doc.b64 || doc.type !== COVER_TYPES[m[2]]) return nf();
+  return new Response(Buffer.from(doc.b64, "base64"), { status: 200, headers: { "content-type": doc.type, "cache-control": "public, max-age=31536000, immutable", "x-content-type-options": "nosniff", "content-security-policy": "default-src 'none'" } });
 }
 
 /* Luke said "Yes, correct": apply it in his name. Returns {done, text} or {done:false, error}; never throws
@@ -1949,12 +2054,12 @@ async function applyProposal(store, now, roster, parent, via) {
   const p = parent.proposal, asker = parent.from, said = `proposed by ${asker}` + (via ? `, Luke said yes via ${via}` : "");
   let out;
   try {
-    if (p.action === "page" || p.action === "track") {
+    if (p.action === "page" || p.action === "track" || p.action === "card") {
       if (!songDispatch) throw new StaffError("The site is not connected to GitHub here, so nothing was built.");
-      const job = p.action === "page" ? { kind: "new", slug: p.slug, title: p.title, date: p.date, cover: p.cover } : { kind: "track", slug: p.slug, track: p.track };
+      const job = p.action === "page" ? { kind: "new", slug: p.slug, title: p.title, date: p.date, cover: p.cover } : p.action === "card" ? { kind: "card", slug: p.slug } : { kind: "track", slug: p.slug, track: p.track };
       const d = await songDispatch({ ...job, by: asker, msg: parent.id });
       if (!d || !d.ok) throw new StaffError((d && d.error) || "GitHub could not be asked. Nothing was built.");
-      out = { done: true, text: p.action === "page"
+      out = { done: true, text: p.action === "card" ? `GitHub is putting ${p.title} on the home card now (about 2 minutes). Open badscandal.com to make sure.` : p.action === "page"
         ? `GitHub is building badscandal.com/${p.slug} now. It checks everything and puts it live in about 2 minutes; if a check fails nothing goes live and Luke gets GitHub's email. Open the page to make sure, then mark your page step done with the link.`
         : `GitHub is putting the Spotify link on badscandal.com/${p.slug} now (about 2 minutes). Open the page to make sure the button says Listen on Spotify and opens the song.` };
     } else if (p.action === "add") {

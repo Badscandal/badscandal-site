@@ -4,6 +4,7 @@
    admin.mjs (the link picker), the edge function (via the test that checks its path list).
    Pure: no Netlify imports, so tests can run it. */
 import DATA from "../../songs.json" with { type: "json" };
+import LISTEN from "../../listen.json" with { type: "json" };
 
 export const ARTIST_URL = DATA.spotifyArtist;
 export const SONGS = DATA.songs.map((s) => ({ ...s, path: "/" + s.slug }));
@@ -46,4 +47,27 @@ export function problems(list = DATA.songs) {
     for (const v of Object.values(s)) if (typeof v === "string" && /pre-?save|ffm\.to|feature\.fm|music\.badscandal\.com/i.test(v)) out.push(`${at}: no pre-save / Feature.fm links`);
   }
   return out;
+}
+
+/* ---------- the home card (16 Nov 2026, Webmaster: "a rule for when the card switches") ----------
+   The card shows a song released in the last 7 days (the newest, so a new release takes over on its own day);
+   otherwise the next song coming out; with nothing coming, the newest song out stays. Dates are YYYY-MM-DD in
+   São Paulo, like everything on the desk. -> { slug, title, date, why } or null */
+const WD = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"], MO = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const dw = (d) => { const t = new Date(d + "T12:00:00Z"); return `${WD[t.getUTCDay()]} ${t.getUTCDate()} ${MO[t.getUTCMonth()]}`; };
+const plus = (d, n) => new Date(Date.parse(d + "T12:00:00Z") + n * 86400000).toISOString().slice(0, 10);
+export function homeCardSong(list = DATA.songs, today) {
+  const ok = (list || []).filter((s) => s && /^\d{4}-\d{2}-\d{2}$/.test(s.date || ""));
+  const fresh = ok.filter((s) => s.date <= today && plus(s.date, 7) > today).sort((a, b) => (a.date < b.date ? 1 : -1))[0];
+  if (fresh) return { slug: fresh.slug, title: fresh.title, date: fresh.date, why: `${fresh.title} came out ${dw(fresh.date)}: it stays on the card for its first 7 days (to ${dw(plus(fresh.date, 6))})` };
+  const next = ok.filter((s) => s.date > today).sort((a, b) => (a.date < b.date ? -1 : 1))[0];
+  if (next) return { slug: next.slug, title: next.title, date: next.date, why: `${next.title} is the next song out (${dw(next.date)}), with its countdown` };
+  const last = ok.sort((a, b) => (a.date < b.date ? 1 : -1))[0];
+  return last ? { slug: last.slug, title: last.title, date: last.date, why: `Nothing is coming yet: ${last.title}, the newest song out, stays` } : null;
+}
+/* what the published home card shows now (listen.json as deployed), matched to its song by cover, then title */
+export function homeCardNow() {
+  const r = LISTEN.release || {};
+  const s = SONGS.find((x) => x.cover === r.cover) || SONGS.find((x) => String(x.title).toLowerCase() === String(r.title || "").toLowerCase()) || null;
+  return { slug: s ? s.slug : "", title: r.title || "", mode: r.mode || "", date: r.date || "" };
 }

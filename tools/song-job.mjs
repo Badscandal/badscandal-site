@@ -37,12 +37,13 @@ export function checkJob(j) {
     if (!/^https:\/\/[^\s"'<>`]+$/.test(cover) || cover.length > 500) bad("cover must be an https link");
     return { kind: "new", slug, title, date, cover, by };
   }
+  if (j.kind === "card") return { kind: "card", slug, by }; /* the home card (16 Nov 2026) */
   if (j.kind === "track") {
     const track = String(j.track || "");
     if (!TRACK_RE.test(track)) bad("track must be https://open.spotify.com/track/<id>");
     return { kind: "track", slug, track, by };
   }
-  return bad("kind must be new or track");
+  return bad("kind must be new, track or card");
 }
 
 /* a Dropbox share link downloads the file itself with dl=1; a Google Drive share link through its download
@@ -92,6 +93,9 @@ async function main() {
     unlinkSync(raw);
     execFileSync(process.execPath, [join(ROOT, "tools/new-song.mjs"), job.slug, job.title, job.date, "--files-out", filesOut], { stdio: "inherit", cwd: ROOT });
     msg = `Song page: ${job.title} -> badscandal.com/${job.slug} (out ${job.date})`;
+  } else if (job.kind === "card") {
+    execFileSync(process.execPath, [join(ROOT, "tools/home-card.mjs"), job.slug, "--files-out", filesOut], { stdio: "inherit", cwd: ROOT });
+    msg = `Home card: badscandal.com now shows badscandal.com/${job.slug}`;
   } else {
     execFileSync(process.execPath, [join(ROOT, "tools/new-song.mjs"), "--track", job.slug, job.track, "--files-out", filesOut], { stdio: "inherit", cwd: ROOT });
     msg = `Release day: the Spotify link on badscandal.com/${job.slug}`;
