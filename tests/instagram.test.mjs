@@ -127,3 +127,49 @@ test("routes, the hourly read, and the page's box", () => {
   assert.equal(HL.igStatusLine({ connected: true, username: "madeupaccount", lastOkAt: NOW - 5 * 60000, daysLeft: 59 }, NOW), "@madeupaccount · read 5 min ago · the key renews by itself");
   assert.equal(HL.igStatusLine({ connected: true, username: "madeupaccount", lastError: IG.SAY.refused, errorKind: "refused" }, NOW), IG.SAY.refused);
 });
+
+/* ---------- the Facebook-login route (17 Nov 2026: Meta blocked the portfolio link the Instagram route needs) ---------- */
+const USER = "EAAusermadeup" + "u".repeat(60), PAGE = "EAApagemadeup" + "p".repeat(60);
+function fakeFb(o = {}) {
+  const calls = [];
+  const f = async (url, init) => {
+    const u = new URL(url), path = u.pathname.replace(/^\/v[\d.]+\//, "/");
+    calls.push({ host: u.host, path, q: Object.fromEntries(u.searchParams), auth: (init.headers || {}).Authorization || "" });
+    const ok = (j) => new Response(JSON.stringify(j), { status: 200 });
+    if (path === "/me/accounts") {
+      if (o.noPerms) return new Response(JSON.stringify({ error: { message: "(#100) Missing permissions", type: "OAuthException", code: 100 } }), { status: 400 });
+      return ok({ data: [{ id: "111", name: "Some Other Page", access_token: "EAAother" + "o".repeat(60) },
+        ...(o.noIg ? [] : [{ id: "222", name: "MADE UP PAGE", access_token: PAGE, instagram_business_account: { id: "17841400000000001", username: "madeupaccount" } }])] });
+    }
+    if (path === "/17841400000000001") return ok({ username: "madeupaccount", followers_count: 2222, media_count: 3 });
+    if (path === "/17841400000000001/media") return ok({ data: [{ id: "f1", caption: "Made up FB-route reel", media_product_type: "REELS", timestamp: new Date(NOW - 7 * H).toISOString(), permalink: "https://www.instagram.com/reel/fb1/", like_count: 3, comments_count: 0 }] });
+    if (path === "/f1/insights") return ok({ data: [{ name: "views", values: [{ value: 90 }] }, { name: "reach", values: [{ value: 60 }] }] });
+    if (path === "/17841400000000001/insights") return ok({ data: [] });
+    return new Response("{}", { status: 404 });
+  };
+  return { f, calls };
+}
+test("Facebook route: a user key is swapped for the Page's key; only the Page key is kept, and it never needs renewing", async () => {
+  const st = memStore(), fb = fakeFb();
+  const r = await IG.saveKey(st, USER, NOW, fb.f);
+  assert.deepEqual(r, { username: "madeupaccount", followers: 2222 });
+  assert.equal(fb.calls[0].host, "graph.facebook.com");
+  assert.equal(fb.calls[0].auth, "Bearer " + USER);
+  assert.equal(fb.calls[1].auth, "Bearer " + PAGE, "the Instagram account is read with the Page's key");
+  const stored = JSON.stringify([...st.m.values()]);
+  assert.equal(stored.includes(USER), false, "the user key is never kept");
+  assert.ok(stored.includes(PAGE));
+  const s = await IG.igStatus(st, NOW);
+  assert.equal(s.route, "fb"); assert.equal(s.daysLeft, null); assert.equal(s.renews, false); assert.equal(s.page, "MADE UP PAGE");
+  assert.equal(HL.igStatusLine({ ...s, lastOkAt: NOW - 60000 }, NOW), "@madeupaccount · read 1 min ago · through the MADE UP PAGE Page · the key doesn't run out");
+  /* a read, weeks later: no renewal call, the same paths through the account's id */
+  const rows = [];
+  const out = await IG.syncInstagram({ store: st, now: NOW + 30 * DAY, fetchImpl: fb.f, logGrowth: async (x) => rows.push(x) });
+  assert.equal(out.ok, true, out.error);
+  assert.equal(fb.calls.some((c) => c.path === "/refresh_access_token"), false);
+  assert.deepEqual(rows, [{ platform: "Instagram", account: "@madeupaccount", followers: "2222" }]);
+});
+test("Facebook route: no linked Instagram account, or a key without the Page permissions, is said plainly", async () => {
+  await assert.rejects(IG.saveKey(memStore(), USER, NOW, fakeFb({ noIg: true }).f), (e) => e.kind === "noPage" && /Linked accounts/.test(e.message));
+  await assert.rejects(IG.saveKey(memStore(), USER, NOW, fakeFb({ noPerms: true }).f), (e) => e.kind === "noPerms" && /pages_show_list/.test(e.message));
+});

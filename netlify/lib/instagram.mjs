@@ -19,6 +19,14 @@
    comments.json [..] · countries.json {at, list}. Store, clock and fetch are passed in (tests use fakes). */
 export const IG_HOST = "https://graph.instagram.com";
 export const IG_VERSION = "v25.0"; /* Instagram Login examples, 2026 */
+/* The Facebook-login route (17 Nov 2026: Meta blocked linking the Instagram-login app to the business portfolio, a
+   hidden limit with no appeal; Luke's profile, Page and portfolio are all clean). The same account is read through
+   the BADSCANDAL Facebook Page on graph.facebook.com. Luke pastes a long-lived USER key (Graph API Explorer, then
+   "Extend Access Token" in the Access Token Debugger); HQ swaps it at once for the Page's own key (/me/accounts),
+   which does not run out, and keeps only that (route "fb", igId = the Page's linked Instagram account). */
+export const FB_HOST = "https://graph.facebook.com";
+export { GRAPH_VERSION as FB_VERSION } from "./capi.mjs";
+import { GRAPH_VERSION as FB_VERSION } from "./capi.mjs";
 export const MARKS = [["h6", 6 * 3600000], ["d1", 24 * 3600000], ["d7", 7 * 86400000]];
 const DAY = 86400000;
 const KEEP_DAYS = 8;
@@ -31,7 +39,9 @@ export const SAY = {
   notPro: "That key belongs to an account that is not a professional (Business or Creator) Instagram account.",
   down: "Instagram did not answer properly just now. The next read tries again.",
   unreachable: "The site could not reach Instagram just now. The next read tries again.",
-  bad: "That does not look like an Instagram key: it is the long text from the Meta app's Instagram API setup, \"Generate token\".",
+  bad: "That does not look like a key: it is the long text Meta gives you (Generate token, or the Graph API Explorer).",
+  noPage: "That key reached Facebook, but none of your Pages has an Instagram professional account linked to it: link @badscandal to the BADSCANDAL Page (Page settings › Linked accounts), then make the key again.",
+  noPerms: "That key can't see your Pages: make it again with pages_show_list, pages_read_engagement, instagram_basic, instagram_manage_insights and instagram_manage_comments ticked.",
 };
 
 class IgError extends Error { constructor(kind, text, code) { super(text); this.kind = kind; this.code = code || null; } }
@@ -44,7 +54,8 @@ export async function igGet(path, params, key, fetchImpl = fetch, o = {}) {
   const go = async (mode) => {
     const q = new URLSearchParams(qs);
     if (mode === "query") q.set("access_token", key.token);
-    const url = `${IG_HOST}/${o.noVersion ? "" : IG_VERSION + "/"}${path}${q.toString() ? "?" + q : ""}`;
+    const host = key.route === "fb" ? `${FB_HOST}/${FB_VERSION}/` : `${IG_HOST}/${o.noVersion ? "" : IG_VERSION + "/"}`;
+    const url = `${host}${path}${q.toString() ? "?" + q : ""}`;
     let res, json;
     const ac = new AbortController(), t = setTimeout(() => ac.abort(), o.timeout || 8000);
     try {
@@ -72,6 +83,8 @@ async function readDoc(store, k, fallback) { try { const v = await store.get(k, 
 export async function saveKey(store, raw, now, fetchImpl = fetch) {
   const token = String(raw || "").trim();
   if (!isToken(token)) throw new IgError("bad", SAY.bad);
+  /* an Instagram-login key starts with IG; anything else is a Facebook key (the Page route) */
+  if (!/^IG/.test(token)) return saveFbKey(store, token, now, fetchImpl);
   const key = { token, auth: "header" };
   const me = await igGet("me", { fields: "user_id,username,account_type,followers_count,media_count" }, key, fetchImpl);
   if (me.account_type && !/business|creator|media_creator/i.test(me.account_type)) throw new IgError("notPro", SAY.notPro);
@@ -79,11 +92,27 @@ export async function saveKey(store, raw, now, fetchImpl = fetch) {
   await store.setJSON("key.json", doc);
   return { username: doc.username, followers: me.followers_count ?? null };
 }
+async function saveFbKey(store, token, now, fetchImpl) {
+  const user = { token, auth: "header", route: "fb" };
+  let pages;
+  try { pages = await igGet("me/accounts", { fields: "id,name,access_token,instagram_business_account{id,username}", limit: "50" }, user, fetchImpl); }
+  catch (e) { if (e.kind === "other") throw new IgError("noPerms", SAY.noPerms, e.code); throw e; }
+  const page = ((pages && pages.data) || []).find((p) => p && p.instagram_business_account && p.instagram_business_account.id && isToken(String(p.access_token || "")));
+  if (!page) throw new IgError("noPage", SAY.noPage);
+  const igId = String(page.instagram_business_account.id);
+  const key = { token: String(page.access_token), auth: "header", route: "fb" };
+  const me = await igGet(igId, { fields: "username,followers_count,media_count" }, key, fetchImpl);
+  /* the Page's key does not run out; only a password change or taking the app's access back ends it */
+  const doc = { token: key.token, auth: key.auth, route: "fb", at: now, refreshedAt: now, expiresAt: null, igId, userId: igId, page: String(page.name || "").slice(0, 80),
+    username: String(me.username || page.instagram_business_account.username || "") };
+  await store.setJSON("key.json", doc);
+  return { username: doc.username, followers: me.followers_count ?? null };
+}
 export async function forgetKey(store) { try { await store.delete("key.json"); } catch {} }
 
 /* renew once the key is a week old (Meta: at least 24 hours old, not yet expired) */
 export async function renewIfDue(store, key, now, fetchImpl = fetch) {
-  if (now - (key.refreshedAt || key.at || 0) < 7 * DAY) return false;
+  if (key.route === "fb" || now - (key.refreshedAt || key.at || 0) < 7 * DAY) return false; /* a Page key never needs renewing */
   const r = await igGet("refresh_access_token", { grant_type: "ig_refresh_token", access_token: key.token }, { ...key, auth: "none" }, fetchImpl, { noVersion: true });
   if (!isToken(r.access_token)) return false;
   key.token = r.access_token; key.refreshedAt = now; key.expiresAt = now + (Number(r.expires_in) > 0 ? Number(r.expires_in) * 1000 : 60 * DAY);
@@ -118,9 +147,10 @@ export async function syncInstagram({ store, now, fetchImpl = fetch, logGrowth =
   const out = { ok: true, snapshots: 0, newComments: 0 };
   try {
     try { if (await renewIfDue(store, key, now, fetchImpl)) out.renewed = true; } catch (e) { if (e.kind === "refused") throw e; }
-    const me = await igGet("me", { fields: "user_id,username,followers_count,media_count" }, key, fetchImpl);
+    const self = key.route === "fb" ? key.igId : "me";
+    const me = await igGet(self, { fields: key.route === "fb" ? "username,followers_count,media_count" : "user_id,username,followers_count,media_count" }, key, fetchImpl);
     out.username = me.username || key.username; out.followers = num(me.followers_count);
-    const media = await igGet("me/media", { fields: "id,caption,media_type,media_product_type,timestamp,permalink,like_count,comments_count", limit: "25" }, key, fetchImpl);
+    const media = await igGet(`${self}/media`, { fields: "id,caption,media_type,media_product_type,timestamp,permalink,like_count,comments_count", limit: "25" }, key, fetchImpl);
     const posts = await readDoc(store, "posts.json", []);
     const byId = new Map(posts.map((p) => [p.id, p]));
     const fresh = [];
@@ -165,7 +195,7 @@ export async function syncInstagram({ store, now, fetchImpl = fetch, logGrowth =
     /* the followers' top countries, once a day (Instagram gives them from 100 followers) */
     if (!state.countriesAt || now - state.countriesAt >= DAY) {
       try {
-        const d = await igGet("me/insights", { metric: "follower_demographics", period: "lifetime", metric_type: "total_value", breakdown: "country" }, key, fetchImpl);
+        const d = await igGet(`${self}/insights`, { metric: "follower_demographics", period: "lifetime", metric_type: "total_value", breakdown: "country" }, key, fetchImpl);
         const res = (((((d.data || [])[0] || {}).total_value || {}).breakdowns || [])[0] || {}).results || [];
         const list = res.map((r) => ({ country: String((r.dimension_values || [])[0] || ""), count: num(r.value) })).filter((x) => x.country && x.count != null).sort((a, b) => b.count - a.count).slice(0, 10);
         if (list.length) await store.setJSON("countries.json", { at: now, list });
@@ -188,7 +218,7 @@ export async function igStatus(store, now) {
   const key = await readDoc(store, "key.json", null), state = await readDoc(store, "state.json", {});
   const daysLeft = key && key.expiresAt ? Math.max(0, Math.floor((key.expiresAt - now) / DAY)) : null;
   return { connected: !!(key && key.token), username: (key && key.username) || state.username || "", followers: state.followers ?? null, lastRunAt: state.lastRunAt || null, lastOkAt: state.lastOkAt || null,
-    lastError: state.lastError || "", errorKind: state.errorKind || "", daysLeft, renews: true };
+    lastError: state.lastError || "", errorKind: state.errorKind || "", daysLeft, renews: !(key && key.route === "fb"), route: (key && key.route) || "ig", ...(key && key.page ? { page: key.page } : {}) };
 }
 export async function igView(store, now) {
   const [status, posts, comments, countries] = await Promise.all([igStatus(store, now), readDoc(store, "posts.json", []), readDoc(store, "comments.json", []), readDoc(store, "countries.json", null)]);
