@@ -260,14 +260,14 @@ const MONTH = [
 ];
 const SAVINGS = [tx({ id: "t-leg-out", date: "2026-11-08", amount: "50.00", out: true, text: "Transfer" })];
 
-test("bank refresh: only booked credits; first run from the 1st of last month; the 7-day overlap never doubles anything; 'checked today'", async () => {
+test("bank refresh: only booked credits; first run 90 days back; the 7-day overlap never doubles anything; 'checked today'", async () => {
   const bank = await connectedBank(), desk = await deskWithSources();
   const f = fakeReader({ pages: { "uid-eur": [{ transactions: MONTH }], "uid-sav": [{ transactions: SAVINGS }] } });
   const s = await B.syncBank({ bank, desk, env: ENV, now: NOW, fetchImpl: f });
   assert.deepEqual(s, { ok: true, at: "2026-11-12T09:50:00.000Z", connected: true, accounts: 3, pages: 3, booked: 7, credits: 5, income: 1, unsorted: 1, transfers: 2, refunds: 1,
     added: 4, updated: 0, upgraded: 0, already: 0, skipped: 0, newPayments: 2, more: false, checked: true, error: null });
   const tq = f.calls.filter((c) => c.path.endsWith("/transactions"));
-  assert.deepEqual(tq.map((c) => [c.path, c.query]), ACCOUNTS.map((a) => [`/accounts/${a.uid}/transactions`, { date_from: "2026-10-01" }]));
+  assert.deepEqual(tq.map((c) => [c.path, c.query]), ACCOUNTS.map((a) => [`/accounts/${a.uid}/transactions`, { date_from: "2026-08-15" }]), "the first read looks back 90 days (16 Nov 2026)");
   assert.ok(f.calls.every((c) => c.method === "GET"), "the refresh only reads");
   const entries = await allEntries(desk);
   assert.deepEqual(entries.map((e) => [e.reference, e.status, e.payer, e.amount, e.currency, e.account, e.by, e.date, e.category, e.note]).sort(), [
@@ -284,7 +284,7 @@ test("bank refresh: only booked credits; first run from the 1st of last month; t
   const rev = inc.accounts.find((a) => a.id === "revolut");
   assert.deepEqual([rev.verdict, rev.checked], ["ok", { day: "2026-11-12", by: "HQ", new: 2 }], "the dashboard shows Revolut checked today");
   const sync = await doc(bank, "sync.json");
-  assert.deepEqual(sync.perAccount, { a1: { lastDate: "2026-11-12" }, a2: { lastDate: "2026-11-12" }, a3: { lastDate: "2026-11-12" } }, "kept by the account's identification hash, not its uid");
+  assert.deepEqual(sync.perAccount, { a1: { lastDate: "2026-11-12", back: true }, a2: { lastDate: "2026-11-12", back: true }, a3: { lastDate: "2026-11-12", back: true } }, "kept by the account's identification hash, not its uid");
   assert.deepEqual([sync.lastRunAt, sync.lastOkAt, sync.lastError, sync.lastAdded, sync.totals.added, sync.totals.runs], ["2026-11-12T09:50:00.000Z", "2026-11-12T09:50:00.000Z", null, 2, 4, 1]);
   assert.ok(!JSON.stringify(sync).includes(SID));
 
@@ -319,12 +319,12 @@ test("bank refresh: the page cap and the time cap stop a run; the next run carri
   const f = fakeReader({ pages: { "uid-eur": pages(3) } });
   const a = await B.syncBank({ bank, desk, env: ENV, now: NOW, fetchImpl: f, pagesPerAccount: 2 });
   assert.deepEqual([a.ok, a.pages, a.added, a.more, a.checked], [true, 2, 2, true, false], "not every page read: no 'checked today' yet");
-  assert.deepEqual((await doc(bank, "sync.json")).perAccount, { a1: { cursor: { key: "page-2", dateFrom: "2026-10-01" } } });
+  assert.deepEqual((await doc(bank, "sync.json")).perAccount, { a1: { cursor: { key: "page-2", dateFrom: "2026-08-15" } } });
   f.calls.length = 0;
   const b = await B.syncBank({ bank, desk, env: ENV, now: NOW + DAY, fetchImpl: f, pagesPerAccount: 2 });
-  assert.deepEqual(f.calls.map((c) => c.query), [{ date_from: "2026-10-01", continuation_key: "page-2" }]);
+  assert.deepEqual(f.calls.map((c) => c.query), [{ date_from: "2026-08-15", continuation_key: "page-2" }]);
   assert.deepEqual([b.pages, b.added, b.more, b.checked], [1, 1, false, true]);
-  assert.deepEqual((await doc(bank, "sync.json")).perAccount, { a1: { lastDate: "2026-11-13" } });
+  assert.deepEqual((await doc(bank, "sync.json")).perAccount, { a1: { lastDate: "2026-11-13", back: true } }, "the read that started 90 days back is finished: marked");
   assert.equal((await allEntries(desk)).length, 3);
   /* a saved place the reader no longer knows: the account is read again from the start, nothing doubled */
   await bank.setJSON("sync.json", { perAccount: { a1: { cursor: { key: "page-9", dateFrom: "2026-10-01" } } } });
@@ -339,7 +339,7 @@ test("bank refresh: the page cap and the time cap stop a run; the next run carri
   const slow = fakeReader({ pages: { "uid-eur": pages(5) }, tick: () => { t += 5000; } });
   const d = await B.syncBank({ bank: bank2, desk: desk2, env: ENV, now: NOW, fetchImpl: slow, clock: () => t });
   assert.deepEqual([d.ok, d.pages, d.added, d.more, d.checked], [true, 3, 3, true, false]);
-  assert.deepEqual((await doc(bank2, "sync.json")).perAccount, { a1: { cursor: { key: "page-3", dateFrom: "2026-10-01" } } });
+  assert.deepEqual((await doc(bank2, "sync.json")).perAccount, { a1: { cursor: { key: "page-3", dateFrom: "2026-08-15" } } });
   t = 0;
   const e = await B.syncBank({ bank: bank2, desk: desk2, env: ENV, now: NOW + DAY, fetchImpl: slow, clock: () => t });
   assert.deepEqual([e.pages, e.added, e.more, e.checked], [2, 2, false, true]);
@@ -358,7 +358,7 @@ test("bank refresh: the page cap and the time cap stop a run; the next run carri
   u = 0; desk3.setJSON = origSubmit;
   const h = await B.syncBank({ bank: bank3, desk: desk3, env: ENV, now: NOW, fetchImpl: fakeReader({ pages: { "uid-eur": [{ transactions: MONTH }] } }), clock: () => u });
   assert.deepEqual([h.added, h.already, h.refunds, h.more, h.checked], [2, 2, 1, false, true]);
-  assert.deepEqual((await doc(bank3, "sync.json")).perAccount, { a1: { lastDate: "2026-11-12" } });
+  assert.deepEqual((await doc(bank3, "sync.json")).perAccount, { a1: { lastDate: "2026-11-12", back: true } });
 });
 
 test("bank refresh: a statement logged as pending is turned into received, never doubled (other wording, other month, its own reference)", async () => {
@@ -501,7 +501,7 @@ test("bank refresh: no request outlives the budget; a page cut off by OUR clock 
   const s = await B.syncBank({ bank, desk, env: ENV, now: NOW, fetchImpl: hang, budgetMs: 1000 });
   assert.ok(Date.now() - t0 < 1000, `${Date.now() - t0} ms of a 1000 ms budget`);
   assert.deepEqual([s.ok, s.error, s.pages, s.added, s.more, s.checked], [true, null, 1, 1, true, false], "our own time running out is the time cap, not a failure");
-  assert.deepEqual((await doc(bank, "sync.json")).perAccount, { a1: { cursor: { key: "page-1", dateFrom: "2026-10-01" } } });
+  assert.deepEqual((await doc(bank, "sync.json")).perAccount, { a1: { cursor: { key: "page-1", dateFrom: "2026-08-15" } } });
   const s2 = await B.syncBank({ bank, desk, env: ENV, now: NOW + 3600000, fetchImpl: base });
   assert.deepEqual([s2.pages, s2.added, s2.more, s2.checked], [1, 1, false, true]);
   /* the reader's own slowness (a request given its full time) is still "could not be reached" */
@@ -588,7 +588,7 @@ test("bank refresh: after a lapse and a new approval (new uids, same accounts), 
   await conn("uid-3", "zz", later + 80 * DAY);
   const h = fakeReader();
   await B.syncBank({ bank, desk, env: ENV, now: later + 80 * DAY, fetchImpl: h });
-  assert.equal(h.calls.find((c) => c.path.endsWith("/transactions")).query.date_from, "2027-01-04");
+  assert.equal(h.calls.find((c) => c.path.endsWith("/transactions")).query.date_from, "2027-01-02", "the 90-day look back (16 Nov 2026) reaches further than a week before the last full read: no gap either way");
 });
 
 test("bank status: a run stopped by a cap is not called a full read; the run that finishes counts both", async () => {
@@ -777,4 +777,20 @@ test("accounts: only the last 4 of the account number are kept, on the tile and 
   assert.equal(B.accountInfo("uid-z", {}, null).last4, undefined, "no number: nothing");
   await import("../js/hq-lib.js"); const L = globalThis.HQLib;
   assert.deepEqual(L.bankView({ configured: true, connected: true, accounts: [{ name: "Current", currency: "EUR", last4: "5678" }], validUntil: new Date(NOW + 90 * DAY).toISOString(), daysLeft: 90, lastOkAt: new Date(NOW).toISOString(), lastRunAt: new Date(NOW).toISOString() }, NOW).accounts, ["Current · EUR ••5678"]);
+});
+
+/* 16 Nov 2026 (Luke: "90 days is fine"): every account reads back 90 days ONCE (marked back: true once read to the
+   end), so the desk holds the last 90 days of Revolut; then it reads daily as before. Nothing is added twice. */
+test("the 90-day look back: once per account, carried on across runs, then daily as before", async () => {
+  const bank = await connectedBank(), desk = await deskWithSources();
+  /* an account already read daily before this (no back mark), like Luke's live connection */
+  await bank.setJSON("sync.json", { lastOkAt: "2026-11-11T09:50:00.000Z", perAccount: { a1: { lastDate: "2026-11-11" }, a2: { lastDate: "2026-11-11" }, a3: { lastDate: "2026-11-11" } } });
+  const f = fakeReader({ pages: { "uid-eur": [{ transactions: MONTH }], "uid-sav": [{ transactions: SAVINGS }] } });
+  await B.syncBank({ bank, desk, env: ENV, now: NOW, fetchImpl: f });
+  assert.deepEqual(f.calls.filter((c) => c.path.endsWith("/transactions")).map((c) => c.query.date_from), ["2026-08-15", "2026-08-15", "2026-08-15"], "90 days back, today included");
+  assert.deepEqual((await doc(bank, "sync.json")).perAccount, { a1: { lastDate: "2026-11-12", back: true }, a2: { lastDate: "2026-11-12", back: true }, a3: { lastDate: "2026-11-12", back: true } });
+  f.calls.length = 0;
+  await B.syncBank({ bank, desk, env: ENV, now: NOW + DAY, fetchImpl: f });
+  assert.deepEqual(f.calls.filter((c) => c.path.endsWith("/transactions")).map((c) => c.query.date_from), ["2026-11-05", "2026-11-05", "2026-11-05"], "then daily, as before");
+  assert.equal(B.LIMITS.backDays, 90);
 });
