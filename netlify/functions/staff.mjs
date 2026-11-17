@@ -179,6 +179,14 @@ async function api(req, context, path) {
   const now = Date.now();
   const me = role === "luke" ? "Luke" : "Claude";
 
+  /* A7 (17 Nov 2026): a closed month as a CSV: the snapshot, then every change since (Luke or Claude) */
+  if (path === "month-close.csv" && req.method === "GET") {
+    if (sample) return new Response("This is the sample: there is no closed month.\n", { status: 404, headers: { "content-type": "text/plain; charset=utf-8", "cache-control": "no-store" } });
+    const m = String(url.searchParams.get("month") || "");
+    const v = /^\d{4}-\d{2}$/.test(m) ? await S.monthCloseView(stores(context).desk, now, m) : null;
+    if (!v) return json(404, { error: "That month has not been closed." });
+    return new Response(S.closeCsv(v), { status: 200, headers: { "content-type": "text/csv; charset=utf-8", "content-disposition": `attachment; filename="income-${m}-closed.csv"`, "cache-control": "no-store", "x-content-type-options": "nosniff" } });
+  }
   if (path === "fields" && req.method === "GET") return json(200, { today: S.spDay(now), packFields: S.packFieldsOut(), releaseSteps: S.releaseStepsOut() });
   if (path === "board" && req.method === "GET") {
     if (sample) return json(200, { sample: true, ...sampleBoard(now) });
