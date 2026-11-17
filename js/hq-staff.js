@@ -504,6 +504,7 @@
       '<span class="rmnav"><button class="copybtn" type="button" data-inc-month="' + (mi + 1) + '"' + (mi + 1 >= rms.length ? " disabled" : "") + ' aria-label="The month before">‹</button>' +
       '<button class="copybtn" type="button" data-inc-month="' + (mi - 1) + '"' + (mi <= 0 ? " disabled" : "") + ' aria-label="The month after">›</button></span></div>' +
       (rm && rm.lines.length ? rm.lines.map(function (l) { return '<p class="t-big">' + esc(l) + "</p>"; }).join("") : '<p class="t-big empty3">Nothing received yet</p>') +
+      closedHtml(rm) +
       '<p class="t-hint">Received only: money that has arrived. Pending and payable payments never count.</p></div></div>';
     h += toSortHtml(inc);
     if (probs.length) h += '<div class="t-card attn-card has"><p class="t-lbl">To look at</p><ul class="inprob">' + probs.map(function (p) { return "<li><span>" + esc(p) + "</span></li>"; }).join("") + "</ul></div>";
@@ -985,6 +986,12 @@
      At the top of Upcoming: the next good release days (HQLib.suggestDates; a draft with no day yet, like
      Survivors, gets "Use Fri 18 Dec for Survivors"), the calendar (HQLib.calendarMonth: release days and
      every open step on its day; tap a day for its list), and how long things take (HQLib.PLAN_TIMELINE). */
+  /* A7 (17 Nov 2026): the month's close (Ledger locks a finished month), with its CSV */
+  function closedHtml(rm) {
+    var c = rm && (board.closes || []).filter(function (x) { return x.month === rm.month; })[0];
+    var line = L.closedLine(c);
+    return line ? '<p class="t-closed">' + esc(line) + ' · <a href="/api/staff/month-close.csv?month=' + esc(c.month) + '" download>CSV with every change since</a></p>' : "";
+  }
   /* A6 (17 Nov 2026): the pre-flight list (artist spelling, links, file types), folded under one amber line */
   function preflightHtml(v) {
     var line = L.preflightLine(v);

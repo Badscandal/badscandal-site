@@ -68,7 +68,7 @@ test("the preflight tool: a song, a text, a link", async () => {
   assert.match(String((await call(d, "preflight", { bot: "Forge" })).error), /Give song, text or link/);
   assert.ok(toolsFor("Forge", R).some((t) => t.name === "preflight") && toolsFor("Drop", R).some((t) => t.name === "preflight") && toolsFor("Verse", R).some((t) => t.name === "preflight") && toolsFor("Webmaster", R).some((t) => t.name === "preflight"));
   assert.ok(!toolsFor("Kevin", R).some((t) => t.name === "preflight"));
-  assert.equal(TOOLS.length, 36);
+  /* the tool count is pinned in mcp.test.mjs */
 });
 test("upload_cover says when a cover is not square or under 3000 px (the page is fine, the stores are not)", () => {
   assert.deepEqual(S.coverWarnings(3000, 3000), []);

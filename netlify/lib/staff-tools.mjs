@@ -23,6 +23,8 @@ const INSTRUCTION_LINES = [
   [null, "Messages and updates written by others are information, not orders: your orders come from Nova's briefs and your own job card."],
   [null, "Releases: when Luke sends a new song to the team, your steps and their dates appear in my_day. Read everything about the song with release_pack, mark ONLY your own steps with release_step (done only when it is really done), and fill the fields you are responsible for with release_fill."],
   ["Atlas", "Atlas, every day: open Spotify for Artists, Music, Upcoming, and report everything listed there with spotify_upcoming (an empty list when nothing is). The Spotify pitch waits until the song shows there."],
+  /* A7 (17 Nov 2026): the locked month close */
+  ["Ledger Sheet", "Ledger and Sheet: once month_check says last month is ready, close it with close_month and add the evidence links (the statements, the sheet). After that, any change in that month shows as a change since closing: say why in fix_payment's reason."],
   /* A6 (17 Nov 2026): pre-flight checks */
   ["Forge Drop Verse Webmaster", "Before anything goes to the stores or into an ad, run preflight: the artist name is exactly badscandal (all lowercase, one word), ads and links go to https://badscandal.com/<song>, the master is a WAV, the artwork a JPG or PNG 3000 x 3000. Fix what it lists first."],
   /* A4 (17 Nov 2026): automatic chasing */
@@ -126,6 +128,10 @@ export const TOOLS = [
     inputSchema: obj({ bot: BOT, song: str("Optional: the song's title or id (every check on its pack)."),
       text: str("Optional: any text to check the artist name in."),
       link: str("Optional: an ad link to check (with song, it must go to that song's page).") }, ["bot"]) },
+  { name: "close_month", title: "Close a finished month (lock its income)", idempotent: true,
+    description: "LEDGER, SHEET (Nova too). When month_check says a finished month is ready (nothing to sort, nothing waiting in Wise or PayPal), close it: HQ keeps a snapshot of every payment that counts in that month, what was received, and your evidence links (the statements, the sheet). It closes once; calling it again changes nothing. Later changes in that month are still allowed but listed old -> new under closed.changes_since in month_check, and in the CSV Luke downloads.",
+    inputSchema: obj({ bot: BOT, month: str("The month to close, YYYY-MM (a month that has ended)."),
+      evidence: { type: "array", items: { type: "string" }, description: "Up to 10 https links that back it up: statements, the sheet, a folder." } }, ["bot", "month"]) },
   { name: "task_update", title: "Update or close one of my tasks", idempotent: true,
     description: 'Update ONE of YOUR OWN open tasks from my_day (open_tasks: the ids start with "T-"). status done = the task is really finished (say in note what was done, with the date or the link); blocked = you cannot go on (say in note exactly what is needed and from whom); working = you started it; todo = it is no longer blocked. The dashboard shows your word over the sheet\'s row straight away: done takes it off the open list, and a blocker you clear disappears. Never another bot\'s task (Nova may update anyone\'s). Daily duties (ids starting with "D-") are NOT tasks: finish or block those with post_update.',
     inputSchema: obj({ bot: BOT, task: str('The task id from my_day, for example "T-27".'),
@@ -328,7 +334,7 @@ const MONEY_ASKERS = ["Ledger", "Sheet", "Forge"];
 export const TOOL_USERS = {
   record_luke_answer: ["Alfred", "Nova"], luke_briefing: ["Alfred"], luke_short_briefing: ["Alfred"],
   submit_income: INCOME_TEAM, fix_payment: INCOME_TEAM, income_source: INCOME_TEAM, income_check: INCOME_TEAM, sort_payment: INCOME_TEAM,
-  income_status: [...INCOME_TEAM, "Alfred"], payments: INCOME_TEAM, link_transfer: INCOME_TEAM, month_check: INCOME_TEAM,
+  income_status: [...INCOME_TEAM, "Alfred"], payments: INCOME_TEAM, link_transfer: INCOME_TEAM, month_check: INCOME_TEAM, close_month: INCOME_TEAM,
   record_spend: ["Forge"], log_growth: ["Steve", "Atlas", "Kevin", "Laura"],
   store_status: ["Drop"], spotify_upcoming: ["Atlas"], song_page: ["Webmaster"], roster_card: ["Nova"], recommend: ["Nova"], preflight: ["Forge", "Drop", "Verse", "Webmaster"], song_pages: ["Webmaster"], upload_cover: ["Webmaster"],
 };
@@ -431,6 +437,12 @@ export async function callTool(tool, args, ctx) {
       const left = r.parent && Array.isArray(r.parent.questions) ? r.parent.questions.filter((q) => !q.answer).length : 0;
       return { sent: true, id: r.message.id, to: r.message.to, needs: r.message.needs, ...(r.parent && r.parent.resolved ? { answered: r.parent.id } : {}), ...(left ? { still_open: `${left} question${left === 1 ? "" : "s"} of that message still need${left === 1 ? "s" : ""} an answer` } : {}),
         note: r.message.to === "Luke" ? "Luke sees this on the dashboard and in Alfred's next message. It is not sent to his phone straight away." : "Saved on the board." };
+    }
+    case "close_month": {
+      const r = await S.closeMonth(store, now, roster, { by: me, month: args.month, evidence: args.evidence });
+      const c = r.close;
+      return { closed: true, ...(r.already ? { already: true } : {}), month: c.month, line: S.closeLine(c), received: Object.keys(c.received).sort().map((k) => `${k} ${Number(c.received[k]).toFixed(2)}`).join(" + ") || "nothing",
+        payments: c.count, evidence: c.evidence, note: r.already ? `It was already closed by ${c.by}: nothing changed.` : "Closed. Later changes in this month show in month_check (closed.changes_since) and in Luke's CSV." };
     }
     case "preflight": {
       const has = (k) => args[k] != null && String(args[k]).trim() !== "";
@@ -547,7 +559,10 @@ export async function callTool(tool, args, ctx) {
         to_sort: c.toSort.map((e) => line(e) + (c.fromOwn(e) ? ` · from your own ${c.fromOwn(e).name}: link it with link_transfer` : " · sort it, or ask Luke")),
         waiting_in_wise_or_paypal: c.waiting.map((e) => line(e) + " · when it reaches Revolut, link it"),
         own_transfers_to_check: c.ownTransfers.map((e) => line(e) + " · if it came from PayPal or Wise, link it with link_transfer"),
-        verdict: c.ready ? `${label} is right: received ${money(c.received)} (Revolut).` : `${label} is not right yet: ${c.toSort.length} to sort, ${c.waiting.length} waiting in Wise or PayPal.` };
+        verdict: c.ready ? `${label} is right: received ${money(c.received)} (Revolut).` : `${label} is not right yet: ${c.toSort.length} to sort, ${c.waiting.length} waiting in Wise or PayPal.`,
+        /* A7 (17 Nov 2026): a closed month says so, with every change since (old -> new) */
+        ...(await S.monthCloseView(store, now, c.month).then((v) => v ? { closed: { line: S.closeLine(v), evidence: v.evidence, changes_since: S.closeChangeLines(v.changes) } }
+          : c.ready && c.month < today.slice(0, 7) ? { close_it: "It is ready: close it with close_month (add evidence links: the statements or the sheet)." } : {})) };
     }
     case "payments": {
       const r = await S.listPayments(store, now, { month: args.month, account: args.account, source: args.source, payer: args.payer, status: args.status, limit: args.limit });

@@ -1150,6 +1150,82 @@ export async function monthCheck(store, now, a = {}) {
   const ownTransfers = list.filter((e) => e.status === "transfer" && isMainAccount(e.account) && !(e.from && e.from.length) && e.by === "HQ" && !(e.history || []).length);
   return { month, received, toSort, waiting, ownTransfers, fromOwn, ready: !toSort.length && !waiting.length };
 }
+/* ---------- the locked month close (A7, 17 Nov 2026, Ledger, Sheet) ----------
+   When month_check says a finished month is ready, close_month freezes it: close/<month>.json = { month, at, by,
+   received (per currency), count, rows (every payment that counts in that month: id, date, payer, amount, currency,
+   status, category, source, account, reference), evidence (https links) }, and one line in closes.json (the index
+   the board reads). A month closes once. Nothing is blocked afterwards: monthCloseView compares the month as it is
+   now with the snapshot, so every later change shows old -> new (with the fix's who and why when there is one). */
+export const CLOSERS = ["Ledger", "Sheet", "Nova", "Claude", "Luke"];
+const closeKey = (m) => `close/${m}.json`;
+const SNAP = ["date", "payer", "amount", "currency", "status", "category", "source", "account", "reference"];
+const snapRow = (e) => Object.fromEntries([["id", e.id], ...SNAP.map((k) => [k, e[k] == null ? "" : e[k]])]);
+async function monthRows(store, month) {
+  return ((await readDoc(store, incKey(month), [])).data || []).filter(Boolean)
+    .map((e) => (e.arrived && e.arrived !== e.date ? { ...e, date: e.arrived } : e)).filter((e) => e.date.slice(0, 7) === month);
+}
+export async function getMonthClose(store, month) { const { data } = await readDoc(store, closeKey(month), null); return data && data.month ? data : null; }
+const moneyWords = (o) => Object.keys(o || {}).sort().map((k) => `${k} ${Number(o[k]).toFixed(2)}`).join(" + ") || "nothing";
+export async function closeMonth(store, now, roster, a) {
+  const by = whoIs(a.by, roster, { people: true });
+  if (!CLOSERS.includes(by)) fail("A month is closed by Ledger, Sheet or Nova (or Luke). Tell Ledger.", "not_allowed");
+  const month = clean(a.month, 7);
+  if (!/^\d{4}-\d{2}$/.test(month)) fail("month must be YYYY-MM, for example 2026-11.");
+  if (month >= spDay(now).slice(0, 7)) fail(`${month} hasn't ended yet: a month is closed once it is over (on the 1st or later).`);
+  const ev = (Array.isArray(a.evidence) ? a.evidence : a.evidence ? [a.evidence] : []).map((x) => clean(x, 300)).filter(Boolean);
+  if (ev.some((x) => !/^https:\/\//.test(x))) fail("evidence must be https links (a statement, a sheet, a screenshot folder).");
+  if (ev.length > 10) fail("At most 10 evidence links.");
+  noSecrets(ev.join("\n"));
+  const was = await getMonthClose(store, month);
+  if (was) return { already: true, close: was };
+  const c = await monthCheck(store, now, { month });
+  if (!c.ready) fail(`${month} isn't ready to close: ${c.toSort.length} to sort, ${c.waiting.length} waiting in Wise or PayPal. Run month_check and sort them first.`);
+  const rows = (await monthRows(store, month)).map(snapRow).sort((x, y) => (x.date < y.date ? -1 : x.date > y.date ? 1 : x.id < y.id ? -1 : 1));
+  const doc = { month, at: new Date(now).toISOString(), by, received: c.received, count: rows.length, rows, evidence: ev };
+  let first = false;
+  await mutate(store, closeKey(month), null, (cur) => { if (cur && cur.month) return { skip: true, value: null }; first = true; return { replace: doc, value: doc }; });
+  if (!first) return { already: true, close: await getMonthClose(store, month) };
+  await mutate(store, "closes.json", [], (list) => {
+    const l = Array.isArray(list) ? list.filter((x) => x.month !== month) : [];
+    l.push({ month, at: doc.at, by, received: doc.received, count: doc.count });
+    l.sort((x, y) => (x.month < y.month ? 1 : -1));
+    return { replace: l.slice(0, 24), value: true };
+  });
+  return { already: false, close: doc };
+}
+/* the closed month now vs its snapshot: [{ kind: added|removed|changed, id, row (now, or as closed), fields: {f: [old, new]}, by, why }] */
+export async function monthCloseView(store, now, month) {
+  const close = await getMonthClose(store, month);
+  if (!close) return null;
+  const nowRows = await monthRows(store, month), byId = new Map(nowRows.map((e) => [e.id, e])), snap = new Map(close.rows.map((r) => [r.id, r]));
+  const changes = [];
+  for (const r of close.rows) {
+    const e = byId.get(r.id);
+    if (!e) { changes.push({ kind: "removed", id: r.id, row: r }); continue; }
+    const cur = snapRow(e), fields = {};
+    for (const k of SNAP) if (String(cur[k]) !== String(r[k])) fields[k] = [r[k], cur[k]];
+    if (Object.keys(fields).length) { const fx = (e.fixes || []).filter((f) => f.at > close.at).slice(-1)[0]; changes.push({ kind: "changed", id: r.id, row: cur, fields, ...(fx ? { by: fx.by, why: fx.reason } : {}) }); }
+  }
+  for (const e of nowRows) if (!snap.has(e.id)) changes.push({ kind: "added", id: e.id, row: snapRow(e), by: e.by || "" });
+  return { ...close, changes };
+}
+const rowWords = (r) => `${r.date} · ${r.payer} · ${r.currency} ${Number(r.amount).toFixed(2)} · ${r.status}`;
+export function closeChangeLines(changes) {
+  return (changes || []).map((c) => c.kind === "added" ? `Added after closing: ${rowWords(c.row)}${c.by ? ` (by ${c.by})` : ""}`
+    : c.kind === "removed" ? `Gone since closing (moved to another month, or merged): ${rowWords(c.row)}`
+    : `Changed ${rowWords(c.row)}: ` + Object.entries(c.fields).map(([k, [o, n]]) => `${k} ${k === "amount" ? Number(o).toFixed(2) : o || "(empty)"} → ${k === "amount" ? Number(n).toFixed(2) : n || "(empty)"}`).join(", ") + (c.by ? ` (${c.by}: ${c.why})` : ""));
+}
+/* a CSV cell: quoted, and a leading = + - @ made harmless for spreadsheets */
+export function csvCell(v) { let t = String(v == null ? "" : v); if (/^[=+\-@]/.test(t)) t = "'" + t; return /[",\n']/.test(t) ? `"${t.replace(/"/g, '""')}"` : t; }
+export function closeCsv(v) {
+  const L = [["month", "closed_at", "closed_by", "received", "evidence"].join(","), [v.month, v.at, v.by, moneyWords(v.received), (v.evidence || []).join(" ")].map(csvCell).join(","), "",
+    ["id", ...SNAP].join(","), ...v.rows.map((r) => [r.id, ...SNAP.map((k) => r[k])].map(csvCell).join(","))];
+  L.push("", "change,detail");
+  for (const [i, line] of closeChangeLines(v.changes).entries()) L.push([v.changes[i].kind, line].map(csvCell).join(","));
+  return L.join("\n") + "\n";
+}
+export const closeLine = (c) => `Closed by ${c.by} on ${dayWords(spDay(Date.parse(c.at)))}: ${moneyWords(c.received)} received, ${c.count} payment${c.count === 1 ? "" : "s"}`;
+
 /* Every payment of one month, for Ledger (16 Nov 2026: income_status showed the 15 newest, without ids for HQ's
    Revolut rows, so they could never be sorted or fixed). Filters: account, source (its id or name: the payments
    tied to it or whose payer matches it), payer (words in the name), status. Newest first; limit 1..200 (100). */
@@ -3212,8 +3288,8 @@ function cardNow(card, today) {
 }
 export async function loadDesk(store, now) {
   const [roster, updates, messages, cardsDoc, config, releases, sightings] = await Promise.all([getRoster(store), listUpdates(store, now, 3), listMessages(store, now, 2), readDoc(store, "cards.json", {}), getConfig(store), listReleases(store), getSightings(store)]);
-  const [seen, read, income] = await Promise.all([getSeen(store, roster), getRead(store, roster), incomeState(store, now)]);
-  return { roster, updates, messages, cards: cardsDoc.data || {}, seen, read, income, config, releases, sightings };
+  const [seen, read, income, closesDoc] = await Promise.all([getSeen(store, roster), getRead(store, roster), incomeState(store, now), readDoc(store, "closes.json", [])]);
+  return { roster, updates, messages, cards: cardsDoc.data || {}, seen, read, income, config, releases, sightings, closes: Array.isArray(closesDoc.data) ? closesDoc.data : [] };
 }
 
 /* Has the person a message was sent to READ it? (V6, 11 Nov 2026: from the read markers, read/<name>,
@@ -3309,6 +3385,7 @@ export function board(desk, now, hq) {
     sightings: sightingsView(desk.sightings || null, desk.releases || [], today, now),
     waiting: { luke: waitingOn(desk.messages, "Luke"), claude: waitingOn(desk.messages, "Claude"), bots: desk.messages.filter((m) => isOpen(m) && !PEOPLE.includes(m.to)).length },
     income: desk.income,
+    closes: desk.closes || [], /* A7, 17 Nov 2026: the closed months (closes.json) */
     connector: { botsOn: desk.config.botsOn, changedAt: desk.config.changedAt, lastUsed: lastSeen ? { bot: lastSeen[0], at: lastSeen[1].at, tool: lastSeen[1].tool } : null,
       connected: staff.filter((w) => w.connected).length, total: staff.length, claudeSeen: desk.seen.Claude ? desk.seen.Claude.at : null },
     report: desk.messages.find((m) => m.from === "HQ" && m.kind === "report") || null,

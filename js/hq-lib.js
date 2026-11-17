@@ -1471,6 +1471,8 @@
     weeks.forEach(function (w) { w.items.sort(function (a, b) { return a.date < b.date ? -1 : a.date > b.date ? 1 : a.kind === b.kind ? 0 : a.kind === "release" ? -1 : 1; }); });
     return weeks;
   }
+  /* A7 (17 Nov 2026): a closed month, under "Received in <Month>" */
+  function closedLine(c) { return c && c.by && c.at ? "Closed by " + c.by + " on " + day(new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(c.at))) : ""; }
   /* A6 (17 Nov 2026): the release's pre-flight list, one line on the card ("" when there is nothing) */
   function preflightLine(v) { var n = ((v && v.preflight) || []).length; return n ? "Check before it goes to the stores: " + n + (n === 1 ? " thing" : " things") : ""; }
   function calendarMonth(ym, releases, today) {
@@ -1556,7 +1558,7 @@
     return scored.slice(0, max).map(function (y) { return y.x; });
   }
 
-  return { preflightLine: preflightLine, sixWeeks: sixWeeks, recommendLines: recommendLines, recommendedOption: recommendedOption, releaseTrouble: releaseTrouble, navPad: navPad, signoutWords: signoutWords, growthWhen: growthWhen, ago: ago, spMs: spMs, releaseWords: releaseWords, releaseDetail: releaseDetail, healthRows: healthRows, healthState: healthState, median: median, change: change, money: money, attention: attention, briefing: briefing,
+  return { closedLine: closedLine, preflightLine: preflightLine, sixWeeks: sixWeeks, recommendLines: recommendLines, recommendedOption: recommendedOption, releaseTrouble: releaseTrouble, navPad: navPad, signoutWords: signoutWords, growthWhen: growthWhen, ago: ago, spMs: spMs, releaseWords: releaseWords, releaseDetail: releaseDetail, healthRows: healthRows, healthState: healthState, median: median, change: change, money: money, attention: attention, briefing: briefing,
     snapshot: snapshot, changesSince: changesSince, tiles: tiles, summaryText: summaryText, shortStep: shortStep, day: day,
     slug: slug, workerLabel: workerLabel, sortWorkers: sortWorkers, workerView: workerView, dutyWhen: dutyWhen, workerCounts: workerCounts, seenLine: seenLine, connectorLine: connectorLine,
     novaMessage: novaMessage, liveFeed: liveFeed, spWhen: spWhen, waitLabel: waitLabel, needWords: needWords, reportParts: reportParts, siteCheckLine: siteCheckLine, composeNames: composeNames,
