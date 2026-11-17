@@ -56,7 +56,7 @@ and Claude's assessment the same morning. Luke said "perfect" to the order below
 | L3 | **Fan inbox** (#8): song-name questions and repeat fans, with country and a ready reply Luke approves | Kevin, Laura | todo |
 | L4 | **Per-song P&L** (#10): royalties per song/store next to its ad spend and release date | Ledger | todo |
 | L5 | **Watchers** (#11): RouteNote status and moderation emails → store_status + a drafted fix; release-day trigger for Verse; Content ID claims panel | Drop, Verse, Laura | todo |
-| L6 | **Song page tile** (#15): live status, button state, visits, Spotify clicks, Pixel/CAPI health | Webmaster | building (branch hq-song-tiles) |
+| L6 | **Song page tile** (#15): live status, button state, visits, Spotify clicks, Pixel/CAPI health | Webmaster | live (PR #59) |
 | L7 | **Pitch tracker** (#16): each song's pitch status, editorial adds, the two-week pitch slot calendar | Atlas | todo (the one-pitch rule is live) |
 | L8 | **Asset checker** (#17): cover, Canvas and banner vs each platform's rules | Atlas | todo |
 | L9 | Exchange-rate cost per payout route | Ledger | todo |
