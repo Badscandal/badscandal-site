@@ -134,6 +134,7 @@ export const TOOLS = [
       reason: str("What was wrong, in one line."), date: str("Optional. The right day, YYYY-MM-DD, same month."), payer: str("Optional. The right payer."),
       amount: { type: "number", description: "Optional. The right amount." }, currency: str("Optional. The right three-letter currency."),
       status: str("Optional. received | pending | transfer | statement only | payable", { enum: S.INCOME_STATUS.filter((x) => x !== "unsorted") }),
+      source: str("Optional. The income source this payment is (its name or id): ties it to that source on Money."),
       category: str("Optional.", { enum: S.CATEGORIES }), account: str("Optional. Where it landed."), reference: str("Optional. The payment's own transaction id."), note: str("Optional. One line.") }, ["bot", "id", "month", "reason"]) },
   { name: "income_source", title: "Update an income source you look after",
     description: "For the bot that owns an income source (Ledger, Sheet; Nova may too): say where its money lands (accounts: one or several, for example RouteNote's two PayPal accounts), whether it is active, blocked (with the reason) or not tracked, its category, and clear a needs_luke ask that no longer stands (send it empty). Only what you send changes. Luke sees it on the dashboard, Money.",
@@ -162,6 +163,11 @@ export const TOOLS = [
     inputSchema: obj({ bot: BOT, account: str('The account you checked: "Wise", "PayPal", "Statement emails", "RouteNote"...'),
       new_payments: { type: "integer", description: "How many new payments you found today. 0 if none.", minimum: 0 },
       note: str('Optional. For example "could not sign in: needs Luke\'s code" (then also post_update with status blocked).') }, ["bot", "account", "new_payments"]) },
+  /* 16 Nov 2026 (Ledger): every payment, with its id */
+  { name: "payments", title: "Every payment of a month, with its id", readOnly: true,
+    description: "LEDGER and SHEET (Nova too): every payment on the desk for ONE month, newest first, each with its id (for sort_payment and fix_payment), date, payer, amount, currency, status, category, source, account and who added it, HQ's Revolut rows included. Filter with account (\"Revolut\"), source (its name or id: payments tied to it or whose payer matches it), payer (words in the name) and status. limit 1 to 200 (100); total says how many there are, and more says what was left out.",
+    inputSchema: obj({ bot: BOT, month: str("YYYY-MM (default: this month)."), account: str("Optional: Revolut, Wise, PayPal..."), source: str("Optional: a source's name or id."),
+      payer: str("Optional: words in the payer's name."), status: str("Optional: received | pending | payable | statement only | transfer | unsorted"), limit: { type: "integer", description: "1 to 200 (default 100)." } }, ["bot"]) },
   { name: "income_status", title: "Income so far and what is missing", readOnly: true,
     description: "This month's income as logged (received and pending, per currency, never mixed), the newest payments, every known source of income with when it last paid, which accounts were checked today, and the list of problems (not checked, overdue, blocked, a payer nobody has named). Use it before the daily check and before reporting to Luke.",
     inputSchema: obj({ bot: BOT }, ["bot"]) },
@@ -272,7 +278,7 @@ const MONEY_ASKERS = ["Ledger", "Sheet", "Forge"];
 export const TOOL_USERS = {
   record_luke_answer: ["Alfred", "Nova"], luke_briefing: ["Alfred"], luke_short_briefing: ["Alfred"],
   submit_income: INCOME_TEAM, fix_payment: INCOME_TEAM, income_source: INCOME_TEAM, income_check: INCOME_TEAM, sort_payment: INCOME_TEAM,
-  income_status: [...INCOME_TEAM, "Alfred"],
+  income_status: [...INCOME_TEAM, "Alfred"], payments: INCOME_TEAM,
   record_spend: ["Forge"], log_growth: ["Steve", "Atlas", "Kevin", "Laura"],
   store_status: ["Drop"], spotify_upcoming: ["Atlas"], song_page: ["Webmaster"], song_pages: ["Webmaster"], upload_cover: ["Webmaster"],
 };
@@ -425,7 +431,7 @@ export async function callTool(tool, args, ctx) {
     }
     case "fix_payment": {
       const r = await S.fixIncome(store, now, roster, { by: me, id: args.id, month: args.month, reason: args.reason, date: args.date, payer: args.payer, amount: args.amount, currency: args.currency,
-        status: args.status, category: args.category, account: args.account, reference: args.reference, note: args.note });
+        status: args.status, category: args.category, account: args.account, reference: args.reference, note: args.note, source: args.source });
       const e = r.entry;
       return { saved: r.fixed.length > 0, fixed: r.fixed, ...(r.fixed.length ? {} : { note: "Nothing was different: nothing changed." }),
         now: `${e.arrived || e.date} · ${e.payer} · ${e.currency} ${e.amount.toFixed(2)} · ${e.status} · ${e.account} · ${e.category}` };
@@ -461,6 +467,12 @@ export async function callTool(tool, args, ctx) {
       const c = await S.incomeCheck(store, now, roster, { ...args, bot: me });
       return { saved: true, account: c.account, day: c.day, new_payments: c.new, note: c.new > 0 ? "Now make sure each of those payments went through submit_income." : "Recorded as checked, nothing new." };
     }
+    case "payments": {
+      const r = await S.listPayments(store, now, { month: args.month, account: args.account, source: args.source, payer: args.payer, status: args.status, limit: args.limit });
+      return { month: r.month, total: r.total, payments: r.payments.map((e) => ({ id: e.id, month: r.month, date: e.date, payer: e.payer, amount: e.amount, currency: e.currency, status: e.status,
+        category: e.category, source: e.source || "", account: e.account, added_by: e.by, ...(e.note ? { note: e.note } : {}) })),
+        ...(r.total > r.payments.length ? { more: `${r.total - r.payments.length} more: narrow it (account, source, payer, status) or raise limit` } : {}) };
+    }
     case "income_status": {
       const i = await S.incomeState(store, now);
       const line = (s) => ({ name: s.name, id: s.id, category: s.category, lands_in: s.lands, expected: s.cadence, owner: s.owner, state: s.verdict, why: s.why,
@@ -478,7 +490,8 @@ export async function callTool(tool, args, ctx) {
         sources: i.sources.map(line), problems: i.problems,
         /* what you submitted yourself, with the id and month fix_payment needs */
         your_payments: i.entries.filter((e) => e.by === me).slice(0, 15).map((e) => ({ id: e.id, month: (e.statement || e.date).slice(0, 7), line: `${e.date} · ${e.payer} · ${e.currency} ${e.amount.toFixed(2)} · ${e.status} · ${e.account} · ${e.category}` })),
-        newest_payments: i.entries.slice(0, 15).map((e) => `${e.date} · ${e.payer} · ${e.currency} ${e.amount.toFixed(2)} · ${e.status} · ${e.account} · by ${e.by}`),
+        newest_payments: i.entries.slice(0, 15).map((e) => `${e.date} · ${e.payer} · ${e.currency} ${e.amount.toFixed(2)} · ${e.status} · ${e.account} · by ${e.by} (id ${e.id})`),
+        ...(i.count > 15 ? { more_payments: `${i.count - 15} more this month: use payments (month ${i.month}) to see every one, with its id` } : {}),
         /* in the account, not yet said what they are: counted as nothing until sorted (tool sort_payment) */
         unsorted: i.unsorted.map((e) => ({ id: e.id, month: e.date.slice(0, 7), line: `${e.date} · ${e.payer} · ${e.currency} ${e.amount.toFixed(2)} · ${e.account}`,
           ...(e.pendingMatch ? { pending_match: { id: e.pendingMatch.id, line: `${e.pendingMatch.date} · ${e.pendingMatch.payer} · ${e.pendingMatch.currency} ${e.pendingMatch.amount.toFixed(2)} · pending` } } : {}) })) };
