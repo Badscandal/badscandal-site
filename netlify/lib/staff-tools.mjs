@@ -35,6 +35,7 @@ const INSTRUCTION_LINES = [
   ["Ledger Sheet", "Ledger and Sheet: once month_check says last month is ready, close it with close_month and add the evidence links (the statements, the sheet). After that, any change in that month shows as a change since closing: say why in fix_payment's reason."],
   /* A6 (17 Nov 2026): pre-flight checks */
   ["Forge Drop Verse Webmaster", "Before anything goes to the stores or into an ad, run preflight: the artist name is exactly badscandal (all lowercase, one word), ads and links go to https://badscandal.com/<song>, the master is a WAV, the artwork a JPG or PNG 3000 x 3000. Fix what it lists first."],
+  ["Atlas Laura Webmaster", "Before you upload a Spotify Canvas, a Spotify header image, a YouTube banner or a cover, run preflight with asset (canvas, spotify_header, youtube_banner or cover) and the file's width, height, seconds, format and size_mb: it checks them against that platform's rule. Fix what it lists first."],
   /* A4 (17 Nov 2026): automatic chasing */
   [null, "When a duty or a release step of yours is late, HQ sends you ONE reminder (07:00 to 22:00). Do it then and post_update or release_step; if it is still not done 2 hours later, Nova is told and chases you."],
   ["Nova", "Nova: HQ reminds the bots about late duties and steps by itself and tells you only when one is still late 2 hours after its reminder: then chase that bot, or tell Luke if it needs him."],
@@ -132,10 +133,16 @@ export const TOOLS = [
       option: str("Optional: the option you recommend, exactly as listed on the message."),
       why: str("Why, in one or two sentences (300 characters at most).") }, ["bot", "message_id", "why"]) },
   { name: "preflight", title: "Check a song, a text or a link before it goes out", idempotent: true, readOnly: true,
-    description: "FORGE, DROP, VERSE, WEBMASTER (Nova too). Pre-flight checks before anything reaches the stores or the ads. song = every check on that release's pack (the artist name exactly \"badscandal\", all lowercase, in primary/featured artists, producers, split and copyright; the master a WAV; the artwork a JPG or PNG, 3000 x 3000; the song page and every link in the ad plan going to badscandal.com/<song>). text = check the artist name in any text (credits, a description). link = an ad link: it must be https://badscandal.com/<the song> (utm tags are fine), never Feature.fm or a store link. ok true = nothing to fix. It changes nothing.",
+    description: "FORGE, DROP, VERSE, WEBMASTER, ATLAS, LAURA (Nova too). Pre-flight checks before anything reaches the stores or the ads. song = every check on that release's pack (the artist name exactly \"badscandal\", all lowercase, in primary/featured artists, producers, split and copyright; the master a WAV; the artwork a JPG or PNG, 3000 x 3000; the Canvas an MP4 or JPG; the song page and every link in the ad plan going to badscandal.com/<song>). text = check the artist name in any text (credits, a description). link = an ad link: it must be https://badscandal.com/<the song> (utm tags are fine), never Feature.fm or a store link. asset = check a file against its platform's rule BEFORE you upload it: cover, canvas (Spotify Canvas), spotify_header (Spotify for Artists header image) or youtube_banner; give what the file shows (width, height, seconds, format, size_mb); anything left out is not checked, and the answer's rule says the whole rule. ok true = nothing to fix. It changes nothing.",
     inputSchema: obj({ bot: BOT, song: str("Optional: the song's title or id (every check on its pack)."),
       text: str("Optional: any text to check the artist name in."),
-      link: str("Optional: an ad link to check (with song, it must go to that song's page).") }, ["bot"]) },
+      link: str("Optional: an ad link to check (with song, it must go to that song's page)."),
+      asset: { type: "string", enum: ["cover", "canvas", "spotify_header", "youtube_banner"], description: "Optional: the kind of file to check against its platform's rule." },
+      width: { type: "number", description: "With asset: the file's width in px." },
+      height: { type: "number", description: "With asset: the file's height in px." },
+      seconds: { type: "number", description: "With asset canvas: the video's length in seconds." },
+      format: str("With asset: the file type, e.g. mp4, mov, jpg, png."),
+      size_mb: { type: "number", description: "With asset: the file's size in MB." } }, ["bot"]) },
   { name: "close_month", title: "Close a finished month (lock its income)", idempotent: true,
     description: "LEDGER, SHEET (Nova too). When month_check says a finished month is ready (nothing to sort, nothing waiting in Wise or PayPal), close it: HQ keeps a snapshot of every payment that counts in that month, what was received, and your evidence links (the statements, the sheet). It closes once; calling it again changes nothing. Later changes in that month are still allowed but listed old -> new under closed.changes_since in month_check, and in the CSV Luke downloads.",
     inputSchema: obj({ bot: BOT, month: str("The month to close, YYYY-MM (a month that has ended)."),
@@ -350,7 +357,7 @@ export const TOOL_USERS = {
   submit_income: INCOME_TEAM, fix_payment: INCOME_TEAM, income_source: INCOME_TEAM, income_check: INCOME_TEAM, sort_payment: INCOME_TEAM,
   income_status: [...INCOME_TEAM, "Alfred"], payments: INCOME_TEAM, link_transfer: INCOME_TEAM, month_check: INCOME_TEAM, close_month: INCOME_TEAM,
   record_spend: ["Forge"], log_growth: ["Steve", "Atlas", "Kevin", "Laura"],
-  store_status: ["Drop"], spotify_upcoming: ["Atlas"], song_page: ["Webmaster"], roster_card: ["Nova"], recommend: ["Nova"], preflight: ["Forge", "Drop", "Verse", "Webmaster"], instagram: ["Steve", "Kevin", "Forge"], song_pages: ["Webmaster"], upload_cover: ["Webmaster"],
+  store_status: ["Drop"], spotify_upcoming: ["Atlas"], song_page: ["Webmaster"], roster_card: ["Nova"], recommend: ["Nova"], preflight: ["Forge", "Drop", "Verse", "Webmaster", "Atlas", "Laura"], instagram: ["Steve", "Kevin", "Forge"], song_pages: ["Webmaster"], upload_cover: ["Webmaster"],
 };
 const onTeam = (bot, roster) => { const k = String(bot || "").trim().toLowerCase(); return k ? (roster.find((b) => b.name.toLowerCase() === k) || {}).name || "" : ""; };
 export function toolsFor(bot, roster) {
@@ -485,13 +492,21 @@ export async function callTool(tool, args, ctx) {
     }
     case "preflight": {
       const has = (k) => args[k] != null && String(args[k]).trim() !== "";
-      if (!has("song") && !has("text") && !has("link")) throw new S.StaffError("Give song, text or link to check.");
+      if (!has("song") && !has("text") && !has("link") && !has("asset")) throw new S.StaffError("Give song, text, link or asset to check.");
       const problems = [];
+      let rule = "";
+      if (has("asset")) { /* L8, 17 Nov 2026: a Canvas, a banner or a cover against its platform's rule */
+        const kind = String(args.asset).trim().toLowerCase();
+        for (const k of ["width", "height", "seconds", "size_mb"]) if (has(k) && !(Number(args[k]) > 0)) throw new S.StaffError(`${k} must be a number above 0 (as the file shows it), or leave it out.`);
+        const found = S.assetProblems(kind, { width: args.width, height: args.height, seconds: args.seconds, format: args.format, mb: args.size_mb });
+        rule = S.ASSETS[kind].rule;
+        for (const t of found) problems.push(`${S.ASSETS[kind].label}: ${t.replace(new RegExp("^" + S.ASSETS[kind].label + " "), "")}`);
+      }
       let own = "";
       if (has("song")) { const r = S.findRelease(await S.listReleases(store), args.song, { drafts: true }); own = r.id; for (const x of S.preflightOf(r)) problems.push(x.text); }
       if (has("text")) for (const t of S.artistProblems(args.text)) problems.push(`Text: ${t}`);
       if (has("link")) { const pr = S.adLinkProblem(args.link, "", own); if (pr) problems.push(`Link: ${pr}`); }
-      return { ok: problems.length === 0, problems, note: problems.length ? "Fix these before it goes out (release_fill for your own fields; tell Luke for his)." : "Nothing to fix." };
+      return { ok: problems.length === 0, problems, ...(rule ? { rule } : {}), note: problems.length ? "Fix these before it goes out (release_fill for your own fields; tell Luke for his)." : "Nothing to fix." };
     }
     case "recommend": {
       const p = await S.recommendMessage(store, now, roster, { by: me, id: args.message_id, option: args.option, why: args.why });

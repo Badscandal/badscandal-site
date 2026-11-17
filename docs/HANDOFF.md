@@ -47,7 +47,10 @@ artist growth bot that all we will need is content and $".
 
 ## In flight (branches not merged)
 
-- Nothing. Everything is on `main`.
+- **`hq-asset-checker` (L8, preview PR, waiting for Luke's "deploy"):** the `preflight` tool checks a cover,
+  Spotify Canvas, Spotify header or YouTube banner against its platform's rule (`S.ASSETS`, `S.assetProblems`);
+  the card flags a Canvas link that isn't MP4/JPG; Atlas and Laura get `preflight`. Tests 568 on Node 24 and 22.
+  On merge: STATUS.md row, roadmap L8 -> live, and tell Atlas, Laura and Webmaster to refresh the tool list.
 
 ## Waiting on someone
 
