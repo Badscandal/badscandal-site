@@ -52,7 +52,7 @@ and Claude's assessment the same morning. Luke said "perfect" to the order below
 | # | What | Asked by | Status |
 |---|------|----------|--------|
 | L1 | **Expected money** (#3): every statement → an expected row with due date; learn pay days; flag short/late/missing; statement → payable → paid → landed, days per step | Ledger, Sheet | todo (partly there: pending/payable, paid_by, main sources' due days) |
-| L2 | **Post log + hook tracker** (#4): every post with its hook, numbers at +6h/+24h/+7d, a "boosted" flag; weekly top 3 / bottom 3 hooks; a Brazil hook tester | Kevin, Steve | building (branch hq-post-ranking): posts ranked by engagement per view, with each boosting ad's spend, cost per engagement and the numbers before the ad; Monday why-analysis by Steve/Kevin, ad-money pick by Forge for Luke |
+| L2 | **Post log + hook tracker** (#4): every post with its hook, numbers at +6h/+24h/+7d, a "boosted" flag; weekly top 3 / bottom 3 hooks; a Brazil hook tester | Kevin, Steve | live (PR #60): posts ranked by engagement per view at the same age, with each boosting ad's spend and cost per engagement and the numbers before the ad; Monday why-analysis by Steve/Kevin, ad-money pick by Forge for Luke |
 | L3 | **Fan inbox** (#8): song-name questions and repeat fans, with country and a ready reply Luke approves | Kevin, Laura | todo |
 | L4 | **Per-song P&L** (#10): royalties per song/store next to its ad spend and release date | Ledger | todo |
 | L5 | **Watchers** (#11): RouteNote status and moderation emails → store_status + a drafted fix; release-day trigger for Verse; Content ID claims panel | Drop, Verse, Laura | todo |
