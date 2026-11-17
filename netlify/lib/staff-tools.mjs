@@ -8,6 +8,7 @@
 import { SONGS, homeCardSong } from "./songs.mjs";
 import * as S from "./staff.mjs";
 import * as IG from "./instagram.mjs";
+import { rankLine } from "./postrank.mjs";
 
 const str = (description, extra = {}) => ({ type: "string", description, ...extra });
 const BOT = str('Your own name on the team, exactly as in the roster (for example "Nova", "Ledger", "Atlas"). Never another bot\'s name.');
@@ -25,6 +26,7 @@ const INSTRUCTION_LINES = [
   [null, "Releases: when Luke sends a new song to the team, your steps and their dates appear in my_day. Read everything about the song with release_pack, mark ONLY your own steps with release_step (done only when it is really done), and fill the fields you are responsible for with release_fill."],
   ["Atlas", "Atlas, every day: open Spotify for Artists, Music, Upcoming, and report everything listed there with spotify_upcoming (an empty list when nothing is). The Spotify pitch waits until the song shows there."],
   /* B4 (17 Nov 2026): the Instagram reader */
+  ["Steve Kevin Forge", "Steve, Kevin and Forge: the instagram tool ranks the posts by engagement per view ((likes + comments + saves + shares) / views), not by views: paid views bring few engagements, so a boosted post never wins on reach alone. Each post shows the ad that boosted it (spend, its own engagements, cost per engagement) and its numbers from BEFORE the ad (its wow factor with our own followers). Every Monday: Steve and Kevin say WHY the top 3 beat the bottom 3 (the hook in the first seconds and the first line, the format, length, sound, topic, the time posted) as ONE update; Forge then sends Luke ONE send_message (needs decision, with recommend) naming the post that deserves the ad money next and why (high engagement per view, low cost per engagement, strong before the ad). The bots never change, start, pause or create ads: Luke decides and makes them."],
   ["Steve Kevin", "Steve and Kevin: HQ reads the Instagram account itself (the instagram tool: followers, every post's numbers at 6 hours, a day and a week, comments, countries). Once it says connected, never open Instagram in a browser for numbers again (that got the account locked); HQ logs the Instagram followers on the desk by itself."],
   /* A8 + B3 (17 Nov 2026) */
   ["Atlas", "Atlas: with your daily numbers, log the artist's Spotify monthly listeners and the Brazil listeners: log_growth platform Spotify, monthly_listeners and brazil_listeners (as shown in Spotify for Artists)."],
@@ -139,7 +141,7 @@ export const TOOLS = [
     inputSchema: obj({ bot: BOT, month: str("The month to close, YYYY-MM (a month that has ended)."),
       evidence: { type: "array", items: { type: "string" }, description: "Up to 10 https links that back it up: statements, the sheet, a folder." } }, ["bot", "month"]) },
   { name: "instagram", title: "The Instagram account's numbers, read by HQ itself", idempotent: true, readOnly: true,
-    description: "STEVE, KEVIN (Nova too). Since 17 Nov 2026 HQ reads the badscandal Instagram account itself through Meta's official API (read-only), so nobody opens Instagram in a browser for numbers again (that got the account locked). Gives: connected or not (and why), followers, the newest posts with their numbers at 6 hours, a day and a week (views, reach, likes, saves, shares), the newest comments (fans asking for the song name), and the followers' top countries. HQ also logs the day's Instagram followers on the desk by itself.",
+    description: "STEVE, KEVIN, FORGE (Nova too). Since 17 Nov 2026 HQ reads the badscandal Instagram account itself through Meta's official API (read-only), so nobody opens Instagram in a browser for numbers again (that got the account locked). Gives: connected or not (and why), followers, the newest posts with their numbers at 6 hours, a day and a week (views, reach, likes, saves, shares), the newest comments (fans asking for the song name), the followers' top countries, and the RANKING: which posts engage best per view, with the ads that boosted them and the cost per engagement. HQ also logs the day's Instagram followers on the desk by itself.",
     inputSchema: obj({ bot: BOT }, ["bot"]) },
   { name: "task_update", title: "Update or close one of my tasks", idempotent: true,
     description: 'Update ONE of YOUR OWN open tasks from my_day (open_tasks: the ids start with "T-"). status done = the task is really finished (say in note what was done, with the date or the link); blocked = you cannot go on (say in note exactly what is needed and from whom); working = you started it; todo = it is no longer blocked. The dashboard shows your word over the sheet\'s row straight away: done takes it off the open list, and a blocker you clear disappears. Never another bot\'s task (Nova may update anyone\'s). Daily duties (ids starting with "D-") are NOT tasks: finish or block those with post_update.',
@@ -345,7 +347,7 @@ export const TOOL_USERS = {
   submit_income: INCOME_TEAM, fix_payment: INCOME_TEAM, income_source: INCOME_TEAM, income_check: INCOME_TEAM, sort_payment: INCOME_TEAM,
   income_status: [...INCOME_TEAM, "Alfred"], payments: INCOME_TEAM, link_transfer: INCOME_TEAM, month_check: INCOME_TEAM, close_month: INCOME_TEAM,
   record_spend: ["Forge"], log_growth: ["Steve", "Atlas", "Kevin", "Laura"],
-  store_status: ["Drop"], spotify_upcoming: ["Atlas"], song_page: ["Webmaster"], roster_card: ["Nova"], recommend: ["Nova"], preflight: ["Forge", "Drop", "Verse", "Webmaster"], instagram: ["Steve", "Kevin"], song_pages: ["Webmaster"], upload_cover: ["Webmaster"],
+  store_status: ["Drop"], spotify_upcoming: ["Atlas"], song_page: ["Webmaster"], roster_card: ["Nova"], recommend: ["Nova"], preflight: ["Forge", "Drop", "Verse", "Webmaster"], instagram: ["Steve", "Kevin", "Forge"], song_pages: ["Webmaster"], upload_cover: ["Webmaster"],
 };
 const onTeam = (bot, roster) => { const k = String(bot || "").trim().toLowerCase(); return k ? (roster.find((b) => b.name.toLowerCase() === k) || {}).name || "" : ""; };
 export function toolsFor(bot, roster) {
@@ -454,7 +456,11 @@ export async function callTool(tool, args, ctx) {
       return { connected: st.connected, ...(st.connected ? { account: "@" + st.username } : { how: "Luke connects it once in HQ (Growth & Fans › Connect Instagram)." }),
         ...(st.lastError ? { problem: st.lastError } : {}), followers: st.followers, last_read: st.lastOkAt ? S.spStamp(st.lastOkAt) : "never",
         posts: v.posts.map(IG.postLine), new_comments: v.comments.slice(0, 20).map((c) => `${c.at.slice(0, 16).replace("T", " ")} · ${c.user}: ${c.text} (on “${c.postCaption}”)`),
-        top_countries: v.countries.map((c) => `${c.country} ${c.count}`), note: "Read-only. Don't open Instagram in a browser for these numbers." };
+        top_countries: v.countries.map((c) => `${c.country} ${c.count}`),
+        ranking: { how: "Best first by engagement per view = (likes + comments + saves + shares) / views. 'boosted' = the ad's own spend and engagements and the cost per engagement; 'before the ad' = the post's numbers before its first ad started (its own pull with our followers). Posts under " + v.ranking.minViews + " views aren't ranked yet.",
+          best: v.ranking.ranked.slice(0, 5).map(rankLine), worst: v.ranking.ranked.length > 5 ? v.ranking.ranked.slice(-3).reverse().map(rankLine) : [],
+          not_ranked_yet: v.ranking.tooFew, ads_read: v.ranking.adsAt ? S.spStamp(v.ranking.adsAt) : "not yet (the ads are read hourly with Meta's read-only key)" },
+        note: "Read-only. Don't open Instagram in a browser for these numbers. Never change, start, pause or create ads." };
     }
     case "close_month": {
       const r = await S.closeMonth(store, now, roster, { by: me, month: args.month, evidence: args.evidence });

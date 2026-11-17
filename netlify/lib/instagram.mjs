@@ -27,6 +27,7 @@ export const IG_VERSION = "v25.0"; /* Instagram Login examples, 2026 */
 export const FB_HOST = "https://graph.facebook.com";
 export { GRAPH_VERSION as FB_VERSION } from "./capi.mjs";
 import { GRAPH_VERSION as FB_VERSION } from "./capi.mjs";
+import { rankPosts } from "./postrank.mjs";
 /* The BADSCANDAL Facebook Page (public id). Luke reaches it through the business portfolio, not a direct Page role,
    so /me/accounts lists nothing; HQ then reads this Page directly. Netlify env FB_PAGE_ID overrides it. */
 export const DEFAULT_PAGE_ID = "101630812698451";
@@ -262,8 +263,11 @@ export async function igStatus(store, now) {
     ...(key && key.route === "fb" ? { keyType: key.keyType || "page", expiresAt: key.expiresAt || null } : {}), ...(key && key.page ? { page: key.page } : {}) };
 }
 export async function igView(store, now) {
-  const [status, posts, comments, countries] = await Promise.all([igStatus(store, now), readDoc(store, "posts.json", []), readDoc(store, "comments.json", []), readDoc(store, "countries.json", null)]);
-  return { status, posts: posts.slice(0, 12), comments: comments.slice(0, 40), countries: countries ? countries.list : [] };
+  const [status, posts, comments, countries, adDoc] = await Promise.all([igStatus(store, now), readDoc(store, "posts.json", []), readDoc(store, "comments.json", []), readDoc(store, "countries.json", null), readDoc(store, "adposts.json", null)]);
+  /* L2: which posts engage best, with the ads that boosted them (postrank.mjs) */
+  const ranking = rankPosts(posts, adDoc, { now });
+  return { status, posts: posts.slice(0, 12), comments: comments.slice(0, 40), countries: countries ? countries.list : [],
+    ranking: { ranked: ranking.ranked.slice(0, 15), tooFew: ranking.tooFew.length, adsAt: ranking.adsAt, minViews: ranking.minViews } };
 }
 /* one post in plain words, for the bots: "Fri 14 Nov · Reel · “caption” · a day: 1,240 views, 880 reach, …" */
 const n0 = (v) => (v == null ? "?" : Number(v).toLocaleString("en-US"));
@@ -275,12 +279,17 @@ export function postLine(p) {
 /* /hq?sample=1: made-up numbers, never a real account */
 export function sampleView(now) {
   const iso = (ms) => new Date(now - ms).toISOString();
-  return { status: { connected: true, username: "sampleaccount", followers: 4210, lastRunAt: now - 600000, lastOkAt: now - 600000, lastError: "", errorKind: "", daysLeft: 53, renews: true },
+  const v = { status: { connected: true, username: "sampleaccount", followers: 4210, lastRunAt: now - 600000, lastOkAt: now - 600000, lastError: "", errorKind: "", daysLeft: 53, renews: true },
     posts: [
-      { id: "s1", at: iso(9 * 3600000), type: "reels", caption: "Made-up reel: the drop at 0:12", link: "https://www.instagram.com/", likes: 88, comments: 6, snaps: { h6: { views: 2100, reach: 1500, likes: 70, saves: 31, shares: 12, at: now - 3 * 3600000 } } },
-      { id: "s2", at: iso(2.5 * DAY), type: "reels", caption: "Made-up studio clip", link: "https://www.instagram.com/", likes: 140, comments: 11, snaps: { h6: { views: 1800, reach: 1200, likes: 90, saves: 20, shares: 8 }, d1: { views: 3900, reach: 2700, likes: 130, saves: 44, shares: 19 } } },
-      { id: "s3", at: iso(9 * DAY), type: "feed", caption: "Made-up cover reveal", link: "https://www.instagram.com/", likes: 210, comments: 15, snaps: { h6: { views: 1400, reach: 1000, likes: 120, saves: 25, shares: 6 }, d1: { views: 2600, reach: 1900, likes: 180, saves: 40, shares: 10 }, d7: { views: 4800, reach: 3300, likes: 205, saves: 61, shares: 17 } } }],
+      { id: "s1", at: iso(9 * 3600000), type: "reels", caption: "Made-up reel: the drop at 0:12", link: "https://www.instagram.com/", likes: 88, comments: 6, snaps: { h6: { views: 2100, reach: 1500, likes: 70, saves: 31, shares: 12, at: now - 3 * 3600000 } }, latest: { views: 2600, reach: 1800, likes: 88, saves: 36, shares: 14 } },
+      { id: "s2", at: iso(2.5 * DAY), type: "reels", caption: "Made-up studio clip", link: "https://www.instagram.com/", likes: 1400, comments: 11, snaps: { h6: { views: 1800, reach: 1200, likes: 90, saves: 20, shares: 8, at: now - 2.5 * DAY + 6 * 3600000 }, d1: { views: 3900, reach: 2700, likes: 130, saves: 44, shares: 19, at: now - 1.5 * DAY } }, latest: { views: 41000, reach: 30000, likes: 1400, saves: 160, shares: 70 } },
+      { id: "s3", at: iso(9 * DAY), type: "feed", caption: "Made-up cover reveal", link: "https://www.instagram.com/", likes: 210, comments: 15, snaps: { h6: { views: 1400, reach: 1000, likes: 120, saves: 25, shares: 6 }, d1: { views: 2600, reach: 1900, likes: 180, saves: 40, shares: 10 }, d7: { views: 4800, reach: 3300, likes: 205, saves: 61, shares: 17 } }, latest: { views: 4800, reach: 3300, likes: 205, saves: 61, shares: 17 } }],
     comments: [{ id: "k1", at: iso(2 * 3600000), user: "made_up_fan", text: "what song is this??", post: "s1", postCaption: "Made-up reel: the drop at 0:12", link: "https://www.instagram.com/" },
       { id: "k2", at: iso(20 * 3600000), user: "another_made_up_fan", text: "need this on spotify 🔥", post: "s2", postCaption: "Made-up studio clip", link: "https://www.instagram.com/" }],
     countries: [{ country: "BR", count: 2380 }, { country: "IE", count: 610 }, { country: "PT", count: 290 }] };
+  /* a made-up ad boosting the studio clip, started after its 6-hour numbers */
+  const ads = { at: now - 600000, ads: [{ id: "sa1", name: "Made-up boost", media: "s2", status: "ACTIVE", created: iso(2 * DAY), spend: 120, currency: "USD", impressions: 36000, reach: 26000, likes: 1200, comments: 4, saves: 110, shares: 40 }] };
+  const r = rankPosts(v.posts, ads, { now });
+  v.ranking = { ranked: r.ranked, tooFew: r.tooFew.length, adsAt: r.adsAt, minViews: r.minViews };
+  return v;
 }

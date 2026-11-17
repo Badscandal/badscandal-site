@@ -17,6 +17,7 @@ import { morning, sweep } from "../lib/push.mjs";
 import * as S from "../lib/staff.mjs";
 import { readSongReport } from "../lib/github.mjs";
 import { syncInstagram } from "../lib/instagram.mjs";
+import { syncAdPosts } from "../lib/postrank.mjs";
 import { loadHq } from "../lib/hq-load.mjs";
 import { readMeta } from "../lib/metaread.mjs";
 import { DEFAULT_ACCOUNT } from "../lib/metaspend.mjs";
@@ -70,6 +71,9 @@ export default async () => {
       const r = await syncInstagram({ store: igStore, now, logGrowth: (row) => S.logGrowth(store, now, roster, { by: "HQ", date: S.spDay(now), ...row }) });
       if (!r.ok) console.error("instagram read: " + (r.kind || "error"));
       else if (r.snapshots || r.newComments) console.log(`instagram read: ${r.snapshots} post numbers, ${r.newComments} new comments`);
+      /* L2: the ads that boost each post (read-only, the same ads_read key, once an hour) */
+      const a = await syncAdPosts({ store: igStore, token: env("META_ADS_TOKEN"), account: (env("META_AD_ACCOUNT_ID") || DEFAULT_ACCOUNT).replace(/\D/g, ""), now });
+      if (a.error) console.error("ad posts read: " + a.kind);
     }
   } catch (e) {
     console.error("instagram read failed", e?.name || "Error");
