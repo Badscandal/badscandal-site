@@ -794,3 +794,14 @@ test("the 90-day look back: once per account, carried on across runs, then daily
   assert.deepEqual(f.calls.filter((c) => c.path.endsWith("/transactions")).map((c) => c.query.date_from), ["2026-11-05", "2026-11-05", "2026-11-05"], "then daily, as before");
   assert.equal(B.LIMITS.backDays, 90);
 });
+
+/* 17 Nov 2026 (Nova): Revolut still said "blocked, reader not connected" while the 90-day read was still going: any
+   read that worked (even one that stops part way, to carry on next time) clears it */
+test("a read that works clears Revolut's old 'blocked', even part way through the 90-day read", async () => {
+  const bank = await connectedBank({ accounts: [ACCOUNTS[0]] }), desk = memoryDesk();
+  await S.setSources(desk, [{ id: "revolut", name: "Revolut", kind: "account", owner: "HQ", cadence: "daily", state: "blocked", blocker: "The site's Revolut reader is not connected yet" }]);
+  const many = Array.from({ length: 5 }, (_, i) => ({ transactions: [], continuation_key: i < 4 ? "page-" + (i + 1) : undefined }));
+  const s = await B.syncBank({ bank, desk, env: ENV, now: NOW, fetchImpl: fakeReader({ pages: { "uid-eur": many } }), pagesPerAccount: 2 });
+  assert.deepEqual([s.ok, s.more, s.checked], [true, true, false], "part way: not 'checked today' yet");
+  assert.equal((await S.getSources(desk)).find((x) => x.id === "revolut").state, "active");
+});

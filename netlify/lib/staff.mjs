@@ -999,7 +999,9 @@ export function incomeReport(entries, checks, sources, today, older = []) {
   const lastCheck = {};
   for (const c of checks) { const k = low(c.account); if (!lastCheck[k] || c.at > lastCheck[k].at) lastCheck[k] = c; }
   const list = sources.map((s) => {
-    const mine = entries.filter((e) => (s.kind === "account" ? low(e.account) === low(s.name) || srcMatches(s, e.account) : low(e.source) === s.id || srcMatches(s, e.payer)));
+    /* a payment tied to a source counts for that source only; the payer's name decides only when it is tied to none
+       (17 Nov 2026: a payment tied to CREATE still showed under the payout service its payer is named after) */
+    const mine = entries.filter((e) => (s.kind === "account" ? low(e.account) === low(s.name) || srcMatches(s, e.account) : e.source ? low(e.source) === s.id : srcMatches(s, e.payer)));
     const last = mine.reduce((a, e) => (!a || e.date > a.date ? e : a), null);
     const chk = s.kind === "account" ? lastCheck[low(s.name)] || Object.values(lastCheck).find((c) => srcMatches(s, c.account)) || null : null;
     const lastLogged = mine.reduce((a, e) => (!a || e.at > a ? e.at : a), null); /* the last time anything was logged for it, as a São Paulo day */
