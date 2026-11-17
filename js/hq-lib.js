@@ -1475,7 +1475,7 @@
   function igStatusLine(st, now) {
     if (!st || !st.connected) return "Instagram is not connected yet.";
     if (st.lastError) return st.lastError;
-    return "@" + st.username + " · " + (st.lastOkAt ? "read " + ago((now || Date.now()) - st.lastOkAt) : "not read yet") + (st.route === "fb" ? " · through the " + (st.page || "Facebook") + " Page · the key doesn't run out" : " · the key renews by itself");
+    return "@" + st.username + " · " + (st.lastOkAt ? "read " + ago((now || Date.now()) - st.lastOkAt) : "not read yet") + (st.route === "fb" ? " · through the " + (st.page || "Facebook") + " Page · " + (st.keyType === "user" && st.expiresAt ? "Meta key: expires around " + day(new Date(st.expiresAt).toISOString().slice(0, 10)) + ", make a new one before then" : "the key doesn't run out") : " · the key renews by itself");
   }
   /* one post's best numbers: a week, else a day, else 6 hours, else so far */
   function igPostNumbers(p) {
