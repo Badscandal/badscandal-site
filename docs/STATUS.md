@@ -1,13 +1,19 @@
 # HQ status (update on every deploy)
 
-**Last updated:** 17 Nov 2026, ~11:30 São Paulo, by Claude (main `63a7463`).
-**Tests:** 486, all passing on Node 24 and Node 22. **Connector:** 34 tools.
+**Last updated:** 17 Nov 2026, ~12:25 São Paulo, by Claude (main `4468dba`).
+**Tests:** 523, all passing on Node 24 and Node 22. **Connector:** 37 tools (bots must reconnect).
 No money amounts, payer names or account numbers in this file: the repo is public.
 
 ## Live (newest first)
 
 | When | PR | What |
 |------|----|------|
+| 17 Nov | #54 | A8: log_growth Spotify `monthly_listeners` / `brazil_listeners`, a "Spotify monthly listeners" card on Songs · B3: HQ records Meta's daily spend on the desk itself (hourly, read-only) |
+| 17 Nov | #53 | A7: `close_month` locks a ready month (snapshot, received, evidence); later changes old → new in month_check and a CSV under Money |
+| 17 Nov | #52 | A6: pre-flight checks (artist exactly "badscandal", links to badscandal.com/<song>, WAV/JPG-PNG, cover size) on cards, in the release tools and the `preflight` tool |
+| 17 Nov | #51 | A5: "The next 6 weeks" in Upcoming › Planning; `six_weeks` in the releases tool for Nova and Claude |
+| 17 Nov | #50 | A4: automatic chasing: one reminder per late duty or release step, Nova told 2 h later |
+| 17 Nov | #49 | A3: recommendations on questions waiting on Luke (`recommend`, send_message `recommend`), shown on the card, the recommended option marked |
 | 17 Nov | #48 | Song-page builds (A2): a failed build tells the bot that asked "Not done: <step>: <why>" (song_pages + hourly); only the song-page checks (`npm run test:song`) can block a page, every other test runs after it is live and reports to Claude; reports on the `song-builds` branch, read with no key |
 | 17 Nov | #47 | HQ UI bugs (A1): Sheet deadlines shown as written (no more Invalid Date); page bottom follows the phone bar; More no longer logs out on a second tap, and the login says why it appeared; no "on time" next to a warning or blocked step; growth "in N days" with under a week of readings |
 | 17 Nov | (song_page job) | badscandal.com/loveyou published by GitHub's song-page build (first real run; cover checked) |
@@ -28,9 +34,12 @@ No money amounts, payer names or account numbers in this file: the repo is publi
 
 ## Next up
 
-- **A3** of `docs/HQ-ROADMAP.md` (Luke's decisions inbox with Nova's recommendation), only when Luke says to start it.
+- Batch A and B3 are done. What's left needs Luke: Batch B keys (B1 Spotify developer app, B2 YouTube sign-in, B4 Instagram on the Meta app, B5 Google Ads / TikTok developer approval), the on-hold decisions H1–H4, and L11. The "Later" list (L1–L10) waits for the API feeds; start any of it on Luke's word.
 
 ## Known gaps / watch
+
+- First live runs to watch: A4's reminders (hourly from 07:00), B3's Meta rows (hourly from 07:00; needs META_ADS_TOKEN valid), A2's build report (next song_page).
+- A6 does not check the Musixmatch format yet (no written rule to check against).
 
 - A2: the report step has never run on GitHub; the next real song_page build is its first test. If song_pages still says "no report from GitHub yet" after 15 minutes, look at the run and the `song-builds` branch.
 
