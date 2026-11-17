@@ -40,7 +40,7 @@ export default async (req, context) => {
         if (!prod) return json(409, { error: "Connect Instagram on badscandal.com itself, not on a preview." });
         let body = {};
         try { const t = await req.text(); if (t.length > 4096) return json(413, { error: "Too large." }); body = JSON.parse(t || "{}"); } catch { body = {}; }
-        const r = await IG.saveKey(store, body && body.token, now);
+        const r = await IG.saveKey(store, body && body.token, now, fetch, { pageId: IG.pageIdFrom((k) => Netlify.env.get(k)) });
         const sync = await IG.syncInstagram({ store, now, logGrowth: deskGrowth(prod, now) });
         return json(200, { ok: true, username: r.username, followers: r.followers, read: sync.ok, ...(sync.ok ? {} : { error: sync.error }) });
       }

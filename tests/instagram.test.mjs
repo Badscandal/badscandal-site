@@ -170,7 +170,9 @@ test("Facebook route: a user key is swapped for the Page's key; only the Page ke
   assert.deepEqual(rows, [{ platform: "Instagram", account: "@madeupaccount", followers: "2222" }]);
 });
 test("Facebook route: no linked Instagram account, or a key without the Page permissions, is said plainly", async () => {
-  await assert.rejects(IG.saveKey(memStore(), USER, NOW, fakeFb({ noIg: true }).f), (e) => e.kind === "noPage" && /Linked accounts/.test(e.message));
+  /* since 17 Nov: no Page with Instagram in /me/accounts -> the known Page is read; here it can't be opened, so HQ
+     says that, never "not linked" (that is only for a Page with no Instagram: the portfolio tests below) */
+  await assert.rejects(IG.saveKey(memStore(), USER, NOW, fakeFb({ noIg: true }).f), (e) => e.kind === "noPageAccess" && !/Linked accounts/.test(e.message));
   await assert.rejects(IG.saveKey(memStore(), USER, NOW, fakeFb({ noPerms: true }).f), (e) => e.kind === "noPerms" && /pages_show_list/.test(e.message));
 });
 
@@ -227,4 +229,65 @@ test("brake: a normal read stays small (well under Meta's limits)", async () => 
   const n1 = ig.calls.length;
   await IG.syncInstagram({ store: st, now: NOW + H, fetchImpl: ig.f });
   assert.ok(ig.calls.length - n1 <= 3, "an ordinary hour: " + (ig.calls.length - n1) + " calls");
+});
+
+/* The Page reached through the business portfolio (17 Nov 2026): Luke's access to the Page comes through the
+   portfolio, not a direct Page role, so /me/accounts answers {"data": []} although every permission is granted and
+   the Page itself reads fine. HQ then reads the known Page (DEFAULT_PAGE_ID, or env FB_PAGE_ID); if Meta won't hand
+   over the Page's own key, it keeps the user key (about 60 days) and says when to make a new one. */
+function portfolioFb(o = {}) {
+  const calls = [];
+  const f = async (url, init) => {
+    const u = new URL(url), path = u.pathname.replace(/^\/v[\d.]+\//, "/"), q = Object.fromEntries(u.searchParams);
+    calls.push({ path, q, auth: (init.headers || {}).Authorization || "" });
+    const ok = (j) => new Response(JSON.stringify(j), { status: 200 });
+    const no = (code, message) => new Response(JSON.stringify({ error: { message, type: "OAuthException", code } }), { status: 400 });
+    if (path === "/me/accounts") return ok({ data: o.otherPage ? [{ id: "111", name: "Some Other Page", access_token: "EAAother" + "o".repeat(60) }] : [] });
+    if (path === "/" + (o.pageId || "333")) {
+      if (o.pageDenied) return no(100, "(#100) Object does not exist, cannot be loaded due to missing permissions");
+      if (/access_token/.test(q.fields || "")) return o.pageToken ? ok({ id: "333", access_token: PAGE }) : no(200, "(#200) Requires pages_manage_metadata permission");
+      return ok({ id: "333", name: "MADE UP PAGE", ...(o.noIg ? {} : { instagram_business_account: { id: "17841400000000001", username: "madeupaccount" } }) });
+    }
+    if (path === "/17841400000000001") return ok({ username: "madeupaccount", followers_count: 2222, media_count: 3 });
+    if (path === "/17841400000000001/media") return ok({ data: [] });
+    if (path === "/17841400000000001/insights") return ok({ data: [] });
+    return new Response("{}", { status: 404 });
+  };
+  return { f, calls };
+}
+test("portfolio Page: /me/accounts empty -> the known Page is read; Meta keeps its key -> the user key stays, ~60 days", async () => {
+  const st = memStore(), fb = portfolioFb();
+  const r = await IG.saveKey(st, USER, NOW, fb.f, { pageId: "333" });
+  assert.deepEqual(r, { username: "madeupaccount", followers: 2222 });
+  assert.ok(fb.calls.some((c) => c.path === "/333"), "the known Page was read");
+  assert.ok(fb.calls.every((c) => !JSON.stringify(c.q).includes(USER)), "the key never goes in an address");
+  const s = await IG.igStatus(st, NOW);
+  assert.equal(s.route, "fb"); assert.equal(s.keyType, "user"); assert.equal(s.renews, false); assert.equal(s.daysLeft, 60); assert.equal(s.page, "MADE UP PAGE");
+  assert.equal(JSON.stringify(s).includes(USER), false);
+  const line = HL.igStatusLine({ ...s, lastOkAt: NOW - 60000 }, NOW);
+  assert.equal(line, "@madeupaccount · read 1 min ago · through the MADE UP PAGE Page · Meta key: expires around Sat 16 Jan, make a new one before then");
+  /* reads work with the user key */
+  const out = await IG.syncInstagram({ store: st, now: NOW + H, fetchImpl: fb.f });
+  assert.equal(out.ok, true, out.error);
+  assert.ok(fb.calls.filter((c) => c.path.startsWith("/1784")).every((c) => c.auth === "Bearer " + USER));
+});
+test("portfolio Page: when Meta does hand over the Page's key, only that is kept (it doesn't run out)", async () => {
+  const st = memStore(), fb = portfolioFb({ pageToken: true, otherPage: true });
+  await IG.saveKey(st, USER, NOW, fb.f, { pageId: "333" });
+  const stored = JSON.stringify([...st.m.values()]);
+  assert.equal(stored.includes(USER), false); assert.ok(stored.includes(PAGE));
+  const s = await IG.igStatus(st, NOW);
+  assert.equal(s.keyType, "page"); assert.equal(s.daysLeft, null);
+});
+test("portfolio Page: 'not linked' only when the Page itself has no Instagram; a Page the key can't open says so", async () => {
+  await assert.rejects(IG.saveKey(memStore(), USER, NOW, portfolioFb({ noIg: true }).f, { pageId: "333" }), (e) => e.kind === "noPage" && /Linked accounts/.test(e.message));
+  await assert.rejects(IG.saveKey(memStore(), USER, NOW, portfolioFb({ pageDenied: true }).f, { pageId: "333" }), (e) => e.kind === "noPageAccess" && !/Linked accounts/.test(e.message) && /333/.test(e.message));
+});
+test("the Page id: Badscandal's by default, env FB_PAGE_ID overrides; the route passes it", () => {
+  assert.equal(IG.DEFAULT_PAGE_ID, "101630812698451");
+  assert.equal(IG.pageIdFrom(() => undefined), "101630812698451");
+  assert.equal(IG.pageIdFrom((k) => (k === "FB_PAGE_ID" ? " 123456789 " : undefined)), "123456789");
+  assert.equal(IG.pageIdFrom(() => "not-a-number"), "101630812698451");
+  const fn = readFileSync(new URL("../netlify/functions/hq.mjs", import.meta.url), "utf8");
+  assert.match(fn, /saveKey\(store, body && body\.token, now, fetch, \{ pageId: IG\.pageIdFrom\(/);
 });

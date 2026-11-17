@@ -27,6 +27,11 @@ export const IG_VERSION = "v25.0"; /* Instagram Login examples, 2026 */
 export const FB_HOST = "https://graph.facebook.com";
 export { GRAPH_VERSION as FB_VERSION } from "./capi.mjs";
 import { GRAPH_VERSION as FB_VERSION } from "./capi.mjs";
+/* The BADSCANDAL Facebook Page (public id). Luke reaches it through the business portfolio, not a direct Page role,
+   so /me/accounts lists nothing; HQ then reads this Page directly. Netlify env FB_PAGE_ID overrides it. */
+export const DEFAULT_PAGE_ID = "101630812698451";
+export function pageIdFrom(env) { const v = String((env && env("FB_PAGE_ID")) || "").trim(); return /^\d{5,30}$/.test(v) ? v : DEFAULT_PAGE_ID; }
+const USER_KEY_DAYS = 60; /* an extended Facebook user key lasts about 60 days */
 export const MARKS = [["h6", 6 * 3600000], ["d1", 24 * 3600000], ["d7", 7 * 86400000]];
 const DAY = 86400000;
 const KEEP_DAYS = 8;
@@ -43,6 +48,7 @@ export const SAY = {
   noPage: "That key reached Facebook, but none of your Pages has an Instagram professional account linked to it: link @badscandal to the BADSCANDAL Page (Page settings › Linked accounts), then make the key again.",
   limit: "Meta asked HQ to slow down, so Instagram reads are paused for a day (nothing is retried before then). Nothing else is affected.",
   blocked: "Meta said an action is blocked or the account is restricted, so HQ has stopped reading Instagram completely. Check Account Quality in Meta; once it is clear, paste a new key to start again.",
+  noPageAccess: "That key can't open the BADSCANDAL Facebook Page (id {id}): make the key again while logged in as someone who can manage the Page, with pages_show_list, pages_read_engagement, instagram_basic, instagram_manage_insights and instagram_manage_comments ticked.",
   noPerms: "That key can't see your Pages: make it again with pages_show_list, pages_read_engagement, instagram_basic, instagram_manage_insights and instagram_manage_comments ticked.",
 };
 
@@ -86,11 +92,11 @@ export async function igGet(path, params, key, fetchImpl = fetch, o = {}) {
 async function readDoc(store, k, fallback) { try { const v = await store.get(k, { type: "json" }); return v == null ? fallback : v; } catch { return fallback; } }
 
 /* Luke pastes the key: checked against Instagram (the profile) before it is kept. -> {username, followers} */
-export async function saveKey(store, raw, now, fetchImpl = fetch) {
+export async function saveKey(store, raw, now, fetchImpl = fetch, o = {}) {
   const token = String(raw || "").trim();
   if (!isToken(token)) throw new IgError("bad", SAY.bad);
   /* an Instagram-login key starts with IG; anything else is a Facebook key (the Page route) */
-  if (!/^IG/.test(token)) return saveFbKey(store, token, now, fetchImpl);
+  if (!/^IG/.test(token)) return saveFbKey(store, token, now, fetchImpl, o.pageId || DEFAULT_PAGE_ID);
   const key = { token, auth: "header" };
   const me = await igGet("me", { fields: "user_id,username,account_type,followers_count,media_count" }, key, fetchImpl);
   if (me.account_type && !/business|creator|media_creator/i.test(me.account_type)) throw new IgError("notPro", SAY.notPro);
@@ -99,18 +105,31 @@ export async function saveKey(store, raw, now, fetchImpl = fetch) {
   await liftBrake(store);
   return { username: doc.username, followers: me.followers_count ?? null };
 }
-async function saveFbKey(store, token, now, fetchImpl) {
+const BRAKE = ["limit", "blocked"];
+async function saveFbKey(store, token, now, fetchImpl, pageId) {
   const user = { token, auth: "header", route: "fb" };
+  /* 1. the Pages the key manages directly */
   let pages;
   try { pages = await igGet("me/accounts", { fields: "id,name,access_token,instagram_business_account{id,username}", limit: "50" }, user, fetchImpl); }
   catch (e) { if (e.kind === "other") throw new IgError("noPerms", SAY.noPerms, e.code); throw e; }
-  const page = ((pages && pages.data) || []).find((p) => p && p.instagram_business_account && p.instagram_business_account.id && isToken(String(p.access_token || "")));
-  if (!page) throw new IgError("noPage", SAY.noPage);
+  let page = ((pages && pages.data) || []).find((p) => p && p.instagram_business_account && p.instagram_business_account.id);
+  let pageKey = page && isToken(String(page.access_token || "")) ? String(page.access_token) : "";
+  /* 2. none there (access through the business portfolio): the known Page itself, read with the user key */
+  if (!page) {
+    try { page = await igGet(pageId, { fields: "id,name,instagram_business_account{id,username}" }, user, fetchImpl); }
+    catch (e) { if (e.kind === "other") throw new IgError("noPageAccess", SAY.noPageAccess.replace("{id}", pageId), e.code); throw e; }
+    if (!page || !page.instagram_business_account || !page.instagram_business_account.id) throw new IgError("noPage", SAY.noPage);
+    /* the Page's own key, if Meta hands it over; if not, the user key stays (about 60 days) */
+    try { const t = await igGet(pageId, { fields: "access_token" }, user, fetchImpl); pageKey = isToken(String((t && t.access_token) || "")) ? String(t.access_token) : ""; }
+    catch (e) { if (BRAKE.includes(e.kind)) throw e; pageKey = ""; }
+  }
   const igId = String(page.instagram_business_account.id);
-  const key = { token: String(page.access_token), auth: "header", route: "fb" };
+  const key = { token: pageKey || token, auth: "header", route: "fb" };
   const me = await igGet(igId, { fields: "username,followers_count,media_count" }, key, fetchImpl);
-  /* the Page's key does not run out; only a password change or taking the app's access back ends it */
-  const doc = { token: key.token, auth: key.auth, route: "fb", at: now, refreshedAt: now, expiresAt: null, igId, userId: igId, page: String(page.name || "").slice(0, 80),
+  /* the Page's key does not run out (only a password change or taking the app's access back ends it); the user key
+     does, so HQ says when to make a new one */
+  const doc = { token: key.token, auth: key.auth, route: "fb", keyType: pageKey ? "page" : "user", at: now, refreshedAt: now,
+    expiresAt: pageKey ? null : now + USER_KEY_DAYS * DAY, igId, userId: igId, page: String(page.name || "").slice(0, 80),
     username: String(me.username || page.instagram_business_account.username || "") };
   await store.setJSON("key.json", doc);
   await liftBrake(store);
@@ -239,7 +258,8 @@ export async function igStatus(store, now) {
   const key = await readDoc(store, "key.json", null), state = await readDoc(store, "state.json", {});
   const daysLeft = key && key.expiresAt ? Math.max(0, Math.floor((key.expiresAt - now) / DAY)) : null;
   return { connected: !!(key && key.token), username: (key && key.username) || state.username || "", followers: state.followers ?? null, lastRunAt: state.lastRunAt || null, lastOkAt: state.lastOkAt || null,
-    lastError: state.lastError || "", errorKind: state.errorKind || "", stopped: !!state.stopped, pausedUntil: state.pausedUntil && state.pausedUntil > now ? state.pausedUntil : null, daysLeft, renews: !(key && key.route === "fb"), route: (key && key.route) || "ig", ...(key && key.page ? { page: key.page } : {}) };
+    lastError: state.lastError || "", errorKind: state.errorKind || "", stopped: !!state.stopped, pausedUntil: state.pausedUntil && state.pausedUntil > now ? state.pausedUntil : null, daysLeft, renews: !(key && key.route === "fb"), route: (key && key.route) || "ig",
+    ...(key && key.route === "fb" ? { keyType: key.keyType || "page", expiresAt: key.expiresAt || null } : {}), ...(key && key.page ? { page: key.page } : {}) };
 }
 export async function igView(store, now) {
   const [status, posts, comments, countries] = await Promise.all([igStatus(store, now), readDoc(store, "posts.json", []), readDoc(store, "comments.json", []), readDoc(store, "countries.json", null)]);
