@@ -9,6 +9,7 @@ No money amounts, payer names or account numbers in this file: the repo is publi
 | When | PR | What |
 |------|----|------|
 | 17 Nov | #55 | B4: the Instagram reader (read-only): key pasted once in HQ (Growth & Fans › Connect Instagram), renewed weekly; followers to the desk, post numbers at 6 h / 1 day / 1 week, comments, countries; `instagram` tool for Steve and Kevin. B1 and B5 marked not needed (Luke). |
+| 17 Nov | #56 | B4: the Facebook-login route (Meta blocks linking the Instagram-login app to the business portfolio): HQ takes a Facebook key and keeps only the Page's key, which doesn't run out. Safety brake: a Meta rate limit pauses Instagram reads for a day; a block, restriction or refused key stops them until a new key is pasted. A normal hour is at most 3 read calls. |
 | 17 Nov | #54 | A8: log_growth Spotify `monthly_listeners` / `brazil_listeners`, a "Spotify monthly listeners" card on Songs · B3: HQ records Meta's daily spend on the desk itself (hourly, read-only) |
 | 17 Nov | #53 | A7: `close_month` locks a ready month (snapshot, received, evidence); later changes old → new in month_check and a CSV under Money |
 | 17 Nov | #52 | A6: pre-flight checks (artist exactly "badscandal", links to badscandal.com/<song>, WAV/JPG-PNG, cover size) on cards, in the release tools and the `preflight` tool |
