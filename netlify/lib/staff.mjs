@@ -588,6 +588,34 @@ export async function chaseLate(store, now, roster, o = {}) {
   return out;
 }
 
+/* ---------- the next 6 weeks (A5, 17 Nov 2026, Nova: "a 6-week release calendar with every song's steps") ----------
+   Monday-first weeks from this one: release days (drafts marked), every open step on its due day (not done, not
+   skipped, not waiting), and late steps placed in THIS week with late: true. Cancelled songs never. The page has the
+   same rule (js/hq-lib.js sixWeeks; tests/six-weeks.test.mjs checks they agree). */
+export function sixWeeks(releases, today) {
+  const start = addDays(today, -((new Date(today + "T12:00:00Z").getUTCDay() + 6) % 7));
+  const weeks = [];
+  for (let i = 0; i < 6; i++) { const ws = addDays(start, i * 7); weeks.push({ start: ws, end: addDays(ws, 6), label: i === 0 ? "This week" : "Week of " + dayWords(ws), items: [] }); }
+  const slot = (d) => { if (d < start) return 0; const n = Math.floor((Date.parse(d + "T12:00:00Z") - Date.parse(start + "T12:00:00Z")) / 604800000); return n < 6 ? n : -1; };
+  for (const r of releases || []) {
+    if (!r || r.status === "cancelled") continue;
+    if (r.date && r.date >= start) { const i = slot(r.date); if (i >= 0) weeks[i].items.push({ date: r.date, kind: "release", id: r.id, title: r.title, draft: r.status === "draft" }); }
+    for (const st of r.steps || []) {
+      if (!st.due || st.waiting || st.status === "done" || st.status === "skipped") continue;
+      const i = slot(st.due);
+      if (i >= 0) weeks[i].items.push({ date: st.due, kind: "step", id: r.id, title: r.title, owner: st.owner, label: st.label, late: st.due < today });
+    }
+  }
+  for (const w of weeks) w.items.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : a.kind === b.kind ? 0 : a.kind === "release" ? -1 : 1));
+  return weeks;
+}
+/* the same weeks as plain lines, for the bots */
+export function sixWeekLines(weeks) {
+  return weeks.map((w) => ({ week: w.label, lines: w.items.length ? w.items.map((x) => x.kind === "release"
+    ? `${dayWords(x.date)} · ${x.title} comes out${x.draft ? " (draft: not sent to the team yet)" : ""}`
+    : `${dayWords(x.date)} · ${x.owner} · ${x.label} · ${x.title}${x.late ? " · LATE" : ""}`) : ["nothing due"] }));
+}
+
 /* ---------- recommendations (A3, 17 Nov 2026, Nova: "Luke's decisions inbox with my recommendation on each card") ----------
    { by, option, why, at } on a message waiting on Luke. option = one of the message's options, exactly as listed
    ("" when it has none, or none is picked); why = one or two sentences. The asker gives its own through

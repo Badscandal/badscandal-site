@@ -2405,3 +2405,6 @@ Luke: "money is not double counted so if something comes to paypal and i send it
 
 ## Automatic chasing (17 Nov 2026, A4)
 - `S.chaseLate(store, now, roster, {hq, releases})`, run by `netlify/functions/pushhourly.mjs` (it now loads the sheet with `loadHq` and the desk's active release views). 07:00–22:00 São Paulo only; paused bots never. Each late duty (`hq.team.duties`, status todo) and late release step (not waiting / blocked / skipped / done) gets ONE reminder from HQ to its bot per day (needs none); still late 2 h later, ONE message from HQ to Nova, needs action (Nova's own goes to Luke). Claimed in `chase/<SP day>.json` before sending. Two INSTRUCTIONS lines tell the bots and Nova. Tests: `tests/auto-chase.test.mjs`.
+
+## The next 6 weeks (17 Nov 2026, A5)
+- `S.sixWeeks(views, today)` (server) and `HQLib.sixWeeks(today, releases)` (page) are the same rule, tested to agree: 6 Monday-first weeks from this one; release days (drafts marked `draft`), every open step on its due day (not done / skipped / waiting), late steps placed in THIS week with `late: true`; cancelled songs never. `S.sixWeekLines()` = plain lines. The `releases` tool gives Nova and Claude `six_weeks`; Upcoming › Planning draws "The next 6 weeks" (`.six-weeks`, each week a fold, the first two open, remembered as `six:<monday>`). Tests: `tests/six-weeks.test.mjs`.

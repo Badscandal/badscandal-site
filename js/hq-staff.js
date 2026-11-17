@@ -1022,7 +1022,17 @@
     var timeHtml = '<details class="tile plan-time"' + (ui.rel.fold.timeline ? " open" : "") + ' data-fold="timeline"><summary>How long things take, and the team\'s rule</summary><ul class="tl">' +
       L.PLAN_TIMELINE.map(function (x) { return "<li><b>" + esc(x.what) + "</b><span>" + esc(x.time) + "</span></li>"; }).join("") + "</ul>" +
       '<p class="tl-rule"><b>The team\'s rule:</b> Drop sends a song to RouteNote 4 weeks before its release day (3 weeks at the very least), songs come out on Fridays, and there are 2 weeks between two songs: a week as Out now, then a week as the next one. Atlas pitches the day the song shows in Spotify for Artists.</p></details>';
-    el.innerHTML = '<div class="plangrid">' + nextHtml + calHtml + "</div>" + timeHtml;
+    /* A5 (17 Nov 2026, Nova): the next 6 weeks, every song's steps, week by week (late ones in this week) */
+    var six = L.sixWeeks(today, rels);
+    var sixHtml = '<section class="tile six-weeks" aria-labelledby="sixTitle"><h3 class="lblh" id="sixTitle">The next 6 weeks</h3><p class="secsub">Every song\'s release day and every open step, week by week. Late steps sit in this week.</p>' +
+      six.map(function (w, i) {
+        return '<details class="sixw"' + ((ui.rel.fold["six:" + w.start] != null ? ui.rel.fold["six:" + w.start] : i < 2) ? " open" : "") + ' data-fold="six:' + esc(w.start) + '"><summary>' + esc(w.label) + ' <span class="lbl">' + (w.items.length ? w.items.length + (w.items.length === 1 ? " thing" : " things") : "nothing due") + "</span></summary>" +
+          (w.items.length ? '<ul class="cal-items">' + w.items.map(function (x) {
+            return x.kind === "release" ? '<li class="r"><a href="#releases/' + esc(safe(x.id)) + '">' + esc(L.day(x.date)) + " · <b>" + esc(x.title) + "</b> comes out" + (x.draft ? " (draft: not sent yet)" : "") + "</a></li>"
+              : '<li class="' + (x.late ? "late" : "") + '"><a href="#releases/' + esc(safe(x.id)) + '">' + esc(L.day(x.date)) + " · <b>" + esc(x.owner) + "</b> · " + esc(x.label) + " · " + esc(x.title) + (x.late ? " · late" : "") + "</a></li>";
+          }).join("") + "</ul>" : '<p class="empty2">Nothing due.</p>') + "</details>";
+      }).join("") + "</section>";
+    el.innerHTML = '<div class="plangrid">' + nextHtml + calHtml + "</div>" + sixHtml + timeHtml;
   }
   /* -> true when the desk drew the tab (js/hq.js draws the sheet's list when it didn't) */
   /* the release page (17 Nov 2026): the whole release in one view, on top of Upcoming */
