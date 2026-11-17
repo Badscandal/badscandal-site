@@ -83,16 +83,25 @@ export async function syncAdPosts({ store, token, account, now, fetchImpl = fetc
 const MARK_WORDS = { h6: "6 hours", d1: "a day", d7: "a week" };
 const engagedOf = (x, comments) => n(x.likes) + n(x.comments != null ? x.comments : comments) + n(x.saves) + n(x.shares);
 
-/* posts: instagram.mjs posts.json; adDoc: adposts.json. -> { ranked (best first), tooFew, adsAt } */
+/* posts: instagram.mjs posts.json; adDoc: adposts.json; o.comments: the read comments, each with `own` (one of our
+   accounts) so ours are taken off. -> { ranked (same age: their 1-day numbers, best first), older (no 1-day numbers:
+   lifetime / so far, best first, not the same age), tooFew, adsAt }.
+   Nova, 17 Nov 2026: "rank every post at the same age … use the 1-day window", "our own comments count as
+   engagement: leave them out", "add follows per view and profile visits", "saves and shares their own column". */
 export function rankPosts(posts, adDoc, o = {}) {
-  const minViews = o.minViews || 300;
-  const ads = (adDoc && adDoc.ads) || [];
-  const out = [], tooFew = [];
+  const minViews = o.minViews || 300, now = o.now || Date.now();
+  const ads = (adDoc && adDoc.ads) || [], comments = o.comments || [];
+  const out = [], older = [], tooFew = [];
   for (const p of posts || []) {
-    const l = p.latest || {};
-    const views = n(l.views) || n(l.reach);
-    const nums = { likes: l.likes != null ? l.likes : p.likes, comments: l.comments != null ? l.comments : p.comments, saves: l.saves, shares: l.shares };
-    const engaged = engagedOf(nums);
+    const d1 = p.snaps && p.snaps.d1;
+    const base = d1 || p.latest || {};
+    const window = d1 ? "1 day" : p.lifetime ? "lifetime" : "so far";
+    const ownC = comments.filter((c) => c && c.own && c.post === p.id && (!d1 || Date.parse(c.at) <= d1.at)).length;
+    const views = n(base.views) || n(base.reach);
+    const rawComments = base.comments != null ? n(base.comments) : d1 ? 0 : n(p.comments);
+    const nums = { likes: base.likes != null ? n(base.likes) : d1 ? 0 : n(p.likes), comments: Math.max(0, rawComments - ownC), saves: n(base.saves), shares: n(base.shares) };
+    const engaged = nums.likes + nums.comments + nums.saves + nums.shares;
+    const follows = base.follows != null ? n(base.follows) : null, visits = base.profile_visits != null ? n(base.profile_visits) : null;
     const mine = ads.filter((a) => a.media === p.id);
     let paid = null, before = null;
     if (mine.length) {
@@ -110,17 +119,23 @@ export function rankPosts(posts, adDoc, o = {}) {
         }
       }
     }
-    const row = { id: p.id, at: p.at, caption: p.caption || "", type: p.type || "post", link: p.link || "", views, engaged, rate: views ? engaged / views : null,
-      likes: n(nums.likes), comments: n(nums.comments), saves: n(nums.saves), shares: n(nums.shares), boosted: !!paid, paid, before };
-    (views >= minViews ? out : tooFew).push(row);
+    const row = { id: p.id, at: p.at, caption: p.caption || "", type: p.type || "post", link: p.link || "", window, views, engaged, rate: views ? engaged / views : null,
+      ...nums, ownComments: ownC, deep: views ? (nums.saves + nums.shares) / views : null,
+      follows, followRate: follows != null && views ? follows / views : null, profileVisits: visits, boosted: !!paid, paid, before };
+    const young = now - Date.parse(p.at) < 36 * 3600000;
+    if (views < minViews || (!d1 && young)) tooFew.push(row);
+    else (d1 ? out : older).push(row);
   }
-  out.sort((a, b) => b.rate - a.rate || b.views - a.views);
-  return { ranked: out, tooFew, adsAt: (adDoc && adDoc.at) || null, minViews };
+  const best = (a, b) => b.rate - a.rate || b.views - a.views;
+  out.sort(best); older.sort(best);
+  return { ranked: out, older, tooFew, adsAt: (adDoc && adDoc.at) || null, minViews };
 }
 
 /* one post in plain words */
 export function rankLine(r) {
-  let s = `“${r.caption || "(no caption)"}” · ${r.type} · ${String(r.at).slice(0, 10)} · ${pct(r.rate)} engaged (${fmt(r.engaged)} of ${fmt(r.views)} views)`;
+  let s = `“${r.caption || "(no caption)"}” · ${r.type} · ${String(r.at).slice(0, 10)} · ${r.window}: ${pct(r.rate)} engaged (${fmt(r.engaged)} of ${fmt(r.views)} views)` +
+    ` · saves + shares ${pct(r.deep)}` + (r.follows != null ? ` · ${fmt(r.follows)} follows (${pct(r.followRate)})` : "") + (r.profileVisits != null ? ` · ${fmt(r.profileVisits)} profile visits` : "") +
+    (r.ownComments ? ` · ${r.ownComments} of our own comments left out` : "");
   if (r.paid) {
     const c = r.paid.currency || "";
     s += ` · boosted ${c} ${r.paid.spend.toFixed(2)}${r.paid.status ? ` (${r.paid.status})` : ""}: ${fmt(r.paid.engaged)} engagements from the ad` +

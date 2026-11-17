@@ -1503,7 +1503,12 @@
   /* L2: one ranked post (netlify/lib/postrank.mjs rankPosts) in the page's words */
   function rankParts(r) {
     var p1 = function (x) { return x == null ? "?" : (Math.round(x * 1000) / 10).toFixed(1) + "%"; };
-    var out = { rate: p1(r.rate) + " engaged", views: fmt(r.engaged) + " of " + fmt(r.views) + " views · " + fmt(r.likes) + " likes · " + fmt(r.saves) + " saves · " + fmt(r.shares) + " shares", paid: "Not boosted", before: "" };
+    var out = { rate: p1(r.rate) + " engaged", window: r.window === "1 day" ? "At 1 day" : r.window === "lifetime" ? "Lifetime" : "So far",
+      views: fmt(r.engaged) + " of " + fmt(r.views) + " views · " + fmt(r.likes) + " likes · " + fmt(r.comments) + " comments",
+      deep: "Saves + shares " + p1(r.deep) + " (" + fmt(r.saves) + " saves · " + fmt(r.shares) + " shares)",
+      follows: r.follows != null ? fmt(r.follows) + " follows (" + p1(r.followRate) + " of views)" + (r.profileVisits != null ? " · " + fmt(r.profileVisits) + " profile visits" : "") : "",
+      own: r.ownComments ? r.ownComments + " of our own comment" + (r.ownComments === 1 ? "" : "s") + " left out" : "",
+      paid: "Not boosted", before: "" };
     if (r.paid) {
       var c = r.paid.currency ? r.paid.currency + " " : "";
       out.paid = "Boosted " + c + r.paid.spend.toFixed(2) + (r.paid.status ? " (" + r.paid.status.toLowerCase() + ")" : "") + " · " + fmt(r.paid.engaged) + " engagements from the ad" +

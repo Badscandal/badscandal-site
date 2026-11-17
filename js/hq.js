@@ -642,15 +642,27 @@
     } else {
       h += '<p class="d"><button class="copybtn" type="button" id="igRead"' + dis + ">" + (igBusy ? "Reading…" : "Read now") + '</button> <button class="linkbtn" type="button" id="igOff"' + dis + ">Disconnect</button>" + (igMsg ? " " + esc(igMsg) : "") + "</p>";
     }
-    /* L2: What engages best, per view, with the ads that boosted each post (17 Nov 2026) */
+    /* L2: What engages best, per view, every post at the same age, with the ads that boosted each (17 Nov 2026) */
     var rk = ig.ranking;
-    if (rk && rk.ranked && rk.ranked.length) h += '<h3 class="sech" style="margin-top:14px">What engages best</h3><p class="sub">Per view: likes, comments, saves and shares ÷ views. Paid views bring few engagements, so a boosted post doesn\u2019t win on reach alone. ' +
-      (rk.adsAt ? "Ads read " + esc(L.ago(Date.now() - rk.adsAt)) + "." : "The ads that boosted each post show here once HQ has read them (hourly).") + (rk.tooFew ? " " + rk.tooFew + " newer post" + (rk.tooFew === 1 ? "" : "s") + " under " + rk.minViews + " views not ranked yet." : "") + '</p><ol class="igrank">' +
-      rk.ranked.slice(0, 8).map(function (r) {
-        var x = L.rankParts(r);
-        return '<li class="tile"><div class="row"><h3>' + link(r.link, r.caption || "(no caption)") + '</h3><span class="lbl">' + esc(r.type + " · " + day(String(r.at).slice(0, 10))) + '</span></div>' +
-          '<div class="big num">' + esc(x.rate) + '</div><div class="d">' + esc(x.views) + '</div><div class="d' + (r.paid ? "" : " muted") + '">' + esc(x.paid) + "</div>" + (x.before ? '<div class="d">' + esc(x.before) + "</div>" : "") + "</li>";
-      }).join("") + "</ol>";
+    function rankItem(r) {
+      var x = L.rankParts(r);
+      return '<li class="tile"><div class="row"><h3>' + link(r.link, r.caption || "(no caption)") + '</h3><span class="lbl">' + esc(r.type + " · " + day(String(r.at).slice(0, 10)) + " · " + x.window) + '</span></div>' +
+        '<div class="big num">' + esc(x.rate) + '</div><div class="d">' + esc(x.views) + '</div><div class="d">' + esc(x.deep) + "</div>" + (x.follows ? '<div class="d">' + esc(x.follows) + "</div>" : "") +
+        '<div class="d' + (r.paid ? "" : " muted") + '">' + esc(x.paid) + "</div>" + (x.before ? '<div class="d">' + esc(x.before) + "</div>" : "") + (x.own ? '<div class="d muted">' + esc(x.own) + "</div>" : "") + "</li>";
+    }
+    if (rk && ((rk.ranked || []).length || (rk.older || []).length)) {
+      h += '<h3 class="sech" style="margin-top:14px">What engages best</h3><p class="sub">Every post at the same age (its numbers at 1 day). Engaged = likes, comments, saves and shares ÷ views; our own accounts\u2019 comments don\u2019t count. Paid views bring few engagements, so a boosted post doesn\u2019t win on reach alone. ' +
+        (rk.adsAt ? "Ads read " + esc(L.ago(Date.now() - rk.adsAt)) + "." : "The ads that boosted each post show here once HQ has read them (hourly).") +
+        (rk.tooFew ? " " + rk.tooFew + " newer post" + (rk.tooFew === 1 ? "" : "s") + " not ranked yet (under " + rk.minViews + " views, or not a day old)." : "") +
+        ((rk.ranked || []).length < 10 ? " Fewer than 10 posts compared so far: the order isn\u2019t settled yet." : "") + "</p>";
+      if ((rk.ranked || []).length) h += '<ol class="igrank">' + rk.ranked.slice(0, 8).map(rankItem).join("") + "</ol>";
+      if ((rk.older || []).length) h += '<details class="tile" style="margin-bottom:12px"><summary>Older posts (' + rk.older.length + "): lifetime numbers, not the same age</summary>" + '<ol class="igrank">' + rk.older.slice(0, 10).map(rankItem).join("") + "</ol></details>";
+    }
+    if ((ig.needsReply || []).length) h += '<div class="tile" style="margin:12px 0"><h3>Needs a reply (' + ig.needsReply.length + ')</h3><p class="sub">Questions nobody of ours has answered yet. Replying is yours.</p><ul class="igcomments">' +
+      ig.needsReply.map(function (c) { return "<li><b>" + esc(c.user) + "</b>: " + esc(c.text) + ' <span class="lbl">on ' + link(c.link, c.postCaption || "a post") + "</span></li>"; }).join("") + "</ul></div>";
+    if (st.connected && !sample) h += '<details class="tile" style="margin:12px 0"><summary>Our own accounts (' + (ig.own || []).length + "): their comments don\u2019t count</summary>" +
+      '<p class="d">' + esc((ig.own || []).map(function (x) { return "@" + x; }).join(", ")) + '</p><form class="igform" id="igOwnForm" autocomplete="off"><input type="text" id="igOwn" placeholder="@account, @another" aria-label="Our own accounts" value="' +
+      esc((ig.own || []).slice(1).map(function (x) { return "@" + x; }).join(", ")) + '"><button class="sendbtn" type="submit"' + dis + ">Save</button></form></details>";
     if ((ig.posts || []).length) h += '<div class="igposts">' + ig.posts.slice(0, 9).map(function (p) {
       return '<div class="tile igpost"><div class="row"><h3>' + link(p.link, p.caption || "(no caption)") + '</h3><span class="lbl">' + esc((p.type || "post") + " · " + day(p.at.slice(0, 10))) + '</span></div><div class="d">' + esc(L.igPostNumbers(p) || "No numbers yet") + "</div></div>";
     }).join("") + "</div>";
@@ -659,6 +671,15 @@
     if ((ig.countries || []).length) h += '<p class="d" style="margin-top:10px">Followers by country: ' + esc(ig.countries.slice(0, 6).map(function (c) { return c.country + " " + fmt(c.count); }).join(" · ")) + "</p>";
     box.innerHTML = h;
   }
+  document.addEventListener("submit", function (ev) {
+    if (!ev.target || ev.target.id !== "igOwnForm") return;
+    ev.preventDefault();
+    igBusy = true; igMsg = ""; drawInstagram();
+    postJSON("/api/hq/instagram/own", { handles: $("igOwn").value || "" }).then(function (res) {
+      igBusy = false; igMsg = res.s === 200 ? "Saved." : (res.j && res.j.error) || "Couldn't save (" + res.s + ").";
+      return loadInstagram();
+    }, function () { igBusy = false; igMsg = "No connection. Try again."; drawInstagram(); });
+  });
   document.addEventListener("submit", function (ev) {
     if (!ev.target || ev.target.id !== "igForm") return;
     ev.preventDefault();

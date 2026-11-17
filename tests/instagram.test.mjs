@@ -66,8 +66,10 @@ test("one read: followers to the desk, post numbers at 6 hours, comments, countr
   assert.equal(p1.snaps.h6.views, 500); assert.equal(p1.snaps.h6.saves, 12);
   assert.equal(p1.caption, "Made up reel");
   const p2 = v.posts.find((p) => p.id === "p2");
-  assert.deepEqual(p2.snaps, {}, "older than 8 days: no insights call");
-  assert.equal(ig.calls.filter((c) => c.path === "/p2/insights").length, 0);
+  assert.deepEqual(p2.snaps, {}, "older than 8 days: no marks");
+  /* since 17 Nov (Nova): an older post gets its lifetime numbers once (numbers + follows), never again */
+  assert.equal(ig.calls.filter((c) => c.path === "/p2/insights").length, 2);
+  assert.equal(p2.lifetime, true);
   assert.deepEqual(v.comments.map((c) => [c.user, c.text]), [["made_up_fan", "what song is this??"]]);
   assert.deepEqual(v.countries, [{ country: "BR", count: 700 }, { country: "IE", count: 200 }]);
   /* an hour later: nothing new is taken twice, comments wait for 3 hours */
@@ -95,7 +97,9 @@ test("the key renews itself once a week; a refused key is said plainly; no key =
 });
 test("postLine: one post in plain words for the bots", () => {
   assert.equal(IG.postLine({ at: "2026-11-17T08:00:00Z", type: "reels", caption: "Made up", link: "https://www.instagram.com/reel/x/", snaps: { d1: { views: 1240, reach: 880, likes: 60, saves: 9, shares: 4 } } }),
-    "2026-11-17 · reels · “Made up” · a day: 1,240 views, 880 reach, 60 likes, 9 saves, 4 shares · https://www.instagram.com/reel/x/");
+    "2026-11-17 · reels · “Made up” · a day: 1,240 views, 880 reach, 60 likes, ? comments, 9 saves, 4 shares · https://www.instagram.com/reel/x/");
+  assert.equal(IG.postLine({ at: "2026-11-17T08:00:00Z", type: "reels", caption: "Made up", link: "", comments: 3, snaps: { d1: { views: 1240, reach: 880, likes: 60, saves: 9, shares: 4, follows: 7, profile_visits: 30 } } }),
+    "2026-11-17 · reels · “Made up” · a day: 1,240 views, 880 reach, 60 likes, 3 comments, 9 saves, 4 shares, 7 follows, 30 profile visits");
 });
 test("the desk takes HQ's Instagram row without marking any duty", async () => {
   const d = memoryDesk();
@@ -290,4 +294,61 @@ test("the Page id: Badscandal's by default, env FB_PAGE_ID overrides; the route 
   assert.equal(IG.pageIdFrom(() => "not-a-number"), "101630812698451");
   const fn = readFileSync(new URL("../netlify/functions/hq.mjs", import.meta.url), "utf8");
   assert.match(fn, /saveKey\(store, body && body\.token, now, fetch, \{ pageId: IG\.pageIdFrom\(/);
+});
+
+/* Nova's points, 17 Nov 2026: compare posts at the same age; older posts need numbers too; follows; our replies */
+function richIg(o = {}) {
+  const calls = [];
+  const posts = o.posts;
+  const f = async (url, init) => {
+    const u = new URL(url), path = u.pathname.replace(/^\/v[\d.]+\//, "/"), q = Object.fromEntries(u.searchParams);
+    calls.push({ path, q });
+    const ok = (j) => new Response(JSON.stringify(j), { status: 200 });
+    if (path === "/me") return ok({ user_id: "1", username: "madeupaccount", account_type: "BUSINESS", followers_count: 10, media_count: posts.length });
+    if (path === "/me/media") return ok({ data: posts });
+    if (/\/insights$/.test(path) && q.metric === "follows,profile_visits") return o.noFollows ? new Response(JSON.stringify({ error: { message: "(#100) metric not supported", code: 100 } }), { status: 400 }) : ok({ data: [{ name: "follows", values: [{ value: 7 }] }, { name: "profile_visits", values: [{ value: 30 }] }] });
+    if (/\/insights$/.test(path)) return ok({ data: [{ name: "views", values: [{ value: 1000 }] }, { name: "likes", values: [{ value: 80 }] }, { name: "comments", values: [{ value: 5 }] }] });
+    if (/\/comments$/.test(path)) return ok({ data: [{ id: "k1", text: "can i use this song?", username: "made_up_fan", timestamp: new Date(NOW - H).toISOString(), replies: { data: [{ username: "MadeUpAccount" }] } }] });
+    return ok({ data: [] });
+  };
+  return { f, calls };
+}
+const mp = (id, ageMs) => ({ id, caption: "post " + id, media_product_type: "REELS", timestamp: new Date(NOW - ageMs).toISOString(), permalink: "https://www.instagram.com/reel/" + id + "/", like_count: 1, comments_count: 1 });
+test("marks are taken only near their age: a post first seen at 3 days gets no '1 day' numbers", async () => {
+  const st = memStore(); await IG.saveKey(st, TOKEN, NOW - DAY, fakeIg().f);
+  const ig = richIg({ posts: [mp("young", 25 * H), mp("late", 3 * DAY)] });
+  await IG.syncInstagram({ store: st, now: NOW, fetchImpl: ig.f });
+  const posts = await st.get("posts.json"), y = posts.find((p) => p.id === "young"), l = posts.find((p) => p.id === "late");
+  assert.ok(y.snaps.d1 && y.snaps.h6 === undefined, "25 hours: the 1-day mark, the 6-hour one is long past");
+  assert.deepEqual(Object.keys(l.snaps), [], "3 days old when first seen: no mark at all");
+  assert.equal(y.snaps.d1.follows, 7); assert.equal(y.snaps.d1.profile_visits, 30);
+  assert.ok(l.latest, "it still has its numbers so far");
+});
+test("older posts get their lifetime numbers once, a few per hour; follows only when the post type has them", async () => {
+  const st = memStore(); await IG.saveKey(st, TOKEN, NOW - DAY, fakeIg().f);
+  const old = Array.from({ length: 6 }, (_, i) => mp("old" + i, (20 + i) * DAY));
+  const ig = richIg({ posts: old, noFollows: true });
+  const r = await IG.syncInstagram({ store: st, now: NOW, fetchImpl: ig.f });
+  assert.equal(r.backfilled, 4);
+  let posts = await st.get("posts.json");
+  assert.equal(posts.filter((p) => p.latest && p.lifetime).length, 4);
+  assert.equal(posts[0].latest.follows, undefined, "a refused follows metric is just left out");
+  const n = ig.calls.length;
+  await IG.syncInstagram({ store: st, now: NOW + H, fetchImpl: ig.f });
+  posts = await st.get("posts.json");
+  assert.equal(posts.filter((p) => p.latest).length, 6, "the rest the next hour");
+  const n2 = ig.calls.length;
+  await IG.syncInstagram({ store: st, now: NOW + 2 * H, fetchImpl: ig.f });
+  assert.ok(ig.calls.length - n2 <= 3, "once read, never again: " + (ig.calls.length - n2) + " calls");
+  assert.ok(n2 - n <= 8);
+});
+test("comments keep who replied (usernames only), so a question we answered isn't 'needs a reply'", async () => {
+  const st = memStore(); await IG.saveKey(st, TOKEN, NOW - DAY, fakeIg().f);
+  const ig = richIg({ posts: [mp("p", 30 * H)] });
+  await IG.syncInstagram({ store: st, now: NOW, fetchImpl: ig.f });
+  assert.match(ig.calls.find((c) => /comments$/.test(c.path)).q.fields, /replies\{username\}/);
+  const list = await st.get("comments.json");
+  assert.deepEqual(list[0].repliedBy, ["madeupaccount"]);
+  const v = await IG.igView(st, NOW);
+  assert.equal(v.needsReply.length, 0, "our own account replied");
 });

@@ -44,6 +44,12 @@ export default async (req, context) => {
         const sync = await IG.syncInstagram({ store, now, logGrowth: deskGrowth(prod, now) });
         return json(200, { ok: true, username: r.username, followers: r.followers, read: sync.ok, ...(sync.ok ? {} : { error: sync.error }) });
       }
+      /* our own accounts, whose comments never count as engagement (17 Nov 2026) */
+      if (sub === "own") {
+        let body = {};
+        try { const t = await req.text(); if (t.length > 2048) return json(413, { error: "Too large." }); body = JSON.parse(t || "{}"); } catch { body = {}; }
+        return json(200, { ok: true, handles: await IG.saveOwn(store, body && body.handles, now) });
+      }
       if (sub === "sync") { const r = await IG.syncInstagram({ store, now, logGrowth: deskGrowth(prod, now) }); return json(200, r); }
       if (sub === "disconnect") { await IG.forgetKey(store); return json(200, { ok: true }); }
     } catch (e) {

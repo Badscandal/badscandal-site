@@ -68,53 +68,93 @@ test("syncAdPosts: hourly, stored for the page and the bots; a limit pauses it f
   assert.equal((await P.syncAdPosts({ store: st, token: TOKEN, account: "1", now: NOW + DAY + 2 * H, fetchImpl: fakeAds().f })).ok, true, "a day later it reads again");
 });
 
-/* Luke's own example, made-up posts: A boosted with 90 (23k views, 1.6k likes), B boosted with 300 (~300k views,
-   3k likes), C not boosted, D too new to judge */
+/* Luke's own example, made-up posts, each compared at the SAME age (its 1-day numbers): A boosted with 90 (23k
+   views, 1.6k likes), B boosted with 300 (~300k views, 3k likes), C not boosted, D too new, E an old post HQ only has
+   lifetime numbers for */
+const d1 = (at, o) => ({ ...o, at: Date.parse(at) + DAY });
+const at = (ms) => new Date(NOW - ms).toISOString();
 const posts = [
-  { id: "m1", at: new Date(NOW - 3 * DAY).toISOString(), type: "reels", caption: "Clip A: the drop", link: "https://www.instagram.com/reel/a/", likes: 1600, comments: 40,
-    snaps: { h6: { views: 2100, reach: 1500, likes: 160, saves: 12, shares: 8, at: NOW - 3 * DAY + 6 * H } }, latest: { views: 23000, reach: 17000, likes: 1600, saves: 100, shares: 60 } },
-  { id: "m2", at: new Date(NOW - 6 * DAY).toISOString(), type: "reels", caption: "Clip B: studio", link: "https://www.instagram.com/reel/b/", likes: 3000, comments: 50,
-    snaps: {}, latest: { views: 300000, reach: 210000, likes: 3000, saves: 80, shares: 70 } },
-  { id: "m3", at: new Date(NOW - 4 * DAY).toISOString(), type: "feed", caption: "Cover reveal", link: "https://www.instagram.com/p/c/", likes: 500, comments: 20, snaps: {}, latest: { views: 5000, reach: 4000, likes: 500, saves: 30, shares: 10 } },
-  { id: "m4", at: new Date(NOW - 2 * H).toISOString(), type: "reels", caption: "Just posted", link: "", likes: 3, comments: 0, snaps: {}, latest: { views: 120, reach: 100, likes: 3, saves: 0, shares: 0 } }];
+  { id: "m1", at: at(3 * DAY), type: "reels", caption: "Clip A: the drop", link: "https://www.instagram.com/reel/a/", likes: 1700, comments: 45,
+    snaps: { h6: { views: 2100, reach: 1500, likes: 160, saves: 12, shares: 8, at: NOW - 3 * DAY + 6 * H }, d1: d1(at(3 * DAY), { views: 23000, reach: 17000, likes: 1600, comments: 40, saves: 100, shares: 60, follows: 120, profile_visits: 300 }) },
+    latest: { views: 25000, reach: 18000, likes: 1700, comments: 45, saves: 110, shares: 66 } },
+  { id: "m2", at: at(6 * DAY), type: "reels", caption: "Clip B: studio", link: "https://www.instagram.com/reel/b/", likes: 3000, comments: 50,
+    snaps: { d1: d1(at(6 * DAY), { views: 300000, reach: 210000, likes: 3000, comments: 50, saves: 80, shares: 70 }) }, latest: { views: 300000, reach: 210000, likes: 3000, saves: 80, shares: 70 } },
+  { id: "m3", at: at(4 * DAY), type: "feed", caption: "Cover reveal", link: "https://www.instagram.com/p/c/", likes: 500, comments: 20,
+    snaps: { d1: d1(at(4 * DAY), { views: 5000, reach: 4000, likes: 500, comments: 20, saves: 30, shares: 10, follows: 40 }) }, latest: { views: 5000, reach: 4000, likes: 500, saves: 30, shares: 10 } },
+  { id: "m4", at: at(2 * H), type: "reels", caption: "Just posted", link: "", likes: 3, comments: 0, snaps: {}, latest: { views: 120, reach: 100, likes: 3, saves: 0, shares: 0 } },
+  { id: "m5", at: at(30 * DAY), type: "reels", caption: "Old reel", link: "", likes: 900, comments: 10, snaps: {}, lifetime: true, latest: { views: 9000, reach: 7000, likes: 900, comments: 10, saves: 50, shares: 40 } }];
 const adDoc = { at: NOW - 10 * 60000, ads: [
-  { id: "a1", name: "Clip A ad", media: "m1", status: "ACTIVE", created: new Date(NOW - 2 * DAY).toISOString(), spend: 90, currency: "USD", impressions: 21000, reach: 15000, likes: 1400, comments: 30, saves: 80, shares: 40 },
-  { id: "a2", name: "Clip B ad", media: "m2", status: "PAUSED", created: new Date(NOW - 5 * DAY).toISOString(), spend: 300, currency: "USD", impressions: 290000, reach: 200000, likes: 2600, comments: 20, saves: 30, shares: 10 }] };
+  { id: "a1", name: "Clip A ad", media: "m1", status: "ACTIVE", created: at(2 * DAY), spend: 90, currency: "USD", impressions: 21000, reach: 15000, likes: 1400, comments: 30, saves: 80, shares: 40 },
+  { id: "a2", name: "Clip B ad", media: "m2", status: "PAUSED", created: at(5 * DAY), spend: 300, currency: "USD", impressions: 290000, reach: 200000, likes: 2600, comments: 20, saves: 30, shares: 10 }] };
+/* three of OUR comments on Clip A before its 1-day mark, one after it; one fan's */
+const comments = [
+  { id: "c1", post: "m1", user: "ouraccount", own: true, at: at(3 * DAY - 2 * H) }, { id: "c2", post: "m1", user: "ourpartner", own: true, at: at(3 * DAY - 3 * H) },
+  { id: "c3", post: "m1", user: "ouraccount", own: true, at: at(3 * DAY - 4 * H) }, { id: "c4", post: "m1", user: "ouraccount", own: true, at: at(DAY) },
+  { id: "c5", post: "m1", user: "a_made_up_fan", own: false, at: at(3 * DAY - 5 * H) }];
 
-test("rankPosts: engagement per view wins, not views; the ad's own numbers and cost per engagement; before the ad", () => {
-  const r = P.rankPosts(posts, adDoc, { now: NOW });
-  assert.deepEqual(r.ranked.map((x) => x.id), ["m3", "m1", "m2"], "C (11%) > A (7.8%) > B (1.1%)");
+test("rankPosts: same age (1 day), engagement per view wins, our own comments left out, the ad's numbers, before the ad", () => {
+  const r = P.rankPosts(posts, adDoc, { now: NOW, comments });
+  assert.deepEqual(r.ranked.map((x) => x.id), ["m3", "m1", "m2"], "C (11.2%) > A (7.8%) > B (1.1%)");
+  assert.deepEqual(r.older.map((x) => x.id), ["m5"], "no 1-day numbers: a reference list, not the same age");
   assert.deepEqual(r.tooFew.map((x) => x.id), ["m4"]);
   const a = r.ranked[1];
-  assert.equal(a.engaged, 1800); assert.equal(Math.round(a.rate * 1000) / 10, 7.8);
-  assert.equal(a.boosted, true);
-  assert.equal(a.paid.spend, 90); assert.equal(a.paid.engaged, 1550); assert.equal(Math.round(a.paid.costPerEng * 1000) / 1000, 0.058);
-  assert.equal(Math.round(a.paid.rate * 1000) / 10, 7.4);
+  assert.equal(a.window, "1 day"); assert.equal(a.views, 23000, "the 1-day numbers, not the latest");
+  assert.equal(a.ownComments, 3, "our 3 comments before the 1-day mark are left out (the later one wasn't in those numbers)");
+  assert.equal(a.comments, 37); assert.equal(a.engaged, 1797);
+  assert.equal(Math.round(a.rate * 1000) / 10, 7.8);
+  assert.equal(Math.round(a.deep * 10000) / 100, 0.7, "saves + shares per view");
+  assert.equal(a.follows, 120); assert.equal(Math.round(a.followRate * 10000) / 100, 0.52); assert.equal(a.profileVisits, 300);
+  assert.equal(a.boosted, true); assert.equal(a.paid.spend, 90); assert.equal(a.paid.engaged, 1550); assert.equal(Math.round(a.paid.costPerEng * 1000) / 1000, 0.058);
   assert.deepEqual(a.before, { mark: "6 hours", views: 2100, engaged: 180, rate: 180 / 2100 }, "the 6-hour numbers were taken before the ad started");
-  const b = r.ranked[2];
-  assert.equal(b.before, null, "B's ad started before any snapshot");
-  assert.equal(Math.round(b.paid.costPerEng * 100) / 100, 0.11);
-  assert.equal(r.ranked[0].boosted, false); assert.equal(r.ranked[0].paid, null);
-  assert.equal(r.adsAt, NOW - 10 * 60000);
+  assert.equal(r.ranked[2].before, null, "B's ad started before its 1-day mark and it had no earlier one");
+  assert.equal(r.ranked[0].paid, null); assert.equal(r.ranked[0].follows, 40); assert.equal(r.ranked[0].profileVisits, null);
+  assert.equal(r.older[0].window, "lifetime");
 });
 test("rankLine: one post in plain words, for Luke and the bots", () => {
-  const r = P.rankPosts(posts, adDoc, { now: NOW });
-  assert.equal(P.rankLine(r.ranked[1]), "“Clip A: the drop” · reels · 2026-11-14 · 7.8% engaged (1,800 of 23,000 views) · boosted USD 90.00 (ACTIVE): 1,550 engagements from the ad, USD 0.058 each · before the ad (6 hours): 8.6% of 2,100 views");
-  assert.equal(P.rankLine(r.ranked[0]), "“Cover reveal” · feed · 2026-11-13 · 11.2% engaged (560 of 5,000 views) · not boosted");
-  assert.equal(P.rankLine(r.ranked[2]), "“Clip B: studio” · reels · 2026-11-11 · 1.1% engaged (3,200 of 300,000 views) · boosted USD 300.00 (PAUSED): 2,660 engagements from the ad, USD 0.113 each");
+  const r = P.rankPosts(posts, adDoc, { now: NOW, comments });
+  assert.equal(P.rankLine(r.ranked[1]), "“Clip A: the drop” · reels · 2026-11-14 · 1 day: 7.8% engaged (1,797 of 23,000 views) · saves + shares 0.7% · 120 follows (0.5%) · 300 profile visits · 3 of our own comments left out · boosted USD 90.00 (ACTIVE): 1,550 engagements from the ad, USD 0.058 each · before the ad (6 hours): 8.6% of 2,100 views");
+  assert.equal(P.rankLine(r.ranked[0]), "“Cover reveal” · feed · 2026-11-13 · 1 day: 11.2% engaged (560 of 5,000 views) · saves + shares 0.8% · 40 follows (0.8%) · not boosted");
+  assert.equal(P.rankLine(r.older[0]), "“Old reel” · reels · 2026-10-18 · lifetime: 11.1% engaged (1,000 of 9,000 views) · saves + shares 1.0% · not boosted");
 });
-test("igView carries the ranking; the sample has one; the bots get it (Steve, Kevin and Forge) with the how-to", async () => {
-  const st = memStore(); st.m.set("posts.json", JSON.stringify(posts)); st.m.set("adposts.json", JSON.stringify(adDoc));
+test("igView: our own accounts' comments left out of the fans' list and the ranking; questions nobody answered need a reply", async () => {
+  const st = memStore();
+  st.m.set("key.json", JSON.stringify({ token: TOKEN, username: "ouraccount", route: "fb" }));
+  st.m.set("state.json", JSON.stringify({ username: "ouraccount" }));
+  st.m.set("own.json", JSON.stringify({ handles: ["ourpartner"] }));
+  st.m.set("posts.json", JSON.stringify(posts)); st.m.set("adposts.json", JSON.stringify(adDoc));
+  st.m.set("comments.json", JSON.stringify([
+    { id: "q1", post: "m1", user: "made_up_creator", text: "can i use your music in my videos?", at: at(2 * H), postCaption: "Clip A", link: "" },
+    { id: "q2", post: "m1", user: "made_up_fan", text: "what song is this??", at: at(3 * H), postCaption: "Clip A", link: "", repliedBy: ["ouraccount"] },
+    { id: "q3", post: "m1", user: "ourpartner", text: "when is it out?", at: at(4 * H), postCaption: "Clip A", link: "" },
+    { id: "q4", post: "m1", user: "made_up_fan", text: "fire", at: at(5 * H), postCaption: "Clip A", link: "" },
+    { id: "q5", post: "m1", user: "made_up_old", text: "song name?", at: at(20 * DAY), postCaption: "Clip A", link: "" }]));
   const v = await IG.igView(st, NOW);
+  assert.deepEqual(v.own, ["ouraccount", "ourpartner"]);
+  assert.deepEqual(v.comments.map((c) => c.id), ["q1", "q2", "q4", "q5"], "our partner's comment is not a fan's");
+  assert.deepEqual(v.needsReply.map((c) => c.id), ["q1"], "answered by us, ours, not a question, or older than 14 days: left out");
   assert.deepEqual(v.ranking.ranked.map((x) => x.id), ["m3", "m1", "m2"]);
-  assert.ok(IG.sampleView(NOW).ranking.ranked.length >= 2);
+  assert.deepEqual(v.ranking.older.map((x) => x.id), ["m5"]);
+  const sv = IG.sampleView(NOW);
+  assert.ok(sv.ranking.ranked.length >= 1 && sv.needsReply.length >= 1);
+});
+test("our own accounts: saved from HQ, handles only", async () => {
+  const st = memStore();
+  assert.deepEqual(await IG.saveOwn(st, "@OurPartner, @another.one  , @ourpartner", NOW), ["ourpartner", "another.one"]);
+  await assert.rejects(IG.saveOwn(st, "not a handle!", NOW), (e) => e.kind === "bad");
+  assert.deepEqual(IG.ownHandles("OurAccount", await st.get("own.json")), ["ouraccount", "ourpartner", "another.one"]);
+  assert.match(readFileSync(new URL("../netlify/functions/hq.mjs", import.meta.url), "utf8"), /sub === "own"[\s\S]*IG\.saveOwn\(store/);
+});
+test("the bots get the ranking (Steve, Kevin and Forge) with the how-to; HQ draws it", async () => {
   for (const b of ["Steve", "Kevin", "Forge"]) assert.ok(toolsFor(b, S.DEFAULT_ROSTER).some((t) => t.name === "instagram"), b);
   assert.match(INSTRUCTIONS, /engagement per view/i);
   assert.match(INSTRUCTIONS, /never (?:change|touch|start|pause)[^.]*ads?/i);
   const src = readFileSync(new URL("../netlify/lib/staff-tools.mjs", import.meta.url), "utf8");
-  assert.match(src, /ranking: \{ how: /);
+  assert.match(src, /ranking: \{ how: /); assert.match(src, /needs_reply: /); assert.match(src, /SAME age/);
   assert.match(readFileSync(new URL("../netlify/functions/pushhourly.mjs", import.meta.url), "utf8"), /syncAdPosts\(/);
-  assert.match(readFileSync(new URL("../js/hq.js", import.meta.url), "utf8"), /What engages best/);
-  const x = globalThis.HQLib.rankParts(P.rankPosts(posts, adDoc, { now: NOW }).ranked[1]);
-  assert.deepEqual(x, { rate: "7.8% engaged", views: "1,800 of 23,000 views · 1,600 likes · 100 saves · 60 shares", paid: "Boosted USD 90.00 (active) · 1,550 engagements from the ad · USD 0.058 each", before: "Before the ad (6 hours): 8.6% of 2,100 views" });
+  const js = readFileSync(new URL("../js/hq.js", import.meta.url), "utf8");
+  assert.match(js, /What engages best/); assert.match(js, /Needs a reply/); assert.match(js, /igOwnForm/);
+  const x = globalThis.HQLib.rankParts(P.rankPosts(posts, adDoc, { now: NOW, comments }).ranked[1]);
+  assert.deepEqual(x, { rate: "7.8% engaged", window: "At 1 day", views: "1,797 of 23,000 views · 1,600 likes · 37 comments", deep: "Saves + shares 0.7% (100 saves · 60 shares)",
+    follows: "120 follows (0.5% of views) · 300 profile visits", own: "3 of our own comments left out",
+    paid: "Boosted USD 90.00 (active) · 1,550 engagements from the ad · USD 0.058 each", before: "Before the ad (6 hours): 8.6% of 2,100 views" });
 });
