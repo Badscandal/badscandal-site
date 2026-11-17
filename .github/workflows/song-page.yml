@@ -2,9 +2,14 @@
 # Started ONLY by the site (repository_dispatch "song-page"), and the site asks for it only after Luke
 # answered "Yes, correct" to Webmaster's (or Nova's) song_page question on the desk.
 # The job is passed to tools/song-job.mjs through the env variable JOB and checked again there; it is never
-# pasted into a shell line. Every test runs before anything is pushed: if one fails, nothing goes live and
-# GitHub emails the repo's owner. Files are added by name (the list the script writes), never "git add -A".
+# pasted into a shell line. Files are added by name (the list the script writes), never "git add -A".
+# A2 (17 Nov 2026, Webmaster): ONLY the song-page checks (npm run test:song) can stop a page; on 17 Nov fourteen
+# unrelated bank tests held /loveyou up for ~20 minutes. Every other test runs AFTER the page is live and only
+# reports (every PR already runs them all before code reaches main). The last step always writes a report
+# (tools/song-report.mjs) to the song-builds branch; the site reads it and the desk tells the bot that asked:
+# "Not done: <why>" when the page did not go live.
 name: Song page (from the staff desk)
+run-name: Song page ${{ github.event.client_payload.kind }} ${{ github.event.client_payload.slug }}
 
 on:
   repository_dispatch:
@@ -29,19 +34,58 @@ jobs:
         with:
           node-version: 22
       - name: Picture tools
+        id: tools
         run: sudo apt-get update -qq && sudo apt-get install -y -qq imagemagick webp
       - name: Install
+        id: install
         run: npm ci --no-audit --no-fund
       - name: Make the page
+        id: make
         env:
           JOB: ${{ toJSON(github.event.client_payload) }}
         run: node tools/song-job.mjs
-      - name: Every test
-        run: npm test
+      - name: Song-page checks
+        id: songtests
+        run: |
+          set -o pipefail
+          npm run test:song 2>&1 | tee .song-tests.log
       - name: Publish
+        id: publish
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add --pathspec-from-file=.song-files
           git commit -F .song-commit
           git push origin HEAD:main
+      - name: Every other test (after it is live; never blocks a page)
+        id: alltests
+        if: steps.publish.outcome == 'success'
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          npm test 2>&1 | tee .all-tests.log
+      - name: Tell the desk
+        if: always()
+        env:
+          JOB: ${{ toJSON(github.event.client_payload) }}
+          STEPS: ${{ toJSON(steps) }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          node tools/song-report.mjs > "$RUNNER_TEMP/report.json" || { echo "no report: the job has no desk id"; exit 0; }
+          MSG=$(node -p 'require(process.env.RUNNER_TEMP + "/report.json").msg')
+          URL="https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          for i in 1 2 3 4; do
+            D="$RUNNER_TEMP/builds$i"; git init -q "$D"; cd "$D"
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            if git fetch -q "$URL" song-builds 2>/dev/null; then git checkout -q -B song-builds FETCH_HEAD; else git checkout -q --orphan song-builds; fi
+            mkdir -p builds
+            cp "$RUNNER_TEMP/report.json" "builds/$MSG.json"
+            printf '# Build reports for the staff desk, never a site: Netlify skips this branch.\n[build]\n  ignore = "exit 0"\n' > netlify.toml
+            git add netlify.toml "builds/$MSG.json"
+            git commit -q -m "Build report $MSG" || true
+            if git push -q "$URL" HEAD:refs/heads/song-builds; then echo "report sent"; exit 0; fi
+            cd "$GITHUB_WORKSPACE"; sleep $((i * 3))
+          done
+          echo "the report could not be pushed"

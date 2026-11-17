@@ -3,10 +3,13 @@
       quiet sweep missed) alerts now, under the same once / flood / quiet-hours rules;
    2. the 08:00 summary: each device whose own clock says 08:xx and that had alerts go silently overnight
       gets ONE "<n> things are waiting on you".
+   3. the song-page builds (A2, 17 Nov 2026): how each build sent in the last 3 days ended; a failed one tells
+      the bot that asked "Not done: <why>" (netlify/lib/staff.mjs checkSongBuilds).
    Logic: netlify/lib/push.mjs. No key or no device: it does nothing. */
 import { getStore } from "@netlify/blobs";
 import { morning, sweep } from "../lib/push.mjs";
 import * as S from "../lib/staff.mjs";
+import { readSongReport } from "../lib/github.mjs";
 
 export default async () => {
   const now = Date.now();
@@ -25,6 +28,13 @@ export default async () => {
     if (m.sent) console.log(`push morning summary: ${m.sent} sent`);
   } catch (e) {
     console.error("push morning summary failed", e?.name || "Error");
+  }
+  try {
+    S.useSongReports((id) => readSongReport(id));
+    const b = await S.checkSongBuilds(store, now, (await desk()).roster || S.DEFAULT_ROSTER);
+    if (b.length) console.log(`song builds: ${b.length} report${b.length === 1 ? "" : "s"} read, ${b.filter((x) => !x.ok).length} not done`);
+  } catch (e) {
+    console.error("song builds check failed", e?.name || "Error");
   }
 };
 

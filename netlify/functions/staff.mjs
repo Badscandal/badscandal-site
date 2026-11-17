@@ -40,7 +40,7 @@
    Deploy previews use their own throwaway store. Nothing here can touch ads, posts or the sheets. */
 import { getDeployStore, getStore } from "@netlify/blobs";
 import { keyOk } from "../lib/feed.mjs";
-import { dispatchSongJob } from "../lib/github.mjs";
+import { dispatchSongJob, readSongReport } from "../lib/github.mjs";
 import { loadHq } from "../lib/hq-load.mjs";
 import { handle } from "../lib/mcp.mjs";
 import { sweep as pushSweep } from "../lib/push.mjs";
@@ -263,6 +263,8 @@ export default async (req, context) => {
   /* song pages (16 Nov 2026): Luke's "Yes, correct" asks GitHub to build the page. ONLY the published site:
      a deploy preview has its own throwaway desk, and must never publish to main. */
   S.useSongDispatch(context?.deploy?.context === "production" ? (job) => dispatchSongJob({ GITHUB_SONG_TOKEN: Netlify.env.get("GITHUB_SONG_TOKEN") }, job) : null);
+  /* the build reports (A2, 17 Nov 2026): public files, no key; the published site only */
+  S.useSongReports(context?.deploy?.context === "production" ? (id) => readSongReport(id) : null);
   try {
     if (path === "/mcp" || path.startsWith("/mcp/")) return await mcp(req, context);
     if (path.startsWith("/api/staff/")) return await api(req, context, path.slice("/api/staff/".length));
