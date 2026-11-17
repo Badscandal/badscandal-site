@@ -37,6 +37,7 @@ export default async (req, context) => {
    literal, so it can't import the list: tools/new-song.mjs rewrites this line, and
    tests/songs.test.mjs fails if it ever disagrees with songs.json. */
 export const config = { path: [
+  "/loveyou", "/loveyou.html", "/loveyou/",
   "/medaseubody", "/medaseubody.html", "/medaseubody/",
   "/touchme", "/touchme.html", "/touchme/",
 ] };

@@ -4,6 +4,16 @@
   "spotifyArtist": "https://open.spotify.com/artist/29kaubgb6Esvwu0idVndGy",
   "songs": [
     {
+      "slug": "loveyou",
+      "title": "Love you",
+      "date": "2026-11-27",
+      "cover": "assets/listen-loveyou-cover-v1.jpg",
+      "coverWeb": "assets/loveyou-cover-600-v1.webp",
+      "share": "assets/share-loveyou-1200-v1.jpg",
+      "spotifyTrack": "",
+      "spotifyArtist": "https://open.spotify.com/artist/29kaubgb6Esvwu0idVndGy"
+    },
+    {
       "slug": "medaseubody",
       "title": "Me Dá Seu Body",
       "date": "2026-11-24",
