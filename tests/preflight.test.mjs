@@ -65,7 +65,7 @@ test("the preflight tool: a song, a text, a link", async () => {
   assert.equal(b.problems.length, 1);
   const c = await call(d, "preflight", { bot: "Forge", link: `https://badscandal.com/${slug}?utm_source=meta` });
   assert.deepEqual(c, { ok: true, problems: [], note: c.note });
-  assert.match(String((await call(d, "preflight", { bot: "Forge" })).error), /Give song, text or link/);
+  assert.match(String((await call(d, "preflight", { bot: "Forge" })).error), /Give song, text, link or asset/); /* + asset (L8, 17 Nov 2026) */
   assert.ok(toolsFor("Forge", R).some((t) => t.name === "preflight") && toolsFor("Drop", R).some((t) => t.name === "preflight") && toolsFor("Verse", R).some((t) => t.name === "preflight") && toolsFor("Webmaster", R).some((t) => t.name === "preflight"));
   assert.ok(!toolsFor("Kevin", R).some((t) => t.name === "preflight"));
   /* the tool count is pinned in mcp.test.mjs */

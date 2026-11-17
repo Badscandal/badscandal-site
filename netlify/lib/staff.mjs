@@ -670,6 +670,9 @@ export function preflightOf(r) {
   if (["mp3", "m4a", "aac", "ogg", "opus"].includes(wext)) out.push({ field: "wav", text: `${short("wav")}: the master must be a WAV (the stores' quality), not an .${wext}.` });
   const aext = filled(pack.artwork) ? extOf(pack.artwork) : "";
   if (["webp", "gif", "heic", "bmp", "tif", "tiff", "svg"].includes(aext)) out.push({ field: "artwork", text: `${short("artwork")}: must be a JPG or PNG, 3000 x 3000, not a .${aext}.` });
+  /* L8: a Canvas link whose file type is known and isn't one Spotify takes (a link with no file type says nothing) */
+  const cext = filled(pack.canvas) ? extOf(pack.canvas) : "";
+  if (cext) for (const t of assetProblems("canvas", { format: cext })) out.push({ field: "canvas", text: `${short("canvas")}: ${t.replace(/^Spotify Canvas must/, "must")}` });
   const own = r && r.id ? r.id : "";
   if (filled(pack.page)) { const pr = adLinkProblem(pack.page, "", own); if (pr) out.push({ field: "page", text: `${short("page")}: ${pr}` }); }
   for (const l of String(pack.adplan || "").match(/https?:\/\/[^\s"'<>)]+/g) || []) { const pr = adLinkProblem(l.replace(/[.,;]+$/, ""), "", own); if (pr) out.push({ field: "adplan", text: `${short("adplan")}: ${pr}` }); }
@@ -681,6 +684,38 @@ export function coverWarnings(w, h) {
   if (w !== h) return [`The picture is ${w} x ${h}: not square. The song page crops it to a square; the stores need a square 3000 x 3000.`];
   if (w < 3000) return [`${w} x ${h}: fine for the song page; RouteNote needs 3000 x 3000 for the stores.`];
   return [];
+}
+
+/* ---------- the asset checker (L8, 17 Nov 2026, Atlas via Nova: "cover, Canvas and banner vs each platform's
+   rules") ----------
+   Each platform's published rule, checked against what a bot can read off the file (width, height, seconds,
+   file type, size). Anything not given is not checked; nothing is refused, the preflight tool lists the problems.
+   ratio = width / height, with 2% slack; min = the smallest width and height; mb = the largest file. */
+export const ASSETS = {
+  cover: { label: "Cover", formats: ["jpg", "jpeg", "png"], ratio: 1, ratioWords: "square", min: [3000, 3000], mb: null,
+    rule: "RouteNote and the stores: a square JPG or PNG, at least 3000 x 3000." },
+  canvas: { label: "Spotify Canvas", formats: ["mp4", "jpg", "jpeg"], ratio: 9 / 16, ratioWords: "9:16", minHeight: 720, seconds: [3, 8], mb: null,
+    rule: "Spotify Canvas: an MP4 (or a JPG), 9:16 portrait, at least 720 px tall, 3 to 8 seconds; no text, logos or links on it (Spotify's guidelines)." },
+  spotify_header: { label: "Spotify header", formats: ["jpg", "jpeg", "png"], ratio: null, min: [2660, 1140], mb: 20,
+    rule: "Spotify for Artists header image: a JPG or PNG, at least 2660 x 1140, 20 MB at most; keep faces and text in the middle (it is cropped on phones)." },
+  youtube_banner: { label: "YouTube banner", formats: ["jpg", "jpeg", "png", "gif", "bmp"], ratio: 16 / 9, ratioWords: "16:9", min: [2048, 1152], mb: 6,
+    rule: "YouTube channel banner: a JPG, PNG, GIF or BMP, 16:9, at least 2048 x 1152, 6 MB at most; text and logos inside the middle 1235 x 338 (what every device shows)." },
+};
+const FORMAT_WORDS = { cover: "a JPG or PNG", canvas: "an MP4 or JPG", spotify_header: "a JPG or PNG", youtube_banner: "a JPG, PNG, GIF or BMP" };
+export function assetProblems(kind, o = {}) {
+  const a = Object.prototype.hasOwnProperty.call(ASSETS, kind) ? ASSETS[kind] : null;
+  if (!a) fail("asset must be cover, canvas, spotify_header or youtube_banner.");
+  const num = (v) => (v == null || v === "" ? null : Number(v));
+  const w = num(o.width), h = num(o.height), sec = num(o.seconds), mb = num(o.mb);
+  const fmt = String(o.format == null ? "" : o.format).trim().toLowerCase().replace(/^\./, "");
+  const out = fmt && !a.formats.includes(fmt) ? [`${a.label} must be ${FORMAT_WORDS[kind]}, not a .${fmt}.`] : [];
+  if (kind === "cover") return [...(w != null && h != null ? coverWarnings(w, h) : []), ...out]; /* A6's wording, kept */
+  if (w != null && h != null && a.ratio && Math.abs(w / h - a.ratio) / a.ratio > 0.02) out.push(`${w} x ${h} is not ${a.ratioWords}: ${a.label} needs ${a.ratioWords}.`);
+  if (a.min && w != null && h != null && (w < a.min[0] || h < a.min[1])) out.push(`${w} x ${h} is too small: ${a.label} needs at least ${a.min[0]} x ${a.min[1]}.`);
+  if (a.minHeight && h != null && h < a.minHeight) out.push(`${h} px tall is too small: ${a.label} needs at least ${a.minHeight} px tall.`);
+  if (a.seconds && sec != null && (sec < a.seconds[0] || sec > a.seconds[1])) out.push(`${sec} seconds: ${a.label} must be ${a.seconds[0]} to ${a.seconds[1]} seconds.`);
+  if (a.mb && mb != null && mb > a.mb) out.push(`${mb} MB: ${a.label} is ${a.mb} MB at most.`);
+  return out;
 }
 
 /* ---------- recommendations (A3, 17 Nov 2026, Nova: "Luke's decisions inbox with my recommendation on each card") ----------
