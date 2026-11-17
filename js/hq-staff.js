@@ -944,7 +944,7 @@
      approvals, the files) folds behind "Steps and details", remembered per song. */
   function relCard(v) {
     var today = board.today, pill = L.upcomingPill(v, today), live = v.status === "scheduled" && !v.released, off = HQ.sample ? " disabled" : "";
-    var acts = ['<button class="copybtn" type="button" data-rel="edit" data-id="' + esc(v.id) + '">Edit the details</button>'];
+    var acts = ['<button class="copybtn" type="button" data-rel="page" data-id="' + esc(v.id) + '">Release page</button>', '<button class="copybtn" type="button" data-rel="edit" data-id="' + esc(v.id) + '">Edit the details</button>'];
     if (live) acts.push('<button class="linkbtn" type="button" data-rel="date" data-id="' + esc(v.id) + '"' + off + ">Change the date</button>",
       '<button class="linkbtn" type="button" data-rel="cancel" data-id="' + esc(v.id) + '"' + off + ">Cancel release</button>");
     var asking = ui.rel.ask && ui.rel.ask.id === v.id, warn = v.warnings || [], st = L.relStatus(v, today), pr = L.relProgress(v), g = L.stepGroups(v);
@@ -1022,10 +1022,30 @@
     el.innerHTML = '<div class="plangrid">' + nextHtml + calHtml + "</div>" + timeHtml;
   }
   /* -> true when the desk drew the tab (js/hq.js draws the sheet's list when it didn't) */
+  /* the release page (17 Nov 2026): the whole release in one view, on top of Upcoming */
+  function releasePageHtml(v, sheet) {
+    var song = sheet && (sheet.songs || []).filter(function (x) { return L.titleKey(x.song) === L.titleKey(v.title); })[0];
+    var p = L.releasePage(v, board.today, { fields: board.packFields || [], song: song });
+    var GROUPS = { deal: "Whose release", files: "Files", stores: "For the stores", lyrics: "Lyrics", pitch: "For the pitch", later: "Filled by the team", notes: "Notes" };
+    var cls = { filled: "", missing: "st-missing", "needed later": "st-later", optional: "st-opt", "not needed": "st-none" };
+    var groups = {}; p.fields.forEach(function (f) { (groups[f.group] || (groups[f.group] = [])).push(f); });
+    var show = function (f) { return f.state === "filled" ? (/^https:\/\//.test(f.value) ? '<a href="' + esc(f.value) + '" target="_blank" rel="noopener">link</a>' : esc(f.value.length > 160 ? f.value.slice(0, 159) + "…" : f.value)) : '<span class="' + cls[f.state] + '">' + esc(f.state) + "</span>"; };
+    return '<article class="tile rpage" aria-labelledby="rpTitle"><div class="rphead"><div><h3 id="rpTitle">' + esc(p.title) + '</h3><p class="rwhen">' + esc(p.when) + "</p></div>" +
+      '<button class="copybtn" type="button" data-rel="page-close" data-id="' + esc(v.id) + '">Close</button></div>' +
+      '<p class="rpready ' + (p.ready ? "ok" : "no") + '">' + esc(p.ready ? "Ready: everything is done" : p.readyText) + "</p>" +
+      '<ul class="rpcheck">' + p.checklist.map(function (c) { return '<li class="' + (c.ok ? "ok" : "no") + '"><span class="mk">' + (c.ok ? "✓" : "○") + "</span><span>" + esc(c.text) + "</span></li>"; }).join("") + "</ul>" +
+      '<div class="rpsec"><p class="t-lbl">Ad plan</p>' + (p.adPlan ? '<p class="rpplan">' + esc(p.adPlan) + "</p>" : '<p class="rnote">Not written yet. Add your notes under Edit the details (Ad plan).</p>') + "</div>" +
+      (p.results.length ? '<div class="rpsec"><p class="t-lbl">After the release</p>' + p.results.map(function (r) { return "<p>" + esc(r) + "</p>"; }).join("") + '<p><a href="#songs">See Songs</a></p></div>' : "") +
+      Object.keys(groups).map(function (g) { return '<div class="rpsec"><p class="t-lbl">' + esc(GROUPS[g] || g) + '</p><dl class="rpfields">' + groups[g].map(function (f) { return "<dt>" + esc(f.label) + "</dt><dd>" + show(f) + "</dd>"; }).join("") + "</dl></div>"; }).join("") +
+      "</article>";
+  }
   function drawReleases() {
     if (!board || !Array.isArray(board.releases)) return false;
     var sheet = HQ.sheet(), lists = L.releaseLists(board, sheet);
     relById = {}; board.releases.forEach(function (v) { relById[v.id] = v; });
+    var pg = ui.rel.page && relById[ui.rel.page];
+    $("relPage").hidden = !pg;
+    $("relPage").innerHTML = pg ? releasePageHtml(pg, sheet) : "";
     $("relSample").hidden = !HQ.sample;
     /* a redraw must not take the caret out of the date field being picked */
     var act = document.activeElement, fk = act && act.getAttribute ? act.getAttribute("data-reldate") : null;
@@ -1174,6 +1194,8 @@
     var act = b.getAttribute("data-rel"), id = b.getAttribute("data-id") || "", v = relById[id];
     var focusSel = function (sel) { var el = $("releases").querySelector(sel); if (el) el.focus(); };
     var sid = id.replace(/[^a-z0-9]/gi, "");
+    if (act === "page") { ui.rel.page = id; drawReleases(); var pgEl = $("relPage"); if (pgEl) pgEl.scrollIntoView({ block: "start" }); return; }
+    if (act === "page-close") { ui.rel.page = null; drawReleases(); jumpTo(id, true); return; }
     if (act === "edit") {
       if (ui.rel.loading[id]) return;
       /* the form needs the whole release (the lyrics too), or saving it would look like clearing them */

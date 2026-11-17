@@ -2385,3 +2385,11 @@ Luke: "money is not double counted so if something comes to paypal and i send it
 - `income_status`: `in_wise_or_paypal_not_counted`, `waiting_in_wise_or_paypal` (ids). The sample's publishing payment now lands in Revolut (its PayPal one shows as holding).
 - **Node 22 vs 24 (17 Nov 2026):** GitHub's song-page build (Node 22) cancelled 12 bank tests ("Promise resolution is still pending but the event loop has already resolved") and stopped /loveyou: `AbortSignal.timeout`'s timer doesn't keep Node running, so a test whose fake bank never answers ended before the timeout fired (Node 24 on the Mac passed). `ebCall` now uses its own AbortController + setTimeout, always cleared; same "timeout" error. Check with `npx -y node@22 --test tests/*.test.mjs` (453 pass, 0 cancelled).
 
+## Release page and Nova's list of 17 Nov 2026 (branch hq-release-page)
+- **Release page** (Upcoming → "Release page" on each song card; `#relPage`, `HQLib.releasePage`): a checklist (files, every step that applies with its state, final lyrics (not for a pre-HQ song), the ad plan) with "N of M ready" / "Ready"; the ad plan; the song's numbers after release (Songs row); every field with its state (filled / missing / needed later / optional / not needed).
+- New pack fields: **`canvas`** (Spotify Canvas link, Luke's) → Atlas's step **`canvas`** "Spotify Canvas uploaded" (days −7, after spotify, `needs: "canvas"`: skipped with NEEDS_NOTE until the pack has a link; saveRelease reopens/skips it when the link is set/cleared). **`adplan`** (Luke's notes on the ads, notes group). **`prehq`** ("Yes" = released through the distributor before HQ: nothing missing, nobody chases; whereWords says so). adplan and prehq are not counted in "N of M filled".
+- `healOne` adds a step of the pipeline a release is missing (only songs not out yet; never the spotify step, which old releases get when moved), dated as if sent with it.
+- `afterBankRead` runs when any account was read (one failing pocket no longer keeps Revolut "not connected").
+- `log_growth`: `channel_views`, `shorts_views`. `ownerName()` in hq.mjs: "Kevin (TikTok)" on the sheet is Kevin (tasks, duties, the bot's own word).
+- **`roster_card`** (Nova; Claude, Luke): fix a bot's duty / why / time / schedule / role on the desk (`rosteredit.json`, on top of the seed, kept across re-seeds). 34 tools.
+

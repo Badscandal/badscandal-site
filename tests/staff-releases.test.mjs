@@ -19,17 +19,17 @@ async function sent(d, title = "Survivors", date = "2026-12-11", pack = FULL) {
 }
 
 test("releases: the pack is one list; every field has a group, the steps have owners and days", () => {
-  assert.equal(S.PACK_FIELDS.length, 31); /* + primary, musixmatch (16 Nov 2026) */
+  assert.equal(S.PACK_FIELDS.length, 34); /* + primary, musixmatch (16 Nov 2026); canvas, adplan, prehq (17 Nov 2026) */
   const groups = Object.fromEntries(["deal", "files", "stores", "lyrics", "pitch", "later", "notes"].map((g) => [g, S.PACK_FIELDS.filter((f) => f.group === g).map((f) => f.key)]));
-  assert.deepEqual(groups, { deal: ["kind", "label", "split", "distributor", "deal"], files: ["wav", "artwork", "visualiser", "folder"], stores: ["language", "explicit", "genre", "subgenre", "version", "writers", "producers", "featuring", "primary", "copyright"],
-    lyrics: ["lyrics"], pitch: ["mood", "instruments", "story"], later: ["isrc", "upc", "storeStatus", "spotifyTrack", "video", "page", "musixmatch"], notes: ["notes"] });
+  assert.deepEqual(groups, { deal: ["kind", "label", "split", "distributor", "deal"], files: ["wav", "artwork", "visualiser", "canvas", "folder"], stores: ["language", "explicit", "genre", "subgenre", "version", "writers", "producers", "featuring", "primary", "copyright"],
+    lyrics: ["lyrics"], pitch: ["mood", "instruments", "story"], later: ["isrc", "upc", "storeStatus", "spotifyTrack", "video", "page", "musixmatch"], notes: ["adplan", "prehq", "notes"] });
   assert.deepEqual(S.PACK_FIELDS.filter((f) => f.required).map((f) => f.key), ["kind", "wav", "artwork", "language", "explicit", "genre", "writers"]);
   /* the copyright line: required for a self-release only (review, 11 Nov 2026), shown on the form whatever the kind */
   const cr = S.PACK_FIELDS.find((f) => f.key === "copyright");
   assert.deepEqual([cr.requiredWhen, cr.showWhen, cr.neededBy], [{ field: "kind", equals: "Self-release" }, null, "upload"]);
   assert.deepEqual(S.PACK_FIELDS.filter((f) => f.requiredWhen).map((f) => [f.key, f.requiredWhen.field, f.requiredWhen.equals]), [["label", "kind", "With a label"], ["split", "kind", "With a label"], ["copyright", "kind", "Self-release"]]);
   for (const f of S.PACK_FIELDS) { assert.ok(f.label && f.short && f.hint, f.key); if (f.neededBy) assert.ok(S.RELEASE_STEPS.some((s) => s.key === f.neededBy), f.key); }
-  assert.deepEqual(S.RELEASE_STEPS.map((s) => [s.key, s.owner, s.days]), [["upload", "Drop", 21], ["approved", "Drop", 16], ["spotify", "Atlas", 15], ["pitch", "Atlas", 14], ["page", "Webmaster", 7], ["video", "Laura", 7], ["ads", "Forge", -2], ["live", "Webmaster", 0], ["lyrics", "Verse", -7]],
+  assert.deepEqual(S.RELEASE_STEPS.map((s) => [s.key, s.owner, s.days]), [["upload", "Drop", 21], ["approved", "Drop", 16], ["spotify", "Atlas", 15], ["pitch", "Atlas", 14], ["canvas", "Atlas", -7], ["page", "Webmaster", 7], ["video", "Laura", 7], ["ads", "Forge", -2], ["live", "Webmaster", 0], ["lyrics", "Verse", -7]],
     "15 Nov 2026 (Luke): no teaser steps; Forge after Webmaster's page; the lyrics a week after the release");
   assert.equal(S.RELEASE_STEPS.find((s) => s.key === "pitch").after, "spotify");
   assert.equal(S.RELEASE_STEPS.find((s) => s.key === "ads").after, "page");
@@ -41,8 +41,9 @@ test("releases: the pack is one list; every field has a group, the steps have ow
 test("releases: steps are dated back from the release day; a late send is compressed to today and flagged tight", () => {
   const roomy = S.scheduleSteps("2026-12-11", TODAY);
   assert.equal(roomy.tight, false);
-  assert.deepEqual(roomy.steps.map((s) => s.due), ["2026-11-20", "2026-11-25", "2026-11-26", "2026-11-27", "2026-12-04", "2026-12-04", "2026-12-13", "2026-12-11", "2026-12-18"]);
-  assert.ok(roomy.steps.every((s) => s.status === "todo" && s.note === "" && s.at === null));
+  assert.deepEqual(roomy.steps.map((s) => s.due), ["2026-11-20", "2026-11-25", "2026-11-26", "2026-11-27", "2026-12-18", "2026-12-04", "2026-12-04", "2026-12-13", "2026-12-11", "2026-12-18"]);
+  assert.ok(roomy.steps.filter((s) => s.key !== "canvas").every((s) => s.status === "todo" && s.note === "" && s.at === null));
+  assert.equal(roomy.steps.find((s) => s.key === "canvas").status, "skipped", "no Canvas link: the Canvas step does not apply (17 Nov 2026)");
   const late = S.scheduleSteps("2026-11-27", TODAY); /* 15 days away */
   assert.equal(late.tight, true);
   assert.deepEqual(late.steps.slice(0, 4).map((s) => s.due), [TODAY, TODAY, TODAY, "2026-11-13"], "upload, approval and Spotify for Artists were due before today: due today, never born late");
@@ -93,7 +94,7 @@ test("releases: sending refuses with the list of what is missing; then schedules
   await S.saveRelease(d, NOW, R, { by: "Luke", id: r.id, date: "2026-12-11", pack: FULL });
   const out = await S.sendRelease(d, NOW + 1, R, { by: "Luke", id: r.id });
   assert.equal(out.already, false); assert.ok(out.told);
-  assert.deepEqual([out.release.status, out.release.steps.length, out.release.tight, out.release.steps[0].due], ["scheduled", 9, false, "2026-11-20"]);
+  assert.deepEqual([out.release.status, out.release.steps.length, out.release.tight, out.release.steps[0].due], ["scheduled", 10, false, "2026-11-20"]);
   assert.match(out.release.log.at(-1).what, /^Luke sent it to the team for Fri 11 Dec$/);
   const again = await S.sendRelease(d, NOW + 2, R, { by: "Claude", id: r.id });
   assert.deepEqual([again.already, again.told], [true, null]);
@@ -148,7 +149,7 @@ test("releases: a step is marked by its owner, Nova, Claude or Luke; never by an
   const up = a.steps.find((s) => s.key === "upload");
   assert.deepEqual([up.status, up.by, up.note], ["done", "Drop", "Uploaded with the date"]);
   assert.equal((await S.setStep(d, NOW, R, { by: "Nova", id: r.id, step: "pitch", status: "working" })).steps[3].by, "Nova");
-  assert.equal((await S.setStep(d, NOW, R, { by: "Luke", id: r.id, step: "video", status: "done" })).steps[5].status, "done");
+  assert.equal((await S.setStep(d, NOW, R, { by: "Luke", id: r.id, step: "video", status: "done" })).steps.find((s) => s.key === "video").status, "done");
   /* the bot's mark is a line in the live log, but it never finishes the bot's daily duty */
   const ups = await S.listUpdates(d, NOW, 1);
   assert.equal(ups.length, 2, "Drop's and Nova's marks; Luke is not a bot");
@@ -180,7 +181,7 @@ test("releases: a bot fills only the fields it is responsible for; Nova what any
   const v = await S.fillRelease(d, NOW, R, { by: "Webmaster", id: r.id, field: "spotifyTrack", value: "https://open.spotify.com/track/sample" });
   assert.equal(v.log.at(-1).what, "Webmaster filled Spotify track link");
   assert.deepEqual(S.fieldsFor("Drop"), ["isrc", "upc", "storeStatus"]);
-  assert.equal(S.fieldsFor("Nova").length, 7); assert.equal(S.fieldsFor("Luke").length, 31); assert.deepEqual(S.fieldsFor("Verse"), ["musixmatch"], "16 Nov 2026: Verse keeps the Musixmatch status");
+  assert.equal(S.fieldsFor("Nova").length, 7); assert.equal(S.fieldsFor("Luke").length, 34); assert.deepEqual(S.fieldsFor("Verse"), ["musixmatch"], "16 Nov 2026: Verse keeps the Musixmatch status");
 });
 
 test("releases: the view says what is missing (required first), what is late, and what is next", () => {
@@ -193,14 +194,14 @@ test("releases: the view says what is missing (required first), what is late, an
   assert.deepEqual(v.missing.map((m) => [m.key, m.required, m.neededBy]), [["lyrics", false, "lyrics"], ["instruments", false, "pitch"], ["story", false, "pitch"]],
     "the video link is Laura's result, not her input: never missing, like the ISRC; the visualiser is optional, never missing (14 Nov 2026, the bots); most urgent first, the waiting pitch's last");
   assert.deepEqual([v.missing[0].step, v.missing[0].owner, v.missing[0].due], ["Lyrics live on Musixmatch", "Verse", "2026-12-02"], "the lyrics go on Musixmatch a week after the release at the latest");
-  assert.deepEqual([v.packFilled, v.packTotal], [8, 19], "the team's 'later' fields and the deal are not counted (primary artists counts since 16 Nov 2026)");
-  assert.deepEqual(v.counts, { done: 1, total: 9, late: 1, blocked: 1, skipped: 0, waiting: 4 }, "Spotify for Artists waits for RouteNote's approval, the pitch for Spotify for Artists, the ads and the lyrics for the release day (16 Nov 2026)");
-  assert.deepEqual(v.steps.map((s) => s.late), [false, true, false, false, false, false, false, false, false], "a waiting step is never late");
+  assert.deepEqual([v.packFilled, v.packTotal], [8, 20], "the team's 'later' fields and the deal are not counted (primary artists counts since 16 Nov 2026)");
+  assert.deepEqual(v.counts, { done: 1, total: 9, late: 1, blocked: 1, skipped: 1, waiting: 4 }, "Spotify for Artists waits for RouteNote's approval, the pitch for Spotify for Artists, the ads and the lyrics for the release day (16 Nov 2026)");
+  assert.deepEqual(v.steps.map((s) => s.late), [false, true, false, false, false, false, false, false, false, false], "a waiting step is never late");
   assert.deepEqual([v.steps[2].key, v.steps[2].waiting, v.steps[2].waitingFor, v.steps[2].waitingText], ["spotify", true, "approved", "waiting: RouteNote has not approved it yet"]);
   assert.deepEqual([v.steps[3].key, v.steps[3].waiting, v.steps[3].waitingFor, v.steps[3].waitingText], ["pitch", true, "spotify", "waiting: the song is not in Spotify for Artists yet"]);
-  assert.deepEqual([v.steps[6].key, v.steps[6].waiting, v.steps[6].waitingFor, v.steps[6].waitingText], ["ads", true, "release", "waiting: the ads are made with Luke once the song is out"]);
-  assert.deepEqual([v.steps[8].key, v.steps[8].waiting, v.steps[8].waitingFor, v.steps[8].waitingText], ["lyrics", true, "release", "waiting: starts on the release day, once the song shows on Musixmatch"]);
-  assert.equal(v.steps[4].dueIn, 6);
+  assert.deepEqual([v.steps.find((x) => x.key === "ads").key, v.steps.find((x) => x.key === "ads").waiting, v.steps.find((x) => x.key === "ads").waitingFor, v.steps.find((x) => x.key === "ads").waitingText], ["ads", true, "release", "waiting: the ads are made with Luke once the song is out"]);
+  assert.deepEqual([v.steps.find((x) => x.key === "lyrics").key, v.steps.find((x) => x.key === "lyrics").waiting, v.steps.find((x) => x.key === "lyrics").waitingFor, v.steps.find((x) => x.key === "lyrics").waitingText], ["lyrics", true, "release", "waiting: starts on the release day, once the song shows on Musixmatch"]);
+  assert.equal(v.steps.find((x) => x.key === "page").dueIn, 6);
   assert.deepEqual([v.next.key, v.next.status, v.next.late], ["approved", "blocked", true]);
   /* blocked before late (review, 11 Nov 2026): the step waits on Luke's cover, not on Drop */
   assert.equal(v.where, "1 of 9 steps done · next: Approved by RouteNote (nothing waiting), Drop, blocked: needs a new cover");
@@ -209,7 +210,7 @@ test("releases: the view says what is missing (required first), what is late, an
   const draft = S.releaseView({ id: "y", title: "Y", status: "draft", pack: {} }, today);
   assert.deepEqual(draft.missing.filter((m) => m.required).map((m) => m.key), ["date", "kind", "wav", "artwork", "language", "explicit", "genre", "writers"]);
   assert.ok(S.releaseView({ id: "y", title: "Y", status: "draft", pack: { kind: "Self-release" } }, today).missing.some((m) => m.key === "copyright" && m.required), "a self-release needs its copyright line to send");
-  assert.match(draft.where, /^In the pipeline: 0 of 19 filled · still missing: Release day, Self-release or label, /);
+  assert.match(draft.where, /^In the pipeline: 0 of 20 filled · still missing: Release day, Self-release or label, /);
   assert.equal(draft.next, null);
   const out = S.releaseView({ ...r, date: "2026-11-12" }, today);
   assert.equal(out.released, true, "released is computed: scheduled and its day has come");
@@ -219,7 +220,7 @@ test("releases: the view says what is missing (required first), what is late, an
 test("releases: the board carries the releases, the pack fields, the steps, and each bot's release steps", () => {
   const b = sampleBoard(NOW);
   assert.deepEqual(b.releases.map((r) => [r.id, r.status, r.released]), [["medaseubody", "scheduled", false], ["slowburn", "scheduled", false], ["survivors", "draft", false], ["touchme", "scheduled", true]]);
-  assert.equal(b.packFields.length, 31);
+  assert.equal(b.packFields.length, 34);
   assert.deepEqual(Object.keys(b.packFields[0]).sort(), ["choices", "fill", "group", "hint", "key", "kind", "label", "max", "neededBy", "required", "requiredWhen", "short", "showWhen"]);
   assert.deepEqual(b.packFields.find((f) => f.key === "explicit").choices, ["No", "Yes", "Clean version"]);
   assert.deepEqual([b.packFields[0].key, b.packFields[0].group, b.packFields[0].requiredWhen], ["kind", "deal", null]);
@@ -245,7 +246,7 @@ test("releases: the same song in the sheet and on the desk is ONE entry in hqMod
   const m = hqModel(sheet, TODAY, {}, undefined, "09:20", { updates: [], overlay: null, releases: [desk] });
   assert.equal(m.releases.length, 2, "one entry per song");
   const one = m.releases.find((r) => r.desk);
-  assert.deepEqual([one.song, one.date, one.status, one.slug, one.steps.length, one.id], ["Me Dá Seu Body", "2026-11-25", "in review at RouteNote", "medaseubody", 9, "medaseubody"]);
+  assert.deepEqual([one.song, one.date, one.status, one.slug, one.steps.length, one.id], ["Me Dá Seu Body", "2026-11-25", "in review at RouteNote", "medaseubody", 10, "medaseubody"]);
   assert.deepEqual(Object.keys(one.steps[0]).sort(), ["done", "due", "label", "late", "note", "owner"]);
   assert.equal(one.late, 2, "upload and approval were due before today and are not done; Spotify for Artists waits for RouteNote's approval (16 Nov 2026), the pitch for Spotify for Artists");
   assert.deepEqual([one.steps[3].label, one.steps[3].late, one.steps[3].waiting], ["Spotify pitch sent", false, true]);

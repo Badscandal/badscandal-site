@@ -330,14 +330,14 @@ test("releases: a step's state in words; red only for late and blocked", () => {
 test("releases: what's missing, the card's pill, and the same sentence the desk refuses with", async () => {
   const b = sampleBoard(NOW), v = (id) => b.releases.find((r) => r.id === id);
   const mdsb = L.packLine(v("medaseubody"), b.today);
-  assert.match(mdsb.filled, /^\d+ of 19 filled$/);
+  assert.match(mdsb.filled, /^\d+ of 20 filled$/);
   assert.equal(mdsb.items[0].text, "Lyrics (needed for the lyrics)", "the lyrics wait for the release day (15 Nov 2026): no day, never red");
   assert.equal(mdsb.attn, false, "nothing it needs is due within 3 days");
   assert.deepEqual(mdsb.items.map((x) => x.text.split(" ")[0] + ":" + x.attn), ["Lyrics:false", "The:false"], "lyrics soon; the visualiser is optional and never missing (14 Nov 2026, the bots); the pitch WAITS for Spotify for Artists (v2), so its field is neither dated nor red and comes last; the video link itself is Laura's result, never missing");
   assert.equal(mdsb.items[1].text, "The song in two lines (needed for the Spotify pitch)");
   const draft = L.packLine(v("survivors"), b.today);
   assert.equal(draft.attn, false, "a draft is not late"); assert.equal(draft.items.length, 4); assert.ok(draft.more > 0);
-  assert.equal(L.packLine(v("touchme"), b.today).text, v("touchme").packFilled + " of 19 filled");
+  assert.equal(L.packLine(v("touchme"), b.today).text, v("touchme").packFilled + " of 20 filled");
   assert.equal(L.missingWords({ short: "Copyright line", step: "Uploaded to RouteNote with the release date", due: "2026-11-20" }), "Copyright line (needed for the RouteNote upload, Fri 20 Nov)");
   assert.equal(L.missingWords({ short: "Artwork", step: "" }), "Artwork");
   assert.deepEqual(L.relPill(v("medaseubody"), b.today), { text: "1 blocked", bad: true, rel: false });
@@ -369,7 +369,7 @@ test("releases: the form sends only what changed, so a field the team filled mea
   assert.deepEqual(g.map((x) => x.title), ["Whose release is it", "The files", "For the stores", "Lyrics", "For the pitch (can wait)", "Later, the team fills these", "Notes"]);
   assert.equal(g.reduce((n, x) => n + x.fields.length, 0), fields.length, "every field of the desk is on the form, once");
   assert.deepEqual(g[0].fields.map((f) => f.key), ["kind", "label", "split", "distributor", "deal"], "whose release it is comes first (v2)");
-  assert.deepEqual(g[1].fields.map((f) => f.key), ["wav", "artwork", "visualiser", "folder"]);
+  assert.deepEqual(g[1].fields.map((f) => f.key), ["wav", "artwork", "visualiser", "canvas", "folder"]);
   assert.deepEqual(L.formGroups([{ key: "bpm", group: "new-group" }])[0].title, "Notes", "a field in a group the page doesn't know still shows");
 });
 
@@ -393,7 +393,7 @@ test("releases: one card per song (the desk's first), the sheet's own rows only 
   assert.equal(withCancelled.cancelled.length, 1); assert.equal(withCancelled.sheetOnly.length, 1, "a cancelled desk release doesn't hide the sheet's row");
   assert.deepEqual(L.releaseLists(null, null), { pipeline: [], coming: [], sheetOnly: [], out: [], sheetOut: [], openOut: [], cancelled: [] });
   /* 15 = the Spotify for Artists step (v2) */
-  assert.equal(L.stepsSummary(b.releaseSteps), "Counting back from release day: 21 days RouteNote upload, 16 RouteNote approval, 15 Spotify for Artists, 14 Spotify pitch, 7 song page and video. After it: ads with Luke within 2 days and lyrics within 7 days.");
+  assert.equal(L.stepsSummary(b.releaseSteps), "Counting back from release day: 21 days RouteNote upload, 16 RouteNote approval, 15 Spotify for Artists, 14 Spotify pitch, 7 song page and video. After it: Spotify Canvas within 7 days, ads with Luke within 2 days and lyrics within 7 days.");
   assert.equal(L.stepsSummary([]), "");
   assert.equal(L.sendQuestion("Survivors", "2026-12-11"), "Send Survivors to the team for Fri 11 Dec? Every bot gets its steps and dates.");
   assert.match(L.moveQuestion("Survivors", "2026-12-11", "2026-12-18"), /^Move Survivors from Fri 11 Dec to Fri 18 Dec\? Every step that isn't done moves with it, and the team is told\.$/);
@@ -541,7 +541,7 @@ test("v2: a step that is not ours, and the pitch that waits for Spotify for Arti
   assert.deepEqual(L.stepButton({ status: "scheduled" }, { owner: "Atlas", status: "done", waiting: true }), { to: "todo", text: "Reopen", main: false }, "a pitch already done can still be reopened");
   assert.deepEqual(L.stepButton({ status: "scheduled" }, { owner: "Atlas", status: "blocked", waiting: false }), { to: "done", text: "Mark done", main: false });
   const b = sampleBoard(NOW), sb = b.releases.find((v) => v.id === "slowburn"), mdsb = b.releases.find((v) => v.id === "medaseubody");
-  assert.deepEqual(sb.steps.filter((s) => L.stepState(s, b.today).skipped).map((s) => s.key), ["upload", "approved"], "the label delivers Slow Burn");
+  assert.deepEqual(sb.steps.filter((s) => L.stepState(s, b.today).skipped).map((s) => s.key), ["upload", "approved", "canvas"], "the label delivers Slow Burn; no Canvas link (17 Nov 2026)");
   assert.equal(L.stepState(mdsb.steps.find((s) => s.key === "pitch"), b.today).text, "waiting: the song is not in Spotify for Artists yet");
   assert.equal(L.shortStep("Showing as upcoming in Spotify for Artists"), "Spotify for Artists");
   /* the release panel (Today's "Next release") says the same */

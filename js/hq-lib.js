@@ -109,7 +109,7 @@
     /* v2 (11 Nov 2026, evening): the song showing in Spotify for Artists, before the pitch */
     "Showing as upcoming in Spotify for Artists": "Spotify for Artists",
     /* 16 Nov 2026 (Luke): YouTube on the release day; the ads made with Luke after it */
-    "YouTube video scheduled for the release day": "video", "Ads made with Luke, after the release": "ads with Luke" };
+    "YouTube video scheduled for the release day": "video", "Ads made with Luke, after the release": "ads with Luke", "Spotify Canvas uploaded": "Spotify Canvas" };
   function shortStep(label) { return SHORT[label] || String(label || "").toLowerCase(); }
   var TAB_HREF = { Growth: "#growth", Songs: "#songs", Royalties: "#money", Fans: "#growth/fans", Releases: "#releases", Tasks: "#team", Spend: "#money", Income: "#money" };
   function metaCur(ov) { return (ov && ((ov.yesterday && ov.yesterday.currency) || (ov.spend && ov.spend.currency))) || "USD"; }
@@ -614,6 +614,33 @@
     return out;
   }
   /* "Mon 9 Nov · USD 104.04 · received" */
+  /* ---------- the release page (17 Nov 2026, Nova for Luke): the whole release in one view ----------
+     checklist: the files, every step that applies, the final lyrics (not for a song released before HQ), the ad plan;
+     ready when every item is. fields: every field with its state (filled / missing / needed later / optional / not
+     needed). results: the song's own numbers once it is out (o.song: the Songs row). */
+  function releasePage(v, today, o) {
+    o = o || {};
+    var pack = (v && v.pack) || {}, pre = pack.prehq === "Yes", has = function (x) { return x != null && String(x).trim() !== ""; };
+    var req = ((v && v.missing) || []).filter(function (m) { return m.required; });
+    var check = [{ key: "files", ok: pre || !req.length, text: pre ? "Files and details: not needed (released before HQ)" : req.length ? "Files and details: still missing " + joinWords(req.map(function (m) { return m.short; })) : "Files and details: complete" }];
+    ((v && v.steps) || []).forEach(function (st) {
+      if (st.status === "skipped") return;
+      check.push({ key: "step:" + st.key, ok: st.status === "done", text: st.label + " (" + st.owner + "): " + stepState(st, today).text });
+    });
+    if (!pre) { var lyr = approvalLines(v).filter(function (x) { return x.key === "lyrics"; })[0]; check.push({ key: "lyrics", ok: !!(lyr && lyr.ok), text: lyr ? lyr.text : "Final lyrics: not approved yet" }); }
+    check.push({ key: "adplan", ok: has(pack.adplan), text: has(pack.adplan) ? "Ad plan: written" : "Ad plan: not written yet (your notes on the ads you set up)" });
+    var okN = check.filter(function (c) { return c.ok; }).length;
+    var fields = (o.fields || []).filter(function (f) { return f.key !== "prehq" && f.key !== "adplan"; }).map(function (f) {
+      var val = f.key === "lyrics" && !has(pack.lyrics) && v.lyricsChars ? v.lyricsChars + " characters" : pack[f.key];
+      var miss = ((v && v.missing) || []).filter(function (m) { return m.key === f.key; })[0];
+      return { key: f.key, label: f.short || f.label, group: f.group, value: has(val) ? String(val) : "", state: has(val) ? "filled" : pre ? "not needed" : miss ? (miss.required ? "missing" : "needed later") : "optional" };
+    });
+    var results = [];
+    if (v && v.released && o.song && o.song.week != null) results.push(fmt(o.song.week) + " Spotify streams in the last 7 days" + (o.song.prevWeek != null ? " (" + fmt(o.song.prevWeek) + " the 7 before)" : ""));
+    return { title: v.title, when: releaseWhen(v.date, today), where: v.where || "", ready: okN === check.length, readyText: okN + " of " + check.length + " ready",
+      checklist: check, steps: ((v && v.steps) || []).map(function (st) { return { key: st.key, label: st.label, owner: st.owner, due: st.due, done: st.status === "done", skipped: st.status === "skipped", state: stepState(st, today).text }; }),
+      fields: fields, adPlan: pack.adplan || "", results: results };
+  }
   /* a bot's proposal (16 Nov 2026): every change, "from → to" (a new value alone when there was none) */
   function proposalRows(m) {
     return ((m && m.proposal && m.proposal.changes) || []).map(function (c) {
@@ -1458,7 +1485,7 @@
     snapshot: snapshot, changesSince: changesSince, tiles: tiles, summaryText: summaryText, shortStep: shortStep, day: day,
     slug: slug, workerLabel: workerLabel, sortWorkers: sortWorkers, workerView: workerView, dutyWhen: dutyWhen, workerCounts: workerCounts, seenLine: seenLine, connectorLine: connectorLine,
     novaMessage: novaMessage, liveFeed: liveFeed, spWhen: spWhen, waitLabel: waitLabel, needWords: needWords, reportParts: reportParts, siteCheckLine: siteCheckLine, composeNames: composeNames,
-    threadRoot: threadRoot, answerTarget: answerTarget, questionLines: questionLines, questionsLeft: questionsLeft, stepButton: stepButton, formKey: formKey, storeLine: storeLine, storeHistory: storeHistory, capRateLine: capRateLine, capMissingLine: capMissingLine, dutyGapsLine: dutyGapsLine, incomeTotals: incomeTotals, approvalLines: approvalLines, resubmitAsk: resubmitAsk, relStatus: relStatus, relProgress: relProgress, stepGroups: stepGroups, upcomingAsks: upcomingAsks, staffAttention: staffAttention, staffHealth: staffHealth, curList: curList, cadenceWord: cadenceWord, accountLine: accountLine, sourceState: sourceState, payLine: payLine, accountsLine: accountsLine, receivedMonths: receivedMonths, monthRows: monthRows, mainSources: mainSources, sourceMonthLine: sourceMonthLine, proposalRows: proposalRows, proposalConfirm: proposalConfirm,
+    threadRoot: threadRoot, answerTarget: answerTarget, questionLines: questionLines, questionsLeft: questionsLeft, stepButton: stepButton, formKey: formKey, storeLine: storeLine, storeHistory: storeHistory, capRateLine: capRateLine, capMissingLine: capMissingLine, dutyGapsLine: dutyGapsLine, incomeTotals: incomeTotals, approvalLines: approvalLines, resubmitAsk: resubmitAsk, relStatus: relStatus, relProgress: relProgress, stepGroups: stepGroups, upcomingAsks: upcomingAsks, staffAttention: staffAttention, staffHealth: staffHealth, curList: curList, cadenceWord: cadenceWord, accountLine: accountLine, sourceState: sourceState, payLine: payLine, accountsLine: accountsLine, receivedMonths: receivedMonths, releasePage: releasePage, monthRows: monthRows, mainSources: mainSources, sourceMonthLine: sourceMonthLine, proposalRows: proposalRows, proposalConfirm: proposalConfirm,
     incomeEmpty: incomeEmpty, incomeProblems: incomeProblems,
     /* replies that visibly land + the release pipeline (11 Nov 2026) */
     spStampOf: spStampOf, seenWords: seenWords, sentLine: sentLine, answeredList: answeredList, CLAUDE_ROUNDS: CLAUDE_ROUNDS,
