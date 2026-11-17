@@ -31,7 +31,7 @@ No money amounts, payer names or account numbers in this file: the repo is publi
 
 ## Waiting on Luke
 
-- **Instagram key:** the Meta-side setup (brief sent to Luke for Claude on his Mac), then Luke generates the key and pastes it into badscandal.com/hq › Growth & Fans › Connect Instagram. The first real read shows whether anything needs tuning.
+- **Instagram:** connected 17 Nov (Luke pasted the key; it works). Watch the first hourly reads: post numbers at 6 h / 1 day / 1 week, comments, countries. If the Page's key wasn't handed over, renew the key before the date HQ shows (about 60 days).
 
 - B2 (YouTube Analytics, one Google sign-in) if Luke wants it; B1 and B5 are not needed.
 - On-hold decisions H1–H4 in the roadmap (ads kill switch, posting, fan capture).
@@ -40,7 +40,7 @@ No money amounts, payer names or account numbers in this file: the repo is publi
 
 ## Next up
 
-- Batch A and B3 are done. What's left needs Luke: Batch B keys (B1 Spotify developer app, B2 YouTube sign-in, B4 Instagram on the Meta app, B5 Google Ads / TikTok developer approval), the on-hold decisions H1–H4, and L11. The "Later" list (L1–L10) waits for the API feeds; start any of it on Luke's word.
+- Batch A and B3 are done. What's left needs Luke: B2 YouTube sign-in (B1 and B5 not needed; B4 Instagram connected 17 Nov), the on-hold decisions H1–H4, and L11. The "Later" list (L1–L10) waits for the API feeds; start any of it on Luke's word.
 
 ## Known gaps / watch
 
