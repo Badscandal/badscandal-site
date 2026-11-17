@@ -584,6 +584,8 @@ export async function callTool(tool, args, ctx) {
           at_the_distributor: v.store.status || v.store.legacy || "not recorded yet",
           your_steps: v.steps.filter((s) => s.owner === me).map((s) => stepOut(s, v.pack)), ...(chase ? { all_steps: v.steps.map((s) => stepOut(s, v.pack)) } : {}) })),
         spotify_for_artists: s4aOut(S.sightingsView(sightings, raw, today, now)),
+        /* A5 (17 Nov 2026): Nova's 6-week calendar, every song's steps (drafts' release days too) */
+        ...(chase ? { six_weeks: S.sixWeekLines(S.sixWeeks(list, today)) } : {}),
         how: "Read a song's whole pack with release_pack. Mark your own step with release_step. Fill your own fields with release_fill." };
     }
     case "release_pack": {

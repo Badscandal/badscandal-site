@@ -1452,6 +1452,25 @@
     return out;
   }
   var MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+  /* the next 6 weeks (A5, 17 Nov 2026): the same rule as netlify/lib/staff.mjs sixWeeks (tested to agree):
+     Monday-first weeks from this one; release days (drafts marked), open steps on their day, late steps in this week */
+  function sixWeeks(today, releases) {
+    var dw = function (d) { return (ymd(d).getUTCDay() + 6) % 7; };
+    var start = plusDays(today, -dw(today)), weeks = [];
+    for (var i = 0; i < 6; i++) { var ws = plusDays(start, i * 7); weeks.push({ start: ws, end: plusDays(ws, 6), label: i === 0 ? "This week" : "Week of " + day(ws), items: [] }); }
+    var slot = function (d) { if (d < start) return 0; var n = Math.floor((ymd(d).getTime() - ymd(start).getTime()) / 604800000); return n < 6 ? n : -1; };
+    (releases || []).forEach(function (r) {
+      if (!r || r.status === "cancelled") return;
+      if (r.date && r.date >= start) { var i = slot(r.date); if (i >= 0) weeks[i].items.push({ date: r.date, kind: "release", id: r.id, title: r.title, draft: r.status === "draft" }); }
+      (r.steps || []).forEach(function (st) {
+        if (!st.due || st.waiting || st.status === "done" || st.status === "skipped") return;
+        var j = slot(st.due);
+        if (j >= 0) weeks[j].items.push({ date: st.due, kind: "step", id: r.id, title: r.title, owner: st.owner, label: st.label, late: st.due < today });
+      });
+    });
+    weeks.forEach(function (w) { w.items.sort(function (a, b) { return a.date < b.date ? -1 : a.date > b.date ? 1 : a.kind === b.kind ? 0 : a.kind === "release" ? -1 : 1; }); });
+    return weeks;
+  }
   function calendarMonth(ym, releases, today) {
     if (!/^\d{4}-\d{2}$/.test(String(ym || "")) || Number(String(ym).slice(5)) < 1 || Number(String(ym).slice(5)) > 12) ym = String(today).slice(0, 7);
     var y = Number(ym.slice(0, 4)), mo = Number(ym.slice(5, 7));
@@ -1535,7 +1554,7 @@
     return scored.slice(0, max).map(function (y) { return y.x; });
   }
 
-  return { recommendLines: recommendLines, recommendedOption: recommendedOption, releaseTrouble: releaseTrouble, navPad: navPad, signoutWords: signoutWords, growthWhen: growthWhen, ago: ago, spMs: spMs, releaseWords: releaseWords, releaseDetail: releaseDetail, healthRows: healthRows, healthState: healthState, median: median, change: change, money: money, attention: attention, briefing: briefing,
+  return { sixWeeks: sixWeeks, recommendLines: recommendLines, recommendedOption: recommendedOption, releaseTrouble: releaseTrouble, navPad: navPad, signoutWords: signoutWords, growthWhen: growthWhen, ago: ago, spMs: spMs, releaseWords: releaseWords, releaseDetail: releaseDetail, healthRows: healthRows, healthState: healthState, median: median, change: change, money: money, attention: attention, briefing: briefing,
     snapshot: snapshot, changesSince: changesSince, tiles: tiles, summaryText: summaryText, shortStep: shortStep, day: day,
     slug: slug, workerLabel: workerLabel, sortWorkers: sortWorkers, workerView: workerView, dutyWhen: dutyWhen, workerCounts: workerCounts, seenLine: seenLine, connectorLine: connectorLine,
     novaMessage: novaMessage, liveFeed: liveFeed, spWhen: spWhen, waitLabel: waitLabel, needWords: needWords, reportParts: reportParts, siteCheckLine: siteCheckLine, composeNames: composeNames,
