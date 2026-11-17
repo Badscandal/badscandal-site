@@ -452,3 +452,19 @@ test("upload_cover through the connector, then the public cover link with no log
   assert.equal((await api("cover/nope.png")).status, 404);
   assert.equal((await api("board")).status, 401, "nothing else is open without a key");
 });
+
+/* 16 Nov 2026, Webmaster: every upload_cover was refused "Too large" (the 64 KB limit on every request, checked
+   before the tool): an upload_cover call may be up to 5.8 MB (a 4 MB picture in base64); everything else stays 64 KB */
+test("request size: upload_cover may carry a real picture; every other call stays under 64 KB", async () => {
+  await api("seed", { method: "PUT", headers: { authorization: "Bearer " + ENV.STAFF_CLAUDE_KEY }, body: JSON.stringify({ roster: DEFAULT_ROSTER }) });
+  const png = (bytes) => { const b = Buffer.alloc(bytes); Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]).copy(b, 0); b.writeUInt32BE(13, 8); b.write("IHDR", 12, "latin1"); b.writeUInt32BE(3000, 16); b.writeUInt32BE(3000, 20); return b; };
+  const up = await tool("upload_cover", { bot: "Webmaster", song: "Made-up Song", image_base64: png(3 * 1024 * 1024).toString("base64") });
+  assert.equal(up.isError, false, up.content && up.content[0].text);
+  assert.match(up.data.link, /^https:\/\/badscandal\.com\/api\/staff\/cover\//);
+  const big = await post(rpc("tools/call", { name: "my_day", arguments: { bot: "Nova", filler: "x".repeat(100 * 1024) } }), "Bearer " + ENV.STAFF_BOT_KEY);
+  assert.equal(big.status, 413);
+  assert.match((await big.json()).error.message, /64 KB/);
+  const huge = await post(rpc("tools/call", { name: "upload_cover", arguments: { bot: "Webmaster", song: "X", image_base64: "A".repeat(6 * 1024 * 1024) } }), "Bearer " + ENV.STAFF_BOT_KEY);
+  assert.equal(huge.status, 413);
+  assert.match((await huge.json()).error.message, /4 MB/);
+});
