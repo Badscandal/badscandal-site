@@ -233,7 +233,8 @@ test("statement only and payable: owed money is payable, a statement below the p
   await S.submitIncome(d, NOW + DAY, R, { bot: "Ledger", date: "2026-11-15", payer: "Sample Distro", amount: "1507.31", currency: "USD", status: "received", account: "Wise", category: "Self-releases" });
   const i2 = await S.incomeState(d, NOW + DAY);
   assert.deepEqual([i2.payable, i2.received], [{}, { USD: 2707.31 }]);
-  assert.deepEqual(L.incomeTotals(i2).map((x) => x.label), ["Received", "Royalties (no salary)", "Owed to us", "Statements only"]);
+  /* 16 Nov 2026 (Luke): "never put pending income only what is received" */
+  assert.deepEqual(L.incomeTotals(i2).map((x) => x.label), ["Received", "Royalties (no salary)"]);
 });
 
 /* ---------- the connector ---------- */

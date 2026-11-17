@@ -175,6 +175,8 @@ test("a song in the pipeline that shows in Spotify for Artists: its step is done
 test("the pitch WAITS while the song is not in Spotify for Artists, and is an ordinary step (never born late) after", async () => {
   const d = memoryDesk(), early = Date.parse("2026-11-01T12:00:00Z");
   const r = await sent(d, "Wait For It", "2026-11-25", { ...FULL, mood: "m", instruments: "i", story: "s" }, early);
+  /* RouteNote has approved it (since 16 Nov 2026 the Spotify for Artists step waits for that) */
+  for (const k of ["upload", "approved"]) await S.setStep(d, early, R, { by: "Drop", id: r.id, step: k, status: "done" });
   let v = S.releaseView((await S.listReleases(d))[0], TODAY);
   const p = v.steps.find((s) => s.key === "pitch");
   assert.deepEqual([p.due, p.late, p.waiting, p.waitingText], ["2026-11-11", false, true, "waiting: the song is not in Spotify for Artists yet"]);
@@ -203,8 +205,8 @@ test("the pitch WAITS while the song is not in Spotify for Artists, and is an or
 test("warnings: each sentence, most urgent first", () => {
   const S2 = (k, o) => ({ [k]: o });
   /* a late step */
-  assert.deepEqual(warn(made("2026-12-05", "2026-11-01", { set: S2("video", { due: "2026-11-10" }) })), ["Video scheduled on YouTube is 2 days late (Laura)"]);
-  assert.deepEqual(warn(made("2026-12-05", "2026-11-01", { set: S2("video", { due: "2026-11-11" }) })), ["Video scheduled on YouTube is 1 day late (Laura)"]);
+  assert.deepEqual(warn(made("2026-12-05", "2026-11-01", { set: S2("video", { due: "2026-11-10" }) })), ["YouTube video scheduled for the release day is 2 days late (Laura)"]);
+  assert.deepEqual(warn(made("2026-12-05", "2026-11-01", { set: S2("video", { due: "2026-11-11" }) })), ["YouTube video scheduled for the release day is 1 day late (Laura)"]);
   /* the lyrics wait for the release day (15 Nov 2026): never late before it, whatever their day says */
   assert.deepEqual(warn(made("2026-12-05", "2026-11-01", { set: S2("lyrics", { due: "2026-11-10" }) })), []);
   /* a blocked step */
@@ -388,7 +390,8 @@ test("team_board: each release lists its late steps and its warnings", async () 
   const d = memoryDesk();
   await sent(d, "Close One", "2026-11-25", FULL, Date.parse("2026-11-01T12:00:00Z"));
   const rel = (await call(d, "team_board", { bot: "Nova" })).releases[0];
-  assert.deepEqual(rel.late_steps, ["Uploaded to RouteNote with the release date (Drop)", "Approved by RouteNote (nothing waiting) (Drop)", "Showing as upcoming in Spotify for Artists (Atlas)"]);
+  /* Spotify for Artists waits for RouteNote's approval (16 Nov 2026): not late */
+  assert.deepEqual(rel.late_steps, ["Uploaded to RouteNote with the release date (Drop)", "Approved by RouteNote (nothing waiting) (Drop)"]);
   assert.deepEqual(rel.warnings, ["Uploaded to RouteNote with the release date is 8 days late (Drop)", "Approved by RouteNote (nothing waiting) is 3 days late (Drop)",
     "Not showing in Spotify for Artists yet, 13 days before release: the pitch cannot be sent until it does"], "the lyrics are needed after the release now (15 Nov 2026)");
 });
@@ -399,7 +402,7 @@ test("moving the date names the steps already done with the old date outside the
   for (const [by, key] of [["Drop", "upload"], ["Drop", "approved"], ["Laura", "video"]]) await S.setStep(d, NOW, R, { by, id: r.id, step: key, status: "done" });
   await S.moveRelease(d, NOW + 1, R, { by: "Luke", id: r.id, date: "2026-12-18" });
   const msg = (await all(d)).find((m) => /^Luke moved Survivors/.test(m.text)).text;
-  assert.equal(msg, "Luke moved Survivors from Fri 11 Dec to Fri 18 Dec. Every step that is not done has a new date: see my_day. Already done with the old date, so change it there too: Uploaded to RouteNote with the release date (Drop) and Video scheduled on YouTube (Laura).");
+  assert.equal(msg, "Luke moved Survivors from Fri 11 Dec to Fri 18 Dec. Every step that is not done has a new date: see my_day. Already done with the old date, so change it there too: Uploaded to RouteNote with the release date (Drop) and YouTube video scheduled for the release day (Laura).");
   const plain = await sent(d, "Plain", "2026-12-11");
   await S.moveRelease(d, NOW + 2, R, { by: "Luke", id: plain.id, date: "2026-12-18" });
   assert.doesNotMatch((await all(d)).find((m) => /^Luke moved Plain/.test(m.text)).text, /Already done/);

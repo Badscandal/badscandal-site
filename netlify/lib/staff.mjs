@@ -308,7 +308,7 @@ export function dutyOverlay(updates, today) {
    stayed "open" and old blockers stood for days. task_update writes here, and HQ shows it OVER the
    sheet's row (teamReport): done takes the task off the open list, blocked sets the blocker to the
    note, todo/working clear the blocker. tasks.json = { "T-27": {status, note, by, at, sp} }. */
-export const TASK_STATUS = ["todo", "working", "blocked", "done"];
+export const TASK_STATUS = ["todo", "working", "blocked", "done", "cancelled"]; /* cancelled: round 3, 16 Nov 2026 */
 export async function getTaskOverlay(store) {
   const { data } = await readDoc(store, "tasks.json", {});
   return data && typeof data === "object" && !Array.isArray(data) ? data : {};
@@ -324,12 +324,15 @@ export async function setTaskStatus(store, now, roster, a, openTasks) {
   if (!TASK_STATUS.includes(status)) fail(`status must be one of: ${TASK_STATUS.join(", ")}`);
   const note = clean(a.note, 240);
   if (status === "blocked" && note.length < 3) fail("With status blocked, say in note what is needed and from whom.");
-  noSecrets(note);
+  if (status === "cancelled" && note.length < 3) fail("With status cancelled, say in note why it is no longer needed.");
+  /* title (round 3): the task's corrected wording, shown over the sheet's (T-31 kept an old phone number) */
+  const title = a.title != null ? clean(a.title, 200) : "";
+  noSecrets(note, title);
   if (!Array.isArray(openTasks)) fail("The team's Google Sheet could not be read just now, so the task can't be checked. Nothing was saved. Try again later.", "busy");
   const t = openTasks.find((x) => String(x.id || "").toUpperCase() === id);
   if (!t) fail(`There is no open task ${id} on the sheet. Check the id in my_day (open_tasks).`, "not_found");
   if (low(t.owner) !== low(by) && !["Nova", "Claude", "Luke"].includes(by)) fail(`${id} is ${t.owner}'s task, not yours: only ${t.owner} (or Nova) can update it.`);
-  const row = { status, note, by, at: new Date(now).toISOString(), sp: spStamp(now) };
+  const row = { status, note, by, at: new Date(now).toISOString(), sp: spStamp(now), ...(title ? { title } : {}) };
   await mutate(store, "tasks.json", {}, (all) => {
     if (!all || typeof all !== "object" || Array.isArray(all)) return { replace: { [id]: row }, value: row };
     all[id] = row;
@@ -877,7 +880,7 @@ const DUE_DAYS = { daily: 2, monthly: 45, quarterly: 110 };
 export function incomeReport(entries, checks, sources, today, older = []) {
   const month = today.slice(0, 7);
   const add = (o, cur, a) => { o[cur] = round((o[cur] || 0) + a); };
-  const received = {}, pending = {}, byCat = {}, payable = {}, statementOnly = {}, royaltiesOnly = {};
+  const received = {}, pending = {}, byCat = {}, payable = {}, statementOnly = {}, royaltiesOnly = {}, pendingOnly = {};
   /* a payment counts on the day it arrived (a pending statement that later landed keeps both dates) */
   entries = entries.map((e) => (e.arrived && e.arrived !== e.date ? { ...e, statement: e.date, date: e.arrived } : e));
   /* round 2: one payment logged twice under two names of its payer (before the desk knew they were one)
@@ -893,6 +896,7 @@ export function incomeReport(entries, checks, sources, today, older = []) {
     if (e.status === "statement only") { add(statementOnly, e.currency, e.amount); continue; }
     add(e.status === "pending" || e.status === "payable" ? pending : received, e.currency, e.amount);
     if (e.status === "payable") add(payable, e.currency, e.amount);
+    if (e.status === "pending") add(pendingOnly, e.currency, e.amount); /* pending without the payable (round 3) */
     if (e.status === "received") add(byCat[e.category] || (byCat[e.category] = {}), e.currency, e.amount);
     if (e.status === "received" && e.category !== "Salary") add(royaltiesOnly, e.currency, e.amount); /* the music's own money: no salary */
   }
@@ -954,7 +958,14 @@ export function incomeReport(entries, checks, sources, today, older = []) {
     const p = fit[0];
     return { ...e, pendingMatch: { id: p.id, payer: p.payer, amount: p.amount, currency: p.currency, date: p.date } };
   };
-  return { month, received, pending, payable, statementOnly, royaltiesOnly, byCategory: byCat, count: entries.filter((e) => e.date.slice(0, 7) === month).length, unsorted: unsorted.slice(0, 40).map(withMatch), unsortedCount: unsorted.length,
+  /* this year, received only, per currency (round 3, Sheet: to check against the ledger), every month read */
+  const receivedYear = {}, yr = today.slice(0, 4), seenY = [];
+  for (const e of entries.concat((older || []).map((x) => (x.arrived && x.arrived !== x.date ? { ...x, date: x.arrived } : x)))) {
+    if (e.status !== "received" || e.date.slice(0, 4) !== yr || seenY.some((x) => samePayment(x, e))) continue;
+    seenY.push(e); add(receivedYear, e.currency, e.amount);
+  }
+  const duplicates = twice.map(([k, e]) => ({ kept: k.payer, also: e.payer, amount: e.amount, currency: e.currency, date: e.date, id: e.id }));
+  return { month, received, pending, payable, statementOnly, royaltiesOnly, pendingOnly, receivedYear, duplicates, byCategory: byCat, count: entries.filter((e) => e.date.slice(0, 7) === month).length, unsorted: unsorted.slice(0, 40).map(withMatch), unsortedCount: unsorted.length,
     entries: [...entries].sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : a.at < b.at ? 1 : -1)).slice(0, 60),
     accounts, sources: src, unknown, problems,
     lastEntryAt: entries.reduce((a, e) => (!a || e.at > a ? e.at : a), null) };
@@ -1086,7 +1097,13 @@ export async function logGrowth(store, now, roster, a) {
     list.push(row);
     return { value: { row, duplicate: false, filled: [], replaced: [], added: true } };
   });
-  if (res.duplicate) return res;
+  /* round 3 (16 Nov 2026): the change is ALWAYS the day before's saved total, whatever order the days came
+     in (Atlas sent 13 Nov before 12 Nov and both read +13). Every call puts the whole run right, so sending a
+     day again corrects a change saved wrong before. */
+  const corrected = song ? [] : await restitch(store, now, key);
+  const mine = corrected.find((c) => c.date === date);
+  if (mine && res.row) res.row.change = mine.to;
+  if (res.duplicate) return corrected.length ? { ...res, corrected } : res;
   /* the duty: done (with its gaps), through the same live log as post_update */
   const r = res.row, words = [];
   if (!song && r.followers != null && (res.added || res.filled.includes("followers") || res.replaced.includes("followers"))) words.push(`${fmtN(r.followers)} followers` + (r.change != null ? ` (${r.change >= 0 ? "+" : ""}${fmtN(r.change)})` : ""));
@@ -1095,7 +1112,30 @@ export async function logGrowth(store, now, roster, a) {
   const msg = `${song || platform} ${shortDay(date)}: ${words.join(", ") || "numbers filled in"}` + (res.added ? "" : " (filled in)");
   let duty = null;
   try { await postUpdate(store, now, roster, { bot: by, status: "done", message: msg, duty: a.duty, gaps: gapText }); duty = gapText ? "done, with gaps" : "done"; } catch { duty = "not marked: the live log is full"; }
-  return { ...res, duty, gapText };
+  return { ...res, duty, gapText, ...(corrected.length ? { corrected } : {}) };
+}
+/* every growth row of one platform in the last 3 months, in day order: change = followers minus the
+   last saved total before it (null when there is none, unless the row came with its own and has no
+   saved day before it). Writes only the month files whose rows changed. -> [{date, from, to}] */
+async function restitch(store, now, key) {
+  const rows = (await listGrowth(store, now, 3)).filter((x) => x.key === key).sort((x, y) => (x.date < y.date ? -1 : x.date > y.date ? 1 : 0));
+  const fix = {};
+  let prev = null;
+  for (const x of rows) {
+    if (x.followers == null) continue;
+    if (prev) { const want = x.followers - prev.followers; if (x.change !== want) fix[x.id] = { date: x.date, from: x.change ?? null, to: want }; }
+    prev = x;
+  }
+  const ids = Object.keys(fix);
+  if (!ids.length) return [];
+  for (const m of [...new Set(ids.map((id) => fix[id].date.slice(0, 7)))]) {
+    await mutate(store, growKey(m), [], (list) => {
+      let n = 0;
+      for (const x of list) if (fix[x.id]) { x.change = fix[x.id].to; n++; }
+      return n ? { value: n } : { skip: true, value: 0 };
+    });
+  }
+  return ids.map((id) => fix[id]).sort((a, b) => (a.date < b.date ? -1 : 1));
 }
 
 /* ---------- cards (what a bot says it is working on) and last-seen ---------- */
@@ -1202,6 +1242,10 @@ const WITH_LABEL = { field: "kind", equals: LABEL_KIND };
 /* where the song is at the distributor (14 Nov 2026, batch 3): a FIXED list, kept with history
    (r.storeLog, newest last), which is also Drop's moderation log (what RouteNote said, and why) */
 export const STORE_STATUS = ["not uploaded", "uploaded", "in moderation", "rejected", "resubmitted", "approved", "delivered", "live"];
+/* RouteNote's own words for them (16 Nov 2026, Drop: "Pending Moderation" was refused) */
+export const STORE_ALIAS = { "pending moderation": "in moderation", "in review": "in moderation", "under review": "in moderation", "pending review": "in moderation",
+  "action needed": "rejected", "action required": "rejected", "needs action": "rejected" };
+export const storeWord = (v) => { const k = low(v).replace(/\s+/g, " ").trim(); return STORE_STATUS.includes(k) ? k : STORE_ALIAS[k] || ""; };
 export const PACK_FIELDS = [
   /* Whose release is it (11 Nov 2026, Luke: "i want it to be if it's self release or released with
      label; for instance touch me: [the label] own 50% of that"). First on the form. */
@@ -1228,6 +1272,8 @@ export const PACK_FIELDS = [
   F("writers", "Writers: full legal names, who wrote music and who wrote lyrics", "Writers", "text", "stores", { required: true, max: 600, hint: 'One person per line, for example "Full Legal Name: music and lyrics". Legal names, not artist names.' }),
   F("producers", "Producers", "Producers", "line", "stores", { hint: "Optional. As they should be credited." }),
   F("featuring", "Featured artists", "Featured artists", "line", "stores", { hint: "Only artists credited in the title." }),
+  /* round 3 (16 Nov 2026, Drop: Love You is co-primary, not "featuring") */
+  F("primary", "Primary artists (when the song has more than one, exactly as in the stores)", "Primary artists", "line", "stores", { hint: 'Optional: only when another artist is a main artist too, for example "badscandal, Sample Singer".' }),
   /* required to send a SELF-RELEASE since 11 Nov 2026 (evening): it cannot be uploaded without it. A label
      release the label delivers doesn't use it (review, 11 Nov 2026); one we upload ourselves needs it for
      the upload. showWhen: the form shows it whatever the kind (requiredWhen alone would hide it). */
@@ -1245,6 +1291,8 @@ export const PACK_FIELDS = [
   /* Laura's RESULT, not her input (11 Nov 2026): never "missing" before her step, like the ISRC */
   F("video", "Video (link)", "Video", "link", "later", { fill: ["Laura"], hint: "Laura fills it once the video is scheduled." }),
   F("page", "Song page (link)", "Song page", "link", "later", { fill: ["Webmaster"], hint: "Webmaster fills it once the page is live: https://badscandal.com/<slug>" }),
+  /* round 3 (16 Nov 2026, Verse): where the lyrics are on Musixmatch, kept by Verse */
+  F("musixmatch", "Lyrics on Musixmatch", "Musixmatch", "choice", "later", { fill: ["Verse"], choices: ["not listed", "submitted", "pending", "live"], hint: "Verse keeps it current after the release: not listed (the song isn't on Musixmatch yet), submitted, pending (in review), live." }),
   F("notes", "Anything else the team should know", "Notes", "text", "notes", { max: 1000, hint: "Optional." }),
 ];
 /* null prototype (11 Nov 2026): "constructor", "toString" or "__proto__" sent as a pack key must be an
@@ -1256,14 +1304,18 @@ const FIELD = Object.assign(Object.create(null), Object.fromEntries(PACK_FIELDS.
 export const RELEASE_STEPS = [
   { key: "upload", label: "Uploaded to RouteNote with the release date", owner: "Drop", days: 21 },
   { key: "approved", label: "Approved by RouteNote (nothing waiting)", owner: "Drop", days: 16 },
-  { key: "spotify", label: "Showing as upcoming in Spotify for Artists", owner: "Atlas", days: 15 },
+  /* waits for RouteNote's approval (16 Nov 2026, Atlas: Love You showed "due today" while RouteNote still had
+     it In Review); a label release skips the approval, so it never waits */
+  { key: "spotify", label: "Showing as upcoming in Spotify for Artists", owner: "Atlas", days: 15, after: "approved" },
   { key: "pitch", label: "Spotify pitch sent", owner: "Atlas", days: 14, after: "spotify", asap: true },
   { key: "page", label: "Song page live on badscandal.com", owner: "Webmaster", days: 7 },
-  { key: "video", label: "Video scheduled on YouTube", owner: "Laura", days: 7 },
-  /* Forge after Webmaster (15 Nov 2026, Luke: "webmaster needs to create us the link
-     www.badscandal.com/(songname) and that links to the metapixel ... our ads will run to that link"):
-     the ads wait for the song page; freed early, they keep their own day */
-  { key: "ads", label: "Ad drafts ready, inside the cap", owner: "Forge", days: 1, after: "page" },
+  /* YouTube on a schedule (16 Nov 2026, Luke: "the day a new song releases the upload is released or scheduled
+     in advance goal is two per month"): scheduled a week ahead, public on the release day */
+  { key: "video", label: "YouTube video scheduled for the release day", owner: "Laura", days: 7 },
+  /* the ads come AFTER the release, made with Luke (16 Nov 2026, Luke: "ads should not be made by forge himself
+     i should help oversee that always after a release goes live ... we may make multiple sets"): waiting until
+     the release day (and the song page: they link to it), due two days after it */
+  { key: "ads", label: "Ads made with Luke, after the release", owner: "Forge", days: -2, after: "page", fromRelease: true },
   { key: "live", label: "Release day: Spotify link on the song page and the home card", owner: "Webmaster", days: 0 },
   /* the lyrics come AFTER the release (15 Nov 2026, Luke: they go on only once the song is on Musixmatch,
      "watching for release on musixmatch immediately after release"): waiting until the
@@ -1349,7 +1401,7 @@ export function packValue(key, v) {
   } else if (f.kind === "choice") {
     const s = clean(v, 40);
     if (!s) return "";
-    out = f.choices.find((c) => low(c) === low(s));
+    out = f.choices.find((c) => low(c) === low(s)) || (f.key === "storeStatus" ? storeWord(s) || undefined : undefined);
     if (!out) fail(`${f.short} must be one of: ${f.choices.join(", ")}.`);
   } else out = f.kind === "text" ? cleanText(v, f.max) : clean(v, f.max);
   packSecrets(f, out);
@@ -1376,9 +1428,11 @@ function packSecrets(f, out) {
    comes out … in order of what song is next and one week after the previous song releases"): due a week
    after the previous song's release day (that song has had its week as "Out now"), never later than the
    day before its own release; with no song before it, a week before its own day. Never in the past. */
+/* never later than a week before its own day (16 Nov 2026: Love You is 3 days after Me Dá Seu Body, and its
+   page came due the day before release, too late for anything that links to it) */
 export function pageDue(date, prevDate, today) {
   let want = isDay(prevDate) ? addDays(prevDate, 7) : addDays(date, -7);
-  if (want >= date) want = addDays(date, -1);
+  if (want > addDays(date, -7)) want = addDays(date, -7);
   return want < today ? today : want;
 }
 /* the release that comes out last before `date` (scheduled, not recorded-after-it-came-out), not `id` */
@@ -1386,13 +1440,47 @@ export function prevReleaseDate(list, id, date) {
   const before = (list || []).filter((x) => x && x.id !== id && x.status === "scheduled" && !x.alreadyOut && isDay(x.date) && x.date < date).map((x) => x.date).sort();
   return before.length ? before[before.length - 1] : null;
 }
-/* after a release is sent, moved or cancelled: every song page not started yet follows the release order */
-function reorderPages(list, today) {
+/* after a release is sent, moved or cancelled: every song page not started yet follows the release order,
+   and the one-pitch rule is applied again. Returns the ids of the releases it changed. */
+function reorderPages(list, today, at = null) {
+  const changed = new Set();
   for (const r of list || []) {
     if (!r || r.status !== "scheduled" || r.alreadyOut || !isDay(r.date)) continue;
     const st = (r.steps || []).find((x) => x.key === "page");
-    if (st && st.status === "todo") st.due = pageDue(r.date, prevReleaseDate(list, r.id, r.date), today);
+    if (st && st.status === "todo") { const due = pageDue(r.date, prevReleaseDate(list, r.id, r.date), today); if (st.due !== due) { st.due = due; changed.add(r.id); } }
   }
+  for (const id of pitchRule(list, today, at)) changed.add(id);
+  return [...changed];
+}
+/* ONE pitch in two weeks (16 Nov 2026, Luke: "only one song can be pitched in two weeks so for instance if one
+   song is releasing and we're pitching that and one song is out a few days later we can't pitch that"). In
+   release order, a song out less than 14 days after the last song that IS pitched (or to be) has its pitch
+   skipped, saying why (rule "one-pitch"); when that stops being true (a move, a cancel) it opens again. A pitch
+   already working, blocked or done is never touched. Returns the ids changed. */
+export const PITCH_GAP_DAYS = 14;
+const ONE_PITCH = "one-pitch";
+const pitchNote = (t, d) => `Not pitched: ${t} (out ${dayWords(d)}) is the song pitched in these two weeks, and Spotify takes one pitch at a time (Luke, 16 Nov 2026)`;
+function pitchRule(list, today, at = null) {
+  const rel = (list || []).filter((r) => r && r.status === "scheduled" && !r.alreadyOut && isDay(r.date)).sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+  const changed = [];
+  let last = null;
+  for (const r of rel) {
+    const p = (r.steps || []).find((x) => x.key === "pitch");
+    if (!p) continue;
+    const byRule = p.status === "skipped" && p.rule === ONE_PITCH;
+    const clash = last && daysBetween(last.date, r.date) < PITCH_GAP_DAYS;
+    if (clash && (p.status === "todo" || byRule)) {
+      const note = pitchNote(last.title, last.date);
+      if (p.status !== "skipped" || p.note !== note) { Object.assign(p, { status: "skipped", note, rule: ONE_PITCH }); changed.push(r.id); if (at) logIt(r, at, "HQ", `HQ skipped the pitch: ${last.title} is the song pitched in these two weeks`); }
+    } else if (!clash && byRule) {
+      p.status = "todo"; p.note = ""; delete p.rule;
+      if (p.due && p.due < today) p.due = today;
+      changed.push(r.id);
+      if (at) logIt(r, at, "HQ", "HQ opened the pitch again: no other song is pitched in these two weeks");
+    }
+    if (p.status !== "skipped") last = r;
+  }
+  return changed;
 }
 export function scheduleSteps(date, today, o = {}) {
   if (o.alreadyOut) return { steps: RELEASE_STEPS.map((s) => ({ key: s.key, label: s.label, owner: s.owner, due: null, status: "skipped", note: OUT_NOTE, link: "", at: null, by: null })), tight: false };
@@ -1417,8 +1505,9 @@ function waitingFor(steps, s, date, today) {
   return a && !finished(a) ? a : null;
 }
 const WAIT_WORDS = { spotify: "waiting: the song is not in Spotify for Artists yet", page: "waiting: the song page is not live yet (the ads link to it)",
-  release: "waiting: starts on the release day, once the song shows on Musixmatch" };
-const waitWords = (a) => WAIT_WORDS[a.key] || `waiting for "${a.label}"`;
+  approved: "waiting: RouteNote has not approved it yet", release: "waiting: starts on the release day, once the song shows on Musixmatch" };
+const ADS_WAIT = "waiting: the ads are made with Luke once the song is out";
+const waitWords = (a, s) => (a.key === "release" && s && s.key === "ads" ? ADS_WAIT : WAIT_WORDS[a.key] || `waiting for "${a.label}"`);
 /* the moment a step is done (or skipped), the steps that waited for it become ordinary steps: the pitch
    (asap) is due TODAY, the day the song shows in Spotify for Artists (14 Nov 2026, Luke: "spotify pitch
    should be sent immediately when the song becomes available in spotify"); any other step keeps its own
@@ -1462,12 +1551,39 @@ function upgradeOne(r, today, at) {
 export async function upgradeReleases(store, now) {
   const today = spDay(now), at = new Date(now).toISOString();
   const list = await listReleases(store);
-  if (!list.some(needsUpgrade)) return { changed: [] };
+  if (!tidyAll(JSON.parse(JSON.stringify(list)), today, at).length) return { changed: [] };
   return mutate(store, REL_KEY, [], (rows) => {
-    const changed = [];
-    for (const r of rows) if (upgradeOne(r, today, at)) changed.push({ id: r.id, title: r.title });
+    const ids = tidyAll(rows, today, at);
+    const changed = rows.filter((r) => ids.includes(r.id)).map((r) => ({ id: r.id, title: r.title }));
     return changed.length ? { value: { changed } } : { skip: true, value: { changed } };
   });
+}
+/* everything a release on the desk is brought up to (15 and 16 Nov 2026); each part changes something only
+   once, so a desk that is already up to date is never written */
+const OLD_ADS = "Ad drafts ready, inside the cap", OLD_VIDEO = "Video scheduled on YouTube";
+function healOne(r, today, at) {
+  if (!r || !Array.isArray(r.steps)) return false;
+  const said = [];
+  /* the song page step done with its link: the pack's page says it too (16 Nov 2026, Verse) */
+  const pg = r.steps.find((s) => s.key === "page");
+  if (pg && pg.status === "done" && httpsLink(pg.link) && !filled((r.pack || {}).page)) { r.pack = r.pack || {}; r.pack.page = httpsLink(pg.link); said.push("put the song page's link in the pack"); }
+  /* the ads, made with Luke after the release (16 Nov 2026) */
+  const ad = r.steps.find((s) => s.key === "ads");
+  if (ad && ad.label === OLD_ADS) {
+    ad.label = STEP.ads.label;
+    if (!finished(ad) && r.status === "scheduled" && !r.alreadyOut && isDay(r.date)) { const want = addDays(r.date, -STEP.ads.days); ad.due = want < today ? today : want; }
+    said.push(`the ads are made with Luke after the release${ad.due ? ` (due ${dayWords(ad.due)})` : ""}`);
+  }
+  const vd = r.steps.find((s) => s.key === "video");
+  if (vd && vd.label === OLD_VIDEO) { vd.label = STEP.video.label; said.push("the YouTube video goes public on the release day"); }
+  if (said.length) logIt(r, at, "HQ", `HQ: ${joinWords(said)} (Luke, 16 Nov 2026)`);
+  return said.length > 0;
+}
+function tidyAll(rows, today, at) {
+  const ids = new Set();
+  for (const r of rows) { if (upgradeOne(r, today, at)) ids.add(r.id); if (healOne(r, today, at)) ids.add(r.id); }
+  for (const id of pitchRule(rows, today, at)) ids.add(id);
+  return [...ids];
 }
 /* label release or not, after a change of the pack on a release already sent: the upload and the
    approval follow the deal (only while nobody has started them) */
@@ -1509,7 +1625,7 @@ export function releaseView(r, today, o = {}) {
   const steps = raw.map((s) => {
     const w = waitingFor(raw, s, date, today), skipped = s.status === "skipped";
     return { ...s, late: !finished(s) && !w && !!s.due && s.due < today, dueIn: s.due ? daysBetween(today, s.due) : null, waiting: !!w,
-      ...(w ? { waitingFor: w.key, waitingText: waitWords(w) } : {}), ...(skipped ? { skipped: true } : {}), ...(STEP[s.key] && STEP[s.key].after ? { after: STEP[s.key].after } : {}) };
+      ...(w ? { waitingFor: w.key, waitingText: waitWords(w, s) } : {}), ...(skipped ? { skipped: true } : {}), ...(STEP[s.key] && STEP[s.key].after ? { after: STEP[s.key].after } : {}) };
   });
   const dueOf = (key) => { const s = steps.find((x) => x.key === key); return s ? s.due : date && STEP[key] ? addDays(date, -STEP[key].days) : null; };
   const out = outAlready(r, today);
@@ -1556,7 +1672,10 @@ export function releaseView(r, today, o = {}) {
 }
 function approvalsOf(r) {
   const a = r.approvals || {}, lyr = (r.pack || {}).lyrics || "";
-  return { pitch: a.pitch ? { ...a.pitch } : null, lyrics: a.lyrics ? { ...a.lyrics, current: a.lyrics.text === lyr } : null };
+  /* a pitch that went out with no approval on the desk reads as sent, never "not approved" (16 Nov 2026, Verse) */
+  const ps = (r.steps || []).find((s) => s.key === "pitch");
+  const sentOnly = !a.pitch && ps && ps.status === "done" ? { sentOnly: true, on: ps.doneOn || (ps.at ? spDay(Date.parse(ps.at)) : ""), by: ps.by || "" } : null;
+  return { pitch: a.pitch ? { ...a.pitch } : sentOnly, lyrics: a.lyrics ? { ...a.lyrics, current: a.lyrics.text === lyr } : null };
 }
 /* a release the team is still working on: sent, not a song recorded after it came out, and not out
    for more than 14 days */
@@ -1675,10 +1794,13 @@ export function findRelease(list, song, { drafts = true } = {}) {
 const logIt = (r, at, by, what) => { r.log = (r.log || []).concat({ at, by, what: clean(what, 240) }).slice(-LIMITS.releaseLog); }; /* the last 30 changes */
 /* the store status's history (batch 3): one entry per change, the current status mirrored in the pack's
    storeStatus (so every older reader, HQ's merged list included, still works). The last 40 are kept. */
+/* kept in the order of the days they happened (16 Nov 2026: Drop filling in 6, 9 and 14 Nov after today's
+   word made "uploaded" the status now); the same day keeps the order they were said in */
 function storeEntry(r, e) {
-  r.storeLog = (r.storeLog || []).concat({ status: e.status, on: e.on, at: e.at, by: e.by, ...(e.reason ? { reason: e.reason } : {}), ...(e.note ? { note: e.note } : {}) }).slice(-40);
+  const log = (r.storeLog || []).concat({ status: e.status, on: e.on, at: e.at, by: e.by, ...(e.reason ? { reason: e.reason } : {}), ...(e.note ? { note: e.note } : {}) });
+  r.storeLog = log.map((x, i) => [x, i]).sort((a, b) => (a[0].on < b[0].on ? -1 : a[0].on > b[0].on ? 1 : a[1] - b[1])).map((x) => x[0]).slice(-40);
   r.pack = r.pack || {};
-  r.pack.storeStatus = e.status;
+  r.pack.storeStatus = r.storeLog[r.storeLog.length - 1].status;
 }
 /* what the view, the tools and HQ show: the status now (with the reason when it is a rejection), the
    history newest first, and an old free-text status written before the fixed list (legacy) */
@@ -1839,7 +1961,8 @@ async function applyProposal(store, now, roster, parent, via) {
       const r = await saveRelease(store, now, roster, { by: "Luke", title: p.title, date: p.date || "", pack: p.pack || {}, from: said });
       let sent = "";
       if (p.send) { const s = await sendRelease(store, now, roster, { by: "Luke", id: r.id, anyway: true }); sent = s.alreadyOut ? " It was recorded as already out." : " It went to the team: every bot has its steps."; }
-      out = { done: true, id: r.id, text: `${r.title} is on the desk${r.status === "draft" && !p.send ? " as a draft in the pipeline" : ""}.${sent}` };
+      if (filled((p.pack || {}).lyrics)) await approveRelease(store, now, roster, { by: "Luke", via, id: r.id, what: "lyrics", msg: parent.id, words: `said yes to ${asker}'s lyrics` });
+      out = { done: true, id: r.id, text: `${r.title} is on the desk${r.status === "draft" && !p.send ? " as a draft in the pipeline" : ""}.${sent}` + (filled((p.pack || {}).lyrics) ? " The lyrics are recorded as approved by Luke." : "") };
     } else {
       const cur = (await listReleases(store)).find((x) => x.id === p.id);
       if (!cur || cur.status === "cancelled") throw new StaffError(`${p.title} is no longer on the desk (or was cancelled).`);
@@ -1855,7 +1978,10 @@ async function applyProposal(store, now, roster, parent, via) {
       if (p.send) await sendRelease(store, now, roster, { by: "Luke", id: p.id, anyway: true });
       const at = new Date(now).toISOString();
       await mutate(store, REL_KEY, [], (list) => { const r = list.find((x) => x.id === p.id); if (!r) return { skip: true, value: null }; logIt(r, at, "Luke", `Luke said yes to ${asker}'s changes` + (via ? ` (via ${via})` : "")); return { value: r }; });
-      out = { done: true, id: p.id, text: `${p.newTitle || cur.title}: the changes are made${p.date && scheduled ? " (every open step moved with the new day, and the team is told)" : ""}${p.send ? "; it went to the team" : ""}.` };
+      /* the lyrics he said yes to ARE the final lyrics (16 Nov 2026, Verse: the pack had 5x "fode" while Luke approved 4x) */
+      const lyr = "lyrics" in (p.pack || {}) && filled(p.pack.lyrics);
+      if (lyr) await approveRelease(store, now, roster, { by: "Luke", via, id: p.id, what: "lyrics", msg: parent.id, words: `said yes to ${asker}'s lyrics` });
+      out = { done: true, id: p.id, text: `${p.newTitle || cur.title}: the changes are made${p.date && scheduled ? " (every open step moved with the new day, and the team is told)" : ""}${p.send ? "; it went to the team" : ""}.` + (lyr ? " The lyrics are recorded as approved by Luke." : "") };
     }
   } catch (e) { out = { done: false, error: e && e.message ? e.message : "it could not be applied" }; }
   try { await sendMessage(store, now, roster, { from: "HQ", to: asker, needs: "none", text: out.done ? `Done: Luke said yes. ${out.text}` : `Not done: ${out.error}` }); } catch {}
@@ -1983,7 +2109,7 @@ export async function sendRelease(store, now, roster, a) {
     const without = miss.length ? ` without ${joinWords(miss.map((m) => m.short))} (sent anyway)` : "";
     logIt(r, at, by, alreadyOut ? `${by} recorded it as already out (${dayWords(r.date)}): no steps` + without
       : `${by} sent it to the team for ${dayWords(r.date)}` + (s.tight ? ` (${daysBetween(today, r.date)} days before release: the early steps are due today)` : "") + without);
-    reorderPages(list, today);
+    reorderPages(list, today, at);
     return { value: { release: r, already: false, alreadyOut, without: miss.map((m) => m.key) } };
   });
   if (out.already || out.alreadyOut) return { ...out, told: null };
@@ -2028,7 +2154,7 @@ export async function moveRelease(store, now, roster, a) {
     }
     r.date = date; r.updatedAt = at;
     logIt(r, at, by, (from ? `${by} moved the date from ${dayWords(from)} to ${dayWords(date)}` : `${by} set the release day to ${dayWords(date)}`) + (added ? "; added the step \"Showing as upcoming in Spotify for Artists\"" + (added === "skipped" ? " (skipped: the pitch was already sent)" : "") : ""));
-    reorderPages(list, today);
+    reorderPages(list, today, at);
     return { value: { release: r, moved: true, from, doneOutside } };
   });
   if (!out.moved || out.release.status !== "scheduled" || out.release.alreadyOut) return { ...out, told: null };
@@ -2049,7 +2175,7 @@ export async function cancelRelease(store, now, roster, a) {
     const was = r.status;
     r.status = "cancelled"; r.updatedAt = at;
     logIt(r, at, by, `${by} cancelled it`);
-    reorderPages(list, spDay(now));
+    reorderPages(list, spDay(now), at);
     return { value: { release: r, was } };
   });
   if (out.was !== "scheduled") return { ...out, told: null };
@@ -2136,12 +2262,14 @@ export async function setStep(store, now, roster, a) {
        ads before the song page is live, the lyrics before the song is out (15 Nov 2026): a bot is told what
        comes first; Luke and Claude may still record what they know */
     const w = waitingFor(r.steps, st, r.date, today0);
-    if (w && status === "done" && !PEOPLE.includes(by)) fail(`"${st.label}" ` + (w.key === "release" ? `waits for the release day (${dayWords(r.date)}): the lyrics go on Musixmatch once the song is out and shows there. Not showing yet is not a block.`
+    if (w && status === "done" && !PEOPLE.includes(by)) fail(`"${st.label}" ` + (w.key === "release" ? (st.key === "ads" ? `waits for the release day (${dayWords(r.date)}): the ads are made with Luke once the song is out, never before and never alone.` : `waits for the release day (${dayWords(r.date)}): the lyrics go on Musixmatch once the song is out and shows there. Not showing yet is not a block.`)
       : `is waiting for "${w.label}" (${w.owner}): it can't be done before that.` + (w.key === "spotify" ? " When the song shows as upcoming in Spotify for Artists, Atlas reports it with spotify_upcoming and the pitch opens." : w.key === "page" ? " The ads link to the song page (badscandal.com/<song>, with the Meta pixel), so they start once Webmaster has it live." : "")), "waiting");
     if (st.status === status && st.note === note && (!link || st.link === link) && (!doneOn || st.doneOn === doneOn)) return { skip: true, value: { release: r, st, changed: false } };
     Object.assign(st, { status, note, ...(link ? { link } : {}), at, by });
     if (doneOn) st.doneOn = doneOn; else if (status !== "done") delete st.doneOn; /* reopened: the old day goes with it */
     if (finished(st)) freeWaiting(r, st.key, today);
+    /* the song page's link goes in the pack's page too (16 Nov 2026) */
+    if (st.key === "page" && status === "done" && link && !filled((r.pack || {}).page)) { r.pack = r.pack || {}; r.pack.page = link; }
     r.updatedAt = at;
     logIt(r, at, by, `${by}: ${st.label} — ${status === "todo" ? "reopened" : status}` + (doneOn ? ` on ${dayWords(doneOn)}` : "") + (note ? ` (${note})` : ""));
     return { value: { release: r, st, changed: true } };
@@ -2162,8 +2290,8 @@ export async function setStep(store, now, roster, a) {
 export async function setStoreStatus(store, now, roster, a) {
   const by = whoIs(a.by, roster, { people: true });
   if (!["Drop", "Nova", "Claude", "Luke"].includes(by)) fail("The status at the distributor is Drop's to keep (Nova may set it for him). If it is wrong, tell Drop.", "not_allowed");
-  const status = STORE_STATUS.find((x) => x === low(clean(a.status, 40)));
-  if (!status) fail(`status must be one of: ${STORE_STATUS.join(", ")}. Nothing was saved.`);
+  const status = storeWord(clean(a.status, 40));
+  if (!status) fail(`status must be one of: ${STORE_STATUS.join(", ")} (RouteNote's "Pending Moderation" or "In review" = in moderation, "Action needed" = rejected). Nothing was saved.`);
   const reason = cleanText(a.reason, 300), note = cleanText(a.note, 300);
   const today = spDay(now), at = new Date(now).toISOString();
   const on = a.on != null && String(a.on).trim() ? clean(a.on, 10) : today;
@@ -2432,20 +2560,22 @@ export async function answerSighting(store, now, roster, a) {
 /* hq: the dashboard model from netlify/lib/hq.mjs (optional): gives each bot its duty and tasks.
    releases: releaseView()s (optional): each bot's open release steps; a late or blocked one makes the
    bot late / blocked, like a duty does (11 Nov 2026). */
-export function workers(roster, { hq, updates, messages, cards, seen, today, nowHM, releases = [] }) {
+export function workers(roster, { hq, updates, messages, cards, seen, today, nowHM, releases = [], deskUpdates = [] }) {
   const duties = (hq && hq.team && hq.team.duties && hq.team.duties.byOwner) || [];
   const tasks = (hq && hq.team && hq.team.tasks) || [];
   return roster.map((b) => {
     const k = low(b.name);
     const mine = duties.find((d) => low(d.owner) === k);
     const items = mine ? mine.items : [];
-    const last = updates.find((u) => low(u.bot) === k) || null;
+    /* the shared live log keeps the newest 40 lines only: a bot's own last word is looked up in the desk's
+       full list too (16 Nov 2026, Steve and Verse read "none yet" after a busy morning) */
+    const last = updates.find((u) => low(u.bot) === k) || deskUpdates.find((u) => low(u.bot) === k) || null;
     const todays = updates.filter((u) => low(u.bot) === k && u.sp.slice(0, 10) === today);
     const open = tasks.filter((t) => low(t.owner) === k);
     const asks = waitingOn(messages, b.name);
     const relSteps = releases.filter(releaseActive).flatMap((r) => r.steps.filter((s) => !finished(s) && low(s.owner) === k)
       .map((s) => ({ id: r.id, title: r.title, key: s.key, label: s.label, due: s.due, dueIn: s.dueIn, status: s.status, late: s.late, note: s.note || "", waiting: !!s.waiting,
-        ...(s.waitingFor ? { waitingFor: s.waitingFor } : {}), ...(s.link ? { link: s.link } : {}), ...(s.key === "live" && r.pack && r.pack.spotifyTrack ? { spotifyTrack: r.pack.spotifyTrack } : {}) })))
+        ...(s.waitingFor ? { waitingFor: s.waitingFor, waitingText: s.waitingText } : {}), ...(s.link ? { link: s.link } : {}), ...(s.key === "live" && r.pack && r.pack.spotifyTrack ? { spotifyTrack: r.pack.spotifyTrack } : {}) })))
       .sort((a, b) => (a.due < b.due ? -1 : a.due > b.due ? 1 : 0));
     let state = "idle";
     if (b.state === "paused") state = "paused";
@@ -2560,7 +2690,7 @@ export function board(desk, now, hq) {
      (hqModel -> team.live.feed), so a bot that still writes only the sheet is not shown as silent */
   const live = hq && hq.team && hq.team.live && hq.team.live.ready ? hq.team.live.feed : null;
   const updates = live ? live.map((u) => ({ sp: u.at, at: u.at, bot: u.bot, status: u.status, message: u.message, link: u.link || "" })) : desk.updates;
-  const staff = workers(desk.roster, { hq, updates, messages: desk.messages, cards: desk.cards, seen: desk.seen, today, nowHM, releases: views });
+  const staff = workers(desk.roster, { hq, updates, messages: desk.messages, cards: desk.cards, seen: desk.seen, today, nowHM, releases: views, deskUpdates: desk.updates || [] });
   const lastSeen = Object.entries(desk.seen).filter(([n]) => n !== "Claude").sort((a, b) => (a[1].at < b[1].at ? 1 : -1))[0] || null;
   return {
     today, now: spStamp(now), staff,
@@ -2613,7 +2743,7 @@ export function checkReport({ desk, hq, hqState, now }) {
   /* 2. money in */
   const inc = b.income;
   const cur = (o) => Object.entries(o).map(([c, a]) => `${c} ${a.toFixed(2)}`).join(" + ") || "nothing yet";
-  lines.push(`Income logged this month: ${cur(inc.received)} received` + (Object.keys(inc.pending).length ? `, ${cur(inc.pending)} pending` : ""));
+  lines.push(`Income received this month: ${cur(inc.received)}`); /* received only (Luke, 16 Nov 2026) */
   for (const p of inc.problems) problems.push("Income: " + p);
   /* 3. messages waiting */
   const age = (m) => Math.floor((now - Date.parse(m.at)) / 3600000);

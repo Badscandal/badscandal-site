@@ -43,7 +43,11 @@ const INSTRUCTION_LINES = [
   ["Alfred", "Alfred: for a short message use luke_short_briefing (the cap, income, the top 3 decisions by deadline, every sign-in Luke has to do); luke_briefing is the full one."],
   /* the pipeline, 15 Nov 2026 (Luke) */
   [null, "The artist name is badscandal, all lowercase, everywhere: store details, featuring, copyright lines, captions, messages. Never Badscandal or BADSCANDAL."],
-  ["Forge Webmaster", "Forge and Webmaster: every ad links to the song's own page, badscandal.com/<song>, which carries the Meta pixel (HQ's Pages shows who clicked and what it cost); never straight to Spotify. Forge's ad step waits until Webmaster's song page is live."],
+  ["Forge Webmaster", "Forge and Webmaster: every ad links to the song's own page, badscandal.com/<song>, which carries the Meta pixel (HQ's Pages shows who clicked and what it cost); never straight to Spotify."],
+  /* 16 Nov 2026 (Luke, also sent to Nova) */
+  ["Forge", "Forge: you never make or launch ads on your own. A song's ads are made WITH Luke after it is out (he oversees them, often several sets, with Claude working in his browser); your release step \"Ads made with Luke, after the release\" waits for the release day. Later you may copy those ads for other posts, only with videos Luke gives you. A lyric video is never used for ads: it is only for YouTube."],
+  ["Laura", "Laura: YouTube runs on a schedule. Each new song's video is uploaded ahead and set to go public on its release day (scheduled in advance, never late). The goal is two uploads a month. A lyric video is only for YouTube, never for ads."],
+  [null, "One Spotify pitch in two weeks (Luke): when two songs come out less than 14 days apart, only the first is pitched and the later one's pitch step is skipped (it says why)."],
   [null, "There are no teaser steps on releases any more: teasers will get their own place later."],
   /* round 2, 15 Nov 2026 (Luke: "yes novas counts as long as i told him yes") */
   [null, "To add a song to the releases or change one (its title, day or details), use propose_release: Luke is asked if it is correct first, and nothing changes until he says yes. Never tell Luke a song is added or changed before that."],
@@ -86,8 +90,9 @@ export const TOOLS = [
   { name: "task_update", title: "Update or close one of my tasks", idempotent: true,
     description: 'Update ONE of YOUR OWN open tasks from my_day (open_tasks: the ids start with "T-"). status done = the task is really finished (say in note what was done, with the date or the link); blocked = you cannot go on (say in note exactly what is needed and from whom); working = you started it; todo = it is no longer blocked. The dashboard shows your word over the sheet\'s row straight away: done takes it off the open list, and a blocker you clear disappears. Never another bot\'s task (Nova may update anyone\'s). Daily duties (ids starting with "D-") are NOT tasks: finish or block those with post_update.',
     inputSchema: obj({ bot: BOT, task: str('The task id from my_day, for example "T-27".'),
-      status: str("todo | working | blocked | done", { enum: S.TASK_STATUS }),
-      note: str("One line (240 characters at most). Required with blocked: what is needed and from whom. With done: what was done. No passwords or codes.") }, ["bot", "task", "status"]) },
+      status: str("todo | working | blocked | done | cancelled (no longer needed: say why in note)", { enum: S.TASK_STATUS }),
+      note: str("One line (240 characters at most). Required with blocked (what is needed and from whom) and cancelled (why). With done: what was done. No passwords or codes."),
+      title: str("Optional: the task's corrected wording, shown on HQ instead of the sheet's (for example a wrong number in it).") }, ["bot", "task", "status"]) },
   { name: "read_messages", title: "Read messages", readOnly: true,
     description: 'Read the message board, newest first. show: mine (to you, to all, or from you: the default), open (everything still waiting on someone), all (the whole board). Narrow it with since, from, to, about or search; unread: true gives only what came for you since you last read; id gives ONE message in full; count_only: true answers just "anything new for me?" cheaply (it does not count as reading). Reading without since/from/to/about/search/id counts as reading your messages.',
     inputSchema: obj({ bot: BOT, show: str("mine | open | all. Default mine.", { enum: ["mine", "open", "all"] }),
@@ -197,7 +202,7 @@ export const TOOLS = [
       why: str("Where this comes from, in one line (400 characters at most).") }, ["bot"]) },
   /* 16 Nov 2026 (Luke: "a tool that can allow webmaster to use this without my computer") */
   { name: "song_page", title: "Make a song page, or put its Spotify link on it (Luke confirms first)", idempotent: false,
-    description: "WEBMASTER (Nova may ask for him). Song pages (badscandal.com/<address>) are built by GitHub, not on Luke's Mac. kind new = a new song's page: address (slug: lowercase letters and digits, for example loveyou), title exactly as in the stores, date (the release day, YYYY-MM-DD) and cover (an https link to the square cover picture; a Dropbox link is fine). It shows a countdown and Follow on Spotify until release day, the Meta pixel and HQ's Pages count it by themselves. kind track = release day: the song's Spotify link (https://open.spotify.com/track/<id>, nothing after the id) so the button says Listen on Spotify. NOTHING happens yet: Luke is asked \"is this correct?\" with Yes, correct / No. On his yes GitHub builds the page, runs every check and puts it live in about 2 minutes; if a check fails nothing goes live. You get a message on the desk either way; then open the page to make sure, and mark your release step done with its link.",
+    description: "WEBMASTER (Nova may ask for him). Song pages (badscandal.com/<address>) are built by GitHub, not on Luke's Mac. kind new = a new song's page: address (slug: lowercase letters and digits, for example loveyou), title exactly as in the stores, date (the release day, YYYY-MM-DD) and cover (an https link to the square cover picture: a Dropbox link is fine, a Google Drive link only when it is shared \"Anyone with the link\", or it answers with a sign-in page). It shows a countdown and Follow on Spotify until release day, the Meta pixel and HQ's Pages count it by themselves. kind track = release day: the song's Spotify link (https://open.spotify.com/track/<id>, nothing after the id) so the button says Listen on Spotify. NOTHING happens yet: Luke is asked \"is this correct?\" with Yes, correct / No. On his yes GitHub builds the page, runs every check and puts it live in about 2 minutes; if a check fails nothing goes live. You get a message on the desk either way; then open the page to make sure, and mark your release step done with its link.",
     inputSchema: obj({ bot: BOT,
       kind: str("new | track", { enum: ["new", "track"] }),
       slug: str("The address after badscandal.com/, lowercase letters and digits (for example loveyou)."),
@@ -207,7 +212,7 @@ export const TOOLS = [
       track: str("kind track: https://open.spotify.com/track/<id>, nothing after the id."),
       why: str("Optional: where this comes from, in one line.") }, ["bot", "kind", "slug"]) },
   { name: "store_status", title: "Where a song is at the distributor",
-    description: "DROP (Nova may do it for him): say where ONE release is at the distributor, each time it changes: not uploaded, uploaded, in moderation, rejected, resubmitted, approved, delivered, live. Every change is kept as its history (the moderation log Luke sees). With rejected, put what RouteNote said, in its words, in reason. When a rejected song is fixed and ready to go again, call it with status rejected and ready_to_resubmit true (and what changed in note): Luke is asked Yes, resubmit / Not yet, and his answer comes back to you in my_day. Do not resubmit before he says yes.",
+    description: "DROP (Nova may do it for him): say where ONE release is at the distributor, each time it changes: not uploaded, uploaded, in moderation, rejected, resubmitted, approved, delivered, live (RouteNote's \"Pending Moderation\" or \"In review\" = in moderation, \"Action needed\" = rejected). To fill in history, give each change with on = the day it happened, in any order: the history is kept in day order and the newest day is the status now. Every change is kept as its history (the moderation log Luke sees). With rejected, put what RouteNote said, in its words, in reason. When a rejected song is fixed and ready to go again, call it with status rejected and ready_to_resubmit true (and what changed in note): Luke is asked Yes, resubmit / Not yet, and his answer comes back to you in my_day. Do not resubmit before he says yes.",
     inputSchema: obj({ bot: BOT, song: str("The song's title or its id."),
       status: str(S.STORE_STATUS.join(" | "), { enum: S.STORE_STATUS }),
       reason: str("Required with rejected: what RouteNote said, in its words (300 characters at most)."),
@@ -280,8 +285,10 @@ const BUILT_IN_GUIDE = "The staff guide has not been loaded onto the desk yet. U
    Spotify for Artists): never late */
 /* the same words in my_day, releases and release_pack (11 Nov 2026, review) */
 const WAIT_SPOTIFY = "the song to show as upcoming in Spotify for Artists";
-const WAIT_OTHER = { page: "Webmaster's song page (badscandal.com/<song>) to be live: the ads link to it", release: "the release day: then check Musixmatch every day and add the lyrics the day the song shows there" };
-const waitFor = (s) => (s.waitingFor === "spotify" || !s.waitingFor ? WAIT_SPOTIFY : WAIT_OTHER[s.waitingFor] ? WAIT_OTHER[s.waitingFor] : `the step "${(S.RELEASE_STEPS.find((x) => x.key === s.waitingFor) || {}).label || s.waitingFor}"`);
+/* 16 Nov 2026 (Luke): the ads come after the release, made with him; the Spotify for Artists step waits for RouteNote */
+const WAIT_ADS = "the release day: the ads are made WITH Luke once the song is out (never before, never on your own)";
+const WAIT_OTHER = { approved: "RouteNote to approve the song (Drop's step \"Approved by RouteNote\"): until then it can't show in Spotify for Artists", page: "Webmaster's song page (badscandal.com/<song>) to be live: the ads link to it", release: "the release day: then check Musixmatch every day and add the lyrics the day the song shows there" };
+const waitFor = (s) => (s.waitingFor === "release" && (s.key === "ads" || s.step === "ads") ? WAIT_ADS : s.waitingFor === "spotify" || !s.waitingFor ? WAIT_SPOTIFY : WAIT_OTHER[s.waitingFor] ? WAIT_OTHER[s.waitingFor] : `the step "${(S.RELEASE_STEPS.find((x) => x.key === s.waitingFor) || {}).label || s.waitingFor}"`);
 const SPOT_HOW = "done by your spotify_upcoming report, not by release_step";
 const stepState = (s) => (s.status === "done" ? "done" : s.status === "skipped" ? "skipped" : s.status === "blocked" ? "blocked" : s.waiting ? "waiting" : s.late ? "late" : s.status === "working" ? "working" : "to do");
 const when = (d) => (d ? `${S.dayWords(d)} (${d})` : "no date yet");
@@ -293,6 +300,7 @@ const stepOut = (s, pack) => ({ step: s.key, label: s.label, owner: s.owner, due
 const stampWords = (iso) => { const t = S.spStamp(Date.parse(iso)); return `${S.dayWords(t.slice(0, 10))} ${t.slice(11, 16)}`; };
 const approvalOut = (ap, what) => {
   if (!ap) return { approved: false, state: `not approved yet: ask Luke with send_message and approval (what: ${what})` };
+  if (ap.sentOnly) return { approved: false, sent: true, state: `sent ${S.dayWords(ap.on) || "already"}${ap.by ? ` by ${ap.by}` : ""}; no approval was recorded on the desk (nothing to do: it is done)` };
   const by = "Luke" + (ap.via ? ` (via ${ap.via})` : "");
   if (what === "lyrics" && ap.current === false) return { approved: false, state: `approved by ${by} on ${stampWords(ap.at)}, but the lyrics changed since: ask Luke again`, by };
   return { approved: true, by, on: stampWords(ap.at), ...(what === "pitch" ? { text: ap.text } : { matches_the_pack: true }), ...(ap.words ? { luke_said: ap.words } : {}) };
@@ -385,8 +393,8 @@ export async function callTool(tool, args, ctx) {
     case "task_update": {
       const ans = ctx.hq ? await ctx.hq().catch(() => null) : null;
       const open = ans && ans.team && Array.isArray(ans.team.tasks) ? ans.team.tasks : null;
-      const t = await S.setTaskStatus(store, now, roster, { by: me, task: args.task, status: args.status, note: args.note }, open);
-      return { saved: true, task: t.id, status: t.status, ...(t.note ? { note: t.note } : {}), shown_on: t.status === "done" ? "badscandal.com/hq, Team: taken off the open tasks" : "badscandal.com/hq, Team" };
+      const t = await S.setTaskStatus(store, now, roster, { by: me, task: args.task, status: args.status, note: args.note, title: args.title }, open);
+      return { saved: true, task: t.id, status: t.status, ...(t.title ? { title: t.title } : {}), ...(t.note ? { note: t.note } : {}), shown_on: t.status === "done" || t.status === "cancelled" ? "badscandal.com/hq, Team: taken off the open tasks" : "badscandal.com/hq, Team" };
     }
     case "submit_income": {
       const r = await S.submitIncome(store, now, roster, { ...args, bot: me });
@@ -422,8 +430,10 @@ export async function callTool(tool, args, ctx) {
       const prev = me !== "Claude" && args.platform && ctx.hq ? await ctx.hq().then((h) => { const g = h && h.growth ? h.growth.find((p) => String(p.platform).toLowerCase() === String(args.platform).trim().toLowerCase()) : null; return g && g.lastDay ? { date: g.lastDay, followers: g.followers } : null; }).catch(() => null) : null;
       const r = await S.logGrowth(store, now, roster, { by: me, date: args.date, platform: args.platform, account: args.account, followers: args.followers, views: args.views, best_post: args.best_post, best_post_link: args.best_post_link,
         song: args.song, streams: args.streams, listeners: args.listeners, saves: args.saves, playlist_adds: args.playlist_adds, gaps: args.gaps, duty: args.duty, prev });
-      if (r.duplicate) return { saved: false, duplicate: true, note: "Those numbers were already logged for that day. Nothing was added." };
-      return { saved: true, ...(r.row.change != null && r.row.kind === "growth" ? { change: r.row.change } : {}), ...(r.filled && r.filled.length ? { filled: r.filled } : {}), ...(r.replaced && r.replaced.length ? { corrected: r.replaced } : {}),
+      const fixedWords = r.corrected && r.corrected.length ? r.corrected.map((c) => `${c.date}: ${c.from == null ? "none" : (c.from >= 0 ? "+" : "") + c.from} -> ${(c.to >= 0 ? "+" : "") + c.to}`) : null;
+      if (r.duplicate) return { saved: false, duplicate: true, ...(fixedWords ? { changes_fixed: fixedWords } : {}),
+        note: "Those numbers were already logged for that day. Nothing was added." + (fixedWords ? " The day-to-day change was worked out again from the day before's total and put right (changes_fixed)." : "") };
+      return { saved: true, ...(fixedWords ? { changes_fixed: fixedWords } : {}), ...(r.row.change != null && r.row.kind === "growth" ? { change: r.row.change } : {}), ...(r.filled && r.filled.length ? { filled: r.filled } : {}), ...(r.replaced && r.replaced.length ? { corrected: r.replaced } : {}),
         duty: r.duty, ...(r.gapText ? { gaps: r.gapText } : {}), shown_on: "badscandal.com/hq, Growth and Songs" };
     }
     case "income_check": {
@@ -436,7 +446,11 @@ export async function callTool(tool, args, ctx) {
         last_payment: s.last ? `${s.last.date} ${s.last.currency} ${s.last.amount.toFixed(2)} (${s.last.status})` : "none logged", this_month: cur(s.monthTotal), ...(s.needsLuke ? { needs_luke: s.needsLuke } : {}),
         /* round 2: each account of a source paid into several (RouteNote's two) */
         ...(s.byAccount ? { by_account: s.byAccount.map((a) => `${a.account}: ` + (a.last ? `${a.last.date} ${a.last.currency} ${a.last.amount.toFixed(2)} (${a.last.status})` : "none logged")) } : {}) });
-      return { month: i.month, received_this_month: cur(i.received), pending_this_month: cur(i.pending), payments_logged_this_month: i.count,
+      return { month: i.month, received_this_month: cur(i.received), pending_this_month: cur(i.pendingOnly), payments_logged_this_month: i.count,
+        /* round 3 (16 Nov 2026, Luke: "we should never put pending income only what is received") */
+        not_income_yet: "pending, payable and statement-only money is listed apart and never added to income: only received money is income",
+        received_this_year: cur(i.receivedYear),
+        duplicates: i.duplicates.map((x) => `${x.date} · ${x.currency} ${Number(x.amount).toFixed(2)} · "${x.also}" is the same payment as "${x.kept}" (id ${x.id}): counted once`),
         /* batch 4: the music's own money (no salary), what is owed and ready to pay out, statements under the payout line */
         royalties_only_this_month: cur(i.royaltiesOnly), payable_this_month: cur(i.payable), statement_only_this_month: cur(i.statementOnly),
         accounts: i.accounts.map((a) => ({ name: a.name, owner: a.owner, checked_today: a.lastLook === today, last_checked: a.lastLook || "never", state: a.verdict })),
@@ -523,7 +537,10 @@ export async function callTool(tool, args, ctx) {
     }
     case "read_guide": {
       const g = await S.getGuide(store);
-      return g.text ? `STAFF GUIDE (updated ${g.at ? g.at.slice(0, 10) : "?"})\n\n${g.text}` : BUILT_IN_GUIDE;
+      /* the guide is written by hand and can fall behind the connector (Sheet, 16 Nov 2026: "says 18 tools, the
+         connector has 28"): the live list goes first, and wins where they differ */
+      const live = `The connector has ${TOOLS.length} tools right now: ${TOOLS.map((t) => t.name).join(", ")}. Where the guide below says otherwise, this line and the tools' own descriptions are right.`;
+      return g.text ? `${live}\n\nSTAFF GUIDE (updated ${g.at ? g.at.slice(0, 10) : "?"})\n\n${g.text}` : `${live}\n\n${BUILT_IN_GUIDE}`;
     }
   }
 
@@ -619,7 +636,8 @@ export async function callTool(tool, args, ctx) {
         (cap.estimated ? `; estimated${cap.estimatedWhy && cap.estimatedWhy.length ? ": " + cap.estimatedWhy.join(", ") : ""}` : "")
         : "not read: the team's sheet could not be read just now";
       const inc = b.income;
-      const income = `Received ${cur(inc.received)}; owed to us ${cur(inc.pending)}` + (inc.problems.length ? `; ${inc.problems.length} problem${inc.problems.length === 1 ? "" : "s"} (Ledger)` : "");
+      /* received only (16 Nov 2026, Luke); Ledger's problems by name, not a count */
+      const income = `Received ${cur(inc.received)} this month` + (inc.problems.length ? `; for Ledger: ${inc.problems.slice(0, 3).map((x) => (x.length > 70 ? x.slice(0, 69) + "…" : x)).join("; ")}` + (inc.problems.length > 3 ? ` (+${inc.problems.length - 3} more)` : "") : "");
       /* a decision's deadline: an approval -> that step's day; "ready to resubmit" -> the release day */
       const due = (m) => {
         const id = m.approval ? m.approval.id : m.ask === "resubmit" ? m.release : null;
@@ -634,8 +652,21 @@ export async function callTool(tool, args, ctx) {
         (m.options && m.options.length ? ` [${m.options.join(" / ")}]` : "") + (d ? ` (by ${S.dayWords(d)})` : ""));
       /* everything that needs Luke to sign in, from wherever a bot said it, each once */
       const SIGN_IN = /sign(ed)?[ -]?(in|out)\b|log(ged)?[ -]?(in|out)\b|login|2fa|two[- ]factor|phone code|verification code|security code|session (expired|ended)|re-?authori[sz]/i;
-      const signIns = [];
-      const add = (who, text) => { const t = String(text || "").trim(); const line = who ? `${who}: ${t}` : t; if (t && SIGN_IN.test(t) && !signIns.includes(line)) signIns.push(line); };
+      const signIns = [], seenKeys = new Set();
+      /* round 3 (16 Nov 2026, Alfred): one line per account (Google Ads 376-… came 4 times), and "is signed in
+         again" is good news, not a sign-in */
+      const DONE_IN = /\b(is|now|got|are)?\s*(signed|logged) (back )?in( again)?\b/i, STILL = /\b(need|needs|please|expired|signed out|logged out|code)\b/i;
+      const PLACES = /google ads|tiktok|meta|facebook|instagram|youtube|spotify|routenote|revolut|tipalti|paypal|wise|symphonic|soundcloud|gmail|google/i;
+      /* the same account number is one sign-in whoever says it; a platform's name only within one bot (Kevin's
+         TikTok profile and Forge's TikTok Ads are two accounts) */
+      const keyOf = (who, t) => { const num = /\d{3}-\d{3}-\d{4}|\d{6,}/.exec(t); if (num) return "n:" + num[0]; const pl = PLACES.exec(t); return pl ? "p:" + who + "|" + pl[0].toLowerCase() : "t:" + who + "|" + t.toLowerCase(); };
+      const add = (who, text) => {
+        const t = String(text || "").trim(); const line = who ? `${who}: ${t}` : t;
+        if (!t || !SIGN_IN.test(t) || (DONE_IN.test(t) && !STILL.test(t))) return;
+        const k = keyOf(who, t);
+        if (seenKeys.has(k) || signIns.includes(line)) return;
+        seenKeys.add(k); signIns.push(line);
+      };
       for (const w of b.staff) {
         add(w.name, w.blockers);
         if (w.card) add(w.name, w.card.needs);

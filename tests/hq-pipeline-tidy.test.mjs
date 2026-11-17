@@ -49,11 +49,12 @@ test("the pipeline: no teaser steps, the ads after the song page, the lyrics a w
   assert.deepEqual(S.RELEASE_STEPS.map((s) => s.key), ["upload", "approved", "spotify", "pitch", "page", "video", "ads", "live", "lyrics"]);
   assert.ok(!S.RELEASE_STEPS.some((s) => /teaser/.test(s.key) || s.owner === "Luke"));
   const steps = S.scheduleSteps("2026-12-11", TODAY).steps;
-  assert.deepEqual(steps.map((s) => [s.key, s.due]).slice(-3), [["ads", "2026-12-10"], ["live", "2026-12-11"], ["lyrics", "2026-12-18"]]);
+  /* 16 Nov 2026 (Luke): the ads are made with him AFTER the release: due two days after it */
+  assert.deepEqual(steps.map((s) => [s.key, s.due]).slice(-3), [["ads", "2026-12-13"], ["live", "2026-12-11"], ["lyrics", "2026-12-18"]]);
   assert.deepEqual(S.releaseStepsOut().find((s) => s.key === "lyrics"), { key: "lyrics", label: "Lyrics live on Musixmatch", owner: "Verse", days: -7, fromRelease: true });
-  assert.deepEqual(S.releaseStepsOut().find((s) => s.key === "ads"), { key: "ads", label: "Ad drafts ready, inside the cap", owner: "Forge", days: 1, after: "page" });
+  assert.deepEqual(S.releaseStepsOut().find((s) => s.key === "ads"), { key: "ads", label: "Ads made with Luke, after the release", owner: "Forge", days: -2, after: "page", fromRelease: true });
   /* the page says it the same way */
-  assert.match(L.stepsSummary(S.releaseStepsOut()), /1 ad drafts\. After it: lyrics within 7 days\.$/);
+  assert.match(L.stepsSummary(S.releaseStepsOut()), /7 song page and video\. After it: ads with Luke within 2 days and lyrics within 7 days\.$/);
 });
 
 test("releases already sent lose the teaser steps and get the lyrics after the release, once; finished work is kept", async () => {
@@ -117,18 +118,23 @@ test("Verse's lyrics: waiting before the release day (done refused), open from i
   assert.equal(step(done, "lyrics").status, "done");
 });
 
-test("Forge's ads wait for Webmaster's song page; once it is live they keep their own day", async () => {
+test("Forge's ads wait for the release day (made with Luke, 16 Nov 2026) and for the song page they link to", async () => {
   const d = memoryDesk();
   const r = await sent(d, "Night Drive", "2026-12-11");
   const v = await view(d, r.id);
-  assert.deepEqual([step(v, "ads").waiting, step(v, "ads").waitingFor, step(v, "ads").waitingText], [true, "page", "waiting: the song page is not live yet (the ads link to it)"]);
-  await fails(S.setStep(d, NOW, R, { by: "Forge", id: r.id, step: "ads", status: "done" }), /is waiting for "Song page live on badscandal\.com" \(Webmaster\).*The ads link to the song page \(badscandal\.com\/<song>, with the Meta pixel\)/);
+  assert.deepEqual([step(v, "ads").waiting, step(v, "ads").waitingFor, step(v, "ads").waitingText], [true, "release", "waiting: the ads are made with Luke once the song is out"]);
+  await fails(S.setStep(d, NOW, R, { by: "Forge", id: r.id, step: "ads", status: "done" }), /the ads are made with Luke once the song is out, never before and never alone/);
   const forge = await call(d, "my_day", { bot: "Forge" });
-  assert.match(forge.release_steps.find((s) => s.step === "ads").waiting_for, /^Webmaster's song page \(badscandal\.com\/<song>\) to be live/);
+  assert.match(forge.release_steps.find((s) => s.step === "ads").waiting_for, /^the release day: the ads are made WITH Luke/);
+  /* after the release, still waiting while the song page isn't live (the ads link to it) */
+  const out = await view(d, r.id, "2026-12-12");
+  assert.deepEqual([step(out, "ads").waitingFor, step(out, "ads").waitingText], ["page", "waiting: the song page is not live yet (the ads link to it)"]);
   await S.setStep(d, NOW, R, { by: "Webmaster", id: r.id, step: "page", status: "done", link: "https://badscandal.com/nightdrive" });
-  const after = await view(d, r.id);
-  assert.deepEqual([step(after, "ads").waiting, step(after, "ads").due], [false, "2026-12-10"], "freed early: still the day before release, not today");
+  const after = await view(d, r.id, "2026-12-12");
+  assert.deepEqual([step(after, "ads").waiting, step(after, "ads").due], [false, "2026-12-13"], "freed: its own day, two days after the release");
   /* the pitch still goes the day the song shows in Spotify for Artists */
+  await S.setStep(d, NOW, R, { by: "Drop", id: r.id, step: "upload", status: "done" });
+  await S.setStep(d, NOW, R, { by: "Drop", id: r.id, step: "approved", status: "done" });
   await S.setStep(d, NOW, R, { by: "Atlas", id: r.id, step: "spotify", status: "done" });
   assert.equal(step(await view(d, r.id), "pitch").due, TODAY);
 });

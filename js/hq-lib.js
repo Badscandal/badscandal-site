@@ -107,7 +107,9 @@
     "Song page live on badscandal.com": "song page", "Video scheduled on YouTube": "video", "Lyrics live on Musixmatch": "lyrics",
     "Ad drafts ready, inside the cap": "ad drafts", "Release day: Spotify link on the song page and the home card": "release-day links",
     /* v2 (11 Nov 2026, evening): the song showing in Spotify for Artists, before the pitch */
-    "Showing as upcoming in Spotify for Artists": "Spotify for Artists" };
+    "Showing as upcoming in Spotify for Artists": "Spotify for Artists",
+    /* 16 Nov 2026 (Luke): YouTube on the release day; the ads made with Luke after it */
+    "YouTube video scheduled for the release day": "video", "Ads made with Luke, after the release": "ads with Luke" };
   function shortStep(label) { return SHORT[label] || String(label || "").toLowerCase(); }
   var TAB_HREF = { Growth: "#growth", Songs: "#songs", Royalties: "#money", Fans: "#growth/fans", Releases: "#releases", Tasks: "#team", Spend: "#money", Income: "#money" };
   function metaCur(ov) { return (ov && ((ov.yesterday && ov.yesterday.currency) || (ov.spend && ov.spend.currency))) || "USD"; }
@@ -537,12 +539,12 @@
   function capMissingLine(cap) { return cap && cap.notRead && cap.notRead.length ? "Not read: " + cap.notRead.join(", ") : ""; }
   /* a duty done with a number it couldn't read: done, never red */
   function dutyGapsLine(d) { return d && d.gaps ? "Done, with gaps: " + d.gaps : ""; }
-  /* the money coming in, four lines: what arrived, the music's own share of it (no salary), what is owed to
-     us (pending + payable), statements still under the payout line */
+  /* the money coming in: ONLY what was received (16 Nov 2026, Luke: "we should never put pending income only
+     what is received"), and the music's own share of it (no salary). Pending, payable and statements are
+     listed as payments, never added up as income. */
   function incomeTotals(i) {
     var row = function (label, o, hint) { var l = curList(o); return { label: label, text: l.length ? l.join(" + ") : "nothing", empty: !l.length, hint: hint }; };
-    return [row("Received", i && i.received, ""), row("Royalties (no salary)", i && i.royaltiesOnly, "Received, without salary"),
-      row("Owed to us", i && i.pending, "Pending and payable"), row("Statements only", i && i.statementOnly, "Not payable yet: under the payout line")];
+    return [row("Received", i && i.received, ""), row("Royalties (no salary)", i && i.royaltiesOnly, "Received, without salary")];
   }
   var CADENCE = { daily: "Every day", monthly: "Every month", quarterly: "Every 3 months", irregular: "Irregular" };
   function cadenceWord(c) { return CADENCE[c] || "Irregular"; }
@@ -732,6 +734,7 @@
     return APPROVAL_WORDS.map(function (w) {
       var ap = a[w[0]];
       if (!ap) return { key: w[0], text: w[1] + ": not approved yet", ok: false, stale: false };
+      if (ap.sentOnly) return { key: w[0], text: "Pitch sent" + (isDay(ap.on) ? " " + day(ap.on) : "") + (ap.by ? " by " + ap.by : "") + " (no approval recorded)", ok: true, stale: false, sent: true };
       var on = ap.at ? day(spStampOf(ap.at).slice(0, 10)) : "", stale = w[0] === "lyrics" && ap.current === false;
       return { key: w[0], text: w[1] + " approved by Luke" + (ap.via ? " (via " + ap.via + ")" : "") + (on ? ", " + on : "") + (stale ? ", but changed since" : ""), ok: !stale, stale: stale };
     });
@@ -1161,7 +1164,9 @@
     if (s === "transfer") return { text: e.by === "HQ" && !(e.history || []).length ? "Your own transfer" : "Not income", counted: false };
     /* batch 4: a statement under the payout line counts nowhere yet; payable is owed to us */
     if (s === "statement only") return { text: "Statement only (not payable yet)", counted: false };
-    if (s === "payable") return { text: "Payable (owed to us)", counted: true };
+    /* not received yet: never counted as income (Luke, 16 Nov 2026) */
+    if (s === "payable") return { text: "Payable (not received yet)", counted: false };
+    if (s === "pending") return { text: "Pending (not received yet)", counted: false };
     s = String(s || ""); return { text: s.charAt(0).toUpperCase() + s.slice(1), counted: true };
   }
   /* the inline question before a payment is sorted (it can't be changed on the page afterwards) */

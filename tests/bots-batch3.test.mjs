@@ -71,7 +71,7 @@ test("a step's link is kept and shown everywhere; Webmaster's release-day step c
   assert.equal((await call(d, "releases", { bot: "Laura" })).releases[0].your_steps.find((s) => s.step === "video").link, LINK);
   /* HQ's merged list (Today, the release panel) keeps it too */
   const merged = mergeReleases([], [v], TODAY);
-  assert.equal(merged[0].steps.find((s) => s.label === "Video scheduled on YouTube").link, LINK);
+  assert.equal(merged[0].steps.find((s) => s.label === "YouTube video scheduled for the release day").link, LINK);
   /* release day: the Spotify track link, wherever Webmaster looks */
   const TRACK = "https://open.spotify.com/track/sample123";
   await call(d, "release_fill", { bot: "Atlas", song: "Night Drive", field: "spotifyTrack", value: TRACK });

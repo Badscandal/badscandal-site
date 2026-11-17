@@ -59,11 +59,11 @@ test("Webmaster's song page is due a week after the previous song comes out (in 
   const b = await sent(d, "Second Song", "2027-01-08");
   assert.equal(step(b, "page").due, "2026-12-18", "a week after First Song is out: Out now has had its week");
   const c = await sent(d, "Close Song", "2027-01-14");
-  assert.equal(step(c, "page").due, "2027-01-13", "a week after Second Song would be after its own day: the day before");
+  assert.equal(step(c, "page").due, "2027-01-07", "a week after Second Song would be too late: a week before its own day (16 Nov 2026)");
   /* Second Song moves after Close Song: the order is First, Close, Second now, and every page not started
      yet follows the new order */
   const moved = (await S.moveRelease(d, NOW, R, { by: "Luke", id: b.id, date: "2027-01-22" })).release;
-  assert.equal(step(moved, "page").due, "2027-01-21", "a week after Close Song now");
+  assert.equal(step(moved, "page").due, "2027-01-15", "a week after Close Song (21 Jan) would be too late: a week before its own day (16 Nov 2026)");
   const list = await S.listReleases(d), page = (id) => step(list.find((x) => x.id === id), "page").due;
   assert.equal(page(c.id), "2026-12-18", "Close Song comes right after First Song now");
   assert.equal(page(a.id), "2026-12-04");

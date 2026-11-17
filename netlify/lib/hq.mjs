@@ -325,12 +325,12 @@ export function liveReport(rows) {
    todo/working clear an old blocker. The sheet's own "done" always wins. */
 export function teamReport(tasks, sheets, today, overlay = null) {
   const said = (t) => (overlay && t.id ? overlay[String(t.id).toUpperCase()] || null : null);
-  const open = tasks.filter((t) => t.task && !isDuty(t) && !/^done$/i.test(t.status) && !(said(t) && said(t).status === "done"));
+  const open = tasks.filter((t) => t.task && !isDuty(t) && !/^done$/i.test(t.status) && !(said(t) && ["done", "cancelled"].includes(said(t).status)));
   const row = (t) => {
     const o = said(t);
     const r = { id: t.id || "", owner: t.owner || "?", task: t.task, deadline: t.deadline || "", status: key(t.status) || "todo", blocker: t.blocker || "",
       late: DAY.test((t.deadline || "").slice(0, 10)) && (t.deadline || "").slice(0, 10) < today && !/^done$/i.test(t.status) };
-    return o ? { ...r, status: o.status, blocker: o.status === "blocked" ? o.note : "", note: o.note || "", by: o.by || "", updated: o.sp || "" } : r;
+    return o ? { ...r, ...(o.title ? { task: o.title } : {}), status: o.status, blocker: o.status === "blocked" ? o.note : "", note: o.note || "", by: o.by || "", updated: o.sp || "" } : r;
   };
   const list = open.map(row).sort((a, b) => (b.late - a.late) || ((a.deadline || "9") < (b.deadline || "9") ? -1 : 1));
   const owners = {};

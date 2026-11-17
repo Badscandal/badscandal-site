@@ -45,9 +45,14 @@ export function checkJob(j) {
   return bad("kind must be new or track");
 }
 
-/* a Dropbox share link downloads the file itself with dl=1 */
+/* a Dropbox share link downloads the file itself with dl=1; a Google Drive share link through its download
+   address (it must be shared "Anyone with the link", or Drive answers with a sign-in page, which is refused) */
 export function directLink(u) {
   const url = new URL(u);
+  if (/^drive\.google\.com$/i.test(url.hostname)) {
+    const id = (/\/file\/d\/([\w-]+)/.exec(url.pathname) || [])[1] || url.searchParams.get("id");
+    return id && /^[\w-]+$/.test(id) ? `https://drive.google.com/uc?export=download&id=${id}` : u;
+  }
   if (!/(^|\.)dropbox\.com$/i.test(url.hostname)) return u;
   url.searchParams.set("dl", "1");
   return url.toString();
@@ -63,7 +68,7 @@ async function fetchCover(link) {
   if (buf.length > MAX) bad("the cover is over 25 MB");
   const jpg = buf[0] === 0xff && buf[1] === 0xd8, png = buf.slice(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])),
     webp = buf.slice(0, 4).toString("latin1") === "RIFF" && buf.slice(8, 12).toString("latin1") === "WEBP";
-  if (!jpg && !png && !webp) bad("the cover link is not a JPG, PNG or WebP picture (a share PAGE instead of the file?)");
+  if (!jpg && !png && !webp) bad("the cover link is not a JPG, PNG or WebP picture (a share PAGE or a sign-in page instead of the file? A Google Drive link must be shared \"Anyone with the link\")");
   return buf;
 }
 
