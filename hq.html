@@ -1318,6 +1318,14 @@ a.t-card:hover,button.t-card:hover,#shell a.tile:hover{border-color:var(--accent
 /* A8 (17 Nov 2026): Spotify monthly listeners on Songs */
 #artistCard .tile{margin-bottom:16px}
 #artistCard .spark{max-width:520px}
+/* B4 (17 Nov 2026): the Instagram reader under Growth & Fans */
+#igBox{margin-top:18px}
+#igBox .igposts{display:grid;gap:12px;grid-template-columns:repeat(auto-fill,minmax(260px,1fr))}
+#igBox .igpost .d{margin-top:4px}
+#igBox .igform{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+#igBox .igform input{flex:1 1 220px;min-height:44px;font-size:16px}
+#igBox .igerr{color:var(--red,#FF7A7A)}
+#igBox .igcomments li{margin:6px 0;font-size:15px}
 </style>
 </head>
 <body>
@@ -1534,7 +1542,7 @@ a.t-card:hover,button.t-card:hover,#shell a.tile:hover{border-color:var(--accent
 
   <!-- Growth & Fans: one page since 12 Nov 2026 (Luke: "growth and fans can be on the same page"). The
        Fans part keeps its ids; #fans goes to #growth/fans (js/hq-shell.js ALIAS). -->
-  <section class="card view" id="growth"><h2>Growth &amp; Fans</h2><p class="sub">Followers per platform and the posts that went out on the days that grew most, then the people turning into fans.</p><div class="sheeterr" id="errGrowth" hidden></div><div class="grid g4" id="growthList"><div class="ph big"></div><div class="ph"></div></div>
+  <section class="card view" id="growth"><h2>Growth &amp; Fans</h2><p class="sub">Followers per platform and the posts that went out on the days that grew most, then the people turning into fans.</p><div class="sheeterr" id="errGrowth" hidden></div><div class="grid g4" id="growthList"><div class="ph big"></div><div class="ph"></div></div><div class="subsec" id="igBox"></div>
     <div class="subsec" id="growth-fans"><h3 class="sech">Fans forming</h3><p class="sub" id="fansSub"></p><div class="sheeterr" id="errFans" hidden></div><div class="tile"><div class="scroll"><table class="stack" id="fanTable"></table></div></div></div>
   </section>
   <!-- Upcoming (11 Nov 2026, v2: the tab's id stays "releases", so #releases and every deep link keep

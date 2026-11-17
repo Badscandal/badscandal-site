@@ -223,7 +223,7 @@
       var loggedIn = dataOkAt >= startedAt && $("login").hidden;
       try { document.dispatchEvent(new CustomEvent("hq:refreshed", { detail: { loggedIn: loggedIn, startedAt: startedAt } })); } catch (e) {}
     };
-    return Promise.all([loadSheet(), loadOverview(), window.HQPages ? window.HQPages.reload() : null, window.HQStaff ? window.HQStaff.reload() : null]).then(after, after);
+    return Promise.all([loadInstagram(), loadSheet(), loadOverview(), window.HQPages ? window.HQPages.reload() : null, window.HQStaff ? window.HQStaff.reload() : null]).then(after, after);
   }
 
   /* ---------- the last good numbers, kept on this device for offline ("as of <time>") ---------- */
@@ -599,6 +599,50 @@
     else if (t.calls) { pill.textContent = "Working"; pill.className = "pill ok"; }
     else { pill.textContent = "Nothing sent today"; pill.className = "pill"; }
   }
+
+  /* ---------- the Instagram reader (B4, 17 Nov 2026), under Growth & Fans ---------- */
+  var ig = null, igMsg = "", igBusy = false;
+  function loadInstagram() {
+    return getJSON("/api/hq/instagram" + (sample ? "?sample=1" : "")).then(function (res) { if (res.s === 200) ig = res.j; drawInstagram(); }, function () { drawInstagram(); });
+  }
+  function drawInstagram() {
+    var box = $("igBox"); if (!box) return;
+    if (!ig) { box.innerHTML = ""; return; }
+    var st = ig.status || {}, line = L.igStatusLine(st, Date.now()), dis = sample || igBusy ? " disabled" : "";
+    var h = '<h3 class="sech">Instagram</h3><p class="sub' + (st.lastError ? " igerr" : "") + '">' + esc(line) + "</p>";
+    if (!st.connected || st.errorKind === "refused") {
+      h += '<div class="tile"><p class="d">Paste the key from the Meta app (Instagram API setup with Instagram login › Generate token). HQ checks it with Instagram, keeps it to itself and renews it every week. Read-only: it can never post or change anything.</p>' +
+        '<form class="igform" id="igForm" autocomplete="off"><input type="password" id="igKey" placeholder="The Instagram key" aria-label="The Instagram key"' + dis + '><button class="sendbtn" type="submit"' + dis + ">" + (igBusy ? "Checking…" : "Connect Instagram") + "</button></form>" +
+        (igMsg ? '<p class="d" role="status">' + esc(igMsg) + "</p>" : "") + "</div>";
+    } else {
+      h += '<p class="d"><button class="copybtn" type="button" id="igRead"' + dis + ">" + (igBusy ? "Reading…" : "Read now") + '</button> <button class="linkbtn" type="button" id="igOff"' + dis + ">Disconnect</button>" + (igMsg ? " " + esc(igMsg) : "") + "</p>";
+    }
+    if ((ig.posts || []).length) h += '<div class="igposts">' + ig.posts.slice(0, 9).map(function (p) {
+      return '<div class="tile igpost"><div class="row"><h3>' + link(p.link, p.caption || "(no caption)") + '</h3><span class="lbl">' + esc((p.type || "post") + " · " + day(p.at.slice(0, 10))) + '</span></div><div class="d">' + esc(L.igPostNumbers(p) || "No numbers yet") + "</div></div>";
+    }).join("") + "</div>";
+    if ((ig.comments || []).length) h += '<div class="tile" style="margin-top:12px"><h3>Newest comments</h3><ul class="igcomments">' + ig.comments.slice(0, 8).map(function (c) {
+      return "<li><b>" + esc(c.user) + "</b>: " + esc(c.text) + ' <span class="lbl">on ' + link(c.link, c.postCaption || "a post") + "</span></li>"; }).join("") + "</ul></div>";
+    if ((ig.countries || []).length) h += '<p class="d" style="margin-top:10px">Followers by country: ' + esc(ig.countries.slice(0, 6).map(function (c) { return c.country + " " + fmt(c.count); }).join(" · ")) + "</p>";
+    box.innerHTML = h;
+  }
+  document.addEventListener("submit", function (ev) {
+    if (!ev.target || ev.target.id !== "igForm") return;
+    ev.preventDefault();
+    var v = ($("igKey").value || "").trim(); if (!v) return;
+    igBusy = true; igMsg = ""; drawInstagram();
+    postJSON("/api/hq/instagram/key", { token: v }).then(function (res) {
+      igBusy = false; igMsg = res.s === 200 ? "Connected @" + res.j.username + (res.j.read ? "." : ". The first read didn't work yet: " + (res.j.error || "")) : (res.j && res.j.error) || "Couldn't connect (" + res.s + ").";
+      return loadInstagram();
+    }, function () { igBusy = false; igMsg = "No connection. Try again."; drawInstagram(); });
+  });
+  document.addEventListener("click", function (ev) {
+    var t = ev.target; if (!t || (t.id !== "igRead" && t.id !== "igOff")) return;
+    igBusy = true; igMsg = ""; drawInstagram();
+    postJSON("/api/hq/instagram/" + (t.id === "igRead" ? "sync" : "disconnect"), {}).then(function (res) {
+      igBusy = false; igMsg = t.id === "igOff" ? "Disconnected." : res.j && res.j.ok ? "Read just now." : (res.j && res.j.error) || "Couldn't read (" + res.s + ").";
+      return loadInstagram();
+    }, function () { igBusy = false; igMsg = "No connection. Try again."; drawInstagram(); });
+  });
 
   /* ---------- Growth, Fans, Releases, Money, Team (the sheet) ---------- */
   function drawGrowth() {
