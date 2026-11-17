@@ -135,6 +135,7 @@ export const TOOLS = [
       amount: { type: "number", description: "Optional. The right amount." }, currency: str("Optional. The right three-letter currency."),
       status: str("Optional. received | pending | transfer | statement only | payable", { enum: S.INCOME_STATUS.filter((x) => x !== "unsorted") }),
       source: str("Optional. The income source this payment is (its name or id): ties it to that source on Money."),
+      paid_by: str("Optional, only on a statement (pending, payable or statement only): the id of the RECEIVED payment that paid it (from payments), even if its amount or currency differs. The statement then counts nowhere; the money counts once, as received."),
       category: str("Optional.", { enum: S.CATEGORIES }), account: str("Optional. Where it landed."), reference: str("Optional. The payment's own transaction id."), note: str("Optional. One line.") }, ["bot", "id", "month", "reason"]) },
   { name: "income_source", title: "Update an income source you look after",
     description: "For the bot that owns an income source (Ledger, Sheet; Nova may too): say where its money lands (accounts: one or several, for example RouteNote's two PayPal accounts), whether it is active, blocked (with the reason) or not tracked, its category, and clear a needs_luke ask that no longer stands (send it empty). Only what you send changes. Luke sees it on the dashboard, Money.",
@@ -431,7 +432,7 @@ export async function callTool(tool, args, ctx) {
     }
     case "fix_payment": {
       const r = await S.fixIncome(store, now, roster, { by: me, id: args.id, month: args.month, reason: args.reason, date: args.date, payer: args.payer, amount: args.amount, currency: args.currency,
-        status: args.status, category: args.category, account: args.account, reference: args.reference, note: args.note, source: args.source });
+        status: args.status, category: args.category, account: args.account, reference: args.reference, note: args.note, source: args.source, paid_by: args.paid_by });
       const e = r.entry;
       return { saved: r.fixed.length > 0, fixed: r.fixed, ...(r.fixed.length ? {} : { note: "Nothing was different: nothing changed." }),
         now: `${e.arrived || e.date} · ${e.payer} · ${e.currency} ${e.amount.toFixed(2)} · ${e.status} · ${e.account} · ${e.category}` };
@@ -470,7 +471,7 @@ export async function callTool(tool, args, ctx) {
     case "payments": {
       const r = await S.listPayments(store, now, { month: args.month, account: args.account, source: args.source, payer: args.payer, status: args.status, limit: args.limit });
       return { month: r.month, total: r.total, payments: r.payments.map((e) => ({ id: e.id, month: r.month, date: e.date, payer: e.payer, amount: e.amount, currency: e.currency, status: e.status,
-        category: e.category, source: e.source || "", account: e.account, added_by: e.by, ...(e.note ? { note: e.note } : {}) })),
+        category: e.category, source: e.source || "", account: e.account, added_by: e.by, ...(e.note ? { note: e.note } : {}), ...(e.paidBy ? { paid_by: e.paidBy } : {}) })),
         ...(r.total > r.payments.length ? { more: `${r.total - r.payments.length} more: narrow it (account, source, payer, status) or raise limit` } : {}) };
     }
     case "income_status": {

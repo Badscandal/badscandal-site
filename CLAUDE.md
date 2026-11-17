@@ -2370,4 +2370,7 @@ Ledger (via Nova): income_status showed the 15 newest payments, no ids for HQ's 
 - **`fix_payment` takes `source`** (FIX_FIELDS): any payment, HQ's included, tied to its source (its card then shows it).
 - **`S.afterBankRead`** (called by `syncBank` after a full read, with the "checked today"): the Revolut account source becomes active (no blocker, no needs-Luke), and a payer source blocked only "for Revolut" (blocker mentions Revolut) too, in srcedit.json by HQ, once.
 - An account source's name (PayPal, Wise…) is never a "new payer".
+- **Royalties = the music's own money** (Ledger, 16 Nov 2026): `royaltiesOnly` counts received Self-releases, Label deals and Publishing only (`ROYALTY_CATS`), never Production (a buyout) or Salary.
+- **`fix_payment paid_by`** (Ledger): on a statement (pending / payable / statement only), the id of the RECEIVED payment that paid it (searched over 12 months), whatever its amount or currency. The statement (`paidBy`) then counts nowhere (no pending/payable totals, no "older than 30 days", never offered as a pending match); the money counts once, as received. `payments` shows `paid_by`; the page says "Paid (see the received payment)".
+- Tool schemas: `income_source` (main, due_day, create) and `fix_payment` (source, paid_by) ARE in tools/list; a bots' app that kept an old list must reconnect. A second RouteNote source is data: `income_source create` (no code).
 

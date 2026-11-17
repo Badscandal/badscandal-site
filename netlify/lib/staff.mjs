@@ -779,7 +779,8 @@ async function mergePending(store, now, by, e, month, pid) {
 }
 /* batch 4 (15 Nov 2026): a payment already on the desk, corrected by the bot that submitted it (or Ledger,
    Sheet, Nova, Claude, Luke), within its own month, with the reason kept beside what changed */
-const FIX_FIELDS = ["date", "payer", "amount", "currency", "status", "category", "account", "reference", "note", "source"];
+const FIX_FIELDS = ["date", "payer", "amount", "currency", "status", "category", "account", "reference", "note", "source", "paidBy"];
+export const ROYALTY_CATS = ["Self-releases", "Label deals", "Publishing"];
 export async function fixIncome(store, now, roster, a) {
   const by = whoIs(a.by, roster, { people: true });
   const id = clean(a.id, 20), month = clean(a.month, 7);
@@ -805,12 +806,24 @@ export async function fixIncome(store, now, roster, a) {
   }
   noSecrets(want.payer || "", want.note || "");
   if (want.reference) { const what = secretIn(want.reference, { reference: true }); if (what) fail(`reference looks like ${what}. It must be the payment's own transaction id, nothing else.`, "secret"); }
+  /* paid_by (16 Nov 2026, Ledger): a statement filed as pending / payable / statement only is settled by the
+     received payment that paid it, whatever its amount or currency (USD 1,300 statement, USD 1,280 received; a
+     USD statement paid in EUR). The statement then counts nowhere; the money counts once, as received. */
+  if (a.paid_by != null && String(a.paid_by).trim()) {
+    const pid = clean(a.paid_by, 20);
+    let target = null;
+    for (const m of monthsBack(spDay(now).slice(0, 7), UNSORTED_MONTHS)) { target = ((await readDoc(store, incKey(m), [])).data || []).find((x) => x.id === pid); if (target) break; }
+    if (!target) fail(`There is no received payment with the id "${pid}". Find it with payments.`, "not_found");
+    if (target.status !== "received") fail(`${pid} is not a received payment (it is ${target.status}): a statement is settled by the money that arrived.`);
+    want.paidBy = pid;
+  }
   const at = new Date(now).toISOString();
   return mutate(store, incKey(month), [], (list) => {
     const e = list.find((x) => x.id === id);
     if (!e) fail(`There is no payment with the id "${id}" in ${month}. Find it under your_payments in income_status.`, "not_found");
     if (e.by !== by && !SORTERS.includes(by)) fail(`That payment was submitted by ${e.by}: only ${e.by}, Ledger, Sheet, Nova, Claude or Luke fix it. Tell ${e.by}.`, "not_allowed");
     if (e.status === "unsorted") fail("That payment is unsorted: say what it is with sort_payment, not fix_payment.", "not_allowed");
+    if (want.paidBy && !OWED.includes(e.status)) fail(`Only a statement (pending, payable or statement only) can be marked paid with paid_by; this payment is ${e.status}.`, "not_allowed");
     const changed = {};
     for (const k of FIX_FIELDS) if (k in want && (e[k] ?? "") !== want[k]) changed[k] = [e[k] ?? "", want[k]];
     if (!Object.keys(changed).length) return { skip: true, value: { entry: e, fixed: [] } };
@@ -973,13 +986,15 @@ export function incomeReport(entries, checks, sources, today, older = []) {
     if (twice.length) entries = entries.filter((e) => kept.includes(e)); }
   for (const e of entries) {
     if (e.date.slice(0, 7) !== month || e.status === "transfer" || e.status === "unsorted") continue;
+    if (e.paidBy && OWED.includes(e.status)) continue; /* a statement settled by a received payment counts nowhere */
     /* batch 4: a statement under the payout line counts nowhere yet; payable is owed (with pending) */
     if (e.status === "statement only") { add(statementOnly, e.currency, e.amount); continue; }
     add(e.status === "pending" || e.status === "payable" ? pending : received, e.currency, e.amount);
     if (e.status === "payable") add(payable, e.currency, e.amount);
     if (e.status === "pending") add(pendingOnly, e.currency, e.amount); /* pending without the payable (round 3) */
     if (e.status === "received") add(byCat[e.category] || (byCat[e.category] = {}), e.currency, e.amount);
-    if (e.status === "received" && e.category !== "Salary") add(royaltiesOnly, e.currency, e.amount); /* the music's own money: no salary */
+    /* the music's own money (16 Nov 2026, Ledger: a production buyout is not a royalty): self-releases, label deals, publishing */
+    if (e.status === "received" && ROYALTY_CATS.includes(e.category)) add(royaltiesOnly, e.currency, e.amount);
   }
   const lastCheck = {};
   for (const c of checks) { const k = low(c.account); if (!lastCheck[k] || c.at > lastCheck[k].at) lastCheck[k] = c; }
@@ -1032,7 +1047,7 @@ export function incomeReport(entries, checks, sources, today, older = []) {
   for (const s of list) if (s.verdict === "blocked") problems.push(`${s.name}: blocked. ${s.blocker}`.trim());
   if (unknown.length) problems.push(`New payer(s) not on the list of sources: ${unknown.join(", ")}`);
   if (twice.length) problems.push(`${twice.length === 1 ? "1 payment was" : twice.length + " payments were"} logged twice under two payer names, counted once: ${twice.slice(0, 5).map(([k, e]) => `${k.payer} = ${e.payer} (${e.currency} ${e.amount}, ${e.date})`).join("; ")}`);
-  const oldPending = entries.filter((e) => (e.status === "pending" || e.status === "payable") && daysBetween(e.date, today) > 30).length;
+  const oldPending = entries.filter((e) => (e.status === "pending" || e.status === "payable") && !e.paidBy && daysBetween(e.date, today) > 30).length;
   if (oldPending) problems.push(`${oldPending} pending payment${oldPending === 1 ? "" : "s"} older than 30 days`);
   /* seen in an account (the bank reader), not yet said what it is: listed apart, in no total */
   const pool = entries.concat(older || []);
@@ -1042,7 +1057,7 @@ export function incomeReport(entries, checks, sources, today, older = []) {
   const edge = monthsBack(month, UNSORTED_MONTHS).pop(), leaving = unsorted.filter((e) => e.date.slice(0, 7) <= edge).length;
   if (leaving) problems.push(`${leaving} unsorted payment${leaving === 1 ? "" : "s"} from ${MONTH[Number(edge.slice(5, 7)) - 1]} ${edge.slice(0, 4)} drop${leaving === 1 ? "s" : ""} off "To sort" when this month ends: sort ${leaving === 1 ? "it" : "them"} before then`);
   /* the money of a statement logged as pending? Offered only when every statement that fits is the same payer's (the oldest is taken, as the bank reader does) */
-  const pend = pool.filter((p) => OWED.includes(p.status));
+  const pend = pool.filter((p) => OWED.includes(p.status) && !p.paidBy);
   const withMatch = (e) => {
     const fit = pend.filter((p) => pendingFits(p, e)).sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
     if (!fit.length || new Set(fit.map((p) => low(p.payer))).size > 1) return e;
