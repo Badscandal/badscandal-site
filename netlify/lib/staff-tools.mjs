@@ -5,6 +5,7 @@
 
    Written for bots that follow instructions literally: every description says when to use the tool
    and what to put in each field, and every refusal says what to do instead. */
+import { SONGS, homeCardSong } from "./songs.mjs";
 import * as S from "./staff.mjs";
 
 const str = (description, extra = {}) => ({ type: "string", description, ...extra });
@@ -51,6 +52,7 @@ const INSTRUCTION_LINES = [
   [null, "There are no teaser steps on releases any more: teasers will get their own place later."],
   /* round 2, 15 Nov 2026 (Luke: "yes novas counts as long as i told him yes") */
   [null, "To add a song to the releases or change one (its title, day or details), use propose_release: Luke is asked if it is correct first, and nothing changes until he says yes. Never tell Luke a song is added or changed before that."],
+  ["Webmaster", "Webmaster: check song_pages first (what happened to each request, and which song the home card should show today); a cover that isn't on a public link goes up with upload_cover; the home card changes with song_page kind card, Luke confirming."],
   ["Webmaster Nova", "Webmaster: song pages are made with song_page (kind new: address, title, day, cover link; kind track: the Spotify link on release day). Luke confirms, then GitHub builds and checks the page: never Luke's Mac, never by hand."],
   [null, "Nova's yes counts as Luke's, as long as Luke told Nova yes himself: Nova records it with record_luke_answer (Luke's exact words), and it reaches you as Luke's answer, via Nova. Never for money (income, payments, ad spend): only Luke answers those."],
 ];
@@ -202,15 +204,24 @@ export const TOOLS = [
       why: str("Where this comes from, in one line (400 characters at most).") }, ["bot"]) },
   /* 16 Nov 2026 (Luke: "a tool that can allow webmaster to use this without my computer") */
   { name: "song_page", title: "Make a song page, or put its Spotify link on it (Luke confirms first)", idempotent: false,
-    description: "WEBMASTER (Nova may ask for him). Song pages (badscandal.com/<address>) are built by GitHub, not on Luke's Mac. kind new = a new song's page: address (slug: lowercase letters and digits, for example loveyou), title exactly as in the stores, date (the release day, YYYY-MM-DD) and cover (an https link to the square cover picture: a Dropbox link is fine, a Google Drive link only when it is shared \"Anyone with the link\", or it answers with a sign-in page). It shows a countdown and Follow on Spotify until release day, the Meta pixel and HQ's Pages count it by themselves. kind track = release day: the song's Spotify link (https://open.spotify.com/track/<id>, nothing after the id) so the button says Listen on Spotify. NOTHING happens yet: Luke is asked \"is this correct?\" with Yes, correct / No. On his yes GitHub builds the page, runs every check and puts it live in about 2 minutes; if a check fails nothing goes live. You get a message on the desk either way; then open the page to make sure, and mark your release step done with its link.",
+    description: "WEBMASTER (Nova may ask for him). Song pages (badscandal.com/<address>) are built by GitHub, not on Luke's Mac. kind new = a new song's page: address (slug: lowercase letters and digits, for example loveyou), title exactly as in the stores, date (the release day, YYYY-MM-DD) and cover (an https link to the square cover picture: a Dropbox link is fine, a Google Drive link only when it is shared \"Anyone with the link\", or it answers with a sign-in page). It shows a countdown and Follow on Spotify until release day, the Meta pixel and HQ's Pages count it by themselves. kind track = release day: the song's Spotify link (https://open.spotify.com/track/<id>, nothing after the id) so the button says Listen on Spotify. kind card = put a song that has its page on the home card (badscandal.com): the rule is in song_pages (a song out in the last 7 days, the newest; else the next one coming). NOTHING happens yet: Luke is asked \"is this correct?\" with Yes, correct / No. On his yes GitHub builds the page, runs every check and puts it live in about 2 minutes; if a check fails nothing goes live. You get a message on the desk either way; then open the page to make sure, and mark your release step done with its link.",
     inputSchema: obj({ bot: BOT,
-      kind: str("new | track", { enum: ["new", "track"] }),
+      kind: str("new | track | card", { enum: ["new", "track", "card"] }),
       slug: str("The address after badscandal.com/, lowercase letters and digits (for example loveyou)."),
       title: str("kind new: the song's title exactly as in the stores."),
       date: str("kind new: the release day, YYYY-MM-DD."),
       cover: str("kind new: an https link to the cover picture (square JPG or PNG, 1000 pixels or more)."),
       track: str("kind track: https://open.spotify.com/track/<id>, nothing after the id."),
       why: str("Optional: where this comes from, in one line.") }, ["bot", "kind", "slug"]) },
+  /* 16 Nov 2026 (Luke: "let's do webmasters 3 fixes") */
+  { name: "song_pages", title: "What happened to each song-page request, and the home card", readOnly: true,
+    description: "WEBMASTER (read only). Every song_page request of the last two months, newest first, and where it is: waiting on Luke, Luke said no, not sent (and why), sent to GitHub (not live yet), or live. Plus the home card: what it shows now, and which song the rule says it should show today (a song out in the last 7 days, the newest; else the next song coming out). Call it before asking again, so nothing is asked twice; when should_show differs from now, ask with song_page kind card.",
+    inputSchema: obj({ bot: BOT }, ["bot"]) },
+  { name: "upload_cover", title: "Put a cover on the desk and get its public link", idempotent: false,
+    description: "WEBMASTER (Nova may for him). For song_page's cover when the picture is not on a public link (a Google Drive file answers with a sign-in page). Send the picture itself as image_base64 (a JPG, PNG or WebP, at least 1000 x 1000, 4 MB at most; 3000 x 3000 JPG is best), or url = a link the site can open without signing in. The answer is a public https://badscandal.com/... link: use it as cover in song_page. Nothing else changes, and Luke still confirms the page.",
+    inputSchema: obj({ bot: BOT, song: str("Which song the cover is for (its title)."),
+      image_base64: str("The picture file itself, base64 (a data: prefix is fine). Or leave it empty and give url."),
+      url: str("Instead of image_base64: an https link to the picture that opens without signing in.") }, ["bot", "song"]) },
   { name: "store_status", title: "Where a song is at the distributor",
     description: "DROP (Nova may do it for him): say where ONE release is at the distributor, each time it changes: not uploaded, uploaded, in moderation, rejected, resubmitted, approved, delivered, live (RouteNote's \"Pending Moderation\" or \"In review\" = in moderation, \"Action needed\" = rejected). To fill in history, give each change with on = the day it happened, in any order: the history is kept in day order and the newest day is the status now. Every change is kept as its history (the moderation log Luke sees). With rejected, put what RouteNote said, in its words, in reason. When a rejected song is fixed and ready to go again, call it with status rejected and ready_to_resubmit true (and what changed in note): Luke is asked Yes, resubmit / Not yet, and his answer comes back to you in my_day. Do not resubmit before he says yes.",
     inputSchema: obj({ bot: BOT, song: str("The song's title or its id."),
@@ -254,7 +265,7 @@ export const TOOL_USERS = {
   submit_income: INCOME_TEAM, fix_payment: INCOME_TEAM, income_source: INCOME_TEAM, income_check: INCOME_TEAM, sort_payment: INCOME_TEAM,
   income_status: [...INCOME_TEAM, "Alfred"],
   record_spend: ["Forge"], log_growth: ["Steve", "Atlas", "Kevin", "Laura"],
-  store_status: ["Drop"], spotify_upcoming: ["Atlas"], song_page: ["Webmaster"],
+  store_status: ["Drop"], spotify_upcoming: ["Atlas"], song_page: ["Webmaster"], song_pages: ["Webmaster"], upload_cover: ["Webmaster"],
 };
 const onTeam = (bot, roster) => { const k = String(bot || "").trim().toLowerCase(); return k ? (roster.find((b) => b.name.toLowerCase() === k) || {}).name || "" : ""; };
 export function toolsFor(bot, roster) {
@@ -519,6 +530,16 @@ export async function callTool(tool, args, ctx) {
       return { saved: true, song: r.release.title, status: r.store.status, ...(r.store.reason ? { reason: r.store.reason } : {}), history: r.store.history.length,
         ...(r.asked ? { asked_luke: r.asked, note: r.already ? "Luke was already asked and hasn't answered yet: his answer comes back to you in my_day." : "Luke is asked: Yes, resubmit / Not yet. His answer comes back to you in my_day. Do not resubmit before he says yes." } : {}),
         shown_on: "badscandal.com/hq, Upcoming" };
+    }
+    case "song_pages": {
+      const list = await S.songPages(store, now);
+      const card = S.homeCardNow(), rule = homeCardSong(SONGS, S.spDay(now));
+      return { requests: list, home_card: { now: card.title ? `${card.title} (${card.mode})` : "nothing", should_show: rule ? rule.title : "nothing", why: rule ? rule.why : "no song pages yet",
+        ...(rule && rule.slug !== card.slug ? { to_do: `Ask Luke with song_page kind card, slug ${rule.slug}` } : { to_do: "nothing: the card shows the right song" }) } };
+    }
+    case "upload_cover": {
+      const r = await S.uploadCover(store, now, roster, { by: me, song: args.song, image_base64: args.image_base64, url: args.url });
+      return { saved: true, link: r.link, width: r.width, height: r.height, note: "Use this link as cover in song_page. It is public: it goes on the song page anyway." };
     }
     case "song_page": {
       const r = await S.proposeSongPage(store, now, roster, { by: me, kind: args.kind, slug: args.slug, title: args.title, date: args.date, cover: args.cover, track: args.track, why: args.why });
