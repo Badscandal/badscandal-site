@@ -616,6 +616,73 @@ export function sixWeekLines(weeks) {
     : `${dayWords(x.date)} · ${x.owner} · ${x.label} · ${x.title}${x.late ? " · LATE" : ""}`) : ["nothing due"] }));
 }
 
+/* ---------- pre-flight checks (A6, 17 Nov 2026, Forge, Drop, Verse: "artist names vs the store spelling
+   ("Basdcandal"), ad links = badscandal.com/<song>, cover size on upload, WAV/artwork specs") ----------
+   Facts the team checks before anything reaches the stores or the ads. Nothing is refused here: they show on the
+   release (releaseView().preflight, the card, releases / release_pack) and on demand (the preflight tool). */
+export const ARTIST = "badscandal";
+function editDistance(a, b) {
+  const d = Array.from({ length: a.length + 1 }, (_, i) => [i, ...Array(b.length).fill(0)]);
+  for (let j = 1; j <= b.length; j++) d[0][j] = j;
+  for (let i = 1; i <= a.length; i++) for (let j = 1; j <= b.length; j++) {
+    d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+    if (i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1]) d[i][j] = Math.min(d[i][j], d[i - 2][j - 2] + 1); /* swapped letters */
+  }
+  return d[a.length][b.length];
+}
+/* the artist's name as the stores need it: exactly "badscandal", one word, all lowercase (Luke's rule) */
+export function artistProblems(text) {
+  const s = String(text == null ? "" : text), out = [];
+  const words = [...s.matchAll(/[A-Za-zÀ-ÿ]+/g)].map((m) => ({ w: m[0], i: m.index }));
+  for (let k = 0; k < words.length; k++) {
+    const one = words[k], two = words[k + 1];
+    if (two && /^[\s\-_.]+$/.test(s.slice(one.i + one.w.length, two.i)) && (one.w + two.w).toLowerCase() === ARTIST) {
+      out.push(`“${s.slice(one.i, two.i + two.w.length)}”: the stores need “badscandal”, one word, all lowercase.`); k++; continue;
+    }
+    const lw = one.w.toLowerCase();
+    if (lw === ARTIST) { if (one.w !== ARTIST) out.push(`“${one.w}”: write it “badscandal”, all lowercase.`); continue; }
+    if (lw.length >= 8 && lw.length <= 12 && editDistance(lw, ARTIST) <= 2) out.push(`“${one.w}” looks like a misspelling: the stores need “badscandal”.`);
+  }
+  return out;
+}
+/* an ad (or song page) link: https://badscandal.com/<the song>, where the Meta pixel and HQ's Pages count it */
+export function adLinkProblem(link, slug = "", own = "") {
+  const raw = String(link == null ? "" : link).trim();
+  let u;
+  try { u = new URL(raw); } catch { return "That is not a link: use https://badscandal.com/<song>."; }
+  if (u.protocol !== "https:") return "Use the https link: https://badscandal.com/<song>.";
+  const host = u.hostname.toLowerCase().replace(/^www\./, "");
+  if (/(^|\.)(ffm\.to|feature\.fm)$/.test(host) || host === "music.badscandal.com") return "Feature.fm is cancelled: ads and links go to https://badscandal.com/<song>.";
+  if (host !== "badscandal.com") return `Ads should send people to badscandal.com/<song> (the Meta pixel and HQ's Pages count them there), not ${host}.`;
+  const p = u.pathname.replace(/^\/+|\/+$/g, "").replace(/\.html$/, "").toLowerCase();
+  if (!p) return "That is the home page: ads go to the song's own page, badscandal.com/<song>.";
+  if (!SONGS.some((x) => x.slug === p) && p !== own) return `There is no song page at badscandal.com/${p} (yet): check the address, or ask Webmaster for the page first.`;
+  if (slug && p !== slug) return `This link goes to /${p}, not this song's page /${slug}.`;
+  return "";
+}
+const ARTIST_FIELDS = ["primary", "featuring", "producers", "split", "copyright"];
+const extOf = (link) => { try { return ((/\.([a-z0-9]{2,5})$/i.exec(new URL(String(link)).pathname) || [])[1] || "").toLowerCase(); } catch { return ""; } };
+export function preflightOf(r) {
+  const pack = (r && r.pack) || {}, out = [];
+  const short = (k) => (FIELD[k] ? FIELD[k].short : k);
+  for (const k of ARTIST_FIELDS) for (const t of artistProblems(pack[k])) out.push({ field: k, text: `${short(k)}: ${t}` });
+  const wext = filled(pack.wav) ? extOf(pack.wav) : "";
+  if (["mp3", "m4a", "aac", "ogg", "opus"].includes(wext)) out.push({ field: "wav", text: `${short("wav")}: the master must be a WAV (the stores' quality), not an .${wext}.` });
+  const aext = filled(pack.artwork) ? extOf(pack.artwork) : "";
+  if (["webp", "gif", "heic", "bmp", "tif", "tiff", "svg"].includes(aext)) out.push({ field: "artwork", text: `${short("artwork")}: must be a JPG or PNG, 3000 x 3000, not a .${aext}.` });
+  const own = r && r.id ? r.id : "";
+  if (filled(pack.page)) { const pr = adLinkProblem(pack.page, "", own); if (pr) out.push({ field: "page", text: `${short("page")}: ${pr}` }); }
+  for (const l of String(pack.adplan || "").match(/https?:\/\/[^\s"'<>)]+/g) || []) { const pr = adLinkProblem(l.replace(/[.,;]+$/, ""), "", own); if (pr) out.push({ field: "adplan", text: `${short("adplan")}: ${pr}` }); }
+  return out;
+}
+/* a cover upload (the song page crops any picture to a square; the stores need a square 3000 x 3000) */
+export function coverWarnings(w, h) {
+  if (w == null || h == null) return [];
+  if (w !== h) return [`The picture is ${w} x ${h}: not square. The song page crops it to a square; the stores need a square 3000 x 3000.`];
+  if (w < 3000) return [`${w} x ${h}: fine for the song page; RouteNote needs 3000 x 3000 for the stores.`];
+  return [];
+}
+
 /* ---------- recommendations (A3, 17 Nov 2026, Nova: "Luke's decisions inbox with my recommendation on each card") ----------
    { by, option, why, at } on a message waiting on Luke. option = one of the message's options, exactly as listed
    ("" when it has none, or none is picked); why = one or two sentences. The asker gives its own through
@@ -2053,6 +2120,7 @@ export function releaseView(r, today, o = {}) {
     approvals: approvalsOf(r),
     log: (r.log || []).slice().reverse() };
   v.warnings = releaseWarnings(v, o.sightings || null, today);
+  v.preflight = r.status === "cancelled" ? [] : preflightOf(r); /* A6, 17 Nov 2026 */
   v.where = whereWords(v, today);
   return v;
 }
@@ -2463,7 +2531,7 @@ export async function uploadCover(store, now, roster, a, fetchImpl = fetch) {
     return { value: old };
   });
   for (const x of gone || []) { try { await store.delete(`covers/${x.id}.json`); } catch {} }
-  return { id, link: `https://badscandal.com/api/staff/cover/${id}.${pic.ext}`, width: pic.w, height: pic.h, bytes: buf.length };
+  return { id, link: `https://badscandal.com/api/staff/cover/${id}.${pic.ext}`, width: pic.w, height: pic.h, bytes: buf.length, warnings: coverWarnings(pic.w, pic.h) };
 }
 /* GET /api/staff/cover/<id>.<ext>: public, the picture only, never anything else on the desk */
 export async function coverResponse(store, name) {

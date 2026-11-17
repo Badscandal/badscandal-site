@@ -891,6 +891,7 @@
       /* the overhaul: one line for the files (what is still missing, by name), the day's problems in red with
          better days one tap away; everything filled in is under "See the files and details" */
       '<p class="rstat' + (pk.attn ? " bad" : "") + '">' + esc(pk.filled + (miss ? " · still missing: " + pk.items.map(function (x) { return x.text; }).join(", ") + (pk.more ? " +" + pk.more + " more" : "") : " · ready to send")) + "</p>" +
+      preflightHtml(v) +
       advice.map(function (a) { return '<p class="dnote' + (a.bad ? " bad" : " q") + '">' + esc(a.text) + "</p>"; }).join("") +
       (better.length ? '<div class="pchips"><span class="pchips-l">' + (v.date ? "Better days:" : "Suggested days:") + "</span>" + better.map(function (x) {
         return '<button class="pchip' + (x.best ? " best" : "") + '" type="button" data-plan="use" data-id="' + esc(v.id) + '" data-date="' + esc(x.date) + '">' + esc(x.words) + "<small>" + esc(x.weeks + " weeks" + (x.note ? " · holidays" : "")) + "</small></button>";
@@ -962,7 +963,7 @@
       (ui.rel.note[v.id] ? '<p class="rdone" role="status">' + esc(ui.rel.note[v.id]) + "</p>" : "") +
       (pr.total ? '<div class="rprog"><div class="rbar" role="progressbar" aria-valuemin="0" aria-valuemax="' + pr.total + '" aria-valuenow="' + pr.done + '" aria-label="' + esc(pr.text) + '"><i style="width:' + pr.pct + '%"></i></div><span>' + esc(pr.text) + "</span></div>" : "") +
       '<p class="rstat' + (st.bad ? " bad" : "") + '">' + esc(st.text) + (st.more ? ' <span class="rmore">+' + st.more + " more</span>" : "") + "</p>" +
-      resubmitHtml(v) +
+      resubmitHtml(v) + preflightHtml(v) +
       '<details class="rfold" data-fold="card:' + esc(v.id) + '"' + (ui.rel.fold["card:" + v.id] ? " open" : "") + "><summary>Steps and details</summary>" +
       (warn.length > 1 ? '<ul class="rwarn" aria-label="Warnings">' + warn.map(function (w) { return "<li>" + esc(w) + "</li>"; }).join("") + "</ul>" : "") +
       storeHtml(v) + steps + approvalsHtml(v) + packHtml(v) + relPack(v) + "</details>" +
@@ -984,6 +985,12 @@
      At the top of Upcoming: the next good release days (HQLib.suggestDates; a draft with no day yet, like
      Survivors, gets "Use Fri 18 Dec for Survivors"), the calendar (HQLib.calendarMonth: release days and
      every open step on its day; tap a day for its list), and how long things take (HQLib.PLAN_TIMELINE). */
+  /* A6 (17 Nov 2026): the pre-flight list (artist spelling, links, file types), folded under one amber line */
+  function preflightHtml(v) {
+    var line = L.preflightLine(v);
+    return line ? '<details class="rpre" data-fold="pre:' + esc(v.id) + '"' + (ui.rel.fold["pre:" + v.id] ? " open" : "") + "><summary>" + esc(line) + '</summary><ul class="rwarn">' +
+      v.preflight.map(function (x) { return "<li>" + esc(x.text) + "</li>"; }).join("") + "</ul></details>" : "";
+  }
   function drawPlan() {
     var el = $("relPlan");
     if (!el || !board || !Array.isArray(board.releases)) return;
