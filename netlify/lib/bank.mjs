@@ -208,7 +208,13 @@ export function accountInfo(uid, details, fromSession) {
   const cur = first(d.currency, f.currency).toUpperCase();
   const currency = /^[A-Z]{3}$/.test(cur) ? cur : null;
   const label = noNumbers(first(d.details, d.product, f.details, f.product), 60) || (currency ? `${currency} account` : "Account");
-  return { uid: String(uid), name: label, currency, idHash: sha("eb|" + first(d.identification_hash, f.identification_hash, String(uid))).slice(0, 16), holder: noNumbers(first(d.name, f.name), 80) };
+  /* which account, by its last 4 characters ONLY (16 Nov 2026, Luke: "which account (last 4 digits only)");
+     the whole number is read here and never kept */
+  const ids = [d.account_id, f.account_id].filter((x) => x && typeof x === "object").flatMap((x) => [x.iban, x.other && x.other.identification])
+    .concat([d.all_account_ids, f.all_account_ids].flatMap((x) => (Array.isArray(x) ? x.map((y) => y && y.identification) : [])));
+  const num = ids.map((x) => String(x || "").replace(/[^A-Za-z0-9]/g, "")).find((x) => x.length >= 6);
+  return { uid: String(uid), name: label, currency, idHash: sha("eb|" + first(d.identification_hash, f.identification_hash, String(uid))).slice(0, 16), holder: noNumbers(first(d.name, f.name), 80),
+    ...(num ? { last4: num.slice(-4) } : {}) };
 }
 
 /* ---------- the callback: the bank sends Luke's browser back here ---------- */
@@ -295,7 +301,7 @@ export async function bankStatus({ bank, env, now, canConnectHere }) {
     configured: cfg.configured, connected, needsApproval,
     aspsp: conn && conn.aspsp ? conn.aspsp.name || null : null,
     validUntil: conn ? conn.validUntil || null : null, daysLeft, expiring: connected && daysLeft <= LIMITS.expiringDays,
-    accounts: conn ? (conn.accounts || []).map((a) => ({ name: a.name, currency: a.currency })) : [],
+    accounts: conn ? (conn.accounts || []).map((a) => ({ name: a.name, currency: a.currency, ...(a.last4 ? { last4: a.last4 } : {}) })) : [],
     lastRunAt: sync.lastRunAt || null, lastOkAt: sync.lastOkAt || null,
     lastError: needsApproval ? SAY.again : sync.lastError || null, errorKind: needsApproval ? "" : errorKind(sync.lastError),
     connectedAt: conn ? conn.connectedAt || null : null, /* the page reads at once after Connect only while this is fresh */
@@ -553,6 +559,7 @@ export async function syncBank({ bank, desk, env, now, fetchImpl, clock = Date.n
       const holders = (conn.accounts || []).map((a) => a.holder).filter(Boolean).concat(cfg.ownNames);
       const labels = (conn.accounts || []).map((a) => a.name).filter(Boolean);
       const hashOf = Object.fromEntries((conn.accounts || []).map((a) => [a.uid, slot(a)]));
+      const last4Of = Object.fromEntries((conn.accounts || []).filter((a) => a.last4).map((a) => [a.uid, a.last4]));
       const index = await deskEntries(desk, credits[0].date, now);
       const alike = new Map();
       for (const tx of credits) {
@@ -574,7 +581,7 @@ export async function syncBank({ bank, desk, env, now, fetchImpl, clock = Date.n
         const pend = c.kind === "income" && !known ? pendingFor(entries, tx, c.source) : null;
         try {
           const r = await S.submitIncome(desk, now, roster, { bot: "HQ", date: tx.date, payer: pend ? pend.payer : payer, amount: tx.amount, currency: tx.currency, account: ACCOUNT, status,
-            category: c.source ? c.source.category : undefined, source: c.source ? c.source.id : undefined, reference: ref, note: "Read from Revolut", ...(pend ? { pending_id: pend.id } : {}) });
+            category: c.source ? c.source.category : undefined, source: c.source ? c.source.id : undefined, reference: ref, note: "Read from Revolut" + (last4Of[tx.uid] ? ` ••${last4Of[tx.uid]}` : ""), ...(pend ? { pending_id: pend.id } : {}) });
           index.set(r.entry.id, r.entry);
           if (r.added) { sum.added++; if (status !== "transfer") sum.newPayments++; }
           else if (r.updated) { sum.updated++; const h = (r.entry.history || []).at(-1); if (pend && h && h.from === "pending") sum.upgraded++; }
