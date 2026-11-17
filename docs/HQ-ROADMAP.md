@@ -1,0 +1,74 @@
+# HQ roadmap: the bots' ideas, ranked (17 Nov 2026)
+
+The goal (Nova, for Luke): **build towards the bots running everything, with Luke approving.**
+This file is the plan. Update an item's **Status** whenever it changes (in the same PR as the work).
+Status words: `todo` · `building (PR #n)` · `live (PR #n)` · `needs Luke` · `on hold` · `not possible`.
+
+Sources: Nova's ranked list (05:05 SP) and her add-on from Webmaster, Steve and Atlas (05:10 SP), 17 Nov 2026,
+and Claude's assessment the same morning. Luke said "perfect" to the order below.
+
+---
+
+## Batch A: do first (cheap, no new accounts) — Luke agreed
+
+| # | What | Asked by | Status | Notes |
+|---|------|----------|--------|-------|
+| A1 | **UI bugs**: "Invalid Date" on task deadlines; the phone's bottom bar covers content; signed out after ~3 minutes; "everything on time" next to a red warning; Growth cards "– in 7 days" | Verse, all bots (round 2) | todo | Open since round 2 (15 Nov). `js/hq.js` `day()` on Sheet deadlines that aren't YYYY-MM-DD (lines ~377, ~650): show the raw text. Growth week: fall back to the oldest reading. Sign-out: investigate the session cookie / refresh first. |
+| A2 | **Build failures to the desk** (#14): a failed song_page build says "Not done: why" to Webmaster, not only a GitHub email | Webmaster | todo | Keep running EVERY test before a page goes live (tonight's failure was a real bug). Needs the workflow to report back (a GitHub secret with a desk key, or the site checking the run). |
+| A3 | **Luke's decisions inbox** with Nova's recommendation on each card | Nova | todo | Messages "Waiting on you" exists; add a `recommendation` to decision messages and show it. |
+| A4 | **Automatic chasing**: HQ nudges a bot when its duty is late, so Nova only escalates | Nova | todo | |
+| A5 | **6-week release calendar** with every song's steps | Nova | todo | Upcoming → Planning already has a calendar; extend it. |
+| A6 | **Pre-flight checks** (#6): artist names vs the store spelling ("Basdcandal"), ad links = badscandal.com/<song>, cover size on upload, WAV/artwork specs, Musixmatch format | Forge, Drop, Verse | todo | Start with names, links and cover size. |
+| A7 | **Locked month close** (#9): when month_check is ready, freeze the month, snapshot, CSV + evidence links; later edits logged old → new | Ledger, Sheet | todo | Builds on `month_check` (live). |
+| A8 | **log_growth**: `monthly_listeners`, `brazil_listeners`; a Growth chart on Songs | Atlas | todo | channel_views and shorts_views are live (PR #44). |
+
+## Batch B: worth it, each needs a free key or app from Luke (~10 min each, once)
+
+| # | What | Asked by | Status | Needs from Luke |
+|---|------|----------|--------|-----------------|
+| B1 | **Release-day automation** (#13): watch the artist page (Spotify Web API, public), match the new track by ISRC, propose song_page kind track + the home-card switch for one "Yes, correct" | Webmaster, Atlas | needs Luke | A free Spotify developer app (client id + secret, put on Netlify by a helper; never in the repo). Best value on the list. |
+| B2 | **YouTube Analytics API**: subscribers, channel + Shorts views, top videos, Brazil vs Ireland | Laura | needs Luke | One Google sign-in (OAuth) for the channel. |
+| B3 | **Meta spend straight to record_spend** | Forge | todo | The read-only Meta key already exists (`META_ADS_TOKEN`). |
+| B4 | **Instagram Graph API**: followers, Reel insights, comments (browser reads locked the account in Oct) | Steve | needs Luke | Instagram Business/Creator account linked to a Facebook page; permissions on the Meta app. |
+| B5 | **Google Ads API, TikTok Business / creator APIs** | Forge, Kevin | needs Luke | Developer approval, can take weeks. Apply early. |
+
+## Not possible
+
+| What | Why |
+|------|-----|
+| Spotify for Artists stats (streams, saves, adds, monthly listeners, top countries) by API | Spotify has no public API for them. A bot keeps reading the dashboard. The public Web API gives followers and popularity only. |
+
+## On hold: each changes a rule Luke set (his decision first)
+
+| # | What | Asked by | Why on hold |
+|---|------|----------|-------------|
+| H1 | **Live ads panel + kill switch** (#2), cap rule firing automatically | Forge | HQ only READS ads, on purpose. A Luke-only "pause all" is reasonable; ads pausing themselves at USD 900 is a bigger step. |
+| H2 | **Ad templates + creative test board** (#7) | Forge | Needs write access to ads (as H1). |
+| H3 | **Upload once, post everywhere** (#5) | Kevin, Laura | Posting APIs need each platform's approval and it puts content in public. After the number feeds work. |
+| H4 | **Fan capture** (#18): "tell me when it's out" box on song pages | Webmaster | Collecting emails/phone numbers = privacy-law duties (EU, Brazil) and a privacy policy update. Plan it properly. Needs Luke's yes (contacts fans). |
+
+## Later (good; easier once the API feeds exist)
+
+| # | What | Asked by | Status |
+|---|------|----------|--------|
+| L1 | **Expected money** (#3): every statement → an expected row with due date; learn pay days; flag short/late/missing; statement → payable → paid → landed, days per step | Ledger, Sheet | todo (partly there: pending/payable, paid_by, main sources' due days) |
+| L2 | **Post log + hook tracker** (#4): every post with its hook, numbers at +6h/+24h/+7d, a "boosted" flag; weekly top 3 / bottom 3 hooks; a Brazil hook tester | Kevin, Steve | todo |
+| L3 | **Fan inbox** (#8): song-name questions and repeat fans, with country and a ready reply Luke approves | Kevin, Laura | todo |
+| L4 | **Per-song P&L** (#10): royalties per song/store next to its ad spend and release date | Ledger | todo |
+| L5 | **Watchers** (#11): RouteNote status and moderation emails → store_status + a drafted fix; release-day trigger for Verse; Content ID claims panel | Drop, Verse, Laura | todo |
+| L6 | **Song page tile** (#15): live status, button state, visits, Spotify clicks, Pixel/CAPI health | Webmaster | todo |
+| L7 | **Pitch tracker** (#16): each song's pitch status, editorial adds, the two-week pitch slot calendar | Atlas | todo (the one-pitch rule is live) |
+| L8 | **Asset checker** (#17): cover, Canvas and banner vs each platform's rules | Atlas | todo |
+| L9 | Exchange-rate cost per payout route | Ledger | todo |
+| L10 | Auto end screens and pinned comments linking badscandal.com/<song> | Laura | todo (needs YouTube write access) |
+| L11 | A split ledger for Luke's and "Luka's" shares | Ledger | needs Luke (who is "Luka"? Lilian's 50%?) |
+
+## Not HQ's
+
+| What | Whose |
+|------|-------|
+| Emulator health check (#19) | The bots' own machine: Nova. |
+
+## Already done (for the record)
+
+- Musixmatch status field (PR #34) · lyrics approval tied to the exact text (approvals keep the text; a change shows "changed since") · log_growth channel_views / shorts_views (PR #44) · release page (PR #44) · one entry per payment at Revolut, link_transfer, month_check (PR #43).
