@@ -511,12 +511,26 @@ function mergeDeskGrowth(t, rows) {
   for (const x of rows) {
     if (!x || !DAY.test(x.date || "")) continue;
     const song = x.kind === "song", tab = song ? t.Songs : t.Growth, cols = song ? SONG_COLS : GROWTH_COLS;
+    if (!Object.keys(cols).some((k) => x[k] != null && x[k] !== "")) continue; /* only artist numbers (A8): they go to artistReport */
     const same = tab.find((r) => r.date === x.date && (song ? sameSong(r.song, x.song) : key(r.platform) === key(x.platform)));
     const row = same || (song ? { date: x.date, song: x.song } : { date: x.date, platform: x.platform, account: x.account || "" });
     for (const [k, col] of Object.entries(cols)) if (x[k] != null && x[k] !== "" && !norm(row[col])) row[col] = String(x[k]);
     row.logged_by = row.logged_by || x.by || "";
     if (!same) tab.push(row);
   }
+}
+/* A8 (17 Nov 2026, Atlas): the artist's Spotify monthly listeners and Brazil listeners, from log_growth (platform
+   Spotify). The change is over 7 days, or since the oldest reading when there are fewer (changeDays says which). */
+export function artistReport(rows) {
+  const read = (rows || []).filter((x) => x && x.kind !== "song" && key(x.platform) === "spotify" && DAY.test(x.date || "") && num(x.monthly_listeners) != null)
+    .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+  if (!read.length) return null;
+  const last = read[read.length - 1], lim = addDays(last.date, -7);
+  const older = read.filter((x) => x.date <= lim), base = older.length ? older[older.length - 1] : read.length > 1 ? read[0] : null;
+  const monthly = num(last.monthly_listeners), brazil = num(last.brazil_listeners);
+  return { monthly, lastDay: last.date, change: base ? monthly - num(base.monthly_listeners) : null, changeDays: base ? Math.min(7, daysBetween(base.date, last.date)) : null,
+    brazil, brazilShare: brazil != null && monthly ? Math.round((brazil / monthly) * 100) : null,
+    series: read.slice(-60).map((x) => ({ d: x.date, v: num(x.monthly_listeners) })), brazilSeries: read.filter((x) => num(x.brazil_listeners) != null).slice(-60).map((x) => ({ d: x.date, v: num(x.brazil_listeners) })) };
 }
 export function hqModel(sheets, today, fx = {}, meta, nowHM = "", staff = null) {
   const t = Object.fromEntries(HQ_TABS.map((n) => [n, rowsToObjects(sheets[n])]));
@@ -550,6 +564,6 @@ export function hqModel(sheets, today, fx = {}, meta, nowHM = "", staff = null) 
   team.duties = dutiesReport(t.Tasks, today, nowHM, staff ? staff.overlay : null);
   const sheetUpdates = sheets.Updates == null ? null : rowsToObjects(sheets.Updates);
   team.live = liveReport(sheetUpdates == null && !staff ? null : mergeUpdates(sheetUpdates, staff ? staff.updates : []));
-  return { today, songs, growth, fans, releases, team, money, empty, sheetErrors: sheetErrors(sheets),
+  return { today, songs, growth, fans, releases, team, money, empty, sheetErrors: sheetErrors(sheets), artist: artistReport(staff && staff.growth),
     next: releases.find((r) => r.date && r.date >= today) || null };
 }

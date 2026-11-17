@@ -20,7 +20,7 @@ and Claude's assessment the same morning. Luke said "perfect" to the order below
 | A5 | **6-week release calendar** with every song's steps | Nova | live (PR #51) | Upcoming › Planning › "The next 6 weeks" (week by week, late steps in this week); the `releases` tool gives Nova and Claude `six_weeks`. `S.sixWeeks` = `HQLib.sixWeeks`. |
 | A6 | **Pre-flight checks** (#6): artist names vs the store spelling ("Basdcandal"), ad links = badscandal.com/<song>, cover size on upload, WAV/artwork specs, Musixmatch format | Forge, Drop, Verse | live (PR #52) | Artist name exactly "badscandal" (misspellings, "Bad Scandal", capitals), song-page and ad links = https://badscandal.com/<song> (never Feature.fm or a store), master WAV, artwork JPG/PNG; on each release card (amber), in releases / release_pack, and the `preflight` tool; upload_cover warns when not square or under 3000 px. Musixmatch format: not done (no rule to check against yet). |
 | A7 | **Locked month close** (#9): when month_check is ready, freeze the month, snapshot, CSV + evidence links; later edits logged old → new | Ledger, Sheet | live (PR #53) | `close_month` (Ledger, Sheet; Nova) once `month_check` is ready: snapshot + received + evidence links; later changes listed old → new in `month_check` and the CSV (Money › Received in <Month> › "CSV with every change since"). |
-| A8 | **log_growth**: `monthly_listeners`, `brazil_listeners`; a Growth chart on Songs | Atlas | todo | channel_views and shorts_views are live (PR #44). |
+| A8 | **log_growth**: `monthly_listeners`, `brazil_listeners`; a Growth chart on Songs | Atlas | live (PR #54) | Platform Spotify (artist numbers). Songs opens with "Spotify monthly listeners": the number, the change over 7 days (or fewer, said), Brazil and its share, the trend line (`artistReport`, `HQLib.artistLines`). |
 
 ## Batch B: worth it, each needs a free key or app from Luke (~10 min each, once)
 
@@ -28,7 +28,7 @@ and Claude's assessment the same morning. Luke said "perfect" to the order below
 |---|------|----------|--------|-----------------|
 | B1 | **Release-day automation** (#13): watch the artist page (Spotify Web API, public), match the new track by ISRC, propose song_page kind track + the home-card switch for one "Yes, correct" | Webmaster, Atlas | needs Luke | A free Spotify developer app (client id + secret, put on Netlify by a helper; never in the repo). Best value on the list. |
 | B2 | **YouTube Analytics API**: subscribers, channel + Shorts views, top videos, Brazil vs Ireland | Laura | needs Luke | One Google sign-in (OAuth) for the channel. |
-| B3 | **Meta spend straight to record_spend** | Forge | todo | The read-only Meta key already exists (`META_ADS_TOKEN`). |
+| B3 | **Meta spend straight to record_spend** | Forge | live (PR #54) | The hourly job (from 07:00) reads the last 7 finished days from Meta (read-only, cached) and writes one Meta row a day as HQ (`S.recordMetaSpend`); a day with Forge's one Meta row updates it, a day with two is left alone. Forge records Google and TikTok. |
 | B4 | **Instagram Graph API**: followers, Reel insights, comments (browser reads locked the account in Oct) | Steve | needs Luke | Instagram Business/Creator account linked to a Facebook page; permissions on the Meta app. |
 | B5 | **Google Ads API, TikTok Business / creator APIs** | Forge, Kevin | needs Luke | Developer approval, can take weeks. Apply early. |
 

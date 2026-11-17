@@ -7,12 +7,16 @@
       the bot that asked "Not done: <why>" (netlify/lib/staff.mjs checkSongBuilds).
    4. automatic chasing (A4, 17 Nov 2026): a late duty or release step gets ONE reminder to its bot; still
       late 2 hours later, Nova gets ONE message to chase or escalate (07:00-22:00 São Paulo; S.chaseLate).
+   5. Meta's own spend (B3, 17 Nov 2026): the last 7 finished days, account level, read-only (cached an hour),
+      one Meta row a day on the desk by HQ (S.recordMetaSpend), from 07:00 São Paulo; no key: nothing.
    Logic: netlify/lib/push.mjs. No key or no device: it does nothing. */
 import { getStore } from "@netlify/blobs";
 import { morning, sweep } from "../lib/push.mjs";
 import * as S from "../lib/staff.mjs";
 import { readSongReport } from "../lib/github.mjs";
 import { loadHq } from "../lib/hq-load.mjs";
+import { readMeta } from "../lib/metaread.mjs";
+import { DEFAULT_ACCOUNT } from "../lib/metaspend.mjs";
 
 export default async () => {
   const now = Date.now();
@@ -41,6 +45,19 @@ export default async () => {
     if (c.nudged.length || c.escalated.length) console.log(`chasing: ${c.nudged.length} reminded, ${c.escalated.length} to Nova`);
   } catch (e) {
     console.error("chasing failed", e?.name || "Error");
+  }
+  try {
+    const token = env("META_ADS_TOKEN");
+    if (token && S.spHM(now) >= "07:00") {
+      const account = (env("META_AD_ACCOUNT_ID") || DEFAULT_ACCOUNT).replace(/\D/g, "");
+      const today = S.spDay(now), day = (n) => new Date(Date.parse(today + "T12:00:00Z") - n * 86400000).toISOString().slice(0, 10);
+      const since = day(7), until = day(1);
+      const r = await readMeta({ cache: getStore("meta-cache"), token, account, since, until, level: "account", key: `rec/${account}/${since}_${until}.json` });
+      if (r.error) console.error("meta spend record: " + r.error);
+      else { const w = await S.recordMetaSpend(store, now, (await desk()).roster || S.DEFAULT_ROSTER, r.rows, { since, until }); if (w.added || w.updated) console.log(`meta spend record: ${w.added} added, ${w.updated} updated`); }
+    }
+  } catch (e) {
+    console.error("meta spend record failed", e?.name || "Error");
   }
   try {
     S.useSongReports((id) => readSongReport(id));

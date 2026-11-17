@@ -1315,6 +1315,9 @@ a.t-card:hover,button.t-card:hover,#shell a.tile:hover{border-color:var(--accent
 /* A7 (17 Nov 2026): a closed month under "Received in" */
 .t-closed{margin:8px 0 0;font-size:14px;color:var(--spot,#1ED760)}
 .t-closed a{color:var(--accent)}
+/* A8 (17 Nov 2026): Spotify monthly listeners on Songs */
+#artistCard .tile{margin-bottom:16px}
+#artistCard .spark{max-width:520px}
 </style>
 </head>
 <body>
@@ -1405,6 +1408,7 @@ a.t-card:hover,button.t-card:hover,#shell a.tile:hover{border-color:var(--accent
   <section class="card view" id="songs">
     <div class="row"><div><h2>Songs</h2><p class="sub">Everything we know per song: Spotify (from the sheet; about two days late), our page, Meta ads and royalties.</p></div></div>
     <div class="sheeterr" id="errSongs" hidden></div>
+    <div id="artistCard"></div>
     <div class="grid g3" id="songList"><div class="ph big"></div><div class="ph"></div><div class="ph"></div></div>
   </section>
 
