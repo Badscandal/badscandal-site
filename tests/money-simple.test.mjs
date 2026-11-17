@@ -96,8 +96,8 @@ test("sort_payment: a Revolut row can be tied to its source (the wage Luke moves
 
 test("Ledger's rules: Revolut is the main bank; Wise and PayPal money arriving there is confirmed, never counted twice", () => {
   const t = instructionsFor("Ledger", R);
-  assert.match(t, /Revolut is Luke's main bank/);
-  assert.match(t, /Wise or PayPal.*same money.*transfer/);
+  assert.match(t, /Revolut \(Luke's main bank/);
+  assert.match(t, /counted once, when it lands in Revolut.*Wise or PayPal is only for confirming.*link_transfer/, "17 Nov 2026: one entry per payment");
   assert.match(t, /wage .* from another bank .* received.* Salary.* source/);
   assert.match(t, /main true and due_day/);
 });

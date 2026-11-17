@@ -870,6 +870,70 @@ export async function getSources(store) {
     return out;
   });
 }
+/* link_transfer (17 Nov 2026): the Revolut credit that carried money from Wise / PayPal is tied to the payment(s) it
+   carried: it becomes received (counted once) with their source and category; they are "moved to Revolut" (counted
+   nowhere). One transfer may carry several payments; fees and exchange are fine (the Revolut amount is what counts). */
+export async function linkTransfer(store, now, roster, a) {
+  const by = whoIs(a.by, roster, { people: true });
+  if (!SORTERS.includes(by)) fail("Linking money moved into Revolut is Ledger's (Sheet and Nova may too). Tell Ledger.", "not_allowed");
+  const rid = clean(a.revolut_id, 20), month = clean(a.month, 7);
+  if (!PAY_ID.test(rid)) fail("revolut_id must be the Revolut payment's id (from payments, account Revolut).");
+  if (!/^\d{4}-\d{2}$/.test(month)) fail("month must be the Revolut payment's month, YYYY-MM.");
+  const from = (Array.isArray(a.from) ? a.from : String(a.from || "").split(/[ ,]+/)).map((x) => clean(x, 20)).filter(Boolean);
+  if (!from.length || from.length > 20) fail("from must be the id(s) of the Wise or PayPal payment(s) this Revolut money carried (1 to 20).");
+  const sources = await getSources(store), isHold = holdingOf(sources);
+  const note = clean(a.note, 240); noSecrets(note);
+  const rev = ((await readDoc(store, incKey(month), [])).data || []).find((x) => x.id === rid);
+  if (!rev) fail(`There is no payment with the id "${rid}" in ${month}. Find it with payments (account Revolut).`, "not_found");
+  if (!isMainAccount(rev.account)) fail(`${rid} is not a Revolut payment (it landed in ${rev.account}): link_transfer ties the Revolut payment to what it carried.`);
+  if (rev.from && rev.from.length) fail(`${rid} is already linked to ${rev.from.join(", ")}.`, "exists");
+  if (!["received", "unsorted", "transfer"].includes(rev.status)) fail(`${rid} is ${rev.status}: only money that arrived in Revolut can be linked.`);
+  /* find every "from" payment in the last 12 months */
+  const found = [];
+  for (const id of from) {
+    let hit = null, hm = null;
+    for (const m of monthsBack(spDay(now).slice(0, 7), UNSORTED_MONTHS)) { hit = ((await readDoc(store, incKey(m), [])).data || []).find((x) => x.id === id); if (hit) { hm = m; break; } }
+    if (!hit) fail(`There is no payment with the id "${id}". Find it with payments.`, "not_found");
+    if (hit.movedTo) fail(`${id} is already moved to Revolut (${hit.movedTo}).`, "exists");
+    if (!isHold(hit)) fail(`${id} is not money received in Wise or PayPal (it is ${hit.status} in ${hit.account}).`);
+    found.push({ e: hit, m: hm });
+  }
+  const at = new Date(now).toISOString();
+  for (const m of [...new Set(found.map((x) => x.m))]) {
+    await mutate(store, incKey(m), [], (list) => {
+      for (const x of list) if (from.includes(x.id)) { x.movedTo = rid; x.history = (x.history || []).concat({ at, by, from: "received", to: "moved to Revolut", rev: rid }).slice(-10); x.updatedAt = at; }
+      return { value: true };
+    });
+  }
+  const first = found[0].e;
+  const out = await mutate(store, incKey(month), [], (list) => {
+    const r = list.find((x) => x.id === rid);
+    if (!r) fail("The Revolut payment is gone. Nothing was linked.", "not_found");
+    r.history = (r.history || []).concat({ at, by, from: r.status, to: "received", linked: from }).slice(-10);
+    r.status = "received"; r.from = from; r.category = first.category || r.category;
+    if (first.source || sources.find((s) => s.kind !== "account" && srcMatches(s, first.payer))) r.source = first.source || sources.find((s) => s.kind !== "account" && srcMatches(s, first.payer)).id;
+    r.note = note || `From ${[...new Set(found.map((x) => x.e.account))].join(" + ")}: ${[...new Set(found.map((x) => x.e.payer))].join(", ")}`;
+    r.updatedAt = at;
+    return { value: r };
+  });
+  return { entry: out, linked: found.length };
+}
+/* month_check (17 Nov 2026, Luke: income "checked from the first day to the last day of the month"): what is still in
+   the way of a right month: payments still to sort, Revolut credits from Luke's own accounts not yet linked, money
+   still waiting in Wise / PayPal. ready = nothing is. */
+export async function monthCheck(store, now, a = {}) {
+  const month = a.month == null || String(a.month).trim() === "" ? spDay(now).slice(0, 7) : clean(a.month, 7);
+  if (!/^\d{4}-\d{2}$/.test(month)) fail("month must be YYYY-MM.");
+  const sources = await getSources(store), isHold = holdingOf(sources), own = sources.filter((s) => s.kind === "account" && !isMainAccount(s.name));
+  const list = ((await readDoc(store, incKey(month), [])).data || []).filter(Boolean).map((e) => (e.arrived && e.arrived !== e.date ? { ...e, date: e.arrived } : e)).filter((e) => e.date.slice(0, 7) === month);
+  const received = {};
+  for (const e of list) if (e.status === "received" && !e.movedTo && !isHold(e)) received[e.currency] = round((received[e.currency] || 0) + e.amount);
+  const fromOwn = (e) => own.find((s) => srcMatches(s, e.payer));
+  const toSort = list.filter((e) => e.status === "unsorted");
+  const waiting = list.filter(isHold);
+  const ownTransfers = list.filter((e) => e.status === "transfer" && isMainAccount(e.account) && !(e.from && e.from.length) && e.by === "HQ" && !(e.history || []).length);
+  return { month, received, toSort, waiting, ownTransfers, fromOwn, ready: !toSort.length && !waiting.length };
+}
 /* Every payment of one month, for Ledger (16 Nov 2026: income_status showed the 15 newest, without ids for HQ's
    Revolut rows, so they could never be sorted or fixed). Filters: account, source (its id or name: the payments
    tied to it or whose payer matches it), payer (words in the name), status. Newest first; limit 1..200 (100). */
@@ -991,10 +1055,20 @@ const DUE_DAYS = { daily: 2, monthly: 45, quarterly: 110 };
    -> { month, received:{CUR:n}, pending:{CUR:n}, entries (newest 60), accounts:[...], sources:[...], problems:[...],
         unsorted (newest 40, each with pendingMatch {id, payer, amount, currency, date} when ONE payer's
         pending statement fits it), unsortedCount } */
+/* ONE entry per payment (17 Nov 2026, Luke: "money is not double counted ... wise and paypal are only mainly used to
+   confirm and check revolut is the main entry"): income counts once, when it lands in Revolut. A received payment
+   logged in another of Luke's own accounts (Wise, PayPal: the account sources) is HOLDING: seen, counted nowhere,
+   until link_transfer ties it to the Revolut credit that carried it (movedTo). */
+export const isMainAccount = (acc) => /revolut/i.test(String(acc || ""));
+export function holdingOf(sources) {
+  const own = (sources || []).filter((s) => s.kind === "account" && !isMainAccount(s.name));
+  return (e) => !!e && e.status === "received" && !e.movedTo && !isMainAccount(e.account) && own.some((s) => srcMatches(s, e.account));
+}
 export function incomeReport(entries, checks, sources, today, older = []) {
+  const isHold = holdingOf(sources);
   const month = today.slice(0, 7);
   const add = (o, cur, a) => { o[cur] = round((o[cur] || 0) + a); };
-  const received = {}, pending = {}, byCat = {}, payable = {}, statementOnly = {}, royaltiesOnly = {}, pendingOnly = {};
+  const received = {}, pending = {}, byCat = {}, payable = {}, statementOnly = {}, royaltiesOnly = {}, pendingOnly = {}, holding = {};
   /* a payment counts on the day it arrived (a pending statement that later landed keeps both dates) */
   entries = entries.map((e) => (e.arrived && e.arrived !== e.date ? { ...e, statement: e.date, date: e.arrived } : e));
   /* round 2: one payment logged twice under two names of its payer (before the desk knew they were one)
@@ -1007,6 +1081,8 @@ export function incomeReport(entries, checks, sources, today, older = []) {
   for (const e of entries) {
     if (e.date.slice(0, 7) !== month || e.status === "transfer" || e.status === "unsorted") continue;
     if (e.paidBy && OWED.includes(e.status)) continue; /* a statement settled by a received payment counts nowhere */
+    if (e.movedTo) continue; /* moved on to Revolut: the Revolut payment is the one that counts */
+    if (isHold(e)) { add(holding, e.currency, e.amount); continue; } /* still in Wise / PayPal: seen, not counted */
     /* batch 4: a statement under the payout line counts nowhere yet; payable is owed (with pending) */
     if (e.status === "statement only") { add(statementOnly, e.currency, e.amount); continue; }
     add(e.status === "pending" || e.status === "payable" ? pending : received, e.currency, e.amount);
@@ -1027,10 +1103,10 @@ export function incomeReport(entries, checks, sources, today, older = []) {
     const lastLogged = mine.reduce((a, e) => (!a || e.at > a ? e.at : a), null); /* the last time anything was logged for it, as a São Paulo day */
     const lastLook = [lastLogged && spDay(Date.parse(lastLogged)), chk && chk.day].filter(Boolean).sort().pop() || null;
     const monthTotal = {};
-    for (const e of mine) if (e.date.slice(0, 7) === month && e.status !== "transfer" && e.status !== "unsorted" && e.status !== "statement only") add(monthTotal, e.currency, e.amount);
+    for (const e of mine) if (e.date.slice(0, 7) === month && e.status !== "transfer" && e.status !== "unsorted" && e.status !== "statement only" && !e.movedTo && !isHold(e) && !(e.paidBy && OWED.includes(e.status))) add(monthTotal, e.currency, e.amount);
     /* this month, received only (16 Nov 2026, Luke): received = green; a MONTHLY source past the day it usually
        pays by with nothing = late (red); otherwise waiting (not highlighted, as every month starts) */
-    const got = mine.filter((e) => e.status === "received" && e.date.slice(0, 7) === month);
+    const got = mine.filter((e) => e.status === "received" && e.date.slice(0, 7) === month && !e.movedTo && !isHold(e));
     const gotAmt = {};
     for (const e of got) add(gotAmt, e.currency, e.amount);
     const dueDay = Number.isInteger(s.dueDay) ? s.dueDay : null;
@@ -1089,18 +1165,19 @@ export function incomeReport(entries, checks, sources, today, older = []) {
   /* this year, received only, per currency (round 3, Sheet: to check against the ledger), every month read */
   const receivedYear = {}, yr = today.slice(0, 4), seenY = [];
   for (const e of entries.concat((older || []).map((x) => (x.arrived && x.arrived !== x.date ? { ...x, date: x.arrived } : x)))) {
-    if (e.status !== "received" || e.date.slice(0, 4) !== yr || seenY.some((x) => samePayment(x, e))) continue;
+    if (e.status !== "received" || e.movedTo || isHold(e) || e.date.slice(0, 4) !== yr || seenY.some((x) => samePayment(x, e))) continue;
     seenY.push(e); add(receivedYear, e.currency, e.amount);
   }
   /* received per month, every month read (12), each payment once: "this month and the ones before" */
   const receivedByMonth = {}, seenM = [];
   for (const e of entries.concat((older || []).map((x) => (x.arrived && x.arrived !== x.date ? { ...x, date: x.arrived } : x)))) {
-    if (e.status !== "received" || seenM.some((x) => samePayment(x, e))) continue;
+    if (e.status !== "received" || e.movedTo || isHold(e) || seenM.some((x) => samePayment(x, e))) continue;
     seenM.push(e); add(receivedByMonth[e.date.slice(0, 7)] || (receivedByMonth[e.date.slice(0, 7)] = {}), e.currency, e.amount);
   }
   const duplicates = twice.map(([k, e]) => ({ kept: k.payer, also: e.payer, amount: e.amount, currency: e.currency, date: e.date, id: e.id }));
   return { month, received, pending, payable, statementOnly, royaltiesOnly, pendingOnly, receivedYear, receivedByMonth, duplicates, byCategory: byCat, count: entries.filter((e) => e.date.slice(0, 7) === month).length, unsorted: unsorted.slice(0, 40).map(withMatch), unsortedCount: unsorted.length,
-    entries: [...entries].sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : a.at < b.at ? 1 : -1)).slice(0, 60),
+    entries: [...entries].sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : a.at < b.at ? 1 : -1)).slice(0, 60).map((e) => (isHold(e) ? { ...e, holding: true } : e)),
+    holding, holdingList: entries.concat(older || []).filter(isHold).sort((a, b) => (a.date < b.date ? 1 : -1)).slice(0, 40),
     accounts, sources: src, unknown, problems,
     lastEntryAt: entries.reduce((a, e) => (!a || e.at > a ? e.at : a), null) };
 }
