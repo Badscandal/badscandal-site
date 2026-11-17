@@ -534,6 +534,60 @@ function answersOf(x) {
   if (!Object.keys(out).length) fail("answers is empty: give at least one answer.");
   return out;
 }
+/* ---------- automatic chasing (A4, 17 Nov 2026, Nova: "HQ nudges a bot when its duty is late, so Nova only escalates") ----------
+   Run by the hourly job, 07:00 to 22:00 São Paulo. For each late duty (hq.team.duties, from the sheet + the
+   connector) and each late release step (desk release views), owned by a bot on the roster that isn't paused:
+     first time today -> ONE reminder from HQ to that bot (needs none: it is in its messages_for_you);
+     still late 2 hours after the reminder -> ONE message from HQ to Nova, needs action (Nova's own -> Luke).
+   Blocked, waiting and skipped work is never chased (the blocker is already said). Each key is claimed in
+   chase/<SP day>.json before its message goes, so two runs at once send once. */
+const CHASE_FROM = "07:00", CHASE_UNTIL = "22:00", CHASE_AFTER = 2 * 3600000;
+export async function chaseLate(store, now, roster, o = {}) {
+  const out = { nudged: [], escalated: [] };
+  const hm = spHM(now), day = spDay(now);
+  if (hm < CHASE_FROM || hm >= CHASE_UNTIL) return out;
+  const active = new Set((roster || []).filter((b) => b.state !== "paused").map((b) => b.name));
+  const items = [];
+  const byOwner = (o.hq && o.hq.team && o.hq.team.duties && o.hq.team.duties.byOwner) || [];
+  for (const g of byOwner) for (const x of g.items || []) {
+    if (!x.late || x.status !== "todo" || !active.has(x.owner)) continue;
+    items.push({ key: `d:${x.id || x.task}`, bot: x.owner, label: `${x.owner}: ${x.task}`, what: `"${x.task}"`, due: x.due || "",
+      remind: `Reminder: your duty "${x.task}" was due at ${x.due} and isn't done yet. Do it now and post_update done (with gaps if something couldn't be read), or blocked with exactly what stops you.` });
+  }
+  for (const r of o.releases || []) {
+    if (r.status !== "scheduled") continue;
+    for (const st of r.steps || []) {
+      if (!st.late || st.waiting || ["done", "blocked", "skipped"].includes(st.status) || !active.has(st.owner)) continue;
+      items.push({ key: `s:${r.id}:${st.key}`, bot: st.owner, label: `${st.owner}: ${r.title}: ${st.label}`, what: `"${st.label}" for ${r.title}`, due: st.due ? dayWords(st.due) : "",
+        remind: `Reminder: "${st.label}" for ${r.title} was due ${dayWords(st.due)} and isn't done yet. Do it now and mark it with release_step (done, with the link), or blocked with exactly what stops you.` });
+    }
+  }
+  if (!items.length) return out;
+  /* claim first, then send: what this run will send is decided in one write */
+  const plan = await mutate(store, `chase/${day}.json`, {}, (doc) => {
+    const d = doc && typeof doc === "object" && !Array.isArray(doc) ? doc : {};
+    const todo = [];
+    for (const it of items) {
+      const was = d[it.key];
+      if (!was) { d[it.key] = { nudged: new Date(now).toISOString(), bot: it.bot }; todo.push({ ...it, step: "nudge" }); }
+      else if (!was.escalated && now - Date.parse(was.nudged) >= CHASE_AFTER) { was.escalated = new Date(now).toISOString(); todo.push({ ...it, step: "escalate" }); }
+    }
+    return todo.length ? { value: todo, replace: d } : { skip: true, value: [] };
+  });
+  for (const it of plan || []) {
+    try {
+      if (it.step === "nudge") { await sendMessage(store, now, roster, { from: "HQ", to: it.bot, needs: "none", text: it.remind }); out.nudged.push(it.label); }
+      else {
+        const to = it.bot === "Nova" ? "Luke" : "Nova";
+        await sendMessage(store, now, roster, { from: "HQ", to, needs: "action", about: it.bot === "Nova" ? "" : it.bot,
+          text: `${it.bot} still hasn't done ${it.what}${it.due ? ` (due ${it.due})` : ""}, 2 hours after HQ's reminder. ` + (to === "Nova" ? `Chase ${it.bot}, or tell Luke if it needs him.` : "Nova is the one who resets and chases the duties: check on her.") });
+        out.escalated.push(it.label);
+      }
+    } catch {}
+  }
+  return out;
+}
+
 /* ---------- recommendations (A3, 17 Nov 2026, Nova: "Luke's decisions inbox with my recommendation on each card") ----------
    { by, option, why, at } on a message waiting on Luke. option = one of the message's options, exactly as listed
    ("" when it has none, or none is picked); why = one or two sentences. The asker gives its own through
