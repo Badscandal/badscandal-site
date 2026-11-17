@@ -43,6 +43,7 @@ export const LIMITS = {
   budgetMs: 20000, /* the whole refresh (the scheduled function may run 30 s) */
   httpBudgetMs: 8000, /* POST /api/bank/sync: a normal function is cut off at 10 s */
   overlapDays: 7, /* banks backdate bookings: re-read the week before; the desk never counts a payment twice */
+  backDays: 90, /* every account reads back this far ONCE (16 Nov 2026, Luke: "90 days is fine"), then daily */
   stateMinutes: 10, /* how long a Connect press stays valid */
   maxConsentDays: 180,
   expiringDays: 14,
@@ -503,7 +504,11 @@ export async function syncBank({ bank, desk, env, now, fetchImpl, clock = Date.n
   /* 1. read every account, page by page, within the caps */
   for (const acc of conn.accounts || []) {
     const st = per[slot(acc)] || {};
-    const from = (st.cursor && st.cursor.dateFrom) || (st.lastDate ? addDays(st.lastDate, -LIMITS.overlapDays) : fresh);
+    let from = (st.cursor && st.cursor.dateFrom) || (st.lastDate ? addDays(st.lastDate, -LIMITS.overlapDays) : fresh);
+    /* the 90-day look back, once per account (a read in progress keeps its own start) */
+    const backFrom = addDays(today, -(LIMITS.backDays - 1));
+    if (!st.back && !(st.cursor && st.cursor.dateFrom) && from > backFrom) from = backFrom;
+    const back = !!st.back || from <= backFrom;
     let key = (st.cursor && st.cursor.key) || null, n = 0, done = false;
     try {
       while (n < pagesPerAccount && clock() < fetchUntil) {
@@ -523,7 +528,7 @@ export async function syncBank({ bank, desk, env, now, fetchImpl, clock = Date.n
         if (!key) { done = true; break; }
       }
       sum.accounts++;
-      next[slot(acc)] = done ? { lastDate: today } : key ? { ...(st.lastDate ? { lastDate: st.lastDate } : {}), cursor: { key, dateFrom: from } } : st;
+      next[slot(acc)] = done ? { lastDate: today, ...(back ? { back: true } : {}) } : key ? { ...(st.lastDate ? { lastDate: st.lastDate } : {}), ...(st.back ? { back: true } : {}), cursor: { key, dateFrom: from } } : st;
       if (!done) sum.more = true;
     } catch (e) {
       if (isGone(e)) { gone = true; break; }
