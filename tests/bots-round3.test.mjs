@@ -178,7 +178,7 @@ test("money: only what is received is income; payable and pending are never adde
   assert.deepEqual(st.received_this_year, "USD 100.00");
   /* Luke's page: Received, and the music's own share; nothing owed */
   const b = await S.board(await S.loadDesk(d, NOW), NOW, null);
-  assert.deepEqual(L.incomeTotals(b.income).map((t) => t.label), ["Received", "Royalties (no salary)"]);
+  assert.deepEqual(L.incomeTotals(b.income).map((t) => t.label), ["Received"]); /* one total (16 Nov 2026) */
   assert.equal(L.payStatus({ status: "payable", by: "Ledger" }).counted, false);
   /* the short briefing and the site check: received only */
   const sb = await call(d, "luke_short_briefing", { bot: "Alfred" });

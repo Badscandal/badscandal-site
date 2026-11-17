@@ -32,9 +32,9 @@ const ROSTER = S.DEFAULT_ROSTER.map((b) => ({ access: "", blockers: b.name === "
 const SOURCES = [
   { id: "wise", name: "Wise", kind: "account", owner: "Ledger", cadence: "daily", state: "active", how: "read-only connection" },
   { id: "paypal", name: "PayPal", kind: "account", owner: "Ledger", cadence: "daily", state: "active", how: "read-only connection" },
-  { id: "northlight", name: "Northlight Records", kind: "payer", category: "Label deals", currency: "EUR", lands: "Wise", cadence: "monthly", owner: "Ledger", state: "active", match: ["northlight"] },
-  { id: "distro", name: "Sample Distro", kind: "payer", category: "Self-releases", currency: "USD", lands: "PayPal", cadence: "monthly", owner: "Drop", state: "active", match: ["sample distro"] },
-  { id: "publisher", name: "Sample Publishing", kind: "payer", category: "Publishing", currency: "USD", lands: "Wise", cadence: "quarterly", owner: "Ledger", state: "active", match: ["sample publishing"] },
+  { id: "northlight", name: "Northlight Records", kind: "payer", category: "Label deals", currency: "EUR", lands: "Wise", cadence: "monthly", owner: "Ledger", state: "active", match: ["northlight"], main: true, dueDay: 10 },
+  { id: "distro", name: "Sample Distro", kind: "payer", category: "Self-releases", currency: "USD", lands: "PayPal", cadence: "monthly", owner: "Drop", state: "active", match: ["sample distro"], main: true, dueDay: 5 },
+  { id: "publisher", name: "Sample Publishing", kind: "payer", category: "Publishing", currency: "USD", lands: "Wise", cadence: "quarterly", owner: "Ledger", state: "active", match: ["sample publishing"], main: true, dueDay: 28 },
   /* the bank reader (11 Nov 2026): the site itself reads this one every morning */
   { id: "revolut", name: "Revolut", kind: "account", owner: "HQ", cadence: "daily", state: "active", how: "read-only, read by the site every morning" },
   { id: "plugin", name: "Plug-in sales", kind: "payer", category: "Other", currency: "USD", lands: "PayPal", cadence: "monthly", owner: "", state: "not_tracked" },

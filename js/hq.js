@@ -622,21 +622,13 @@
       (r.notes ? '<div class="d" style="margin-top:8px">' + esc(r.notes) + "</div>" : "") +
       '<button class="rel-btn" type="button" data-release="' + esc(r.song) + '">See what\'s missing ›</button></div>';
   }
+  /* month by month: just the month and what was received (16 Nov 2026, Luke) */
   function drawMoney() {
-    var ms = sheet.money.months, incomeBad = broken("Income");
-    setTable("moneyTable", ms.length ? "<tr><th>Month</th><th>Ad spend (as billed)</th><th>Income received (as paid)</th><th class='r'>Spend ≈ EUR</th><th class='r'>Income ≈ EUR</th><th class='r'>Left over ≈ EUR</th></tr>" + ms.map(function (m) {
-      return "<tr><td><b>" + esc(monthName(m.month)) + "</b>" + (m.rate ? "<br><span class='lbl'>1 EUR = " + m.rate + " USD</span>" : "") + "</td><td>" + esc(amounts(flat(m.spend))) + "</td><td>" + (incomeBad ? "can't be read" : esc(amounts(flat(m.income))) + (Object.keys(m.pending).length ? "<br><span class='lbl'>pending: " + esc(amounts(flat(m.pending))) + "</span>" : "")) +
-        "</td><td class='r'>" + esc(money(m.spendEur.amount, "EUR")) + (m.spendEur.missing ? "*" : "") + "</td><td class='r'>" + (incomeBad ? "–" : esc(money(m.incomeEur.amount, "EUR")) + (m.incomeEur.missing ? "*" : "")) + "</td><td class='r'><b>" + (incomeBad || m.netEur == null ? "–" : esc(money(m.netEur, "EUR"))) + "</b></td></tr>";
-    }).join("") : '<tr><td class="empty">' + (broken("Spend") || incomeBad ? "See the note above." : "No spend or income rows yet.") + "</td></tr>");
-    var m0 = ms[0];
-    if (!m0) { $("moneyDetail").innerHTML = ""; return; }
-    var block = function (title, o, bad) {
-      var k = Object.keys(o || {});
-      return '<div class="tile"><div class="lbl">' + esc(title) + "</div>" + (bad ? '<p class="empty" style="margin-top:6px">Can\'t be read: the sheet shows an error.</p>' : k.length ? k.map(function (c) { return '<div class="row d" style="margin-top:6px"><span>' + esc(c) + "</span><b style='color:var(--paper)'>" + esc(amounts(o[c])) + "</b></div>"; }).join("") : '<p class="empty" style="margin-top:6px">Nothing logged.</p>') + "</div>";
-    };
-    var src = sheet.money.metaSource;
-    var spendTitle = "Ad spend by platform" + (src && src.from === "meta" ? " · Meta from Meta" : src && src.from === "sheet" ? " · Meta from the sheet" : "");
-    $("moneyDetail").innerHTML = '<div class="lbl" style="margin:16px 0 8px">' + esc(monthName(m0.month)) + ' in detail</div><div class="grid g3">' + block(spendTitle, m0.spend) + block("Income by type", m0.income, incomeBad) + block("Self-release royalties by song", m0.royalties, broken("Royalties")) + "</div>";
+    var incomeBad = broken("Income"), rows = HQLib.monthRows(sheet.money.months);
+    setTable("moneyTable", rows.length ? "<tr><th>Month</th><th class='r'>Received</th></tr>" + rows.map(function (r) {
+      return "<tr><td><b>" + esc(r.label) + "</b></td><td class='r'>" + (incomeBad ? "can't be read" : esc(r.amount)) + "</td></tr>";
+    }).join("") : '<tr><td class="empty">' + (incomeBad ? "See the note above." : "No income rows yet.") + "</td></tr>");
+    $("moneyDetail").innerHTML = "";
   }
   var TASK_WORD = { todo: "To do", doing: "Doing", blocked: "Blocked", waiting: "Waiting", review: "In review" }; /* sentence case: no shouting pills */
   function drawTeam() {
