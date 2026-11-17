@@ -133,7 +133,7 @@ export function sampleDesk(now = Date.now()) {
   messages.sort((a, b) => (a.at < b.at ? 1 : -1)); /* newest first, as the real desk lists them */
   const E = (back, payer, amount, currency, status, account, category, by = "Ledger") => ({ id: "i" + back + payer.length, at: new Date(ago(back * 1440 + 90)).toISOString(), by, date: d(back), payer, amount, currency, status, category, account, reference: "", period: "", source: "", note: "" });
   const entries = [E(0, "Sample Distro", 104.04, "USD", "received", "PayPal", "Self-releases"), E(2, "Northlight Records", 112.01, "EUR", "pending", "Statement only", "Label deals"),
-    E(9, "Sample Publishing", 420.5, "USD", "received", "Wise", "Publishing"), E(34, "Northlight Records", 96.4, "EUR", "received", "Wise", "Label deals"), E(36, "Sample Distro", 88.1, "USD", "received", "PayPal", "Self-releases"),
+    E(9, "Sample Publishing", 420.5, "USD", "received", "Revolut", "Publishing"), E(34, "Northlight Records", 96.4, "EUR", "received", "Wise", "Label deals"), E(36, "Sample Distro", 88.1, "USD", "received", "PayPal", "Self-releases"),
     /* batch 4 (15 Nov 2026): owed and ready to pay out, and a statement still under the payout line (made up) */
     E(3, "Sample Collecting Society", 61.2, "USD", "payable", "Statement only", "Publishing"), E(4, "Sample Small Store", 7.35, "USD", "statement only", "Statement only", "Self-releases")];
   /* MADE-UP rows as the Revolut reader files them (by HQ): two it could not place ("to sort", in no

@@ -1190,6 +1190,9 @@
   function payStatus(e) {
     var s = e && e.status;
     if (e && e.paidBy && (s === "pending" || s === "payable" || s === "statement only")) return { text: "Paid (see the received payment)", counted: false }; /* 16 Nov 2026 */
+    /* one entry per payment (17 Nov 2026): Wise / PayPal money counts when it reaches Revolut */
+    if (e && e.movedTo) return { text: "Moved to Revolut", counted: false };
+    if (e && e.holding) return { text: "In " + e.account + ": counts when it reaches Revolut", counted: false };
     if (s === "unsorted") return { text: "To sort", counted: false };
     if (s === "transfer") return { text: e.by === "HQ" && !(e.history || []).length ? "Your own transfer" : "Not income", counted: false };
     /* batch 4: a statement under the payout line counts nowhere yet; payable is owed to us */

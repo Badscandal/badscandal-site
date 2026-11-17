@@ -110,7 +110,8 @@ test("staff: one payment is recorded once; pending becomes received; nothing is 
     { id: "revolut", name: "Revolut", kind: "account", state: "blocked", blocker: "Not connected" }, { id: "northlight", name: "Northlight Records", category: "Label deals", cadence: "monthly", state: "active" },
     { id: "pub", name: "Sample Publishing", category: "Publishing", cadence: "quarterly", state: "active" }, { id: "plug", name: "Plug-in sales", state: "not_tracked" }]);
   const i = await S.incomeState(d, NOW);
-  assert.deepEqual(i.received, { EUR: 112.01, USD: 104.04 }, "currencies are never mixed; the transfer is not income");
+  assert.deepEqual(i.received, { EUR: 112.01 }, "currencies are never mixed; the transfer is not income; the PayPal money counts only once it reaches Revolut (17 Nov 2026)");
+  assert.deepEqual(i.holding, { USD: 104.04 }, "seen in PayPal, once");
   assert.deepEqual(i.pending, {});
   const v = Object.fromEntries(i.accounts.concat(i.sources).map((s) => [s.id, s.verdict]));
   assert.deepEqual(v, { wise: "ok", paypal: "ok", revolut: "blocked", northlight: "ok", pub: "never", plug: "not_tracked" });

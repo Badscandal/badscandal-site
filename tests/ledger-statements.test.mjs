@@ -50,3 +50,22 @@ test("fix_payment paid_by: a filed statement is settled by the received payment,
   await fails(call(d, "fix_payment", { bot: "Ledger", id: got.id, month: "2026-11", paid_by: got2.id, reason: "x y z" }), /Only a statement/);
   await fails(call(d, "fix_payment", { bot: "Ledger", id: stmt.id, month: "2026-11", paid_by: "inope", reason: "x y z" }), /no received payment/);
 });
+
+/* 17 Nov 2026 (Luke: "the month should count when the payment arrives so the payment from cheerful landed today"):
+   fix_payment may put a payment's real arrival day in ANOTHER month: it moves there, keeps its id, counts once */
+test("fix_payment date: a payment moves to the month it really arrived in, once, with its id", async () => {
+  const d = memoryDesk();
+  const p = await sub(d, { date: "2026-10-30", payer: "Sample Studio", amount: "1280", currency: "USD", category: "Production" });
+  const r = await call(d, "fix_payment", { bot: "Ledger", id: p.id, month: "2026-10", date: "2026-11-16", reason: "it landed in Revolut on 16 Nov" });
+  assert.deepEqual([r.saved, r.fixed, r.moved_to], [true, ["date"], "2026-11"]);
+  const nov = await call(d, "payments", { bot: "Ledger", month: "2026-11" }), oct = await call(d, "payments", { bot: "Ledger", month: "2026-10" });
+  assert.deepEqual([nov.payments.map((x) => [x.id, x.date]), oct.total], [[[p.id, "2026-11-16"]], 0]);
+  const i = await S.incomeState(d, NOW);
+  assert.deepEqual([i.received, i.receivedByMonth["2026-10"]], [{ USD: 1280 }, undefined]);
+  await fails(call(d, "fix_payment", { bot: "Ledger", id: p.id, month: "2026-11", date: "2026-12-30", reason: "x y z" }), /future/);
+});
+
+test("Ledger and Sheet ask Luke when they're not sure what a payment is", async () => {
+  const { INSTRUCTIONS } = await import("../netlify/lib/staff-tools.mjs");
+  assert.match(INSTRUCTIONS, /not sure what a payment .* ask Luke/);
+});
