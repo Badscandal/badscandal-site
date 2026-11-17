@@ -2363,3 +2363,10 @@ Luke: "better to just have one received in november ... an option check other mo
 - `sort_payment` takes `source` (ties a Revolut row to its source so it turns green) and `note`. Ledger's instructions: Revolut is the main bank; each Revolut credit from Wise/PayPal is cross-checked by name + amount (already on the desk = sort as transfer with a note; else received with its source); the wage Luke moves in from another bank of his = received, Salary, with its source.
 - **Month by month** (the sheet): Month | Received only (`HQLib.monthRows`); the detail tiles are gone.
 
+## Ledger's payments (16 Nov 2026, branch hq-ledger-payments)
+Ledger (via Nova): income_status showed the 15 newest payments, no ids for HQ's Revolut rows, so they could never be sorted, fixed or tied to a source; Revolut still said "blocked"; PAYPAL was a "new payer". 31 tools.
+- **`payments`** (Ledger, Sheet; Nova): `S.listPayments`: ONE month (default this one), every payment with id, date, payer, amount, currency, status, category, source, account, added_by; filters account / source (tied to it, or payer matches it) / payer words / status; limit 1–200 (100); `total` + `more` when cut. `income_status`'s newest 15 carry "(id …)" and `more_payments` says how many more.
+- **`fix_payment` takes `source`** (FIX_FIELDS): any payment, HQ's included, tied to its source (its card then shows it).
+- **`S.afterBankRead`** (called by `syncBank` after a full read, with the "checked today"): the Revolut account source becomes active (no blocker, no needs-Luke), and a payer source blocked only "for Revolut" (blocker mentions Revolut) too, in srcedit.json by HQ, once.
+- An account source's name (PayPal, Wise…) is never a "new payer".
+

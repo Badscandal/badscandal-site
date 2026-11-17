@@ -779,7 +779,7 @@ async function mergePending(store, now, by, e, month, pid) {
 }
 /* batch 4 (15 Nov 2026): a payment already on the desk, corrected by the bot that submitted it (or Ledger,
    Sheet, Nova, Claude, Luke), within its own month, with the reason kept beside what changed */
-const FIX_FIELDS = ["date", "payer", "amount", "currency", "status", "category", "account", "reference", "note"];
+const FIX_FIELDS = ["date", "payer", "amount", "currency", "status", "category", "account", "reference", "note", "source"];
 export async function fixIncome(store, now, roster, a) {
   const by = whoIs(a.by, roster, { people: true });
   const id = clean(a.id, 20), month = clean(a.month, 7);
@@ -797,6 +797,12 @@ export async function fixIncome(store, now, roster, a) {
   if (a.account != null && String(a.account).trim()) want.account = clean(a.account, 40);
   if (a.reference != null) want.reference = clean(a.reference, 80);
   if (a.note != null) want.note = clean(a.note, 240);
+  /* source (16 Nov 2026, Ledger): tie ANY payment to its income source, HQ's Revolut rows included */
+  if (a.source != null && String(a.source).trim()) {
+    const k = low(clean(a.source, 60)), list = await getSources(store), hit = list.find((x) => x.kind !== "account" && (x.id === k || low(x.name) === k));
+    if (!hit) fail(`There is no income source called "${clean(a.source, 60)}". The sources are: ${list.filter((x) => x.kind !== "account").map((x) => `${x.name} (${x.id})`).join(", ")}.`);
+    want.source = hit.id;
+  }
   noSecrets(want.payer || "", want.note || "");
   if (want.reference) { const what = secretIn(want.reference, { reference: true }); if (what) fail(`reference looks like ${what}. It must be the payment's own transaction id, nothing else.`, "secret"); }
   const at = new Date(now).toISOString();
@@ -830,6 +836,41 @@ export async function getSources(store) {
     if (Array.isArray(f.accounts) && f.accounts.length) out.lands = f.accounts.join(" + ");
     return out;
   });
+}
+/* Every payment of one month, for Ledger (16 Nov 2026: income_status showed the 15 newest, without ids for HQ's
+   Revolut rows, so they could never be sorted or fixed). Filters: account, source (its id or name: the payments
+   tied to it or whose payer matches it), payer (words in the name), status. Newest first; limit 1..200 (100). */
+export async function listPayments(store, now, a = {}) {
+  const month = a.month == null || String(a.month).trim() === "" ? spDay(now).slice(0, 7) : clean(a.month, 7);
+  if (!/^\d{4}-\d{2}$/.test(month)) fail("month must be YYYY-MM, for example 2026-11.");
+  const limit = a.limit == null ? 100 : Math.max(1, Math.min(200, Math.floor(Number(a.limit)) || 100));
+  let list = ((await readDoc(store, incKey(month), [])).data || []).filter(Boolean);
+  if (a.account != null && String(a.account).trim()) { const k = low(a.account); list = list.filter((e) => low(e.account).includes(k)); }
+  if (a.source != null && String(a.source).trim()) {
+    const k = low(clean(a.source, 60)), src = (await getSources(store)).find((x) => x.id === k || low(x.name) === k);
+    if (!src) fail(`There is no income source called "${clean(a.source, 60)}".`);
+    list = list.filter((e) => low(e.source) === src.id || (!e.source && srcMatches(src, e.payer)));
+  }
+  if (a.payer != null && String(a.payer).trim()) { const words = low(a.payer).split(/\s+/).filter(Boolean); list = list.filter((e) => words.every((w) => low(e.payer).includes(w))); }
+  if (a.status != null && String(a.status).trim()) { const st = low(a.status); list = list.filter((e) => e.status === st); }
+  list.sort((x, y) => (x.date < y.date ? 1 : x.date > y.date ? -1 : (x.at || "") < (y.at || "") ? 1 : -1));
+  return { month, total: list.length, payments: list.slice(0, limit) };
+}
+/* After a full Revolut read (16 Nov 2026, Ledger: Revolut still said "blocked" / "not connected" after the site had
+   read it): the Revolut account source is active again with no blocker or ask, and so is a payer source that was
+   blocked only for want of Revolut. Kept in srcedit.json by "HQ"; a source changes once. -> ids changed */
+export async function afterBankRead(store, now) {
+  const list = await getSources(store);
+  const fix = list.filter((s) => (s.kind === "account" && /revolut/i.test(s.name) && (s.state === "blocked" || s.needsLuke || s.blocker)) ||
+    (s.kind !== "account" && s.state === "blocked" && /revolut/i.test(s.blocker || "")));
+  if (!fix.length) return [];
+  const at = new Date(now).toISOString();
+  await mutate(store, "srcedit.json", {}, (doc) => {
+    const d = doc && typeof doc === "object" && !Array.isArray(doc) ? doc : {};
+    for (const s of fix) d[s.id] = { ...(d[s.id] || {}), state: "active", blocker: "", ...(s.kind === "account" ? { needsLuke: "" } : {}), by: "HQ", at };
+    return { replace: d, value: true };
+  });
+  return fix.map((s) => s.id);
 }
 /* batch 4 (15 Nov 2026): the bot that owns a source (or Ledger, Sheet, Nova, Claude, Luke) says where its
    money lands (one or several accounts), its state and why, its category, and clears a "needs Luke" that
@@ -981,7 +1022,9 @@ export function incomeReport(entries, checks, sources, today, older = []) {
   });
   /* payments whose payer matches no known source: a new source nobody has named yet */
   const payers = sources.filter((s) => s.kind !== "account");
-  const unknown = [...new Set(entries.filter((e) => e.status !== "transfer" && e.status !== "unsorted" && !payers.some((s) => low(e.source) === s.id || srcMatches(s, e.payer))).map((e) => e.payer))].slice(0, 20);
+  /* Luke's own money accounts (PayPal, Wise…: the account sources) are never a "new payer" (16 Nov 2026) */
+  const ownAccts = sources.filter((s) => s.kind === "account");
+  const unknown = [...new Set(entries.filter((e) => e.status !== "transfer" && e.status !== "unsorted" && !payers.some((s) => low(e.source) === s.id || srcMatches(s, e.payer)) && !ownAccts.some((s) => srcMatches(s, e.payer))).map((e) => e.payer))].slice(0, 20);
   const accounts = list.filter((s) => s.kind === "account"), src = list.filter((s) => s.kind !== "account");
   const problems = [];
   for (const a of accounts) if (["never", "overdue", "due"].includes(a.verdict)) problems.push(`${a.name}: not checked today${a.owner ? " (" + a.owner + ")" : ""}`);
