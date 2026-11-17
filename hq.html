@@ -1326,6 +1326,23 @@ a.t-card:hover,button.t-card:hover,#shell a.tile:hover{border-color:var(--accent
 #igBox .igform input{flex:1 1 220px;min-height:44px;font-size:16px}
 #igBox .igerr{color:var(--red,#FF7A7A)}
 #igBox .igcomments li{margin:6px 0;font-size:15px}
+/* ---------- L6: song page tiles (17 Nov 2026) ---------- */
+.songtiles .sth { margin: 4px 0 10px; }
+.songtiles .stgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; margin-bottom: 18px; }
+#songTiles .stile .stpick::before { content: ""; width: 10px; height: 10px; border-radius: 50%; margin-right: 10px; flex: none; background: var(--spot); }
+#songTiles .stile.warn .stpick::before { background: var(--amber); }
+#songTiles .stile.bad .stpick::before { background: var(--red); }
+#songTiles .stile.bad { box-shadow: inset 0 0 0 1px var(--red); }
+.stile .sthead { display: flex; flex-direction: column; gap: 2px; margin-bottom: 8px; }
+.stile .stpick { all: unset; cursor: pointer; font-weight: 700; font-size: 17px; color: var(--text, #F3F5F9); min-height: 44px; display: flex; align-items: center; }
+.stile .stpick:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 6px; }
+.stile .staddr { font-size: 13px; color: var(--muted); overflow-wrap: anywhere; }
+.stile dl { margin: 0; display: grid; gap: 6px; }
+.stile dl div { display: grid; grid-template-columns: 88px 1fr; gap: 8px; font-size: 14px; }
+.stile dt { color: var(--muted); }
+.stile dd { margin: 0; overflow-wrap: anywhere; }
+.stile dl div.bad dd { color: var(--red); }
+.stile dl div.warn dd { color: var(--amber); }
 </style>
 </head>
 <body>
@@ -1473,6 +1490,7 @@ a.t-card:hover,button.t-card:hover,#shell a.tile:hover{border-color:var(--accent
 
   <section class="card view pg" id="pages">
     <h2>Pages</h2><p class="sub">Our own pages, people only. Pick a page; the date range is at the top.</p>
+    <div id="songTiles" class="songtiles"></div>
     <div class="controls">
       <label class="picker"><img id="pickImg" alt=""><select id="link" aria-label="Page"></select></label>
     </div>

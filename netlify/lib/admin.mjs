@@ -19,7 +19,7 @@ import { SONGS } from "./songs.mjs";
    to edit here for a new song. `id` is the page name the counter stores. */
 export const LINKS = [
   ...SONGS.slice().sort((a, b) => (a.date < b.date ? 1 : -1))
-    .map((s) => ({ id: s.slug, title: s.title, path: s.path, cover: "/" + s.coverWeb, date: s.date })),
+    .map((s) => ({ id: s.slug, title: s.title, path: s.path, cover: "/" + s.coverWeb, date: s.date, track: s.spotifyTrack || "" })),
   { id: "home", title: "Home page", path: "/", cover: "/assets/favicon-192-v2.png", date: "" },
 ];
 
@@ -473,6 +473,20 @@ export function dashboard(cur, prev, days, link, extra = {}) {
 
 /* ---------- Meta health (the mh/ keys written by netlify/functions/capi.mjs) ---------- */
 
+/* Meta's health per song page (L6, 17 Nov 2026), over the range: sends (not blocked), refusals, bots blocked,
+   the last good send and the last refusal. Records from before 17 Nov carry no page and count for none. */
+export function pageHealth(list, days) {
+  const keep = new Set(days), out = {};
+  for (const h of list) {
+    if (!h || !h.ts || !h.page || !keep.has(spDay(h.ts))) continue;
+    const p = out[h.page] || (out[h.page] = { sends: 0, errors: 0, blocked: 0, lastOk: null, lastError: null });
+    if (h.result === "blocked") { p.blocked++; continue; }
+    p.sends++;
+    if (h.result === "ok") { if (!p.lastOk || h.ts > p.lastOk) p.lastOk = h.ts; }
+    else { p.errors++; if (!p.lastError || h.ts > p.lastError.ts) p.lastError = { ts: h.ts, detail: h.detail }; }
+  }
+  return out;
+}
 export function healthSummary(list, days, now = Date.now()) {
   const keep = new Set(days), today = spDay(now);
   const blank = () => ({ calls: 0, sent: 0, received: 0, errors: 0, blocked: 0, taps: 0, tapsReceived: 0, test: 0 });

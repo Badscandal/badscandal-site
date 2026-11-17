@@ -319,7 +319,7 @@
       netState("ov", "offline", old && old.at);
     });
   }
-  function drawOverview() { drawBriefing(); drawSongs(); drawAds(); drawDataHealth(); }
+  function drawOverview() { drawBriefing(); drawSongs(); drawAds(); drawDataHealth(); drawSongTiles(); }
 
   /* ---------- Data health: Sheet, Meta, page counter, exchange rate (one dot in the header) ---------- */
   function drawDataHealth() {
@@ -459,6 +459,31 @@
   $("copySummary").addEventListener("click", function () {
     if (!lastSummary) return;
     copyText(lastSummary, function () { $("copied").textContent = "Copied. Paste it into WhatsApp."; setTimeout(function () { $("copied").textContent = ""; }, 4000); });
+  });
+
+  /* ---------- Pages: one tile per song page (L6, 17 Nov 2026, Webmaster's #15) ----------
+     live or not, what the button does, people and taps for the header's range, whether Meta is receiving THIS
+     page's events, and the home card. Rules in HQLib.songTile; the build states come with the board. */
+  function drawSongTiles() {
+    var box = $("songTiles");
+    if (!box) return;
+    if (!ov || !ov.songs) { box.innerHTML = ""; return; }
+    var b = staffBoard(), today = new Date().toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" });
+    var songs = ov.songs.filter(function (x) { return x.id && x.id !== "home" && x.date; });
+    if (!songs.length) { box.innerHTML = ""; return; }
+    box.innerHTML = '<h3 class="sth">Song pages</h3><div class="stgrid">' + songs.map(function (x) {
+      var t = L.songTile(x, { today: today, now: Date.now(), card: ov.homeCard, builds: b && b.pageBuilds });
+      return '<div class="tile stile ' + t.tone + '"><div class="sthead"><button type="button" class="stpick" data-page="' + esc(t.id) + '">' + esc(t.title) + '</button>' +
+        '<a class="staddr" href="https://' + esc(t.address) + '" target="_blank" rel="noopener">' + esc(t.address) + '</a></div><dl>' +
+        t.lines.map(function (l) { return '<div class="' + (l.tone || "") + '"><dt>' + esc(l.label) + '</dt><dd>' + esc(l.text) + '</dd></div>'; }).join("") + '</dl></div>';
+    }).join("") + '</div>';
+  }
+  document.addEventListener("click", function (e) {
+    var t = e.target && e.target.closest ? e.target.closest(".stpick") : null, sel = $("link");
+    if (!t || !sel) return;
+    sel.value = t.getAttribute("data-page");
+    sel.dispatchEvent(new Event("change", { bubbles: true }));
+    var k = document.querySelector("#pages .controls"); if (k && k.scrollIntoView) k.scrollIntoView();
   });
 
   /* ---------- Songs: the sheet's Spotify numbers + our page + Meta + royalties, one card each ---------- */
@@ -808,7 +833,7 @@
       return out;
     },
     /* the staff desk answered (or was cleared): Today's attention, the site-check line and Data health read it */
-    boardChanged: function () { if (sheet || ov) { drawBriefing(); drawSongs(); } drawDataHealth(); if (!staffBoard()) drawLive(); } };
+    boardChanged: function () { if (sheet || ov) { drawBriefing(); drawSongs(); } drawDataHealth(); drawSongTiles(); if (!staffBoard()) drawLive(); } };
   /* hq-pages.js is loaded with defer right after this file: start once both are in */
   document.addEventListener("DOMContentLoaded", start);
 })();

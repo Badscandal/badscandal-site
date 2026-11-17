@@ -198,7 +198,9 @@ async function api(req, context, path) {
     /* the board hands Claude every message, so it counts as Claude having READ them (11 Nov 2026, review:
        a round that reads the desk this way left Luke's answers to Claude "Not read yet" for good) */
     if (role === "claude") await Promise.all([S.touchSeen(st.desk, now, "Claude", "board"), S.touchRead(st.desk, now, "Claude")]);
-    return json(200, { ...S.board(desk, now, hqAns && hqAns.team ? hqAns : null), hqRead: !!(hqAns && hqAns.team), keys: { bots: !!Netlify.env.get("STAFF_BOT_KEY"), claude: !!Netlify.env.get("STAFF_CLAUDE_KEY") } });
+    /* L6: what happened to each song-page request (the Pages tab's tiles) */
+    const pageBuilds = await S.songPages(st.desk, now).catch(() => []);
+    return json(200, { ...S.board(desk, now, hqAns && hqAns.team ? hqAns : null), pageBuilds, hqRead: !!(hqAns && hqAns.team), keys: { bots: !!Netlify.env.get("STAFF_BOT_KEY"), claude: !!Netlify.env.get("STAFF_CLAUDE_KEY") } });
   }
   if (path === "trace" && req.method === "GET") return sample ? json(200, { sample: true, trace: [] }) : json(200, { trace: await S.getTrace(stores(context).desk) });
   if (path === "release" && req.method === "GET") {

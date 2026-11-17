@@ -127,15 +127,23 @@ export function healthKey(h, ts, rand) {
     ["ok", "error", "blocked"].includes(h.result) ? h.result : "error",
     hslug(h.detail || "-", 40),
     h.test ? "1" : "0",
+    /* the page's slug (L6, 17 Nov 2026), so each song page's tile can say Meta is receiving ITS events;
+       left off when there is none, so the key is exactly as before */
+    ...(h.page && /^[a-z0-9-]{1,60}$/.test(h.page) ? [h.page] : []),
   ].join("/");
 }
 
+/* the song page a beacon came from ("touchme"), or "" (L6) */
+export function pageOf(body) {
+  try { const s = songFromPath(new URL(String((body && body.url) || "")).pathname); return s ? s.slug : ""; } catch { return ""; }
+}
 export function parseHealthKey(key) {
   const p = String(key).split("/");
-  if (p.length !== 9 || p[0] !== "mh") return null;
+  if ((p.length !== 9 && p.length !== 10) || p[0] !== "mh") return null;
   return {
     day: p[1], ts: parseInt(p[2], 10) || 0, events: p[3].split("."), sent: Number(p[4]) || 0,
     received: p[5] === "-" ? null : Number(p[5]), result: p[6], detail: p[7], test: p[8] === "1",
+    ...(p.length === 10 ? { page: p[9] } : {}),
   };
 }
 

@@ -66,9 +66,9 @@ export function sampleStatsEntries(now = Date.now()) {
         if (page === "home") { if (rnd() < 0.3) add({ ...base, type: "click", target: ["spotify", "instagram", "youtube"][Math.floor(rnd() * 3)], ms: 3000 }, ts + 3000); continue; }
         if (rnd() < (ad ? ad.tapRate : 0.3)) {
           add({ ...base, type: "click", target: "spotify", ms: Math.round(1500 + rnd() * 5000), meta: eu ? (rnd() < 0.55 ? 1 : 0) : 1 }, ts + 3500);
-          out.push([healthKey({ events: "sc", sent: 1, received: 1, result: "ok" }, ts + 3600, "h" + n++), ""]);
+          out.push([healthKey({ events: "sc", sent: 1, received: 1, result: "ok", page }, ts + 3600, "h" + n++), ""]);
         }
-        out.push([healthKey({ events: "pv.vc", sent: 2, received: 2, result: "ok" }, ts + 900, "h" + n++), ""]);
+        out.push([healthKey({ events: "pv.vc", sent: 2, received: 2, result: "ok", page }, ts + 900, "h" + n++), ""]);
       }
     }
   }

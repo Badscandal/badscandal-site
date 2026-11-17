@@ -16,7 +16,7 @@
                             so testing never mixes preview traffic into the real numbers.
                             Delete it after testing. */
 import { getDeployStore, getStore } from "@netlify/blobs";
-import { buildEvents, eventCodes, graphRequest, healthKey, LAST_ERROR_KEY, LAST_KEY, lastRecord, readMetaAnswer } from "../lib/capi.mjs";
+import { buildEvents, eventCodes, graphRequest, healthKey, LAST_ERROR_KEY, LAST_KEY, lastRecord, pageOf, readMetaAnswer } from "../lib/capi.mjs";
 import { datacenter } from "../lib/dc.mjs";
 import { needsConsent } from "../lib/geo.mjs";
 import { readCookie } from "../lib/session.mjs";
@@ -56,13 +56,14 @@ export default async (req, context) => {
   }
   if (!body || !Array.isArray(body.ev)) return done;
   const names = body.ev.slice(0, 3).map((e) => e && e.n).filter(Boolean);
+  const page = pageOf(body);
 
   /* Bots and data centres: never to Meta. Counted as "blocked" so /admin shows it working. */
   const dc = datacenter(context.ip);
   const bot = BOT.test(ua) ? "ua" : dc ? "dc-" + dc : CLIENT_BOT.has(body.b) ? body.b : "";
   if (bot) {
     console.log(`capi: blocked ${names.join("+")} (${bot})`);
-    await record(context, { events: eventCodes(names), sent: 0, result: "blocked", detail: bot }, names);
+    await record(context, { events: eventCodes(names), sent: 0, result: "blocked", detail: bot, page }, names);
     return done;
   }
 
@@ -105,7 +106,7 @@ export default async (req, context) => {
     h = { result: "error", received: null, detail: why, note: why === "timeout" ? "Meta didn't answer within 5 seconds" : "Couldn't reach Meta" };
     console.error(`capi: ${label} -> no answer from Meta (${why})`);
   }
-  await record(context, { events: eventCodes(sentNames), sent: events.length, test: !!testCode, ...h }, sentNames);
+  await record(context, { events: eventCodes(sentNames), sent: events.length, test: !!testCode, page, ...h }, sentNames);
   return done;
 };
 
