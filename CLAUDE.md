@@ -1,5 +1,10 @@
 # BADSCANDAL — badscandal.com
 
+> **Read first (any Claude session, local or cloud):** `docs/WORKING-WITH-LUKE.md` (the rules and how a request
+> goes: merge to main ONLY on Luke's "deploy"/"publish"; this repo is public, so no keys, money amounts, payer or
+> account names, lyrics or private notes, not even in tests; test on Node 24 AND 22; end with a message for Nova),
+> then `docs/STATUS.md` (where things stand) and `docs/HQ-ROADMAP.md` (the plan). Update both on every deploy.
+
 Static site (no build step, no framework, no dependencies). Plain HTML +
 CSS + vanilla JS, auto-deployed to Netlify on every push to `main`.
 Shop data comes live from Shopify's Storefront API at runtime.
