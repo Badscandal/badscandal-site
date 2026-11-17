@@ -8,7 +8,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import * as P from "../netlify/lib/postrank.mjs";
 import * as IG from "../netlify/lib/instagram.mjs";
-import { toolsFor, INSTRUCTIONS } from "../netlify/lib/staff-tools.mjs";
+import { toolsFor, INSTRUCTIONS, TOOLS } from "../netlify/lib/staff-tools.mjs";
 import * as S from "../netlify/lib/staff.mjs";
 
 await import("../js/hq-lib.js");
@@ -137,12 +137,54 @@ test("igView: our own accounts' comments left out of the fans' list and the rank
   const sv = IG.sampleView(NOW);
   assert.ok(sv.ranking.ranked.length >= 1 && sv.needsReply.length >= 1);
 });
-test("our own accounts: saved from HQ, handles only", async () => {
+/* Luke, 17 Nov 2026: "make it a list Nova manages with a tool … add / remove / list … each change needs a short
+   reason and is logged with the date, and HQ › Growth & Fans shows the list … Nova only; other bots can read". */
+test("our accounts: Nova adds and removes handles with a reason, every change logged; the connected account is always ours", async () => {
   const st = memStore();
-  assert.deepEqual(await IG.saveOwn(st, "@OurPartner, @another.one  , @ourpartner", NOW), ["ourpartner", "another.one"]);
-  await assert.rejects(IG.saveOwn(st, "not a handle!", NOW), (e) => e.kind === "bad");
-  assert.deepEqual(IG.ownHandles("OurAccount", await st.get("own.json")), ["ouraccount", "ourpartner", "another.one"]);
-  assert.match(readFileSync(new URL("../netlify/functions/hq.mjs", import.meta.url), "utf8"), /sub === "own"[\s\S]*IG\.saveOwn\(store/);
+  st.m.set("key.json", JSON.stringify({ token: TOKEN, username: "ouraccount", route: "fb" }));
+  st.m.set("state.json", JSON.stringify({ username: "ouraccount" }));
+  const T1 = NOW, T2 = NOW + H;
+  let r = await IG.editOwn(st, T1, { by: "Nova", action: "add", handle: "@Made_Up.Partner", reason: "Luke's own account" });
+  assert.deepEqual(r.handles, ["ouraccount", "made_up.partner"]);
+  r = await IG.editOwn(st, T1, { by: "Nova", action: "add", handle: "made_up_spam", reason: "spam bot" });
+  await assert.rejects(IG.editOwn(st, T1, { by: "Nova", action: "add", handle: "made_up_spam", reason: "again" }), (e) => /already/.test(e.message));
+  await assert.rejects(IG.editOwn(st, T1, { by: "Nova", action: "add", handle: "not a handle!", reason: "x y z" }), (e) => e.kind === "bad");
+  await assert.rejects(IG.editOwn(st, T1, { by: "Nova", action: "add", handle: "someone", reason: "" }), (e) => /reason/.test(e.message));
+  await assert.rejects(IG.editOwn(st, T1, { by: "Nova", action: "remove", handle: "ouraccount", reason: "test" }), (e) => /connected account/.test(e.message));
+  await assert.rejects(IG.editOwn(st, T1, { by: "Nova", action: "remove", handle: "nobody_here", reason: "test" }), (e) => /isn't on the list/.test(e.message));
+  r = await IG.editOwn(st, T2, { by: "Nova", action: "remove", handle: "made_up_spam", reason: "it was a real fan after all" });
+  assert.deepEqual(r.handles, ["ouraccount", "made_up.partner"]);
+  const v = await IG.igView(st, T2);
+  assert.deepEqual(v.own, ["ouraccount", "made_up.partner"]);
+  assert.deepEqual(v.ownLog.map((x) => [x.action, x.handle, x.by, x.reason]), [["remove", "made_up_spam", "Nova", "it was a real fan after all"], ["add", "made_up_spam", "Nova", "spam bot"], ["add", "made_up.partner", "Nova", "Luke's own account"]], "newest first");
+  assert.equal(v.ownLog[0].at, T2);
+  /* HQ only shows it; there is no write route for it any more */
+  const fn = readFileSync(new URL("../netlify/functions/hq.mjs", import.meta.url), "utf8");
+  assert.doesNotMatch(fn, /sub === "own"/);
+  const js = readFileSync(new URL("../js/hq.js", import.meta.url), "utf8");
+  assert.match(js, /Our own accounts/); assert.doesNotMatch(js, /igOwnForm/);
+});
+test("our_accounts in the instagram tool: Nova (and Claude) change it; every other bot only reads it", async () => {
+  const { callTool } = await import("../netlify/lib/staff-tools.mjs");
+  const { memoryDesk } = await import("../netlify/lib/staff-sample.mjs");
+  const st = memStore();
+  st.m.set("key.json", JSON.stringify({ token: TOKEN, username: "ouraccount", route: "fb" }));
+  st.m.set("state.json", JSON.stringify({ username: "ouraccount" }));
+  const desk = memoryDesk();
+  const call = (bot, args) => callTool(TOOLS.find((t) => t.name === "instagram"), { bot, ...args }, { store: desk, now: NOW, ig: () => st }).catch((e) => ({ error: e.message }));
+  const ok = await call("Nova", { our_accounts: "add", handle: "made_up_family", reason: "Luke's family" });
+  assert.equal(ok.error, undefined, ok.error);
+  assert.deepEqual(ok.our_accounts.handles, ["@ouraccount", "@made_up_family"]);
+  const no = await call("Steve", { our_accounts: "add", handle: "someone_else", reason: "x y z" });
+  assert.match(no.error, /Only Nova/);
+  const read = await call("Steve", { our_accounts: "list" });
+  assert.deepEqual(read.our_accounts.handles, ["@ouraccount", "@made_up_family"]);
+  assert.equal(read.our_accounts.changes[0].by, "Nova");
+  const plain = await call("Kevin", {});
+  assert.deepEqual(plain.own_accounts, ["@ouraccount", "@made_up_family"]);
+  const schema = TOOLS.find((t) => t.name === "instagram").inputSchema.properties;
+  assert.deepEqual(schema.our_accounts.enum, ["list", "add", "remove"]);
+  assert.ok(schema.handle && schema.reason);
 });
 test("the bots get the ranking (Steve, Kevin and Forge) with the how-to; HQ draws it", async () => {
   for (const b of ["Steve", "Kevin", "Forge"]) assert.ok(toolsFor(b, S.DEFAULT_ROSTER).some((t) => t.name === "instagram"), b);
@@ -152,7 +194,7 @@ test("the bots get the ranking (Steve, Kevin and Forge) with the how-to; HQ draw
   assert.match(src, /ranking: \{ how: /); assert.match(src, /needs_reply: /); assert.match(src, /SAME age/);
   assert.match(readFileSync(new URL("../netlify/functions/pushhourly.mjs", import.meta.url), "utf8"), /syncAdPosts\(/);
   const js = readFileSync(new URL("../js/hq.js", import.meta.url), "utf8");
-  assert.match(js, /What engages best/); assert.match(js, /Needs a reply/); assert.match(js, /igOwnForm/);
+  assert.match(js, /What engages best/); assert.match(js, /Needs a reply/); assert.match(js, /Our own accounts/);
   const x = globalThis.HQLib.rankParts(P.rankPosts(posts, adDoc, { now: NOW, comments }).ranked[1]);
   assert.deepEqual(x, { rate: "7.8% engaged", window: "At 1 day", views: "1,797 of 23,000 views · 1,600 likes · 37 comments", deep: "Saves + shares 0.7% (100 saves · 60 shares)",
     follows: "120 follows (0.5% of views) · 300 profile visits", own: "3 of our own comments left out",

@@ -660,9 +660,10 @@
     }
     if ((ig.needsReply || []).length) h += '<div class="tile" style="margin:12px 0"><h3>Needs a reply (' + ig.needsReply.length + ')</h3><p class="sub">Questions nobody of ours has answered yet. Replying is yours.</p><ul class="igcomments">' +
       ig.needsReply.map(function (c) { return "<li><b>" + esc(c.user) + "</b>: " + esc(c.text) + ' <span class="lbl">on ' + link(c.link, c.postCaption || "a post") + "</span></li>"; }).join("") + "</ul></div>";
-    if (st.connected && !sample) h += '<details class="tile" style="margin:12px 0"><summary>Our own accounts (' + (ig.own || []).length + "): their comments don\u2019t count</summary>" +
-      '<p class="d">' + esc((ig.own || []).map(function (x) { return "@" + x; }).join(", ")) + '</p><form class="igform" id="igOwnForm" autocomplete="off"><input type="text" id="igOwn" placeholder="@account, @another" aria-label="Our own accounts" value="' +
-      esc((ig.own || []).slice(1).map(function (x) { return "@" + x; }).join(", ")) + '"><button class="sendbtn" type="submit"' + dis + ">Save</button></form></details>";
+    /* our own accounts (Nova keeps the list with the instagram tool; Luke sees it here) */
+    if (st.connected) h += '<details class="tile" style="margin:12px 0"><summary>Our own accounts (' + (ig.own || []).length + "): their comments don\u2019t count</summary>" +
+      '<p class="d">' + esc((ig.own || []).map(function (x) { return "@" + x; }).join(", ")) + '</p><p class="d muted">Nova keeps this list (the connected account is always on it). Ask Nova to add or remove one.</p>' +
+      ((ig.ownLog || []).length ? '<ul class="igcomments">' + ig.ownLog.slice(0, 10).map(function (x) { return "<li>" + esc(day(new Date(x.at).toISOString().slice(0, 10)) + " · " + x.by + " " + (x.action === "add" ? "added" : "removed") + " @" + x.handle) + ' <span class="lbl">' + esc(x.reason) + "</span></li>"; }).join("") + "</ul>" : "") + "</details>";
     if ((ig.posts || []).length) h += '<div class="igposts">' + ig.posts.slice(0, 9).map(function (p) {
       return '<div class="tile igpost"><div class="row"><h3>' + link(p.link, p.caption || "(no caption)") + '</h3><span class="lbl">' + esc((p.type || "post") + " · " + day(p.at.slice(0, 10))) + '</span></div><div class="d">' + esc(L.igPostNumbers(p) || "No numbers yet") + "</div></div>";
     }).join("") + "</div>";
@@ -671,15 +672,6 @@
     if ((ig.countries || []).length) h += '<p class="d" style="margin-top:10px">Followers by country: ' + esc(ig.countries.slice(0, 6).map(function (c) { return c.country + " " + fmt(c.count); }).join(" · ")) + "</p>";
     box.innerHTML = h;
   }
-  document.addEventListener("submit", function (ev) {
-    if (!ev.target || ev.target.id !== "igOwnForm") return;
-    ev.preventDefault();
-    igBusy = true; igMsg = ""; drawInstagram();
-    postJSON("/api/hq/instagram/own", { handles: $("igOwn").value || "" }).then(function (res) {
-      igBusy = false; igMsg = res.s === 200 ? "Saved." : (res.j && res.j.error) || "Couldn't save (" + res.s + ").";
-      return loadInstagram();
-    }, function () { igBusy = false; igMsg = "No connection. Try again."; drawInstagram(); });
-  });
   document.addEventListener("submit", function (ev) {
     if (!ev.target || ev.target.id !== "igForm") return;
     ev.preventDefault();

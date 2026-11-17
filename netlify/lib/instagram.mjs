@@ -275,19 +275,35 @@ export async function syncInstagram({ store, now, fetchImpl = fetch, logGrowth =
   return out;
 }
 
-/* Our own accounts (Nova, 17 Nov 2026: our comments made posts look better than they are). The connected account
-   always counts; Luke adds the others once in HQ (POST /api/hq/instagram/own), kept in own.json. Handles only. */
+/* Our own accounts (Nova, 17 Nov 2026: our comments made posts look better than they are). Luke, the same day:
+   "make it a list Nova manages with a tool … each change needs a short reason and is logged with the date … Nova
+   only; other bots can read". The connected account always counts; the rest are in own.json
+   {handles, log: [{at, by, action, handle, reason}]} (handles only: they are public Instagram names; the list itself
+   is NOT in the code, the repo is public). Changed through the instagram tool (our_accounts), shown in HQ. */
 export const HANDLE_RE = /^[a-z0-9._]{1,30}$/;
-export function parseHandles(text) {
-  return [...new Set(String(text || "").split(/[\s,;]+/).map((h) => h.trim().replace(/^@/, "").toLowerCase()).filter(Boolean))];
-}
-export async function saveOwn(store, text, now) {
-  const handles = parseHandles(text);
-  const bad = handles.filter((h) => !HANDLE_RE.test(h));
-  if (bad.length) throw new IgError("bad", `Not an Instagram handle: ${bad.slice(0, 3).join(", ")}. Write them like @name, separated by commas.`);
-  if (handles.length > 10) throw new IgError("bad", "At most 10 accounts.");
-  await store.setJSON("own.json", { handles, at: now });
-  return handles;
+export const OWN_EDITORS = ["Nova", "Claude"];
+const OWN_MAX = 40, OWN_LOG = 60;
+export function parseHandle(text) { return String(text || "").trim().replace(/^@/, "").toLowerCase(); }
+export async function editOwn(store, now, { by, action, handle, reason }) {
+  const h = parseHandle(handle), why = String(reason || "").replace(/\s+/g, " ").trim().slice(0, 200);
+  if (!["add", "remove"].includes(action)) throw new IgError("bad", "our_accounts is add, remove or list.");
+  if (!HANDLE_RE.test(h)) throw new IgError("bad", `"${String(handle || "").slice(0, 40)}" isn't an Instagram handle: write it like @name.`);
+  if (why.length < 3) throw new IgError("bad", "Give a short reason (who it is: Luke's account, family, a friend, a bot, spam…).");
+  const [doc, key, state] = await Promise.all([readDoc(store, "own.json", null), readDoc(store, "key.json", null), readDoc(store, "state.json", {})]);
+  const handles = ((doc && doc.handles) || []).map(parseHandle).filter(Boolean), log = (doc && doc.log) || [];
+  const self = parseHandle((key && key.username) || state.username);
+  if (action === "add") {
+    if (h === self || handles.includes(h)) throw new IgError("bad", `@${h} is already on the list: nothing changed.`);
+    if (handles.length >= OWN_MAX) throw new IgError("bad", `The list has ${OWN_MAX} accounts already: remove one first.`);
+    handles.push(h);
+  } else {
+    if (h === self) throw new IgError("bad", `@${h} is the connected account: it always counts as ours.`);
+    if (!handles.includes(h)) throw new IgError("bad", `@${h} isn't on the list: nothing changed.`);
+    handles.splice(handles.indexOf(h), 1);
+  }
+  log.push({ at: now, by: String(by || ""), action, handle: h, reason: why });
+  await store.setJSON("own.json", { handles, log: log.slice(-OWN_LOG), at: now });
+  return { handles: ownHandles(self, { handles }), change: { action, handle: h } };
 }
 export function ownHandles(username, ownDoc) {
   return [...new Set([String(username || "").toLowerCase(), ...(((ownDoc && ownDoc.handles) || []).map((h) => String(h).toLowerCase()))].filter(Boolean))];
@@ -315,6 +331,7 @@ export async function igView(store, now) {
   /* L2: which posts engage best, with the ads that boosted them (postrank.mjs); our own comments don't count */
   const ranking = rankPosts(posts, adDoc, { now, comments: marked });
   return { status, posts: posts.slice(0, 12), comments: marked.filter((c) => !c.own).slice(0, 40), countries: countries ? countries.list : [], own,
+    ownLog: (((ownDoc && ownDoc.log) || []).slice().reverse()).slice(0, 20),
     needsReply: needsReply(marked, now),
     ranking: { ranked: ranking.ranked.slice(0, 15), older: ranking.older.slice(0, 15), tooFew: ranking.tooFew.length, adsAt: ranking.adsAt, minViews: ranking.minViews } };
 }
@@ -340,6 +357,7 @@ export function sampleView(now) {
   /* a made-up ad boosting the studio clip, started after its 6-hour numbers */
   const ads = { at: now - 600000, ads: [{ id: "sa1", name: "Made-up boost", media: "s2", status: "ACTIVE", created: iso(2 * DAY), spend: 120, currency: "USD", impressions: 36000, reach: 26000, likes: 1200, comments: 4, saves: 110, shares: 40 }] };
   v.own = ["sampleaccount", "made_up_partner"];
+  v.ownLog = [{ at: now - 2 * DAY, by: "Nova", action: "add", handle: "made_up_partner", reason: "Made-up: Luke's own account" }];
   v.comments = v.comments.map((c) => ({ ...c, own: false, answered: false }));
   v.needsReply = needsReply(v.comments, now);
   const r = rankPosts(v.posts, ads, { now, comments: v.comments });

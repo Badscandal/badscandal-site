@@ -26,7 +26,7 @@ const INSTRUCTION_LINES = [
   [null, "Releases: when Luke sends a new song to the team, your steps and their dates appear in my_day. Read everything about the song with release_pack, mark ONLY your own steps with release_step (done only when it is really done), and fill the fields you are responsible for with release_fill."],
   ["Atlas", "Atlas, every day: open Spotify for Artists, Music, Upcoming, and report everything listed there with spotify_upcoming (an empty list when nothing is). The Spotify pitch waits until the song shows there."],
   /* B4 (17 Nov 2026): the Instagram reader */
-  ["Steve Kevin Forge", "Steve, Kevin and Forge: the instagram tool ranks the posts by engagement per view ((likes + comments + saves + shares) / views), not by views, every post at the SAME age (its numbers at 1 day; older posts are a separate reference list), with our own accounts' comments left out, plus saves + shares per view and follows per view: paid views bring few engagements, so a boosted post never wins on reach alone. With fewer than 10 ranked posts, say the order is not settled yet. Fans' questions nobody of ours answered are in needs_reply: put them in your update for Luke, never reply yourself. Each post shows the ad that boosted it (spend, its own engagements, cost per engagement) and its numbers from BEFORE the ad (its wow factor with our own followers). Every Monday: Steve and Kevin say WHY the top 3 beat the bottom 3 (the hook in the first seconds and the first line, the format, length, sound, topic, the time posted) as ONE update; Forge then sends Luke ONE send_message (needs decision, with recommend) naming the post that deserves the ad money next and why (high engagement per view, low cost per engagement, strong before the ad). The bots never change, start, pause or create ads: Luke decides and makes them."],
+  ["Steve Kevin Forge", "Steve, Kevin and Forge: the instagram tool ranks the posts by engagement per view ((likes + comments + saves + shares) / views), not by views, every post at the SAME age (its numbers at 1 day; older posts are a separate reference list), with our own accounts' comments left out, plus saves + shares per view and follows per view: paid views bring few engagements, so a boosted post never wins on reach alone. With fewer than 10 ranked posts, say the order is not settled yet. Fans' questions nobody of ours answered are in needs_reply: put them in your update for Luke, never reply yourself. Our own accounts (team, family, friends, bots, spam) never count: Nova keeps that list with instagram our_accounts add/remove (a handle and a short reason, logged); anyone can read it with our_accounts list. Each post shows the ad that boosted it (spend, its own engagements, cost per engagement) and its numbers from BEFORE the ad (its wow factor with our own followers). Every Monday: Steve and Kevin say WHY the top 3 beat the bottom 3 (the hook in the first seconds and the first line, the format, length, sound, topic, the time posted) as ONE update; Forge then sends Luke ONE send_message (needs decision, with recommend) naming the post that deserves the ad money next and why (high engagement per view, low cost per engagement, strong before the ad). The bots never change, start, pause or create ads: Luke decides and makes them."],
   ["Steve Kevin", "Steve and Kevin: HQ reads the Instagram account itself (the instagram tool: followers, every post's numbers at 6 hours, a day and a week, comments, countries). Once it says connected, never open Instagram in a browser for numbers again (that got the account locked); HQ logs the Instagram followers on the desk by itself."],
   /* A8 + B3 (17 Nov 2026) */
   ["Atlas", "Atlas: with your daily numbers, log the artist's Spotify monthly listeners and the Brazil listeners: log_growth platform Spotify, monthly_listeners and brazil_listeners (as shown in Spotify for Artists)."],
@@ -142,7 +142,10 @@ export const TOOLS = [
       evidence: { type: "array", items: { type: "string" }, description: "Up to 10 https links that back it up: statements, the sheet, a folder." } }, ["bot", "month"]) },
   { name: "instagram", title: "The Instagram account's numbers, read by HQ itself", idempotent: true, readOnly: true,
     description: "STEVE, KEVIN, FORGE (Nova too). Since 17 Nov 2026 HQ reads the badscandal Instagram account itself through Meta's official API (read-only), so nobody opens Instagram in a browser for numbers again (that got the account locked). Gives: connected or not (and why), followers, the newest posts with their numbers at 6 hours, a day and a week (views, reach, likes, saves, shares), the newest comments (fans asking for the song name), the followers' top countries, and the RANKING: which posts engage best per view, with the ads that boosted them and the cost per engagement. HQ also logs the day's Instagram followers on the desk by itself.",
-    inputSchema: obj({ bot: BOT }, ["bot"]) },
+    inputSchema: obj({ bot: BOT,
+      our_accounts: str("Optional. The list of OUR OWN accounts, whose comments never count (left out of the ranking, the fans' list and needs_reply). list = show it with its changes (anyone). add = leave a handle's comments out (team, family, friends, bots, spam); remove = count that handle's comments again. Only Nova changes it, always with handle and a short reason.", { enum: ["list", "add", "remove"] }),
+      handle: str('With add or remove: the Instagram handle, like "@name".'),
+      reason: str("With add or remove: a short reason (who it is and why), kept in the log with the date.") }, ["bot"]) },
   { name: "task_update", title: "Update or close one of my tasks", idempotent: true,
     description: 'Update ONE of YOUR OWN open tasks from my_day (open_tasks: the ids start with "T-"). status done = the task is really finished (say in note what was done, with the date or the link); blocked = you cannot go on (say in note exactly what is needed and from whom); working = you started it; todo = it is no longer blocked. The dashboard shows your word over the sheet\'s row straight away: done takes it off the open list, and a blocker you clear disappears. Never another bot\'s task (Nova may update anyone\'s). Daily duties (ids starting with "D-") are NOT tasks: finish or block those with post_update.',
     inputSchema: obj({ bot: BOT, task: str('The task id from my_day, for example "T-27".'),
@@ -451,7 +454,16 @@ export async function callTool(tool, args, ctx) {
     }
     case "instagram": {
       if (!ctx.ig) throw new S.StaffError("The Instagram reader isn't available here. Tell Claude.");
+      const oa = args.our_accounts ? String(args.our_accounts) : "";
+      let changed = null;
+      if (oa === "add" || oa === "remove") {
+        if (!IG.OWN_EDITORS.includes(me)) throw new S.StaffError("Only Nova changes the list of our own accounts. Read it with our_accounts list; to change it, ask Nova (send_message).");
+        try { changed = await IG.editOwn(ctx.ig(), now, { by: me, action: oa, handle: args.handle, reason: args.reason }); } catch (e) { throw new S.StaffError(e.message); }
+      } else if (oa && oa !== "list") throw new S.StaffError("our_accounts is list, add or remove.");
       const v = await IG.igView(ctx.ig(), now);
+      const ourAccounts = { handles: v.own.map((h) => "@" + h), note: "Comments from these accounts never count: not in the ranking, the fans' list or needs_reply. The connected account is always on it. Only Nova changes it.",
+        changes: (v.ownLog || []).map((x) => ({ on: S.spStamp(x.at), by: x.by, what: `${x.action} @${x.handle}`, reason: x.reason })) };
+      if (oa) return { our_accounts: ourAccounts, ...(changed ? { done: `${changed.change.action === "add" ? "Added" : "Removed"} @${changed.change.handle}.` } : {}) };
       const st = v.status;
       return { connected: st.connected, ...(st.connected ? { account: "@" + st.username } : { how: "Luke connects it once in HQ (Growth & Fans › Connect Instagram)." }),
         ...(st.lastError ? { problem: st.lastError } : {}), followers: st.followers, last_read: st.lastOkAt ? S.spStamp(st.lastOkAt) : "never",
@@ -462,7 +474,7 @@ export async function callTool(tool, args, ctx) {
           older: v.ranking.older.slice(0, 10).map(rankLine), not_ranked_yet: v.ranking.tooFew, ads_read: v.ranking.adsAt ? S.spStamp(v.ranking.adsAt) : "not yet (the ads are read hourly with Meta's read-only key)" },
         needs_reply: v.needsReply.map((c) => `${c.at.slice(0, 16).replace("T", " ")} · ${c.user}: ${c.text} (on “${c.postCaption}”)`),
         needs_reply_note: "Questions from fans nobody of ours has answered. Replying goes outside the team: Luke decides and replies. Put them in your update for Luke; never reply yourself.",
-        own_accounts: v.own,
+        own_accounts: v.own.map((h) => "@" + h),
         note: "Read-only. Don't open Instagram in a browser for these numbers. Never change, start, pause or create ads." };
     }
     case "close_month": {
