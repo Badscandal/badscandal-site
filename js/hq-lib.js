@@ -1471,6 +1471,24 @@
     weeks.forEach(function (w) { w.items.sort(function (a, b) { return a.date < b.date ? -1 : a.date > b.date ? 1 : a.kind === b.kind ? 0 : a.kind === "release" ? -1 : 1; }); });
     return weeks;
   }
+  /* B4 (17 Nov 2026): the Instagram reader's one line */
+  function igStatusLine(st, now) {
+    if (!st || !st.connected) return "Instagram is not connected yet.";
+    if (st.lastError) return st.lastError;
+    return "@" + st.username + " · " + (st.lastOkAt ? "read " + ago((now || Date.now()) - st.lastOkAt) : "not read yet") + " · the key renews by itself";
+  }
+  /* one post's best numbers: a week, else a day, else 6 hours, else so far */
+  function igPostNumbers(p) {
+    var s = (p && p.snaps) || {}, pick = s.d7 ? ["After a week", s.d7] : s.d1 ? ["After a day", s.d1] : s.h6 ? ["After 6 hours", s.h6] : p && p.latest ? ["So far", p.latest] : null;
+    if (!pick) return "";
+    var n = pick[1], bits = [];
+    if (n.views != null) bits.push(fmt(n.views) + " views");
+    if (n.reach != null) bits.push(fmt(n.reach) + " reach");
+    if ((n.likes != null ? n.likes : p.likes) != null) bits.push(fmt(n.likes != null ? n.likes : p.likes) + " likes");
+    if (n.saves != null) bits.push(fmt(n.saves) + " saves");
+    if (n.shares != null) bits.push(fmt(n.shares) + " shares");
+    return pick[0] + ": " + bits.join(" · ");
+  }
   /* A8 (17 Nov 2026): the monthly listeners card on Songs: { big, sub } or null */
   function artistLines(a) {
     if (!a || a.monthly == null) return null;
@@ -1567,7 +1585,7 @@
     return scored.slice(0, max).map(function (y) { return y.x; });
   }
 
-  return { artistLines: artistLines, closedLine: closedLine, preflightLine: preflightLine, sixWeeks: sixWeeks, recommendLines: recommendLines, recommendedOption: recommendedOption, releaseTrouble: releaseTrouble, navPad: navPad, signoutWords: signoutWords, growthWhen: growthWhen, ago: ago, spMs: spMs, releaseWords: releaseWords, releaseDetail: releaseDetail, healthRows: healthRows, healthState: healthState, median: median, change: change, money: money, attention: attention, briefing: briefing,
+  return { igStatusLine: igStatusLine, igPostNumbers: igPostNumbers, artistLines: artistLines, closedLine: closedLine, preflightLine: preflightLine, sixWeeks: sixWeeks, recommendLines: recommendLines, recommendedOption: recommendedOption, releaseTrouble: releaseTrouble, navPad: navPad, signoutWords: signoutWords, growthWhen: growthWhen, ago: ago, spMs: spMs, releaseWords: releaseWords, releaseDetail: releaseDetail, healthRows: healthRows, healthState: healthState, median: median, change: change, money: money, attention: attention, briefing: briefing,
     snapshot: snapshot, changesSince: changesSince, tiles: tiles, summaryText: summaryText, shortStep: shortStep, day: day,
     slug: slug, workerLabel: workerLabel, sortWorkers: sortWorkers, workerView: workerView, dutyWhen: dutyWhen, workerCounts: workerCounts, seenLine: seenLine, connectorLine: connectorLine,
     novaMessage: novaMessage, liveFeed: liveFeed, spWhen: spWhen, waitLabel: waitLabel, needWords: needWords, reportParts: reportParts, siteCheckLine: siteCheckLine, composeNames: composeNames,

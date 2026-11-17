@@ -83,6 +83,8 @@ async function isLuke(req) {
   return !!secret && (await verifySession(readCookie(req.headers.get("cookie"), COOKIE), secret));
 }
 
+/* the Instagram reader's store (B4): read-only for the bots, through the instagram tool */
+function igStore(context) { return context.deploy?.context === "production" ? getStore({ name: "instagram", consistency: "strong" }) : getDeployStore({ name: "instagram", consistency: "strong" }); }
 function stores(context) {
   const prod = context.deploy?.context === "production";
   const open = (name, strong) => (prod ? getStore(strong ? { name, consistency: "strong" } : name) : getDeployStore(strong ? { name, consistency: "strong" } : name));
@@ -135,7 +137,7 @@ async function mcp(req, context) {
   if (b.bad) { await note(context, req, 400, who, "", "the body was not JSON"); return json(400, { jsonrpc: "2.0", id: null, error: { code: -32700, message: "Parse error: the body is not JSON" } }); }
   const st = stores(context), now = Date.now();
   const headers = Object.fromEntries([...req.headers].map(([k, v]) => [k.toLowerCase(), v]));
-  const ctx = { store: st.desk, now, role, hq: hqLoader(st) };
+  const ctx = { store: st.desk, now, role, hq: hqLoader(st), ig: () => igStore(context) };
   /* batch 5: /mcp/<bot> (or /mcp?bot=<bot>) = that bot's own tools and instruction lines; a call there
      without `bot` is that bot's, and another bot's name is refused. /mcp, a name not on the team, and
      Claude's key keep the whole list. */

@@ -9,11 +9,14 @@
       late 2 hours later, Nova gets ONE message to chase or escalate (07:00-22:00 São Paulo; S.chaseLate).
    5. Meta's own spend (B3, 17 Nov 2026): the last 7 finished days, account level, read-only (cached an hour),
       one Meta row a day on the desk by HQ (S.recordMetaSpend), from 07:00 São Paulo; no key: nothing.
+   6. the Instagram reader (B4, 17 Nov 2026): followers to the desk, post numbers at 6 h / 1 day / 1 week, comments
+      every 3 hours, countries daily; renews its own key weekly. Not connected: nothing.
    Logic: netlify/lib/push.mjs. No key or no device: it does nothing. */
 import { getStore } from "@netlify/blobs";
 import { morning, sweep } from "../lib/push.mjs";
 import * as S from "../lib/staff.mjs";
 import { readSongReport } from "../lib/github.mjs";
+import { syncInstagram } from "../lib/instagram.mjs";
 import { loadHq } from "../lib/hq-load.mjs";
 import { readMeta } from "../lib/metaread.mjs";
 import { DEFAULT_ACCOUNT } from "../lib/metaspend.mjs";
@@ -58,6 +61,18 @@ export default async () => {
     }
   } catch (e) {
     console.error("meta spend record failed", e?.name || "Error");
+  }
+  try {
+    const igStore = getStore({ name: "instagram", consistency: "strong" });
+    const k = await igStore.get("key.json", { type: "json" }).catch(() => null);
+    if (k && k.token) {
+      const roster = (await desk()).roster || S.DEFAULT_ROSTER;
+      const r = await syncInstagram({ store: igStore, now, logGrowth: (row) => S.logGrowth(store, now, roster, { by: "HQ", date: S.spDay(now), ...row }) });
+      if (!r.ok) console.error("instagram read: " + (r.kind || "error"));
+      else if (r.snapshots || r.newComments) console.log(`instagram read: ${r.snapshots} post numbers, ${r.newComments} new comments`);
+    }
+  } catch (e) {
+    console.error("instagram read failed", e?.name || "Error");
   }
   try {
     S.useSongReports((id) => readSongReport(id));

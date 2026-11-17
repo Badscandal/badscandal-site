@@ -1554,7 +1554,7 @@ export async function listSpend(store, now) {
   return docs.flatMap((d) => (Array.isArray(d.data) ? d.data : []));
 }
 
-export const GROWERS = ["Steve", "Atlas", "Kevin", "Laura", "Nova", "Claude"];
+export const GROWERS = ["Steve", "Atlas", "Kevin", "Laura", "Nova", "Claude", "HQ"]; /* HQ: the Instagram reader (B4, 17 Nov 2026) */
 /* A8 (17 Nov 2026, Atlas): monthly_listeners and brazil_listeners are the artist's Spotify numbers: platform Spotify */
 const GROWTH_NUM = ["followers", "views", "channel_views", "shorts_views", "monthly_listeners", "brazil_listeners"], SONG_NUM = ["streams", "listeners", "saves", "playlist_adds"];
 const growKey = (month) => `grow/${month}.json`;
@@ -1631,6 +1631,8 @@ export async function logGrowth(store, now, roster, a) {
   const mine = corrected.find((c) => c.date === date);
   if (mine && res.row) res.row.change = mine.to;
   if (res.duplicate) return corrected.length ? { ...res, corrected } : res;
+  /* HQ's own rows (the Instagram reader) mark no duty: the bot whose duty it is still says it did it */
+  if (by === "HQ") return { ...res, duty: null, ...(corrected.length ? { corrected } : {}) };
   /* the duty: done (with its gaps), through the same live log as post_update */
   const r = res.row, words = [];
   if (!song && r.followers != null && (res.added || res.filled.includes("followers") || res.replaced.includes("followers"))) words.push(`${fmtN(r.followers)} followers` + (r.change != null ? ` (${r.change >= 0 ? "+" : ""}${fmtN(r.change)})` : ""));
