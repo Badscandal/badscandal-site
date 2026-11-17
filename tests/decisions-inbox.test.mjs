@@ -65,8 +65,8 @@ test("recommend: who may, and on what", async () => {
   const c = await call(d, "recommend", { message_id: r2.id, why: "Stop: made-up reason." }, { role: "claude" });
   assert.equal(c.saved, true);
 });
-test("the tool list: recommend is Nova's (Claude and plain /mcp get it too); 35 tools", () => {
-  assert.equal(TOOLS.length, 35);
+test("the tool list: recommend is Nova's (Claude and plain /mcp get it too)", () => {
+  assert.ok(TOOLS.some((t) => t.name === "recommend")); /* the count is pinned in mcp.test.mjs (36 since preflight, A6) */
   assert.ok(toolsFor("Nova", R).some((t) => t.name === "recommend"));
   assert.ok(!toolsFor("Kevin", R).some((t) => t.name === "recommend"));
   assert.match(INSTRUCTIONS, /recommend/);
