@@ -66,8 +66,30 @@
   });
 
   /* More (phones) */
-  function openMore() { $("moreSheet").hidden = false; $("scrim").hidden = false; $("moreBtn").setAttribute("aria-expanded", "true"); var a = $("moreSheet").querySelector("a"); if (a) a.focus(); }
-  function closeMore() { $("moreSheet").hidden = true; $("scrim").hidden = true; $("moreBtn").setAttribute("aria-expanded", "false"); }
+  /* A1 (17 Nov 2026): the sheet used to cover the bar, with Log out exactly where the More button was, so a
+     second tap on More ("close it") logged Luke out. Now the bar stays on top while the sheet is open
+     (body.more-open), the sheet's items end above it, and More closes it again. */
+  function openMore() { $("moreSheet").hidden = false; $("scrim").hidden = false; document.body.classList.add("more-open"); $("moreBtn").setAttribute("aria-expanded", "true"); var a = $("moreSheet").querySelector("a"); if (a) a.focus(); }
+  function closeMore() { $("moreSheet").hidden = true; $("scrim").hidden = true; document.body.classList.remove("more-open"); $("moreBtn").setAttribute("aria-expanded", "false"); }
+  $("nav").addEventListener("click", function (ev) { var a = ev.target.closest && ev.target.closest("a[data-tab]"); if (a && !$("moreSheet").hidden) closeMore(); });
+
+  /* A1 (17 Nov 2026): the space under every page on phones follows the bottom bar's REAL height and place
+     (--navpad, HQLib.navPad), so the bar never covers the end of a page whatever the phone, the text size or
+     the app around it. The CSS keeps its fixed 112 px as the least. Desktop's rail: 0. */
+  var L = window.HQLib;
+  function sizeNav() {
+    var n = $("nav"); if (!n || !L) return;
+    var r = n.getBoundingClientRect(), vh = window.innerHeight;
+    var bar = r.height > 0 && r.width > window.innerWidth / 2 && r.bottom > vh - 60; /* the phone's bar, not the rail */
+    document.documentElement.style.setProperty("--navpad", (bar ? L.navPad(r, vh) : 0) + "px");
+  }
+  window.addEventListener("resize", sizeNav);
+  window.addEventListener("orientationchange", sizeNav);
+  window.addEventListener("pageshow", sizeNav);
+  if (window.visualViewport) window.visualViewport.addEventListener("resize", sizeNav);
+  if (window.ResizeObserver) try { new ResizeObserver(sizeNav).observe($("nav")); } catch (e) {}
+  document.addEventListener("hq:refreshed", sizeNav);
+  sizeNav();
   $("moreBtn").addEventListener("click", function () { if ($("moreSheet").hidden) openMore(); else closeMore(); });
   $("scrim").addEventListener("click", closeMore);
   document.addEventListener("keydown", function (ev) { if (ev.key === "Escape" && !$("moreSheet").hidden) { closeMore(); $("moreBtn").focus(); } });
