@@ -27,12 +27,19 @@ export const IG_VERSION = "v25.0"; /* Instagram Login examples, 2026 */
 export const FB_HOST = "https://graph.facebook.com";
 export { GRAPH_VERSION as FB_VERSION } from "./capi.mjs";
 import { GRAPH_VERSION as FB_VERSION } from "./capi.mjs";
+import { rankPosts } from "./postrank.mjs";
 /* The BADSCANDAL Facebook Page (public id). Luke reaches it through the business portfolio, not a direct Page role,
    so /me/accounts lists nothing; HQ then reads this Page directly. Netlify env FB_PAGE_ID overrides it. */
 export const DEFAULT_PAGE_ID = "101630812698451";
 export function pageIdFrom(env) { const v = String((env && env("FB_PAGE_ID")) || "").trim(); return /^\d{5,30}$/.test(v) ? v : DEFAULT_PAGE_ID; }
 const USER_KEY_DAYS = 60; /* an extended Facebook user key lasts about 60 days */
 export const MARKS = [["h6", 6 * 3600000], ["d1", 24 * 3600000], ["d7", 7 * 86400000]];
+/* a mark is only taken close to its age (Nova, 17 Nov 2026: compare posts at the SAME age): a post first seen
+   later than this gets no such snapshot, so "1 day" always means about one day */
+export const MARK_GRACE = { h6: 3 * 3600000, d1: 12 * 3600000, d7: 24 * 3600000 };
+/* older posts (seen after their week) get their numbers read ONCE, a few per hour, so the ranking has history */
+const BACKFILL_PER_RUN = 4;
+export const EXTRA_METRICS = ["follows", "profile_visits"];
 const DAY = 86400000;
 const KEEP_DAYS = 8;
 export const MEDIA_METRICS = ["views", "reach", "likes", "comments", "saved", "shares", "total_interactions"];
@@ -163,6 +170,12 @@ export function metricsOf(json) {
   }
   return out;
 }
+/* follows and profile visits a post brought (Nova: "followers are our weekly goal"); not every kind of post has
+   them, so a refusal (other) just means none */
+async function extraNumbers(id, key, fetchImpl) {
+  try { return metricsOf(await igGet(`${id}/insights`, { metric: EXTRA_METRICS.join(",") }, key, fetchImpl)); } catch (e) { if (e.kind !== "other") throw e; return {}; }
+}
+const keepExtras = (prev) => { const o = {}; for (const k of EXTRA_METRICS) if (prev && prev[k] != null) o[k] = prev[k]; return o; };
 async function mediaNumbers(id, key, fetchImpl) {
   try { return metricsOf(await igGet(`${id}/insights`, { metric: MEDIA_METRICS.join(",") }, key, fetchImpl)); } catch (e) {
     if (e.kind !== "other") throw e;
@@ -200,13 +213,19 @@ export async function syncInstagram({ store, now, fetchImpl = fetch, logGrowth =
         likes: num(m.like_count), comments: num(m.comments_count) });
       const age = now - at;
       if (age <= KEEP_DAYS * DAY) {
-        const due = MARKS.filter(([k, ms]) => age >= ms && !p.snaps[k]);
+        const due = MARKS.filter(([k, ms]) => age >= ms && age <= ms + MARK_GRACE[k] && !p.snaps[k]);
         const wantLatest = !p.latestAt || now - p.latestAt >= 3 * 3600000;
         if (due.length || wantLatest) {
-          const n = await mediaNumbers(m.id, key, fetchImpl);
+          let n = await mediaNumbers(m.id, key, fetchImpl);
+          n = due.length || !p.latest ? { ...n, ...(await extraNumbers(m.id, key, fetchImpl)) } : { ...keepExtras(p.latest), ...n };
           for (const [k] of due) { p.snaps[k] = { ...n, at: now }; out.snapshots++; }
           p.latest = n; p.latestAt = now;
         }
+      } else if (!p.latest && (out.backfilled || 0) < BACKFILL_PER_RUN) {
+        /* an older post HQ has never read: its lifetime numbers, once */
+        p.latest = { ...(await mediaNumbers(m.id, key, fetchImpl)), ...(await extraNumbers(m.id, key, fetchImpl)) };
+        p.latestAt = now; p.lifetime = true;
+        out.backfilled = (out.backfilled || 0) + 1;
       }
       fresh.push(p);
     }
@@ -218,11 +237,14 @@ export async function syncInstagram({ store, now, fetchImpl = fetch, logGrowth =
       const list = await readDoc(store, "comments.json", []);
       const seen = new Set(list.map((c) => c.id));
       for (const p of keep.filter((x) => now - Date.parse(x.at) <= KEEP_DAYS * DAY && (x.comments == null || x.comments > 0))) {
-        const c = await igGet(`${p.id}/comments`, { fields: "id,text,username,timestamp", limit: "50" }, key, fetchImpl);
+        const c = await igGet(`${p.id}/comments`, { fields: "id,text,username,timestamp,replies{username}", limit: "50" }, key, fetchImpl);
         for (const x of (c && c.data) || []) {
-          if (!x.id || seen.has(x.id)) continue;
+          if (!x.id) continue;
+          /* who replied (usernames only): a reply from one of our own accounts = answered */
+          const repliedBy = (((x.replies && x.replies.data) || []).map((r) => String((r && r.username) || "").toLowerCase()).filter(Boolean)).slice(0, 20);
+          if (seen.has(x.id)) { const old = list.find((y) => y.id === String(x.id)); if (old) old.repliedBy = repliedBy; continue; }
           seen.add(x.id);
-          list.push({ id: String(x.id), at: String(x.timestamp || ""), user: String(x.username || "").slice(0, 60), text: String(x.text || "").replace(/\s+/g, " ").slice(0, 300), post: p.id, postCaption: p.caption.slice(0, 60), link: p.link });
+          list.push({ id: String(x.id), at: String(x.timestamp || ""), user: String(x.username || "").slice(0, 60), text: String(x.text || "").replace(/\s+/g, " ").slice(0, 300), post: p.id, postCaption: p.caption.slice(0, 60), link: p.link, repliedBy });
           out.newComments++;
         }
       }
@@ -253,6 +275,47 @@ export async function syncInstagram({ store, now, fetchImpl = fetch, logGrowth =
   return out;
 }
 
+/* Our own accounts (Nova, 17 Nov 2026: our comments made posts look better than they are). Luke, the same day:
+   "make it a list Nova manages with a tool … each change needs a short reason and is logged with the date … Nova
+   only; other bots can read". The connected account always counts; the rest are in own.json
+   {handles, log: [{at, by, action, handle, reason}]} (handles only: they are public Instagram names; the list itself
+   is NOT in the code, the repo is public). Changed through the instagram tool (our_accounts), shown in HQ. */
+export const HANDLE_RE = /^[a-z0-9._]{1,30}$/;
+export const OWN_EDITORS = ["Nova", "Claude"];
+const OWN_MAX = 40, OWN_LOG = 60;
+export function parseHandle(text) { return String(text || "").trim().replace(/^@/, "").toLowerCase(); }
+export async function editOwn(store, now, { by, action, handle, reason }) {
+  const h = parseHandle(handle), why = String(reason || "").replace(/\s+/g, " ").trim().slice(0, 200);
+  if (!["add", "remove"].includes(action)) throw new IgError("bad", "our_accounts is add, remove or list.");
+  if (!HANDLE_RE.test(h)) throw new IgError("bad", `"${String(handle || "").slice(0, 40)}" isn't an Instagram handle: write it like @name.`);
+  if (why.length < 3) throw new IgError("bad", "Give a short reason (who it is: Luke's account, family, a friend, a bot, spam…).");
+  const [doc, key, state] = await Promise.all([readDoc(store, "own.json", null), readDoc(store, "key.json", null), readDoc(store, "state.json", {})]);
+  const handles = ((doc && doc.handles) || []).map(parseHandle).filter(Boolean), log = (doc && doc.log) || [];
+  const self = parseHandle((key && key.username) || state.username);
+  if (action === "add") {
+    if (h === self || handles.includes(h)) throw new IgError("bad", `@${h} is already on the list: nothing changed.`);
+    if (handles.length >= OWN_MAX) throw new IgError("bad", `The list has ${OWN_MAX} accounts already: remove one first.`);
+    handles.push(h);
+  } else {
+    if (h === self) throw new IgError("bad", `@${h} is the connected account: it always counts as ours.`);
+    if (!handles.includes(h)) throw new IgError("bad", `@${h} isn't on the list: nothing changed.`);
+    handles.splice(handles.indexOf(h), 1);
+  }
+  log.push({ at: now, by: String(by || ""), action, handle: h, reason: why });
+  await store.setJSON("own.json", { handles, log: log.slice(-OWN_LOG), at: now });
+  return { handles: ownHandles(self, { handles }), change: { action, handle: h } };
+}
+export function ownHandles(username, ownDoc) {
+  return [...new Set([String(username || "").toLowerCase(), ...(((ownDoc && ownDoc.handles) || []).map((h) => String(h).toLowerCase()))].filter(Boolean))];
+}
+/* comments that need a reply (Nova: a fan asked if they can use the music): a question, not ours, nobody of ours
+   answered it, the last 14 days. Replying goes outside the team, so it's Luke's. */
+const ASKS = /\?|\b(can i|could i|may i|use your|use this|what song|song name|which song|where can|when (is|does)|link|nome da m[uú]sica|qual ([ée] )?a m[uú]sica|posso usar|onde|quando sai)\b/i;
+export function needsReply(comments, now) {
+  return (comments || []).filter((c) => !c.own && !c.answered && ASKS.test(c.text || "") && now - Date.parse(c.at || "") <= 14 * DAY).slice(0, 10)
+    .map((c) => ({ id: c.id, at: c.at, user: c.user, text: c.text, postCaption: c.postCaption, link: c.link }));
+}
+
 /* what HQ and the bots see: never the key */
 export async function igStatus(store, now) {
   const key = await readDoc(store, "key.json", null), state = await readDoc(store, "state.json", {});
@@ -262,25 +325,42 @@ export async function igStatus(store, now) {
     ...(key && key.route === "fb" ? { keyType: key.keyType || "page", expiresAt: key.expiresAt || null } : {}), ...(key && key.page ? { page: key.page } : {}) };
 }
 export async function igView(store, now) {
-  const [status, posts, comments, countries] = await Promise.all([igStatus(store, now), readDoc(store, "posts.json", []), readDoc(store, "comments.json", []), readDoc(store, "countries.json", null)]);
-  return { status, posts: posts.slice(0, 12), comments: comments.slice(0, 40), countries: countries ? countries.list : [] };
+  const [status, posts, comments, countries, adDoc, ownDoc] = await Promise.all([igStatus(store, now), readDoc(store, "posts.json", []), readDoc(store, "comments.json", []), readDoc(store, "countries.json", null), readDoc(store, "adposts.json", null), readDoc(store, "own.json", null)]);
+  const own = ownHandles(status.username, ownDoc);
+  const marked = comments.map((c) => ({ ...c, own: own.includes(String(c.user || "").toLowerCase()), answered: (c.repliedBy || []).some((u) => own.includes(u)) }));
+  /* L2: which posts engage best, with the ads that boosted them (postrank.mjs); our own comments don't count */
+  const ranking = rankPosts(posts, adDoc, { now, comments: marked });
+  return { status, posts: posts.slice(0, 12), comments: marked.filter((c) => !c.own).slice(0, 40), countries: countries ? countries.list : [], own,
+    ownLog: (((ownDoc && ownDoc.log) || []).slice().reverse()).slice(0, 20),
+    needsReply: needsReply(marked, now),
+    ranking: { ranked: ranking.ranked.slice(0, 15), older: ranking.older.slice(0, 15), tooFew: ranking.tooFew.length, adsAt: ranking.adsAt, minViews: ranking.minViews } };
 }
 /* one post in plain words, for the bots: "Fri 14 Nov · Reel · “caption” · a day: 1,240 views, 880 reach, …" */
 const n0 = (v) => (v == null ? "?" : Number(v).toLocaleString("en-US"));
 export function postLine(p) {
-  const s = p.snaps || {}, show = s.d7 ? ["a week", s.d7] : s.d1 ? ["a day", s.d1] : s.h6 ? ["6 hours", s.h6] : p.latest ? ["so far", p.latest] : null;
-  return `${p.at.slice(0, 10)} · ${p.type || "post"} · “${p.caption || "(no caption)"}”` + (show ? ` · ${show[0]}: ${n0(show[1].views)} views, ${n0(show[1].reach)} reach, ${n0(show[1].likes ?? p.likes)} likes, ${n0(show[1].saves)} saves, ${n0(show[1].shares)} shares` : "") + (p.link ? ` · ${p.link}` : "");
+  const s = p.snaps || {}, show = s.d7 ? ["a week", s.d7] : s.d1 ? ["a day", s.d1] : s.h6 ? ["6 hours", s.h6] : p.latest ? [p.lifetime ? "lifetime" : "so far", p.latest] : null;
+  return `${p.at.slice(0, 10)} · ${p.type || "post"} · “${p.caption || "(no caption)"}”` + (show ? ` · ${show[0]}: ${n0(show[1].views)} views, ${n0(show[1].reach)} reach, ${n0(show[1].likes ?? p.likes)} likes, ${n0(show[1].comments ?? p.comments)} comments, ${n0(show[1].saves)} saves, ${n0(show[1].shares)} shares` +
+    (show[1].follows != null ? `, ${n0(show[1].follows)} follows` : "") + (show[1].profile_visits != null ? `, ${n0(show[1].profile_visits)} profile visits` : "") : ` · ${n0(p.comments)} comments, no numbers yet`) + (p.link ? ` · ${p.link}` : "");
 }
 
 /* /hq?sample=1: made-up numbers, never a real account */
 export function sampleView(now) {
   const iso = (ms) => new Date(now - ms).toISOString();
-  return { status: { connected: true, username: "sampleaccount", followers: 4210, lastRunAt: now - 600000, lastOkAt: now - 600000, lastError: "", errorKind: "", daysLeft: 53, renews: true },
+  const v = { status: { connected: true, username: "sampleaccount", followers: 4210, lastRunAt: now - 600000, lastOkAt: now - 600000, lastError: "", errorKind: "", daysLeft: 53, renews: true },
     posts: [
-      { id: "s1", at: iso(9 * 3600000), type: "reels", caption: "Made-up reel: the drop at 0:12", link: "https://www.instagram.com/", likes: 88, comments: 6, snaps: { h6: { views: 2100, reach: 1500, likes: 70, saves: 31, shares: 12, at: now - 3 * 3600000 } } },
-      { id: "s2", at: iso(2.5 * DAY), type: "reels", caption: "Made-up studio clip", link: "https://www.instagram.com/", likes: 140, comments: 11, snaps: { h6: { views: 1800, reach: 1200, likes: 90, saves: 20, shares: 8 }, d1: { views: 3900, reach: 2700, likes: 130, saves: 44, shares: 19 } } },
-      { id: "s3", at: iso(9 * DAY), type: "feed", caption: "Made-up cover reveal", link: "https://www.instagram.com/", likes: 210, comments: 15, snaps: { h6: { views: 1400, reach: 1000, likes: 120, saves: 25, shares: 6 }, d1: { views: 2600, reach: 1900, likes: 180, saves: 40, shares: 10 }, d7: { views: 4800, reach: 3300, likes: 205, saves: 61, shares: 17 } } }],
+      { id: "s1", at: iso(9 * 3600000), type: "reels", caption: "Made-up reel: the drop at 0:12", link: "https://www.instagram.com/", likes: 88, comments: 6, snaps: { h6: { views: 2100, reach: 1500, likes: 70, saves: 31, shares: 12, at: now - 3 * 3600000 } }, latest: { views: 2600, reach: 1800, likes: 88, saves: 36, shares: 14 } },
+      { id: "s2", at: iso(2.5 * DAY), type: "reels", caption: "Made-up studio clip", link: "https://www.instagram.com/", likes: 1400, comments: 11, snaps: { h6: { views: 1800, reach: 1200, likes: 90, saves: 20, shares: 8, at: now - 2.5 * DAY + 6 * 3600000 }, d1: { views: 3900, reach: 2700, likes: 130, comments: 6, saves: 44, shares: 19, follows: 21, profile_visits: 64, at: now - 1.5 * DAY } }, latest: { views: 41000, reach: 30000, likes: 1400, saves: 160, shares: 70 } },
+      { id: "s3", at: iso(9 * DAY), type: "feed", caption: "Made-up cover reveal", link: "https://www.instagram.com/", likes: 210, comments: 15, snaps: { h6: { views: 1400, reach: 1000, likes: 120, saves: 25, shares: 6 }, d1: { views: 2600, reach: 1900, likes: 180, comments: 9, saves: 40, shares: 10, follows: 8, profile_visits: 30, at: now - 8 * DAY }, d7: { views: 4800, reach: 3300, likes: 205, saves: 61, shares: 17 } }, latest: { views: 4800, reach: 3300, likes: 205, saves: 61, shares: 17 } }],
     comments: [{ id: "k1", at: iso(2 * 3600000), user: "made_up_fan", text: "what song is this??", post: "s1", postCaption: "Made-up reel: the drop at 0:12", link: "https://www.instagram.com/" },
       { id: "k2", at: iso(20 * 3600000), user: "another_made_up_fan", text: "need this on spotify 🔥", post: "s2", postCaption: "Made-up studio clip", link: "https://www.instagram.com/" }],
     countries: [{ country: "BR", count: 2380 }, { country: "IE", count: 610 }, { country: "PT", count: 290 }] };
+  /* a made-up ad boosting the studio clip, started after its 6-hour numbers */
+  const ads = { at: now - 600000, ads: [{ id: "sa1", name: "Made-up boost", media: "s2", status: "ACTIVE", created: iso(2 * DAY), spend: 120, currency: "USD", impressions: 36000, reach: 26000, likes: 1200, comments: 4, saves: 110, shares: 40 }] };
+  v.own = ["sampleaccount", "made_up_partner"];
+  v.ownLog = [{ at: now - 2 * DAY, by: "Nova", action: "add", handle: "made_up_partner", reason: "Made-up: Luke's own account" }];
+  v.comments = v.comments.map((c) => ({ ...c, own: false, answered: false }));
+  v.needsReply = needsReply(v.comments, now);
+  const r = rankPosts(v.posts, ads, { now, comments: v.comments });
+  v.ranking = { ranked: r.ranked, older: r.older, tooFew: r.tooFew.length, adsAt: r.adsAt, minViews: r.minViews };
+  return v;
 }

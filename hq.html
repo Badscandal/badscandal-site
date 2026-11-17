@@ -1326,6 +1326,11 @@ a.t-card:hover,button.t-card:hover,#shell a.tile:hover{border-color:var(--accent
 #igBox .igform input{flex:1 1 220px;min-height:44px;font-size:16px}
 #igBox .igerr{color:var(--red,#FF7A7A)}
 #igBox .igcomments li{margin:6px 0;font-size:15px}
+/* ---------- L2: What engages best (17 Nov 2026) ---------- */
+.igrank { list-style: none; padding: 0; margin: 8px 0 14px; display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; counter-reset: rk; }
+.igrank li { counter-increment: rk; position: relative; }
+.igrank li::before { content: counter(rk); position: absolute; top: 14px; right: 16px; font-weight: 700; color: var(--muted); }
+.igrank .d.muted { color: var(--muted); }
 /* ---------- L6: song page tiles (17 Nov 2026) ---------- */
 .songtiles .sth { margin: 4px 0 10px; }
 .songtiles .stgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; margin-bottom: 18px; }

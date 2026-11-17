@@ -1500,6 +1500,23 @@
     var tone = lines.some(function (x) { return x.tone === "bad"; }) ? "bad" : lines.some(function (x) { return x.tone === "warn"; }) ? "warn" : "ok";
     return { id: id, title: s.title, address: "badscandal.com/" + id, tone: tone, lines: lines };
   }
+  /* L2: one ranked post (netlify/lib/postrank.mjs rankPosts) in the page's words */
+  function rankParts(r) {
+    var p1 = function (x) { return x == null ? "?" : (Math.round(x * 1000) / 10).toFixed(1) + "%"; };
+    var out = { rate: p1(r.rate) + " engaged", window: r.window === "1 day" ? "At 1 day" : r.window === "lifetime" ? "Lifetime" : "So far",
+      views: fmt(r.engaged) + " of " + fmt(r.views) + " views · " + fmt(r.likes) + " likes · " + fmt(r.comments) + " comments",
+      deep: "Saves + shares " + p1(r.deep) + " (" + fmt(r.saves) + " saves · " + fmt(r.shares) + " shares)",
+      follows: r.follows != null ? fmt(r.follows) + " follows (" + p1(r.followRate) + " of views)" + (r.profileVisits != null ? " · " + fmt(r.profileVisits) + " profile visits" : "") : "",
+      own: r.ownComments ? r.ownComments + " of our own comment" + (r.ownComments === 1 ? "" : "s") + " left out" : "",
+      paid: "Not boosted", before: "" };
+    if (r.paid) {
+      var c = r.paid.currency ? r.paid.currency + " " : "";
+      out.paid = "Boosted " + c + r.paid.spend.toFixed(2) + (r.paid.status ? " (" + r.paid.status.toLowerCase() + ")" : "") + " · " + fmt(r.paid.engaged) + " engagements from the ad" +
+        (r.paid.costPerEng != null ? " · " + c + r.paid.costPerEng.toFixed(3) + " each" : "");
+    }
+    if (r.before) out.before = "Before the ad (" + r.before.mark + "): " + p1(r.before.rate) + " of " + fmt(r.before.views) + " views";
+    return out;
+  }
   function igStatusLine(st, now) {
     if (!st || !st.connected) return "Instagram is not connected yet.";
     if (st.lastError) return st.lastError;
@@ -1613,7 +1630,7 @@
     return scored.slice(0, max).map(function (y) { return y.x; });
   }
 
-  return { songTile: songTile, igStatusLine: igStatusLine, igPostNumbers: igPostNumbers, artistLines: artistLines, closedLine: closedLine, preflightLine: preflightLine, sixWeeks: sixWeeks, recommendLines: recommendLines, recommendedOption: recommendedOption, releaseTrouble: releaseTrouble, navPad: navPad, signoutWords: signoutWords, growthWhen: growthWhen, ago: ago, spMs: spMs, releaseWords: releaseWords, releaseDetail: releaseDetail, healthRows: healthRows, healthState: healthState, median: median, change: change, money: money, attention: attention, briefing: briefing,
+  return { rankParts: rankParts, songTile: songTile, igStatusLine: igStatusLine, igPostNumbers: igPostNumbers, artistLines: artistLines, closedLine: closedLine, preflightLine: preflightLine, sixWeeks: sixWeeks, recommendLines: recommendLines, recommendedOption: recommendedOption, releaseTrouble: releaseTrouble, navPad: navPad, signoutWords: signoutWords, growthWhen: growthWhen, ago: ago, spMs: spMs, releaseWords: releaseWords, releaseDetail: releaseDetail, healthRows: healthRows, healthState: healthState, median: median, change: change, money: money, attention: attention, briefing: briefing,
     snapshot: snapshot, changesSince: changesSince, tiles: tiles, summaryText: summaryText, shortStep: shortStep, day: day,
     slug: slug, workerLabel: workerLabel, sortWorkers: sortWorkers, workerView: workerView, dutyWhen: dutyWhen, workerCounts: workerCounts, seenLine: seenLine, connectorLine: connectorLine,
     novaMessage: novaMessage, liveFeed: liveFeed, spWhen: spWhen, waitLabel: waitLabel, needWords: needWords, reportParts: reportParts, siteCheckLine: siteCheckLine, composeNames: composeNames,
