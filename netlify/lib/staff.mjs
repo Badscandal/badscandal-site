@@ -1487,7 +1487,7 @@ export async function incomeState(store, now) {
    (hq.mjs mergeDeskSpend / mergeDeskGrowth): a desk row replaces the sheet's for the same platform and day
    (spend), or fills the numbers the sheet's row lacks (growth). */
 export const SPEND_PLATFORMS = ["Meta", "Google", "TikTok"];
-export const SPENDERS = ["Forge", "Nova", "Claude", "Luke"];
+export const SPENDERS = ["Forge", "Nova", "Claude", "Luke", "HQ"]; /* HQ: Meta's own numbers (B3, 17 Nov 2026) */
 const spendKey = (month) => `spend/${month}.json`;
 export async function recordSpend(store, now, roster, a) {
   const by = whoIs(a.by, roster, { people: true });
@@ -1524,6 +1524,29 @@ export async function recordSpend(store, now, roster, a) {
     return { value: { entry: e, added: true, updated: false, duplicate: false } };
   });
 }
+/* B3 (17 Nov 2026, Forge): Meta's own daily spend on the desk, recorded by HQ from the read-only Meta key (the
+   hourly job), so Forge records only Google and TikTok. rows = account-level insight rows {day, spend, currency};
+   every finished day from since to until gets ONE Meta row (a day Meta lists nothing for = 0). A day where Forge
+   already has ONE Meta row: that row is updated (its account kept, the old amount kept as was); a day with two or
+   more Meta rows is left alone (a person split it on purpose). No rows at all: the currency is unknown, nothing is
+   written. -> {added, updated, skipped} */
+export async function recordMetaSpend(store, now, roster, rows, { since, until }) {
+  const out = { added: 0, updated: 0, skipped: 0 };
+  const list = Array.isArray(rows) ? rows : [];
+  const currency = (list.find((r) => r && r.currency) || {}).currency || "";
+  if (!/^[A-Z]{3}$/.test(currency) || !isDay(since) || !isDay(until)) return out;
+  const byDay = {};
+  for (const r of list) if (r && isDay(r.day)) byDay[r.day] = round((byDay[r.day] || 0) + (Number(r.spend) || 0));
+  const have = await Promise.all([since.slice(0, 7), until.slice(0, 7)].filter((m, i, a) => a.indexOf(m) === i).map((m) => readDoc(store, spendKey(m), [])));
+  const desk = have.flatMap((d) => (Array.isArray(d.data) ? d.data : [])).filter((x) => x.platform === "Meta");
+  for (let d = since; d <= until && d < spDay(now); d = addDays(d, 1)) {
+    const mine = desk.filter((x) => x.date === d);
+    if (mine.length > 1) { out.skipped++; continue; }
+    const r = await recordSpend(store, now, roster, { by: "HQ", platform: "Meta", account: mine.length ? mine[0].account : "Meta", date: d, amount: (byDay[d] || 0).toFixed(2), currency });
+    if (r.added) out.added++; else if (r.updated) out.updated++; else out.skipped++;
+  }
+  return out;
+}
 /* this month's and last month's spend rows (the cap's month and the one before) */
 export async function listSpend(store, now) {
   const m = spDay(now).slice(0, 7);
@@ -1532,7 +1555,8 @@ export async function listSpend(store, now) {
 }
 
 export const GROWERS = ["Steve", "Atlas", "Kevin", "Laura", "Nova", "Claude"];
-const GROWTH_NUM = ["followers", "views", "channel_views", "shorts_views"], SONG_NUM = ["streams", "listeners", "saves", "playlist_adds"];
+/* A8 (17 Nov 2026, Atlas): monthly_listeners and brazil_listeners are the artist's Spotify numbers: platform Spotify */
+const GROWTH_NUM = ["followers", "views", "channel_views", "shorts_views", "monthly_listeners", "brazil_listeners"], SONG_NUM = ["streams", "listeners", "saves", "playlist_adds"];
 const growKey = (month) => `grow/${month}.json`;
 /* a count: "1240" or "1,240" (never "about 1k", never a guess) */
 function countOf(v, name) {
