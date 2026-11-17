@@ -428,7 +428,13 @@ export async function sendMessage(store, now, roster, a) {
   const opts = approval ? APPROVE_OPTIONS.slice() : proposal ? PROPOSE_OPTIONS.slice() : options;
   /* release + ask: set only by the desk itself (store_status's "ready to resubmit"), never by a tool argument */
   const tag = a.ask === "resubmit" && a.release ? { release: clean(a.release, 60), ask: "resubmit" } : {};
-  const m = { id: newId("m", now), at: new Date(now).toISOString(), sp: spStamp(now), from, to, text, needs, re, options: opts, kind, resolved: null, ...(approval ? { approval } : {}), ...(proposal ? { proposal } : {}), ...tag,
+  /* the asker's own recommendation (A3, 17 Nov 2026): which option and why, on a message that needs Luke */
+  let recs = null;
+  if ((a.recommend != null && String(a.recommend).trim()) || (a.recommend_option != null && String(a.recommend_option).trim())) {
+    if (to !== "Luke" || needs === "none") fail("recommend goes only on a message to Luke that needs him (needs: decision, reply or action).");
+    recs = [recommendation(from, now, opts, a.recommend_option, a.recommend)];
+  }
+  const m = { id: newId("m", now), at: new Date(now).toISOString(), sp: spStamp(now), from, to, text, needs, re, options: opts, kind, resolved: null, ...(approval ? { approval } : {}), ...(proposal ? { proposal } : {}), ...tag, ...(recs ? { recommendations: recs } : {}),
     ...(qs.length >= 2 ? { questions: qs.map((q) => ({ q, answer: "", by: "", at: "" })) } : {}), ...(answers ? { answers } : {}), ...(via ? { via } : {}) };
   /* what Luke's answer settles the message with (an option he picked); "answered" otherwise */
   const settleNote = from === "Luke" ? clean(a.note, 240) : "";
@@ -527,6 +533,40 @@ function answersOf(x) {
   }
   if (!Object.keys(out).length) fail("answers is empty: give at least one answer.");
   return out;
+}
+/* ---------- recommendations (A3, 17 Nov 2026, Nova: "Luke's decisions inbox with my recommendation on each card") ----------
+   { by, option, why, at } on a message waiting on Luke. option = one of the message's options, exactly as listed
+   ("" when it has none, or none is picked); why = one or two sentences. The asker gives its own through
+   send_message; Nova (or Claude) adds hers with recommend. One per person: a new one replaces that person's. */
+export const RECOMMENDERS = ["Nova", "Claude"];
+function recommendation(by, now, options, option, why) {
+  const w = cleanText(why, 300);
+  if (w.length < 2) fail("Say why in recommend (why): one or two sentences.");
+  noSecrets(w);
+  let opt = "";
+  if (option != null && String(option).trim()) {
+    if (!(options || []).length) fail("recommend_option only goes with options: say what you recommend in recommend instead.");
+    opt = options.find((o) => low(o) === low(option)) || "";
+    if (!opt) fail(`recommend_option must be one of the options, exactly as listed: ${options.join(" / ")}.`);
+  }
+  return { by, option: opt, why: w, at: new Date(now).toISOString() };
+}
+export async function recommendMessage(store, now, roster, a) {
+  const by = whoIs(a.by, roster, { people: true });
+  if (!RECOMMENDERS.includes(by)) fail("Only Nova (or Claude) adds a recommendation to someone else's question. When you ask Luke yourself, put yours in send_message recommend.", "not_allowed");
+  const id = clean(a.id, 20), month = monthOfId(id);
+  if (!month) fail("message_id must be the id of the message waiting on Luke (it starts with m).");
+  return mutate(store, msgKey(month), [], (list) => {
+    const p = list.find((x) => x.id === id);
+    if (!p) fail("There is no message with that id.", "not_found");
+    if (p.to !== "Luke" || !isOpen(p)) fail("That message is not waiting on Luke (it was not sent to him, or it is already handled). Nothing was saved.");
+    const opt = a.option != null && String(a.option).trim() ? a.option : "";
+    if (opt && !(p.options || []).length) fail("That question has no options: say what you recommend in why.");
+    if (opt && !(p.options || []).some((o) => low(o) === low(opt))) fail(`option must be one of the options, exactly as listed: ${(p.options || []).join(" / ")}.`);
+    const rec = recommendation(by, now, p.options || [], opt, a.why);
+    p.recommendations = (Array.isArray(p.recommendations) ? p.recommendations : []).filter((x) => x.by !== by).concat([rec]);
+    return { value: p };
+  });
 }
 export async function resolveMessage(store, now, roster, a) {
   const by = whoIs(a.by, roster, { people: true });
