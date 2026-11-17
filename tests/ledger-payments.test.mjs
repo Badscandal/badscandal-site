@@ -81,3 +81,15 @@ test("Luke's own money accounts (PayPal, Wise) are never a 'new payer'", async (
   assert.ok(!i.unknown.includes("PAYPAL"), i.unknown.join(", "));
   assert.ok(i.unknown.includes("Made-up Payer 1"));
 });
+
+/* 17 Nov 2026 (Nova): "Label Engine" still showed EUR 411.43 after Ledger tied that payment to CREATE: a payment tied
+   to a source counts for that source only, never for another whose name its payer happens to match */
+test("a payment tied to a source counts for that source only", async () => {
+  const d = memoryDesk();
+  await S.setSources(d, [...SRC, { id: "engine", name: "Sample Engine", kind: "payer", category: "Self-releases", currency: "EUR", cadence: "monthly", owner: "Ledger", state: "active", match: ["sample engine"] }]);
+  const e = (await S.submitIncome(d, NOW, R, { bot: "HQ", date: "2026-11-03", payer: "SAMPLE ENGINE PAYOUTS", amount: "411.43", currency: "EUR", status: "received", category: "Other", account: "Revolut", reference: "ref-eng" })).entry;
+  await call(d, "fix_payment", { bot: "Ledger", id: e.id, month: "2026-11", source: "store", reason: "it is Sample Store's money, paid through Sample Engine" });
+  const i = await S.incomeState(d, NOW);
+  const by = Object.fromEntries(i.sources.map((s) => [s.id, s.monthTotal]));
+  assert.deepEqual([by.store, by.engine], [{ EUR: 411.43 }, {}]);
+});
