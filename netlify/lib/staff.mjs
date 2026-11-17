@@ -713,6 +713,16 @@ export async function sortIncome(store, now, roster, a) {
   if (pid && (status !== "received" || !PAY_ID.test(pid))) fail("pending_id goes only with status received, and must be the pending statement's id (it starts with i)");
   const category = status === "received" ? CATEGORIES.find((c) => low(c) === low(a.category)) : null;
   if (status === "received" && !category && !pid) fail(`category must be one of: ${CATEGORIES.join(", ")}`);
+  /* source + note (16 Nov 2026): tie a Revolut row to the source it is (a wage Luke moves in from another bank of
+     his, money from a payer via Wise or PayPal), so that source turns green on Money */
+  let srcId = "";
+  if (a.source != null && String(a.source).trim()) {
+    const k = low(clean(a.source, 60)), list = await getSources(store), hit = list.find((x) => x.kind !== "account" && (x.id === k || low(x.name) === k));
+    if (!hit) fail(`There is no income source called "${clean(a.source, 60)}". The sources are: ${list.filter((x) => x.kind !== "account").map((x) => `${x.name} (${x.id})`).join(", ")}.`);
+    srcId = hit.id;
+  }
+  const sortNote = a.note != null ? clean(a.note, 240) : "";
+  noSecrets(sortNote);
   let months = [clean(a.month, 7)];
   if (!/^\d{4}-\d{2}$/.test(months[0])) months = monthsBack(spDay(now).slice(0, 7), UNSORTED_MONTHS);
   const sortable = (e) => {
@@ -733,7 +743,7 @@ export async function sortIncome(store, now, roster, a) {
       sortable(e);
       const at = new Date(now).toISOString();
       e.history = (e.history || []).concat({ at, by, from: e.status, to: status }).slice(-10);
-      e.status = status; if (category) e.category = category; e.updatedAt = at;
+      e.status = status; if (category) e.category = category; if (srcId) e.source = srcId; if (sortNote) e.note = sortNote; e.updatedAt = at;
       return { value: e };
     });
     if (hit) return hit;
@@ -808,10 +818,14 @@ export async function getSources(store) {
   const [{ data }, ed] = await Promise.all([readDoc(store, "sources.json", []), readDoc(store, "srcedit.json", {})]);
   const edits = ed.data && typeof ed.data === "object" ? ed.data : {};
   /* the bots' own edits (batch 4) on top of the private seed: a re-seed never wipes them */
-  return (Array.isArray(data) ? data : []).map((s) => {
+  const seed = Array.isArray(data) ? data : [];
+  /* a source the seed doesn't have, added by Ledger with income_source create (16 Nov 2026) */
+  const made = Object.entries(edits).filter(([id, e]) => e && e.created && !seed.some((x) => x.id === id))
+    .map(([id, e]) => ({ id, name: e.name, kind: "payer", category: e.category || "Other", currency: "", lands: "", cadence: "monthly", owner: e.by || "Ledger", state: "active", match: [low(e.name)], how: "", blocker: "", needsLuke: "" }));
+  return seed.concat(made).map((s) => {
     const e = edits[s.id];
     if (!e) return s;
-    const { by, at, ...f } = e;
+    const { by, at, created, name, ...f } = e;
     const out = { ...s, ...f, editedBy: by, editedAt: at };
     if (Array.isArray(f.accounts) && f.accounts.length) out.lands = f.accounts.join(" + ");
     return out;
@@ -825,8 +839,20 @@ export async function editSource(store, now, roster, a) {
   const by = whoIs(a.by, roster, { people: true });
   const want = low(clean(a.source, 60));
   const list = await getSources(store);
-  const s = list.find((x) => x.id === want || low(x.name) === want);
-  if (!s) fail(`There is no income source called "${clean(a.source, 60)}". The sources are: ${list.map((x) => x.name).join(", ") || "none yet"}.`);
+  let s = list.find((x) => x.id === want || low(x.name) === want);
+  /* create (16 Nov 2026): a main source the desk doesn't have yet, added by Ledger, Sheet or Nova */
+  const create = a.create === true;
+  if (create && s) fail(`${s.name} is already a source: change it without create. Nothing was saved.`, "exists");
+  if (!s && !create) fail(`There is no income source called "${clean(a.source, 60)}". The sources are: ${list.map((x) => x.name).join(", ") || "none yet"}. To add a new one, send create: true with its name in source and its category.`);
+  if (create) {
+    if (!SOURCE_EDITORS.includes(by)) fail("Only Ledger, Sheet or Nova add a source. Tell Ledger.", "not_allowed");
+    const name = clean(a.source, 60);
+    if (name.length < 2) fail("Give the new source's name in source. Nothing was saved.");
+    noSecrets(name);
+    const id = songKey(name).slice(0, 30) || "s" + Number(now).toString(36);
+    if (list.some((x) => x.id === id)) fail(`There is already a source with the id "${id}". Nothing was saved.`, "exists");
+    s = { id, name, owner: by, created: true };
+  }
   if (!SOURCE_EDITORS.includes(by) && by !== s.owner) fail(`${s.name} is edited by its owner (${s.owner || "nobody named"}), Ledger, Sheet or Nova. If something about it is wrong, tell ${s.owner || "Ledger"}.`, "not_allowed");
   const f = {};
   if (a.state != null && String(a.state).trim() !== "") {
@@ -848,7 +874,16 @@ export async function editSource(store, now, roster, a) {
     if (!acc.length || acc.length > 4) fail("accounts must be 1 to 4 account names, for example [\"PayPal\", \"Wise\"].");
     f.accounts = acc;
   } else if (a.lands != null && clean(a.lands, 40)) f.accounts = [clean(a.lands, 40)];
-  if (!Object.keys(f).length) fail("Nothing to change: give state, reason, accounts, category or needs_luke.");
+  /* main + due_day (16 Nov 2026, Luke): the main sources are highlighted on Money every month, green once
+     their money has come, red once the day they usually pay by has passed */
+  if (a.main != null) f.main = a.main === true || low(a.main) === "true";
+  if (a.due_day != null && String(a.due_day).trim() !== "") {
+    const n = Number(a.due_day);
+    if (!Number.isInteger(n) || n < 1 || n > 31) fail("due_day must be the day of the month it usually pays by, 1 to 31. Nothing was saved.");
+    f.dueDay = n;
+  }
+  if (s.created) { f.created = true; f.name = s.name; if (!f.category) f.category = "Other"; }
+  if (!Object.keys(f).length) fail("Nothing to change: give state, reason, accounts, category, needs_luke, main or due_day.");
   noSecrets(JSON.stringify(f));
   const at = new Date(now).toISOString();
   await mutate(store, "srcedit.json", {}, (doc) => {
@@ -915,6 +950,14 @@ export function incomeReport(entries, checks, sources, today, older = []) {
     const lastLook = [lastLogged && spDay(Date.parse(lastLogged)), chk && chk.day].filter(Boolean).sort().pop() || null;
     const monthTotal = {};
     for (const e of mine) if (e.date.slice(0, 7) === month && e.status !== "transfer" && e.status !== "unsorted" && e.status !== "statement only") add(monthTotal, e.currency, e.amount);
+    /* this month, received only (16 Nov 2026, Luke): received = green; a MONTHLY source past the day it usually
+       pays by with nothing = late (red); otherwise waiting (not highlighted, as every month starts) */
+    const got = mine.filter((e) => e.status === "received" && e.date.slice(0, 7) === month);
+    const gotAmt = {};
+    for (const e of got) add(gotAmt, e.currency, e.amount);
+    const dueDay = Number.isInteger(s.dueDay) ? s.dueDay : null;
+    const thisMonth = s.kind === "account" ? null : { state: got.length ? "received" : dueDay && (s.cadence || "monthly") === "monthly" && Number(today.slice(8, 10)) > dueDay ? "late" : "waiting",
+      amount: got.length ? gotAmt : null, date: got.length ? got.map((e) => e.date).sort().pop() : null, dueDay };
     let verdict = "ok", why = "";
     if (s.state === "not_tracked") { verdict = "not_tracked"; why = "Nobody is logging this yet"; }
     else if (s.state === "blocked") { verdict = "blocked"; why = s.blocker || "Blocked"; }
@@ -932,7 +975,7 @@ export function incomeReport(entries, checks, sources, today, older = []) {
       return { account: acc, last: l ? { date: l.date, amount: l.amount, currency: l.currency, status: l.status } : null };
     }) : null;
     return { id: s.id, name: s.name, kind: s.kind, category: s.category, currency: s.currency, lands: s.lands, ...(s.accounts ? { accounts: s.accounts } : {}), ...(byAccount ? { byAccount } : {}), ...(s.editedBy ? { editedBy: s.editedBy, editedAt: s.editedAt } : {}),
-      cadence: s.cadence, owner: s.owner, how: s.how, state: s.state,
+      cadence: s.cadence, owner: s.owner, how: s.how, state: s.state, ...(s.main ? { main: true } : {}), ...(thisMonth ? { thisMonth } : {}),
       blocker: s.blocker, needsLuke: s.needsLuke, last: last ? { date: last.date, amount: last.amount, currency: last.currency, status: last.status } : null,
       checked: chk ? { day: chk.day, by: chk.by, new: chk.new } : null, lastLook, monthTotal, verdict, why };
   });
@@ -969,8 +1012,14 @@ export function incomeReport(entries, checks, sources, today, older = []) {
     if (e.status !== "received" || e.date.slice(0, 4) !== yr || seenY.some((x) => samePayment(x, e))) continue;
     seenY.push(e); add(receivedYear, e.currency, e.amount);
   }
+  /* received per month, every month read (12), each payment once: "this month and the ones before" */
+  const receivedByMonth = {}, seenM = [];
+  for (const e of entries.concat((older || []).map((x) => (x.arrived && x.arrived !== x.date ? { ...x, date: x.arrived } : x)))) {
+    if (e.status !== "received" || seenM.some((x) => samePayment(x, e))) continue;
+    seenM.push(e); add(receivedByMonth[e.date.slice(0, 7)] || (receivedByMonth[e.date.slice(0, 7)] = {}), e.currency, e.amount);
+  }
   const duplicates = twice.map(([k, e]) => ({ kept: k.payer, also: e.payer, amount: e.amount, currency: e.currency, date: e.date, id: e.id }));
-  return { month, received, pending, payable, statementOnly, royaltiesOnly, pendingOnly, receivedYear, duplicates, byCategory: byCat, count: entries.filter((e) => e.date.slice(0, 7) === month).length, unsorted: unsorted.slice(0, 40).map(withMatch), unsortedCount: unsorted.length,
+  return { month, received, pending, payable, statementOnly, royaltiesOnly, pendingOnly, receivedYear, receivedByMonth, duplicates, byCategory: byCat, count: entries.filter((e) => e.date.slice(0, 7) === month).length, unsorted: unsorted.slice(0, 40).map(withMatch), unsortedCount: unsorted.length,
     entries: [...entries].sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : a.at < b.at ? 1 : -1)).slice(0, 60),
     accounts, sources: src, unknown, problems,
     lastEntryAt: entries.reduce((a, e) => (!a || e.at > a ? e.at : a), null) };

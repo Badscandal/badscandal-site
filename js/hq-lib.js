@@ -544,7 +544,36 @@
      listed as payments, never added up as income. */
   function incomeTotals(i) {
     var row = function (label, o, hint) { var l = curList(o); return { label: label, text: l.length ? l.join(" + ") : "nothing", empty: !l.length, hint: hint }; };
-    return [row("Received", i && i.received, ""), row("Royalties (no salary)", i && i.royaltiesOnly, "Received, without salary")];
+    return [row("Received", i && i.received, "")]; /* one total (16 Nov 2026, Luke: "better to just have one received") */
+  }
+  /* ---------- Money, simpler (16 Nov 2026, Luke) ---------- */
+  var MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+  var monthLabel = function (m) { return MONTHS[Number(String(m).slice(5, 7)) - 1] + " " + String(m).slice(0, 4); };
+  var ordinal = function (n) { var t = n % 100, u = n % 10; return n + (t >= 11 && t <= 13 ? "th" : u === 1 ? "st" : u === 2 ? "nd" : u === 3 ? "rd" : "th"); };
+  /* received per month, newest first, this month always there: [{month, label, lines}] */
+  function receivedMonths(inc, current) {
+    var by = (inc && inc.receivedByMonth) || {}, ms = Object.keys(by);
+    if (current && ms.indexOf(current) < 0) ms.push(current);
+    return ms.sort().reverse().map(function (m) { return { month: m, label: monthLabel(m), lines: curList(by[m]) }; });
+  }
+  /* the sheet's month by month, just the month and what was received */
+  function monthRows(months) {
+    return (months || []).map(function (m) {
+      var tot = {};
+      Object.keys(m.income || {}).forEach(function (k) { var o = m.income[k] || {}; Object.keys(o).forEach(function (c) { tot[c] = Math.round(((tot[c] || 0) + Number(o[c])) * 100) / 100; }); });
+      var l = curList(tot);
+      return { month: m.month, label: monthLabel(m.month), amount: l.length ? l.join(" + ") : "nothing received" };
+    });
+  }
+  /* the main income sources, in their order (accounts never) */
+  function mainSources(list) { return (list || []).filter(function (s) { return s.main && s.kind !== "account"; }); }
+  /* one line per source for this month: received (green), not received past its day (red), or what to expect */
+  function sourceMonthLine(s) {
+    var t = s && s.thisMonth;
+    if (!t) return "";
+    if (t.state === "received") return "Received " + curList(t.amount).join(" + ") + (t.date ? " · " + day(t.date) : "");
+    if (t.state === "late") return "Not received: it usually pays by the " + ordinal(t.dueDay);
+    return t.dueDay ? "Expected by the " + ordinal(t.dueDay) : "Not received yet this month";
   }
   var CADENCE = { daily: "Every day", monthly: "Every month", quarterly: "Every 3 months", irregular: "Irregular" };
   function cadenceWord(c) { return CADENCE[c] || "Irregular"; }
@@ -1425,7 +1454,7 @@
     snapshot: snapshot, changesSince: changesSince, tiles: tiles, summaryText: summaryText, shortStep: shortStep, day: day,
     slug: slug, workerLabel: workerLabel, sortWorkers: sortWorkers, workerView: workerView, dutyWhen: dutyWhen, workerCounts: workerCounts, seenLine: seenLine, connectorLine: connectorLine,
     novaMessage: novaMessage, liveFeed: liveFeed, spWhen: spWhen, waitLabel: waitLabel, needWords: needWords, reportParts: reportParts, siteCheckLine: siteCheckLine, composeNames: composeNames,
-    threadRoot: threadRoot, answerTarget: answerTarget, questionLines: questionLines, questionsLeft: questionsLeft, stepButton: stepButton, formKey: formKey, storeLine: storeLine, storeHistory: storeHistory, capRateLine: capRateLine, capMissingLine: capMissingLine, dutyGapsLine: dutyGapsLine, incomeTotals: incomeTotals, approvalLines: approvalLines, resubmitAsk: resubmitAsk, relStatus: relStatus, relProgress: relProgress, stepGroups: stepGroups, upcomingAsks: upcomingAsks, staffAttention: staffAttention, staffHealth: staffHealth, curList: curList, cadenceWord: cadenceWord, accountLine: accountLine, sourceState: sourceState, payLine: payLine, accountsLine: accountsLine, proposalRows: proposalRows, proposalConfirm: proposalConfirm,
+    threadRoot: threadRoot, answerTarget: answerTarget, questionLines: questionLines, questionsLeft: questionsLeft, stepButton: stepButton, formKey: formKey, storeLine: storeLine, storeHistory: storeHistory, capRateLine: capRateLine, capMissingLine: capMissingLine, dutyGapsLine: dutyGapsLine, incomeTotals: incomeTotals, approvalLines: approvalLines, resubmitAsk: resubmitAsk, relStatus: relStatus, relProgress: relProgress, stepGroups: stepGroups, upcomingAsks: upcomingAsks, staffAttention: staffAttention, staffHealth: staffHealth, curList: curList, cadenceWord: cadenceWord, accountLine: accountLine, sourceState: sourceState, payLine: payLine, accountsLine: accountsLine, receivedMonths: receivedMonths, monthRows: monthRows, mainSources: mainSources, sourceMonthLine: sourceMonthLine, proposalRows: proposalRows, proposalConfirm: proposalConfirm,
     incomeEmpty: incomeEmpty, incomeProblems: incomeProblems,
     /* replies that visibly land + the release pipeline (11 Nov 2026) */
     spStampOf: spStampOf, seenWords: seenWords, sentLine: sentLine, answeredList: answeredList, CLAUDE_ROUNDS: CLAUDE_ROUNDS,

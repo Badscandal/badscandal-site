@@ -710,6 +710,15 @@ textarea.fld{min-height:112px;resize:vertical}
 #shell .acct .tile.attn-t{border:1px solid var(--red)}
 .acct .attn-t .an + .al{color:var(--red);font-weight:600} /* the line right under the name (was :first-of-type, which never matched: the name is a p too) */
 .inmonth{display:grid;gap:10px;grid-template-columns:repeat(2,minmax(0,1fr));margin:0 0 12px}
+.inmonth.one{grid-template-columns:minmax(0,1fr)}
+.rmhead{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.rmnav{display:flex;gap:8px}.rmnav .copybtn{min-width:44px;min-height:44px;padding:0 12px;font-size:20px}
+.t-big{margin:4px 0 0;font-size:28px;font-weight:700;color:var(--paper)}.t-big.empty3{font-size:18px;color:var(--muted);font-weight:500}
+.srcmain{display:grid;gap:10px;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));margin:0 0 12px}
+.srcm .an{margin:0;font-weight:700;color:var(--paper)}.srcm .al{margin:6px 0 0;color:var(--muted)}
+#shell .srcm.got{border:1px solid var(--spot)}.srcm.got .al{color:var(--spot);font-weight:600}
+#shell .srcm.late{border:1px solid var(--red)}.srcm.late .al{color:var(--red);font-weight:600}
+.srcother summary{cursor:pointer;color:var(--muted);min-height:44px;display:flex;align-items:center}
 .inmonth .t-lbl{margin-bottom:6px}
 .inmonth .t-hint{margin:6px 0 0;font-size:13px;color:var(--muted)}
 .inmonth .amt{margin:0;font-size:24px;line-height:1.25;font-weight:700;letter-spacing:-.01em;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
@@ -1519,12 +1528,12 @@ a.t-card:hover,button.t-card:hover,#shell a.tile:hover{border-color:var(--accent
     <h3 class="sech relh" id="releases-spotify">In Spotify for Artists</h3>
     <p class="secsub">What Atlas last saw there as upcoming. A song that didn't go through the pipeline is a question for you.</p>
     <div id="relSpot"><div class="ph"></div></div></section>
-  <section class="card view" id="money"><h2>Money</h2><p class="sub">Every amount in the currency it was billed or paid in. Totals in EUR are estimates at that month's average rate.</p><div class="sheeterr" id="errMoney" hidden></div>
+  <section class="card view" id="money"><h2>Money</h2><p class="sub">Every amount in the currency it was paid in. Only money that has arrived counts.</p><div class="sheeterr" id="errMoney" hidden></div>
     <h3 class="sech">Money coming in</h3>
-    <p class="secsub">Sent in by the bots every day through the connector, and read from Revolut by the site every morning. The monthly tables below still come from the income sheet.</p>
+    <p class="secsub">Read from Revolut by the site every morning, and sent in by the bots through the connector. Only money that has arrived counts.</p>
     <div id="incomeBody"><div class="ph big"></div><div class="ph"></div></div>
     <h3 class="sech" style="margin-top:30px">Month by month</h3>
-    <p class="secsub">Ad spend and income per month, from the sheet.</p>
+    <p class="secsub">What was received each month, from the income sheet.</p>
     <div class="tile"><div class="scroll"><table class="stack" id="moneyTable"></table></div></div><div id="moneyDetail"></div></section>
   <section class="card view" id="team"><h2>Team</h2><p class="sub" id="teamSub"></p><div class="sheeterr" id="errTeam" hidden></div>
     <p class="note2" id="liveNote" hidden></p>

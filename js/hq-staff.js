@@ -495,19 +495,29 @@
       var l = L.accountLine(a, today);
       return '<div class="tile' + (l.attn ? " attn-t" : "") + '"><p class="an">' + esc(a.name) + '</p><p class="al">' + esc(cap(l.text)) + "</p>" + (a.needsLuke ? '<p class="al need">Needs you: ' + esc(a.needsLuke) + "</p>" : "") + "</div>";
     }).join("") + "</div>";
-    /* batch 4: what arrived, the music's own share (no salary), what is owed to us, statements not payable yet */
-    var keys = { "Received": "received", "Royalties (no salary)": "royaltiesOnly" };
-    h += '<div class="inmonth">' + L.incomeTotals(inc).map(function (t) {
-      return '<div class="tile"><p class="t-lbl">' + esc(t.label === "Received" ? "Received in " + month : t.label) + "</p>" + amountLines(inc[keys[t.label]], "Nothing") + (t.hint ? '<p class="t-hint">' + esc(t.hint) + "</p>" : "") + "</div>";
-    }).join("") + "</div>";
+    /* ONE total: received in the month (16 Nov 2026, Luke), and the months before with ‹ › */
+    var rms = L.receivedMonths(inc, inc.month), mi = Math.min(ui.incMonth || 0, Math.max(0, rms.length - 1)), rm = rms[mi];
+    h += '<div class="inmonth one"><div class="tile"><div class="rmhead"><p class="t-lbl">Received in ' + esc(rm ? rm.label : month) + "</p>" +
+      '<span class="rmnav"><button class="copybtn" type="button" data-inc-month="' + (mi + 1) + '"' + (mi + 1 >= rms.length ? " disabled" : "") + ' aria-label="The month before">‹</button>' +
+      '<button class="copybtn" type="button" data-inc-month="' + (mi - 1) + '"' + (mi <= 0 ? " disabled" : "") + ' aria-label="The month after">›</button></span></div>' +
+      (rm && rm.lines.length ? rm.lines.map(function (l) { return '<p class="t-big">' + esc(l) + "</p>"; }).join("") : '<p class="t-big empty3">Nothing received yet</p>') +
+      '<p class="t-hint">Received only: money that has arrived. Pending and payable payments never count.</p></div></div>';
     h += toSortHtml(inc);
     if (probs.length) h += '<div class="t-card attn-card has"><p class="t-lbl">To look at</p><ul class="inprob">' + probs.map(function (p) { return "<li><span>" + esc(p) + "</span></li>"; }).join("") + "</ul></div>";
-    h += '<h4 class="lblh">Where money comes from</h4><div class="tile"><div class="scroll"><table class="stack" id="srcTable">' +
+    /* the main sources, this month: neutral as every month starts, green once received, red once their day has
+       passed without it (16 Nov 2026, Luke) */
+    var mains = L.mainSources(sources), others = sources.filter(function (s) { return !s.main; });
+    h += '<h4 class="lblh">Where money comes from · ' + esc(month) + "</h4>" + (mains.length ? '<div class="srcmain">' + mains.map(function (s) {
+      var st = s.thisMonth ? s.thisMonth.state : "waiting";
+      return '<div class="tile srcm ' + (st === "received" ? "got" : st === "late" ? "late" : "") + '"><p class="an">' + esc(s.name) + '</p><p class="al">' + esc(L.sourceMonthLine(s)) + "</p>" + (s.category ? '<p class="t-hint">' + esc(s.category) + "</p>" : "") + "</div>";
+    }).join("") + "</div>" : '<p class="secsub">Ledger marks the main income sources here (each with the day it usually pays by).</p>');
+    sources = others;
+    h += '<details class="tile srcother"><summary>Other sources (' + others.length + ')</summary><div class="scroll"><table class="stack" id="srcTable">' +
       (sources.length ? "<tr><th>Source</th><th>Type</th><th>Usually paid</th><th>Last payment</th><th>This month</th><th>State</th></tr>" + sources.map(function (s) {
         var st = L.sourceState(s), mt = L.curList(s.monthTotal);
         return "<tr><td><b>" + esc(s.name) + "</b>" + (s.lands ? "<small>Lands in " + esc(s.lands) + (s.editedBy ? " · updated by " + esc(s.editedBy) : "") + "</small>" : "") + (s.byAccount ? "<small>" + esc(L.accountsLine(s)) + "</small>" : "") + "</td><td>" + esc(s.category || "–") + "</td><td>" + esc(L.cadenceWord(s.cadence)) + "</td><td>" + esc(cap(L.payLine(s.last))) + "</td><td>" + esc(mt.length ? mt.join(" + ") : "Nothing yet") +
           "</td><td>" + (st.attn ? '<span class="attn">' + esc(st.text) + "</span>" : esc(st.text)) + (s.needsLuke ? '<small class="need">Needs you: ' + esc(s.needsLuke) + "</small>" : "") + "</td></tr>";
-      }).join("") : '<tr><td class="empty">No sources are on the list yet.</td></tr>') + "</table></div></div>";
+      }).join("") : '<tr><td class="empty">No other sources.</td></tr>') + "</table></div></details>";
     /* transfers and payments still to sort say so in words, their amount greyed: never in the totals */
     var rows = entries.slice(0, ui.payAll ? 60 : 15), stat = function (e) { return L.payStatus(e).text; }, nc = function (e) { return L.payStatus(e).counted ? "" : " nc"; };
     h += '<h4 class="lblh">Latest payments</h4><div class="tile">' + (!rows.length ? '<p class="empty2">No payments have been submitted yet.</p>'
@@ -532,6 +542,7 @@
     if (!b) return;
     if (b.hasAttribute("data-retry")) reload();
     if (b.hasAttribute("data-pay-more")) { ui.payAll = true; drawIncome(); }
+    if (b.hasAttribute("data-inc-month")) { ui.incMonth = Math.max(0, Number(b.getAttribute("data-inc-month")) || 0); drawIncome(); }
     if (b.hasAttribute("data-bank")) bankClick(b.getAttribute("data-bank"));
     if (b.hasAttribute("data-sort")) sortClick(b.getAttribute("data-sort"), b.getAttribute("data-id") || "", b.getAttribute("data-cat") || "");
   });

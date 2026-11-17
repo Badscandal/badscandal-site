@@ -37,6 +37,10 @@ const INSTRUCTION_LINES = [
   /* batch 4 (15 Nov 2026) */
   ["Steve Atlas Kevin Laura", "Steve, Atlas, Kevin, Laura: log each day's numbers with log_growth (one call per platform or song); a number you could not read goes in gaps with why, and your duty counts as done with gaps. post_update takes gaps too: one missing number is never a reason for blocked."],
   ["Forge", "Forge: record each platform's daily spend with record_spend (not_read with why when you could not read it). The month's total against the cap is the one record_spend and the dashboard give, at the team's fixed rate: never add it up yourself."],
+  /* 16 Nov 2026 (Luke): Revolut is the main bank; Wise and PayPal money ends up there */
+  ["Ledger Sheet", "Ledger: Revolut is Luke's main bank, read by the site every morning; money from Wise or PayPal ends up there too. For every Revolut credit that comes from Wise or PayPal, find where it came from by name and amount: if that payment is already on the desk as received, it is the same money, so sort the Revolut row as transfer with a note (\"from <payer> via Wise\"); if not, sort it as received with its category and source. Never count the same money twice."],
+  ["Ledger Sheet", "Ledger: a wage Luke moves in himself every month from another bank of his shows as his own transfer: sort it as received, category Salary, with its source (Luke tells you which source it is)."],
+  ["Ledger Sheet", "Ledger: Luke's main income sources are highlighted on Money every month: mark each with income_source main true and due_day (the day of the month it usually pays by); add one the desk doesn't have with create true. Only received money counts: a main source turns green when its money is received, red once its day has passed without it."],
   ["Ledger Sheet", "Ledger and Sheet: keep your income sources current with income_source (where the money lands, state, reason; clear needs_luke when it no longer stands), and correct a payment with fix_payment (with the reason). Statuses: statement only (not payable yet) and payable (owed, ready to pay out)."],
   /* batch 5 (15 Nov 2026) */
   [null, "A duty you finish before Nova has put today's duty rows on the board still counts: post_update with status done as usual, and it is marked done once the row appears."],
@@ -136,7 +140,10 @@ export const TOOLS = [
     inputSchema: obj({ bot: BOT, source: str("The source's name or id, as income_status lists it."),
       accounts: { type: "array", items: { type: "string" }, description: 'Where its money lands, 1 to 4 accounts, for example ["PayPal", "Wise"].' },
       state: str("active | blocked | unknown | not_tracked", { enum: S.SOURCE_STATE }), reason: str("Why it is blocked (required with blocked), or empty to clear."),
-      category: str("Optional.", { enum: S.CATEGORIES }), needs_luke: str('What only Luke can do for it; send "" (empty) when nothing is needed any more.') }, ["bot", "source"]) },
+      category: str("Optional.", { enum: S.CATEGORIES }), needs_luke: str('What only Luke can do for it; send "" (empty) when nothing is needed any more.'),
+      main: { type: "boolean", description: "true = one of Luke's main income sources: highlighted on Money every month (green when its money came, red once its day has passed)." },
+      due_day: { type: "integer", description: "The day of the month it usually pays by (1 to 31). After it, a main monthly source with nothing received turns red." },
+      create: { type: "boolean", description: "true = add a source the desk doesn't have yet: its name in source, with its category (and main, due_day, accounts)." } }, ["bot", "source"]) },
   { name: "record_spend", title: "Record a day's ad spend",
     description: "FORGE (Nova may do it for him): ONE platform's spend for ONE day, exactly as the ad account shows it, in the account's own currency (never converted). 0 for a day with no ads. If you could not read it, send not_read with why (for example \"signed out\") instead of an amount: the dashboard lists it as missing and marks the month's total estimated. Sending the same day again with a new amount corrects it. The answer is the month so far against the USD 1,000 cap, worked out on the site with the team's fixed monthly rate: use that figure, never your own sum.",
     inputSchema: obj({ bot: BOT, platform: str("Meta | Google | TikTok", { enum: S.SPEND_PLATFORMS }), account: str("The ad account's name as shown."),
@@ -244,7 +251,9 @@ export const TOOLS = [
     description: 'For Ledger (Sheet and Nova may too). The site reads Luke\'s personal Revolut every morning and puts every incoming payment on the desk. One it could not place has the status "unsorted": it is in the account, and nobody has said what it is, so it counts as nothing yet. Use this to say what ONE such payment is: received (it is income: give its category) or transfer (not income: Luke moving his own money, a refund, a gift, a friend paying him back). Find the id and month in income_status under "unsorted". Sort it ONLY when it is clear from the payer (a label, a distributor, a publisher, a known client = received; Luke\'s own name or his own account = transfer). When it is not clear, leave it unsorted and ask Luke with ONE send_message, needs decision, naming the payer, the date and the amount. Never guess. If income_status shows a pending_match for it (a statement already logged as pending, same amount and currency) and you are sure it is that statement\'s money, sort it as received with pending_id = that statement\'s id: the statement becomes received and this row goes, so the money is never counted twice. You can also correct a payment the site sorted itself; what Luke or another person decided cannot be changed here.',
     inputSchema: obj({ bot: BOT, id: str("The payment's id from income_status (it starts with i)."), month: str("The month it is filed under, YYYY-MM (the first 7 characters of its date)."),
       status: str("received | transfer", { enum: ["received", "transfer"] }), category: str("Only with received: Self-releases | Label deals | Publishing | Production | Salary | Other.", { enum: S.CATEGORIES }),
-      pending_id: str("Optional, only with received: the id of the pending statement this payment is the money of (income_status: pending_match). The statement keeps its own category.") }, ["bot", "id", "status"]) },
+      pending_id: str("Optional, only with received: the id of the pending statement this payment is the money of (income_status: pending_match). The statement keeps its own category."),
+      source: str("Optional: the income source this payment is (its name or id from income_status), so that source shows as received on Money."),
+      note: str("Optional: one line, for example where the money came from (\"from Sample Label via Wise\").") }, ["bot", "id", "status"]) },
 ];
 
 /* Luke, 11 Nov 2026: "let them see my full revolut personal income to be able to actually see the
@@ -422,8 +431,9 @@ export async function callTool(tool, args, ctx) {
         now: `${e.arrived || e.date} · ${e.payer} · ${e.currency} ${e.amount.toFixed(2)} · ${e.status} · ${e.account} · ${e.category}` };
     }
     case "income_source": {
-      const src = await S.editSource(store, now, roster, { by: me, source: args.source, accounts: args.accounts, state: args.state, reason: args.reason, category: args.category, needs_luke: args.needs_luke });
-      return { saved: true, source: src.name, lands_in: src.lands, state: src.state, ...(src.blocker ? { reason: src.blocker } : {}), category: src.category, needs_luke: src.needsLuke || "nothing", shown_on: "badscandal.com/hq, Money" };
+      const src = await S.editSource(store, now, roster, { by: me, source: args.source, accounts: args.accounts, state: args.state, reason: args.reason, category: args.category, needs_luke: args.needs_luke, main: args.main, due_day: args.due_day, create: args.create });
+      return { saved: true, source: src.name, id: src.id, lands_in: src.lands, state: src.state, ...(src.blocker ? { reason: src.blocker } : {}), category: src.category, needs_luke: src.needsLuke || "nothing",
+        main: !!src.main, ...(src.dueDay ? { due_day: src.dueDay } : {}), shown_on: "badscandal.com/hq, Money" };
     }
     case "record_spend": {
       const r = await S.recordSpend(store, now, roster, { by: me, platform: args.platform, account: args.account, date: args.date, amount: args.amount, currency: args.currency, not_read: args.not_read });
@@ -474,7 +484,7 @@ export async function callTool(tool, args, ctx) {
           ...(e.pendingMatch ? { pending_match: { id: e.pendingMatch.id, line: `${e.pendingMatch.date} · ${e.pendingMatch.payer} · ${e.pendingMatch.currency} ${e.pendingMatch.amount.toFixed(2)} · pending` } } : {}) })) };
     }
     case "sort_payment": {
-      const e = await S.sortIncome(store, now, roster, { by: me, id: args.id, month: args.month, status: args.status, category: args.category, pending_id: args.pending_id });
+      const e = await S.sortIncome(store, now, roster, { by: me, id: args.id, month: args.month, status: args.status, category: args.category, pending_id: args.pending_id, source: args.source, note: args.note });
       return { saved: true, id: e.id, status: e.status, category: e.category, recorded: `${e.arrived || e.date} · ${e.payer} · ${e.currency} ${e.amount.toFixed(2)} · ${e.status}` };
     }
     case "set_my_card": {
