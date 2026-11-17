@@ -1,13 +1,14 @@
 # HQ status (update on every deploy)
 
-**Last updated:** 17 Nov 2026, ~05:45 São Paulo, by Claude (main `a9d1409`).
-**Tests:** 477, all passing on Node 24 and Node 22. **Connector:** 34 tools.
+**Last updated:** 17 Nov 2026, ~11:30 São Paulo, by Claude (main `63a7463`).
+**Tests:** 486, all passing on Node 24 and Node 22. **Connector:** 34 tools.
 No money amounts, payer names or account numbers in this file: the repo is public.
 
 ## Live (newest first)
 
 | When | PR | What |
 |------|----|------|
+| 17 Nov | #48 | Song-page builds (A2): a failed build tells the bot that asked "Not done: <step>: <why>" (song_pages + hourly); only the song-page checks (`npm run test:song`) can block a page, every other test runs after it is live and reports to Claude; reports on the `song-builds` branch, read with no key |
 | 17 Nov | #47 | HQ UI bugs (A1): Sheet deadlines shown as written (no more Invalid Date); page bottom follows the phone bar; More no longer logs out on a second tap, and the login says why it appeared; no "on time" next to a warning or blocked step; growth "in N days" with under a week of readings |
 | 17 Nov | (song_page job) | badscandal.com/loveyou published by GitHub's song-page build (first real run; cover checked) |
 | 17 Nov | #44 | Release page per song; Spotify Canvas field + Atlas step; ad plan field; "released before HQ" mark; missing pipeline steps added; `roster_card` for Nova; Revolut clears "not connected" when any account reads; "Kevin (TikTok)" = Kevin; log_growth channel/Shorts views |
@@ -27,9 +28,11 @@ No money amounts, payer names or account numbers in this file: the repo is publi
 
 ## Next up
 
-- **A2** of `docs/HQ-ROADMAP.md` (build failures to the desk), only when Luke says to start it (17 Nov 2026: "don't continue to the next fixes until I tell you").
+- **A3** of `docs/HQ-ROADMAP.md` (Luke's decisions inbox with Nova's recommendation), only when Luke says to start it.
 
 ## Known gaps / watch
+
+- A2: the report step has never run on GitHub; the next real song_page build is its first test. If song_pages still says "no report from GitHub yet" after 15 minutes, look at the run and the `song-builds` branch.
 
 - A1 sign-out: if HQ signs Luke out again, the login form says why (button, or which answer said "not logged in"); ask him for that line.
 - A1 bottom bar: the overlap never reproduced in a phone-sized desktop browser; Luke checks on his phone.
