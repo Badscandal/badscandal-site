@@ -52,10 +52,20 @@ import { callTool, CLAUDE_TOOLS, INSTRUCTIONS, TOOLS, toolsFor, instructionsFor 
 const NO_STORE = { "Cache-Control": "no-store", "X-Robots-Tag": "noindex, nofollow" };
 const json = (status, data, extra = {}) => new Response(data === null ? null : JSON.stringify(data), { status, headers: { ...(data === null ? {} : { "Content-Type": "application/json; charset=utf-8" }), ...NO_STORE, ...extra } });
 const MAX_BODY = 64 * 1024;
+/* upload_cover carries the picture itself (16 Nov 2026, Webmaster: every upload was refused "Too large"): ONE
+   tools/call of upload_cover may be up to 5.8 MB (a 4 MB picture in base64, under Netlify's 6 MB); every other
+   request stays at 64 KB */
+const MAX_UPLOAD_BODY = 5.8 * 1024 * 1024;
+const isUpload = (v) => !!v && !Array.isArray(v) && v.method === "tools/call" && v.params && v.params.name === "upload_cover";
 
-async function bodyOf(req) {
+async function bodyOf(req, { upload = false } = {}) {
   const text = await req.text();
-  if (text.length > MAX_BODY) return { tooBig: true };
+  if (text.length > MAX_BODY) {
+    if (!upload || text.length > MAX_UPLOAD_BODY) return { tooBig: true, upload: upload && text.length > MAX_BODY };
+    let v;
+    try { v = JSON.parse(text); } catch { return { bad: true }; }
+    return isUpload(v) ? { value: v } : { tooBig: true };
+  }
   try { return { value: JSON.parse(text) }; } catch { return { bad: true }; }
 }
 /* "Bearer X" or a bare "X" (the bots' app may send either) */
@@ -120,8 +130,8 @@ async function mcp(req, context) {
     await note(context, req, 405, who, "", "only POST is answered");
     return json(405, { jsonrpc: "2.0", id: null, error: { code: -32000, message: "Use POST" } }, { Allow: "POST, OPTIONS" });
   }
-  const b = await bodyOf(req);
-  if (b.tooBig) return json(413, { jsonrpc: "2.0", id: null, error: { code: -32600, message: "Too large" } });
+  const b = await bodyOf(req, { upload: true });
+  if (b.tooBig) return json(413, { jsonrpc: "2.0", id: null, error: { code: -32600, message: "Too large: a request may be 64 KB at most; only upload_cover may carry a picture (4 MB at most)" } });
   if (b.bad) { await note(context, req, 400, who, "", "the body was not JSON"); return json(400, { jsonrpc: "2.0", id: null, error: { code: -32700, message: "Parse error: the body is not JSON" } }); }
   const st = stores(context), now = Date.now();
   const headers = Object.fromEntries([...req.headers].map(([k, v]) => [k.toLowerCase(), v]));
