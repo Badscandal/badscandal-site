@@ -1,7 +1,7 @@
 # HQ status (update on every deploy)
 
-**Last updated:** 17 Nov 2026, ~15:20 São Paulo, by Claude (main `9020fce`).
-**Tests:** 531, all passing on Node 24 and Node 22. **Connector:** 38 tools (bots must reconnect).
+**Last updated:** 17 Nov 2026, evening São Paulo, by Claude (main after PR #60). Start with `docs/HANDOFF.md`.
+**Tests:** 561, all passing on Node 24 and Node 22. **Connector:** 38 tools (the instagram tool gained options: bots refresh their tool list).
 No money amounts, payer names or account numbers in this file: the repo is public.
 
 ## Live (newest first)

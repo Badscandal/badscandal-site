@@ -1,5 +1,8 @@
 # BADSCANDAL — badscandal.com
 
+> **Start with `docs/HANDOFF.md`** (where we left off, what's in flight, what's next, and a prompt to paste into a
+> new session). **Every push to `main` updates HANDOFF.md and STATUS.md in the same push** (Luke, 17 Nov 2026).
+>
 > **Read first (any Claude session, local or cloud):** `docs/WORKING-WITH-LUKE.md` (the rules and how a request
 > goes: merge to main ONLY on Luke's "deploy"/"publish"; this repo is public, so no keys, money amounts, payer or
 > account names, lyrics or private notes, not even in tests; test on Node 24 AND 22; end with a message for Nova),
