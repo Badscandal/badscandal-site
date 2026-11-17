@@ -58,9 +58,18 @@ const INSTRUCTION_LINES = [
   [null, "To add a song to the releases or change one (its title, day or details), use propose_release: Luke is asked if it is correct first, and nothing changes until he says yes. Never tell Luke a song is added or changed before that."],
   ["Webmaster", "Webmaster: check song_pages first (what happened to each request, and which song the home card should show today); a cover that isn't on a public link goes up with upload_cover; the home card changes with song_page kind card, Luke confirming."],
   ["Webmaster Nova", "Webmaster: song pages are made with song_page (kind new: address, title, day, cover link; kind track: the Spotify link on release day). Luke confirms, then GitHub builds and checks the page: never Luke's Mac, never by hand."],
+  [null, "my_day's connector line says how many tools the desk has and the version of their list. If your app shows fewer tools, or that version is new to you, refresh the tool list (reconnect the connector) before you work: a tool or an option you can't see may have been added."],
   [null, "Nova's yes counts as Luke's, as long as Luke told Nova yes himself: Nova records it with record_luke_answer (Luke's exact words), and it reaches you as Luke's answer, via Nova. Never for money (income, payments, ad spend): only Luke answers those."],
 ];
 export const INSTRUCTIONS = INSTRUCTION_LINES.map((l) => l[1]).join("\n");
+/* a short fingerprint of the tool list: names and every option. It changes whenever a tool or an option is added or
+   removed (17 Nov 2026, Nova: the bots' app kept an old copy, so new options looked missing) */
+export function toolsVersion(tools) {
+  const text = tools.map((t) => t.name + ":" + Object.keys((t.inputSchema && t.inputSchema.properties) || {}).sort().join(",")).sort().join("|");
+  let h = 0x811c9dc5;
+  for (let i = 0; i < text.length; i++) { h ^= text.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; }
+  return h.toString(16).padStart(8, "0");
+}
 
 export const TOOLS = [
   { name: "my_day", title: "My day", readOnly: true,
@@ -170,7 +179,7 @@ export const TOOLS = [
     inputSchema: obj({ bot: BOT, month: str("YYYY-MM (default: this month)."), account: str("Optional: Revolut, Wise, PayPal..."), source: str("Optional: a source's name or id."),
       payer: str("Optional: words in the payer's name."), status: str("Optional: received | pending | payable | statement only | transfer | unsorted"), limit: { type: "integer", description: "1 to 200 (default 100)." } }, ["bot"]) },
   { name: "income_status", title: "Income so far and what is missing", readOnly: true,
-    description: "This month's income as logged (received and pending, per currency, never mixed), the newest payments, every known source of income with when it last paid, which accounts were checked today, and the list of problems (not checked, overdue, blocked, a payer nobody has named). Use it before the daily check and before reporting to Luke.",
+    description: "For a month or an account, or every payment with its id, use payments. This month's income as logged (received and pending, per currency, never mixed), the newest payments, every known source of income with when it last paid, which accounts were checked today, and the list of problems (not checked, overdue, blocked, a payer nobody has named). Use it before the daily check and before reporting to Luke.",
     inputSchema: obj({ bot: BOT }, ["bot"]) },
   { name: "team_board", title: "The whole team right now", readOnly: true,
     description: "Every bot with today's duties (done, to do, late, blocked), its latest update, what it says it is working on, what is waiting on it, and when it last used this desk; every release with its late steps and warnings, and what Spotify for Artists showed in Atlas's last report. For Nova's standup, the 12:00 chase and the 21:00 wrap-up.",
@@ -628,7 +637,9 @@ export async function callTool(tool, args, ctx) {
       const notes = desk.messages.filter((m) => m.to === "all" && Date.parse(m.at) > since).slice(0, 5);
       /* the spotify step is done by the daily report, never by release_step (11 Nov 2026, review) */
       const spotNext = firstRs && firstRs.key === "spotify";
-      return { you: me, role: w.role, why_you_are_needed: w.why, today, now_sao_paulo: b.now, daily_duty: w.duty, usual_time: w.time, schedule: w.schedule,
+      const mine = TOOLS; /* the bots share ONE connector (/mcp): their app lists every tool */
+      return { you: me, role: w.role, why_you_are_needed: w.why, today, now_sao_paulo: b.now,
+        connector: { tools: mine.length, version: toolsVersion(mine), check: `If your app lists fewer than ${mine.length} tools, or this version is new to you, refresh the tool list (reconnect the connector) first.` }, daily_duty: w.duty, usual_time: w.time, schedule: w.schedule,
         duties_today: w.duties.map((d) => ({ id: d.id, task: d.task, due: d.due || "today", status: d.late ? "late" : d.status, ...(d.blocker ? { blocker: d.blocker } : {}) })),
         open_tasks: w.tasks.map((t) => ({ id: t.id, task: t.task, deadline: t.deadline, status: t.late ? "late" : t.status, ...(t.blocker ? { blocker: t.blocker } : {}), ...(t.note ? { your_note: t.note } : {}) })),
         waiting_on_you: w.waiting, notes_for_everyone: notes.map(short), ...forYou(w.waiting.map((m) => m.id).concat(notes.map((m) => m.id))),
