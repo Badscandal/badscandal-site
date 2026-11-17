@@ -17,7 +17,7 @@
    The password is the Netlify env var ADMIN_KEY (secret; STATS_KEY still works as a fallback).
    Wrong passwords: 5 per 10 minutes per IP (hashed), counted in the "admin-auth" Blob store. */
 import { getDeployStore, getStore } from "@netlify/blobs";
-import { adTaps, dashboard, defaultLink, healthSummary, LINKS, mergeSummary, resolveRange, spDay, spTime, summarize, toCSV, utcDaysFor, visitLog, addDays } from "../lib/admin.mjs";
+import { adTaps, dashboard, defaultLink, healthSummary, pageHealth, LINKS, mergeSummary, resolveRange, spDay, spTime, summarize, toCSV, utcDaysFor, visitLog, addDays } from "../lib/admin.mjs";
 import { HEALTH_PREFIX, LAST_ERROR_KEY, LAST_KEY, parseHealthKey } from "../lib/capi.mjs";
 import { DEFAULT_ACCOUNT, adKey, capReport, songOf, spendReport } from "../lib/metaspend.mjs";
 import { keyHealth, readKeyHealth, readMeta } from "../lib/metaread.mjs";
@@ -25,6 +25,7 @@ import { sampleEnv } from "../lib/admin-sample.mjs";
 import { convert, fetchMonthAverage, FX_TTL_MS } from "../lib/fx.mjs";
 import { checkPassword, clearCookie, COOKIE, makeSession, readCookie, sessionCookie, verifySession } from "../lib/session.mjs";
 import { parseKey, PREFIX } from "../lib/stats.mjs";
+import { homeCardNow, homeCardSong, SONGS } from "../lib/songs.mjs";
 
 const NO_STORE = { "Cache-Control": "no-store", "X-Robots-Tag": "noindex, nofollow" };
 const json = (status, data, extra = {}) =>
@@ -99,6 +100,7 @@ async function loadHealth(store, spDays) {
   const lists = await Promise.all(utc.map((d) =>
     store.list({ prefix: HEALTH_PREFIX + d + "/" }).then((r) => r.blobs.map((b) => parseHealthKey(b.key))).catch(() => [])));
   const h = healthSummary(lists.flat(), spDays);
+  h.pages = pageHealth(lists.flat(), spDays); /* L6: per song page */
   const [last, lastErr] = await Promise.all([LAST_KEY, LAST_ERROR_KEY].map((k) => store.get(k, { type: "json" }).catch(() => null)));
   const show = (r) => r && { ok: r.ok, time: spTime(r.ts), agoMs: Date.now() - r.ts, events: r.events, message: r.message, detail: r.detail, test: r.test };
   h.last = show(last);
@@ -190,7 +192,7 @@ async function overview(env, r, now) {
     const y = summarize(events, [yday], l.id);
     const rec = summarize(events, d8, l.id);
     const w = adTaps(summarize(events, d7, l.id));
-    return { id: l.id, title: l.title, date: l.date, cover: l.cover, path: l.path, visits: s.visits, people: s.unique, taps: s.taps,
+    return { id: l.id, title: l.title, date: l.date, cover: l.cover, path: l.path, track: !!l.track, visits: s.visits, people: s.unique, taps: s.taps,
       y: { people: y.unique, taps: y.taps }, pv: { visits: pv.visits, people: pv.unique, taps: pv.taps }, days: s.days, rec: rec.days, tapsByAd7: w.tapsByAd, ...adTaps(s) };
   }));
   const sum = (f) => per.reduce((n, s) => n + (f(s) || 0), 0);
@@ -245,11 +247,16 @@ async function overview(env, r, now) {
     readKeyHealth(env.cache),
   ]);
   if (health) health.testMode = env.testMode;
+  /* L6: each song page's own Meta record, then the home card (what is on it, and what the rule says) */
+  const pages = (health && health.pages) || {};
+  if (health) delete health.pages;
+  for (const s of per) s.health = pages[s.id] || null;
   return {
     range: r.range, days: r.days.length, from: r.days[0], to: r.days[r.days.length - 1],
     /* for /hq's "Data health": the newest visit record the counter wrote (any page, bots too) */
     lastEventAt: events.reduce((m, e) => (e && e.ts > m ? e.ts : m), 0) || null,
     songs: per.map(({ y, pv, days, rec, tapsByAd, tapsByDay, tapsByAd7, ...s }) => s), yesterday, prev, series, recent, spend, cap, health,
+    homeCard: { now: homeCardNow(), due: homeCardSong(SONGS, today) },
     metaKey: keyHealth(keyRec, !!env.token, now), sample: env.sample || undefined, generated: new Date(now).toISOString(),
   };
 }

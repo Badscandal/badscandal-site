@@ -1472,6 +1472,34 @@
     return weeks;
   }
   /* B4 (17 Nov 2026): the Instagram reader's one line */
+  /* L6 (17 Nov 2026, Webmaster's #15): one song page at a glance. s = an overview song (+ track, health);
+     o = {today, now, card: {now, due} (the home card), builds: board.pageBuilds}. -> {id, title, address, tone,
+     lines: [{label, text, tone}]}; tone "bad" (red) / "warn" (amber) / "ok" / "" (neutral); the tile takes the worst. */
+  function songTile(s, o) {
+    o = o || {};
+    var lines = [], id = s.id, today = o.today || "", now = o.now || Date.now();
+    var b = (o.builds || []).filter(function (x) { return x && x.slug === id; })[0];
+    var st = b ? String(b.state || "") : "";
+    if (/^not (done|sent)/.test(st)) lines.push({ label: "Page", text: "The last change didn't go live: " + st.replace(/^not (done|sent):\s*/, ""), tone: "bad" });
+    else if (/^waiting on Luke/.test(st)) lines.push({ label: "Page", text: "Live · a change is waiting on your yes", tone: "warn" });
+    else if (/^(sent to GitHub|built by GitHub)/.test(st)) lines.push({ label: "Page", text: "Going live: " + st, tone: "" });
+    else lines.push({ label: "Page", text: "Live", tone: "ok" });
+    if (s.date && s.date > today) lines.push({ label: "Button", text: "Follow on Spotify, with the countdown to " + day(s.date), tone: "ok" });
+    else if (s.track) lines.push({ label: "Button", text: "Listen on Spotify: goes to the track", tone: "ok" });
+    else lines.push({ label: "Button", text: "Out since " + day(s.date) + ", but there's no Spotify track link yet: the button goes to the artist profile", tone: "bad" });
+    var ppl = s.people || 0, taps = s.taps || 0;
+    lines.push({ label: "Visitors", text: ppl ? fmt(ppl) + (ppl === 1 ? " person" : " people") + " · " + fmt(taps) + " Spotify tap" + (taps === 1 ? "" : "s") + " (" + Math.round(taps / ppl * 100) + "%)" : "No visits in this range", tone: "" });
+    var h = s.health;
+    if (h && h.errors) lines.push({ label: "Meta", text: "Meta refused " + h.errors + " of " + h.sends + " sends in this range" + (h.lastError ? " (last: " + h.lastError.detail + ", " + ago(now - h.lastError.ts) + ")" : ""), tone: "bad" });
+    else if (h && h.sends) lines.push({ label: "Meta", text: "Receiving this page's events" + (h.lastOk ? " · last " + ago(now - h.lastOk) : ""), tone: "ok" });
+    else lines.push({ label: "Meta", text: "No Meta events in this range", tone: "" });
+    var c = o.card || {}, on = c.now && c.now.slug === id, due = c.due && c.due.slug === id;
+    if (on && (due || !c.due)) lines.push({ label: "Home card", text: "On the home card", tone: "ok" });
+    else if (on) lines.push({ label: "Home card", text: "On the home card, but the rule says " + c.due.title + " now", tone: "warn" });
+    else if (due) lines.push({ label: "Home card", text: "Should be on the home card now" + (c.due.why ? " (" + c.due.why + ")" : "") + (c.now && c.now.title ? "; " + c.now.title + " is there" : ""), tone: "warn" });
+    var tone = lines.some(function (x) { return x.tone === "bad"; }) ? "bad" : lines.some(function (x) { return x.tone === "warn"; }) ? "warn" : "ok";
+    return { id: id, title: s.title, address: "badscandal.com/" + id, tone: tone, lines: lines };
+  }
   function igStatusLine(st, now) {
     if (!st || !st.connected) return "Instagram is not connected yet.";
     if (st.lastError) return st.lastError;
@@ -1585,7 +1613,7 @@
     return scored.slice(0, max).map(function (y) { return y.x; });
   }
 
-  return { igStatusLine: igStatusLine, igPostNumbers: igPostNumbers, artistLines: artistLines, closedLine: closedLine, preflightLine: preflightLine, sixWeeks: sixWeeks, recommendLines: recommendLines, recommendedOption: recommendedOption, releaseTrouble: releaseTrouble, navPad: navPad, signoutWords: signoutWords, growthWhen: growthWhen, ago: ago, spMs: spMs, releaseWords: releaseWords, releaseDetail: releaseDetail, healthRows: healthRows, healthState: healthState, median: median, change: change, money: money, attention: attention, briefing: briefing,
+  return { songTile: songTile, igStatusLine: igStatusLine, igPostNumbers: igPostNumbers, artistLines: artistLines, closedLine: closedLine, preflightLine: preflightLine, sixWeeks: sixWeeks, recommendLines: recommendLines, recommendedOption: recommendedOption, releaseTrouble: releaseTrouble, navPad: navPad, signoutWords: signoutWords, growthWhen: growthWhen, ago: ago, spMs: spMs, releaseWords: releaseWords, releaseDetail: releaseDetail, healthRows: healthRows, healthState: healthState, median: median, change: change, money: money, attention: attention, briefing: briefing,
     snapshot: snapshot, changesSince: changesSince, tiles: tiles, summaryText: summaryText, shortStep: shortStep, day: day,
     slug: slug, workerLabel: workerLabel, sortWorkers: sortWorkers, workerView: workerView, dutyWhen: dutyWhen, workerCounts: workerCounts, seenLine: seenLine, connectorLine: connectorLine,
     novaMessage: novaMessage, liveFeed: liveFeed, spWhen: spWhen, waitLabel: waitLabel, needWords: needWords, reportParts: reportParts, siteCheckLine: siteCheckLine, composeNames: composeNames,

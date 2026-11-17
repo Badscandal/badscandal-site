@@ -2533,7 +2533,7 @@ export async function songPages(store, now) {
     else if (r && r.build && r.build.ok) state = "built by GitHub: going live in a minute or two";
     else state = `sent to GitHub ${r && r.at ? spStamp(Date.parse(r.at)).slice(5) : ""}: not live yet` + (r && r.at && now - Date.parse(r.at) > 15 * 60000 ? " (over 15 minutes and no report from GitHub yet: tell Claude)" : "");
     return { id: m.id, asked: m.sp, by: m.from, what: p.action === "card" ? `home card: ${p.title}` : p.action === "track" ? `Spotify link on ${p.title}` : `new page: ${p.title}`,
-      address: `badscandal.com/${p.slug}`, state };
+      address: `badscandal.com/${p.slug}`, slug: p.slug, state };
   });
 }
 
