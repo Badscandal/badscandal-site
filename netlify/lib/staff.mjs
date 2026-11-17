@@ -2166,6 +2166,10 @@ export async function proposeRelease(store, now, roster, a) {
    useSongDispatch). The page itself, the images and every test run on GitHub (song-page.yml). */
 let songDispatch = null;
 export const useSongDispatch = (fn) => { songDispatch = typeof fn === "function" ? fn : null; };
+/* the build reports (A2, 17 Nov 2026): netlify/lib/github.mjs readSongReport, set on the published site only
+   (functions/staff.mjs and functions/pushhourly.mjs); a preview never reads them */
+let songReports = null;
+export const useSongReports = (fn) => { songReports = typeof fn === "function" ? fn : null; };
 export const SONG_PAGE_BOTS = ["Webmaster", "Nova"];
 export async function proposeSongPage(store, now, roster, a) {
   const by = whoIs(a.by, roster);
@@ -2232,11 +2236,53 @@ export async function songPages(store, now) {
     if (isOpen(m)) state = "waiting on Luke";
     else if (!r && m.resolved && low(m.resolved.note) !== PROPOSE_YES) state = "Luke said no";
     else if (r && !r.done) state = `not sent: ${r.error || "it could not be sent"}`;
+    else if (r && r.build && !r.build.ok) state = `not done: GitHub's build stopped at "${r.build.step}": ${r.build.reason}`;
     else if (live(p)) state = "live";
-    else state = `sent to GitHub ${r && r.at ? spStamp(Date.parse(r.at)).slice(5) : ""}: not live yet` + (r && r.at && now - Date.parse(r.at) > 15 * 60000 ? " (over 15 minutes: a check may have failed, and Luke gets GitHub's email)" : "");
+    else if (r && r.build && r.build.ok) state = "built by GitHub: going live in a minute or two";
+    else state = `sent to GitHub ${r && r.at ? spStamp(Date.parse(r.at)).slice(5) : ""}: not live yet` + (r && r.at && now - Date.parse(r.at) > 15 * 60000 ? " (over 15 minutes and no report from GitHub yet: tell Claude)" : "");
     return { id: m.id, asked: m.sp, by: m.from, what: p.action === "card" ? `home card: ${p.title}` : p.action === "track" ? `Spotify link on ${p.title}` : `new page: ${p.title}`,
       address: `badscandal.com/${p.slug}`, state };
   });
+}
+
+/* How each song-page build ended (A2, 17 Nov 2026, Webmaster: the /loveyou build failed and the desk never said
+   "Not done"). For every request sent to GitHub in the last 3 days whose report hasn't been read, read it
+   (songReports); the first time one is there it is kept on the question (proposalResult.build) and:
+     failed -> ONE message from HQ to the bot that asked: "Not done: … stopped at "<step>": <why>" + the run link;
+     worked, but other tests failed after it went live -> ONE message from HQ to Claude (they never block a page).
+   The report is claimed in the same write that keeps it, so two checks at once tell once. Run by song_pages and
+   the hourly job. Returns the reports read this time. */
+export async function checkSongBuilds(store, now, roster) {
+  if (!songReports) return [];
+  const pending = (await listMessages(store, now, 2)).filter((m) => m.proposal && ["page", "track", "card"].includes(m.proposal.action) &&
+    m.proposalResult && m.proposalResult.done && !m.proposalResult.build && now - Date.parse(m.proposalResult.at) < 3 * 86400000);
+  const found = [];
+  await Promise.all(pending.map(async (m) => {
+    let rep = null;
+    try { rep = await songReports(m.id); } catch { rep = null; }
+    if (!rep || rep.msg !== m.id) return;
+    const build = { ok: !!rep.ok, ...(rep.ok ? {} : { step: clean(rep.step, 40), reason: clean(rep.reason, 300) }), ...(rep.others ? { others: clean(rep.others, 400) } : {}),
+      run: /^https:\/\/github\.com\//.test(rep.run || "") ? rep.run : "", at: new Date(now).toISOString() };
+    let claimed = false;
+    try {
+      await mutate(store, msgKey(monthOfId(m.id)), [], (list) => {
+        const x = list.find((y) => y.id === m.id);
+        if (!x || !x.proposalResult || x.proposalResult.build) return { skip: true, value: null };
+        x.proposalResult.build = build; claimed = true;
+        return { value: x };
+      });
+    } catch { return; }
+    if (!claimed) return;
+    found.push({ id: m.id, ...build });
+    const where = `badscandal.com/${m.proposal.slug}`, what = m.proposal.action === "card" ? `The home card change (${where})` : m.proposal.action === "track" ? `The Spotify link on ${where}` : where;
+    try {
+      if (!build.ok) await sendMessage(store, now, roster, { from: "HQ", to: m.from, needs: "none", re: m.id,
+        text: `Not done: ${what} did not go live. GitHub's build stopped at "${build.step}": ${build.reason.replace(/[.\s]+$/, "")}. Nothing was published, so the site is as it was. Fix what it says, then ask again with song_page.` + (build.run ? ` Run: ${build.run}` : "") });
+      else if (build.others) await sendMessage(store, now, roster, { from: "HQ", to: "Claude", needs: "none",
+        text: `${where} went live, but ${build.others.replace(/^(\d+ other tests? failed|Other tests failed)/, (w) => w.charAt(0).toLowerCase() + w.slice(1))}. Fix them in the code.` + (build.run ? ` Run: ${build.run}` : "") });
+    } catch {}
+  }));
+  return found;
 }
 
 /* ---------- covers on the desk (16 Nov 2026, Webmaster: a Drive link answered with a sign-in page) ----------
@@ -2320,7 +2366,7 @@ async function applyProposal(store, now, roster, parent, via) {
       const d = await songDispatch({ ...job, by: asker, msg: parent.id });
       if (!d || !d.ok) throw new StaffError((d && d.error) || "GitHub could not be asked. Nothing was built.");
       out = { done: true, text: p.action === "card" ? `GitHub is putting ${p.title} on the home card now (about 2 minutes). Open badscandal.com to make sure.` : p.action === "page"
-        ? `GitHub is building badscandal.com/${p.slug} now. It checks everything and puts it live in about 2 minutes; if a check fails nothing goes live and Luke gets GitHub's email. Open the page to make sure, then mark your page step done with the link.`
+        ? `GitHub is building badscandal.com/${p.slug} now. It runs the song-page checks and puts it live in about 2 minutes; if a check fails nothing goes live and you get a "Not done" message here with the reason. Open the page to make sure, then mark your page step done with the link.`
         : `GitHub is putting the Spotify link on badscandal.com/${p.slug} now (about 2 minutes). Open the page to make sure the button says Listen on Spotify and opens the song.` };
     } else if (p.action === "add") {
       const r = await saveRelease(store, now, roster, { by: "Luke", title: p.title, date: p.date || "", pack: p.pack || {}, from: said });

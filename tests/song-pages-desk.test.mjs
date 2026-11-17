@@ -120,7 +120,7 @@ test("song-job: GitHub checks the job again itself (it never trusts what it is s
   assert.equal(directLink("https://example.com/c.jpg"), "https://example.com/c.jpg");
 });
 
-test("the workflow: started only by the site, the job never pasted into a shell, every test before publishing, files added by name", () => {
+test("the workflow: started only by the site, the job never pasted into a shell, the song-page checks before publishing, files added by name", () => {
   const y = readFileSync(new URL("../.github/workflows/song-page.yml", import.meta.url), "utf8").split("\n").filter((l) => !/^\s*#/.test(l)).join("\n");
   assert.match(y, /repository_dispatch:\s*\n\s*types: \[song-page\]/);
   assert.doesNotMatch(y, /\bpush:|pull_request|workflow_dispatch|schedule:/, "nothing else starts it");
@@ -128,7 +128,9 @@ test("the workflow: started only by the site, the job never pasted into a shell,
   const runs = y.split("\n").filter((l) => /^\s*(run:|- run:)|^\s{10,}\S/.test(l)).join("\n");
   assert.doesNotMatch(runs, /\$\{\{\s*github\.event/, "client_payload only through env, never inside a run line");
   assert.match(y, /JOB: \$\{\{ toJSON\(github\.event\.client_payload\) \}\}/);
-  assert.ok(y.indexOf("npm test") > 0 && y.indexOf("npm test") < y.indexOf("git push"), "tests before the push");
+  /* changed 17 Nov 2026 (A2, Webmaster via Luke): only the song-page checks run before the push; the whole suite
+     runs after it and never blocks a page (unrelated bank tests held /loveyou up for ~20 minutes) */
+  assert.ok(y.indexOf("npm run test:song") > 0 && y.indexOf("npm run test:song") < y.indexOf("git push origin HEAD:main"), "song-page checks before the push");
   assert.doesNotMatch(y, /git add (-A|\.|--all)/);
   assert.match(y, /git add --pathspec-from-file/);
 });

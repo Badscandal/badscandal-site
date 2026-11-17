@@ -10,7 +10,9 @@
                                                     assets/listen-<slug>-cover-vN.jpg, then tools/new-song.mjs
      {kind: "track", slug, track, by}              release day: the Spotify track link, then --rebuild
    It writes the files to commit to .song-files (one per line; the workflow adds exactly those) and the commit
-   message to .song-commit. The workflow then runs EVERY test and pushes only if they all pass. */
+   message to .song-commit. The workflow then runs the song-page checks and pushes only if they pass (A2, 17 Nov
+   2026: the rest of the tests run after it is live and never block it). When it stops, its sentence goes to .song-error
+   for the build's report to the desk. */
 import { execFileSync } from "node:child_process";
 import { readdirSync, writeFileSync, unlinkSync, readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -104,4 +106,10 @@ async function main() {
   console.log("files to commit:\n" + readFileSync(filesOut, "utf8"));
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) main().catch((e) => { console.error("✗ " + (e && e.message ? e.message : e)); process.exit(1); });
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) main().catch((e) => {
+  const why = String(e && e.message ? e.message : e);
+  console.error("✗ " + why);
+  /* the build's report to the desk says this sentence (tools/song-report.mjs, A2 17 Nov 2026) */
+  try { writeFileSync(join(ROOT, ".song-error"), why.slice(0, 500)); } catch {}
+  process.exit(1);
+});
