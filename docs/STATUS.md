@@ -1,13 +1,14 @@
 # HQ status (update on every deploy)
 
-**Last updated:** 17 Nov 2026, ~12:25 São Paulo, by Claude (main `4468dba`).
-**Tests:** 523, all passing on Node 24 and Node 22. **Connector:** 37 tools (bots must reconnect).
+**Last updated:** 17 Nov 2026, ~15:20 São Paulo, by Claude (main `9020fce`).
+**Tests:** 531, all passing on Node 24 and Node 22. **Connector:** 38 tools (bots must reconnect).
 No money amounts, payer names or account numbers in this file: the repo is public.
 
 ## Live (newest first)
 
 | When | PR | What |
 |------|----|------|
+| 17 Nov | #55 | B4: the Instagram reader (read-only): key pasted once in HQ (Growth & Fans › Connect Instagram), renewed weekly; followers to the desk, post numbers at 6 h / 1 day / 1 week, comments, countries; `instagram` tool for Steve and Kevin. B1 and B5 marked not needed (Luke). |
 | 17 Nov | #54 | A8: log_growth Spotify `monthly_listeners` / `brazil_listeners`, a "Spotify monthly listeners" card on Songs · B3: HQ records Meta's daily spend on the desk itself (hourly, read-only) |
 | 17 Nov | #53 | A7: `close_month` locks a ready month (snapshot, received, evidence); later changes old → new in month_check and a CSV under Money |
 | 17 Nov | #52 | A6: pre-flight checks (artist exactly "badscandal", links to badscandal.com/<song>, WAV/JPG-PNG, cover size) on cards, in the release tools and the `preflight` tool |
@@ -27,7 +28,9 @@ No money amounts, payer names or account numbers in this file: the repo is publi
 
 ## Waiting on Luke
 
-- Batch B keys (see `docs/HQ-ROADMAP.md`): a Spotify developer app; a YouTube sign-in; Instagram on the Meta app.
+- **Instagram key:** the Meta-side setup (brief sent to Luke for Claude on his Mac), then Luke generates the key and pastes it into badscandal.com/hq › Growth & Fans › Connect Instagram. The first real read shows whether anything needs tuning.
+
+- B2 (YouTube Analytics, one Google sign-in) if Luke wants it; B1 and B5 are not needed.
 - On-hold decisions H1–H4 in the roadmap (ads kill switch, posting, fan capture).
 - Who "Luka" is in the split-ledger request (L11).
 - Answers the bots are waiting for go through Nova; they are not tracked here.
