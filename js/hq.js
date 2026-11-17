@@ -611,7 +611,7 @@
     var st = ig.status || {}, line = L.igStatusLine(st, Date.now()), dis = sample || igBusy ? " disabled" : "";
     var h = '<h3 class="sech">Instagram</h3><p class="sub' + (st.lastError ? " igerr" : "") + '">' + esc(line) + "</p>";
     if (!st.connected || st.errorKind === "refused") {
-      h += '<div class="tile"><p class="d">Paste the key from the Meta app (Instagram API setup with Instagram login › Generate token). HQ checks it with Instagram, keeps it to itself and renews it every week. Read-only: it can never post or change anything.</p>' +
+      h += '<div class="tile"><p class="d">Paste the key from Meta (the Graph API Explorer key after "Extend Access Token", or the Instagram setup's "Generate token"). HQ checks it with Instagram and keeps it to itself; a Facebook key is swapped for the Page's own key, which doesn't run out. Read-only: it can never post or change anything.</p>' +
         '<form class="igform" id="igForm" autocomplete="off"><input type="password" id="igKey" placeholder="The Instagram key" aria-label="The Instagram key"' + dis + '><button class="sendbtn" type="submit"' + dis + ">" + (igBusy ? "Checking…" : "Connect Instagram") + "</button></form>" +
         (igMsg ? '<p class="d" role="status">' + esc(igMsg) + "</p>" : "") + "</div>";
     } else {

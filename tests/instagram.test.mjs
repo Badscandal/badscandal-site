@@ -127,3 +127,104 @@ test("routes, the hourly read, and the page's box", () => {
   assert.equal(HL.igStatusLine({ connected: true, username: "madeupaccount", lastOkAt: NOW - 5 * 60000, daysLeft: 59 }, NOW), "@madeupaccount · read 5 min ago · the key renews by itself");
   assert.equal(HL.igStatusLine({ connected: true, username: "madeupaccount", lastError: IG.SAY.refused, errorKind: "refused" }, NOW), IG.SAY.refused);
 });
+
+/* ---------- the Facebook-login route (17 Nov 2026: Meta blocked the portfolio link the Instagram route needs) ---------- */
+const USER = "EAAusermadeup" + "u".repeat(60), PAGE = "EAApagemadeup" + "p".repeat(60);
+function fakeFb(o = {}) {
+  const calls = [];
+  const f = async (url, init) => {
+    const u = new URL(url), path = u.pathname.replace(/^\/v[\d.]+\//, "/");
+    calls.push({ host: u.host, path, q: Object.fromEntries(u.searchParams), auth: (init.headers || {}).Authorization || "" });
+    const ok = (j) => new Response(JSON.stringify(j), { status: 200 });
+    if (path === "/me/accounts") {
+      if (o.noPerms) return new Response(JSON.stringify({ error: { message: "(#100) Missing permissions", type: "OAuthException", code: 100 } }), { status: 400 });
+      return ok({ data: [{ id: "111", name: "Some Other Page", access_token: "EAAother" + "o".repeat(60) },
+        ...(o.noIg ? [] : [{ id: "222", name: "MADE UP PAGE", access_token: PAGE, instagram_business_account: { id: "17841400000000001", username: "madeupaccount" } }])] });
+    }
+    if (path === "/17841400000000001") return ok({ username: "madeupaccount", followers_count: 2222, media_count: 3 });
+    if (path === "/17841400000000001/media") return ok({ data: [{ id: "f1", caption: "Made up FB-route reel", media_product_type: "REELS", timestamp: new Date(NOW - 7 * H).toISOString(), permalink: "https://www.instagram.com/reel/fb1/", like_count: 3, comments_count: 0 }] });
+    if (path === "/f1/insights") return ok({ data: [{ name: "views", values: [{ value: 90 }] }, { name: "reach", values: [{ value: 60 }] }] });
+    if (path === "/17841400000000001/insights") return ok({ data: [] });
+    return new Response("{}", { status: 404 });
+  };
+  return { f, calls };
+}
+test("Facebook route: a user key is swapped for the Page's key; only the Page key is kept, and it never needs renewing", async () => {
+  const st = memStore(), fb = fakeFb();
+  const r = await IG.saveKey(st, USER, NOW, fb.f);
+  assert.deepEqual(r, { username: "madeupaccount", followers: 2222 });
+  assert.equal(fb.calls[0].host, "graph.facebook.com");
+  assert.equal(fb.calls[0].auth, "Bearer " + USER);
+  assert.equal(fb.calls[1].auth, "Bearer " + PAGE, "the Instagram account is read with the Page's key");
+  const stored = JSON.stringify([...st.m.values()]);
+  assert.equal(stored.includes(USER), false, "the user key is never kept");
+  assert.ok(stored.includes(PAGE));
+  const s = await IG.igStatus(st, NOW);
+  assert.equal(s.route, "fb"); assert.equal(s.daysLeft, null); assert.equal(s.renews, false); assert.equal(s.page, "MADE UP PAGE");
+  assert.equal(HL.igStatusLine({ ...s, lastOkAt: NOW - 60000 }, NOW), "@madeupaccount · read 1 min ago · through the MADE UP PAGE Page · the key doesn't run out");
+  /* a read, weeks later: no renewal call, the same paths through the account's id */
+  const rows = [];
+  const out = await IG.syncInstagram({ store: st, now: NOW + 30 * DAY, fetchImpl: fb.f, logGrowth: async (x) => rows.push(x) });
+  assert.equal(out.ok, true, out.error);
+  assert.equal(fb.calls.some((c) => c.path === "/refresh_access_token"), false);
+  assert.deepEqual(rows, [{ platform: "Instagram", account: "@madeupaccount", followers: "2222" }]);
+});
+test("Facebook route: no linked Instagram account, or a key without the Page permissions, is said plainly", async () => {
+  await assert.rejects(IG.saveKey(memStore(), USER, NOW, fakeFb({ noIg: true }).f), (e) => e.kind === "noPage" && /Linked accounts/.test(e.message));
+  await assert.rejects(IG.saveKey(memStore(), USER, NOW, fakeFb({ noPerms: true }).f), (e) => e.kind === "noPerms" && /pages_show_list/.test(e.message));
+});
+
+/* The safety brake (17 Nov 2026, Luke: "our prime goal is not to get our account restricted or disabled, we need
+   ads"). HQ never keeps knocking: a rate limit pauses every read for a day; a block, a restriction or a refused key
+   stops reading altogether until a new key is pasted. Read now obeys the brake too. */
+function errIg(error, status = 400) {
+  const calls = [];
+  const f = async (url) => { calls.push(url); return new Response(JSON.stringify({ error }), { status }); };
+  return { f, calls };
+}
+test("brake: a rate limit pauses every read for a day, then reading starts again", async () => {
+  for (const code of [4, 17, 32, 613, 80002]) {
+    const st = memStore(); await IG.saveKey(st, TOKEN, NOW - DAY, fakeIg().f);
+    const lim = errIg({ message: "Application request limit reached", type: "OAuthException", code });
+    const r = await IG.syncInstagram({ store: st, now: NOW, fetchImpl: lim.f });
+    assert.equal(r.kind, "limit", "code " + code);
+    const n = lim.calls.length;
+    const again = await IG.syncInstagram({ store: st, now: NOW + 3 * H, fetchImpl: lim.f });
+    assert.equal(again.kind, "paused"); assert.equal(lim.calls.length, n, "no call while paused");
+    const s = await IG.igStatus(st, NOW + 3 * H);
+    assert.equal(s.pausedUntil, NOW + DAY); assert.match(s.lastError, /paused/i);
+    const ok = await IG.syncInstagram({ store: st, now: NOW + DAY + 1, fetchImpl: fakeIg().f });
+    assert.equal(ok.ok, true, "a day later it reads again");
+  }
+  const st = memStore(); await IG.saveKey(st, TOKEN, NOW - DAY, fakeIg().f);
+  assert.equal((await IG.syncInstagram({ store: st, now: NOW, fetchImpl: errIg({ message: "Too many calls" }, 429).f })).kind, "limit", "HTTP 429");
+});
+test("brake: a block, a restriction or a refused key stops reading until a new key is pasted", async () => {
+  const cases = [{ message: "You have been temporarily blocked from performing this action.", code: 368 },
+    { message: "Your account is restricted right now", code: 10 },
+    { message: "Error validating access token: The session has been invalidated", type: "OAuthException", code: 190 }];
+  for (const error of cases) {
+    const st = memStore(); await IG.saveKey(st, TOKEN, NOW - DAY, fakeIg().f);
+    const bad = errIg(error);
+    const r = await IG.syncInstagram({ store: st, now: NOW, fetchImpl: bad.f });
+    assert.ok(["blocked", "refused"].includes(r.kind), error.message);
+    const n = bad.calls.length;
+    for (const later of [H, DAY, 30 * DAY]) assert.equal((await IG.syncInstagram({ store: st, now: NOW + later, fetchImpl: bad.f })).kind, "stopped");
+    assert.equal(bad.calls.length, n, "never another call");
+    assert.equal((await IG.igStatus(st, NOW + H)).stopped, true);
+    await IG.saveKey(st, TOKEN, NOW + 2 * DAY, fakeIg().f);
+    assert.equal((await IG.syncInstagram({ store: st, now: NOW + 2 * DAY, fetchImpl: fakeIg().f })).ok, true, "a new key starts it again");
+  }
+  const st = memStore(); await IG.saveKey(st, TOKEN, NOW - DAY, fakeIg().f);
+  const r = await IG.syncInstagram({ store: st, now: NOW, fetchImpl: errIg({ message: "You have been temporarily blocked" }, 400).f });
+  assert.equal(r.kind, "blocked"); assert.match(r.error, /stopped/i);
+});
+test("brake: a normal read stays small (well under Meta's limits)", async () => {
+  const st = memStore(), ig = fakeIg(); await IG.saveKey(st, TOKEN, NOW - DAY, ig.f);
+  const n0 = ig.calls.length;
+  await IG.syncInstagram({ store: st, now: NOW, fetchImpl: ig.f });
+  assert.ok(ig.calls.length - n0 <= 10, "first read: " + (ig.calls.length - n0) + " calls");
+  const n1 = ig.calls.length;
+  await IG.syncInstagram({ store: st, now: NOW + H, fetchImpl: ig.f });
+  assert.ok(ig.calls.length - n1 <= 3, "an ordinary hour: " + (ig.calls.length - n1) + " calls");
+});
