@@ -39,6 +39,8 @@ const INSTRUCTION_LINES = [
   ["Forge", "Forge: record each platform's daily spend with record_spend (not_read with why when you could not read it). The month's total against the cap is the one record_spend and the dashboard give, at the team's fixed rate: never add it up yourself."],
   /* 16 Nov 2026 (Luke): Revolut is the main bank; Wise and PayPal money ends up there */
   ["Ledger Sheet", "Ledger: Revolut is Luke's main bank, read by the site every morning; money from Wise or PayPal ends up there too. For every Revolut credit that comes from Wise or PayPal, find where it came from by name and amount: if that payment is already on the desk as received, it is the same money, so sort the Revolut row as transfer with a note (\"from <payer> via Wise\"); if not, sort it as received with its category and source. Never count the same money twice."],
+  /* 17 Nov 2026 (Luke: "they should just ask me what the income is in the money account if they're not sure") */
+  ["Ledger Sheet", "Ledger and Sheet: when you are not sure what a payment in the money account is (who paid, which source, income or not), ask Luke with ONE send_message (needs decision): name the payer, the day and the amount. Never guess. A payment counts in the month it arrived: if its day is wrong, fix it with fix_payment date (any month)."],
   ["Ledger Sheet", "Ledger: a wage Luke moves in himself every month from another bank of his shows as his own transfer: sort it as received, category Salary, with its source (Luke tells you which source it is)."],
   ["Ledger Sheet", "Ledger: Luke's main income sources are highlighted on Money every month: mark each with income_source main true and due_day (the day of the month it usually pays by); add one the desk doesn't have with create true. Only received money counts: a main source turns green when its money is received, red once its day has passed without it."],
   ["Ledger Sheet", "Ledger and Sheet: keep your income sources current with income_source (where the money lands, state, reason; clear needs_luke when it no longer stands), and correct a payment with fix_payment (with the reason). Statuses: statement only (not payable yet) and payable (owed, ready to pay out)."],
@@ -140,7 +142,7 @@ export const TOOLS = [
   { name: "fix_payment", title: "Fix a payment already on the desk",
     description: "Correct ONE payment you (or another bot) already submitted: a wrong amount, currency, payer, status (for example a transfer that is really income), category (for example a salary filed as Publishing), account, reference, note, or day within its month. Find its id and month under your_payments in income_status. Only the bot that submitted it, Ledger, Sheet or Nova fix it. Say what was wrong in reason. Only the fields you send change; the old values are kept with your reason.",
     inputSchema: obj({ bot: BOT, id: str("The payment's id (it starts with i), from income_status."), month: str("Its month, YYYY-MM, from income_status."),
-      reason: str("What was wrong, in one line."), date: str("Optional. The right day, YYYY-MM-DD, same month."), payer: str("Optional. The right payer."),
+      reason: str("What was wrong, in one line."), date: str("Optional. The day the money really arrived, YYYY-MM-DD (any month: a payment counts in the month it arrived, and moves there)."), payer: str("Optional. The right payer."),
       amount: { type: "number", description: "Optional. The right amount." }, currency: str("Optional. The right three-letter currency."),
       status: str("Optional. received | pending | transfer | statement only | payable", { enum: S.INCOME_STATUS.filter((x) => x !== "unsorted") }),
       source: str("Optional. The income source this payment is (its name or id): ties it to that source on Money."),
@@ -443,7 +445,7 @@ export async function callTool(tool, args, ctx) {
       const r = await S.fixIncome(store, now, roster, { by: me, id: args.id, month: args.month, reason: args.reason, date: args.date, payer: args.payer, amount: args.amount, currency: args.currency,
         status: args.status, category: args.category, account: args.account, reference: args.reference, note: args.note, source: args.source, paid_by: args.paid_by });
       const e = r.entry;
-      return { saved: r.fixed.length > 0, fixed: r.fixed, ...(r.fixed.length ? {} : { note: "Nothing was different: nothing changed." }),
+      return { saved: r.fixed.length > 0, fixed: r.fixed, ...(r.movedTo ? { moved_to: r.movedTo } : {}), ...(r.fixed.length ? {} : { note: "Nothing was different: nothing changed." }),
         now: `${e.arrived || e.date} · ${e.payer} · ${e.currency} ${e.amount.toFixed(2)} · ${e.status} · ${e.account} · ${e.category}` };
     }
     case "income_source": {

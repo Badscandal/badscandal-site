@@ -789,7 +789,9 @@ export async function fixIncome(store, now, roster, a) {
   if (reason.length < 3) fail("reason is empty: say in one line what was wrong. Nothing was changed.");
   noSecrets(reason);
   const want = {};
-  if (a.date != null && String(a.date).trim()) { const d = clean(a.date, 10); if (!DAY.test(d)) fail("date must be YYYY-MM-DD."); if (d.slice(0, 7) !== month) fail(`date must stay in the same month (${month}). For another month, tell Claude. Nothing was changed.`); want.date = d; }
+  /* the day it arrived, in ANY month (17 Nov 2026, Luke: "the month should count when the payment arrives"): a
+     payment whose real day is in another month moves there (same id, counted once) */
+  if (a.date != null && String(a.date).trim()) { const d = clean(a.date, 10); if (!DAY.test(d) || Number.isNaN(Date.parse(d + "T12:00:00Z"))) fail("date must be YYYY-MM-DD."); if (d > spDay(now)) fail(`date is in the future (${d}). Nothing was changed.`); want.date = d; }
   if (a.payer != null && String(a.payer).trim()) want.payer = clean(a.payer, 80);
   if (a.amount != null && String(a.amount).trim()) { const n = amountOf(a.amount); if (n == null || n <= 0) fail("amount must be a positive number, written like 112.01."); want.amount = n; }
   if (a.currency != null && String(a.currency).trim()) { const c = clean(a.currency, 12).toUpperCase(); if (!/^[A-Z]{3}$/.test(c)) fail("currency must be the three-letter code the money was paid in."); want.currency = c; }
@@ -818,20 +820,38 @@ export async function fixIncome(store, now, roster, a) {
     want.paidBy = pid;
   }
   const at = new Date(now).toISOString();
-  return mutate(store, incKey(month), [], (list) => {
+  /* a statement already paid keeps its own (statement) date and gets the day it arrived instead */
+  const moveTo = want.date && want.date.slice(0, 7) !== month ? want.date.slice(0, 7) : "";
+  const res = await mutate(store, incKey(month), [], (list) => {
     const e = list.find((x) => x.id === id);
-    if (!e) fail(`There is no payment with the id "${id}" in ${month}. Find it under your_payments in income_status.`, "not_found");
+    if (!e) fail(`There is no payment with the id "${id}" in ${month}. Find it with payments.`, "not_found");
     if (e.by !== by && !SORTERS.includes(by)) fail(`That payment was submitted by ${e.by}: only ${e.by}, Ledger, Sheet, Nova, Claude or Luke fix it. Tell ${e.by}.`, "not_allowed");
     if (e.status === "unsorted") fail("That payment is unsorted: say what it is with sort_payment, not fix_payment.", "not_allowed");
     if (want.paidBy && !OWED.includes(e.status)) fail(`Only a statement (pending, payable or statement only) can be marked paid with paid_by; this payment is ${e.status}.`, "not_allowed");
     const changed = {};
     for (const k of FIX_FIELDS) if (k in want && (e[k] ?? "") !== want[k]) changed[k] = [e[k] ?? "", want[k]];
     if (!Object.keys(changed).length) return { skip: true, value: { entry: e, fixed: [] } };
-    for (const k of Object.keys(changed)) e[k] = want[k];
+    if (moveTo && e.arrived) { delete changed.date; changed.arrived = [e.arrived, want.date]; } /* merged statement: its arrival day moves, it stays filed */
+    for (const k of Object.keys(changed)) e[k] = k === "arrived" ? want.date : want[k];
     e.fixes = (e.fixes || []).concat({ at, by, reason, changed }).slice(-10);
     e.updatedAt = at;
-    return { value: { entry: e, fixed: Object.keys(changed) } };
+    /* to another month: written there first, then taken out of here, so it is never lost (and never twice: the
+       new month skips an id it already has) */
+    return { value: { entry: e, fixed: Object.keys(changed), move: !!(moveTo && changed.date) } };
   });
+  if (!res.move) return res;
+  await mutate(store, incKey(moveTo), [], (list) => {
+    if (list.some((x) => x.id === id)) return { skip: true, value: null };
+    list.push(res.entry);
+    return { value: res.entry };
+  });
+  await mutate(store, incKey(month), [], (list) => {
+    const i = list.findIndex((x) => x.id === id);
+    if (i < 0) return { skip: true, value: null };
+    list.splice(i, 1);
+    return { value: true };
+  });
+  return { ...res, movedTo: moveTo };
 }
 export async function getSources(store) {
   const [{ data }, ed] = await Promise.all([readDoc(store, "sources.json", []), readDoc(store, "srcedit.json", {})]);

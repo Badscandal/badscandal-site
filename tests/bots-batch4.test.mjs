@@ -205,7 +205,8 @@ test("fix_payment: the bot that submitted it (or a sorter) fixes it, with the re
   assert.deepEqual(e.fixes[0].changed, { status: ["transfer", "received"], category: ["Other", "Label deals"] });
   assert.deepEqual((await S.incomeState(d, NOW)).received, { USD: 473.07 });
   await fails(S.fixIncome(d, NOW, R, { by: "Kevin", id: sub.entry.id, month: "2026-11", amount: "1", reason: "x is wrong" }), /Ledger/);
-  await fails(S.fixIncome(d, NOW, R, { by: "Ledger", id: sub.entry.id, month: "2026-11", date: "2026-10-30", reason: "wrong month" }), /same month/);
+  /* 17 Nov 2026 (Luke): a payment counts in the month it arrived; another month is allowed (it moves), the future is not */
+  await fails(S.fixIncome(d, NOW, R, { by: "Ledger", id: sub.entry.id, month: "2026-11", date: "2026-12-30", reason: "a day still to come" }), /future/);
   await fails(S.fixIncome(d, NOW, R, { by: "Ledger", id: sub.entry.id, month: "2026-11", amount: "500" }), /reason/);
   await fails(S.fixIncome(d, NOW, R, { by: "Ledger", id: "i0000000000000", month: "2026-11", amount: "500", reason: "typo" }), /no payment/);
   /* the bot sees its own payments, with the id and month to fix them */
