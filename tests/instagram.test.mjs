@@ -173,3 +173,58 @@ test("Facebook route: no linked Instagram account, or a key without the Page per
   await assert.rejects(IG.saveKey(memStore(), USER, NOW, fakeFb({ noIg: true }).f), (e) => e.kind === "noPage" && /Linked accounts/.test(e.message));
   await assert.rejects(IG.saveKey(memStore(), USER, NOW, fakeFb({ noPerms: true }).f), (e) => e.kind === "noPerms" && /pages_show_list/.test(e.message));
 });
+
+/* The safety brake (17 Nov 2026, Luke: "our prime goal is not to get our account restricted or disabled, we need
+   ads"). HQ never keeps knocking: a rate limit pauses every read for a day; a block, a restriction or a refused key
+   stops reading altogether until a new key is pasted. Read now obeys the brake too. */
+function errIg(error, status = 400) {
+  const calls = [];
+  const f = async (url) => { calls.push(url); return new Response(JSON.stringify({ error }), { status }); };
+  return { f, calls };
+}
+test("brake: a rate limit pauses every read for a day, then reading starts again", async () => {
+  for (const code of [4, 17, 32, 613, 80002]) {
+    const st = memStore(); await IG.saveKey(st, TOKEN, NOW - DAY, fakeIg().f);
+    const lim = errIg({ message: "Application request limit reached", type: "OAuthException", code });
+    const r = await IG.syncInstagram({ store: st, now: NOW, fetchImpl: lim.f });
+    assert.equal(r.kind, "limit", "code " + code);
+    const n = lim.calls.length;
+    const again = await IG.syncInstagram({ store: st, now: NOW + 3 * H, fetchImpl: lim.f });
+    assert.equal(again.kind, "paused"); assert.equal(lim.calls.length, n, "no call while paused");
+    const s = await IG.igStatus(st, NOW + 3 * H);
+    assert.equal(s.pausedUntil, NOW + DAY); assert.match(s.lastError, /paused/i);
+    const ok = await IG.syncInstagram({ store: st, now: NOW + DAY + 1, fetchImpl: fakeIg().f });
+    assert.equal(ok.ok, true, "a day later it reads again");
+  }
+  const st = memStore(); await IG.saveKey(st, TOKEN, NOW - DAY, fakeIg().f);
+  assert.equal((await IG.syncInstagram({ store: st, now: NOW, fetchImpl: errIg({ message: "Too many calls" }, 429).f })).kind, "limit", "HTTP 429");
+});
+test("brake: a block, a restriction or a refused key stops reading until a new key is pasted", async () => {
+  const cases = [{ message: "You have been temporarily blocked from performing this action.", code: 368 },
+    { message: "Your account is restricted right now", code: 10 },
+    { message: "Error validating access token: The session has been invalidated", type: "OAuthException", code: 190 }];
+  for (const error of cases) {
+    const st = memStore(); await IG.saveKey(st, TOKEN, NOW - DAY, fakeIg().f);
+    const bad = errIg(error);
+    const r = await IG.syncInstagram({ store: st, now: NOW, fetchImpl: bad.f });
+    assert.ok(["blocked", "refused"].includes(r.kind), error.message);
+    const n = bad.calls.length;
+    for (const later of [H, DAY, 30 * DAY]) assert.equal((await IG.syncInstagram({ store: st, now: NOW + later, fetchImpl: bad.f })).kind, "stopped");
+    assert.equal(bad.calls.length, n, "never another call");
+    assert.equal((await IG.igStatus(st, NOW + H)).stopped, true);
+    await IG.saveKey(st, TOKEN, NOW + 2 * DAY, fakeIg().f);
+    assert.equal((await IG.syncInstagram({ store: st, now: NOW + 2 * DAY, fetchImpl: fakeIg().f })).ok, true, "a new key starts it again");
+  }
+  const st = memStore(); await IG.saveKey(st, TOKEN, NOW - DAY, fakeIg().f);
+  const r = await IG.syncInstagram({ store: st, now: NOW, fetchImpl: errIg({ message: "You have been temporarily blocked" }, 400).f });
+  assert.equal(r.kind, "blocked"); assert.match(r.error, /stopped/i);
+});
+test("brake: a normal read stays small (well under Meta's limits)", async () => {
+  const st = memStore(), ig = fakeIg(); await IG.saveKey(st, TOKEN, NOW - DAY, ig.f);
+  const n0 = ig.calls.length;
+  await IG.syncInstagram({ store: st, now: NOW, fetchImpl: ig.f });
+  assert.ok(ig.calls.length - n0 <= 10, "first read: " + (ig.calls.length - n0) + " calls");
+  const n1 = ig.calls.length;
+  await IG.syncInstagram({ store: st, now: NOW + H, fetchImpl: ig.f });
+  assert.ok(ig.calls.length - n1 <= 3, "an ordinary hour: " + (ig.calls.length - n1) + " calls");
+});

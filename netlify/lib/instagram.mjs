@@ -41,6 +41,8 @@ export const SAY = {
   unreachable: "The site could not reach Instagram just now. The next read tries again.",
   bad: "That does not look like a key: it is the long text Meta gives you (Generate token, or the Graph API Explorer).",
   noPage: "That key reached Facebook, but none of your Pages has an Instagram professional account linked to it: link @badscandal to the BADSCANDAL Page (Page settings › Linked accounts), then make the key again.",
+  limit: "Meta asked HQ to slow down, so Instagram reads are paused for a day (nothing is retried before then). Nothing else is affected.",
+  blocked: "Meta said an action is blocked or the account is restricted, so HQ has stopped reading Instagram completely. Check Account Quality in Meta; once it is clear, paste a new key to start again.",
   noPerms: "That key can't see your Pages: make it again with pages_show_list, pages_read_engagement, instagram_basic, instagram_manage_insights and instagram_manage_comments ticked.",
 };
 
@@ -70,6 +72,10 @@ export async function igGet(path, params, key, fetchImpl = fetch, o = {}) {
   let r = await go(mode);
   if (r && r.__error && mode === "header" && (r.code === 190 || r.status === 401) && /parse|malformed|no access token|must be used|active access token/i.test(r.msg)) { mode = "query"; r = await go(mode); if (r && !r.__error) key.auth = "query"; }
   if (r && r.__error) {
+    /* the safety brake (17 Nov 2026): Meta's rate limits and any block or restriction are their own kinds, so the
+       reader stops instead of knocking again (syncInstagram) */
+    if (r.status === 429 || [4, 17, 32, 613].includes(r.code) || (r.code >= 80001 && r.code <= 80014) || /request limit|too many calls/i.test(r.msg)) throw new IgError("limit", SAY.limit, r.code);
+    if (r.code === 368 || /temporarily blocked|restricted|checkpoint|disabled|suspended/i.test(r.msg)) throw new IgError("blocked", SAY.blocked, r.code);
     if (r.code === 190 || r.status === 401 || r.type === "OAuthException" && /token/i.test(r.msg)) throw new IgError("refused", SAY.refused, r.code);
     if (r.status >= 500) throw new IgError("down", SAY.down, r.code);
     throw new IgError("other", `Instagram said no (${r.status}${r.code ? ", code " + r.code : ""}).`, r.code);
@@ -90,6 +96,7 @@ export async function saveKey(store, raw, now, fetchImpl = fetch) {
   if (me.account_type && !/business|creator|media_creator/i.test(me.account_type)) throw new IgError("notPro", SAY.notPro);
   const doc = { token, auth: key.auth, at: now, refreshedAt: now, expiresAt: now + 60 * DAY, userId: String(me.user_id || me.id || ""), username: String(me.username || "") };
   await store.setJSON("key.json", doc);
+  await liftBrake(store);
   return { username: doc.username, followers: me.followers_count ?? null };
 }
 async function saveFbKey(store, token, now, fetchImpl) {
@@ -106,7 +113,13 @@ async function saveFbKey(store, token, now, fetchImpl) {
   const doc = { token: key.token, auth: key.auth, route: "fb", at: now, refreshedAt: now, expiresAt: null, igId, userId: igId, page: String(page.name || "").slice(0, 80),
     username: String(me.username || page.instagram_business_account.username || "") };
   await store.setJSON("key.json", doc);
+  await liftBrake(store);
   return { username: doc.username, followers: me.followers_count ?? null };
+}
+/* a new key lifts the brake (Luke pastes one only once Meta is clear) */
+async function liftBrake(store) {
+  const state = await readDoc(store, "state.json", null);
+  if (state && (state.stopped || state.pausedUntil)) { delete state.stopped; delete state.pausedUntil; state.lastError = ""; state.errorKind = ""; await store.setJSON("state.json", state); }
 }
 export async function forgetKey(store) { try { await store.delete("key.json"); } catch {} }
 
@@ -138,15 +151,21 @@ async function mediaNumbers(id, key, fetchImpl) {
   }
 }
 
+const STOP = ["refused", "blocked", "limit"];
 /* One read. deps: {store, now, fetchImpl, logGrowth(row) (optional: the desk's Instagram row)} -> summary */
 export async function syncInstagram({ store, now, fetchImpl = fetch, logGrowth = null }) {
   const key = await readDoc(store, "key.json", null);
   const state = await readDoc(store, "state.json", {});
   state.lastRunAt = now;
   if (!key || !key.token) { state.lastError = SAY.missing; state.errorKind = "missing"; await store.setJSON("state.json", state); return { ok: false, error: SAY.missing, kind: "missing" }; }
+  /* the brake: stopped (a block, a restriction, a refused key) = no call at all until a new key; paused (a rate
+     limit) = no call until the day is over. Read now obeys it too. */
+  if (state.stopped) return { ok: false, kind: "stopped", error: state.lastError || SAY.blocked };
+  if (state.pausedUntil && now < state.pausedUntil) return { ok: false, kind: "paused", error: state.lastError || SAY.limit };
+  delete state.pausedUntil;
   const out = { ok: true, snapshots: 0, newComments: 0 };
   try {
-    try { if (await renewIfDue(store, key, now, fetchImpl)) out.renewed = true; } catch (e) { if (e.kind === "refused") throw e; }
+    try { if (await renewIfDue(store, key, now, fetchImpl)) out.renewed = true; } catch (e) { if (STOP.includes(e.kind)) throw e; }
     const self = key.route === "fb" ? key.igId : "me";
     const me = await igGet(self, { fields: key.route === "fb" ? "username,followers_count,media_count" : "user_id,username,followers_count,media_count" }, key, fetchImpl);
     out.username = me.username || key.username; out.followers = num(me.followers_count);
@@ -199,7 +218,7 @@ export async function syncInstagram({ store, now, fetchImpl = fetch, logGrowth =
         const res = (((((d.data || [])[0] || {}).total_value || {}).breakdowns || [])[0] || {}).results || [];
         const list = res.map((r) => ({ country: String((r.dimension_values || [])[0] || ""), count: num(r.value) })).filter((x) => x.country && x.count != null).sort((a, b) => b.count - a.count).slice(0, 10);
         if (list.length) await store.setJSON("countries.json", { at: now, list });
-      } catch (e) { if (e.kind === "refused") throw e; }
+      } catch (e) { if (STOP.includes(e.kind)) throw e; }
       state.countriesAt = now;
     }
     if (key.auth && key.auth !== "none") await store.setJSON("key.json", key);
@@ -207,6 +226,8 @@ export async function syncInstagram({ store, now, fetchImpl = fetch, logGrowth =
     Object.assign(state, { lastOkAt: now, lastError: "", errorKind: "", username: out.username, followers: out.followers });
   } catch (e) {
     Object.assign(state, { lastError: e.message || SAY.down, errorKind: e.kind || "other" });
+    if (e.kind === "limit") state.pausedUntil = now + DAY;
+    if (e.kind === "blocked" || e.kind === "refused") state.stopped = true;
     out.ok = false; out.error = state.lastError; out.kind = state.errorKind;
   }
   await store.setJSON("state.json", state);
@@ -218,7 +239,7 @@ export async function igStatus(store, now) {
   const key = await readDoc(store, "key.json", null), state = await readDoc(store, "state.json", {});
   const daysLeft = key && key.expiresAt ? Math.max(0, Math.floor((key.expiresAt - now) / DAY)) : null;
   return { connected: !!(key && key.token), username: (key && key.username) || state.username || "", followers: state.followers ?? null, lastRunAt: state.lastRunAt || null, lastOkAt: state.lastOkAt || null,
-    lastError: state.lastError || "", errorKind: state.errorKind || "", daysLeft, renews: !(key && key.route === "fb"), route: (key && key.route) || "ig", ...(key && key.page ? { page: key.page } : {}) };
+    lastError: state.lastError || "", errorKind: state.errorKind || "", stopped: !!state.stopped, pausedUntil: state.pausedUntil && state.pausedUntil > now ? state.pausedUntil : null, daysLeft, renews: !(key && key.route === "fb"), route: (key && key.route) || "ig", ...(key && key.page ? { page: key.page } : {}) };
 }
 export async function igView(store, now) {
   const [status, posts, comments, countries] = await Promise.all([igStatus(store, now), readDoc(store, "posts.json", []), readDoc(store, "comments.json", []), readDoc(store, "countries.json", null)]);
