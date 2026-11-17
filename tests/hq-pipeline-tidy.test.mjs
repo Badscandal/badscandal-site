@@ -46,7 +46,7 @@ function oldStyle(r, lyrics = {}) {
 }
 
 test("the pipeline: no teaser steps, the ads after the song page, the lyrics a week after the release", () => {
-  assert.deepEqual(S.RELEASE_STEPS.map((s) => s.key), ["upload", "approved", "spotify", "pitch", "page", "video", "ads", "live", "lyrics"]);
+  assert.deepEqual(S.RELEASE_STEPS.map((s) => s.key), ["upload", "approved", "spotify", "pitch", "canvas", "page", "video", "ads", "live", "lyrics"]); /* + canvas (17 Nov 2026) */
   assert.ok(!S.RELEASE_STEPS.some((s) => /teaser/.test(s.key) || s.owner === "Luke"));
   const steps = S.scheduleSteps("2026-12-11", TODAY).steps;
   /* 16 Nov 2026 (Luke): the ads are made with him AFTER the release: due two days after it */
@@ -54,7 +54,7 @@ test("the pipeline: no teaser steps, the ads after the song page, the lyrics a w
   assert.deepEqual(S.releaseStepsOut().find((s) => s.key === "lyrics"), { key: "lyrics", label: "Lyrics live on Musixmatch", owner: "Verse", days: -7, fromRelease: true });
   assert.deepEqual(S.releaseStepsOut().find((s) => s.key === "ads"), { key: "ads", label: "Ads made with Luke, after the release", owner: "Forge", days: -2, after: "page", fromRelease: true });
   /* the page says it the same way */
-  assert.match(L.stepsSummary(S.releaseStepsOut()), /7 song page and video\. After it: ads with Luke within 2 days and lyrics within 7 days\.$/);
+  assert.match(L.stepsSummary(S.releaseStepsOut()), /7 song page and video\. After it: Spotify Canvas within 7 days, ads with Luke within 2 days and lyrics within 7 days\.$/);
 });
 
 test("releases already sent lose the teaser steps and get the lyrics after the release, once; finished work is kept", async () => {
@@ -103,7 +103,7 @@ test("the tools bring an old release up to date before answering: Verse's lyrics
   assert.deepEqual([ly.song, ly.state, ly.label], ["Night Drive", "waiting", "Lyrics live on Musixmatch"]);
   assert.match(ly.waiting_for, /^the release day: then check Musixmatch every day/);
   assert.deepEqual((await call(d, "my_day", { bot: "Kevin" })).release_steps || [], []);
-  assert.equal((await stored(d, r.id)).steps.length, 9);
+  assert.equal((await stored(d, r.id)).steps.length, 10, "+ the Canvas step (17 Nov 2026)");
 });
 
 test("Verse's lyrics: waiting before the release day (done refused), open from it, late a week after", async () => {

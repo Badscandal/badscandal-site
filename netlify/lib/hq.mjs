@@ -267,6 +267,8 @@ export function mergeReleases(sheetReleases, deskReleases, today, sightings, now
    Today's = deadline today, or no date at all (a standing duty). done / todo / blocked + blocker.
    They are NOT counted as ordinary tasks (no "late", no open count). */
 export const isDuty = (t) => /^d-/i.test(norm(t.id));
+/* "Kevin (TikTok)" or "Laura (YouTube)" on the sheet is the bot Kevin / Laura (17 Nov 2026: T-50 never reached Kevin) */
+export const ownerName = (o) => norm(o).replace(/\s*\([^)]*\)\s*$/, "").trim();
 /* nowHM: São Paulo "HH:MM" now. A duty's deadline may carry its time ("2026-11-12 09:15"): once that
    time has passed and the duty isn't done, it is late (live updates brief, 11 Nov 2026). */
 /* overlay (the staff desk, netlify/lib/staff.mjs dutyOverlay()): what each bot said TODAY through the
@@ -275,7 +277,7 @@ export const isDuty = (t) => /^d-/i.test(norm(t.id));
 export function dutiesReport(tasks, today, nowHM = "", overlay = null) {
   const mine = tasks.filter((t) => isDuty(t) && t.task && (!DAY.test(norm(t.deadline).slice(0, 10)) || norm(t.deadline).slice(0, 10) === today));
   const perOwner = {};
-  for (const t of mine) perOwner[key(t.owner)] = (perOwner[key(t.owner)] || 0) + 1;
+  for (const t of mine) perOwner[key(ownerName(t.owner))] = (perOwner[key(ownerName(t.owner))] || 0) + 1;
   const list = mine
     .map((t) => {
       const m = /(\d{1,2}):(\d{2})/.exec(norm(t.deadline).slice(10)), due = m ? m[1].padStart(2, "0") + ":" + m[2] : "";
@@ -284,15 +286,15 @@ export function dutiesReport(tasks, today, nowHM = "", overlay = null) {
       /* "done with gaps" (batch 4): done, with what could not be read (in the blocker column) */
       if (/^done with gaps\b/i.test(norm(t.status))) { status = "done"; gaps = blocker; blocker = ""; }
       /* by duty id only from the duty's OWN bot; a bot with one duty may leave the id out; the newer word wins */
-      const byId = overlay ? (overlay.byDuty || {})[key(t.id)] : null, byBot = overlay && perOwner[key(t.owner)] === 1 ? (overlay.byBot || {})[key(t.owner)] : null;
-      const mine = byId && (!byId.bot || byId.bot === key(t.owner)) ? byId : null;
+      const byId = overlay ? (overlay.byDuty || {})[key(t.id)] : null, byBot = overlay && perOwner[key(ownerName(t.owner))] === 1 ? (overlay.byBot || {})[key(ownerName(t.owner))] : null;
+      const mine = byId && (!byId.bot || byId.bot === key(ownerName(t.owner))) ? byId : null;
       const said = mine && byBot ? ((byBot.iso || "") > (mine.iso || "") ? byBot : mine) : mine || byBot;
       if (said && status !== "done") {
         if (said.status === "done") { status = "done"; via = "connector"; gaps = said.gaps || ""; }
         else if (said.status === "blocked") { status = "blocked"; blocker = blocker || said.message; via = "connector"; }
         else if (said.status === "working") working = true;
       }
-      return { id: norm(t.id), owner: norm(t.owner) || "?", task: t.task, blocker, status, due,
+      return { id: norm(t.id), owner: ownerName(t.owner) || "?", task: t.task, blocker, status, due,
         late: status === "todo" && !!due && !!nowHM && nowHM > due, updated: norm(t.updated), ...(via ? { via } : {}), ...(working ? { working } : {}), ...(gaps ? { gaps } : {}) };
     });
   const owners = {};
@@ -328,7 +330,7 @@ export function teamReport(tasks, sheets, today, overlay = null) {
   const open = tasks.filter((t) => t.task && !isDuty(t) && !/^done$/i.test(t.status) && !(said(t) && ["done", "cancelled"].includes(said(t).status)));
   const row = (t) => {
     const o = said(t);
-    const r = { id: t.id || "", owner: t.owner || "?", task: t.task, deadline: t.deadline || "", status: key(t.status) || "todo", blocker: t.blocker || "",
+    const r = { id: t.id || "", owner: ownerName(t.owner) || "?", task: t.task, deadline: t.deadline || "", status: key(t.status) || "todo", blocker: t.blocker || "",
       late: DAY.test((t.deadline || "").slice(0, 10)) && (t.deadline || "").slice(0, 10) < today && !/^done$/i.test(t.status) };
     return o ? { ...r, ...(o.title ? { task: o.title } : {}), status: o.status, blocker: o.status === "blocked" ? o.note : "", note: o.note || "", by: o.by || "", updated: o.sp || "" } : r;
   };

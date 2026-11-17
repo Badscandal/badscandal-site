@@ -220,9 +220,36 @@ export async function mutate(store, key, fallback, fn, tries = 12) {
 
 /* ---------- who is who ---------- */
 export async function getRoster(store) {
-  const { data } = await readDoc(store, "roster.json", null);
+  const [{ data }, ed] = await Promise.all([readDoc(store, "roster.json", null), readDoc(store, "rosteredit.json", {})]);
   const list = Array.isArray(data) && data.length ? data : DEFAULT_ROSTER;
-  return list.filter((b) => b && b.name).map((b) => ({ ...b, name: clean(b.name, 40) }));
+  const edits = ed.data && typeof ed.data === "object" && !Array.isArray(ed.data) ? ed.data : {};
+  /* Nova's fixes to a job card (roster_card, 17 Nov 2026) go on top of the seed: a re-seed never wipes them */
+  return list.filter((b) => b && b.name).map((b) => { const name = clean(b.name, 40), e = edits[low(name)]; if (!e) return { ...b, name }; const { by, at, ...f } = e; return { ...b, ...f, name, editedBy: by, editedAt: at }; });
+}
+/* roster_card (17 Nov 2026, Nova: Drop's card still listed royalties, Forge's times were old, and the private seed
+   is not on this Mac): Nova (or Claude, Luke) fixes a bot's duty, why, usual time, schedule or role on the desk */
+export async function editRosterCard(store, now, roster, a) {
+  const by = whoIs(a.by, roster, { people: true });
+  if (!["Nova", "Claude", "Luke"].includes(by)) fail("Only Nova changes a bot's job card. Tell Nova what is wrong on it.", "not_allowed");
+  const name = whoIs(a.for, roster);
+  const f = {};
+  if (a.duty != null && String(a.duty).trim()) f.duty = clean(a.duty, 200);
+  if (a.why != null && String(a.why).trim()) f.why = cleanText(a.why, 400);
+  if (a.role != null && String(a.role).trim()) f.role = clean(a.role, 60);
+  if (a.time != null && String(a.time).trim()) { const t = clean(a.time, 5); if (!/^\d{2}:\d{2}$/.test(t)) fail("time must be HH:MM (24 hours, São Paulo), for example 09:20."); f.time = t; }
+  if (a.schedule != null) {
+    if (!Array.isArray(a.schedule) || a.schedule.length > 8) fail('schedule must be a list of 0 to 8 lines: [{"time": "09:20", "what": "..."}].');
+    f.schedule = a.schedule.map((x) => ({ time: clean(x && x.time, 40), what: clean(x && x.what, 200) })).filter((x) => x.time && x.what);
+  }
+  if (!Object.keys(f).length) fail("Nothing to change: give duty, why, time, schedule or role.");
+  noSecrets(JSON.stringify(f));
+  const at = new Date(now).toISOString();
+  await mutate(store, "rosteredit.json", {}, (doc) => {
+    const d = doc && typeof doc === "object" && !Array.isArray(doc) ? doc : {};
+    d[low(name)] = { ...(d[low(name)] || {}), ...f, by, at };
+    return { replace: d, value: d[low(name)] };
+  });
+  return (await getRoster(store)).find((b) => b.name === name);
 }
 export const botNames = (roster) => roster.map((b) => b.name);
 /* When Nova resets the day's duty rows: the time of the "reset" line on her card (07:00 since batch 5,
@@ -1240,7 +1267,7 @@ export async function listSpend(store, now) {
 }
 
 export const GROWERS = ["Steve", "Atlas", "Kevin", "Laura", "Nova", "Claude"];
-const GROWTH_NUM = ["followers", "views"], SONG_NUM = ["streams", "listeners", "saves", "playlist_adds"];
+const GROWTH_NUM = ["followers", "views", "channel_views", "shorts_views"], SONG_NUM = ["streams", "listeners", "saves", "playlist_adds"];
 const growKey = (month) => `grow/${month}.json`;
 /* a count: "1240" or "1,240" (never "about 1k", never a guess) */
 function countOf(v, name) {
@@ -1474,6 +1501,8 @@ export const PACK_FIELDS = [
   /* optional, and never "needed" by any step (14 Nov 2026, the bots: it made Laura's video step look
      blocked on Me Dá Seu Body, which has no visualiser) */
   F("visualiser", "Visualiser video (link)", "Visualiser", "link", "files", { fill: [], hint: "Optional. A download link to the visualiser video (Dropbox, Google Drive...). Laura uploads it to YouTube and writes the description like the other visualisers. It must start with https://" }),
+  /* 17 Nov 2026 (Luke via Nova): the Spotify Canvas, Luke's; Atlas uploads it (step "canvas", only when there is one) */
+  F("canvas", "Spotify Canvas video (link)", "Spotify Canvas", "link", "files", { hint: "Optional. A link to the Canvas video (the short loop on Spotify). Atlas uploads it in Spotify for Artists once the song shows there." }),
   F("folder", "Folder with the release files (link)", "Folder", "link", "files", { hint: "Optional. One shared folder with the master, the cover, stems and clips." }),
   F("language", "Language of the lyrics", "Language", "line", "stores", { required: true, hint: 'For example "Portuguese", "English", or "Instrumental".' }),
   F("explicit", "Explicit lyrics?", "Explicit", "choice", "stores", { required: true, choices: ["No", "Yes", "Clean version"], hint: "Yes if the lyrics swear or are sexual. RouteNote asks for it." }),
@@ -1504,6 +1533,10 @@ export const PACK_FIELDS = [
   F("page", "Song page (link)", "Song page", "link", "later", { fill: ["Webmaster"], hint: "Webmaster fills it once the page is live: https://badscandal.com/<slug>" }),
   /* round 3 (16 Nov 2026, Verse): where the lyrics are on Musixmatch, kept by Verse */
   F("musixmatch", "Lyrics on Musixmatch", "Musixmatch", "choice", "later", { fill: ["Verse"], choices: ["not listed", "submitted", "pending", "live"], hint: "Verse keeps it current after the release: not listed (the song isn't on Musixmatch yet), submitted, pending (in review), live." }),
+  /* 17 Nov 2026 (Luke, via Nova): his notes on the ads he set up for the song (the release page shows them) */
+  F("adplan", "Ad plan (what you set up, and your notes)", "Ad plan", "text", "notes", { max: 1500, hint: "Optional. Your notes on the ads for this song: platforms, audience, budget, dates, what you set up." }),
+  /* 17 Nov 2026 (Luke: Love You "went through RouteNote before HQ existed"): no pack needed, nothing chased */
+  F("prehq", "Released through the distributor before HQ: no pack needed", "Before HQ", "choice", "notes", { choices: ["Yes"], hint: "Only for a song that already went to the distributor before HQ: its missing fields stop showing and no bot chases them." }),
   F("notes", "Anything else the team should know", "Notes", "text", "notes", { max: 1000, hint: "Optional." }),
 ];
 /* null prototype (11 Nov 2026): "constructor", "toString" or "__proto__" sent as a pack key must be an
@@ -1519,6 +1552,8 @@ export const RELEASE_STEPS = [
      it In Review); a label release skips the approval, so it never waits */
   { key: "spotify", label: "Showing as upcoming in Spotify for Artists", owner: "Atlas", days: 15, after: "approved" },
   { key: "pitch", label: "Spotify pitch sent", owner: "Atlas", days: 14, after: "spotify", asap: true },
+  /* 17 Nov 2026: only when the pack has a Canvas link (needs); once the song shows in Spotify for Artists, by a week after the release */
+  { key: "canvas", label: "Spotify Canvas uploaded", owner: "Atlas", days: -7, after: "spotify", needs: "canvas" },
   { key: "page", label: "Song page live on badscandal.com", owner: "Webmaster", days: 7 },
   /* YouTube on a schedule (16 Nov 2026, Luke: "the day a new song releases the upload is released or scheduled
      in advance goal is two per month"): scheduled a week ahead, public on the release day */
@@ -1693,13 +1728,15 @@ function pitchRule(list, today, at = null) {
   }
   return changed;
 }
+const NEEDS_NOTE = "No Spotify Canvas link in the pack (Luke adds one if there is a Canvas)";
 export function scheduleSteps(date, today, o = {}) {
   if (o.alreadyOut) return { steps: RELEASE_STEPS.map((s) => ({ key: s.key, label: s.label, owner: s.owner, due: null, status: "skipped", note: OUT_NOTE, link: "", at: null, by: null })), tight: false };
   const steps = RELEASE_STEPS.map((s) => {
     const want = addDays(date, -s.days);
     const skip = o.labelDelivers && (s.key === "upload" || s.key === "approved");
+    const noNeed = s.needs && !filled((o.pack || {})[s.needs]); /* the Canvas step without a Canvas link */
     const due = s.key === "page" ? pageDue(date, o.prevDate, today) : want < today ? today : want;
-    return { key: s.key, label: s.label, owner: s.owner, due, status: skip ? "skipped" : "todo", note: skip ? LABEL_NOTE : "", link: "", at: null, by: null };
+    return { key: s.key, label: s.label, owner: s.owner, due, status: skip || noNeed ? "skipped" : "todo", note: skip ? LABEL_NOTE : noNeed ? NEEDS_NOTE : "", link: "", at: null, by: null };
   });
   return { steps, tight: daysBetween(today, date) < 21 };
 }
@@ -1785,6 +1822,20 @@ function healOne(r, today, at) {
     if (!finished(ad) && r.status === "scheduled" && !r.alreadyOut && isDay(r.date)) { const want = addDays(r.date, -STEP.ads.days); ad.due = want < today ? today : want; }
     said.push(`the ads are made with Luke after the release${ad.due ? ` (due ${dayWords(ad.due)})` : ""}`);
   }
+  /* a release missing a step of the pipeline gets it (17 Nov 2026: Me Dá Seu Body had no YouTube step), dated as if it
+     had been sent with it; a step done long ago elsewhere is never invented as done */
+  /* only a song not out yet; never the Spotify for Artists step (an old release gets that one when Luke moves it: its
+     pitch may have gone out already, 11 Nov 2026) */
+  if (r.status === "scheduled" && !r.alreadyOut && isDay(r.date) && r.date >= today) {
+    const have = new Set(r.steps.map((s) => s.key)), add = RELEASE_STEPS.filter((x) => !have.has(x.key) && x.key !== "spotify");
+    if (add.length) {
+      const fresh = scheduleSteps(r.date, today, { labelDelivers: labelDelivers(r.pack), pack: r.pack }).steps;
+      for (const x of add) r.steps.push(fresh.find((y) => y.key === x.key));
+      const order = RELEASE_STEPS.map((x) => x.key);
+      r.steps.sort((a, b) => order.indexOf(a.key) - order.indexOf(b.key));
+      said.push(`added the step${add.length === 1 ? "" : "s"} ${joinWords(add.map((x) => `"${x.label}"`))}`);
+    }
+  }
   const vd = r.steps.find((s) => s.key === "video");
   if (vd && vd.label === OLD_VIDEO) { vd.label = STEP.video.label; said.push("the YouTube video goes public on the release day"); }
   if (said.length) logIt(r, at, "HQ", `HQ: ${joinWords(said)} (Luke, 16 Nov 2026)`);
@@ -1839,11 +1890,13 @@ export function releaseView(r, today, o = {}) {
       ...(w ? { waitingFor: w.key, waitingText: waitWords(w, s) } : {}), ...(skipped ? { skipped: true } : {}), ...(STEP[s.key] && STEP[s.key].after ? { after: STEP[s.key].after } : {}) };
   });
   const dueOf = (key) => { const s = steps.find((x) => x.key === key); return s ? s.due : date && STEP[key] ? addDays(date, -STEP[key].days) : null; };
-  const out = outAlready(r, today);
+  /* released through the distributor before HQ (17 Nov 2026): no pack needed, nothing is missing, nobody chases it */
+  const out = outAlready(r, today) || pack.prehq === "Yes";
+  const preHq = pack.prehq === "Yes";
   const missing = [];
   if (!date) missing.push({ key: "date", label: "Release day", short: "Release day", required: true, neededBy: "", step: "", owner: "", due: null });
   /* already out: only whose song it is matters (the files and the details went to the stores long ago) */
-  for (const f of PACK_FIELDS) if (requiredNow(f, pack) && !filled(pack[f.key]) && (!out || f.group === "deal")) missing.push({ key: f.key, label: f.label, short: f.short, required: true, neededBy: "", step: "", owner: "", due: null });
+  for (const f of PACK_FIELDS) if (!preHq && requiredNow(f, pack) && !filled(pack[f.key]) && (!out || f.group === "deal")) missing.push({ key: f.key, label: f.label, short: f.short, required: true, neededBy: "", step: "", owner: "", due: null });
   for (const f of PACK_FIELDS) if (!out && !requiredNow(f, pack) && f.neededBy && !filled(pack[f.key])) {
     const st = steps.find((x) => x.key === f.neededBy);
     if (st && finished(st)) continue; /* the label delivers it, or the step is done already: nothing needs the field any more */
@@ -1857,7 +1910,7 @@ export function releaseView(r, today, o = {}) {
   if (firstOpt >= 0) missing.splice(firstOpt, missing.length - firstOpt, ...missing.slice(firstOpt).map((m, i) => [m, i]).sort((a, b) => (when(a[0]) < when(b[0]) ? -1 : when(a[0]) > when(b[0]) ? 1 : a[1] - b[1])).map((x) => x[0]));
   /* "Pack: 14 of 17 filled": the fields Luke fills about the song; the team's "later" fields and the
      deal (shown on its own line) are not counted */
-  const own = PACK_FIELDS.filter((f) => f.group !== "later" && f.group !== "deal");
+  const own = PACK_FIELDS.filter((f) => f.key !== "prehq" && f.key !== "adplan" && f.group !== "later" && f.group !== "deal");
   const open = steps.filter((s) => !finished(s));
   /* next = the first open step someone can work on now (a waiting one only when nothing else is open) */
   const next = open.find((s) => !s.waiting) || open[0] || null;
@@ -1898,6 +1951,7 @@ export function whereWords(v, today) {
   if (v.status === "cancelled") return "Cancelled";
   if (v.status === "draft") {
     const req = v.missing.filter((m) => m.required);
+    if (v.pack && v.pack.prehq === "Yes") return "Released through the distributor before HQ: no pack needed · ready to send";
     if (v.date && v.date < today) return `Release day ${dayWords(v.date)} has passed: sending records it as already out, with no steps` + (req.length ? ` · still missing: ${joinWords(req.map((m) => m.short))}` : "");
     return "In the pipeline: " + filledLine + (req.length ? ` · still missing: ${joinWords(req.map((m) => m.short))}` : " · ready to send");
   }
@@ -2350,6 +2404,13 @@ export async function saveRelease(store, now, roster, a) {
       const changed = Object.keys(values).filter((k) => (r.pack[k] || "") !== values[k]);
       for (const k of changed) { if (values[k]) r.pack[k] = values[k]; else delete r.pack[k]; }
       if (changed.includes("storeStatus") && values.storeStatus) storeEntry(r, { status: values.storeStatus, on: today, at, by });
+      /* a step that needs a field (the Canvas): it applies once the field is filled, and stops applying when cleared */
+      for (const st of r.steps || []) {
+        const need = STEP[st.key] && STEP[st.key].needs;
+        if (!need || !changed.includes(need)) continue;
+        if (filled(r.pack[need]) && st.status === "skipped" && st.note === NEEDS_NOTE) { st.status = "todo"; st.note = ""; if (isDay(r.date)) { const want = addDays(r.date, -STEP[st.key].days); st.due = want < today ? today : want; } }
+        else if (!filled(r.pack[need]) && st.status === "todo") { st.status = "skipped"; st.note = NEEDS_NOTE; }
+      }
       if (changed.length) changes.push(`changed ${joinWords(changed.map((k) => FIELD[k].short))}`);
       /* the deal changed on a release already sent: the upload and the approval follow it, and Drop is told */
       if (changed.some((k) => k === "kind" || k === "distributor")) {
@@ -2409,7 +2470,7 @@ export async function sendRelease(store, now, roster, a) {
       e.missing = miss.map((m) => m.key); e.anyway = !noDay; throw e;
     }
     const alreadyOut = r.date < today;
-    const s = scheduleSteps(r.date, today, { alreadyOut, labelDelivers: labelDelivers(r.pack), prevDate: prevReleaseDate(list, r.id, r.date) });
+    const s = scheduleSteps(r.date, today, { alreadyOut, labelDelivers: labelDelivers(r.pack), prevDate: prevReleaseDate(list, r.id, r.date), pack: r.pack });
     /* sentWithout (11 Nov 2026, review): what "send anyway" left out, kept on the release. Only this makes the
        "Sent without …" warning: a release sent before a field was required was never sent without it. */
     Object.assign(r, { status: "scheduled", sentAt: at, updatedAt: at, steps: s.steps, tight: s.tight, sentWithout: miss.map((m) => m.key), ...(alreadyOut ? { alreadyOut: true } : {}) });

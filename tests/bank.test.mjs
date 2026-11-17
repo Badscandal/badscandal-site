@@ -805,3 +805,14 @@ test("a read that works clears Revolut's old 'blocked', even part way through th
   assert.deepEqual([s.ok, s.more, s.checked], [true, true, false], "part way: not 'checked today' yet");
   assert.equal((await S.getSources(desk)).find((x) => x.id === "revolut").state, "active");
 });
+
+/* 17 Nov 2026 (Nova): HQ kept saying "not connected" while rows kept arriving: one account failing every read (a pocket
+   the approval doesn't cover) must not hold the others back */
+test("one account failing doesn't keep Revolut 'not connected' while another reads fine", async () => {
+  const bank = await connectedBank({ accounts: [ACCOUNTS[0], ACCOUNTS[1]] }), desk = memoryDesk();
+  await S.setSources(desk, [{ id: "revolut", name: "Revolut", kind: "account", owner: "HQ", cadence: "daily", state: "blocked", blocker: "The site's Revolut reader is not connected yet" }]);
+  const f = fakeReader({ pages: { "uid-eur": [{ transactions: [] }] }, fail: (method, path) => (path.includes("uid-sav") ? ok({ error: "ACCESS_DENIED" }, 403) : null) });
+  const s = await B.syncBank({ bank, desk, env: ENV, now: NOW, fetchImpl: f });
+  assert.equal(s.accounts >= 1, true);
+  assert.equal((await S.getSources(desk)).find((x) => x.id === "revolut").state, "active");
+});

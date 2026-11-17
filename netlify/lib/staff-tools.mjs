@@ -168,7 +168,8 @@ export const TOOLS = [
     description: "STEVE, ATLAS, KEVIN, LAURA: ONE call per platform (Growth: followers, views, the best post) or per song (Songs: Spotify streams, listeners, saves, playlist adds) for ONE day, numbers exactly as shown. The change in followers is worked out for you. Anything you could not read: leave it out and name it in gaps with why (TikTok views come a day late; Instagram has no daily views on the web): your duty is marked done, with gaps, never blocked. Sending the same numbers again does nothing; a later call for the same day fills in what was missing. Put your duty id (D-...) in duty if you have more than one duty today.",
     inputSchema: obj({ bot: BOT, date: str("The day the numbers are for, YYYY-MM-DD."),
       platform: str("For Growth: TikTok, Instagram, YouTube..."), account: str("For Growth: the account handle."),
-      followers: str("Followers as shown, for example 1240 or 1,240."), views: str("Views as shown."), best_post: str("Optional. The day's best post, in a few words."), best_post_link: str("Optional. Its https link."),
+      followers: str("Followers as shown, for example 1240 or 1,240."), views: str("Views as shown."),
+      channel_views: str("YouTube: the Official Artist Channel's views as shown (17 Nov 2026)."), shorts_views: str("Shorts or Reels views as shown."), best_post: str("Optional. The day's best post, in a few words."), best_post_link: str("Optional. Its https link."),
       song: str("For Songs: the song's title."), streams: str("Spotify streams for that day."), listeners: str("Spotify listeners."), saves: str("Saves."), playlist_adds: str("Playlist adds."),
       gaps: { type: "object", description: 'What could not be read, and why: {"views": "TikTok shows them a day late"}.', additionalProperties: { type: "string" } },
       duty: str('Optional. Your duty id from my_day (it starts with "D-").') }, ["bot", "date"]) },
@@ -258,6 +259,12 @@ export const TOOLS = [
     inputSchema: obj({ bot: BOT, song: str("Which song the cover is for (its title)."),
       image_base64: str("The picture file itself, base64 (a data: prefix is fine). Or leave it empty and give url."),
       url: str("Instead of image_base64: an https link to the picture that opens without signing in.") }, ["bot", "song"]) },
+  /* 17 Nov 2026 (Nova): job cards fixed on the desk */
+  { name: "roster_card", title: "Fix a bot's job card", idempotent: false,
+    description: "NOVA only. Correct a bot's job card on the desk (what my_day tells it): duty, why, usual time (HH:MM São Paulo), schedule (up to 8 lines {time, what}) or role. Use it when a card is out of date (for example a duty that moved to another bot). Only what you send changes; it stays when the private seed is loaded again.",
+    inputSchema: obj({ bot: BOT, for: str("Whose card: the bot's name."), duty: str("Optional: the daily duty, one line."), why: str("Optional: why the bot is needed."),
+      time: str("Optional: usual time, HH:MM."), role: str("Optional: the role, a few words."),
+      schedule: { type: "array", description: 'Optional: the whole schedule, replacing the old one: [{"time": "09:20", "what": "..."}].', items: { type: "object", properties: { time: { type: "string" }, what: { type: "string" } }, additionalProperties: false } } }, ["bot", "for"]) },
   { name: "store_status", title: "Where a song is at the distributor",
     description: "DROP (Nova may do it for him): say where ONE release is at the distributor, each time it changes: not uploaded, uploaded, in moderation, rejected, resubmitted, approved, delivered, live (RouteNote's \"Pending Moderation\" or \"In review\" = in moderation, \"Action needed\" = rejected). To fill in history, give each change with on = the day it happened, in any order: the history is kept in day order and the newest day is the status now. Every change is kept as its history (the moderation log Luke sees). With rejected, put what RouteNote said, in its words, in reason. When a rejected song is fixed and ready to go again, call it with status rejected and ready_to_resubmit true (and what changed in note): Luke is asked Yes, resubmit / Not yet, and his answer comes back to you in my_day. Do not resubmit before he says yes.",
     inputSchema: obj({ bot: BOT, song: str("The song's title or its id."),
@@ -303,7 +310,7 @@ export const TOOL_USERS = {
   submit_income: INCOME_TEAM, fix_payment: INCOME_TEAM, income_source: INCOME_TEAM, income_check: INCOME_TEAM, sort_payment: INCOME_TEAM,
   income_status: [...INCOME_TEAM, "Alfred"], payments: INCOME_TEAM, link_transfer: INCOME_TEAM, month_check: INCOME_TEAM,
   record_spend: ["Forge"], log_growth: ["Steve", "Atlas", "Kevin", "Laura"],
-  store_status: ["Drop"], spotify_upcoming: ["Atlas"], song_page: ["Webmaster"], song_pages: ["Webmaster"], upload_cover: ["Webmaster"],
+  store_status: ["Drop"], spotify_upcoming: ["Atlas"], song_page: ["Webmaster"], roster_card: ["Nova"], song_pages: ["Webmaster"], upload_cover: ["Webmaster"],
 };
 const onTeam = (bot, roster) => { const k = String(bot || "").trim().toLowerCase(); return k ? (roster.find((b) => b.name.toLowerCase() === k) || {}).name || "" : ""; };
 export function toolsFor(bot, roster) {
@@ -478,7 +485,7 @@ export async function callTool(tool, args, ctx) {
     }
     case "log_growth": {
       const prev = me !== "Claude" && args.platform && ctx.hq ? await ctx.hq().then((h) => { const g = h && h.growth ? h.growth.find((p) => String(p.platform).toLowerCase() === String(args.platform).trim().toLowerCase()) : null; return g && g.lastDay ? { date: g.lastDay, followers: g.followers } : null; }).catch(() => null) : null;
-      const r = await S.logGrowth(store, now, roster, { by: me, date: args.date, platform: args.platform, account: args.account, followers: args.followers, views: args.views, best_post: args.best_post, best_post_link: args.best_post_link,
+      const r = await S.logGrowth(store, now, roster, { by: me, date: args.date, platform: args.platform, account: args.account, followers: args.followers, views: args.views, channel_views: args.channel_views, shorts_views: args.shorts_views, best_post: args.best_post, best_post_link: args.best_post_link,
         song: args.song, streams: args.streams, listeners: args.listeners, saves: args.saves, playlist_adds: args.playlist_adds, gaps: args.gaps, duty: args.duty, prev });
       const fixedWords = r.corrected && r.corrected.length ? r.corrected.map((c) => `${c.date}: ${c.from == null ? "none" : (c.from >= 0 ? "+" : "") + c.from} -> ${(c.to >= 0 ? "+" : "") + c.to}`) : null;
       if (r.duplicate) return { saved: false, duplicate: true, ...(fixedWords ? { changes_fixed: fixedWords } : {}),
@@ -594,6 +601,10 @@ export async function callTool(tool, args, ctx) {
       return { saved: true, song: r.release.title, status: r.store.status, ...(r.store.reason ? { reason: r.store.reason } : {}), history: r.store.history.length,
         ...(r.asked ? { asked_luke: r.asked, note: r.already ? "Luke was already asked and hasn't answered yet: his answer comes back to you in my_day." : "Luke is asked: Yes, resubmit / Not yet. His answer comes back to you in my_day. Do not resubmit before he says yes." } : {}),
         shown_on: "badscandal.com/hq, Upcoming" };
+    }
+    case "roster_card": {
+      const b = await S.editRosterCard(store, now, roster, { by: me, for: args.for, duty: args.duty, why: args.why, time: args.time, role: args.role, schedule: args.schedule });
+      return { saved: true, bot: b.name, duty: b.duty, time: b.time, schedule: (b.schedule || []).map((x) => `${x.time}: ${x.what}`), note: "The bot's my_day says this from now on." };
     }
     case "song_pages": {
       const list = await S.songPages(store, now);

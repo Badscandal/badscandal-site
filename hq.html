@@ -935,6 +935,13 @@ textarea.fld.lyrics{min-height:220px}
 .rask .mopts{margin-top:0}
 .mappr{margin:10px 0 0}
 .mappr .mq{margin:0 0 6px;font-weight:600}
+.rpage .rphead{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}.rpage h3{margin:0;font-size:24px}
+.rpage .rpready{margin:6px 0 0;font-weight:700}.rpage .rpready.ok{color:var(--spot)}.rpage .rpready.no{color:var(--amber,#FBBF24)}
+.rpage ul.rpcheck{list-style:none;margin:10px 0 0;padding:0;display:grid;gap:6px}.rpage ul.rpcheck li{display:flex;gap:8px;align-items:flex-start;font-size:15px}
+.rpage ul.rpcheck li .mk{flex:0 0 20px;font-weight:700}.rpage ul.rpcheck li.ok .mk{color:var(--spot)}.rpage ul.rpcheck li.no .mk{color:var(--muted)}
+.rpage dl.rpfields{display:grid;grid-template-columns:minmax(120px,auto) 1fr;gap:6px 12px;margin:8px 0 0;font-size:15px}.rpage dl.rpfields dt{color:var(--muted)}.rpage dl.rpfields dd{margin:0;overflow-wrap:anywhere}
+.rpage .st-missing{color:var(--red)}.rpage .st-later{color:var(--amber,#FBBF24)}.rpage .st-opt,.rpage .st-none{color:var(--muted)}
+.rpage .rpsec{margin:18px 0 0}.rpage .rpplan{white-space:pre-wrap;margin:6px 0 0}
 .mprop{margin:6px 0 0;display:grid;grid-template-columns:minmax(90px,auto) 1fr;gap:6px 12px;font-size:15px;line-height:1.45}.mprop dt{color:var(--muted)}.mprop dd{margin:0;color:var(--paper);overflow-wrap:anywhere;white-space:pre-wrap}.mprop s{color:var(--muted)}
 .mpitch{margin:0;padding:10px 12px;border-left:3px solid var(--glass-line);background:var(--glass-2);border-radius:0 10px 10px 0;font-size:15px;line-height:1.5;white-space:pre-wrap;overflow-wrap:anywhere}
 .rsteps li.skip i{border-style:dashed}
@@ -1510,6 +1517,7 @@ a.t-card:hover,button.t-card:hover,#shell a.tile:hover{border-color:var(--accent
   <section class="card view" id="releases"><h2>Upcoming</h2><p class="sub" id="relSub">Your songs on their way out. What needs you is on top; tap a song for every step.</p><div class="sheeterr" id="errReleases" hidden></div>
     <p class="mnote" id="relSample" hidden>This is the sample: the form opens, but saving, sending, changing a date, marking steps and answering are switched off here.</p>
     <!-- the overhaul (15 Nov 2026): what needs Luke first, then the songs as compact cards, then drafts, planning, Spotify for Artists -->
+    <div id="relPage" hidden></div>
     <div id="relNow"></div>
     <div class="relhead"><h3 class="sech relh">Coming up</h3><button class="sendbtn" id="relNew" type="button" aria-controls="relForm" aria-expanded="false">New song</button></div>
     <p class="secsub">Sent to the team, soonest first.</p>

@@ -616,7 +616,9 @@ export async function syncBank({ bank, desk, env, now, fetchImpl, clock = Date.n
   }
   /* Revolut can be read: the desk stops calling it (or a source waiting for it) blocked. Any read that worked counts,
      also one that stops part way to carry on next time (17 Nov 2026: the 90-day read takes several) */
-  if (complete && !accountFails && !gone) { try { await S.afterBankRead(desk, now); } catch {} }
+  /* (17 Nov 2026) one account that fails (a pocket the approval doesn't cover) must not keep "not connected" up while
+     the others read fine: any account read is enough */
+  if (complete && sum.accounts > 0 && !gone) { try { await S.afterBankRead(desk, now); } catch {} }
 
   /* 4. remember where every account got to (only when the desk took everything that was read) */
   try {
