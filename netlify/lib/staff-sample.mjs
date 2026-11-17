@@ -111,7 +111,8 @@ export function sampleDesk(now = Date.now()) {
   const messages = [
     M(12, "msample0001a", "HQ", "Luke", "HQ check, " + today + " morning: 3 things to look at\n\nNeeds a look:\n- Kevin is blocked: TikTok login expired\n- Laura is late (due 00:30): Log YouTube subscribers\n- Income: 2 payments in Revolut that nobody has sorted yet\n\nRunning:\n- Duties: 3 of 6 done, 1 late, 1 blocked\n- Income logged this month: USD 104.04 + EUR 112.01 received", "none", { kind: "report" }),
     M(40, "msample0002a", "Kevin", "Luke", "TikTok signed me out. I need the 6-digit code TikTok sends to your phone, typed into the secure form (not here).", "action"),
-    M(95, "msample0003a", "Nova", "Luke", "Survivors on Fri 11 Dec? Files have to reach Drop by Fri 13 Nov.", "decision", { options: ["Yes, Fri 11 Dec", "Move it to January", "Not this one"] }),
+    M(95, "msample0003a", "Nova", "Luke", "Survivors on Fri 11 Dec? Files have to reach Drop by Fri 13 Nov.", "decision", { options: ["Yes, Fri 11 Dec", "Move it to January", "Not this one"],
+      recommendations: [{ by: "Nova", option: "Move it to January", why: "Fri 11 Dec is only 6 days after Slow Burn and in the slow holiday weeks: a January Friday gives the pitch time (made up).", at: new Date(ago(90)).toISOString() }] }),
     M(130, "msample0004a", "Claude", "Nova", "Ledger's Northlight row for this month is still pending. Ask Ledger to check the statement email again at 12:00.", "action"),
     M(125, "msample0005a", "Nova", "Claude", "Asked. Ledger will post an update when it has looked.", "none", { re: "msample0004a" }),
     M(300, "msample0006a", "Claude", "all", "From today every bot starts its run with my_day and finishes with post_update. The guide is in read_guide.", "none"),

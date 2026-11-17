@@ -240,8 +240,11 @@
       opts = ui.ask && ui.ask.k === k && m.options[ui.ask.i] != null
         ? '<div class="confirm" role="group" aria-label="Confirm your answer"><p>' + (m.proposal ? esc(L.proposalConfirm(m, m.options[ui.ask.i])) : "Answer “" + esc(m.options[ui.ask.i]) + "”? " + esc(m.from) + " will see it, and this is marked as done.") + '</p><div class="conn-acts"><button class="sendbtn" type="button" data-act="opt-yes" data-k="' + esc(k) + '"' + dis + ">" +
           (busy ? "Sending…" : "Send this answer") + '</button><button class="copybtn" type="button" data-act="opt-no" data-k="' + esc(k) + '"' + dis + ">Cancel</button></div></div>"
-        : '<div class="mopts">' + m.options.map(function (o, i) { return '<button class="copybtn" type="button" data-act="opt" data-k="' + esc(k) + '" data-i="' + i + '"' + dis + ">" + esc(o) + "</button>"; }).join("") + "</div>";
+        : '<div class="mopts">' + m.options.map(function (o, i) { var rec = i === L.recommendedOption(m); return '<button class="copybtn' + (rec ? " rec" : "") + '" type="button" data-act="opt" data-k="' + esc(k) + '" data-i="' + i + '"' + dis + ">" + esc(o) + (rec ? ' <span class="rectag">recommended</span>' : "") + "</button>"; }).join("") + "</div>";
     }
+    /* A3 (17 Nov 2026): Luke's decisions inbox: the recommendations (Nova's first), above the options */
+    var recs = L.recommendLines(m);
+    if (recs.length) opts = '<ul class="mrec">' + recs.map(function (t) { return "<li>" + esc(t) + "</li>"; }).join("") + "</ul>" + opts;
     /* numbered questions (14 Nov 2026): one answer box per open question, one button for them all */
     var qs = L.questionLines(m), qhtml = "";
     if (qs.length) {

@@ -2398,3 +2398,7 @@ Luke: "money is not double counted so if something comes to paypal and i send it
 - `log_growth`: `channel_views`, `shorts_views`. `ownerName()` in hq.mjs: "Kevin (TikTok)" on the sheet is Kevin (tasks, duties, the bot's own word).
 - **`roster_card`** (Nova; Claude, Luke): fix a bot's duty / why / time / schedule / role on the desk (`rosteredit.json`, on top of the seed, kept across re-seeds). 34 tools.
 
+
+## Luke's decisions inbox: recommendations (17 Nov 2026, A3, branch hq-decisions-inbox)
+- A message waiting on Luke carries `recommendations: [{by, option, why, at}]` (one per person; a new one replaces that person's). The asker gives its own with `send_message recommend` (+ `recommend_option`, exactly one of the options); Nova (or Claude) adds hers with the tool **`recommend`** (35 tools; `S.recommendMessage`, `RECOMMENDERS`). Only on an open message to Luke that needs him; `why` 300 characters, secrets refused.
+- HQ Messages › Waiting on you shows them above the options, Nova's first (`HQLib.recommendLines`), and marks the recommended option (`HQLib.recommendedOption`, `.copybtn.rec` + "recommended"). Alfred's `luke_short_briefing` decision lines end with "· Nova recommends: …"; `luke_briefing` is unchanged (no recommendation in it). Tests: `tests/decisions-inbox.test.mjs`.

@@ -220,6 +220,17 @@
   /* growth over "7 days", or fewer when there aren't 7 days of readings yet (weekDays from the server) */
   function growthWhen(g) { var n = g && g.weekDays; return n > 0 && n < 7 ? "in " + n + " day" + (n === 1 ? "" : "s") : "in 7 days"; }
 
+  /* Luke's decisions inbox (A3, 17 Nov 2026): the recommendations on a message waiting on him, Nova's first,
+     then the asker's; and which option to mark as recommended (Nova's pick, else the asker's; -1 = none) */
+  function recsOf(m) { return ((m && m.recommendations) || []).slice().sort(function (a, b) { return a.by === "Nova" ? -1 : b.by === "Nova" ? 1 : 0; }); }
+  function recommendLines(m) {
+    return recsOf(m).map(function (x) { return x.option ? x.by + " recommends “" + x.option + "”: " + x.why : x.by + " recommends: " + x.why; });
+  }
+  function recommendedOption(m) {
+    var opts = (m && m.options) || [], pick = recsOf(m).filter(function (x) { return x.option; })[0];
+    return pick ? opts.indexOf(pick.option) : -1;
+  }
+
   /* the 3 to 5 sentences at the top of Today */
   function briefing(o) {
     var sheet = o.sheet, ov = o.ov, att = o.attention || [], out = [];
@@ -1524,7 +1535,7 @@
     return scored.slice(0, max).map(function (y) { return y.x; });
   }
 
-  return { releaseTrouble: releaseTrouble, navPad: navPad, signoutWords: signoutWords, growthWhen: growthWhen, ago: ago, spMs: spMs, releaseWords: releaseWords, releaseDetail: releaseDetail, healthRows: healthRows, healthState: healthState, median: median, change: change, money: money, attention: attention, briefing: briefing,
+  return { recommendLines: recommendLines, recommendedOption: recommendedOption, releaseTrouble: releaseTrouble, navPad: navPad, signoutWords: signoutWords, growthWhen: growthWhen, ago: ago, spMs: spMs, releaseWords: releaseWords, releaseDetail: releaseDetail, healthRows: healthRows, healthState: healthState, median: median, change: change, money: money, attention: attention, briefing: briefing,
     snapshot: snapshot, changesSince: changesSince, tiles: tiles, summaryText: summaryText, shortStep: shortStep, day: day,
     slug: slug, workerLabel: workerLabel, sortWorkers: sortWorkers, workerView: workerView, dutyWhen: dutyWhen, workerCounts: workerCounts, seenLine: seenLine, connectorLine: connectorLine,
     novaMessage: novaMessage, liveFeed: liveFeed, spWhen: spWhen, waitLabel: waitLabel, needWords: needWords, reportParts: reportParts, siteCheckLine: siteCheckLine, composeNames: composeNames,
