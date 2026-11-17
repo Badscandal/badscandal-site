@@ -84,7 +84,15 @@
     catch (e) { return (whole ? Math.round(n) : Number(n).toFixed(2)) + " " + (cur || ""); }
   }
   function plural(n, one, many) { return fmt(n) + " " + (n === 1 ? one : many || one + "s"); }
-  function day(d) { return d ? new Date(String(d).slice(0, 10) + "T12:00:00Z").toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" }) : ""; }
+  /* "Fri 20 Nov" from a YYYY-MM-DD date (a time after it is fine). Anything else (a Sheet deadline typed as
+     "Friday" or "15/11") is shown as written: it used to read "Invalid Date" (A1, 17 Nov 2026) */
+  function day(d) {
+    if (!d) return "";
+    var s = String(d).trim(), m = /^(\d{4})-(\d{2})-(\d{2})(?:$|[ T])/.exec(s);
+    var t = m ? new Date(m[1] + "-" + m[2] + "-" + m[3] + "T12:00:00Z") : null;
+    if (!t || isNaN(t) || t.toISOString().slice(0, 10) !== m[1] + "-" + m[2] + "-" + m[3]) return s;
+    return t.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" });
+  }
   function median(a) {
     var v = a.filter(function (x) { return x != null && isFinite(x); }).slice().sort(function (x, y) { return x - y; });
     if (!v.length) return null;
@@ -184,6 +192,34 @@
     return st.filter(first).concat(out, st.filter(function (x) { return !first(x); }));
   }
 
+  /* a release's trouble: late steps, blocked steps (a merged desk step carries "blocked: …" in its note),
+     warnings. onTime = none of them (A1, 17 Nov 2026) */
+  function stepBlocked(st) { return !!st && !st.done && !st.skipped && /^blocked\b/i.test(String(st.note || "").trim()); }
+  function releaseTrouble(r) {
+    var steps = (r && r.steps) || [], late = steps.filter(function (st) { return st && st.late && !st.done; }).length;
+    var blocked = steps.filter(stepBlocked).length, warnings = ((r && r.warnings) || []).length;
+    return { late: late, blocked: blocked, warnings: warnings, onTime: !late && !blocked && !warnings };
+  }
+  /* the space under a page on phones: from the top of the bottom bar to the bottom of the screen, + 24 px;
+     0 when the bar isn't there (desktop rail, login). js/hq-shell.js sets it as --navpad (A1, 17 Nov 2026) */
+  function navPad(rect, vh) {
+    if (!rect || !rect.height || !(vh > 0)) return 0;
+    return Math.max(0, Math.round(vh - rect.top)) + 24;
+  }
+  /* why the login appeared, said on the login form; rec = { at, why: "button" | "401", what } kept on this
+     device (bs_hq_signout). Older than a day: nothing */
+  var SIGNOUT_WHAT = { "/api/hq/data": "the sheet numbers", "/api/admin/overview": "the page numbers", "/api/admin/data": "the Pages numbers",
+    "/api/staff/board": "the team's desk", "/api/staff/fields": "the release form", "/api/staff/release": "a release", "/api/bank/status": "Revolut's state" };
+  function signoutWords(rec, now) {
+    if (!rec || !rec.at || !(now - rec.at < 86400000) || now < rec.at) return "";
+    var hm = new Date(rec.at).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: "America/Sao_Paulo" });
+    if (rec.why === "button") return "You logged out with the Log out button at " + hm + ".";
+    var what = SIGNOUT_WHAT[String(rec.what || "").split("?")[0]] || "the site";
+    return "Signed out at " + hm + ": the site no longer saw your login (" + what + " answered “not logged in”). Log in again.";
+  }
+  /* growth over "7 days", or fewer when there aren't 7 days of readings yet (weekDays from the server) */
+  function growthWhen(g) { var n = g && g.weekDays; return n > 0 && n < 7 ? "in " + n + " day" + (n === 1 ? "" : "s") : "in 7 days"; }
+
   /* the 3 to 5 sentences at the top of Today */
   function briefing(o) {
     var sheet = o.sheet, ov = o.ov, att = o.attention || [], out = [];
@@ -201,8 +237,15 @@
       if (n) {
         var rel = (sheet.releases || []).filter(function (r) { return r.song === n.song; })[0];
         var late = rel ? rel.steps.filter(function (st) { return st.late; }) : [];
+        /* "everything is on time" only when nothing is late, blocked or warned about (A1, 17 Nov 2026: it sat
+           next to a red warning on the same song) */
+        var tr = releaseTrouble(rel || n), warns = (rel || n).warnings || [];
+        var blockedSteps = (rel || n).steps ? (rel || n).steps.filter(stepBlocked) : [];
         out.push(n.song + (n.daysToGo === 0 ? " is out today" : " is out in " + plural(n.daysToGo, "day")) + "; " +
-          (late.length ? (late.length === 1 ? "1 step is" : late.length + " steps are") + " late (" + late.map(function (st) { return shortStep(st.label) + ", " + st.owner; }).join("; ") + ")." : "everything is on time."));
+          (late.length ? (late.length === 1 ? "1 step is" : late.length + " steps are") + " late (" + late.map(function (st) { return shortStep(st.label) + ", " + st.owner; }).join("; ") + ")."
+            : tr.blocked ? (tr.blocked === 1 ? "1 step is" : tr.blocked + " steps are") + " blocked (" + blockedSteps.map(function (st) { return shortStep(st.label) + ", " + st.owner; }).join("; ") + ")."
+            : tr.warnings ? String(warns[0]).replace(/\.$/, "") + (tr.warnings > 1 ? " (+" + (tr.warnings - 1) + " more)" : "") + "."
+            : "everything is on time."));
       }
       var moving = (sheet.songs || []).filter(function (s) { return s.trend === "rising" || s.trend === "cooling"; })
         .sort(function (a, b) { return Math.abs(b.momentum) - Math.abs(a.momentum); })[0];
@@ -272,7 +315,7 @@
     }
     if (sheet) (sheet.growth || []).forEach(function (g) {
       out.push({ key: "f:" + g.platform, label: g.platform + " followers", value: fmt(g.followers), change: g.week == null ? { text: "–", dir: "flat" } : { text: (g.week > 0 ? "+" : g.week < 0 ? "−" : "") + fmt(Math.abs(g.week)), dir: g.week > 0 ? "up" : g.week < 0 ? "down" : "flat" },
-        vs: "in 7 days", series: (g.series || []).slice(-14).map(function (p) { return p.v; }) });
+        vs: growthWhen(g), series: (g.series || []).slice(-14).map(function (p) { return p.v; }) });
     });
     return out;
   }
@@ -1481,7 +1524,7 @@
     return scored.slice(0, max).map(function (y) { return y.x; });
   }
 
-  return { ago: ago, spMs: spMs, releaseWords: releaseWords, releaseDetail: releaseDetail, healthRows: healthRows, healthState: healthState, median: median, change: change, money: money, attention: attention, briefing: briefing,
+  return { releaseTrouble: releaseTrouble, navPad: navPad, signoutWords: signoutWords, growthWhen: growthWhen, ago: ago, spMs: spMs, releaseWords: releaseWords, releaseDetail: releaseDetail, healthRows: healthRows, healthState: healthState, median: median, change: change, money: money, attention: attention, briefing: briefing,
     snapshot: snapshot, changesSince: changesSince, tiles: tiles, summaryText: summaryText, shortStep: shortStep, day: day,
     slug: slug, workerLabel: workerLabel, sortWorkers: sortWorkers, workerView: workerView, dutyWhen: dutyWhen, workerCounts: workerCounts, seenLine: seenLine, connectorLine: connectorLine,
     novaMessage: novaMessage, liveFeed: liveFeed, spWhen: spWhen, waitLabel: waitLabel, needWords: needWords, reportParts: reportParts, siteCheckLine: siteCheckLine, composeNames: composeNames,

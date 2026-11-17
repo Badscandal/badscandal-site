@@ -24,7 +24,9 @@
     try { return new Intl.NumberFormat("en-US", { style: "currency", currency: cur || "USD", currencyDisplay: "code" }).format(n); }
     catch (e) { return Number(n).toFixed(2) + " " + (cur || ""); }
   }
-  function day(d) { return d ? new Date(String(d).slice(0, 10) + "T12:00:00Z").toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" }) : "–"; }
+  /* one rule with js/hq-lib.js: a Sheet deadline that isn't YYYY-MM-DD is shown as written (A1, 17 Nov 2026) */
+  var L = window.HQLib;
+  function day(d) { return d ? L.day(d) : "–"; }
   function spToday() { try { return new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date()); } catch (e) { return new Date().toISOString().slice(0, 10); } }
   function monthName(m) { return new Date(m + "-15T12:00:00Z").toLocaleDateString("en-GB", { month: "long", year: "numeric", timeZone: "UTC" }); }
   function link(url, text) { return /^https:\/\//.test(url || "") ? '<a href="' + esc(url) + '" target="_blank" rel="noopener noreferrer">' + esc(text) + "</a>" : esc(text); }
@@ -63,13 +65,13 @@
   }
   function getJSON(url) {
     return fetch(url, { credentials: "same-origin", cache: "no-store" })
-      .then(function (r) { return r.json().catch(function () { return {}; }).then(function (j) { return { s: r.status, j: j }; }); });
+      .then(function (r) { return r.json().catch(function () { return {}; }).then(function (j) { return { s: r.status, j: j, u: url }; }); });
   }
 
   /* the page's only writes (js/hq-staff.js): same cookie, our own origin; answers like getJSON */
   function postJSON(url, body) {
     return fetch(url, { method: "POST", credentials: "same-origin", cache: "no-store", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) })
-      .then(function (r) { return r.json().catch(function () { return {}; }).then(function (j) { return { s: r.status, j: j }; }); });
+      .then(function (r) { return r.json().catch(function () { return {}; }).then(function (j) { return { s: r.status, j: j, u: url }; }); });
   }
   /* plain text to the clipboard, with the old-browser fallback */
   function copyText(text, done) {
@@ -127,10 +129,16 @@
   });
 
   /* ---------- login (same endpoint, password, cookie and lockout as before) ---------- */
+  /* why the login appeared (A1, 17 Nov 2026: "HQ signs me out after about 3 minutes"): the Log out button,
+     or an answer saying "not logged in" while HQ was showing. Kept on this device (not swept by Log out) and
+     said on the login form for a day, so the next sign-out can be traced; a good login clears it. */
+  var SIGNOUT = "bs_hq_signout";
+  function noteSignout(why, what) { try { localStorage.setItem(SIGNOUT, JSON.stringify({ at: Date.now(), why: why, what: what || "" })); } catch (e) {} }
+  function signoutLine() { try { return L.signoutWords(JSON.parse(localStorage.getItem(SIGNOUT) || "null"), Date.now()); } catch (e) { return ""; } }
   function showLogin(msg) {
     $("shell").hidden = true;
     $("login").hidden = false; $("boot").hidden = true;
-    $("err").textContent = msg || "";
+    $("err").textContent = msg || signoutLine();
     clearInterval(timer);
     started = false;
     if (window.HQPages) window.HQPages.stop();
@@ -153,7 +161,7 @@
       .then(function (r) { return r.json().catch(function () { return {}; }).then(function (j) { return { s: r.status, j: j }; }); })
       .then(function (res) {
         btn.disabled = false;
-        if (res.s === 200) { $("pw").value = ""; start(); return; }
+        if (res.s === 200) { $("pw").value = ""; try { localStorage.removeItem(SIGNOUT); } catch (e) {} start(); return; }
         if (res.s === 401) $("err").textContent = "Wrong password." + (res.j.left != null ? " " + res.j.left + " tries left." : "");
         else $("err").textContent = res.j.error || "Couldn't log in (" + res.s + ").";
       })
@@ -173,6 +181,7 @@
   /* inside the HQ apps, the device stops getting alerts first (js/hq-app.js: unregister while the login
      still works, then the app clears its badge); in a browser that is nothing */
   $("logout").addEventListener("click", function () {
+    noteSignout("button");
     var first = window.HQAppPage && window.HQAppPage.beforeLogout ? window.HQAppPage.beforeLogout() : null;
     Promise.resolve(first).catch(function () {})
       .then(function () { return fetch("/api/admin/logout", { method: "POST", credentials: "same-origin" }).catch(function () {}); })
@@ -180,7 +189,7 @@
   });
   /* any 401 / 503 from any of the three answers lands here */
   function authFail(res) {
-    if (res.s === 401) { showLogin(""); return true; }
+    if (res.s === 401) { if (!$("shell").hidden) noteSignout("401", res.u); showLogin(""); return true; }
     if (res.s === 503 && /ADMIN_KEY/.test(res.j.error || "")) { showLogin("The password isn't set on Netlify yet (ADMIN_KEY)."); return true; }
     return false;
   }
@@ -358,6 +367,14 @@
     var p = function (n) { return Math.min(100, (n / c.amount) * 100) + "%"; };
     $(fill).style.width = p(c.spent); $(warn).style.left = p(c.warn); $(stop).style.left = p(c.stop);
   }
+  /* " · on time" only when nothing is late, blocked or warned about (A1, 17 Nov 2026) */
+  function nextTrouble(t) {
+    var bits = [];
+    if (t.late) bits.push(t.late + " step" + (t.late > 1 ? "s" : "") + " late");
+    if (t.blocked) bits.push(t.blocked + " blocked");
+    if (t.warnings && !t.late) bits.push(t.warnings + " warning" + (t.warnings > 1 ? "s" : ""));
+    return bits.length ? ' · <span class="attn">' + esc(bits.join(" · ")) + "</span>" : " · on time";
+  }
   function drawToday() {
     var c = sheet.money.cap, attn = c.status !== "ok";
     $("capMonth").textContent = monthName(c.month);
@@ -371,10 +388,10 @@
     var n = sheet.next;
     $("nextSong").textContent = broken("Releases") ? "Can't be read" : n ? n.song : "None set";
     $("nextMsg").innerHTML = broken("Releases") ? '<span class="attn">The Releases tab in the sheet shows an error.</span>' : n ? "<b>" + (n.daysToGo === 0 ? "Out today" : n.daysToGo + " day" + (n.daysToGo === 1 ? "" : "s")) + "</b> · " + esc(day(n.date)) +
-      (n.late ? ' · <span class="attn">' + n.late + " step" + (n.late > 1 ? "s" : "") + " late</span>" : " · on time") : "Tell Nova the next song and a Friday.";
+      nextTrouble(L.releaseTrouble(n)) : "Tell Nova the next song and a Friday.";
     var mine = sheet.team.forLuke;
     $("forLuke").innerHTML = broken("Tasks") ? '<p class="empty2 attn">The Tasks tab can\'t be read.</p>' : mine.length ? '<ul class="t-list">' + mine.slice(0, 4).map(function (x) {
-      return '<li class="' + (x.late ? "late" : "") + '"><span>' + esc(x.task) + '</span><span class="when">' + (x.late ? "late · " : "") + esc(x.deadline ? day(x.deadline.slice(0, 10)) : "") + "</span></li>"; }).join("") + "</ul>"
+      return '<li class="' + (x.late ? "late" : "") + '"><span>' + esc(x.task) + '</span><span class="when">' + (x.late ? "late · " : "") + esc(x.deadline ? day(x.deadline) : "") + "</span></li>"; }).join("") + "</ul>"
       : '<p class="empty2">Nothing waiting on you.</p>';
     var du = sheet.team.duties;
     $("dutyBig").innerHTML = broken("Tasks") ? "–" : du.total ? du.done + " <small>of " + du.total + " done</small>" : "–";
@@ -585,7 +602,7 @@
     $("growthList").innerHTML = broken("Growth") ? '<p class="empty">See the note above.</p>' : sheet.growth.length ? sheet.growth.map(function (g) {
       return '<div class="tile"><div class="row"><h3>' + esc(g.platform) + '</h3><span class="lbl">' + esc(g.account) + "</span></div>" +
         '<div class="big num">' + fmt(g.followers) + "</div>" +
-        '<div class="d">' + signed(g.day) + " yesterday · " + signed(g.week) + " in 7 days" + (g.month != null ? " · " + signed(g.month) + " in 30" : "") + "</div>" + spark(g.series) +
+        '<div class="d">' + signed(g.day) + " yesterday · " + signed(g.week) + " " + L.growthWhen(g) + (g.month != null ? " · " + signed(g.month) + " in 30" : "") + "</div>" + spark(g.series) +
         (g.best.length ? '<div class="lbl" style="margin-top:4px">Best days</div>' + g.best.map(function (b) { return '<div class="d" style="margin-top:4px">' + signed(b.change) + " · " + esc(day(b.d)) + " · " + link(b.link, b.post) + "</div>"; }).join("") : "") +
         (g.stale > 2 ? '<div class="d" style="margin-top:6px;color:var(--paper)">Not logged for ' + g.stale + " days</div>" : "") + "</div>";
     }).join("") : '<p class="empty">No growth rows yet. Steve, Kevin, Laura and Atlas log one row a day.</p>';
@@ -613,7 +630,9 @@
     var isOut = !!r.date && r.daysToGo <= 0;
     var when = r.date ? (r.daysToGo > 0 ? r.daysToGo + " days to go" : r.daysToGo === 0 ? "Released today" : "Released " + (-r.daysToGo) + " day" + (r.daysToGo === -1 ? "" : "s") + " ago") : "No date yet";
     /* once it is out the card says Released; "On time" / "N late" are about getting there */
-    return '<div class="tile"><div class="row"><h3>' + esc(r.song) + "</h3>" + (isOut ? '<span class="pill rel">Released</span>' : r.late ? '<span class="pill warn">' + r.late + " late</span>" : '<span class="pill">On time</span>') + "</div>" +
+    var tr = L.releaseTrouble(r); /* "On time" only with nothing late, blocked or warned about (A1, 17 Nov 2026) */
+    return '<div class="tile"><div class="row"><h3>' + esc(r.song) + "</h3>" + (isOut ? '<span class="pill rel">Released</span>' : tr.late ? '<span class="pill warn">' + tr.late + " late</span>"
+      : tr.blocked ? '<span class="pill warn">' + tr.blocked + " blocked</span>" : tr.warnings ? '<span class="pill warn">' + tr.warnings + " warning" + (tr.warnings > 1 ? "s" : "") + "</span>" : '<span class="pill">On time</span>') + "</div>" +
       '<div class="d" style="margin-top:6px">' + esc(day(r.date)) + " · " + when + (r.status && !(r.daysToGo <= 0 && /^(out|released|live)$/i.test(r.status)) ? " · " + esc(r.status) : "") + (r.weekday && r.weekday !== "Fri" && r.daysToGo > 0 ? " · not a Friday" : "") + "</div>" +
       /* v2: the pitch waits (never late) while the latest Spotify for Artists report doesn't show the song;
          a step the label delivers is not ours */
@@ -639,7 +658,7 @@
       return "<tr><td><b>" + esc(o.owner) + "</b></td><td class='r'>" + o.open + "</td><td class='r'>" + (o.late ? "<b>" + o.late + "</b>" : 0) + "</td><td class='r'>" + (o.blocked ? "<b>" + o.blocked + "</b>" : 0) + "</td><td>" + (o.lastLogged ? esc(day(o.lastLogged)) + (o.quiet > 2 ? " · <b>quiet " + o.quiet + " days</b>" : "") : "–") + "</td></tr>";
     }).join("") : "");
     setTable("taskTable", t.tasks.length ? "<tr><th>Task</th><th>Owner</th><th>Deadline</th><th>Status</th></tr>" + t.tasks.map(function (x) {
-      return "<tr><td>" + (x.late ? "<b>" + esc(x.task) + "</b>" : esc(x.task)) + (x.blocker ? "<small>Blocked: " + esc(x.blocker) + "</small>" : x.note ? "<small>" + esc(x.by || x.owner) + ": " + esc(x.note) + "</small>" : "") + "</td><td>" + esc(x.owner) + "</td><td>" + esc(x.deadline ? day(x.deadline.slice(0, 10)) : "–") + (x.late ? " · <b class='attn'>late</b>" : "") + "</td><td><span class='mlabel" + (x.status === "blocked" ? " mine" : "") + "'>" + esc(TASK_WORD[x.status] || x.status) + "</span></td></tr>";
+      return "<tr><td>" + (x.late ? "<b>" + esc(x.task) + "</b>" : esc(x.task)) + (x.blocker ? "<small>Blocked: " + esc(x.blocker) + "</small>" : x.note ? "<small>" + esc(x.by || x.owner) + ": " + esc(x.note) + "</small>" : "") + "</td><td>" + esc(x.owner) + "</td><td>" + esc(x.deadline ? day(x.deadline) : "–") + (x.late ? " · <b class='attn'>late</b>" : "") + "</td><td><span class='mlabel" + (x.status === "blocked" ? " mine" : "") + "'>" + esc(TASK_WORD[x.status] || x.status) + "</span></td></tr>";
     }).join("") : broken("Tasks") ? "" : '<tr><td class="empty">No open tasks in the sheet.</td></tr>');
   }
 

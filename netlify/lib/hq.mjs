@@ -151,7 +151,9 @@ export function growthReport(rows, today) {
     const read = p.days.filter((x) => x.followers != null);
     const last = read[read.length - 1] || null;
     const at = (n) => { const lim = last ? addDays(last.d, -n) : ""; const c = read.filter((x) => x.d <= lim); return c.length ? c[c.length - 1] : null; };
-    const w = at(7), m = at(30);
+    /* fewer than 7 days of readings: compare with the oldest one and say how many days it covers (A1,
+       17 Nov 2026: the card said "– in 7 days" for a new platform) */
+    const w = at(7) || (read.length > 1 ? read[0] : null), m = at(30);
     /* the days that grew the most, with the post that went out that day */
     const best = p.days.filter((x) => x.change != null && x.post).sort((a, b) => b.change - a.change).slice(0, 3)
       .map((x) => ({ d: x.d, change: x.change, post: x.post, link: x.link }));
@@ -161,6 +163,7 @@ export function growthReport(rows, today) {
       followers: last ? last.followers : null,
       day: last ? last.change : null,
       week: last && w ? last.followers - w.followers : null,
+      weekDays: last && w ? Math.min(7, daysBetween(w.d, last.d)) : null,
       month: last && m ? last.followers - m.followers : null,
       views7: sum(p.days.filter((x) => last && x.d > addDays(last.d, -7) && x.views != null).map((x) => x.views)),
       series: read.slice(-30).map((x) => ({ d: x.d, v: x.followers })),
