@@ -129,11 +129,17 @@ const GONE_WORDS = /(EXPIRED|REVOKED|CLOSED|INVALID)_SESSION|SESSION_(EXPIRED|RE
 /* timeoutMs: how long this one request may take (a refresh passes what is left of its budget) */
 export async function ebCall(cfg, fetchImpl, now, method, path, body, timeoutMs = LIMITS.callMs) {
   const token = signJwt(cfg, now);
+  /* our own timer, always cleared (17 Nov 2026): AbortSignal.timeout's timer doesn't keep Node running, so on
+     Node 22 (GitHub's builds) a call left waiting for it ended the test run with "Promise resolution is still
+     pending" and stopped the /loveyou page from going live. The same "timeout" either way. */
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => { const e = new Error("The operation was aborted due to timeout"); e.name = "TimeoutError"; ctrl.abort(e); }, Math.max(1, Math.round(timeoutMs)));
   let res;
   try {
     res = await fetchImpl(API + path, { method, headers: { Authorization: "Bearer " + token, Accept: "application/json", ...(body === undefined ? {} : { "Content-Type": "application/json" }) },
-      body: body === undefined ? undefined : JSON.stringify(body), signal: AbortSignal.timeout(Math.max(1, Math.round(timeoutMs))) });
+      body: body === undefined ? undefined : JSON.stringify(body), signal: ctrl.signal });
   } catch (err) { throw new BankError(err && err.name === "TimeoutError" ? "timeout" : "network"); }
+  finally { clearTimeout(timer); }
   if (!res.ok) {
     const info = await res.json().catch(() => null);
     const word = info && typeof info.error === "string" && /^[A-Z][A-Z_]{2,40}$/.test(info.error) ? info.error : "";
