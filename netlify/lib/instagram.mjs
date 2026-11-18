@@ -314,13 +314,41 @@ export async function editOwn(store, now, { by, action, handle, reason }) {
   return { handles: ownHandles(self, { handles }), change: { action, handle: h } };
 }
 export function ownHandles(username, ownDoc) {
-  return [...new Set([String(username || "").toLowerCase(), ...(((ownDoc && ownDoc.handles) || []).map((h) => String(h).toLowerCase()))].filter(Boolean))];
+  const list = [...new Set([String(username || "").toLowerCase(), ...(((ownDoc && ownDoc.handles) || []).map((h) => String(h).toLowerCase()))].filter(Boolean))];
+  /* always ours, so their comments never count as fans (18 Nov 2026). They stay off comment text. */
+  for (const h of HIDDEN_HANDLES) if (!list.includes(h)) list.push(h);
+  return list;
+}
+/* Forge or Steve records which song a post is. Never guessed from the caption (18 Nov 2026). */
+export async function setPostSong(store, now, a) {
+  void now;
+  const raw = String((a && a.post) || "").trim();
+  const post = raw.replace(/^https?:\/\/(www\.)?instagram\.com\/(?:reel|p|tv)\//i, "").replace(/\/.*$/, "").replace(/^@/, "");
+  if (!post || post.length > 80) throw new Error("post is the post id or the shortcode from its link. Nothing was saved.");
+  const song = String(a && a.song != null ? a.song : "").trim().slice(0, 120);
+  const doc = await readDoc(store, "post-songs.json", {});
+  const map = doc && typeof doc === "object" && !Array.isArray(doc) ? { ...doc } : {};
+  if (!song) delete map[post]; else map[post] = song;
+  if (typeof store.setJSON === "function") await store.setJSON("post-songs.json", map);
+  try { if (typeof store.delete === "function") await store.delete("tool-cache.json"); } catch { /* a missing cache is fine */ }
+  return { post, song, state: song ? "linked" : "cleared" };
+}
+export const TOOL_CACHE_MS = 20 * 60 * 1000;
+export async function readToolCache(store, now) {
+  const data = await readDoc(store, "tool-cache.json", null);
+  if (!data || !data.at || !data.body || now - Number(data.at) > TOOL_CACHE_MS || now - Number(data.at) < 0) return null;
+  return data;
+}
+export async function writeToolCache(store, now, body) {
+  if (typeof store.setJSON === "function") await store.setJSON("tool-cache.json", { at: now, body });
 }
 /* comments that need a reply (Nova: a fan asked if they can use the music): a question, not ours, nobody of ours
-   answered it, the last 14 days. Replying goes outside the team, so it's Luke's. */
+   answered it. It stays until one of our accounts replies (18 Nov 2026). Replying goes outside the team, so it's Luke's. */
 const ASKS = /\?|\b(can i|could i|may i|would it be|is it okay|okay to|use (your|this|it)|what song|song name|which song|where can|when (is|does)|link|nome da m[uú]sica|qual ([ée] )?a m[uú]sica|posso usar|onde|quando sai)\b/i;
 export function needsReply(comments, now) {
-  return (comments || []).filter((c) => !c.own && !c.hidden && !isHiddenHandle(c.user) && !c.answered && ASKS.test(c.text || "") && now - Date.parse(c.at || "") <= 14 * DAY).slice(0, 10)
+  void now;
+  return (comments || []).filter((c) => !c.own && !c.hidden && !isHiddenHandle(c.user) && !c.answered && ASKS.test(c.text || ""))
+    .sort((a, b) => (String(a.at) < String(b.at) ? 1 : -1)).slice(0, 30)
     .map((c) => ({ id: c.id, at: c.at, user: c.user, text: c.text, postCaption: c.postCaption, link: c.link }));
 }
 /* L3 part 1: song name or where to listen, and the same account on more than one post.
@@ -328,10 +356,12 @@ export function needsReply(comments, now) {
 const fold = (s) => String(s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
 const SONG_ASK = /\b(what song|what'?s (the |this )?song|what is (the |this )?song|whats (the |this )?song|which song|song name|name of (the |this )?song|this song called|nome da musica|qual (e )?a musica|que musica|nome dessa( musica)?|nome da track|track name|what'?s this called|what is this called|whats this called|como se chama|como se llama|que cancion|nombre de (la |esta )?cancion)\b/;
 const LISTEN_ASK = /\b(where (can i |do i |to )?(listen|hear|stream|find)|on spotify|no spotify|spotify link|link (do |da |de )?(spotify|musica|la cancion)|apple music|where('s| is) (this|it|the song))\b|\bonde\b.{0,24}\b(ouvir|ouco|escuto|escutar|acho|encontrar)\b|\bdonde\b.{0,24}\b(escuchar|oir|encontrar)\b/;
+const USE_ASK = /\b(can i|could i|may i|would it be)\b.{0,80}\b(use|video|videos)\b|\buse (your|this|it|the) music\b|\bposso usar\b/;
 export function askKind(text) {
   const t = fold(text);
   if (SONG_ASK.test(t)) return "song";
   if (LISTEN_ASK.test(t)) return "listen";
+  if (USE_ASK.test(t)) return "use";
   return "";
 }
 const recentEnough = (c, now) => { const age = now - Date.parse(c.at || ""); return isFinite(age) && age <= 14 * DAY; };
@@ -340,7 +370,8 @@ export function fanInbox(comments, now) {
   const questions = [];
   for (const c of list) {
     const kind = askKind(c.text);
-    if (!kind || !recentEnough(c, now)) continue;
+    /* an unanswered question stays until one of our accounts replies (18 Nov 2026) */
+    if (!kind || (c.answered && !recentEnough(c, now))) continue;
     questions.push({ id: c.id, at: c.at, user: redactHandles(c.user), text: redactHandles(c.text), post: c.post || "", postCaption: redactHandles(c.postCaption || ""), link: c.link || "", kind, needsReply: !c.answered });
   }
   questions.sort((a, b) => (a.needsReply === b.needsReply ? 0 : a.needsReply ? -1 : 1) || (a.at < b.at ? 1 : a.at > b.at ? -1 : 0));
@@ -369,19 +400,19 @@ export async function igStatus(store, now) {
     ...(key && key.route === "fb" ? { keyType: key.keyType || "page", expiresAt: key.expiresAt || null } : {}), ...(key && key.page ? { page: key.page } : {}) };
 }
 export async function igView(store, now, o = {}) {
-  const [status, posts, comments, countries, adDoc, ownDoc] = await Promise.all([igStatus(store, now), readDoc(store, "posts.json", []), readDoc(store, "comments.json", []), readDoc(store, "countries.json", null), readDoc(store, "adposts.json", null), readDoc(store, "own.json", null)]);
+  const [status, posts, comments, countries, adDoc, ownDoc, songDoc] = await Promise.all([igStatus(store, now), readDoc(store, "posts.json", []), readDoc(store, "comments.json", []), readDoc(store, "countries.json", null), readDoc(store, "adposts.json", null), readDoc(store, "own.json", null), readDoc(store, "post-songs.json", {})]);
   const ownAll = ownHandles(status.username, ownDoc);
   const marked = comments.map((c) => ({ ...c, hidden: isHiddenHandle(c.user), own: ownAll.includes(parseHandle(c.user)), answered: (c.repliedBy || []).some((u) => ownAll.includes(parseHandle(u))) }));
   /* names that must never be shown are dropped here, including inside someone else's comment */
   const shown = marked.filter((c) => !c.hidden).map((c) => ({ ...c, user: redactHandles(c.user), text: redactHandles(c.text), postCaption: redactHandles(c.postCaption || ""),
     repliedBy: (c.repliedBy || []).filter((u) => !isHiddenHandle(u)).map((u) => redactHandles(u)) }));
   /* L2: which posts engage best, with the ads that boosted them (postrank.mjs); our own comments don't count */
-  const ranking = rankPosts(posts, adDoc, { now, comments: marked, spend: o.spend || [] });
+  const ranking = rankPosts(posts, adDoc, { now, comments: marked, spend: o.spend || [], songs: songDoc || {} });
   const ownLog = (((ownDoc && ownDoc.log) || []).slice().reverse()).filter((x) => !isHiddenHandle(x.handle)).slice(0, 20)
     .map((x) => ({ ...x, reason: redactHandles(x.reason || "") }));
   return { status: isHiddenHandle(status.username) ? { ...status, username: "" } : status,
     posts: posts.slice(0, 30).map((p) => ({ ...p, caption: redactHandles(p.caption || "") })),
-    comments: shown.filter((c) => !c.own).slice(0, 40), countries: countries ? countries.list : [], own: ownAll.filter((h) => !isHiddenHandle(h)),
+    comments: shown.filter((c) => !c.own).slice(0, 40), countries: countries ? countries.list : [], own: ownAll,
     ownLog, needsReply: needsReply(shown, now), fanInbox: fanInbox(shown, now),
     ranking: { ranked: ranking.ranked, older: ranking.older, tooFew: ranking.tooFew, adsAt: ranking.adsAt, minViews: ranking.minViews,
       noClearWinner: ranking.noClearWinner, notSettled: ranking.notSettled, needSix: ranking.needSix } };

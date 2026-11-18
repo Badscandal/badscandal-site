@@ -21,9 +21,12 @@ test("song name and where to listen, in the languages fans write", () => {
     "Qual é a música??", "qual o nome dessa música", "nome da musica?", "qué canción es esta", "cómo se llama", "como se chama essa"];
   const listen = ["where can I listen to this", "where do I hear the full thing", "need this on spotify", "onde eu ouço isso",
     "link do spotify", "dónde puedo escuchar", "apple music?"];
-  const neither = ["fire", "love this", "can i use your music in my videos?", "when is it out?"];
+  /* 18 Nov 2026: "can I use this in my videos?" is a real question and stays until one of our accounts replies */
+  const use = ["can i use your music in my videos?", "would it be okay to use it in my videos?"];
+  const neither = ["fire", "love this", "when is it out?"];
   assert.deepEqual(song.map(IG.askKind), song.map(() => "song"));
   assert.deepEqual(listen.map(IG.askKind), listen.map(() => "listen"));
+  assert.deepEqual(use.map(IG.askKind), use.map(() => "use"));
   assert.deepEqual(neither.map(IG.askKind), neither.map(() => ""));
 });
 
@@ -45,7 +48,7 @@ test("fan inbox: unanswered song and listen questions need a reply; a repeat fan
   ];
   const box = IG.fanInbox(comments, NOW);
   assert.deepEqual(box.questions.map((q) => [q.id, q.kind, q.needsReply]), [
-    ["s1", "song", true], ["m1", "song", true], ["l1", "listen", true], ["a1", "song", false],
+    ["s1", "song", true], ["m1", "song", true], ["l1", "listen", true], ["n1", "song", true], ["a1", "song", false],
   ]);
   assert.equal(box.questions.find((q) => q.id === "m1").text.includes("lilian"), false);
   assert.equal(box.repeats.map((r) => r.user).join(" "), "made_up_fan made_up_regular");
@@ -80,10 +83,11 @@ test("igView and the sample never show the two accounts, and the inbox is built 
   let v;
   try { v = await IG.igView(st, NOW); } finally { globalThis.fetch = prev; }
   assert.equal(fetches, 0);
-  const raw = JSON.stringify(v).toLowerCase();
-  for (const h of HIDDEN) assert.equal(raw.includes(h), false, h);
+  /* 18 Nov 2026: the handles are on own so their comments never count. They stay out of comments and the fan inbox. */
+  const pub = JSON.stringify({ comments: v.comments, fanInbox: v.fanInbox, needsReply: v.needsReply }).toLowerCase();
+  for (const h of HIDDEN) assert.equal(pub.includes(h), false, h);
+  for (const h of HIDDEN) assert.ok(v.own.includes(h));
   assert.equal(v.fanInbox.questions.find((q) => q.id === "q1").needsReply, false, "a reply from our own list counts, and the name stays off the page");
-  assert.deepEqual(v.own, ["ouraccount"]);
   assert.equal(v.ownLog.length, 0);
   assert.deepEqual(v.comments.map((x) => x.id), ["q1", "q3"]);
   const sample = JSON.stringify(IG.sampleView(NOW)).toLowerCase();
@@ -113,8 +117,9 @@ test("adding either account is refused without repeating the name; the instagram
   }
   const desk = memoryDesk();
   const res = await callTool(TOOLS.find((t) => t.name === "instagram"), { bot: "Kevin" }, { store: desk, now: NOW, ig: () => st });
-  const raw = JSON.stringify(res).toLowerCase();
-  for (const h of HIDDEN) assert.equal(raw.includes(h), false, h);
+  const pub = JSON.stringify({ comments: res.new_comments, needs_reply: res.needs_reply, fan_inbox: res.fan_inbox, ranking: res.ranking }).toLowerCase();
+  for (const h of HIDDEN) assert.equal(pub.includes(h), false, h);
+  for (const h of HIDDEN) assert.ok(res.own_accounts.map((x) => x.toLowerCase()).includes("@" + h));
   assert.equal(res.fan_inbox.questions[0].needs_reply, true);
   assert.equal(res.fan_inbox.questions[0].kind, "where to listen");
   assert.equal(res.fan_inbox.repeat_fans[0].posts, 2);

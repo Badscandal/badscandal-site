@@ -112,9 +112,10 @@ test("rankPosts: same age (1 day), engagement per view wins, our own comments le
 });
 test("rankLine: one post in plain words, for Luke and the bots", () => {
   const r = P.rankPosts(posts, adDoc, { now: NOW, comments });
-  assert.equal(P.rankLine(r.ranked[1]), "“Clip A: the drop” · reels · 2026-11-14 · 1 day: 7.8% engaged (1,797 of 23,000 views) · saves + shares 0.7% · 120 follows (0.5%) · 300 profile visits · 3 of our own comments left out · boosted USD 90.00 (ACTIVE): 1,550 engagements from the ad, USD 0.058 each · before the ad (6 hours): 8.6% of 2,100 views");
-  assert.equal(P.rankLine(r.ranked[0]), "“Cover reveal” · feed · 2026-11-13 · 1 day: 11.2% engaged (560 of 5,000 views) · saves + shares 0.8% · 40 follows (0.8%) · not boosted");
-  assert.equal(P.rankLine(r.older[0]), "“Old reel” · reels · 2026-10-18 · lifetime: 11.1% engaged (1,000 of 9,000 views) · saves + shares 1.0% · not boosted");
+  assert.equal(P.rankLine(r.ranked[1]), "“Clip A: the drop” · reels · 2026-11-14 · 1 day: 7.8% engaged (1,797 of 23,000 views) · saves + shares 0.7% · 120 follows (0.5%) · 300 profile visits · 3 of our own comments left out · boosted USD 90.00 (ACTIVE): 1,550 engagements from the ad, USD 0.058 each · before the ad (6 hours): 8.6% of 2,100 views · song not linked");
+  assert.equal(P.rankLine(r.ranked[0]), "“Cover reveal” · feed · 2026-11-13 · 1 day: 11.2% engaged (560 of 5,000 views) · saves + shares 0.8% · 40 follows (0.8%) · not boosted · song not linked");
+  /* 18 Nov 2026: an old post the current ads don't cover says boost unknown, and the song is not guessed from the caption */
+  assert.equal(P.rankLine(r.older[0]), "“Old reel” · reels · 2026-10-18 · lifetime: 11.1% engaged (1,000 of 9,000 views) · saves + shares 1.0% · boost unknown · song not linked");
 });
 test("igView: our own accounts' comments left out of the fans' list and the ranking; questions nobody answered need a reply", async () => {
   const st = memStore();
@@ -129,9 +130,10 @@ test("igView: our own accounts' comments left out of the fans' list and the rank
     { id: "q4", post: "m1", user: "made_up_fan", text: "fire", at: at(5 * H), postCaption: "Clip A", link: "" },
     { id: "q5", post: "m1", user: "made_up_old", text: "song name?", at: at(20 * DAY), postCaption: "Clip A", link: "" }]));
   const v = await IG.igView(st, NOW);
-  assert.deepEqual(v.own, ["ouraccount", "ourpartner"]);
+  /* 18 Nov 2026: the always-ours handles are on the list, and an unanswered question stays past 14 days */
+  assert.deepEqual(v.own, ["ouraccount", "ourpartner", "liliancardos", "liliancardosomakeup"]);
   assert.deepEqual(v.comments.map((c) => c.id), ["q1", "q2", "q4", "q5"], "our partner's comment is not a fan's");
-  assert.deepEqual(v.needsReply.map((c) => c.id), ["q1"], "answered by us, ours, not a question, or older than 14 days: left out");
+  assert.deepEqual(v.needsReply.map((c) => c.id), ["q1", "q5"], "answered by us or ours: left out. An old unanswered question stays.");
   assert.deepEqual(v.ranking.ranked.map((x) => x.id), ["m3", "m1", "m2"]);
   assert.deepEqual(v.ranking.older.map((x) => x.id), ["m5"]);
   const sv = IG.sampleView(NOW);
@@ -145,7 +147,7 @@ test("our accounts: Nova adds and removes handles with a reason, every change lo
   st.m.set("state.json", JSON.stringify({ username: "ouraccount" }));
   const T1 = NOW, T2 = NOW + H;
   let r = await IG.editOwn(st, T1, { by: "Nova", action: "add", handle: "@Made_Up.Partner", reason: "Luke's own account" });
-  assert.deepEqual(r.handles, ["ouraccount", "made_up.partner"]);
+  assert.deepEqual(r.handles, ["ouraccount", "made_up.partner", "liliancardos", "liliancardosomakeup"]);
   r = await IG.editOwn(st, T1, { by: "Nova", action: "add", handle: "made_up_spam", reason: "spam bot" });
   await assert.rejects(IG.editOwn(st, T1, { by: "Nova", action: "add", handle: "made_up_spam", reason: "again" }), (e) => /already/.test(e.message));
   await assert.rejects(IG.editOwn(st, T1, { by: "Nova", action: "add", handle: "not a handle!", reason: "x y z" }), (e) => e.kind === "bad");
@@ -153,9 +155,9 @@ test("our accounts: Nova adds and removes handles with a reason, every change lo
   await assert.rejects(IG.editOwn(st, T1, { by: "Nova", action: "remove", handle: "ouraccount", reason: "test" }), (e) => /connected account/.test(e.message));
   await assert.rejects(IG.editOwn(st, T1, { by: "Nova", action: "remove", handle: "nobody_here", reason: "test" }), (e) => /isn't on the list/.test(e.message));
   r = await IG.editOwn(st, T2, { by: "Nova", action: "remove", handle: "made_up_spam", reason: "it was a real fan after all" });
-  assert.deepEqual(r.handles, ["ouraccount", "made_up.partner"]);
+  assert.deepEqual(r.handles, ["ouraccount", "made_up.partner", "liliancardos", "liliancardosomakeup"]);
   const v = await IG.igView(st, T2);
-  assert.deepEqual(v.own, ["ouraccount", "made_up.partner"]);
+  assert.deepEqual(v.own, ["ouraccount", "made_up.partner", "liliancardos", "liliancardosomakeup"]);
   assert.deepEqual(v.ownLog.map((x) => [x.action, x.handle, x.by, x.reason]), [["remove", "made_up_spam", "Nova", "it was a real fan after all"], ["add", "made_up_spam", "Nova", "spam bot"], ["add", "made_up.partner", "Nova", "Luke's own account"]], "newest first");
   assert.equal(v.ownLog[0].at, T2);
   /* HQ only shows it; there is no write route for it any more */
@@ -174,14 +176,14 @@ test("our_accounts in the instagram tool: Nova (and Claude) change it; every oth
   const call = (bot, args) => callTool(TOOLS.find((t) => t.name === "instagram"), { bot, ...args }, { store: desk, now: NOW, ig: () => st }).catch((e) => ({ error: e.message }));
   const ok = await call("Nova", { our_accounts: "add", handle: "made_up_family", reason: "Luke's family" });
   assert.equal(ok.error, undefined, ok.error);
-  assert.deepEqual(ok.our_accounts.handles, ["@ouraccount", "@made_up_family"]);
+  assert.deepEqual(ok.our_accounts.handles, ["@ouraccount", "@made_up_family", "@liliancardos", "@liliancardosomakeup"]);
   const no = await call("Steve", { our_accounts: "add", handle: "someone_else", reason: "x y z" });
   assert.match(no.error, /Only Nova/);
   const read = await call("Steve", { our_accounts: "list" });
-  assert.deepEqual(read.our_accounts.handles, ["@ouraccount", "@made_up_family"]);
+  assert.deepEqual(read.our_accounts.handles, ["@ouraccount", "@made_up_family", "@liliancardos", "@liliancardosomakeup"]);
   assert.equal(read.our_accounts.changes[0].by, "Nova");
   const plain = await call("Kevin", {});
-  assert.deepEqual(plain.own_accounts, ["@ouraccount", "@made_up_family"]);
+  assert.deepEqual(plain.own_accounts, ["@ouraccount", "@made_up_family", "@liliancardos", "@liliancardosomakeup"]);
   const schema = TOOLS.find((t) => t.name === "instagram").inputSchema.properties;
   assert.deepEqual(schema.our_accounts.enum, ["list", "add", "remove"]);
   assert.ok(schema.handle && schema.reason);

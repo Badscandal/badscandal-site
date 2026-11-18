@@ -29,7 +29,16 @@ export default async (req, context) => {
   if (url.pathname.startsWith("/api/hq/instagram")) {
     const sub = url.pathname.replace(/^\/api\/hq\/instagram\/?/, "");
     const sample = url.searchParams.get("sample") === "1";
-    if (req.method === "GET" && !sub) return json(200, sample ? IG.sampleView(Date.now()) : await IG.igView(igStore(prod), Date.now()));
+    if (req.method === "GET" && !sub) {
+      if (sample) return json(200, IG.sampleView(Date.now()));
+      const now = Date.now();
+      let spend = [];
+      try {
+        const desk = prod ? getStore({ name: "staff", consistency: "strong" }) : getDeployStore({ name: "staff", consistency: "strong" });
+        spend = (await S.listSpend(desk, now) || []).filter((r) => /meta|facebook|instagram/i.test(r.platform || ""));
+      } catch { spend = []; }
+      return json(200, await IG.igView(igStore(prod), now, { spend }));
+    }
     if (req.method !== "POST") return json(404, { error: "Not found" });
     const origin = req.headers.get("origin");
     if (origin && origin !== url.origin) return json(403, { error: "Forbidden" });

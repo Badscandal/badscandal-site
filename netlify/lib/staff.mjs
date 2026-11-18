@@ -139,11 +139,39 @@ export function freshBlocker(text, o = {}) {
   if (!t) return "";
   if (o.igConnected && /instagram/i.test(t) && /log\s*in|sign[\s-]*in|browser|locked/i.test(t)) return "";
   if (o.revolutLive && /revolut can'?t be read|revolut (is )?not connected/i.test(t)) return "";
+  /* 18 Nov 2026: a lyrics blocker clears once that song's lyrics are in the pack or waiting on Luke's yes */
+  if (/lyric/i.test(t)) {
+    const ready = [...(o.lyricsReady || []), ...(o.lyricsPending || [])];
+    if (ready.some((title) => mentionsSong(t, title))) return "";
+  }
   return t;
+}
+/* a sign-in task follows the live signed-out list (18 Nov 2026). TikTok signed in means the TikTok line goes. */
+export function signInOpen(task, signedOutText) {
+  const text = `${(task && task.task) || ""} ${(task && task.note) || ""} ${(task && task.blocker) || ""}`;
+  if (!/sign-?in|signed out|log in/i.test(text)) return true;
+  const names = ["tiktok", "meta", "facebook", "instagram", "google", "youtube", "spotify"];
+  const named = names.filter((p) => new RegExp("\\b" + p + "\\b", "i").test(text));
+  if (!named.length) return false;
+  return named.some((p) => new RegExp(p, "i").test(String(signedOutText || "")));
+}
+/* the duty's song and the blocker's song must be the same one (18 Nov 2026) */
+export function blockerForDuty(task, blocker, titles) {
+  const b = String(blocker || "").trim();
+  if (!b) return "";
+  const named = (titles || []).filter((title) => mentionsSong(task, title));
+  const inBlock = (titles || []).filter((title) => mentionsSong(b, title));
+  if (named.length && inBlock.length && !inBlock.some((t) => named.some((n) => songKey(n) === songKey(t)))) return "";
+  return b;
+}
+export function mentionsSong(text, title) {
+  const k = songKey(title);
+  return k.length >= 4 && songKey(text).includes(k);
 }
 export function staleTask(task) {
   const t = `${(task && task.id) || ""} ${(task && task.task) || ""}`;
-  return /tiktok ads sign-?in/i.test(t);
+  /* 18 Nov 2026: "Forge's TikTok Ads sign-in" is not always stale. signInOpen checks the live list. */
+  return /^done\b/i.test((task && task.task) || "") || /done 11 Nov/i.test(t);
 }
 /* last-four card digits and ad-account ids never leave a tool answer (18 Nov 2026) */
 export function hidePrivate(s) {
@@ -726,10 +754,10 @@ export function preflightOf(r) {
   const pack = (r && r.pack) || {}, out = [];
   const short = (k) => (FIELD[k] ? FIELD[k].short : k);
   for (const k of ARTIST_FIELDS) for (const t of artistProblems(pack[k])) out.push({ field: k, text: `${short(k)}: ${t}` });
-  /* Primary artist is Badscandal and matches the Spotify artist. Featured is flagged, never moved (18 Nov 2026).
-     An empty Primary is fine until another artist is named: the field is optional. */
+  /* Primary artist is Badscandal and matches the Spotify artist. Featured is a flag, never a failure
+     and never moved (18 Nov 2026). An empty Primary is not a pass: the tool says it could not be checked. */
   const primary = String(pack.primary || ""), feat = String(pack.featuring || "");
-  if (/badscandal/i.test(feat) && !/badscandal/i.test(primary)) out.push({ field: "primary", text: "Primary artist: Badscandal is under Featured, not Primary. Flagged only: move it if the release says Badscandal is the primary artist." });
+  if (/badscandal/i.test(feat) && !/badscandal/i.test(primary)) out.push({ field: "primary", warn: true, text: "Primary artist: Badscandal is under Featured, not Primary. Flagged only: move it if the release says Badscandal is the primary artist." });
   else if (filled(primary) && !/badscandal/i.test(primary) && !artistProblems(primary).length) out.push({ field: "primary", text: `Primary artist should be Badscandal (Spotify artist ${SPOTIFY_ARTIST_ID}).` });
   const blob = [primary, feat, pack.spotifyArtist, pack.artist].filter(Boolean).join(" ");
   if (/open\.spotify\.com\/artist\//i.test(blob) && !blob.includes(SPOTIFY_ARTIST_ID)) out.push({ field: "primary", text: `The artist link is not Spotify artist ${SPOTIFY_ARTIST_ID}.` });
@@ -737,7 +765,7 @@ export function preflightOf(r) {
   if (["mp3", "m4a", "aac", "ogg", "opus"].includes(wext)) out.push({ field: "wav", text: `${short("wav")}: the master must be a WAV (the stores' quality), not an .${wext}.` });
   const aext = filled(pack.artwork) ? extOf(pack.artwork) : "";
   if (["webp", "gif", "heic", "bmp", "tif", "tiff", "svg"].includes(aext)) out.push({ field: "artwork", text: `${short("artwork")}: must be a JPG or PNG, 3000 x 3000, not a .${aext}.` });
-  if (filled(pack.wav) && pack.wav === pack.artwork && pack.artwork === pack.folder) out.push({ field: "wav", warn: true, text: "Master WAV, artwork and folder are the same link. That is one folder, not the three files." });
+  if (filled(pack.wav) && pack.wav === pack.artwork && pack.artwork === pack.folder) out.push({ field: "wav", warn: true, text: "Flagged only: Master WAV, artwork and folder are the same link. That is one folder, not the three files." });
   /* L8: a Canvas link whose file type is known and isn't one Spotify takes (a link with no file type says nothing) */
   const cext = filled(pack.canvas) ? extOf(pack.canvas) : "";
   if (cext) for (const t of assetProblems("canvas", { format: cext })) out.push({ field: "canvas", text: `${short("canvas")}: ${t.replace(/^Spotify Canvas must/, "must")}` });
@@ -766,8 +794,8 @@ export const ASSETS = {
     rule: "Spotify Canvas: an MP4 (or a JPG), 9:16 portrait, 720 to 1080 px tall, 3 to 8 seconds. House rule, stricter than Spotify: no text, logos or links." },
   spotify_header: { label: "Spotify header", formats: ["jpg", "jpeg", "png", "gif"], ratio: null, min: [2660, 1140], mb: 20,
     rule: "Spotify for Artists header image: a JPG, PNG or GIF, at least 2660 x 1140, 20 MB at most. No text, advertising or busy backgrounds. Faces stay in the middle (it is cropped on phones)." },
-  youtube_banner: { label: "YouTube banner", formats: ["jpg", "jpeg", "png"], ratio: 16 / 9, ratioWords: "16:9", recommended: [2560, 1440], mb: 6,
-    rule: "YouTube channel banner: a JPG or PNG, 16:9. 2560 x 1440 is recommended, not a minimum. Keep text inside the safe area, about 1546 x 423, with no borders. 6 MB at most." },
+  youtube_banner: { label: "YouTube banner", formats: ["jpg", "jpeg", "png"], ratio: 16 / 9, ratioWords: "16:9", min: [2048, 1152], recommended: [2560, 1440], mb: 6,
+    rule: "YouTube channel banner: a JPG or PNG, 16:9, min 2048x1152, 2560x1440 recommended. Keep text inside the safe area, about 1546 x 423, with no borders. 6 MB at most." },
   /* L12 (18 Nov 2026): profile photos and banners whose platforms publish a size. A platform with no
      published size is not given a kind here: the Profiles list says "Rule not set" instead. */
   spotify_avatar: { label: "Spotify profile photo", formats: ["jpg", "jpeg", "png", "gif"], min: [750, 750], mb: 20,
@@ -826,6 +854,7 @@ export function assetNotes(kind, o = {}) {
   if (!a || !a.recommended) return [];
   const w = o.width == null || o.width === "" ? null : Number(o.width), h = o.height == null || o.height === "" ? null : Number(o.height);
   if (w == null || h == null || !(w < a.recommended[0] || h < a.recommended[1])) return [];
+  if (a.min) return [`${w} x ${h} meets the minimum (${a.min[0]} x ${a.min[1]}). ${a.recommended[0]} x ${a.recommended[1]} is recommended.`];
   return [`${w} x ${h}: ${a.recommended[0]} x ${a.recommended[1]} is recommended, not a minimum.`];
 }
 
@@ -2549,6 +2578,117 @@ export const PACK_FIELDS = [
 /* null prototype (11 Nov 2026): "constructor", "toString" or "__proto__" sent as a pack key must be an
    unknown field, not something every plain object already has */
 const FIELD = Object.assign(Object.create(null), Object.fromEntries(PACK_FIELDS.map((f) => [f.key, f])));
+/* a pre-HQ song already went to RouteNote. Those fields are "not needed". The release-day link,
+   the video and the lyrics stay live (18 Nov 2026). */
+export const PREHQ_NOT_NEEDED = new Set(["kind", "label", "split", "distributor", "deal", "wav", "artwork", "folder", "language", "explicit", "genre", "subgenre", "version", "writers", "producers", "featuring", "primary", "copyright"]);
+const STEP_LINK = { video: "video", page: "page", spotifyTrack: "live" };
+export function packFieldView(f, pack, steps, o = {}) {
+  const preHq = pack.prehq === "Yes";
+  const pitchSkipped = (steps || []).some((s) => s.key === "pitch" && s.status === "skipped");
+  let shown = f.key === "distributor" && !pack.distributor ? (distributorOf(pack) || "") : (pack[f.key] || "");
+  let doneOn = "";
+  const from = STEP_LINK[f.key];
+  if (from) {
+    const st = (steps || []).find((s) => s.key === from && s.status === "done" && s.link);
+    /* the stored pack is left as Luke wrote it; an empty field shows the done step's link, and the day it was done */
+    if (st && (!shown || shown === st.link)) { if (!shown) shown = st.link; doneOn = st.doneOn || ""; }
+  }
+  if (f.key === "notes" && shown && /pending moderation/i.test(shown)) {
+    const st = String(o.storeStatus || "");
+    if (st && !/pending|moderation|uploaded/i.test(st)) shown = String(shown).replace(/pending moderation/ig, st);
+  }
+  const routeSkip = preHq && PREHQ_NOT_NEEDED.has(f.key);
+  const pitchSkip = pitchSkipped && f.neededBy === "pitch";
+  const state = shown ? "" : routeSkip || pitchSkip ? "not needed" : requiredNow(f, pack) ? "missing (required)" : f.neededBy ? `missing (needed for "${(STEP[f.neededBy] || {}).label || f.neededBy}")` : "not filled yet";
+  return { field: f.key, label: f.label, value: shown, ...(state ? { state } : {}), ...(doneOn ? { done_on: doneOn } : {}), filled_by: f.fill.length ? f.fill.join(" or ") + " (or Luke)" : "Luke" };
+}
+/* my_day schedule: never cut mid-word, never a past date, never a step that is already done (18 Nov 2026) */
+export const MONDAY_SCHEDULE = "Steve and Kevin say WHY the top 3 beat the bottom 3 in one update at 10:00. Nova then sends Luke one recommendation on where the ad money goes next.";
+const MONTH_NUM = { jan: "01", feb: "02", mar: "03", apr: "04", may: "05", jun: "06", jul: "07", aug: "08", sep: "09", oct: "10", nov: "11", dec: "12" };
+function dateMentioned(line, today) {
+  const m = /\b(\d{1,2})\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\b/i.exec(String(line || ""));
+  if (!m || !/^\d{4}-\d{2}-\d{2}$/.test(String(today || ""))) return "";
+  const iso = `${today.slice(0, 4)}-${MONTH_NUM[m[2].toLowerCase()]}-${String(m[1]).padStart(2, "0")}`;
+  return Number.isNaN(Date.parse(iso + "T12:00:00Z")) ? "" : iso;
+}
+function realWhenComplete(line, nextDate) {
+  if (!nextDate) return String(line || "");
+  return String(line || "").replace(/(\d+)\s+days?\s+before a release\b/gi, (_, n) => dayWords(addDays(nextDate, -Number(n))) || _);
+}
+function stepKeyOf(text) {
+  const w = String(text || "").toLowerCase();
+  if (/song page|page live/.test(w)) return "page";
+  if (/spotify pitch|send the spotify pitch/.test(w)) return "pitch";
+  if (/video scheduled/.test(w)) return "video";
+  if (/upload to routenote/.test(w)) return "upload";
+  if (/musixmatch|lyrics live/.test(w)) return "lyrics";
+  if (/spotify link/.test(w)) return "live";
+  return "";
+}
+function stepIsDone(releases, key, today) {
+  if (!key) return false;
+  const live = (releases || []).filter((r) => r && r.date && r.status !== "cancelled" && r.status !== "draft");
+  const upcoming = live.filter((r) => r.date >= today).sort((a, b) => (a.date < b.date ? -1 : 1));
+  const next = (upcoming.length ? upcoming : live)[0];
+  if (!next) return false;
+  const st = (next.steps || []).find((s) => s.key === key);
+  return !!(st && (st.status === "done" || st.status === "skipped"));
+}
+export function scheduleForMyDay(bot, schedule, o = {}) {
+  const today = o.today || "";
+  const defaults = ((DEFAULT_ROSTER.find((b) => b.name === bot) || {}).schedule) || [];
+  const out = [];
+  for (const item of schedule || []) {
+    let time = String((item && item.time) || ""), what = String((item && item.what) || "");
+    const blob = `${time} ${what}`;
+    if (/what engages best|holds on ti|add them/i.test(blob)) { out.push({ time: "Monday 10:00", what: MONDAY_SCHEDULE }); continue; }
+    for (const d of defaults) {
+      if (what && d.what.toLowerCase().startsWith(what.toLowerCase()) && what.length >= 4 && what.length < d.what.length) what = d.what;
+      if (time && d.time.toLowerCase().startsWith(time.toLowerCase()) && /[a-z]$/i.test(time) && time.length < d.time.length) time = d.time;
+    }
+    if (/\ba rel(?!ease\b)/i.test(time) || /\ba rel(?!ease\b)/i.test(what)) {
+      const d = defaults.find((x) => /before a release/i.test(x.time)) || defaults.find((x) => stepKeyOf(x.what));
+      if (d) { if (/\ba rel/i.test(time) || time.length < 8) time = d.time; if (/\ba rel/i.test(what) || what.length < 8) what = d.what; }
+    }
+    time = realWhenComplete(time, o.nextDate || "");
+    const key = stepKeyOf(`${time} ${what}`);
+    if (stepIsDone(o.releases, key, today)) continue;
+    const when = dateMentioned(time, today) || dateMentioned(what, today);
+    if (/^done\b/i.test(what) && o.duty && o.duty.status && o.duty.status !== "done") {
+      what = o.duty.status === "blocked" && o.duty.blocker ? `blocked: ${o.duty.blocker}` : (o.duty.status || what);
+      time = "today";
+    }
+    if (when && when < today) {
+      if (!what || /\ba rel/i.test(what)) continue;
+      out.push({ time: "late", what: clipWords(what, 240) });
+      continue;
+    }
+    out.push({ time: clipWords(time, 120), what: clipWords(what, 240) });
+  }
+  return out;
+}
+/* a note to everyone leaves my_day once it is handled, superseded, or older than two days with a newer state */
+export function noteStillCurrent(m, o = {}) {
+  if (!m || m.to !== "all" || m.resolved) return false;
+  const at = Date.parse(m.at || "");
+  if (!isFinite(at)) return false;
+  const age = (o.now || 0) - at;
+  const text = m.text || "";
+  const rel = (o.releases || []).find((r) => mentionsSong(text, r.title));
+  if (rel && rel.pack && rel.pack.prehq === "Yes" && /missing|master|artwork|language|wav/i.test(text)) return false;
+  if (rel && /pending moderation/i.test(text)) {
+    const log = rel.storeLog || (rel.store && rel.store.history) || [];
+    const st = (rel.store && rel.store.status) || (log.length ? log[0].status : "");
+    if (st && !/pending|moderation|uploaded/i.test(st)) return false;
+  }
+  if (age > 2 * 86400000 && rel) {
+    const updated = Date.parse(rel.updatedAt || "") || 0;
+    const log = rel.storeLog || (rel.store && rel.store.history) || [];
+    const newerLog = log.some((e) => Date.parse(e.at || "") > at || (e.on && String(m.at || "").slice(0, 10) && e.on > String(m.at).slice(0, 10)));
+    if (updated > at || newerLog || (rel.pack && rel.pack.prehq === "Yes")) return false;
+  }
+  return age <= 4 * 86400000;
+}
 /* days = how many days before the release day the step is due. after = a step that must be done (or
    skipped) first: until then this one is WAITING, never late (11 Nov 2026, Luke: "it says spotify pitch
    sent [late] but it didn't get sent because the song hasn't shown in spotify for artists yet"). */
@@ -2736,6 +2876,11 @@ function pitchRule(list, today, at = null) {
   return changed;
 }
 const NEEDS_NOTE = "No Spotify Canvas link in the pack (Luke adds one if there is a Canvas)";
+/* a step skipped only because its link was missing comes back when the link is added (18 Nov 2026) */
+function canvasSkipNote(note) {
+  const n = String(note || "");
+  return n === NEEDS_NOTE || /no .{0,80}link|because no link/i.test(n);
+}
 export function scheduleSteps(date, today, o = {}) {
   if (o.alreadyOut) return { steps: RELEASE_STEPS.map((s) => ({ key: s.key, label: s.label, owner: s.owner, due: null, status: "skipped", note: OUT_NOTE, link: "", at: null, by: null })), tight: false };
   const steps = RELEASE_STEPS.map((s) => {
@@ -2984,7 +3129,12 @@ export function releaseView(r, today, o = {}) {
     const ap = raw.find((x) => x.key === "approved");
     const spotWait = !w && s.key === "spotify" && !finished(s) && isDay(s.due) && today < s.due && ap && ap.status === "done";
     const waiting = !!w || spotWait;
-    return { ...s, late: !finished(s) && !waiting && !!s.due && s.due < today, dueIn: s.due ? daysBetween(today, s.due) : null, waiting,
+    let note = s.note || "";
+    if (s.key === "lyrics" && /none provided/i.test(note)) {
+      if (filled(pack.lyrics)) note = "Luke's lyrics are in the pack.";
+      else if (o.lyricsPending) note = "Lyrics are with Luke: a proposal is waiting for Yes, correct.";
+    }
+    return { ...s, note, late: !finished(s) && !waiting && !!s.due && s.due < today, dueIn: s.due ? daysBetween(today, s.due) : null, waiting,
       ...(w ? { waitingFor: w.key, waitingText: waitWords(w, s) } : spotWait ? { waitingFor: "spotify-window", waitingText: "waiting on Spotify" } : {}),
       ...(skipped ? { skipped: true } : {}), ...(STEP[s.key] && STEP[s.key].after ? { after: STEP[s.key].after } : {}) };
   });
@@ -3058,7 +3208,7 @@ export function whereWords(v, today) {
   if (v.status === "cancelled") return "Cancelled";
   if (v.status === "draft") {
     const req = v.missing.filter((m) => m.required);
-    if (v.pack && v.pack.prehq === "Yes") return "Released through the distributor before HQ: no pack needed · ready to send";
+    if (v.pack && v.pack.prehq === "Yes") return "Released before HQ: the RouteNote files are not needed. The release-day link, the video and the lyrics still are.";
     if (v.date && v.date < today) return `Release day ${dayWords(v.date)} has passed: sending records it as already out, with no steps` + (req.length ? ` · still missing: ${joinWords(req.map((m) => m.short))}` : "");
     return "In the pipeline: " + filledLine + (req.length ? ` · still missing: ${joinWords(req.map((m) => m.short))}` : " · ready to send");
   }
@@ -3515,6 +3665,31 @@ export async function coverResponse(store, name) {
   return new Response(Buffer.from(doc.b64, "base64"), { status: 200, headers: { "content-type": doc.type, "cache-control": "public, max-age=31536000, immutable", "x-content-type-options": "nosniff", "content-security-policy": "default-src 'none'" } });
 }
 
+/* Luke said yes to lyrics: the step note stops saying none were provided, and a card blocker waiting on them clears */
+async function settleLyricsYes(store, now, id, title) {
+  const at = new Date(now).toISOString();
+  await mutate(store, REL_KEY, [], (list) => {
+    const r = list.find((x) => x.id === id);
+    if (!r) return { skip: true, value: null };
+    const st = (r.steps || []).find((s) => s.key === "lyrics");
+    if (st && /none provided/i.test(st.note || "")) {
+      st.note = "Luke said yes to the lyrics.";
+      if (st.status === "blocked") st.status = "todo";
+      st.at = at;
+    }
+    return { value: r };
+  });
+  await mutate(store, "cards.json", {}, (doc) => {
+    const d = doc && typeof doc === "object" && !Array.isArray(doc) ? doc : {};
+    let changed = false;
+    for (const k of Object.keys(d)) {
+      const c = d[k];
+      if (!c || !c.blockers || !/lyric/i.test(c.blockers) || !mentionsSong(c.blockers, title)) continue;
+      c.blockers = ""; c.blockersAt = at; changed = true;
+    }
+    return changed ? { replace: d, value: true } : { skip: true, value: false };
+  });
+}
 /* Luke said "Yes, correct": apply it in his name. Returns {done, text} or {done:false, error}; never throws
    (the answer is already saved and the question closed). The bot that asked is told either way. */
 async function applyProposal(store, now, roster, parent, via) {
@@ -3536,7 +3711,7 @@ async function applyProposal(store, now, roster, parent, via) {
       const r = await saveRelease(store, now, roster, { by: "Luke", title: p.title, date: p.date || "", pack: p.pack || {}, from: said });
       let sent = "";
       if (p.send) { const s = await sendRelease(store, now, roster, { by: "Luke", id: r.id, anyway: true }); sent = s.alreadyOut ? " It was recorded as already out." : " It went to the team: every bot has its steps."; }
-      if (filled((p.pack || {}).lyrics)) await approveRelease(store, now, roster, { by: "Luke", via, id: r.id, what: "lyrics", msg: parent.id, words: `said yes to ${asker}'s lyrics` });
+      if (filled((p.pack || {}).lyrics)) { await approveRelease(store, now, roster, { by: "Luke", via, id: r.id, what: "lyrics", msg: parent.id, words: `said yes to ${asker}'s lyrics` }); await settleLyricsYes(store, now, r.id, r.title); }
       out = { done: true, id: r.id, text: `${r.title} is on the desk${r.status === "draft" && !p.send ? " as a draft in the pipeline" : ""}.${sent}` + (filled((p.pack || {}).lyrics) ? " The lyrics are recorded as approved by Luke." : "") };
     } else {
       const cur = (await listReleases(store)).find((x) => x.id === p.id);
@@ -3555,7 +3730,7 @@ async function applyProposal(store, now, roster, parent, via) {
       await mutate(store, REL_KEY, [], (list) => { const r = list.find((x) => x.id === p.id); if (!r) return { skip: true, value: null }; logIt(r, at, "Luke", `Luke said yes to ${asker}'s changes` + (via ? ` (via ${via})` : "")); return { value: r }; });
       /* the lyrics he said yes to ARE the final lyrics (16 Nov 2026, Verse: the pack had 5x "fode" while Luke approved 4x) */
       const lyr = "lyrics" in (p.pack || {}) && filled(p.pack.lyrics);
-      if (lyr) await approveRelease(store, now, roster, { by: "Luke", via, id: p.id, what: "lyrics", msg: parent.id, words: `said yes to ${asker}'s lyrics` });
+      if (lyr) { await approveRelease(store, now, roster, { by: "Luke", via, id: p.id, what: "lyrics", msg: parent.id, words: `said yes to ${asker}'s lyrics` }); await settleLyricsYes(store, now, p.id, p.newTitle || cur.title); }
       out = { done: true, id: p.id, text: `${p.newTitle || cur.title}: the changes are made${p.date && scheduled ? " (every open step moved with the new day, and the team is told)" : ""}${p.send ? "; it went to the team" : ""}.` + (lyr ? " The lyrics are recorded as approved by Luke." : "") };
     }
   } catch (e) { out = { done: false, error: e && e.message ? e.message : "it could not be applied" }; }
@@ -3618,7 +3793,7 @@ export async function saveRelease(store, now, roster, a) {
       for (const st of r.steps || []) {
         const need = STEP[st.key] && STEP[st.key].needs;
         if (!need || !changed.includes(need)) continue;
-        if (filled(r.pack[need]) && st.status === "skipped" && st.note === NEEDS_NOTE) { st.status = "todo"; st.note = ""; if (isDay(r.date)) { const want = addDays(r.date, -STEP[st.key].days); st.due = want < today ? today : want; } }
+        if (filled(r.pack[need]) && st.status === "skipped" && canvasSkipNote(st.note)) { st.status = "todo"; st.note = ""; if (isDay(r.date)) { const want = addDays(r.date, -STEP[st.key].days); st.due = want < today ? today : want; } }
         else if (!filled(r.pack[need]) && st.status === "todo") { st.status = "skipped"; st.note = NEEDS_NOTE; }
       }
       if (changed.length) changes.push(`changed ${joinWords(changed.map((k) => FIELD[k].short))}`);
@@ -3806,6 +3981,12 @@ export async function fillRelease(store, now, roster, a) {
     if (key === "storeStatus") storeEntry(r, { status: value, on: spDay(now), at, by });
     r.pack[key] = value; r.updatedAt = at;
     logIt(r, at, by, `${by} ${had ? "changed" : "filled"} ${f.short}`);
+    const today = spDay(now);
+    for (const st of r.steps || []) {
+      const need = STEP[st.key] && STEP[st.key].needs;
+      if (need !== key) continue;
+      if (filled(r.pack[need]) && st.status === "skipped" && canvasSkipNote(st.note)) { st.status = "todo"; st.note = ""; if (isDay(r.date)) { const want = addDays(r.date, -STEP[st.key].days); st.due = want < today ? today : want; } }
+    }
     return { value: r };
   });
 }

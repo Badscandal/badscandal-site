@@ -3,7 +3,7 @@
    - cover (RouteNote / the stores): JPG or PNG, square, at least 3000 x 3000
    - Spotify Canvas: MP4 or JPG, 9:16 portrait, 720 to 1080 px tall (18 Nov 2026), 3 to 8 seconds
    - Spotify artist header: JPG, PNG or GIF, at least 2660 x 1140, 20 MB at most
-   - YouTube channel banner: JPG or PNG, 16:9. 2560 x 1440 is recommended, not a minimum (18 Nov 2026)
+   - YouTube channel banner: JPG or PNG, 16:9. min 2048x1152, 2560x1440 recommended (18 Nov 2026)
    Nothing is refused: the preflight tool lists the problems, the release card shows a bad Canvas link. */
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -46,9 +46,11 @@ test("banners: Spotify header and YouTube banner", () => {
   assert.match(S.assetProblems("spotify_header", { mb: 25 })[0], /25 MB.*20 MB at most/);
   assert.deepEqual(S.assetProblems("youtube_banner", { width: 2560, height: 1440, format: "jpg", mb: 2 }), []);
   assert.match(S.assetProblems("youtube_banner", { width: 2048, height: 1000 }).join(" "), /not 16:9/);
-  /* 18 Nov 2026: 1600 x 900 is 16:9 and under the recommended size, not a failure */
-  assert.deepEqual(S.assetProblems("youtube_banner", { width: 1600, height: 900 }), []);
-  assert.match(S.assetNotes("youtube_banner", { width: 1600, height: 900 }).join(" "), /recommended/);
+  /* 18 Nov 2026: YouTube's minimum is 2048 x 1152. 1600 x 900 is too small. 2048 x 1152 passes and notes the recommended size. */
+  assert.match(S.assetProblems("youtube_banner", { width: 1600, height: 900 }).join(" "), /at least 2048 x 1152/);
+  assert.deepEqual(S.assetProblems("youtube_banner", { width: 2048, height: 1152 }), []);
+  assert.match(S.assetNotes("youtube_banner", { width: 2048, height: 1152 }).join(" "), /recommended/);
+  assert.match(S.ASSETS.youtube_banner.rule, /min 2048x1152, 2560x1440 recommended/);
   assert.match(S.assetProblems("youtube_banner", { mb: 8 })[0], /6 MB at most/);
   assert.match(S.assetProblems("youtube_banner", { format: "webp" })[0], /JPG or PNG/);
 });
@@ -76,7 +78,7 @@ test("the preflight tool checks an asset and gives the rule", async () => {
   assert.match(a.rule, /9:16/);
   const b = await call(d, "preflight", { bot: "Laura", asset: "youtube_banner", width: 2560, height: 1440 });
   assert.equal(b.ok, true);
-  assert.match(b.rule, /2560 x 1440/);
+  assert.match(b.rule, /min 2048x1152, 2560x1440 recommended/); /* 18 Nov 2026: the minimum is back; 2560x1440 stays the recommended size */
   assert.match(String((await call(d, "preflight", { bot: "Atlas", asset: "poster" })).error), /cover, canvas/);
   assert.match(String((await call(d, "preflight", { bot: "Atlas" })).error), /Give song, text, link or asset/);
   assert.match(String((await call(d, "preflight", { bot: "Atlas", asset: "canvas", width: "big" })).error), /width.*number/);
