@@ -44,7 +44,7 @@ No money amounts, payer names or account numbers in this file: the repo is publi
 
 ## Next up
 
-- L7 is live. L12 Profiles is in a branch (not live): one Profiles section, the `profiles` tool, Luke's "Yes, correct", then the owner uploads by hand. HQ does not log in. Next, only on Luke's word: L3 fan inbox part 1.
+- L7 is live. L12 Profiles is in PR #64 (not live): one Profiles section, the `profiles` tool, Luke's "Yes, correct", then the owner uploads by hand. HQ does not log in. Next, only on Luke's word: L3 fan inbox part 1.
 - Still needs Luke: B2 YouTube sign-in, the on-hold decisions H1–H4, and L11 (who "Luka" is). B1 and B5 are not needed; B4 Instagram is connected.
 - The rest of Later (L1, L4, L5, L9, L10) waits. Start any of it on his word.
 

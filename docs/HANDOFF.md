@@ -53,7 +53,7 @@ artist growth bot that all we will need is content and $".
 
 ## In flight (branches not merged)
 
-- **`cursor/hq-profiles-9009` (L12, preview PR, waiting for Luke's "deploy"):** HQ › Profiles lists the profile photo and the banner on every official platform. For each: the current image and the day it changed, the size rule (or "Rule not set"), a new image waiting for "Yes, correct", and the owner who uploads it by hand after that. The `profiles` tool (list, record, propose) is for Atlas, Laura, Steve and Kevin. X has no owner yet. HQ never logs in and never changes a platform. No Meta or Instagram calls. 582 tests pass on Node 24 and Node 22. On merge: STATUS row, roadmap L12 -> live, and tell Atlas, Laura, Steve, Kevin and Nova to refresh the tool list (40 tools).
+- **`cursor/hq-profiles-9009` (L12, PR #64, waiting for Luke's "deploy"):** HQ › Profiles lists the profile photo and the banner on every official platform. For each: the current image and the day it changed, the size rule (or "Rule not set"), a new image waiting for "Yes, correct", and the owner who uploads it by hand after that. The `profiles` tool (list, record, propose) is for Atlas, Laura, Steve and Kevin. X has no owner yet. HQ never logs in and never changes a platform. No Meta or Instagram calls. 582 tests pass on Node 24 and Node 22. On merge: STATUS row, roadmap L12 -> live, and tell Atlas, Laura, Steve, Kevin and Nova to refresh the tool list (40 tools).
 
 ## Waiting on someone
 

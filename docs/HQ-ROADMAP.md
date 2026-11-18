@@ -69,7 +69,7 @@ Luke, 17 Nov 2026, night. L12 was the one item here. Its first version is now be
 
 | # | What | Asked by | Status |
 |---|------|----------|--------|
-| L12 | **Profiles**: one place in HQ for the profile photo, and the banner, header, cover or wallpaper, on every official badscandal platform that has one | Luke | building: HQ › Profiles. Current image and the day it changed; the size rule (L8 kinds, plus published profile and banner sizes; Instagram, TikTok and Deezer say "Rule not set"); a new image waits for "Yes, correct"; then the owner uploads it by hand. Atlas (DSPs), Laura (YouTube), Steve (Instagram and Facebook), Kevin (TikTok). X has no owner. The `profiles` tool. HQ never logs in and never changes a platform. No Meta or Instagram calls. |
+| L12 | **Profiles**: one place in HQ for the profile photo, and the banner, header, cover or wallpaper, on every official badscandal platform that has one | Luke | building (PR #64): HQ › Profiles. Current image and the day it changed; the size rule (L8 kinds, plus published profile and banner sizes; Instagram, TikTok and Deezer say "Rule not set"); a new image waits for "Yes, correct"; then the owner uploads it by hand. Atlas (DSPs), Laura (YouTube), Steve (Instagram and Facebook), Kevin (TikTok). X has no owner. The `profiles` tool. HQ never logs in and never changes a platform. No Meta or Instagram calls. |
 
 **First version (building).** One Profiles section. It records what is already live and asks Luke before a new image. After "Yes, correct" the owner bot uploads it by hand and then records the new link and the day. HQ does not log in and does not change any platform.
 
