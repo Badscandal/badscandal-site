@@ -18,6 +18,7 @@ import { getStore } from "@netlify/blobs";
 import { morning, sweep } from "../lib/push.mjs";
 import * as S from "../lib/staff.mjs";
 import { readSongReport } from "../lib/github.mjs";
+import { profileAlerts } from "../lib/profile-images.mjs";
 import { syncInstagram } from "../lib/instagram.mjs";
 import { syncAdPosts } from "../lib/postrank.mjs";
 import { loadHq } from "../lib/hq-load.mjs";
@@ -93,6 +94,13 @@ export default async () => {
     }
   } catch (e) {
     console.error("watchers failed", e?.name || "Error");
+  }
+  try {
+    /* a profile image open more than a day asks Luke once (moved here from profile_jobs, which is a list) */
+    const r = await profileAlerts(store, now, (await desk()).roster || S.DEFAULT_ROSTER);
+    if (r && r.asked) console.log("profile jobs: asked Luke about a stuck job");
+  } catch (e) {
+    console.error("profile jobs check failed", e?.name || "Error");
   }
   try {
     S.useSongReports((id) => readSongReport(id));

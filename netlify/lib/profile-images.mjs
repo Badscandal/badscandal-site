@@ -196,7 +196,7 @@ function visibleJob(by, slot) {
 
 export async function listProfileJobs(store, now, roster, a) {
   const by = whoIs(a.by, roster, { people: true });
-  await profileAlerts(store, now, roster);
+  /* a list only: the hourly job and the board ask Luke about a stuck job (18 Nov 2026, handoff bug 5) */
   const doc = await getProfiles(store);
   const jobs = (doc.jobs || []).filter((j) => j && j.status === "open").map((j) => ({ j, slot: PROFILE_SLOTS.find((s) => s.id === j.slot) })).filter((x) => x.slot && visibleJob(by, x.slot));
   return { jobs: jobs.map((x) => jobOut(doc, x.j)).filter(Boolean),
