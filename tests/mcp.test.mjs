@@ -112,14 +112,15 @@ test("connector: a bot's whole day, end to end (the sheet isn't connected in thi
   assert.equal((await tool("my_day", { bot: "Manny" })).isError, true);
   assert.equal((await tool("post_update", { bot: "Ledger", status: "working", message: "Checking Wise and PayPal" })).data.saved, true);
   assert.match((await tool("post_update", { bot: "Ledger", status: "blocked", message: "PayPal password: abc12345" })).content[0].text, /Never write passwords/);
-  const pay = { bot: "Ledger", date: "2026-11-10", payer: "Sample Distro", amount: 104.04, currency: "USD", account: "PayPal", reference: "TX-9" };
+  /* 18 Nov 2026: received means it landed in Revolut, so this end-to-end payment lands there */
+  const pay = { bot: "Ledger", date: "2026-11-10", payer: "Sample Distro", amount: 104.04, currency: "USD", account: "Revolut", reference: "TX-9" };
   assert.equal((await tool("submit_income", pay)).data.saved, true);
   const again = (await tool("submit_income", pay)).data;
   assert.deepEqual([again.saved, again.duplicate], [false, true]);
   assert.match((await tool("submit_income", { ...pay, amount: "not read" })).content[0].text, /amount must be a positive number/);
   assert.equal((await tool("income_check", { bot: "Ledger", account: "Wise", new_payments: 0 })).data.saved, true);
   const inc = (await tool("income_status", { bot: "Alfred" })).data;
-  assert.equal(inc.received_this_month, "USD 104.04"); assert.equal(inc.payments_logged_this_month, 1); assert.match(inc.newest_payments[0], /Sample Distro · USD 104\.04 · received · PayPal · by Ledger/);
+  assert.equal(inc.received_this_month, "USD 104.04"); assert.equal(inc.payments_logged_this_month, 1); assert.match(inc.newest_payments[0], /Sample Distro · USD 104\.04 · received · Revolut · by Ledger/);
   const sent = (await tool("send_message", { bot: "Nova", to: "Luke", text: "Survivors on Fri 11 Dec?", needs: "decision", options: ["Yes", "January"] })).data;
   assert.equal(sent.sent, true); assert.match(sent.note, /Alfred's next message/);
   const ask = (await tool("send_message", { bot: "Nova", to: "Ledger", text: "Did Wise load today?", needs: "reply" })).data;

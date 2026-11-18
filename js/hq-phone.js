@@ -9,6 +9,7 @@
   var esc = function (s) { return window.HQ ? HQ.esc(s) : String(s == null ? "" : s); };
   var lyricsCache = {};
   var QUIET = "bs_hq_quiet", LATER = "bs_hq_later";
+  var openCard = "", editing = "";
 
   function quietOn() { try { return localStorage.getItem(QUIET) !== "0"; } catch (e) { return true; } }
   function applyQuiet() {
@@ -78,6 +79,45 @@
       '<div class="wbody"' + (open ? "" : " hidden") + "><p>" + esc(c.text || c.line || "") + "</p>" + diff +
       (c.recommended ? '<p class="drec">Recommended: ' + esc(c.recommended) + "</p>" : "") + cardButtons(c) + "</div></article>";
   }
+  function stackHtml(list, topOpen) {
+    return (list || []).map(function (c, i) {
+      var open = openCard ? openCard === c.id : (topOpen && i === 0);
+      var money = c.money_at_risk && c.amount != null ? " · " + c.currency + " " + c.amount : "";
+      var link = /^https:\/\//.test(c.link || "") ? '<p class="dmeta"><a href="' + esc(c.link) + '">' + esc(c.link) + "</a></p>" : "";
+      var dis = window.HQ && HQ.sample ? " disabled" : "";
+      return '<article class="dcard astack' + (open ? " open" : "") + '"><button class="astackbtn" type="button" data-aopen="' + esc(c.id) + '"><b>' + esc(c.owner_bot || c.owner) + "</b> " + esc(c.preview || c.text) + esc(money) + "</button>" +
+        '<div class="abody"' + (open ? "" : " hidden") + "><p>" + esc(c.text) + "</p>" +
+        (c.recipient ? "<p>To " + esc(c.recipient) + "</p>" : "") + link +
+        (c.deadline ? '<p class="dmeta">' + esc(c.deadline) + "</p>" : "") +
+        '<p class="drec">' + esc(c.line) + "</p>" +
+        '<div class="dacts"><button class="sendbtn" type="button" data-achoice="yes" data-aid="' + esc(c.id) + '"' + dis + ">Yes</button>" +
+        '<button class="copybtn" type="button" data-achoice="no" data-aid="' + esc(c.id) + '"' + dis + ">No</button>" +
+        '<button class="copybtn" type="button" data-achoice="edit" data-aid="' + esc(c.id) + '"' + dis + ">Edit</button></div>" +
+        (editing === c.id ? '<div class="aedit"><textarea class="fld" rows="4" maxlength="600" data-aedit="' + esc(c.id) + '">' + esc(c.text) + '</textarea><button class="sendbtn" type="button" data-asave="' + esc(c.id) + '"' + dis + ">Save this version</button></div>" : "") +
+        '<p class="ferr" data-aerr="' + esc(c.id) + '"></p></div></article>';
+    }).join("");
+  }
+  function othersHtml(items) {
+    if (!items || !items.length) return "";
+    return '<section class="waitlane"><h2>Waiting on others</h2><ul>' + items.map(function (it) {
+      var meta = [];
+      if (it.ticket) meta.push(it.ticket);
+      if (it.days != null) meta.push(it.days === 1 ? "1 day" : it.days + " days");
+      return '<li class="' + (it.tone === "bad" ? "bad" : "") + '"><b>' + esc(it.name) + "</b> " + esc(it.text) + (meta.length ? "<small>" + esc(meta.join(" · ")) + "</small>" : "") + "</li>";
+    }).join("") + "</ul></section>";
+  }
+  function sendChoice(id, choice, text) {
+    if (!window.HQ || HQ.sample) return;
+    HQ.postJSON("/api/staff/card", { id: id, choice: choice, text: text || "" }).then(function (res) {
+      if (res && res.s === 200 && res.j && res.j.ok) { editing = ""; openCard = ""; if (window.HQStaff && HQStaff.reload) HQStaff.reload(); return; }
+      var p = document.querySelector('[data-aerr="' + id + '"]');
+      if (p) p.textContent = (res && res.j && res.j.error) || "Couldn't save that.";
+    }, function () {
+      var p = document.querySelector('[data-aerr="' + id + '"]');
+      if (p) p.textContent = "No connection. Nothing was sent.";
+    });
+  }
+
   function drawHome() {
     var el = $("phoneHome"); if (!el || !window.HQ) return;
     var V = window.HQLook;
@@ -88,21 +128,28 @@
     var waiting = ((board && board.waiting && board.waiting.luke) || []).filter(function (m) { return m && !snoozed(m.id); });
     var tasks = (sheet && sheet.team && sheet.team.tasks) || (board && board.tasks) || [];
     var stack = V.decisionStack(waiting, tasks, board && board.actionCards);
+    var auto = board && board.auto;
+    var health = L.accountHealthHome ? L.accountHealthHome(board && board.accountHealth) : { dots: [], needs: [] };
     var risk = [];
     try { risk = L.attention({ sheet: sheet, ov: ov, board: board, bank: window.HQStaff && HQStaff.bank ? HQStaff.bank() : null }); } catch (e) { risk = []; }
-    var pulse = V.homePulse({ need: stack.top ? [stack.top].concat(stack.rest) : [], risk: risk });
+    var need = (stack.top ? [stack.top].concat(stack.rest) : []).concat((auto && auto.needsYou) || []).concat(health.needs || []);
+    var pulse = V.homePulse({ need: need, risk: risk });
     var ids = [stack.top].concat(stack.rest).filter(Boolean).map(function (c) { return c.id; });
     if (ids.indexOf(openId) < 0) openId = stack.top ? stack.top.id : "";
     var decision = "";
-    if (stack.caughtUp) decision = '<p class="dnone">You\'re all caught up.</p>';
-    else {
-      decision = '<div class="wstack">' + [stack.top].concat(stack.rest).map(function (c) { return walletCard(c, c.id === openId); }).join("") + "</div>";
+    if (auto && auto.header) decision += '<p class="dhead">' + esc(auto.header) + "</p>" + stackHtml(auto.needsYou, true);
+    if (auto && auto.quiet && auto.held && auto.held.length) decision += '<p class="dnone">Quiet hours until 08:00. These wait.</p>' + stackHtml(auto.held, false);
+    if (!stack.caughtUp) {
+      decision += '<div class="wstack">' + [stack.top].concat(stack.rest).map(function (c) { return walletCard(c, c.id === openId); }).join("") + "</div>";
       if (stack.rest.length) decision += '<p class="wcount">' + stack.rest.length + " more under this one</p>";
     }
-    var others = ((board && board.messages) || []).filter(function (m) { return m && !m.resolved && m.to && m.to !== "Luke" && m.needs && m.needs !== "none"; }).slice(0, 8);
-    if (others.length) decision += '<details class="look-more"><summary>Waiting on others (' + others.length + ")</summary><ul>" + others.map(function (m) {
-      return "<li>" + esc((m.from || "") + " to " + m.to) + "</li>";
-    }).join("") + "</ul></details>";
+    (health.needs || []).forEach(function (n) {
+      decision += '<article class="dcard" data-health="' + esc(n.id) + '"><p class="dfrom">' + esc(n.title) + '</p><p class="dline">' + esc(n.line) + "</p>" +
+        (n.next ? '<p class="drec">' + esc(n.next) + "</p>" : "") + '<a class="linkbtn" href="' + esc(n.href || "#growth") + '">Open</a></article>';
+    });
+    decision += healthDots(health);
+    if (auto) decision += othersHtml(auto.waitingOnOthers);
+    if (!need.length && !(auto && auto.held && auto.held.length)) decision += '<p class="dnone">Nothing is waiting on you.</p>';
     if (stack.parked.length) decision += '<details class="look-more"><summary>Waiting on Luke (' + stack.parked.length + ")</summary><ul>" + stack.parked.map(function (t) {
       return "<li><b>" + esc(t.id) + "</b> " + esc(t.title) + (t.note ? "<small>" + esc(t.note) + "</small>" : "") + "</li>";
     }).join("") + "</ul></details>";
@@ -122,6 +169,16 @@
     el.innerHTML = h;
     var ads = $("adsGauge");
     if (ads) ads.innerHTML = gaugeHtml(L.spendGauge(sheet && sheet.money && sheet.money.cap));
+  }
+
+  function healthDots(health) {
+    var dots = (health && health.dots) || [];
+    if (!dots.length && !(health && health.connection && health.connection.state === "watch")) return "";
+    var row = dots.map(function (d) {
+      return '<a class="adot ' + esc(d.state) + '" href="#growth"><i></i><span>' + esc(d.label) + "</span></a>";
+    }).join("");
+    var note = health.connection && health.connection.state === "watch" ? '<p class="dnone">' + esc(health.connection.line) + "</p>" : "";
+    return '<div class="adots" role="list">' + row + "</div>" + note;
   }
 
   function stripHtml(sheet, ov) {
@@ -211,6 +268,19 @@
 
   document.addEventListener("hq:refreshed", draw);
   document.addEventListener("click", function (ev) {
+    var a = ev.target.closest && ev.target.closest("[data-aopen],[data-achoice],[data-asave]");
+    if (a) {
+      if (a.hasAttribute("data-aopen")) { openCard = a.getAttribute("data-aopen"); drawHome(); return; }
+      var id = a.getAttribute("data-aid") || a.getAttribute("data-asave");
+      if (a.getAttribute("data-achoice") === "edit") { editing = id; openCard = id; drawHome(); return; }
+      if (a.hasAttribute("data-asave")) {
+        var box = document.querySelector('[data-aedit="' + id + '"]');
+        sendChoice(id, "edit", box ? box.value : "");
+        return;
+      }
+      if (a.getAttribute("data-achoice") === "yes" || a.getAttribute("data-achoice") === "no") sendChoice(id, a.getAttribute("data-achoice"));
+      return;
+    }
     var t = ev.target.closest && ev.target.closest("[data-expand],[data-wallet],[data-snooze],[data-lyrics],[data-dot],[data-source],.gapbtn,#quietBtn");
     if (!t) return;
     if (t.id === "quietBtn") {
