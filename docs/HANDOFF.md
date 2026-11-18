@@ -1,8 +1,8 @@
 # Handoff: where HQ is and what's next (read this first)
 
-**Last updated:** 18 Nov 2026, by Cursor, after PR #69 was merged.
-**main:** every PR up to #69 is live. **Tests:** 611 pass on Node 24 and Node 22, none cancelled.
-**Connector:** 40 tools. No new tool in #69. Options on existing tools changed, so every bot refreshes the tool list.
+**Last updated:** 18 Nov 2026, by Cursor. Main is through PR #70. L1 and L9 are in flight as PR #71 (not merged).
+**main:** every PR up to #70 is live. **Tests on main:** 611 pass on Node 24 and Node 22, none cancelled.
+**Connector:** 40 tools. No new tool in #69, #70, or on the L1/L9 branch. Options changed in #69, so every bot refreshes the tool list.
 
 > **The rule (Luke, 17 Nov 2026):** every time anything is pushed to `main` for HQ, the same push updates THIS
 > file (and `docs/STATUS.md`). If Luke's computer crashes or a session ends mid-way, the next agent starts from
@@ -31,7 +31,7 @@ site + Luke's private dashboard /hq + the bots' connector /mcp).
 
 ## Where it stands (18 Nov 2026)
 
-**Where we left off:** the connector bug fixes from the bots' read-only test are live on main (PR #69, commit `dde345c`). Nothing else is in flight. L4 per-song profit (PR #67), L3 fan inbox part 1 (PR #66), L12 (Profiles, PR #64) and the release-card fix (PR #65) are live.
+**Where we left off:** the phone HQ is on main (PR #70). Money shows what landed in Revolut on its own line. Payable, and money still in Wise or PayPal, are smaller and never added in. The connector bug fixes (PR #69) are live. L1 (expected money) and L9 (what a payout route cost) are PR #71 and are not live yet. L4 (PR #67), L3 part 1 (PR #66), L12 (PR #64) and the release-card fix (PR #65) are live.
 
 **HQ** (`badscandal.com/hq`, also inside the HQ apps on Luke's iPhone and Mac) has: Today, Songs, Ads, Pages
 (one tile per song page since #59), Growth & Fans (with the Instagram reader), Profiles (since #64), Upcoming (the release pipeline),
@@ -60,7 +60,7 @@ artist growth bot that all we will need is content and $".
 
 ## In flight (branches not merged)
 
-- `cursor/hq-phone-needs-you-048c`: phone HQ (Needs you first, release and team strips, quiet mode, money lines, ad gauge) plus the desk answers from PR #68 (tool-list reconnect line, optional working_on, stale blockers, questions to Luke, unsorted payment ids, a waiting step is not blocked). Includes main through the connector bug fixes (PR #69). 627 tests, Node 24 and Node 22. Not live. PR #68 can close in favour of this branch.
+- **L1 + L9** (PR #71, `cursor/expected-money-routes-cbcf`, not merged): Expected money and the exchange-and-fee cost of each payout route, for Ledger and Sheet, on the phone Money screen from PR #70. No new tool (still 40). `income_status` gains `expected_money` and `payout_routes`. `my_day` for Ledger and Sheet gains the same summaries. `luke_briefing` is unchanged. A route with two currencies says "not enough data". HQ does not move money and does not guess a rate. No new tool and no new option, so this branch does not by itself ask the bots to refresh. Preview: https://deploy-preview-71--profound-haupia-db7ffa.netlify.app/hq?sample=1
 
 ## Waiting on someone
 
@@ -104,7 +104,7 @@ Later, if he asks:
 2. **After a week of Instagram data:** check the ranking with Luke against what he sees in the app; the floor is
    1,000 views (PR #69). Tune the 1-day window if needed.
 3. **B2 YouTube Analytics** (one Google sign-in from Luke), so Laura's numbers come in by themselves.
-4. **The rest of Later** (L1 expected money, L5, L9, L10): see docs/HQ-ROADMAP.md. L4 is live.
+4. **The rest of Later** (L5, L10): see docs/HQ-ROADMAP.md. L4 is live. L1 and L9 are the in-flight branch above.
 5. **H1–H4** stay on hold until Luke decides (they would touch ads, posting or fans' data).
 
 ## How to check your work
