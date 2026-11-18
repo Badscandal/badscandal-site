@@ -13,7 +13,8 @@
    js/hq.js (HQ.boardChanged).
 
    THE ONLY WRITES ON /hq ARE HERE: Luke's own messages (send, answer, mark as done), the bots' key
-   switch, and (11 Nov 2026) the release pipeline: save / send / move / cancel a release and mark a
+   switch, his Yes / No / Edit on an action card, the "taps count as Luke's yes" switch, one webhook
+   address per bot, and (11 Nov 2026) the release pipeline: save / send / move / cancel a release and mark a
    step. Nothing here can touch an ad, a post, the sheet or any money. In /hq?sample=1 nothing is
    sent at all and the page says so.
 
@@ -37,7 +38,7 @@
       /* the release pipeline: busy / error / the inline question per card, notes, open disclosures, the form */
       rel: { busy: "", err: {}, ask: null, note: {}, open: {}, fold: {}, full: {}, loading: {}, gen: {}, tried: {} }, form: null, payOpen: {},
       /* planning (14 Nov 2026): the month shown and the day picked on the calendar */
-      cal: { ym: "", sel: "" },
+      cal: { ym: "", sel: "" }, hookDraft: {}, tapAsk: false, tapErr: "", tapBusy: false,
       /* In Spotify for Artists (v2): the question being answered, the label typed, what was answered */
       spot: { k: "", answer: "", label: "", busy: "", err: {}, done: {} },
       /* Revolut (11 Nov 2026): the tile's button in flight, its inline "Disconnect?", the last error and
@@ -193,7 +194,55 @@
       (g.quiet.length ? '<h3 class="lblh">Haven\'t checked in today</h3><div class="botlist">' + g.quiet.map(botRow).join("") + "</div>" : "") +
       (g.onTrack.length ? '<h3 class="lblh">On track</h3><div class="botlist">' + g.onTrack.map(botRow).join("") + "</div>" : "");
     HQ.drawFeed(L.liveFeed(board, sheet), board.today);
+    drawAuto();
     return true;
+  }
+  function drawAuto() {
+    var el = $("autoCard"); if (!el || !board || !board.auto) { if (el) el.hidden = true; return; }
+    var a = board.auto, taps = !!a.tapsCountAsYes;
+    el.hidden = false;
+    var rows = (a.webhooks || []).map(function (w) {
+      var draft = ui.hookDraft[w.bot];
+      return '<label class="flbl">' + esc(w.bot) + (w.on ? " · " + esc(w.host) : " · off") +
+        '<input class="fld" type="url" inputmode="url" autocomplete="off" data-hook="' + esc(w.bot) + '" placeholder="https://" value="' + esc(draft != null ? draft : "") + '"' + off() + '></label>' +
+        '<button class="copybtn" type="button" data-hook-save="' + esc(w.bot) + '"' + off() + ">Save</button>";
+    }).join("");
+    var ask = ui.tapAsk ? '<div class="confirm" role="group"><p>A Yes on a card will count as your yes, except payments and signatures, which you still do yourself. HQ will not change ads.</p><button class="sendbtn" type="button" data-taps="yes"' + (ui.tapBusy ? " disabled" : "") + '>Yes, switch it on</button><button class="copybtn" type="button" data-taps="cancel">Cancel</button></div>' : "";
+    el.innerHTML = '<h3 class="lblh">One-tap cards</h3><p>' + esc(a.tapsLine || "") + "</p>" +
+      (taps ? '<button class="copybtn" type="button" data-taps="off"' + off() + ">Switch taps off</button>" : '<button class="copybtn" type="button" data-taps="on"' + off() + ">Taps count as my yes</button>") +
+      ask + '<h3 class="lblh">Desk push</h3><p>Empty means off. Paste the https address that bot\'s app gives you. HQ does not invent one. Nova can send you the address. Only you paste it here. Leave the box empty and save to turn that bot off.</p>' +
+      rows + '<p class="ferr" role="alert">' + esc(ui.tapErr) + "</p>";
+  }
+  var autoEl = $("autoCard");
+  if (autoEl) {
+    autoEl.addEventListener("input", function (ev) {
+      var b = ev.target.getAttribute && ev.target.getAttribute("data-hook");
+      if (b) ui.hookDraft[b] = ev.target.value;
+    });
+    autoEl.addEventListener("click", function (ev) {
+      var b = ev.target.closest && ev.target.closest("button");
+      if (!b || HQ.sample) return;
+      var taps = b.getAttribute("data-taps"), who = b.getAttribute("data-hook-save");
+      if (taps === "on") { ui.tapAsk = true; ui.tapErr = ""; drawAuto(); return; }
+      if (taps === "cancel") { ui.tapAsk = false; drawAuto(); return; }
+      if (taps === "yes" || taps === "off") {
+        ui.tapBusy = true; drawAuto();
+        write("auto", { tapsCountAsYes: taps === "yes" }).then(function (r) {
+          ui.tapBusy = false; ui.tapAsk = false;
+          if (!r.ok) { ui.tapErr = r.error; drawAuto(); return; }
+          ui.tapErr = ""; reload();
+        });
+        return;
+      }
+      if (who) {
+        var input = autoEl.querySelector('[data-hook="' + who + '"]');
+        var url = input ? input.value.trim() : "";
+        write("auto", { webhook: { bot: who, url: url } }).then(function (r) {
+          if (!r.ok) { ui.tapErr = r.error; drawAuto(); return; }
+          delete ui.hookDraft[who]; ui.tapErr = ""; reload();
+        });
+      }
+    });
   }
   $("team").addEventListener("click", function (ev) {
     var b = ev.target.closest && ev.target.closest("button");

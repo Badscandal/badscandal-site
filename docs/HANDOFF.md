@@ -60,6 +60,7 @@ artist growth bot that all we will need is content and $".
 
 ## In flight (branches not merged)
 
+- `cursor/hq-automation-phase-1-91a7`: HQ automation phase 1. One-tap cards (owner, dedupe key, expiry, money at risk, Yes/No/Edit, proof), Waiting on others, scheduled site/cap/release-day/month checks, desk push (empty until Luke pastes an address), Monday draft. Still 40 tools. 638 tests, Node 24 and Node 22. Not live.
 - `cursor/hq-phone-needs-you-048c`: phone HQ (Needs you first, release and team strips, quiet mode, money lines, ad gauge) plus the desk answers from PR #68 (tool-list reconnect line, optional working_on, stale blockers, questions to Luke, unsorted payment ids, a waiting step is not blocked). Includes main through the connector bug fixes (PR #69). 627 tests, Node 24 and Node 22. Not live. PR #68 can close in favour of this branch.
 
 ## Waiting on someone

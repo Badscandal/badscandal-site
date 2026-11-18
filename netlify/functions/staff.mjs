@@ -9,6 +9,8 @@
      POST /api/staff/resolve   …or settles a message                        { id, note }
      POST /api/staff/sort      Luke (or Claude) says what a Revolut payment is { id, month, status: received|transfer, category, pending_id? }
      POST /api/staff/config    Luke switches the bots' key off / on         { botsOn }
+     POST /api/staff/card      Luke answers an action card                  { id, choice: yes|no|edit, text? }
+     POST /api/staff/auto      Luke only: taps count as his yes, or one bot's webhook { tapsCountAsYes?, webhook?: { bot, url } }
      PUT  /api/staff/seed      Claude loads the roster, the income sources and the guide
      POST /api/staff/release         a release pack: start a draft or change one { id?, title, date, pack }
      POST /api/staff/release/send    …send it to the team (steps get dates)       { id }
@@ -45,6 +47,8 @@ import { loadHq } from "../lib/hq-load.mjs";
 import { handle } from "../lib/mcp.mjs";
 import { sweep as pushSweep } from "../lib/push.mjs";
 import { COOKIE, readCookie, verifySession } from "../lib/session.mjs";
+import * as C from "../lib/action-cards.mjs";
+import { pingNames } from "../lib/desk-push.mjs";
 import * as S from "../lib/staff.mjs";
 import { sampleBoard, sampleReleases, sampleSightings } from "../lib/staff-sample.mjs";
 import { callTool, CLAUDE_TOOLS, INSTRUCTIONS, TOOLS, toolsFor, instructionsFor } from "../lib/staff-tools.mjs";
@@ -191,7 +195,7 @@ async function api(req, context, path) {
   }
   if (path === "fields" && req.method === "GET") return json(200, { today: S.spDay(now), packFields: S.packFieldsOut(), releaseSteps: S.releaseStepsOut() });
   if (path === "board" && req.method === "GET") {
-    if (sample) return json(200, { sample: true, ...sampleBoard(now) });
+    if (sample) return json(200, { sample: true, ...sampleBoard(now), auto: C.sampleAuto(now) });
     const st = stores(context);
     await S.upgradeReleases(st.desk, now).catch(() => null); /* releases sent before the pipeline changed (15 Nov 2026) */
     const [desk, hqAns] = await Promise.all([S.loadDesk(st.desk, now), hqLoader(st)().catch(() => null)]);
@@ -200,7 +204,8 @@ async function api(req, context, path) {
     if (role === "claude") await Promise.all([S.touchSeen(st.desk, now, "Claude", "board"), S.touchRead(st.desk, now, "Claude")]);
     /* L6: what happened to each song-page request (the Pages tab's tiles) */
     const pageBuilds = await S.songPages(st.desk, now).catch(() => []);
-    return json(200, { ...S.board(desk, now, hqAns && hqAns.team ? hqAns : null), pageBuilds, hqRead: !!(hqAns && hqAns.team), keys: { bots: !!Netlify.env.get("STAFF_BOT_KEY"), claude: !!Netlify.env.get("STAFF_CLAUDE_KEY") } });
+    const auto = await C.boardAuto(st.desk, now, desk).catch(() => null);
+    return json(200, { ...S.board(desk, now, hqAns && hqAns.team ? hqAns : null), pageBuilds, hqRead: !!(hqAns && hqAns.team), ...(auto ? { auto } : {}), keys: { bots: !!Netlify.env.get("STAFF_BOT_KEY"), claude: !!Netlify.env.get("STAFF_CLAUDE_KEY") } });
   }
   if (path === "trace" && req.method === "GET") return sample ? json(200, { sample: true, trace: [] }) : json(200, { trace: await S.getTrace(stores(context).desk) });
   if (path === "release" && req.method === "GET") {
@@ -254,6 +259,18 @@ async function api(req, context, path) {
     if (path === "config" && req.method === "POST") {
       if (role !== "luke") return json(403, { error: "Only Luke switches the bots' key" });
       return json(200, { ok: true, config: await S.setConfig(st.desk, now, { botsOn: a.botsOn }) });
+    }
+    if (path === "card" && req.method === "POST") {
+      if (role !== "luke") return json(403, { error: "Only Luke answers a card" });
+      const card = await C.answerCard(st.desk, now, roster, { by: "Luke", id: a.id, choice: a.choice, text: a.text });
+      await pingNames(st.desk, now, [card.owner], { kind: "card", id: card.id }).catch(() => null);
+      const view = C.botCard(card);
+      return json(200, { ok: true, id: view.id, status: view.status, version: view.version, line: view.line, may_act: view.may_act });
+    }
+    if (path === "auto" && req.method === "POST") {
+      if (role !== "luke") return json(403, { error: "Only Luke changes this" });
+      await C.setAuto(st.desk, now, { by: "Luke", roster, tapsCountAsYes: a.tapsCountAsYes, webhook: a.webhook });
+      return json(200, { ok: true, auto: C.autoPublic(await C.getAuto(st.desk), roster) });
     }
     if (path === "seed" && req.method === "PUT") {
       const done = [];
