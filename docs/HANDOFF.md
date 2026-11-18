@@ -1,5 +1,7 @@
 # Handoff: where HQ is and what's next (read this first)
 
+**Full picture:** [docs/HQ-FULL-HANDOFF.md](HQ-FULL-HANDOFF.md) (18 Nov 2026). It was checked against the code at `9e447e2` (PR #88). If this file disagrees with it, the full file wins. Main is through PR #88: 47 connector tools, service worker `bs-hq-v8`, 745 tests. The paragraphs below still describe the state at PR #84 in places. They are kept as the running log.
+
 **Last updated:** 18 Nov 2026, by Cursor. HQ workspaces v1 is live (PR #84).
 **main:** through PR #84. Social Farm and Label are on /hq. The blank-screen fix (#83), the phone look (#80), one-tap cards (#79) and account health (#77) are live with it. **Tests:** 716 pass on Node 24 and Node 22, none cancelled.
 **Connector:** 40 tools. No new tool. `workspace` is on `log_growth`, `record_spend`, `submit_income`, `releases`, `release_step` and on an action card. `release_step` accepts `licence` for a Label cover only. `hq-workspaces.js` shares the HQ content hash and is in the precache (`bs-hq-v7`). The options changed, so every bot refreshes.
@@ -16,7 +18,7 @@
 You're picking up the BADSCANDAL HQ work in the repo Badscandal/badscandal-site (badscandal.com, the public
 site + Luke's private dashboard /hq + the bots' connector /mcp).
 
-1. Read, in this order: docs/HANDOFF.md (where we are, what's next), docs/WORKING-WITH-LUKE.md (the rules),
+1. Read, in this order: docs/HQ-FULL-HANDOFF.md (the full picture: pages, all 47 tools, routes, the 17–18 Nov PRs, known bugs), docs/HANDOFF.md (where we are, what's next), docs/WORKING-WITH-LUKE.md (the rules),
    docs/STATUS.md (what's live), docs/HQ-ROADMAP.md (the plan). CLAUDE.md is the full technical reference.
 2. Hard rules: merge to main ONLY when Luke says "deploy" or "publish". The repo is PUBLIC: no keys, money
    amounts, payer or account names, lyrics or private notes, not even in tests. Never read a key, .env, .pem or
@@ -62,7 +64,7 @@ artist growth bot that all we will need is content and $".
 
 ## In flight (branches not merged)
 
-- **Night test, 18 Nov** (`cursor/hq-night-test-31d0`, not merged). 29 connector fixes, including RouteNote mail from luke@badscandal.com with admin@badscandal.com in CC, plus the three read-only tools. With PR #87's four profile tools the connector is 47. `luke_briefing` unchanged. Not on main.
+- **Night test, 18 Nov** (PR #88, on main, `9e447e2`). 29 connector fixes, including RouteNote mail from luke@badscandal.com with admin@badscandal.com in CC, plus the three read-only tools. With PR #87's four profile tools the connector is 47. `luke_briefing` unchanged. The detail, including the two "need you" lines, is in docs/HQ-FULL-HANDOFF.md.
 - **Profile masters** (PR #87, on main). Luke uploads one profile photo and one banner on Profiles. A fitting shape is resized on the page. A shape that does not fit is not cropped: Atlas, Laura and Kevin extend it with `profile_jobs`, `profile_master`, `profile_rework` and `profile_uploaded`. Problems open a Needs you card. Instagram is Luke's. Deezer, TikTok and Instagram have size rules. TIDAL is on the list. Secondary buttons set their own colours. Cache `bs-hq-v8`.
 
 - **Blank-screen fix** (PR #83, on main). One content hash on every HQ script, an 8-second fetch timeout, and Try again / Reset app when the page never paints.
