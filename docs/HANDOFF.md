@@ -66,7 +66,8 @@ artist growth bot that all we will need is content and $".
 
 ## In flight (branches not merged)
 
-- Nothing in flight. **Handoff fixes** (PR #90) are on main. Nova refreshes the tool list once (the `needs_you`, `instagram`, `read_messages` and `log_growth` descriptions changed; same 47 names). A new Yes/No/Edit card or a red account now buzzes Luke's phone once (quiet hours and the 10-minute rule still apply).
+- **Account health** (branch `cursor/account-health-organic-1188`, not merged). Instagram no longer calls a paid-inflated view count "in line". Not live until Luke says deploy.
+- **Handoff fixes** (PR #90) are on main. Nova refreshes the tool list once (the `needs_you`, `instagram`, `read_messages` and `log_growth` descriptions changed; same 47 names). A new Yes/No/Edit card or a red account now buzzes Luke's phone once (quiet hours and the 10-minute rule still apply).
 
 - **Night test, 18 Nov** (PR #88, on main, `9e447e2`). 29 connector fixes, including RouteNote mail from luke@badscandal.com with admin@badscandal.com in CC, plus the three read-only tools. With PR #87's four profile tools the connector is 47. `luke_briefing` unchanged. The detail, including the two "need you" lines, is in docs/HQ-FULL-HANDOFF.md.
 - **Profile masters** (PR #87, on main). Luke uploads one profile photo and one banner on Profiles. A fitting shape is resized on the page. A shape that does not fit is not cropped: Atlas, Laura and Kevin extend it with `profile_jobs`, `profile_master`, `profile_rework` and `profile_uploaded`. Problems open a Needs you card. Instagram is Luke's. Deezer, TikTok and Instagram have size rules. TIDAL is on the list. Secondary buttons set their own colours. Cache `bs-hq-v8`.

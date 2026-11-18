@@ -105,6 +105,8 @@ const adHits = (a, p) => {
   const name = String(a.name || "").toLowerCase();
   return String(a.media || "") === sc || name.includes(sc.toLowerCase());
 };
+/* the same match account health uses, so a boosted post is the same post in both places */
+export function adMatchesPost(ad, post) { return adHits(ad, post); }
 export function rankPosts(posts, adDoc, o = {}) {
   const minViews = o.minViews || 1000, now = o.now || Date.now();
   const ads = (adDoc && adDoc.ads) || [], comments = o.comments || [], spend = o.spend || [];

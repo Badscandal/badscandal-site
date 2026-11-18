@@ -40,7 +40,11 @@ test("the last 3 posts under 30% of the account's own median is a possible suppr
   assert.equal(red.next, "Pause hashtags, check Account Status, post normally, no deleting.");
 
   const edge = acc({ checks: [{ type: "reading", platform: "tiktok", date: day(1), by: "Kevin", posts: posts([[1, 600], [2, 600], [3, 600], ...older]) }] }, "tiktok");
-  assert.equal(sig(edge, "reach").level, "ok", "exactly 30% is not under");
+  /* 18 Nov 2026: exactly 30% is still not the red suppression line, and it is not "in line" either */
+  assert.equal(sig(edge, "reach").level, "watch", "exactly 30% is not under the suppression line");
+  assert.match(sig(edge, "reach").text, /not under the 30%/);
+  assert.doesNotMatch(sig(edge, "reach").text, /in line/);
+  assert.doesNotMatch(sig(edge, "reach").text, /Possible suppression/);
 
   const one = acc({ checks: [{ type: "reading", platform: "tiktok", date: day(1), by: "Kevin", posts: posts([[1, 200], [2, 2000], [3, 2000], ...older]) }] }, "tiktok");
   assert.equal(sig(one, "reach").level, "watch");
@@ -50,6 +54,88 @@ test("the last 3 posts under 30% of the account's own median is a possible suppr
   const few = acc({ checks: [{ type: "reading", platform: "tiktok", date: day(1), by: "Kevin", posts: posts([[1, 10], [2, 10], [3, 10]]) }] }, "tiktok");
   assert.equal(sig(few, "reach").level, "gap");
   assert.match(sig(few, "reach").text, /Not enough data/);
+});
+
+function reels(rows) {
+  return rows.map((r) => {
+    const post = { id: r.id, at: day(r.n) + "T12:00:00Z", snaps: {} };
+    if (r.d1 != null) post.snaps.d1 = { views: r.d1 };
+    if (r.latest != null) post.latest = { views: r.latest };
+    if (r.d1 == null && r.latest == null) post.snaps.d1 = { views: r.views };
+    return post;
+  });
+}
+const NO_ADS = { at: NOW, ads: [] };
+const ad = (media, spend) => ({ id: "ad-" + media, media, spend, impressions: spend * 100, reach: spend * 80 });
+
+test("last 3 views at about 35% of the median are a dip, not in line and not a suppression", () => {
+  /* the live headline: 2,496, 2,888, 2,765 against a 30-day median of 7,860. Each is about 35%, which is over the 30% line. */
+  const rows = [[1, 2496], [2, 2888], [3, 2765], [5, 7860], [7, 7860], [9, 7860], [12, 7860]];
+  const known = acc({ igPosts: reels(rows.map(([n, views], i) => ({ id: "o" + i, n, views }))), igAds: NO_ADS }, "instagram");
+  const reach = sig(known, "reach");
+  assert.equal(reach.level, "watch");
+  assert.match(reach.text, /2,496, 2,888, 2,765/);
+  assert.match(reach.text, /30-day median 7,860/);
+  assert.match(reach.text, /not under the 30%/);
+  assert.match(reach.text, /dip/);
+  assert.doesNotMatch(reach.text, /in line/);
+  assert.doesNotMatch(reach.text, /Possible suppression/);
+  assert.notEqual(known.state, "green");
+
+  const close = [[1, 7600], [2, 8000], [3, 7900], [5, 7860], [7, 7860], [9, 7860], [12, 7860]];
+  const fine = acc({ igPosts: reels(close.map(([n, views], i) => ({ id: "n" + i, n, views }))), igAds: NO_ADS }, "instagram");
+  assert.equal(sig(fine, "reach").level, "ok");
+  assert.match(sig(fine, "reach").text, /in line/);
+  assert.match(sig(fine, "reach").text, /70%/);
+  assert.equal(fine.state, "green");
+});
+
+test("a paid-inflated median is not a content dip, and totals with no ad list are not called in line", () => {
+  const organic = [1, 2, 3, 5, 7, 9, 12].map((n, i) => ({ id: "org" + i, n, views: 8000 + i * 50 }));
+  const boosted = [{ id: "b285", n: 4, views: 285000 }, { id: "b273", n: 6, views: 273000 }];
+  const igAds = { at: NOW, ads: [ad("b285", 300), ad("b273", 280)] };
+  const judged = acc({ igPosts: reels(organic.concat(boosted)), igAds }, "instagram");
+  const reach = sig(judged, "reach");
+  assert.equal(reach.level, "ok");
+  assert.match(reach.text, /in line/);
+  assert.match(reach.text, /Boosted posts are left out/);
+  assert.doesNotMatch(reach.text, /285,000|273,000|Possible suppression/);
+  assert.equal(judged.state, "green");
+
+  /* the three newest had less spend; they are still boosted, so they are left out too */
+  const light = [
+    { id: "r8", n: 1, views: 8371 }, { id: "r10", n: 2, views: 10900 }, { id: "r24", n: 3, views: 24300 },
+    { id: "b285", n: 8, views: 285000 }, { id: "b273", n: 10, views: 273000 },
+  ];
+  const spent = acc({ igPosts: reels(light), igAds: { at: NOW, ads: [ad("r8", 20), ad("r10", 15), ad("r24", 40), ad("b285", 300), ad("b273", 280)] } }, "instagram");
+  const left = sig(spent, "reach");
+  assert.equal(left.level, "watch");
+  assert.match(left.text, /left out/);
+  assert.match(left.text, /not called a dip/);
+  assert.doesNotMatch(left.text, /in line|Possible suppression/);
+  assert.notEqual(spent.state, "green");
+
+  const blind = acc({ igPosts: reels([[1, 2496], [2, 2888], [3, 2765], [5, 7860], [7, 7860], [9, 7860], [12, 7860]].map(([n, views], i) => ({ id: "u" + i, n, views }))) }, "instagram");
+  const unk = sig(blind, "reach");
+  assert.equal(unk.level, "watch");
+  assert.match(unk.text, /can't judge organic/);
+  assert.match(unk.text, /paid reach/);
+  assert.doesNotMatch(unk.text, /in line|Possible suppression|2,496/);
+  assert.notEqual(blind.state, "green");
+});
+
+test("a 1-day snapshot is not compared with the latest total, which is what the Instagram grid shows", () => {
+  const posts = [
+    { id: "a", n: 1, d1: 2496, latest: 8371 },
+    { id: "b", n: 2, d1: 2888, latest: 10900 },
+    { id: "c", n: 3, d1: 2765, latest: 24300 },
+    ...[5, 7, 9, 11, 13, 15].map((n, i) => ({ id: "old" + i, n, latest: 8000 })),
+  ];
+  const reach = sig(acc({ igPosts: reels(posts), igAds: NO_ADS }, "instagram"), "reach");
+  assert.match(reach.text, /latest stored views/);
+  assert.match(reach.text, /8,371/);
+  assert.doesNotMatch(reach.text, /2,496/);
+  assert.equal(reach.level, "ok");
 });
 
 test("under the 14-day median but not the 30-day median is a watch, not a suppression", () => {
