@@ -5,6 +5,7 @@
 
    Written for bots that follow instructions literally: every description says when to use the tool
    and what to put in each field, and every refusal says what to do instead. */
+import { hasAccountCheck, recordAccountCheck } from "./account-health.mjs";
 import { SONGS, homeCardSong } from "./songs.mjs";
 import * as S from "./staff.mjs";
 import * as IG from "./instagram.mjs";
@@ -53,6 +54,7 @@ const INSTRUCTION_LINES = [
   ["Atlas", "Atlas: when the pitch is sent, record the day with pitch_log (pitched_on). HQ never pitches a song and never changes Spotify: you send the pitch in Spotify for Artists, then record it here. When you see the song on a new editorial playlist in Spotify for Artists, record it the same day with pitch_log (playlist, added_on). A song the one-pitch rule skipped is not pitched: do not record a pitch for it."],
   ["Laura", "Laura: when the pack has a visualiser link, upload it to YouTube for the release and write its description like the other visualisers."],
   ["Laura", "Laura: a Content ID claim is recorded with log_growth (claim, claimant, impact, and date: the day YouTube showed it). Leave claimant or impact out when YouTube did not show them: HQ says not reported. Never guess a claim. HQ does not look Content ID up itself."],
+  [null, "Account health: Steve (Instagram), Kevin (TikTok), Laura (YouTube), Atlas (Spotify) and Webmaster (badscandal.com) record what the platform's own page shows, with log_growth, on the same day as the numbers, and again that day if Account Status changes. account_status is clear, restricted, strike, copyright, ineligible or age, and status_note is the page's own words. visible is yes, no or unknown, and visible_where is where you looked (For You, Explore, a hashtag). non_follower_share is the percent of views from people who do not follow, when the page shows it. recent_posts is the last few posts, each with at (YYYY-MM-DD) and views or reach, as shown. Atlas records track_moved (and moved_to) when a track is on another profile, and artificial_streams for a warning on the screen. Drop records artificial_streams on Spotify only. Webmaster records site_ok yes or no. HQ messages that bot only when the health changes. Never buy reach, never use a pod, never sign in somewhere else to get around a block, and never delete or appeal from here. HQ will not delete, appeal or post anything."],
   ["Webmaster", "Webmaster: make each song page (badscandal.com/<song>) before the song comes out, in the order the songs come out: a week after the previous song's release day. The home page shows a song as Out now for 7 days after its release day, then switches to the next upcoming song."],
   ["Verse", "Verse: the lyrics go on Musixmatch only once the song is out and shows there. Your lyrics step waits until the release day; from that day check Musixmatch every day and add Luke's approved text (the pack's lyrics) the day the song appears. A song not on Musixmatch yet is not a block. Only Luke writes the lyrics into the pack."],
   /* batch 3 (14 Nov 2026) */
@@ -253,7 +255,7 @@ export const TOOLS = [
       song: str("Optional. The song this amount is for. Leave it out when it is the account total: HQ then says not linked to a song."),
       days: { type: "array", description: "Optional. Several days in one call: each {date, amount, currency, song} or {date, not_read}.", items: { type: "object", properties: { date: { type: "string" }, amount: { type: "number" }, currency: { type: "string" }, not_read: { type: "string" }, song: { type: "string" } } } } }, ["bot", "platform"]) },
   { name: "log_growth", title: "Log a day's growth or song numbers",
-    description: "STEVE, ATLAS, KEVIN, LAURA: ONE call per platform (Growth: followers, views, the best post) or per song (Songs: Spotify streams, listeners, saves, playlist adds) for ONE day, numbers exactly as shown. The change in followers is worked out for you. Anything you could not read: leave it out and name it in gaps with why (TikTok views come a day late; Instagram has no daily views on the web): your duty is marked done, with gaps, never blocked. Sending the same numbers again does nothing; a later call for the same day fills in what was missing. Put your duty id (D-...) in duty if you have more than one duty today. LAURA, a Content ID claim: send claim, and claimant and impact when YouTube showed them, with date. Leave a blank when it was not shown. Do not also send follower numbers on that call. Never guess a claim. Steve, Atlas and Kevin do not record claims.",
+    description: "STEVE, ATLAS, KEVIN, LAURA: ONE call per platform (Growth: followers, views, the best post) or per song (Songs: Spotify streams, listeners, saves, playlist adds) for ONE day, numbers exactly as shown. The change in followers is worked out for you. Anything you could not read: leave it out and name it in gaps with why (TikTok views come a day late; Instagram has no daily views on the web): your duty is marked done, with gaps, never blocked. Sending the same numbers again does nothing; a later call for the same day fills in what was missing. Put your duty id (D-...) in duty if you have more than one duty today. LAURA, a Content ID claim: send claim, and claimant and impact when YouTube showed them, with date. Leave a blank when it was not shown. Do not also send follower numbers on that call. Never guess a claim. Steve, Atlas and Kevin do not record claims. Account health, same tool: Steve, Kevin, Laura, Atlas and Webmaster can send account_status, visible, non_follower_share, recent_posts or site_ok without follower numbers. Atlas or Drop can send artificial_streams on Spotify. Atlas can send track_moved. A check on its own does not mark a growth duty done. Record only what the page showed.",
     inputSchema: obj({ bot: BOT, date: str("The day the numbers are for, YYYY-MM-DD. For a Content ID claim: the day YouTube showed it."),
       platform: str("For Growth: TikTok, Instagram, YouTube..."), account: str("For Growth: the account handle."),
       followers: str("Followers as shown, for example 1240 or 1,240. YouTube: use subscribers (followers is accepted too)."), subscribers: str("YouTube: subscribers as shown. Stored as the follower number."), views: str("Views for the day (or the newest day shown). Not the channel's lifetime total."),
@@ -264,7 +266,18 @@ export const TOOLS = [
       duty: str('Optional. Your duty id from my_day (it starts with "D-").'),
       claim: str("Laura only. A Content ID claim, in the words YouTube showed. Leave it out when you are logging followers or a song. Never guess one."),
       claimant: str("Laura only. Who made the claim, as YouTube showed. Leave it out when YouTube did not show a name: HQ says not reported."),
-      impact: str("Laura only. What the claim did, as YouTube showed (for example a video flagged). Leave it out when YouTube did not show it: HQ says not reported.") }, ["bot", "date"]) },
+      impact: str("Laura only. What the claim did, as YouTube showed (for example a video flagged). Leave it out when YouTube did not show it: HQ says not reported."),
+      account_status: str("What that platform's own Account Status, Account Check or Studio page says: clear, restricted, strike, copyright, ineligible or age. Record only the word the page uses."),
+      status_note: str("Optional. The page's own words, one line. Needs account_status."),
+      visible: str("A check you did by hand: yes, no or unknown. There is no official API for hashtag, For You or Explore."),
+      visible_where: str("Where you looked: For You, Explore, a hashtag, or the words the app used."),
+      non_follower_share: str("Percent of views from people who do not follow, only when the page shows it (for example 42). Leave it out when it does not."),
+      recent_posts: { type: "array", description: "The last few posts, 12 at most. Each one: at (YYYY-MM-DD, the day it went out) and views or reach, as shown.", items: { type: "object", properties: { at: { type: "string" }, views: { type: "string" }, reach: { type: "string" } } } },
+      artificial_streams: str("Spotify only. Atlas or Drop: an artificial-streams warning, in the words on the screen. Never guess one."),
+      track_moved: str("Spotify only. Atlas: a track he saw on another profile, named as shown."),
+      moved_to: str("Spotify only. The other profile's name, when Atlas saw it. Needs track_moved."),
+      site_ok: str("Webmaster only, platform badscandal.com: yes or no, as the page answered."),
+      site_note: str("Webmaster only. One line about what the page showed. Needs site_ok.") }, ["bot", "date"]) },
   { name: "income_check", title: "Say an account was checked",
     description: 'Call this once per account, every day, after you looked at it, EVEN WHEN NOTHING IS NEW. It is how the dashboard tells "checked, nothing came in" from "nobody looked". new_payments is how many new payments you found (each one also goes through submit_income).',
     inputSchema: obj({ bot: BOT, account: str('The account you checked: "Wise", "PayPal", "Statement emails", "RouteNote"...'),
@@ -747,21 +760,35 @@ export async function callTool(tool, args, ctx) {
           : "not read just now: the team's sheet could not be read" };
     }
     case "log_growth": {
-      /* L5: a Content ID claim is not a growth number. It does not mark a growth duty done. */
+      const growthKeys = ["followers", "subscribers", "views", "channel_views", "shorts_views", "watch_hours", "monthly_listeners", "brazil_listeners", "best_post", "best_post_link", "song", "streams", "listeners", "saves", "playlist_adds"];
+      const hasNumbers = growthKeys.some((k) => args[k] != null && String(args[k]).trim() !== "");
+      const checkOf = async () => {
+        const c = await recordAccountCheck(store, now, roster, { ...args, by: me });
+        return { account_check: c.summary, account_check_saved: !!c.saved };
+      };
+      /* L5: a Content ID claim is not a growth number. It does not mark a growth duty done.
+         A claim on its own returns the same shape as before. A status check sent with it is kept too. */
       if (args.claim != null && String(args.claim).trim()) {
+        const extra = hasAccountCheck(args) ? await checkOf() : {};
         const c = await S.recordContentClaim(store, now, roster, { by: me, date: args.date, claim: args.claim, claimant: args.claimant, impact: args.impact });
         if (!c || !c.item) throw new S.StaffError("That claim was not saved. Try again.");
-        if (c.duplicate) return { saved: false, duplicate: true, note: "That claim was already recorded for that day. Nothing was added." };
-        return { saved: true, duplicate: false, claim: c.item.claim, date: c.item.date, shown_on: "badscandal.com/hq, Growth and Fans" };
+        if (c.duplicate) return { saved: false, duplicate: true, note: "That claim was already recorded for that day. Nothing was added.", ...extra };
+        return { saved: true, duplicate: false, claim: c.item.claim, date: c.item.date, shown_on: "badscandal.com/hq, Growth and Fans", ...extra };
+      }
+      /* A status-page check with no follower numbers does not mark a growth duty done. */
+      if (!hasNumbers && hasAccountCheck(args)) {
+        const c = await recordAccountCheck(store, now, roster, { ...args, by: me });
+        return { saved: !!c.saved, duplicate: !!c.duplicate, account_check: c.summary, shown_on: "badscandal.com/hq, Needs you" };
       }
       const prev = me !== "Claude" && args.platform && ctx.hq ? await ctx.hq().then((h) => { const g = h && h.growth ? h.growth.find((p) => String(p.platform).toLowerCase() === String(args.platform).trim().toLowerCase()) : null; return g && g.lastDay ? { date: g.lastDay, followers: g.followers } : null; }).catch(() => null) : null;
       const r = await S.logGrowth(store, now, roster, { by: me, date: args.date, platform: args.platform, account: args.account, followers: args.followers, subscribers: args.subscribers, views: args.views, views_date: args.views_date, channel_views: args.channel_views, shorts_views: args.shorts_views, watch_hours: args.watch_hours, monthly_listeners: args.monthly_listeners, brazil_listeners: args.brazil_listeners, best_post: args.best_post, best_post_link: args.best_post_link,
         song: args.song, streams: args.streams, listeners: args.listeners, saves: args.saves, playlist_adds: args.playlist_adds, gaps: args.gaps, duty: args.duty, prev });
+      const extra = hasAccountCheck(args) ? await checkOf() : {};
       const fixedWords = r.corrected && r.corrected.length ? r.corrected.map((c) => `${c.date}: ${c.from == null ? "none" : (c.from >= 0 ? "+" : "") + c.from} -> ${(c.to >= 0 ? "+" : "") + c.to}`) : null;
       if (r.duplicate) return { saved: false, duplicate: true, ...(fixedWords ? { changes_fixed: fixedWords } : {}),
-        note: "Those numbers were already logged for that day. Nothing was added." + (fixedWords ? " The day-to-day change was worked out again from the day before's total and put right (changes_fixed)." : "") };
+        note: "Those numbers were already logged for that day. Nothing was added." + (fixedWords ? " The day-to-day change was worked out again from the day before's total and put right (changes_fixed)." : ""), ...extra };
       return { saved: true, ...(fixedWords ? { changes_fixed: fixedWords } : {}), ...(r.row.change != null && r.row.kind === "growth" ? { change: r.row.change } : {}), ...(r.filled && r.filled.length ? { filled: r.filled } : {}), ...(r.replaced && r.replaced.length ? { corrected: r.replaced } : {}),
-        duty: r.duty, ...(r.gapText ? { gaps: r.gapText } : {}), shown_on: "badscandal.com/hq, Growth and Songs" };
+        duty: r.duty, ...(r.gapText ? { gaps: r.gapText } : {}), shown_on: "badscandal.com/hq, Growth and Songs", ...extra };
     }
     case "income_check": {
       const c = await S.incomeCheck(store, now, roster, { ...args, bot: me });
