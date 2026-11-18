@@ -2,7 +2,7 @@
 
 The goal (Nova, for Luke): **build towards the bots running everything, with Luke approving.**
 This file is the plan. Update an item's **Status** whenever it changes (in the same PR as the work).
-Status words: `todo` · `building (PR #n)` · `live (PR #n)` · `needs Luke` · `on hold` · `not possible`.
+Status words: `todo` · `building (PR #n)` · `live (PR #n)` · `needs Luke` · `on hold` · `not possible` · `idea` (needs his go; nothing is built).
 
 Sources: Nova's ranked list (05:05 SP) and her add-on from Webmaster, Steve and Atlas (05:10 SP), 17 Nov 2026,
 and Claude's assessment the same morning. Luke said "perfect" to the order below.
@@ -58,10 +58,34 @@ and Claude's assessment the same morning. Luke said "perfect" to the order below
 | L5 | **Watchers** (#11): RouteNote status and moderation emails → store_status + a drafted fix; release-day trigger for Verse; Content ID claims panel | Drop, Verse, Laura | todo |
 | L6 | **Song page tile** (#15): live status, button state, visits, Spotify clicks, Pixel/CAPI health | Webmaster | live (PR #59) |
 | L7 | **Pitch tracker** (#16): each song's pitch status, editorial adds, the two-week pitch slot calendar | Atlas | todo (the one-pitch rule is live) |
-| L8 | **Asset checker** (#17): cover, Canvas and banner vs each platform's rules | Atlas | building (branch `hq-asset-checker`): `preflight` asset = cover / canvas / spotify_header / youtube_banner with width, height, seconds, format, size_mb; a Canvas link that isn't MP4/JPG shows on the card; Atlas and Laura get the tool |
+| L8 | **Asset checker** (#17): cover, Canvas and banner vs each platform's rules | Atlas | live (PR #61): `preflight` asset = cover / canvas / spotify_header / youtube_banner with width, height, seconds, format, size_mb; a Canvas link that isn't MP4/JPG shows on the card; Atlas and Laura have the tool. Live check on HQ passed (17 Nov, ~20:52 SP). Atlas, Laura and Webmaster were told to refresh. |
 | L9 | Exchange-rate cost per payout route | Ledger | todo |
 | L10 | Auto end screens and pinned comments linking badscandal.com/<song> | Laura | todo (needs YouTube write access) |
 | L11 | A split ledger for Luke's and "Luka's" shares | Ledger | needs Luke (who is "Luka"? Lilian's 50%?) |
+
+## Ideas (need Luke's go before any build)
+
+Luke, 17 Nov 2026, night. Not part of the ranked list above. Nothing here is built, and nothing starts until he says go.
+
+| # | What | Asked by | Status |
+|---|------|----------|--------|
+| L12 | **Profiles**: one place in HQ for the profile photo, and the banner, header, cover or wallpaper, on every official badscandal platform that has one | Luke | idea, needs Luke's go |
+
+Platforms: Facebook Page, Instagram, YouTube, Spotify, Apple Music, TikTok, X, SoundCloud, Deezer, Amazon Music, and any other that has one.
+
+For each platform: the current image and the date it changed; the size rule (reuse the L8 `preflight` asset kinds, and add a kind when that platform isn't covered); a new image waiting for Luke's "Yes, correct"; the bot who uploads it after that yes. Atlas uploads for the DSPs (Spotify, Apple Music, SoundCloud, Deezer, Amazon Music). Laura uploads for YouTube. Steve uploads for Instagram and Facebook. Kevin uploads for TikTok. X has no owner yet.
+
+What can be read, and what needs Luke's own login (checked 17 Nov 2026 against the official pages). No bot logs in to Meta. No password goes in the repo.
+
+- **Instagram.** The key HQ already holds can read the profile photo (`profile_picture_url`). Meta's IG User page says updating is not supported. There is no banner. Luke changes the photo himself.
+- **Facebook Page.** The Page key already held can read the profile photo and the cover. Changing either is a write, so Luke does it himself. Do not add a write to the reader.
+- **Spotify.** The public Web API returns the artist images. Nothing in that API changes the avatar or the header. Luke changes both in Spotify for Artists. The header kind `spotify_header` is already in L8.
+- **YouTube.** The public channel thumbnail can be read. The banner upload is in the Data API, and only with Luke's Google login as the channel owner (not connected). B2 is Analytics, so it does not upload the banner. Luke changes the profile photo himself. The banner kind `youtube_banner` is already in L8.
+- **Apple Music.** A partner API can upload a hero image (square JPEG or PNG, at least 2400×2400). It needs Apple partner access, not a public key. Until that access is confirmed, Luke uploads it.
+- **SoundCloud.** Their help says the profile image and the header are uploaded on the website.
+- **Deezer.** The profile photo is changed in Deezer for Creators.
+- **Amazon Music.** The profile image and the background are changed in Amazon Music for Artists.
+- **TikTok and X.** Treat the change as Luke's login until that platform's current official docs are checked.
 
 ## Not HQ's
 

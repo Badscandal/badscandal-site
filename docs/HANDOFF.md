@@ -1,8 +1,8 @@
 # Handoff: where HQ is and what's next (read this first)
 
-**Last updated:** 17 Nov 2026, evening São Paulo, by Claude (cloud session), after PR #60.
-**main:** every PR up to #60 is live. **Tests:** 561 pass on Node 24 and Node 22, none cancelled.
-**Connector:** 38 tools; the `instagram` tool gained options on 17 Nov, so the bots must refresh their tool list.
+**Last updated:** 17 Nov 2026, night São Paulo, by Cursor (cloud session), after PR #61.
+**main:** every PR up to #61 is live. **Tests:** 568 pass on Node 24 and Node 22, none cancelled.
+**Connector:** 38 tools. `preflight` gained asset options (L8); Atlas, Laura and Webmaster were told to refresh their tool list.
 
 > **The rule (Luke, 17 Nov 2026):** every time anything is pushed to `main` for HQ, the same push updates THIS
 > file (and `docs/STATUS.md`). If Luke's computer crashes or a session ends mid-way, the next agent starts from
@@ -29,7 +29,11 @@ site + Luke's private dashboard /hq + the bots' connector /mcp).
 
 ---
 
-## Where it stands (17 Nov 2026)
+## Where it stands (17 Nov 2026, night)
+
+**Where we left off:** L8 (the asset checker) is live on main (PR #61, commit `1013f31`, about 20:52 São Paulo),
+on Luke's word. Nothing else is in flight. Luke is comparing Claude Code headless runs with Cursor cloud agents
+tonight. A new session of either kind starts from this file.
 
 **HQ** (`badscandal.com/hq`, also inside the HQ apps on Luke's iPhone and Mac) has: Today, Songs, Ads, Pages
 (one tile per song page since #59), Growth & Fans (with the Instagram reader), Upcoming (the release pipeline),
@@ -39,7 +43,12 @@ Atlas, Drop, Verse, Webmaster, Forge) work through the connector `/mcp`.
 **Done today (17 Nov):** the bots' roadmap Batch A (A1–A8) and B3; B4 Instagram (connected, read-only, Facebook
 Page route, a safety brake that stops reading if Meta objects); L6 song page tiles; L2 adapted ("What engages
 best": posts ranked by engagement per view at the same age, each boosting ad's cost per engagement, numbers before
-the ad, "Needs a reply", our-own-accounts list Nova manages). B1 and B5 were dropped by Luke.
+the ad, "Needs a reply", our-own-accounts list Nova manages); L8, the asset checker. B1 and B5 were dropped by Luke.
+
+**L8, checked live on HQ:** `preflight` checks a cover, a Spotify Canvas, a Spotify header or a YouTube banner.
+A Canvas at 1080×1920, mp4, 6 seconds passed. A Canvas at 1920×1080, .mov, 12 seconds and a YouTube banner at
+1500×500, 9 MB were each caught on all three problems. Preflight for the song "Love You" passed. Atlas, Laura
+and Webmaster were told to refresh their HQ tool list.
 
 **Luke's priorities, in his words:** "our prime goal is not to get our account restricted or disabled, we need
 ads" (every Meta/Instagram read is read-only, small, and stops by itself on a block). The aim: "an autonomous
@@ -47,10 +56,7 @@ artist growth bot that all we will need is content and $".
 
 ## In flight (branches not merged)
 
-- **`hq-asset-checker` (L8, preview PR, waiting for Luke's "deploy"):** the `preflight` tool checks a cover,
-  Spotify Canvas, Spotify header or YouTube banner against its platform's rule (`S.ASSETS`, `S.assetProblems`);
-  the card flags a Canvas link that isn't MP4/JPG; Atlas and Laura get `preflight`. Tests 568 on Node 24 and 22.
-  On merge: STATUS.md row, roadmap L8 -> live, and tell Atlas, Laura and Webmaster to refresh the tool list.
+- Nothing in flight. L8 shipped on main as PR #61 (`1013f31`).
 
 ## Waiting on someone
 
@@ -76,13 +82,22 @@ artist growth bot that all we will need is content and $".
 
 ## What's next (start any of these only on Luke's word)
 
-1. **After a week of Instagram data:** check the ranking with Luke against what he sees in the app; tune the
+Offer these three, in this order:
+
+1. **L7 pitch tracker:** each song's pitch status, editorial adds, the two-week pitch slot. The one-pitch rule
+   is already live. See docs/HQ-ROADMAP.md.
+2. **Profiles (L12):** an idea. One place in HQ for the profile photo and the banner on every official platform.
+   Needs Luke's go before any build. Do not start it before he says go.
+3. **L3 fan inbox, part 1:** song-name questions and repeat fans (builds on "Needs a reply"). Agree the slice
+   with him before building the rest of L3 (a ready reply he approves).
+
+Later, if he asks:
+
+4. **After a week of Instagram data:** check the ranking with Luke against what he sees in the app; tune the
    300-view floor and the 1-day window if needed.
-2. **L3 fan inbox:** song-name questions and repeat fans, with a ready reply Luke approves (builds on
-   "Needs a reply").
-3. **B2 YouTube Analytics** (one Google sign-in from Luke), so Laura's numbers come in by themselves.
-4. **L1 expected money, L4 per-song P&L, L7 pitch tracker:** see docs/HQ-ROADMAP.md "Later".
-5. **H1–H4** stay on hold until Luke decides (they would touch ads, posting or fans' data).
+5. **B2 YouTube Analytics** (one Google sign-in from Luke), so Laura's numbers come in by themselves.
+6. **The rest of Later** (L1 expected money, L4 per-song P&L, L5, L9, L10): see docs/HQ-ROADMAP.md.
+7. **H1–H4** stay on hold until Luke decides (they would touch ads, posting or fans' data).
 
 ## How to check your work
 
