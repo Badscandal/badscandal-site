@@ -208,6 +208,8 @@ test("connector: requests that were turned away are noted (never the key), and C
 });
 
 test("bank reader: the bots see every incoming Revolut payment; Ledger, Sheet and Nova can sort one, the others can't (/api/staff/sort, sort_payment)", async () => {
+  /* its own roster (Nova + Echo), so this test no longer depends on the one before it (18 Nov 2026) */
+  assert.equal((await api("seed", { method: "PUT", headers: { authorization: "Bearer " + ENV.STAFF_CLAUDE_KEY }, body: JSON.stringify({ roster: [{ name: "Nova", role: "Chief of staff" }, { name: "Echo", role: "New" }] }) })).status, 200);
   const desk = globalThis.__stores.get("staff"), now = Date.now(), day = S.spDay(now), month = day.slice(0, 7);
   const rev = { bot: "HQ", date: day, currency: "EUR", account: "Revolut", note: "Read from Revolut" };
   const friend = (await S.submitIncome(desk, now, S.DEFAULT_ROSTER, { ...rev, payer: "Made-up Mum", amount: 40, status: "unsorted", reference: "tx-mum" })).entry;
@@ -226,7 +228,7 @@ test("bank reader: the bots see every incoming Revolut payment; Ledger, Sheet an
   /* a bot whose job is not the money can look but not sort, neither with the tool nor by sending the payment again */
   assert.match((await tool("sort_payment", { bot: "Echo", id: friend.id, month, status: "transfer" })).content[0].text, /Only Luke, Claude, Ledger, Sheet, Nova can sort/);
   assert.match((await tool("submit_income", { bot: "Echo", date: day, payer: "Made-up Mum", amount: 40, currency: "EUR", account: "Revolut", reference: "tx-mum", status: "received" })).content[0].text, /unsorted\. Only Ledger, Sheet, Nova, Claude or Luke/);
-  /* a money bot sorts one as income (this file's roster is Nova + Echo by now: Nova is one of Ledger, Sheet, Nova) */
+  /* a money bot sorts one as income (this test's roster is Nova + Echo: Nova is one of Ledger, Sheet, Nova) */
   const sortedC = (await tool("sort_payment", { bot: "Nova", id: client.id, month, status: "received", category: "Production" })).data;
   assert.deepEqual([sortedC.saved, sortedC.status, sortedC.category], [true, "received", "Production"]);
   assert.match((await tool("sort_payment", { bot: "Nova", id: client.id, month, status: "received" })).content[0].text, /already sorted|category must be/);
