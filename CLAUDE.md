@@ -2105,9 +2105,20 @@ Stacked on batch 1 (branch `hq-bots-batch2` starts from `hq-bots-batch1`). Tests
   Alfred)".
 * **Stale blockers and asks:** `set_my_card` takes `blockers` ("" clears): stored on the card
   (`blockers`, `blockersAt`) and it REPLACES the roster profile's blocker in `workers()`; left out, the
-  last word stands. `my_day` shows `your_known_blockers` + how to clear it. A card's `needs` not said
-  again for 2 days is dropped from the card (`cardNow()`, kept as `oldNeeds`). The income sources'
-  `needsLuke` lines (Ledger's old codes) are batch 4 (owner-editable sources).
+  last word stands. `working_on` is optional (18 Nov 2026): leave it out to keep the last one, so a bot
+  can clear only a blocker. `my_day` shows `your_known_blockers` + how to clear it. A card blocker not
+  said again for 48 hours is `blockersStale`: the page and `my_day` say "old, still true?" and it is not
+  the headline (`your_known_blockers_old`). A card's `needs` not said again for 2 days is dropped from
+  the card (`cardNow()`, kept as `oldNeeds`). The income sources' `needsLuke` lines (Ledger's old codes)
+  are batch 4 (owner-editable sources).
+* **my_day, 18 Nov 2026:** `connector` is `{tools, version, reconnect_needed, status, check}` and `reconnect`
+  is the same sentence. Pass `tools_seen` (and optional `list_version`): a mismatch sets `reconnect_needed`
+  and the sentence starts "reconnect needed". `questions_to_luke` is this bot's open questions to Luke with
+  `waiting` ("3 h", "2 days"). For Ledger, Sheet, Nova and Alfred, `income_problems` appends each unsorted
+  payment's id and date; `luke_briefing` keeps the short count. A duty whose text still says "monthly
+  listeners in note" or "Salvation" is rewritten for Atlas: those numbers are `log_growth` fields. The
+  live D-atlas-1 row is on the task board. A blocked step whose note says it is waiting for the release
+  day is `state: "waiting"` (`blockIsWait`), not blocked, and it is not red on /hq.
 * **HQ page:** `HQLib.questionLines(m)` / `questionsLeft(m)`; "Waiting on you" shows each question with
   its own answer box and one "Send answers" button (`data-act="qsend"`, posts `answers`); the board
   thread lists every question with its answer or "No answer yet". `/api/staff/message` passes
@@ -2452,5 +2463,5 @@ From the comments HQ already stores (`comments.json`). No new Instagram call: th
 - `fanInbox(comments, now)` and `askKind(text)` in `netlify/lib/instagram.mjs`. A question is the song's name or where to listen (English, Portuguese, Spanish), from the last 14 days. `needsReply` is true when nobody on the own-accounts list has replied. That flag is Luke's. A repeat fan is the same account on two or more posts. 15 of each, questions that need a reply first.
 - `HIDDEN_HANDLES` is `liliancardos` and `liliancardosomakeup` (Luke, 18 Nov 2026). They are dropped from comments, the own-accounts list, its log and reply names, and a mention of either name in a comment is replaced. Adding one is refused, and the refusal does not repeat the name. Do not remove the list. Other own accounts stay on the desk.
 - HQ › Growth & Fans › Instagram › **Fan inbox** (`#fanInbox`, `HQLib.FAN_INTRO` / `fanFlagWord`). "Needs your reply" on a question or a repeat fan. Nothing on the page replies, likes, hides or deletes.
-- The `instagram` tool (still 40; Steve, Kevin, Forge) adds `fan_inbox` `{ note, questions: [{needs_reply, kind, when, user, text, on}], repeat_fans }`. The wider `needs_reply` list stays. Steve, Kevin and Forge refresh so the description matches. Tests: `tests/fan-inbox.test.mjs`.
+- The `instagram` tool (still 40; Steve, Kevin, Forge) adds `fan_inbox` `{ note, questions: [{needs_reply, kind, when, user, text, on}], repeat_fans }`. The wider `needs_reply` list stays. Steve, Kevin and Forge refresh so the description matches. Tests: `tests/fan-inbox.test.mjs`. The HQ polish branch changes the tool-list version again (no new tool): every bot refreshes. Tests: `tests/hq-polish.test.mjs`.
 - **Part 2, not built:** a fan's country (the reader only has the account's top countries, not each person's), and a ready reply Luke approves. HQ still never sends a reply.

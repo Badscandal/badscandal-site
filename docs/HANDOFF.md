@@ -1,8 +1,8 @@
 # Handoff: where HQ is and what's next (read this first)
 
-**Last updated:** 18 Nov 2026, by Cursor, after PR #66 was merged.
-**main:** every PR up to #66 is live. **Tests:** 590 pass on Node 24 and Node 22, none cancelled.
-**Connector:** 40 tools. No new tool. The `instagram` tool now returns the fan inbox, so Steve, Kevin and Forge must refresh (Nova too: she has every tool).
+**Last updated:** 18 Nov 2026, by Cursor. HQ polish is on a branch, not live.
+**main:** every PR up to #66 is live. **Tests:** 598 pass on Node 24 and Node 22, none cancelled.
+**Connector:** 40 tools. No new tool. The list version changed (`my_day` takes `tools_seen`; `set_my_card` no longer requires `working_on`), so every bot refreshes. Kevin, Steve, Sheet and Drop were already on a stale list.
 
 > **The rule (Luke, 17 Nov 2026):** every time anything is pushed to `main` for HQ, the same push updates THIS
 > file (and `docs/STATUS.md`). If Luke's computer crashes or a session ends mid-way, the next agent starts from
@@ -31,7 +31,7 @@ site + Luke's private dashboard /hq + the bots' connector /mcp).
 
 ## Where it stands (18 Nov 2026)
 
-**Where we left off:** L3 fan inbox, part 1, is live on main (PR #66, commit `dab08d2`). Nothing else is in flight. L12 (Profiles, PR #64) and the release-card fix (PR #65) are live.
+**Where we left off:** L3 fan inbox, part 1, is live on main (PR #66, commit `dab08d2`). HQ polish is in flight on `cursor/hq-polish-declutter-c9eb` and is not merged. L12 (Profiles, PR #64) and the release-card fix (PR #65) are live.
 
 **HQ** (`badscandal.com/hq`, also inside the HQ apps on Luke's iPhone and Mac) has: Today, Songs, Ads, Pages
 (one tile per song page since #59), Growth & Fans (with the Instagram reader), Profiles (since #64), Upcoming (the release pipeline),
@@ -56,11 +56,12 @@ artist growth bot that all we will need is content and $".
 
 ## In flight (branches not merged)
 
-- Nothing in flight. L3 fan inbox part 1 shipped on main as PR #66 (`dab08d2`).
+- HQ polish (`cursor/hq-polish-declutter-c9eb`): calmer /hq (what needs Luke first, details folded, the phone bar clears the last card) and desk fixes (`my_day` reconnect line, optional `working_on`, stale blockers, questions to Luke, unsorted payment ids, a waiting step is not "blocked"). Not merged. L3 part 1 is live as PR #66 (`dab08d2`).
 
 ## Waiting on someone
 
-- **Nova (after #66):** tell Steve, Kevin and Forge to refresh the tool list (still 40 tools). The instagram tool now includes the fan inbox: song-name questions, where to listen, and repeat fans. `needs_reply` true is for Luke. They never reply, like, hide or delete a comment.
+- **Nova (after this polish is deployed):** tell every bot to refresh. Still 40 tools. `my_day` says "reconnect needed" when `tools_seen` is not 40. `set_my_card` can clear a blocker without `working_on`. A blocker not restated for 48 hours shows as "old, still true?" and leaves the headline. `questions_to_luke` lists each open question and how long it has waited. Ledger, Sheet, Nova and Alfred: `income_problems` names unsorted payments by id and date. Atlas: if D-atlas-1 still says "monthly listeners in note" or mentions a Salvation card, change that duty row. Monthly listeners are `monthly_listeners` and `brazil_listeners` on `log_growth`. The live duty row is on the task board, not in this repo.
+- **Nova (after #66):** Steve, Kevin and Forge: the instagram tool includes the fan inbox (song-name questions, where to listen, repeat fans). `needs_reply` true is for Luke. They never reply, like, hide or delete a comment.
 - **Nova (after #64):** Atlas, Laura, Steve and Kevin: `profiles` records the image that is live (the link and the day it changed) and proposes a new one. Luke says "Yes, correct", then that bot uploads it by hand and records it. HQ never logs in. X has no owner yet: Luke uploads that one himself. Instagram, TikTok and Deezer say "Rule not set".
 - **Nova (after #63, still open):** Atlas: after he sends a Spotify pitch, record the day with `pitch_log` (`pitched_on`). When he sees the song on a new editorial playlist in Spotify for Artists, record it the same day (`playlist`, `added_on`). HQ never pitches. A song the one-pitch rule skipped is not pitched.
 - **Nova (after #60, still open):** other own accounts still go on the desk with the instagram tool (`our_accounts: "add"`, a handle and a reason). The two accounts named for the fan inbox are already filtered in code and never shown. Add the Monday routine to the

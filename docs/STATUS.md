@@ -1,8 +1,12 @@
 # HQ status (update on every deploy)
 
-**Last updated:** 18 Nov 2026, by Cursor (main after PR #66). Start with `docs/HANDOFF.md`.
-**Tests:** 590, all passing on Node 24 and Node 22. **Connector:** 40 tools (no new tool). The `instagram` tool now returns the fan inbox: Steve, Kevin and Forge refresh. Nova has every tool, so she refreshes too.
+**Last updated:** 18 Nov 2026, by Cursor. HQ polish is in review, not live. Start with `docs/HANDOFF.md`.
+**Tests:** 598 on this branch, Node 24 and Node 22. **Connector:** 40 tools (no new tool). The list version changed, so every bot refreshes once this is live. The `instagram` tool also returns the fan inbox (live, #66).
 No money amounts, payer names or account numbers in this file: the repo is public.
+
+## In review (not live)
+
+HQ polish, branch `cursor/hq-polish-declutter-c9eb`. Today leads with what needs Luke. Long notes fold behind "The rest of the note", "Numbers" and "Steps and details". The phone bar leaves the last card clear. A step whose note says it is waiting is not shown as blocked, and is not red. `my_day` says reconnect needed when the bot reports an old tool list. `set_my_card` can clear a blocker on its own. A card blocker older than 48 hours is "old, still true?" and drops off the headline. Open questions to Luke include how long they have waited. Unsorted payments are named by id and date on `my_day` only (Alfred's briefing stays as it is).
 
 ## Live (newest first)
 
