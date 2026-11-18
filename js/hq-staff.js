@@ -1155,7 +1155,7 @@
       '<span class="' + (pill.bad ? "bstate late" : "pill" + (pill.rel ? " rel" : "")) + '">' + esc(pill.text) + "</span></div>" +
       (face.prehq ? '<p class="prehq">pre-HQ</p>' : "") + dots + nxt +
       (face.distributor && !/ISRC|UPC/i.test(face.distributor) ? '<p class="rdist">' + esc(face.distributor) + "</p>" : "") +
-      (face.mailLine && face.mailLine !== "RouteNote email: not connected" ? '<p class="rdist">' + esc(face.mailLine) + "</p>" : "") + stats +
+      (face.mailLine && !/^RouteNote email: (not connected|not reported)$/.test(face.mailLine) ? '<p class="rdist">' + esc(face.mailLine) + "</p>" : "") + stats +
       (ui.rel.note[v.id] ? '<p class="rdone" role="status">' + esc(ui.rel.note[v.id]) + "</p>" : "") +
       (!face.prehq && (st.bad || st.caution) ? '<p class="rstat' + (st.bad ? " bad" : " caution") + '">' + esc(st.text) + (st.more ? ' <span class="rmore">+' + st.more + " more</span>" : "") + "</p>" : "") +
       "</div>" +
@@ -1313,9 +1313,6 @@
     var act = document.activeElement, fk = act && act.getAttribute ? act.getAttribute("data-reldate") : null;
     $("relPipe").innerHTML = lists.pipeline.length ? lists.pipeline.map(pipeCard).join("") : '<p class="empty2">Nothing is being prepared right now. Start one with New song.</p>';
     $("relDesk").innerHTML = lists.coming.map(relCard).join("");
-    /* said once for the list (18 Nov 2026: it was repeated on every card) */
-    var mailNote = $("relMail");
-    if (mailNote) { var ml = L.routeMailLine ? L.routeMailLine(board.mail, null) : ""; mailNote.hidden = !(lists.coming.length && ml === "RouteNote email: not connected"); mailNote.textContent = "RouteNote email is not connected yet, so the store status on each card is what Drop records."; }
     drawRelRows(lists.coming);
     if (sheet && HQ.releasesBroken()) $("relList").innerHTML = '<p class="empty">See the note above.</p>';
     else $("relList").innerHTML = lists.sheetOnly.map(HQ.sheetReleaseCard).join("") ||

@@ -263,3 +263,17 @@ test("the one-pitch skip line reads as a sentence on Luke's card", () => {
   const p = S.pitchOf ? S.pitchOf(v, "2026-11-18") : null;
   if (p) assert.equal(p.line, "Pitch: not this time. Made Up (out Tue 24 Nov) has the pitch for these two weeks, and Spotify takes one pitch at a time.");
 });
+
+test("Needs you: no platform stat blocks and no 'RouteNote email: not connected' card (18 Nov 2026, Luke)", async () => {
+  const fs = await import("node:fs");
+  const phone = fs.readFileSync(new URL("../js/hq-phone.js", import.meta.url), "utf8");
+  assert.equal(/V\.platformKpis\(/.test(phone), false, "the platform numbers live on Growth & Fans");
+  await import("../js/hq-lib.js");
+  const L = globalThis.HQLib;
+  assert.deepEqual(L.phoneWatchers({ mail: { connected: false }, waiting: { luke: [] } }), []);
+  const hq = fs.readFileSync(new URL("../js/hq.js", import.meta.url), "utf8");
+  assert.match(hq, /views in the last 7 days/);
+  assert.match(hq, /Account health: /);
+  const staff = fs.readFileSync(new URL("../js/hq-staff.js", import.meta.url), "utf8");
+  assert.equal(/RouteNote email is not connected yet/.test(staff), false);
+});

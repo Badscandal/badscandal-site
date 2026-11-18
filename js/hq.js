@@ -807,9 +807,21 @@
 
   /* ---------- Growth, Fans, Releases, Money, Team (the sheet) ---------- */
   function drawGrowth() {
+    if (!sheet) return;
+    /* the account's health dot and its 7-day views live here (18 Nov 2026, Luke: the platform blocks cluttered Needs you) */
+    var b = staffBoard(), dots = (L.accountHealthHome && b ? L.accountHealthHome(b.accountHealth).dots : []) || [];
+    var dotOf = function (name) {
+      var k = String(name || "").toLowerCase().replace(/[^a-z]/g, "");
+      return dots.filter(function (d) { var l = String(d.label || d.id || "").toLowerCase().replace(/[^a-z]/g, ""); return k && (l === k || l.indexOf(k) === 0 || k.indexOf(l) === 0); })[0] || null;
+    };
+    var DOT = { ok: "Fine", watch: "Watch", red: "Needs a look", gap: "Not enough data" };
+    var SAME = { green: "ok", amber: "watch", yellow: "watch" };
     $("growthList").innerHTML = broken("Growth") ? '<p class="empty">See the note above.</p>' : sheet.growth.length ? sheet.growth.map(function (g) {
-      return '<div class="tile"><div class="row"><h3>' + esc(g.platform) + '</h3><span class="lbl">' + esc(g.account) + "</span></div>" +
+      var d = dotOf(g.platform);
+      if (d) d = { state: SAME[d.state] || (DOT[d.state] ? d.state : "gap") };
+      return '<div class="tile"><div class="row"><h3>' + esc(g.platform) + (d ? ' <a class="gdot ' + esc(d.state) + '" href="#growth" title="Account health: ' + esc(DOT[d.state] || d.state) + '"><i></i><span>' + esc(DOT[d.state] || d.state) + "</span></a>" : "") + '</h3><span class="lbl">' + esc(g.account) + "</span></div>" +
         '<div class="big num">' + fmt(g.followers) + "</div>" +
+        (g.views7 != null ? '<div class="d">' + fmt(g.views7) + " views in the last 7 days</div>" : "") +
         '<div class="d">' + signed(g.day) + " yesterday · " + signed(g.week) + " " + L.growthWhen(g) + (g.month != null ? " · " + signed(g.month) + " in 30" : "") + "</div>" + spark(g.series) +
         (g.best.length ? '<div class="lbl" style="margin-top:4px">Best days</div>' + g.best.map(function (b) { return '<div class="d" style="margin-top:4px">' + signed(b.change) + " · " + esc(day(b.d)) + " · " + link(b.link, b.post) + "</div>"; }).join("") : "") +
         (g.stale > 2 ? '<div class="d" style="margin-top:6px;color:var(--paper)">Not logged for ' + g.stale + " days</div>" : "") + "</div>";
@@ -988,7 +1000,7 @@
       return out;
     },
     /* the staff desk answered (or was cleared): Today's attention, the site-check line and Data health read it */
-    boardChanged: function () { if (sheet || ov) { drawBriefing(); drawSongs(); } drawDataHealth(); drawSongTiles(); if (!staffBoard()) drawLive(); },
+    boardChanged: function () { if (sheet || ov) { drawBriefing(); drawSongs(); } if (sheet) drawGrowth(); drawDataHealth(); drawSongTiles(); if (!staffBoard()) drawLive(); },
     overview: function () { return ov; }, instagram: function () { return ig; } };
   /* hq-pages.js is loaded with defer right after this file: start once both are in */
   document.addEventListener("DOMContentLoaded", start);

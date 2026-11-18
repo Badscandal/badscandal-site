@@ -2076,7 +2076,9 @@
   function phoneWatchers(board) {
     board = board || {};
     var out = [], mail = board.mail;
-    if (!mail || mail.connected !== true) out.push({ kind: "connect", title: "RouteNote email: not connected", line: (mail && mail.steps) || "HQ cannot read RouteNote's inbox yet.", href: "#releases" });
+    /* no "not connected" card (18 Nov 2026, Luke: RouteNote's emails are forwarded to his own inbox, so the section was
+       noise); a RouteNote rejection that reached the desk still shows */
+    void mail;
     ((board.waiting && board.waiting.luke) || []).forEach(function (m) {
       if (!m || m.ask !== "routenote" || m.resolved) return;
       out.push({ kind: "routenote", title: "RouteNote needs you", line: m.text || "", href: m.id ? "#messages/" + m.id : "#releases", id: m.id || "" });
@@ -2143,13 +2145,17 @@
     var one = function (r) {
       if (!r) return null;
       var parts = rankParts(r), song = "", cover = "";
+      /* the song Steve or Forge linked to the post wins over a title found in the caption */
+      var linked = String(r.song || "").toLowerCase();
       (songs || []).some(function (s) {
-        if (s && s.title && String(r.caption || "").toLowerCase().indexOf(String(s.title).toLowerCase()) >= 0) { song = s.title; cover = s.cover || ""; return true; }
+        if (s && s.title && ((linked && String(s.title).toLowerCase() === linked) || String(r.caption || "").toLowerCase().indexOf(String(s.title).toLowerCase()) >= 0)) { song = s.title; cover = s.cover || ""; return true; }
         return false;
       });
+      if (!song && r.song) song = r.song;
+      var thumb = /^https:\/\//.test(String(r.thumb || "")) ? String(r.thumb) : "";
       if (!song) song = String(r.caption || "").split("\n")[0].slice(0, 80) || "not reported";
       var cost = r.paid && r.paid.costPerEng != null && isFinite(Number(r.paid.costPerEng)) ? ((r.paid.currency ? r.paid.currency + " " : "") + Number(r.paid.costPerEng).toFixed(3)) : "not reported";
-      return { song: song, cover: cover, rate: parts.rate, deep: parts.deep, cost: cost, link: r.link || "" };
+      return { song: song, cover: thumb || cover, fallback: thumb ? cover : "", rate: parts.rate, deep: parts.deep, cost: cost, link: r.link || "" };
     };
     var yes = "", no = "", id = "";
     if (decision && decision.id && (decision.options || []).length && !decision.resolved) {

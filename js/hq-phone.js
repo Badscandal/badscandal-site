@@ -165,7 +165,8 @@
     var today = (board && board.today) || (sheet && sheet.today) || "";
     var hero = V.releaseHero((board && board.releases) || [], today, covers);
     var miles = V.milestones((sheet && sheet.songs) || []);
-    var kpis = V.platformKpis(sheet && sheet.growth, (board && (board.platformHealth || board.healthDots)) || null);
+    /* the platform numbers live on Growth & Fans (18 Nov 2026, Luke: they cluttered Needs you) */
+    var kpis = [];
     var watchers = (L.phoneWatchers ? L.phoneWatchers(board) : []).filter(function (w) { return V.lukeSees(w.line) && V.lukeSees(w.title); });
     var h = V.homeHtml({ pulse: pulse, decision: decision, milestones: miles, hero: hero, kpis: kpis });
     watchers.forEach(function (w) {
@@ -235,7 +236,8 @@
     if (!pick) return "";
     var slide = function (p, label) {
       if (!p) return "";
-      var img = p.cover ? '<img src="' + esc(p.cover) + '" alt="">' : '<span class="nothumb">No cover on file</span>';
+      /* the post's picture; if Instagram's link has expired, the song's cover, else a plain tile with no "missing" words */
+      var img = p.cover ? '<img src="' + esc(p.cover) + '" alt="" loading="lazy" referrerpolicy="no-referrer" data-fallback="' + esc(p.fallback || "") + '">' : '<span class="nothumb">' + esc(p.song) + "</span>";
       return '<article class="mpick"><p class="dfrom">' + esc(label) + "</p>" + img + "<h3>" + esc(p.song) + "</h3>" +
         "<p>" + esc(p.rate) + "</p><p>" + esc(p.deep) + "</p><p>Cost per engagement: " + esc(p.cost) + "</p></article>";
     };
@@ -274,6 +276,15 @@
   function draw() { applyQuiet(); drawHome(); drawWeek(); drawTeam(); }
 
   document.addEventListener("hq:refreshed", draw);
+  /* a post picture whose Instagram link has expired: the song's cover, else a plain tile (18 Nov 2026) */
+  document.addEventListener("error", function (ev) {
+    var t = ev.target;
+    if (!t || t.tagName !== "IMG" || !t.hasAttribute("data-fallback")) return;
+    var f = t.getAttribute("data-fallback");
+    t.removeAttribute("data-fallback");
+    if (f) { t.src = f; return; }
+    var s = document.createElement("span"); s.className = "nothumb"; t.parentNode && t.parentNode.replaceChild(s, t);
+  }, true);
   document.addEventListener("click", function (ev) {
     var a = ev.target.closest && ev.target.closest("[data-aopen],[data-achoice],[data-asave]");
     if (a) {

@@ -32,10 +32,9 @@ test("RouteNote mail is not connected: no key the site already has can read a ma
   assert.equal(JSON.stringify(src).includes("not-a-mailbox"), false, "a key is never copied into the answer");
   const line = L.routeMailLine(src, { store: { status: "approved", since: "2026-11-01" } });
   assert.equal(line, "RouteNote email: not connected");
+  /* 18 Nov 2026 (Luke): RouteNote's emails reach his own inbox, so Needs you has no "not connected" card */
   const phone = L.phoneWatchers({ mail: src, waiting: { luke: [] } });
-  assert.equal(phone.length, 1);
-  assert.equal(phone[0].kind, "connect");
-  assert.match(phone[0].title, /not connected/);
+  assert.equal(phone.length, 0);
 });
 
 test("a RouteNote email sets that release's status, notes Drop once, and asks Luke only when he must act", async () => {
