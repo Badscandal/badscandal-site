@@ -1400,6 +1400,20 @@ a.t-card:hover,button.t-card:hover,#shell a.tile:hover{border-color:var(--accent
 .dacts .sendbtn,.dacts .copybtn{min-height:48px;min-width:44px;padding:0 16px;font-size:16px}
 .dacts small{display:block;font-size:12px;font-weight:500;opacity:.75}
 .dnone{margin:0 0 12px;color:var(--muted)}
+.dhead{margin:0 0 10px;font-size:15px;font-weight:650}
+.astackbtn{all:unset;display:block;width:100%;box-sizing:border-box;min-height:44px;cursor:pointer;font-size:16px;text-align:left}
+.abody p{margin:8px 0;font-size:16px}
+.aedit .fld{font-size:16px;width:100%;box-sizing:border-box}
+.waitlane{margin:8px 0 16px}
+.waitlane h2{margin:0 0 8px;font-size:15px}
+.waitlane li{margin:0 0 8px;font-size:15px}
+.waitlane li.bad{color:var(--red)}
+.waitlane small{display:block;color:var(--muted);font-size:13px}
+.dmeta{font-size:13px;color:var(--muted);overflow-wrap:anywhere}
+.adots{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 12px}
+.adot{display:flex;align-items:center;gap:6px;min-height:44px;padding:0 12px;border-radius:999px;background:rgba(255,255,255,.04);color:inherit;text-decoration:none;font-size:13px}
+.adot i{width:8px;height:8px;border-radius:50%;background:var(--silver)}
+.adot.green i{background:#3DDC97}.adot.watch i{background:#E8A317}.adot.red i{background:var(--red)}.adot.gap i{background:var(--silver)}
 .nstrip{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:8px 0 16px}
 .fcell{display:flex;flex-direction:column;gap:2px;min-height:44px;padding:10px 12px;border-radius:14px;background:rgba(255,255,255,.04);color:inherit;text-decoration:none}
 .fcell .fn{font-size:20px;font-weight:700}
@@ -1763,7 +1777,8 @@ body.ws-on .nav{display:none}
     <div data-wrap hidden><h3 class="lblh">Open tasks</h3><div class="tile"><div class="scroll"><table class="stack" id="taskTable"></table></div></div></div>
     <div data-wrap hidden><h3 class="lblh">Tasks per person</h3><div class="tile"><div class="scroll"><table class="stack" id="teamTable"></table></div></div></div>
     <!-- the bots' key switch: a setting, so it sits at the bottom, folded (opens by itself when the key is off) -->
-    <details class="tile connfold" id="connFold" hidden><summary>Bots' connector: <span id="connState"></span></summary><div id="connCard" hidden></div></details></section>
+    <details class="tile connfold" id="connFold" hidden><summary>Bots' connector: <span id="connState"></span></summary><div id="connCard" hidden></div></details>
+    <div class="tile" id="autoCard" hidden></div></section>
   <section class="card view" id="messages"><h2>Messages</h2><p class="sub">One board for you, Claude and every bot. What waits on you is on top.</p>
     <div class="mwrap">
       <p class="mnote" id="msgSample" hidden>This is the sample: sending, answering and marking as done are switched off here.</p>

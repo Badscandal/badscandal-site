@@ -5,7 +5,10 @@
 
    Written for bots that follow instructions literally: every description says when to use the tool
    and what to put in each field, and every refusal says what to do instead. */
+import { hasAccountCheck, recordAccountCheck } from "./account-health.mjs";
 import { SONGS, homeCardSong } from "./songs.mjs";
+import * as C from "./action-cards.mjs";
+import { pingNames } from "./desk-push.mjs";
 import * as S from "./staff.mjs";
 import * as W from "./workspaces.mjs";
 import * as IG from "./instagram.mjs";
@@ -55,6 +58,7 @@ const INSTRUCTION_LINES = [
   ["Atlas", "Atlas: when the pitch is sent, record the day with pitch_log (pitched_on). HQ never pitches a song and never changes Spotify: you send the pitch in Spotify for Artists, then record it here. When you see the song on a new editorial playlist in Spotify for Artists, record it the same day with pitch_log (playlist, added_on). A song the one-pitch rule skipped is not pitched: do not record a pitch for it."],
   ["Laura", "Laura: when the pack has a visualiser link, upload it to YouTube for the release and write its description like the other visualisers."],
   ["Laura", "Laura: a Content ID claim is recorded with log_growth (claim, claimant, impact, and date: the day YouTube showed it). Leave claimant or impact out when YouTube did not show them: HQ says not reported. Never guess a claim. HQ does not look Content ID up itself."],
+  [null, "Account health: Steve (Instagram), Kevin (TikTok), Laura (YouTube), Atlas (Spotify) and Webmaster (badscandal.com) record what the platform's own page shows, with log_growth, on the same day as the numbers, and again that day if Account Status changes. account_status is clear, restricted, strike, copyright, ineligible or age, and status_note is the page's own words. visible is yes, no or unknown, and visible_where is where you looked (For You, Explore, a hashtag). non_follower_share is the percent of views from people who do not follow, when the page shows it. recent_posts is the last few posts, each with at (YYYY-MM-DD) and views or reach, as shown. Atlas records track_moved (and moved_to) when a track is on another profile, and artificial_streams for a warning on the screen. Drop records artificial_streams on Spotify only. Webmaster records site_ok yes or no. HQ messages that bot only when the health changes. Never buy reach, never use a pod, never sign in somewhere else to get around a block, and never delete or appeal from here. HQ will not delete, appeal or post anything."],
   ["Webmaster", "Webmaster: make each song page (badscandal.com/<song>) before the song comes out, in the order the songs come out: a week after the previous song's release day. The home page shows a song as Out now for 7 days after its release day, then switches to the next upcoming song."],
   ["Verse", "Verse: the lyrics go on Musixmatch only once the song is out and shows there. Your lyrics step waits until the release day; from that day check Musixmatch every day and add Luke's approved text (the pack's lyrics) the day the song appears. A song not on Musixmatch yet is not a block. Only Luke writes the lyrics into the pack."],
   /* batch 3 (14 Nov 2026) */
@@ -95,6 +99,8 @@ const INSTRUCTION_LINES = [
   ["Webmaster Nova", "Webmaster: song pages are made with song_page (kind new: address, title, day, cover link; kind track: the Spotify link on release day). Luke confirms, then GitHub builds and checks the page: never Luke's Mac, never by hand."],
   [null, "my_day's connector line says how many tools the desk has and the version of their list. Pass tools_seen (the number your app lists) when you call my_day. If your app shows fewer tools, or the version is different, the answer says reconnect needed: refresh the tool list (reconnect the connector) before you work."],
   [null, "Nova's yes counts as Luke's, as long as Luke told Nova yes himself: Nova records it with record_luke_answer (Luke's exact words), and it reaches you as Luke's answer, via Nova. Never for money (income, payments, ad spend): only Luke answers those."],
+  [null, "A finished action Luke can tap is a card: send_message with card {kind, text, dedupe_key, action, owner, recipient, amount, currency, link, preview, deadline, expires_at, waiting_on, money_at_risk, ticket}. The same dedupe_key is never posted twice. Read his answer in my_day (card_answers): choice, time and the card version. An edit after a Yes is a new version and needs a new Yes. The card is done only when you post_update with card (the id) and proof_message, proof_ref or proof_link. Until Luke switches on \"taps count as Luke's yes\", a Yes is recorded and you still confirm with him. Payments and signatures always say Luke does this himself. Only a money_at_risk card may reach him between 23:00 and 08:00 São Paulo. Ads and the Monday pick: HQ never changes an ad and never chooses an amount."],
+  ["Drop", "Drop: before you distribute, resubmit, or reply to a moderation note, call my_day with luke_tap (the card id or dedupe_key, the version, and the action). Go ahead only when it says yes and gives the time he tapped. A tap while \"taps count as Luke's yes\" is off does not let you proceed. Payments and signatures are never yours to send."],
 ];
 export const INSTRUCTIONS = INSTRUCTION_LINES.map((l) => l[1]).join("\n");
 /* a short fingerprint of the tool list: names and every option. It changes whenever a tool or an option is added or
@@ -128,11 +134,13 @@ export function connectorStatus(tools, args) {
 
 export const TOOLS = [
   { name: "my_day", title: "My day", readOnly: true,
-    description: "START HERE, every run. Returns who you are on the team, today's duties and their deadlines (São Paulo time), your open tasks, messages waiting on you, your open questions to Luke and how long each has waited (questions_to_luke), every new message for you since your last read (messages_for_you: Luke's answers to you included), new notes for the whole team, and the rules. The first lines are the live tool count and version: pass tools_seen (how many tools your app lists) and tools_version or list_version (the version your app last loaded). If that number or version is not the desk's, the answer says reconnect needed. Read it before doing anything else.",
+    description: "START HERE, every run. Returns who you are on the team, today's duties and their deadlines (São Paulo time), your open tasks, messages waiting on you, your open questions to Luke and how long each has waited (questions_to_luke), every new message for you since your last read (messages_for_you: Luke's answers to you included), card_answers (Luke's Yes, No or Edit on your action cards, with the version and the time), new notes for the whole team, and the rules. Before an irreversible step, pass luke_tap (id or dedupe_key, version, action): yes is true only when he tapped yes for that exact action and version and the tap counts. The first lines are the live tool count and version: pass tools_seen (how many tools your app lists) and tools_version or list_version (the version your app last loaded). If that number or version is not the desk's, the answer says reconnect needed. Read it before doing anything else.",
     inputSchema: obj({ bot: BOT,
       tools_seen: { type: "integer", description: "How many tools your app lists right now. If this is not the desk's count, the answer says reconnect needed." },
       list_version: str("Optional. The version from your last my_day. If it is not the desk's version, the answer says reconnect needed."),
-      tools_version: str("Optional. The version your app last loaded. Same check as list_version: if it is not the current one, the answer says reconnect needed.") }, ["bot"]) },
+      tools_version: str("Optional. The version your app last loaded. Same check as list_version: if it is not the current one, the answer says reconnect needed."),
+      luke_tap: { type: "object", description: "Before an irreversible step (Drop: distribute, resubmit, or a reply to moderation). Did Luke tap yes for this exact action and card version, and when.",
+        properties: { id: str("The card id (it starts with k)."), dedupe_key: str("The card's dedupe_key, if you do not have the id."), version: { type: "integer", description: "The card version you are about to act on." }, action: str("The card's action, exactly, for example distribute, resubmit or moderation.") }, additionalProperties: false } }, ["bot"]) },
   { name: "post_update", title: "Post an update", idempotent: false,
     description: "Add one line to the live log Luke sees on the dashboard. Call it when you START a duty (status working), when you FINISH it (status done, with the number you logged), when you are STUCK (status blocked, say exactly what is needed and from whom) or when something FAILED (status error). One line, plain words, no secrets. Finishing a duty here also marks it done on the dashboard.",
     inputSchema: obj({ bot: BOT,
@@ -140,7 +148,11 @@ export const TOOLS = [
       message: str('What happened, in one line (240 characters at most). Good: "Touch Me row for Mon 9 Nov written: 3,540 streams". Bad: "done".'),
       duty: str('Optional. The id of the duty this is about, from my_day (it starts with "D-"). Leave empty if you have only one duty today.'),
       link: str("Optional. An https link to the row, post or page this is about."),
-      gaps: str('Only with status done: what you could NOT read, and why (for example "views: TikTok shows them a day late"). The duty counts as done, with its gaps; never use blocked for one missing number.') }, ["bot", "status", "message"]) },
+      gaps: str('Only with status done: what you could NOT read, and why (for example "views: TikTok shows them a day late"). The duty counts as done, with its gaps; never use blocked for one missing number.'),
+      card: str("Optional. The id of an action card you are closing (it starts with k). Also give proof_message, proof_ref or proof_link. The update is saved only after the proof is accepted."),
+      proof_message: str("Optional, with card. A message id that proves the action was done."),
+      proof_ref: str("Optional, with card. A booking reference."),
+      proof_link: str("Optional, with card. An https link that proves it was done.") }, ["bot", "status", "message"]) },
   { name: "send_message", title: "Send a message",
     description: "Write to Luke, Claude, another bot, or the whole team (to: all). Use needs to say what you expect: reply (a question), action (please do this), decision (Luke must choose: give 2 to 4 options) or none (just so you know). To answer a message, put its id in reply_to. Messages to Luke reach him through the dashboard and Alfred's 10:00 message: keep them short and say exactly what you need.",
     inputSchema: obj({ bot: BOT,
@@ -155,7 +167,27 @@ export const TOOLS = [
         properties: { song: str("The song's title or id."), what: str("pitch | lyrics", { enum: ["pitch", "lyrics"] }), text: str("For the pitch: the pitch itself.") }, required: ["song", "what"], additionalProperties: false },
       answers: { type: "object", description: 'Only with reply_to, when the message you answer has numbered questions: {"1": "your answer to question 1", "3": "..."}. Questions you leave out stay open.', additionalProperties: { type: "string" } },
       recommend: str("Only on a message to Luke that needs him: what you recommend and why, in one or two sentences (300 characters at most). Luke sees it on the card."),
-      recommend_option: str("Optional, with options: the option you recommend, exactly as listed.") }, ["bot", "to", "text"]) },
+      recommend_option: str("Optional, with options: the option you recommend, exactly as listed."),
+      card: { type: "object", description: "Optional. Creates or edits an action card instead of posting this text as a board message. to and text are still required and are not posted. Same dedupe_key never posts a second card.",
+        properties: {
+          id: str("Optional. The card id, to edit one. A change after a Yes needs a new Yes."),
+          kind: str("message, booking, post, link, payment, signature, ads, track, month, monday or other."),
+          text: str("The finished action, exactly."),
+          dedupe_key: str("Required on a new card. The same key is never posted twice. Letters, digits and . _ : - only."),
+          action: str("The exact action a later luke_tap must name, for example distribute, resubmit or moderation."),
+          owner: str("The bot who carries it out. Nova may name another bot. Leave it out to use yourself."),
+          recipient: str("Who it is addressed to, when the action has a recipient."),
+          amount: str("Optional. The amount, as written. Leave it out if there is none. HQ does not convert it."),
+          currency: str("The three-letter code, only with amount."),
+          link: str("Optional. An https link."),
+          preview: str("Optional. The short line Luke sees before he expands the card."),
+          deadline: str("Optional. YYYY-MM-DD or YYYY-MM-DD HH:MM, São Paulo."),
+          expires_at: str("Optional. When the card stops asking Luke. ISO time, or YYYY-MM-DD HH:MM in São Paulo."),
+          waiting_on: str("luke, bot, label or store. Anything but luke is Waiting on others, not on Luke's phone."),
+          money_at_risk: { type: "boolean", description: "True only when money is at risk. Only those cards may reach Luke between 23:00 and 08:00 São Paulo. A payment is always true." },
+          ticket: str("Optional. An external thread or ticket id, for Waiting on others."),
+          workspace: str("Leave this out for BADSCANDAL. farm or label puts the card on that workspace's Needs you. It is not on the BADSCANDAL Needs you."),
+        }, additionalProperties: false } }, ["bot", "to", "text"]) },
   { name: "record_luke_answer", title: "Record Luke's answer from Alfred's or Nova's chat",
     description: "ALFRED, or NOVA. When Luke answers a message that waits on him in your chat (not on the dashboard), record it here so the bot that asked gets it. NOVA: only when Luke himself told you the answer (never your own yes, never another bot's word), and never about money: a message from Ledger, Sheet or Forge (income, payments, ad spend) is refused; Luke answers those on the dashboard or to Alfred. reply_to = the message's id, luke_said = Luke's EXACT words, copied as he wrote them (never your summary). For a decision, also put the option he picked in option (exactly as listed). For a message with numbered questions, put each answer in answers. It is saved as Luke's answer, marked \"via Alfred\" or \"via Nova\", and closes the message the way Luke's own answer would.",
     inputSchema: obj({ bot: BOT, reply_to: str("The id of the message Luke answered (it starts with m)."),
@@ -261,7 +293,7 @@ export const TOOLS = [
       alias: str("Label only. The alias, when this spend is for one alias."),
       days: { type: "array", description: "Optional. Several days in one call: each {date, amount, currency, song} or {date, not_read}.", items: { type: "object", properties: { date: { type: "string" }, amount: { type: "number" }, currency: { type: "string" }, not_read: { type: "string" }, song: { type: "string" } } } } }, ["bot", "platform"]) },
   { name: "log_growth", title: "Log a day's growth or song numbers",
-    description: "STEVE, ATLAS, KEVIN, LAURA: ONE call per platform (Growth: followers, views, the best post) or per song (Songs: Spotify streams, listeners, saves, playlist adds) for ONE day, numbers exactly as shown. The change in followers is worked out for you. Anything you could not read: leave it out and name it in gaps with why (TikTok views come a day late; Instagram has no daily views on the web): your duty is marked done, with gaps, never blocked. Sending the same numbers again does nothing; a later call for the same day fills in what was missing. Put your duty id (D-...) in duty if you have more than one duty today. LAURA, a Content ID claim: send claim, and claimant and impact when YouTube showed them, with date. Leave a blank when it was not shown. Do not also send follower numbers on that call. Never guess a claim. Steve, Atlas and Kevin do not record claims.",
+    description: "STEVE, ATLAS, KEVIN, LAURA: ONE call per platform (Growth: followers, views, the best post) or per song (Songs: Spotify streams, listeners, saves, playlist adds) for ONE day, numbers exactly as shown. The change in followers is worked out for you. Anything you could not read: leave it out and name it in gaps with why (TikTok views come a day late; Instagram has no daily views on the web): your duty is marked done, with gaps, never blocked. Sending the same numbers again does nothing; a later call for the same day fills in what was missing. Put your duty id (D-...) in duty if you have more than one duty today. LAURA, a Content ID claim: send claim, and claimant and impact when YouTube showed them, with date. Leave a blank when it was not shown. Do not also send follower numbers on that call. Never guess a claim. Steve, Atlas and Kevin do not record claims. Account health, same tool: Steve, Kevin, Laura, Atlas and Webmaster can send account_status, visible, non_follower_share, recent_posts or site_ok without follower numbers. Atlas or Drop can send artificial_streams on Spotify. Atlas can send track_moved. A check on its own does not mark a growth duty done. Record only what the page showed.",
     inputSchema: obj({ bot: BOT, date: str("The day the numbers are for, YYYY-MM-DD. For a Content ID claim: the day YouTube showed it."),
       platform: str("For Growth: TikTok, Instagram, YouTube..."), account: str("For Growth: the account handle."),
       followers: str("Followers as shown, for example 1240 or 1,240. YouTube: use subscribers (followers is accepted too)."), subscribers: str("YouTube: subscribers as shown. Stored as the follower number."), views: str("Views for the day (or the newest day shown). Not the channel's lifetime total."),
@@ -288,7 +320,18 @@ export const TOOLS = [
       genre: str("Label: the genre, for example UK garage."),
       alias: str("Label: the alias, when you know it."),
       direction: str("Label trend: rising or falling."),
-      research: str("Label: a candidate genre for the research list.") }, ["bot", "date"]) },
+      research: str("Label: a candidate genre for the research list."),
+      account_status: str("What that platform's own Account Status, Account Check or Studio page says: clear, restricted, strike, copyright, ineligible or age. Record only the word the page uses."),
+      status_note: str("Optional. The page's own words, one line. Needs account_status."),
+      visible: str("A check you did by hand: yes, no or unknown. There is no official API for hashtag, For You or Explore."),
+      visible_where: str("Where you looked: For You, Explore, a hashtag, or the words the app used."),
+      non_follower_share: str("Percent of views from people who do not follow, only when the page shows it (for example 42). Leave it out when it does not."),
+      recent_posts: { type: "array", description: "The last few posts, 12 at most. Each one: at (YYYY-MM-DD, the day it went out) and views or reach, as shown.", items: { type: "object", properties: { at: { type: "string" }, views: { type: "string" }, reach: { type: "string" } } } },
+      artificial_streams: str("Spotify only. Atlas or Drop: an artificial-streams warning, in the words on the screen. Never guess one."),
+      track_moved: str("Spotify only. Atlas: a track he saw on another profile, named as shown."),
+      moved_to: str("Spotify only. The other profile's name, when Atlas saw it. Needs track_moved."),
+      site_ok: str("Webmaster only, platform badscandal.com: yes or no, as the page answered."),
+      site_note: str("Webmaster only. One line about what the page showed. Needs site_ok.") }, ["bot", "date"]) },
   { name: "income_check", title: "Say an account was checked",
     description: 'Call this once per account, every day, after you looked at it, EVEN WHEN NOTHING IS NEW. It is how the dashboard tells "checked, nothing came in" from "nobody looked". new_payments is how many new payments you found (each one also goes through submit_income).',
     inputSchema: obj({ bot: BOT, account: str('The account you checked: "Wise", "PayPal", "Statement emails", "RouteNote"...'),
@@ -393,7 +436,7 @@ export const TOOLS = [
       time: str("Optional: usual time, HH:MM."), role: str("Optional: the role, a few words."),
       schedule: { type: "array", description: 'Optional: the whole schedule, replacing the old one: [{"time": "09:20", "what": "..."}].', items: { type: "object", properties: { time: { type: "string" }, what: { type: "string" } }, additionalProperties: false } } }, ["bot", "for"]) },
   { name: "store_status", title: "Where a song is at the distributor",
-    description: "DROP (Nova may do it for him): say where ONE release is at the distributor, each time it changes: not uploaded, uploaded, in moderation, rejected, resubmitted, approved, delivered, live (RouteNote's \"Pending Moderation\" or \"In review\" = in moderation, \"Action needed\" = rejected). To fill in history, give each change with on = the day it happened, in any order: the history is kept in day order and the newest day is the status now. Every change is kept as its history (the moderation log Luke sees). With rejected, put what RouteNote said, in its words, in reason. When a rejected song is fixed and ready to go again, call it with status rejected and ready_to_resubmit true (and what changed in note): Luke is asked Yes, resubmit / Not yet, and his answer comes back to you in my_day. Do not resubmit before he says yes.",
+    description: "DROP (Nova may do it for him): say where ONE release is at the distributor, each time it changes: not uploaded, uploaded, in moderation, rejected, resubmitted, approved, delivered, live (RouteNote's \"Pending Moderation\" or \"In review\" = in moderation, \"Action needed\" = rejected). To fill in history, give each change with on = the day it happened, in any order: the history is kept in day order and the newest day is the status now. Every change is kept as its history (the moderation log Luke sees). With rejected, put what RouteNote said, in its words, in reason. When a rejected song is fixed and ready to go again, call it with status rejected and ready_to_resubmit true (and what changed in note): Luke is asked Yes, resubmit / Not yet, and his answer comes back to you in my_day. Do not resubmit before he says yes. Before you distribute, resubmit, or reply to moderation, call my_day with luke_tap for that card's action and version.",
     inputSchema: obj({ bot: BOT, song: str("The song's title or its id."),
       status: str(S.STORE_STATUS.join(" | "), { enum: S.STORE_STATUS }),
       reason: str("Required with rejected: what RouteNote said, in its words (300 characters at most)."),
@@ -555,6 +598,9 @@ async function perSongAnswer(store, now, hq) {
     how: v.how,
   };
 }
+async function pingSafe(store, now, names, item) {
+  try { await pingNames(store, now, names, item); } catch { /* a missed ping never fails the desk write */ }
+}
 export async function callTool(tool, args, ctx) {
   const { store, now } = ctx;
   const roster = await S.getRoster(store);
@@ -582,11 +628,25 @@ export async function callTool(tool, args, ctx) {
   switch (tool.name) {
     case "post_update": {
       if (me === "Claude") throw new S.StaffError("Updates are the bots' log. Claude writes with send_message.");
+      let card_done = null;
+      if (args.card != null && String(args.card).trim()) {
+        const done = await C.recordProof(store, now, roster, { by: me, id: args.card, messageId: args.proof_message, bookingRef: args.proof_ref, link: args.proof_link });
+        card_done = C.botCard(done);
+      }
       const u = await S.postUpdate(store, now, roster, { ...args, bot: me });
-      return { saved: true, id: u.id, at: u.sp, bot: u.bot, status: u.status, message: u.message, shown_on: "badscandal.com/hq, Team" };
+      return { saved: true, id: u.id, at: u.sp, bot: u.bot, status: u.status, message: u.message, shown_on: "badscandal.com/hq, Team", ...(card_done ? { card_done, may_act: card_done.may_act } : {}) };
     }
     case "send_message": {
+      if (args.card && typeof args.card === "object") {
+        const card = await C.saveCard(store, now, roster, { by: me, ...args.card });
+        const view = C.botCard(card);
+        const where = card.workspace === "farm" || card.workspace === "label" ? ` Shown on the ${card.workspace === "farm" ? "Social Farm" : "Label"} Needs you, not on the BADSCANDAL Needs you.` : "";
+        return { saved: true, card: view, note: view.duplicate ? "This dedupe_key is already on the desk. Nothing new was posted." : view.waiting_on === "luke" ? "Saved as a card for Luke. It was not also posted as a message. Read his answer in my_day (card_answers). It is done only when you record proof with post_update." + where : "Saved as a card on Waiting on others. It was not posted as a message, and it is not on Luke's Needs you." + where };
+      }
       const r = await S.sendMessage(store, now, roster, { from: me, to: args.to, text: args.text, needs: args.needs, re: args.reply_to, options: args.options, questions: args.questions, about: args.about, answers: args.answers, approval: args.approval, recommend: args.recommend, recommend_option: args.recommend_option });
+      const names = r.message.to === "all" ? roster.map((b) => b.name) : [r.message.to];
+      if (r.message.about) names.push(r.message.about);
+      await pingSafe(store, now, names, { kind: "message", id: r.message.id });
       const left = r.parent && Array.isArray(r.parent.questions) ? r.parent.questions.filter((q) => !q.answer).length : 0;
       return { sent: true, id: r.message.id, to: r.message.to, needs: r.message.needs, ...(r.parent && r.parent.resolved ? { answered: r.parent.id } : {}), ...(left ? { still_open: `${left} question${left === 1 ? "" : "s"} of that message still need${left === 1 ? "s" : ""} an answer` } : {}),
         ...(r.lyricsPending ? { lyrics_pending: r.lyricsPending.note || "These look like lyrics. They are not in the pack yet." } : {}),
@@ -746,6 +806,8 @@ export async function callTool(tool, args, ctx) {
       const ans = ctx.hq ? await ctx.hq().catch(() => null) : null;
       const open = ans && ans.team && Array.isArray(ans.team.tasks) ? ans.team.tasks : null;
       const t = await S.setTaskStatus(store, now, roster, { by: me, task: args.task, status: args.status, note: args.note, title: args.title }, open);
+      const owner = open && open.find((x) => String(x.id || "").toUpperCase() === String(t.id).toUpperCase());
+      await pingSafe(store, now, [owner && owner.owner], { kind: "task", id: t.id });
       return { saved: true, task: t.id, status: t.status, ...(t.title ? { title: t.title } : {}), ...(t.note ? { note: t.note } : {}), shown_on: t.status === "done" || t.status === "cancelled" ? "badscandal.com/hq, Team: taken off the open tasks" : "badscandal.com/hq, Team" };
     }
     case "submit_income": {
@@ -793,12 +855,25 @@ export async function callTool(tool, args, ctx) {
           : "not read just now: the team's sheet could not be read" };
     }
     case "log_growth": {
-      /* L5: a Content ID claim is not a growth number. It does not mark a growth duty done. */
+      const growthKeys = ["followers", "subscribers", "views", "channel_views", "shorts_views", "watch_hours", "monthly_listeners", "brazil_listeners", "best_post", "best_post_link", "song", "streams", "listeners", "saves", "playlist_adds"];
+      const hasNumbers = growthKeys.some((k) => args[k] != null && String(args[k]).trim() !== "");
+      const checkOf = async () => {
+        const c = await recordAccountCheck(store, now, roster, { ...args, by: me });
+        return { account_check: c.summary, account_check_saved: !!c.saved };
+      };
+      /* L5: a Content ID claim is not a growth number. It does not mark a growth duty done.
+         A claim on its own returns the same shape as before. A status check sent with it is kept too. */
       if (args.claim != null && String(args.claim).trim()) {
+        const extra = hasAccountCheck(args) ? await checkOf() : {};
         const c = await S.recordContentClaim(store, now, roster, { by: me, date: args.date, claim: args.claim, claimant: args.claimant, impact: args.impact });
         if (!c || !c.item) throw new S.StaffError("That claim was not saved. Try again.");
-        if (c.duplicate) return { saved: false, duplicate: true, note: "That claim was already recorded for that day. Nothing was added." };
-        return { saved: true, duplicate: false, claim: c.item.claim, date: c.item.date, shown_on: "badscandal.com/hq, Growth and Fans" };
+        if (c.duplicate) return { saved: false, duplicate: true, note: "That claim was already recorded for that day. Nothing was added.", ...extra };
+        return { saved: true, duplicate: false, claim: c.item.claim, date: c.item.date, shown_on: "badscandal.com/hq, Growth and Fans", ...extra };
+      }
+      /* A status-page check with no follower numbers does not mark a growth duty done. */
+      if (!hasNumbers && hasAccountCheck(args)) {
+        const c = await recordAccountCheck(store, now, roster, { ...args, by: me });
+        return { saved: !!c.saved, duplicate: !!c.duplicate, account_check: c.summary, shown_on: "badscandal.com/hq, Needs you" };
       }
       {
         const ws = String(args.workspace || "").trim().toLowerCase();
@@ -809,11 +884,12 @@ export async function callTool(tool, args, ctx) {
       const prev = me !== "Claude" && args.platform && ctx.hq ? await ctx.hq().then((h) => { const g = h && h.growth ? h.growth.find((p) => String(p.platform).toLowerCase() === String(args.platform).trim().toLowerCase()) : null; return g && g.lastDay ? { date: g.lastDay, followers: g.followers } : null; }).catch(() => null) : null;
       const r = await S.logGrowth(store, now, roster, { by: me, date: args.date, platform: args.platform, account: args.account, followers: args.followers, subscribers: args.subscribers, views: args.views, views_date: args.views_date, channel_views: args.channel_views, shorts_views: args.shorts_views, watch_hours: args.watch_hours, monthly_listeners: args.monthly_listeners, brazil_listeners: args.brazil_listeners, best_post: args.best_post, best_post_link: args.best_post_link,
         song: args.song, streams: args.streams, listeners: args.listeners, saves: args.saves, playlist_adds: args.playlist_adds, gaps: args.gaps, duty: args.duty, prev });
+      const extra = hasAccountCheck(args) ? await checkOf() : {};
       const fixedWords = r.corrected && r.corrected.length ? r.corrected.map((c) => `${c.date}: ${c.from == null ? "none" : (c.from >= 0 ? "+" : "") + c.from} -> ${(c.to >= 0 ? "+" : "") + c.to}`) : null;
       if (r.duplicate) return { saved: false, duplicate: true, ...(fixedWords ? { changes_fixed: fixedWords } : {}),
-        note: "Those numbers were already logged for that day. Nothing was added." + (fixedWords ? " The day-to-day change was worked out again from the day before's total and put right (changes_fixed)." : "") };
+        note: "Those numbers were already logged for that day. Nothing was added." + (fixedWords ? " The day-to-day change was worked out again from the day before's total and put right (changes_fixed)." : ""), ...extra };
       return { saved: true, ...(fixedWords ? { changes_fixed: fixedWords } : {}), ...(r.row.change != null && r.row.kind === "growth" ? { change: r.row.change } : {}), ...(r.filled && r.filled.length ? { filled: r.filled } : {}), ...(r.replaced && r.replaced.length ? { corrected: r.replaced } : {}),
-        duty: r.duty, ...(r.gapText ? { gaps: r.gapText } : {}), shown_on: "badscandal.com/hq, Growth and Songs" };
+        duty: r.duty, ...(r.gapText ? { gaps: r.gapText } : {}), shown_on: "badscandal.com/hq, Growth and Songs", ...extra };
     }
     case "income_check": {
       const c = await S.incomeCheck(store, now, roster, { ...args, bot: me });
@@ -1079,6 +1155,8 @@ export async function callTool(tool, args, ctx) {
   switch (tool.name) {
     case "my_day": {
       const conn = connectorStatus(TOOLS, args); /* the bots share ONE connector: their app lists every tool */
+      const card_answers = await C.answersFor(store, me);
+      const luke_tap = args.luke_tap && typeof args.luke_tap === "object" ? await C.checkTap(store, args.luke_tap, now) : null;
       /* ids and dates of unsorted payments (18 Nov 2026). luke_briefing keeps the short count. */
       const incomeProblems = (inc) => (inc && inc.problems || []).map((p) => {
         if (!/nobody has sorted/.test(p) || !(inc.unsorted || []).length) return p;
@@ -1088,7 +1166,7 @@ export async function callTool(tool, args, ctx) {
       });
       const questions = (from) => desk.messages.filter((m) => S.isOpen(m) && m.to === "Luke" && m.from === from).map((m) => ({
         id: m.id, needs: m.needs, waiting: S.waitedFor(now - Date.parse(m.at)), since: m.sp, text: m.text.length > 180 ? m.text.slice(0, 179) + "…" : m.text }));
-      if (me === "Claude") return { reconnect: conn.status, connector: { tools: conn.tools, version: conn.version, reconnect_needed: conn.reconnect_needed }, you: "Claude", today, now: b.now, waiting_on_you: b.waiting.claude.map(short), questions_to_luke: questions("Claude"), ...forYou(b.waiting.claude.map((m) => m.id)), waiting_on_luke: b.waiting.luke.map(short),
+      if (me === "Claude") return { reconnect: conn.status, connector: { tools: conn.tools, version: conn.version, reconnect_needed: conn.reconnect_needed }, you: "Claude", today, now: b.now, waiting_on_you: b.waiting.claude.map(short), questions_to_luke: questions("Claude"), card_answers, ...(luke_tap ? { luke_tap } : {}), ...forYou(b.waiting.claude.map((m) => m.id)), waiting_on_luke: b.waiting.luke.map(short),
         releases: rel.filter((v) => S.releaseActive(v) || v.status === "draft").map((v) => `${v.title}: ${v.status === "draft" ? "draft" : v.released ? "released" : "coming"}, ${when(v.date)}, ${v.counts.done} of ${v.counts.total} steps done` + (v.counts.late ? `, ${v.counts.late} late` : "") + (v.counts.blocked ? `, ${v.counts.blocked} blocked` : "") + (v.missing.length ? `; missing: ${v.missing.map((m) => m.short).join(", ")}` : "")),
         unknown_in_spotify: b.sightings.items.filter((x) => x.state === "unknown").map((x) => `${x.title}, ${x.dateWords}`),
         ...(sheetNote ? { note: sheetNote } : {}) };
@@ -1135,7 +1213,7 @@ export async function callTool(tool, args, ctx) {
         daily_duty: uncut(w.duty), usual_time: w.time, schedule: S.scheduleForMyDay(me, w.schedule, { today, releases: rel, nextDate: nextRel && nextRel.date, duty: duties[0] }),
         duties_today: duties,
         open_tasks: w.tasks.filter((t) => !S.staleTask(t) && S.signInOpen(t, signedRaw.join(" "))).map((t) => ({ id: t.id, task: dutyTask(t.task), deadline: /^invalid date$/i.test(String(t.deadline || "")) ? "" : t.deadline, status: t.late ? "late" : t.status, ...(t.blocker ? { blocker: t.blocker } : {}), ...(t.note ? { your_note: t.note } : {}) })),
-        questions_to_luke: questions(me),
+        questions_to_luke: questions(me), card_answers, ...(luke_tap ? { luke_tap } : {}),
         ...(asks.length ? { open_questions: asks.map((m) => ({ id: m.id, waiting: `${Math.max(0, Math.floor((now - Date.parse(m.at)) / 3600000))} h`, text: S.hidePrivate(m.text).slice(0, 140) })) } : {}),
         ...(signedOut.length ? { signed_out_accounts: signedOut.slice(0, 6) } : {}),
         waiting_on_you: w.waiting, notes_for_everyone: notes.map(short), ...forYou(w.waiting.map((m) => m.id).concat(notes.map((m) => m.id))),

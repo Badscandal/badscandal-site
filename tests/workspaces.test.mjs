@@ -6,6 +6,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { memoryDesk } from "../netlify/lib/staff-sample.mjs";
 import * as S from "../netlify/lib/staff.mjs";
+import * as C from "../netlify/lib/action-cards.mjs";
 import * as W from "../netlify/lib/workspaces.mjs";
 import { TOOLS, callTool, toolsFor } from "../netlify/lib/staff-tools.mjs";
 
@@ -32,6 +33,8 @@ test("the switch, the farm note and Add genre are on the page", () => {
   assert.match(html, /Farm accounts are kept separate from the official BADSCANDAL accounts and ad accounts\./);
   assert.match(read("js/hq-workspaces.js"), /Add genre/);
   assert.match(read("js/hq-workspaces.js"), /not set up/);
+  assert.match(read("js/hq-workspaces.js"), /class="dhead"/);
+  assert.match(read("js/hq-workspaces.js"), /data-wschoice/);
   assert.equal(TOOLS.length, 40, "no new tool: licence is a release_step value");
   const step = tool("release_step");
   assert.ok(step.inputSchema.properties.step.enum.includes("licence"));
@@ -139,4 +142,28 @@ test("farm posts and label spend and payouts stay out of the official numbers", 
   assert.deepEqual(await S.listSpend(d, NOW), spendBefore);
   assert.equal(JSON.stringify((await S.incomeState(d, NOW)).received), incomeBefore);
   await rejects(call(d, "record_spend", { bot: "Forge", platform: "Meta", genre: "UK garage", date: "2026-11-17", amount: 1, currency: "USD" }), /not in the USD 1,000 cap/);
+});
+
+test("a Farm or Label card uses the Needs you header and stays off the BADSCANDAL list", async () => {
+  const d = memoryDesk();
+  const official = await C.saveCard(d, NOW, S.DEFAULT_ROSTER, { by: "Nova", kind: "message", text: "Send the official sample note.", dedupe_key: "off-1", action: "send the note" });
+  const label = await call(d, "send_message", { bot: "Nova", to: "Luke", text: "card", card: { kind: "other", text: "Order the sample licence. HQ does not take payment.", dedupe_key: "lab-1", action: "order the licence", workspace: "label", owner: "Nova" } });
+  assert.match(label.note, /Label Needs you/);
+  assert.match(label.note, /not on the BADSCANDAL Needs you/);
+  const farm = await C.saveCard(d, NOW, S.DEFAULT_ROSTER, { by: "Nova", kind: "other", text: "Confirm the sample farm page is only a record.", dedupe_key: "farm-1", action: "confirm the page", workspace: "farm" });
+  const shown = C.presentLuke([official, { ...farm, waitingOn: "luke", status: "open" }], false, NOW);
+  assert.deepEqual(shown.needsYou.map((c) => c.id), [official.id]);
+  const labelView = await W.view(d, NOW, "label");
+  assert.equal(labelView.auto.header, "1 need you · nothing at risk");
+  assert.equal(labelView.auto.needsYou.length, 1);
+  assert.equal(labelView.auto.needsYou[0].text, "Order the sample licence. HQ does not take payment.");
+  const farmView = await W.view(d, NOW, "farm");
+  assert.equal(farmView.auto.needsYou.length, 1);
+  assert.equal(farmView.auto.needsYou[0].id, farm.id);
+  assert.equal(farmView.auto.needsYou.some((c) => c.id === official.id), false);
+  const sample = W.sampleWorkspace("label", NOW);
+  assert.match(sample.auto.header, /need you/);
+  assert.equal(sample.auto.needsYou.length, 1);
+  assert.equal(sample.auto.needsYou[0].id, "klabelsample");
+  assert.equal(W.sampleWorkspace("farm", NOW).auto.needsYou.some((c) => c.id === "klabelsample"), false);
 });

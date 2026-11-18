@@ -2,6 +2,7 @@
    Farm pages and posts, and Label covers, spend, streams and payouts, live under ws/ only.
    Nothing here writes grow/, spend/, inc/ or releases.json, and nothing here pays anyone.
    Official releases never gain a licence step. Label covers do: licence, then upload, then pitch. */
+import * as C from "./action-cards.mjs";
 import * as S from "./staff.mjs";
 
 export const FARM_NOTE = "Farm accounts are kept separate from the official BADSCANDAL accounts and ad accounts.";
@@ -432,7 +433,7 @@ export async function view(store, now, which) {
     const [accounts, posts] = await Promise.all([readList(store, KEY.accounts), readList(store, KEY.posts)]);
     const needs = [];
     for (const a of accounts) if (a.status === "restricted" || a.status === "banned") needs.push({ id: a.id, text: `@${a.handle} on ${a.platform} is ${a.status}.` });
-    return { ok: true, workspace: "farm", note: FARM_NOTE, needs, numbers: { accounts: accounts.length, posts: posts.length, views: posts.reduce((n, p) => n + (p.views || 0), 0) },
+    return { ok: true, workspace: "farm", note: FARM_NOTE, needs, auto: await C.workspaceNeeds(store, now, "farm"), numbers: { accounts: accounts.length, posts: posts.length, views: posts.reduce((n, p) => n + (p.views || 0), 0) },
       team: [{ name: "Steve", role: "Records Instagram pages" }, { name: "Kevin", role: "Records TikTok pages" }, { name: "Laura", role: "Records YouTube pages" }, { name: "Nova", role: "Can record any farm page" }],
       accounts, posts: posts.slice(0, 40), rollups: rollups(accounts, posts),
       recording: "This only records a page that already exists. HQ does not create accounts, log in, post, or invent engagement." };
@@ -450,7 +451,7 @@ export async function view(store, now, which) {
       if (r.licence.status === "flagged") needs.push({ id: r.id, text: `${r.title}: the licence is flagged. ${r.licence.flag_reason}` });
     }
   }
-  return { ok: true, workspace: "label", needs, numbers: { genres: blocks.length, releases: releases.filter((r) => r.status !== "cancelled").length },
+  return { ok: true, workspace: "label", needs, auto: await C.workspaceNeeds(store, now, "label"), numbers: { genres: blocks.length, releases: releases.filter((r) => r.status !== "cancelled").length },
     team: [{ name: "Licence", role: "Easy Song licence and the Drive folder. Not on the BADSCANDAL roster yet." }, { name: "Drop", role: "RouteNote upload, after the licence is licensed" }, { name: "Atlas", role: "Pitch, once the alias has Spotify for Artists" }, { name: "Forge", role: "Label ad spend, off the BADSCANDAL cap" }, { name: "Ledger", role: "Label payouts, when a statement arrives" }],
     genres: blocks, research: research.slice(0, 20),
     payments: "HQ does not take or send payment." };
@@ -462,7 +463,10 @@ export async function labelList(store, now) {
 }
 export function sampleWorkspace(which, now) {
   const ws = low(which);
-  if (ws === "farm") return { ok: true, sample: true, workspace: "farm", note: FARM_NOTE, needs: [], numbers: { accounts: 1, posts: 1, views: 1200 },
+  now = Number.isFinite(now) ? now : Date.now();
+  const farmCard = { id: "kfarmsample", version: 1, kind: "other", owner: "Nova", status: "open", waitingOn: "luke", workspace: "farm", moneyAtRisk: false, text: "Confirm the sample farm page is only a record.", preview: "Confirm the sample farm page is only a record.", createdAt: "2026-11-18T12:00:00Z" };
+  const labelCard = { id: "klabelsample", version: 1, kind: "other", owner: "Nova", status: "open", waitingOn: "luke", workspace: "label", moneyAtRisk: false, text: "Order the Easy Song licence for Northwind Cover. HQ does not take payment.", preview: "Order the Easy Song licence for Northwind Cover.", createdAt: "2026-11-18T12:00:00Z" };
+  if (ws === "farm") return { ok: true, sample: true, workspace: "farm", note: FARM_NOTE, needs: [], auto: C.workspaceNeedsFrom([farmCard, labelCard], false, now, "farm"), numbers: { accounts: 1, posts: 1, views: 1200 },
     team: [{ name: "Steve", role: "Records Instagram pages" }],
     accounts: [{ id: "fa-sample", platform: "TikTok", handle: "northwind.wav", niche: "covers", songs: ["Northwind"], owner: "Nova", status: "active", created: "2026-11-01" }],
     posts: [{ id: "fp-sample", handle: "northwind.wav", platform: "TikTok", date: "2026-11-02", song: "Northwind", contentType: "clip", views: 1200, likes: 40, shares: 3, saves: 5, follows: 2, link: "https://example.com/farm" }],
@@ -470,7 +474,7 @@ export function sampleWorkspace(which, now) {
     recording: "This only records a page that already exists. HQ does not create accounts, log in, post, or invent engagement." };
   const lic = emptyLicence();
   const steps = stepsFor("2026-12-18", "2026-11-18").map((s) => s.key === "upload" ? { ...s, status: "blocked", blocked: true, note: "Blocked until the licence is licensed. The Licence bot marks it. HQ does not take payment." } : s.key === "licence" ? { ...s, ...lic } : s.key === "pitch" ? { ...s, note: "no S4A access yet" } : s);
-  return { ok: true, sample: true, workspace: "label", needs: [{ id: "ukgarage", text: "UK garage: the main alias has no name yet." }], numbers: { genres: 1, releases: 1 },
+  return { ok: true, sample: true, workspace: "label", needs: [{ id: "ukgarage", text: "UK garage: the main alias has no name yet." }], auto: C.workspaceNeedsFrom([farmCard, labelCard], false, now, "label"), numbers: { genres: 1, releases: 1 },
     team: [{ name: "Licence", role: "Easy Song licence and the Drive folder. Not on the BADSCANDAL roster yet." }],
     payments: "HQ does not take or send payment.", research: [],
     genres: [{ id: "ukgarage", name: "UK garage", status: "active", aliases: [clone(SEED_ALIAS)], playlist: playlistPlaceholder("ukgarage"),

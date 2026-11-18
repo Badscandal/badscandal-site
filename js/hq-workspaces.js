@@ -6,6 +6,7 @@
   var KEY = "bs_hq_ws";
   var $ = function (id) { return document.getElementById(id); };
   var current = "badscandal";
+  var openCard = "", editing = "";
 
   function esc(s) {
     return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; });
@@ -34,10 +35,10 @@
     load();
   }
 
-  function load() {
+  function load(silent) {
     var body = $("wsBody");
     if (!body) return;
-    body.innerHTML = '<p>Loading…</p>';
+    if (!silent) body.innerHTML = '<p>Loading…</p>';
     var sample = window.HQ && window.HQ.sample;
     var url = "/api/staff/workspace?ws=" + current + (sample ? "&sample=1" : "");
     var ask = window.HQ && window.HQ.getJSON ? window.HQ.getJSON(url) : fetch(url, { credentials: "same-origin", cache: "no-store" }).then(function (r) { return r.json().then(function (j) { return { s: r.status, j: j }; }); });
@@ -49,9 +50,36 @@
     }).catch(function () { body.innerHTML = "<p>Could not load this workspace.</p>"; });
   }
 
+  function stack(list, topOpen) {
+    return (list || []).map(function (c, i) {
+      var open = openCard ? openCard === c.id : (topOpen && i === 0);
+      var money = c.money_at_risk && c.amount != null ? " · " + c.currency + " " + c.amount : "";
+      var link = /^https:\/\//.test(c.link || "") ? '<p class="dmeta"><a href="' + esc(c.link) + '">' + esc(c.link) + "</a></p>" : "";
+      return '<article class="dcard astack' + (open ? " open" : "") + '"><button class="astackbtn" type="button" data-wsopen="' + esc(c.id) + '"><b>' + esc(c.owner_bot || c.owner) + "</b> " + esc(c.preview || c.text) + esc(money) + "</button>" +
+        '<div class="abody"' + (open ? "" : " hidden") + "><p>" + esc(c.text) + "</p>" +
+        (c.recipient ? "<p>To " + esc(c.recipient) + "</p>" : "") + link +
+        (c.deadline ? '<p class="dmeta">' + esc(c.deadline) + "</p>" : "") +
+        '<p class="drec">' + esc(c.line) + "</p>" +
+        '<div class="dacts"><button class="sendbtn" type="button" data-wschoice="yes" data-wsid="' + esc(c.id) + '">Yes</button>' +
+        '<button class="copybtn" type="button" data-wschoice="no" data-wsid="' + esc(c.id) + '">No</button>' +
+        '<button class="copybtn" type="button" data-wschoice="edit" data-wsid="' + esc(c.id) + '">Edit</button></div>' +
+        (editing === c.id ? '<div class="aedit"><textarea class="fld" rows="4" maxlength="600" data-wsedit="' + esc(c.id) + '">' + esc(c.text) + '</textarea><button class="sendbtn" type="button" data-wssave="' + esc(c.id) + '">Save this version</button></div>' : "") +
+        '<p class="ferr" data-wserr="' + esc(c.id) + '" hidden></p></div></article>';
+    }).join("");
+  }
   function needs(v) {
-    if (!v.needs || !v.needs.length) return '<div class="wscard"><h2>Needs you</h2><p>Nothing waiting.</p></div>';
-    return '<div class="wscard"><h2>Needs you</h2><ul>' + v.needs.map(function (n) { return "<li>" + esc(n.text) + "</li>"; }).join("") + "</ul></div>";
+    var auto = v.auto || { header: "0 need you · nothing at risk", needsYou: [], held: [], waitingOnOthers: [] };
+    var cards = auto.needsYou || [];
+    var h = '<div class="wscard" id="wsNeeds"><h2>Needs you</h2><p class="dhead">' + esc(auto.header || "0 need you · nothing at risk") + "</p>";
+    h += stack(cards, true);
+    if (auto.quiet && auto.held && auto.held.length) h += '<p class="dnone">Quiet hours until 08:00. These wait.</p>' + stack(auto.held, false);
+    if (v.needs && v.needs.length) h += "<ul>" + v.needs.map(function (n) { return "<li>" + esc(n.text) + "</li>"; }).join("") + "</ul>";
+    else if (!cards.length && !(auto.held && auto.held.length)) h += '<p class="dnone">Nothing is waiting on you.</p>';
+    var others = auto.waitingOnOthers || [];
+    if (others.length) h += '<section class="waitlane"><h3>Waiting on others</h3><ul>' + others.map(function (it) {
+      return '<li class="' + (it.tone === "bad" ? "bad" : "") + '"><b>' + esc(it.name) + "</b> " + esc(it.text) + "</li>";
+    }).join("") + "</ul></section>";
+    return h + "</div>";
   }
   function team(v) {
     return '<div class="wscard"><h2>Team</h2><ul>' + v.team.map(function (t) { return "<li><b>" + esc(t.name) + "</b> — " + esc(t.role) + "</li>"; }).join("") + "</ul></div>";
@@ -110,7 +138,20 @@
       research;
   }
 
+  function sendChoice(id, choice, text) {
+    if (window.HQ && window.HQ.sample) return;
+    var send = window.HQ && window.HQ.postJSON ? window.HQ.postJSON("/api/staff/card", { id: id, choice: choice, text: text || "" }) : Promise.resolve({ s: 0, j: {} });
+    send.then(function (res) {
+      if (res && res.s === 200 && res.j && res.j.ok) { editing = ""; openCard = ""; load(); return; }
+      var p = document.querySelector('[data-wserr="' + id + '"]');
+      if (p) { p.hidden = false; p.textContent = (res && res.j && res.j.error) || "Couldn't save that."; }
+    }, function () {
+      var p = document.querySelector('[data-wserr="' + id + '"]');
+      if (p) { p.hidden = false; p.textContent = "No connection. Nothing was sent."; }
+    });
+  }
   function bind(root, sample) {
+    if (sample) [].forEach.call(root.querySelectorAll("#wsNeeds .dacts button, #wsNeeds .aedit button, #wsNeeds textarea"), function (el) { el.disabled = true; });
     [].forEach.call(root.querySelectorAll("form"), function (form) {
       if (sample) {
         [].forEach.call(form.querySelectorAll("input,select,button"), function (el) { el.disabled = true; });
@@ -134,6 +175,20 @@
     b.addEventListener("click", function () { apply(b.getAttribute("data-ws")); });
   });
   document.addEventListener("hq:refreshed", function () { if (current !== "badscandal") load(); });
+  document.addEventListener("click", function (ev) {
+    var a = ev.target.closest && ev.target.closest("[data-wsopen],[data-wschoice],[data-wssave]");
+    if (!a || current === "badscandal") return;
+    if (a.hasAttribute("data-wsopen")) { openCard = a.getAttribute("data-wsopen"); load(true); return; }
+    if (window.HQ && window.HQ.sample) return;
+    var id = a.getAttribute("data-wsid") || a.getAttribute("data-wssave");
+    if (a.getAttribute("data-wschoice") === "edit") { editing = id; openCard = id; load(true); return; }
+    if (a.hasAttribute("data-wssave")) {
+      var box = document.querySelector('[data-wsedit="' + id + '"]');
+      sendChoice(id, "edit", box ? box.value : "");
+      return;
+    }
+    if (a.getAttribute("data-wschoice") === "yes" || a.getAttribute("data-wschoice") === "no") sendChoice(id, a.getAttribute("data-wschoice"));
+  });
   var saved = "badscandal";
   try { saved = localStorage.getItem(KEY) || "badscandal"; } catch (e) {}
   if (saved === "farm" || saved === "label") apply(saved);
