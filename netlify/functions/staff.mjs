@@ -51,6 +51,7 @@ import { COOKIE, readCookie, verifySession } from "../lib/session.mjs";
 import * as C from "../lib/action-cards.mjs";
 import { pingNames } from "../lib/desk-push.mjs";
 import * as S from "../lib/staff.mjs";
+import * as W from "../lib/workspaces.mjs";
 import { sampleBoard, sampleReleases, sampleSightings } from "../lib/staff-sample.mjs";
 import { callTool, CLAUDE_TOOLS, INSTRUCTIONS, TOOLS, toolsFor, instructionsFor } from "../lib/staff-tools.mjs";
 
@@ -211,6 +212,12 @@ async function api(req, context, path) {
     return json(200, { ...S.board(desk, now, hqAns && hqAns.team ? hqAns : null), pageBuilds, hqRead: !!(hqAns && hqAns.team), accountHealth, ...(auto ? { auto } : {}), keys: { bots: !!Netlify.env.get("STAFF_BOT_KEY"), claude: !!Netlify.env.get("STAFF_CLAUDE_KEY") } });
   }
   if (path === "trace" && req.method === "GET") return sample ? json(200, { sample: true, trace: [] }) : json(200, { trace: await S.getTrace(stores(context).desk) });
+  if (path === "workspace" && req.method === "GET") {
+    const ws = String(url.searchParams.get("ws") || "");
+    if (sample) return json(200, W.sampleWorkspace(ws, now));
+    try { return json(200, await W.view(stores(context).desk, now, ws)); }
+    catch (e) { if (e && e.name === "StaffError") return json(400, { error: e.message }); throw e; }
+  }
   if (path === "release" && req.method === "GET") {
     /* one whole release, lyrics and log included (11 Nov 2026: the board no longer carries them) */
     const id = String(url.searchParams.get("id") || "").slice(0, 60);
@@ -228,6 +235,7 @@ async function api(req, context, path) {
   if (b.bad || !b.value || typeof b.value !== "object") return json(400, { error: "Bad request" });
   const a = b.value;
   try {
+    if (path === "workspace" && req.method === "POST") return json(200, { ok: true, ...(await W.workspaceAct(st.desk, now, { ...a, by: me })) });
     if (path === "message" && req.method === "POST") {
       const r = await S.sendMessage(st.desk, now, roster, { from: me, to: a.to, text: a.text, needs: a.needs, re: a.re, options: a.options, note: a.note, answers: a.answers, questions: a.questions, about: a.about });
       if (role === "claude" && asksLuke(r.message)) await pushAfter(context, st, now);

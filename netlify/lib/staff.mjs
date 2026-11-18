@@ -3476,7 +3476,12 @@ export function blockIsWait(st) {
 }
 export const releaseWarnings = (v, sightings, today) => warningsOf(v, sightings, today).map((w) => w.text);
 
-export async function listReleases(store) { const { data } = await readDoc(store, REL_KEY, []); return Array.isArray(data) ? data : []; }
+export async function listReleases(store) {
+  const { data } = await readDoc(store, REL_KEY, []);
+  const list = Array.isArray(data) ? data : [];
+  /* a Label cover never belongs on the BADSCANDAL release list (18 Nov 2026) */
+  return list.filter((r) => !r || r.workspace !== "label");
+}
 /* id or title, without accents / case / spaces; a live release before a cancelled one of the same name.
    drafts: false = the bots' view (a draft is Luke's, not the team's yet). */
 export function findRelease(list, song, { drafts = true } = {}) {
@@ -4143,6 +4148,8 @@ export async function fillRelease(store, now, roster, a) {
 
 /* the step's owner, Nova, Claude or Luke marks a step. A bot's mark is also a line in the live log. */
 export async function setStep(store, now, roster, a) {
+  /* licence is a Label step only (18 Nov 2026). Official releases keep their current steps. */
+  if (low(a.step) === "licence") fail("Badscandal releases have no licence step. A Label cover uses release_step with workspace \"label\" and step \"licence\", and only the Licence bot or Nova can mark it.");
   const by = whoIs(a.by, roster, { people: true });
   const today0 = spDay(now);
   const status = low(a.status);

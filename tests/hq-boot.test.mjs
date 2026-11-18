@@ -6,7 +6,7 @@ import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import vm from "node:vm";
 
-const HQ_SCRIPTS = ["js/crt.js", "js/hq-lib.js", "js/hq-look.js", "js/hq.js", "js/hq-staff.js", "js/hq-phone.js", "js/hq-shell.js", "js/hq-app.js", "js/hq-cmd.js", "js/hq-pages.js"];
+const HQ_SCRIPTS = ["js/crt.js", "js/hq-lib.js", "js/hq-look.js", "js/hq.js", "js/hq-staff.js", "js/hq-phone.js", "js/hq-shell.js", "js/hq-workspaces.js", "js/hq-app.js", "js/hq-cmd.js", "js/hq-pages.js"];
 
 function contentVersion() {
   const h = createHash("sha256");

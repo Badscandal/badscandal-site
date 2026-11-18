@@ -91,10 +91,12 @@ test("offline helper: keeps only the /hq page and its scripts; never the numbers
   assert.equal(f(u("/js/hq-cmd.js")), true, "and Search");
   assert.equal(f(u("/js/hq-phone.js")), true, "the phone screen");
   assert.equal(f(u("/js/hq-look.js")), true, "the phone look (18 Nov 2026)");
+  assert.equal(f(u("/js/hq-workspaces.js")), true, "the workspace switcher, on the same content hash");
   /* 18 Nov 2026: the cache key is the full url. An older file (no hash, or a different hash) is not served. */
   assert.equal(f("https://badscandal.com/js/hq.js"), false);
   assert.equal(f("https://badscandal.com/js/hq-phone.js"), false);
   assert.equal(f("https://badscandal.com/js/hq-look.js"), false);
+  assert.equal(f("https://badscandal.com/js/hq-workspaces.js"), false);
   assert.equal(f(u("/js/hq.js").replace(v, "stale")), false);
   assert.equal(f("https://badscandal.com/api/hq/push/waiting"), false, "what is waiting always comes from the network");
   assert.equal(f("https://badscandal.com/api/staff/board"), false, "the board always comes from the network");

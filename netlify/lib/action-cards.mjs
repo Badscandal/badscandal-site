@@ -238,6 +238,20 @@ export async function checkTap(store, ask, now = Date.now()) {
   return lukeTap(card, ask || {}, now);
 }
 
+export function cardWorkspace(c) {
+  const w = low(c && c.workspace);
+  return w === "farm" || w === "label" ? w : "badscandal";
+}
+export function cardsFor(cards, ws) {
+  const want = ws === "farm" || ws === "label" ? ws : "badscandal";
+  return (cards || []).filter((c) => cardWorkspace(c) === want);
+}
+function workspaceOf(v, fallback) {
+  if (v == null || String(v).trim() === "") return fallback || "badscandal";
+  const s = low(v);
+  if (s === "badscandal" || s === "farm" || s === "label") return s;
+  fail("workspace must be badscandal, farm or label. Nothing was saved.");
+}
 function scrub(card) {
   const blob = [card.text, card.preview, card.recipient, card.link].filter(Boolean).join("\n");
   const what = S.secretIn(blob);
@@ -271,7 +285,7 @@ export async function saveCard(store, now, roster, a) {
       const key = dedupeOf(a.dedupe_key != null ? a.dedupe_key : a.dedupeKey);
       const existing = rows.find((c) => c.dedupeKey === key);
       if (existing) return { skip: true, value: { ...existing, duplicate: true } };
-      const next = { kind, text, preview, recipient, link, deadline, waitingOn, action, ticket, dedupeKey: key, expiresAt: expiresOf(a.expires_at != null ? a.expires_at : a.expiresAt), moneyAtRisk: moneyFlag(a, money, kind), ...money };
+      const next = { kind, text, preview, recipient, link, deadline, waitingOn, action, ticket, workspace: workspaceOf(a.workspace), dedupeKey: key, expiresAt: expiresOf(a.expires_at != null ? a.expires_at : a.expiresAt), moneyAtRisk: moneyFlag(a, money, kind), ...money };
       scrub(next);
       if (rows.length >= 80) {
         const drop = rows.findIndex((c) => c.status === "done");
@@ -299,13 +313,14 @@ export async function saveCard(store, now, roster, a) {
       action: a.action != null ? action : (cur.action || ""),
       ticket: a.ticket != null ? ticket : (cur.ticket || ""),
       dedupeKey: key,
+      workspace: a.workspace != null ? workspaceOf(a.workspace) : cardWorkspace(cur),
       expiresAt: a.expires_at != null || a.expiresAt != null ? expiresOf(a.expires_at != null ? a.expires_at : a.expiresAt) : (cur.expiresAt || ""),
       amount: sentAmount ? money.amount : (cur.amount ?? null),
       currency: sentAmount ? money.currency : (cur.currency || ""),
       moneyAtRisk: a.money_at_risk != null || sentAmount || kind === "payment" ? moneyFlag(sentAmount ? a : { ...a, amount: cur.amount, currency: cur.currency }, sentAmount ? money : { amount: cur.amount ?? null, currency: cur.currency || "" }, kind) : cur.moneyAtRisk === true,
     };
     scrub(next);
-    const changed = ["kind", "text", "preview", "recipient", "link", "deadline", "waitingOn", "amount", "currency", "action", "ticket", "dedupeKey", "expiresAt", "moneyAtRisk"].some((k) => (cur[k] ?? "") !== (next[k] ?? ""));
+    const changed = ["kind", "text", "preview", "recipient", "link", "deadline", "waitingOn", "amount", "currency", "action", "ticket", "dedupeKey", "expiresAt", "moneyAtRisk", "workspace"].some((k) => (k === "workspace" ? cardWorkspace(cur) : (cur[k] ?? "")) !== (next[k] ?? ""));
     if (!changed) return { skip: true, value: cur };
     Object.assign(cur, next, { version: (cur.version || 1) + 1, status: "open", updatedAt: at, updatedBy: by });
     return { value: cur };
@@ -444,22 +459,35 @@ export function lukeCards(cards, tapsOn, now = Date.now()) {
   const open = (cards || []).filter((c) => c && c.waitingOn === "luke" && c.status === "open" && !isExpired(c, now));
   return sortForLuke(open).map((c) => lukeView(c, tapsOn));
 }
-/* During quiet hours the phone shows only money-at-risk cards. The rest wait until 08:00. */
-export function presentLuke(cards, tapsOn, now = Date.now()) {
+function present(cards, tapsOn, now) {
   const all = lukeCards(cards, tapsOn, now);
   const quiet = quietNow(now);
   const needsYou = quiet ? all.filter((c) => c.money_at_risk) : all;
   const held = quiet ? all.filter((c) => !c.money_at_risk) : [];
   return { quiet, needsYou, held, header: needsHeader(needsYou) };
 }
+/* During quiet hours the phone shows only money-at-risk cards. The rest wait until 08:00.
+   A Farm or Label card stays on that workspace. It is not on the BADSCANDAL Needs you. */
+export function presentLuke(cards, tapsOn, now = Date.now()) {
+  return present(cardsFor(cards, "badscandal"), tapsOn, now);
+}
+export function workspaceNeedsFrom(cards, tapsOn, now, ws) {
+  const mine = cardsFor(cards, ws);
+  return { ...present(mine, tapsOn, now), waitingOnOthers: othersLane({ cards: mine, messages: [], releases: [], now }) };
+}
+export async function workspaceNeeds(store, now, ws) {
+  const [cards, auto] = await Promise.all([load(store), getAuto(store)]);
+  return workspaceNeedsFrom(cards, auto.tapsCountAsYes === true, now, ws);
+}
 
 export async function boardAuto(store, now, desk) {
   const [cards, auto] = await Promise.all([load(store), getAuto(store)]);
   const roster = (desk && desk.roster) || S.DEFAULT_ROSTER;
+  const official = cardsFor(cards, "badscandal");
   return {
     ...autoPublic(auto, roster),
-    ...presentLuke(cards, auto.tapsCountAsYes === true, now),
-    waitingOnOthers: othersLane({ cards, messages: desk && desk.messages, releases: desk && desk.releases, roster, now }),
+    ...present(official, auto.tapsCountAsYes === true, now),
+    waitingOnOthers: othersLane({ cards: official, messages: desk && desk.messages, releases: desk && desk.releases, roster, now }),
   };
 }
 

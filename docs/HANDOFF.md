@@ -1,8 +1,8 @@
 # Handoff: where HQ is and what's next (read this first)
 
-**Last updated:** 18 Nov 2026, by Cursor. This branch is main through PR #80 plus the HQ blank-screen fix (one content hash on every HQ script, including `hq-look.js`, an 8-second fetch timeout, and a boot guard). Not live.
-**main:** every PR up to #80 is live (the phone look, automation phase 1, account health). **Tests on this branch:** 710 pass on Node 24 and Node 22, none cancelled.
-**Connector:** 40 tools. The blank-screen fix adds no tool and changes no option. The phone look adds no tool. Automation phase 1 changed options on `my_day`, `send_message` and `post_update`, so every bot refreshes. `log_growth` has the account-health fields from PR #77, and `claim`, `claimant` and `impact` from PR #73. The instagram tool's `post` and `song` are on main from #75.
+**Last updated:** 18 Nov 2026, by Cursor. This branch includes main through PR #83 and adds HQ workspaces v1. Not live.
+**main:** every PR up to #83 is live (the blank-screen fix, the phone look, one-tap cards, account health). **Tests on this branch:** 716 pass on Node 24 and Node 22, none cancelled.
+**Connector:** 40 tools. No new tool. This branch adds `workspace` on `log_growth`, `record_spend`, `submit_income`, `releases`, `release_step` and on an action card, and `release_step` accepts `licence` for a Label cover only. `hq-workspaces.js` shares the HQ content hash and is in the precache. The options changed, so every bot refreshes when this is deployed.
 
 > **The rule (Luke, 17 Nov 2026):** every time anything is pushed to `main` for HQ, the same push updates THIS
 > file (and `docs/STATUS.md`). If Luke's computer crashes or a session ends mid-way, the next agent starts from
@@ -31,7 +31,7 @@ site + Luke's private dashboard /hq + the bots' connector /mcp).
 
 ## Where it stands (18 Nov 2026)
 
-**Where we left off:** The phone look is live (PR #80). The home keeps the Needs you header, one-tap Yes / No / Edit cards, the quiet-hours lane, Waiting on others, and the account-health dots. Money is one received total per currency: only what has landed in Revolut counts. Automation phase 1 is live (PR #79): one-tap cards, Waiting on others, the scheduled checks, and the Monday draft. Desk push stays empty until Luke pastes an address. Account health is live (PR #77): one green / watch / red per official account. A red item sits on Needs you. Money counts once, when it lands in Revolut (PR #76). The round-2 fixes (PR #75) and L5 watchers (PR #73) are on main. RouteNote email is still not connected. L1 and L9 (PR #71), the first phone HQ (PR #70), the connector bug fixes (PR #69), L4 (PR #67), L3 part 1 (PR #66), L12 (PR #64) and the release-card fix (PR #65) are on main. This branch stops a bad connection mixing old and new HQ scripts. Not live.
+**Where we left off:** The blank-screen fix is on main (PR #83): one content hash on every HQ script, an 8-second fetch timeout, and a boot guard. The phone look is live (PR #80). The home keeps the Needs you header, one-tap Yes / No / Edit cards, the quiet-hours lane, Waiting on others, and the account-health dots. Money is one received total per currency: only what has landed in Revolut counts. Automation phase 1 is live (PR #79). Account health is live (PR #77). Money counts once, when it lands in Revolut (PR #76). The round-2 fixes (PR #75) and L5 watchers (PR #73) are on main. RouteNote email is still not connected. This branch adds Social Farm and Label on top of that. The same Needs you header and cards work inside those workspaces, and a Farm or Label card is not on the BADSCANDAL Needs you. `hq-workspaces.js` uses the same content hash and is in the precache. Not live.
 
 **HQ** (`badscandal.com/hq`, also inside the HQ apps on Luke's iPhone and Mac) has: Today, Songs, Ads, Pages
 (one tile per song page since #59), Growth & Fans (with the Instagram reader), Profiles (since #64), Upcoming (the release pipeline),
@@ -62,7 +62,11 @@ artist growth bot that all we will need is content and $".
 
 ## In flight (branches not merged)
 
-- **HQ home screen blank on a bad connection** (`cursor/hq-sw-consistent-cache-31c2`, not merged): HQ scripts, including `hq-look.js`, share one content hash. The service worker caches that full url and gives up after 8 seconds. A page that never paints shows Try again and Reset app. Not live. The phone look (PR #80), automation phase 1 (PR #79) and account health (PR #77) are on main.
+- **HQ workspaces v1** (`cursor/hq-workspaces-v1-3e9a`, not merged): a switch for BADSCANDAL (unchanged), Social Farm and Label. Farm pages and Label covers, spend and payouts stay off the official numbers and the USD 1,000 cap. The Needs you header and one-tap cards work inside Farm and Label. A card for one of those workspaces is not on the BADSCANDAL Needs you. Label is covers only. The genre list starts with UK garage and Luke can add genres. Each genre has a playlist placeholder, status "not set up". A Label cover's steps are licence (owner_bot Licence, before upload), then upload, then pitch. Drop's upload shows blocked until the licence is licensed. Only the Licence bot or Nova can mark the licence step. HQ does not take payment. Official releases have no licence step. `hq-workspaces.js` shares the content hash from PR #83 and is in the precache. Cache name stays `bs-hq-v7`, which the #83 tests lock. Still 40 tools. Includes main through PR #83. The bots refresh.
+- **Blank-screen fix** (PR #83, on main). One content hash on every HQ script, an 8-second fetch timeout, and Try again / Reset app when the page never paints.
+- **Phone look** (PR #80, on main). One received total per currency.
+- **One-tap cards** (PR #79, on main). Needs you header, Yes / No / Edit, Waiting on others, scheduled checks, desk push (empty until Luke pastes an address), Monday draft. Still 40 tools.
+- **Account health** (PR #77, on main). One green / watch / red per official account. A red item goes on the phone Needs you. `luke_briefing` is unchanged.
 
 ## Waiting on someone
 
