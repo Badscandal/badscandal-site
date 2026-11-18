@@ -2045,6 +2045,16 @@
     return bits.join(" · ");
   }
   /* What YouTube showed, as Laura recorded it. An empty list is none recorded, never a made-up claim. */
+  /* Spark's daily ideas. The best post is the official one with the highest engagement per view. Nothing is posted. */
+  function contentIdeasCard(doc) {
+    var d = doc && doc.reported != null ? doc : null;
+    if (!d || !d.reported) return { reported: false, title: "Content ideas", empty: (d && d.empty) || "No content ideas yet. Spark sends them once a day. Nothing is posted.", ideas: [], best: "", note: "" };
+    var b = d.best || null;
+    var eng = b ? (b.likes || 0) + (b.comments || 0) + (b.saves || 0) + (b.shares || 0) : 0;
+    var best = b ? b.title + " · " + b.platform + " · " + b.perView + " per view (" + eng + " engagements, " + b.views + " views)" : "No official post was ranked.";
+    return { reported: true, title: "Content ideas", best: best, compared: d.compared || "", note: d.note || "Ideas for Nova. Nothing is posted.",
+      ideas: (d.ideas || []).map(function (i) { return i.platform + ": " + i.hook + " — " + i.text + " (" + i.format + "). " + i.why; }) };
+  }
   function contentClaimRows(claims) {
     var list = !claims ? [] : (Array.isArray(claims) ? claims : (claims.items || []));
     if (!list.length) return { reported: false, rows: [], empty: "No Content ID claim has been recorded." };
@@ -2205,7 +2215,7 @@
     releaseFace: releaseFace, teamDots: teamDots, weekAhead: weekAhead, quietFeed: quietFeed, followerStrip: followerStrip,
     mondayPick: mondayPick, lyricsPreview: lyricsPreview,
     /* L5 watchers (18 Nov 2026) */
-    routeMailLine: routeMailLine, contentClaimRows: contentClaimRows, phoneWatchers: phoneWatchers,
+    routeMailLine: routeMailLine, contentClaimRows: contentClaimRows, contentIdeasCard: contentIdeasCard, phoneWatchers: phoneWatchers,
     /* account health (18 Nov 2026) */
     accountHealthHome: accountHealthHome };
 });

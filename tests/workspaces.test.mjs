@@ -35,11 +35,12 @@ test("the switch, the farm note and Add genre are on the page", () => {
   assert.match(read("js/hq-workspaces.js"), /not set up/);
   assert.match(read("js/hq-workspaces.js"), /class="dhead"/);
   assert.match(read("js/hq-workspaces.js"), /data-wschoice/);
-  assert.equal(TOOLS.length, 47, "account_health, needs_you, song_pl (18 Nov 2026 night test) + profile_jobs, profile_master, profile_rework, profile_uploaded (PR #87)");
+  assert.equal(TOOLS.length, 49, "content_ideas (Spark) + licence_queue, plus account_health, needs_you, song_pl (18 Nov 2026 night test) + profile_jobs, profile_master, profile_rework, profile_uploaded (PR #87)");
   const step = tool("release_step");
   assert.ok(step.inputSchema.properties.step.enum.includes("licence"));
   assert.ok(step.inputSchema.properties.step.enum.includes("upload"));
-  assert.deepEqual(toolsFor("Licence", S.DEFAULT_ROSTER).map((t) => t.name), ["releases", "release_step"]);
+  assert.ok(step.inputSchema.properties.step.enum.includes("pack"));
+  assert.deepEqual(toolsFor("Licence", S.DEFAULT_ROSTER).map((t) => t.name), ["my_day", "post_update", "send_message", "set_my_card", "releases", "release_step", "licence_queue"]);
 });
 
 test("official releases keep their steps and have no licence step", async () => {
@@ -79,12 +80,15 @@ test("licence is before upload, only Licence or Nova can mark it, and upload sta
   const made = await W.createRelease(d, NOW, { by: "Luke", title: "Northwind Cover", date: "2026-12-18" });
   assert.equal((await S.listReleases(d)).length, 0, "a Label cover is not a BADSCANDAL release");
   let card = (await W.view(d, NOW, "label")).genres[0].releases[0];
-  assert.deepEqual(card.steps.map((s) => s.key), ["licence", "upload", "pitch"]);
+  assert.deepEqual(card.steps.map((s) => s.key), ["pack", "licence", "upload", "pitch"]);
   assert.ok(card.steps.findIndex((s) => s.key === "licence") < card.steps.findIndex((s) => s.key === "upload"));
-  assert.equal(card.steps[0].owner_bot, "Licence");
-  assert.equal(card.steps[0].status, "todo");
-  assert.equal(card.steps[1].status, "blocked");
-  assert.match(card.steps[1].note, /Blocked until the licence is licensed/);
+  assert.equal(card.steps[0].owner_bot, "Nova");
+  assert.equal(card.steps[1].owner_bot, "Licence");
+  assert.equal(card.steps[1].status, "todo");
+  assert.equal(card.steps[1].shown, "waiting on licence");
+  assert.equal(card.steps[1].proof_link, "");
+  assert.equal(card.steps[2].status, "blocked");
+  assert.match(card.steps[2].note, /Blocked until the licence is licensed/);
   for (const key of W.LICENCE_FIELDS) assert.ok(key in card.licence, key);
   await rejects(W.markLabelStep(d, NOW, { by: "Steve", song: made.id, step: "licence", status: "paid" }), /Only the Licence bot or Nova/);
   await rejects(W.markLabelStep(d, NOW, { by: "Luke", song: made.id, step: "licence", status: "paid" }), /Only the Licence bot or Nova/);
@@ -102,20 +106,26 @@ test("licence is before upload, only Licence or Nova can mark it, and upload sta
   const paid = await W.markLabelStep(d, NOW, { by: "Nova", song: made.id, step: "licence", status: "paid" });
   assert.equal(paid.licence.status, "paid");
   assert.equal(paid.steps.find((s) => s.key === "upload").status, "blocked");
+  await W.markLabelStep(d, NOW, { by: "Luke", song: made.id, step: "pack", status: "done" });
+  await W.recordLicenceYes(d, NOW, { by: "Luke", song: made.id, words: "Yes, licence Northwind Cover." });
   const licensed = await call(d, "release_step", { bot: "Licence", workspace: "label", song: "Northwind Cover", step: "licence", status: "licensed", ...LICENCE });
   assert.equal(licensed.status, "licensed");
   assert.equal(licensed.upload, "open");
   assert.match(licensed.payment, /did not take or send any payment/);
   card = (await W.view(d, NOW, "label")).genres[0].releases[0];
-  assert.equal(card.steps[0].status, "licensed");
-  assert.equal(card.steps[1].status, "todo");
+  assert.equal(card.steps[1].status, "licensed");
+  assert.equal(card.steps[1].shown, "licensed");
+  assert.equal(card.steps[1].proof_link, LICENCE.licence_pdf_url);
+  assert.equal(card.steps[2].status, "todo");
   assert.equal(card.licence.drive_folder_url, LICENCE.drive_folder_url);
   const uploaded = await call(d, "release_step", { bot: "Drop", workspace: "label", song: made.id, step: "upload", status: "done", link: "https://example.com/routenote" });
   assert.equal(uploaded.status, "done");
   const listed = await call(d, "releases", { bot: "Licence", workspace: "label" });
   assert.equal(listed.workspace, "label");
-  assert.equal(listed.releases[0].steps[0].key, "licence");
-  assert.equal(listed.releases[0].steps[1].status, "done");
+  assert.equal(listed.releases[0].steps[1].key, "licence");
+  assert.equal(listed.releases[0].steps[1].status, "licensed");
+  assert.equal(listed.releases[0].steps[1].proof_link, LICENCE.licence_pdf_url);
+  assert.equal(listed.releases[0].steps[2].status, "done");
   await rejects(W.workspaceAct(d, NOW, { by: "Luke", action: "mark_licence", step: "licence" }), /Only the Licence bot or Nova/);
 });
 

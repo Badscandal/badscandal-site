@@ -90,6 +90,16 @@ export const DEFAULT_ROSTER = [
   { name: "Forge", role: "Ads", duty: "Logs ad spend, checks the cap before any launch", time: "09:30",
     why: "Keeps ad spend inside USD 1,000 a month: logs what Meta, Google and TikTok spent and checks the cap before anything launches.",
     schedule: [{ time: "09:30", what: "Yesterday's Meta, Google and TikTok spend (record_spend)" }, { time: "Monday", what: "Compare the month's Meta total with Ads Manager" }, { time: "before any launch", what: "Month to date + planned budgets must stay under the cap" }, { time: "at USD 900", what: "Switch every ad off (never delete) and confirm" }], writes: "The Ads Tracker's daily log" },
+  { name: "Licence", role: "Cover licensing", duty: "Idle until Luke starts a cover. Then the mechanical licence, before Drop's upload", time: "",
+    why: "Idle until Luke starts producing covers. He writes the covers himself and keeps 100% of the songs. When a cover's pack is ready, get the mechanical licence through Easy Song Licensing before Drop's upload. Reports to Nova only. Never pays.",
+    schedule: [{ time: "when a cover starts", what: "Read the Label queue. Do not pay, and do not mark it licensed, until Luke has said yes for that song." },
+      { time: "when a licence is done", what: "Save the licence, the song and the assets to Google Drive, then mark it with licence_queue and the proof link." }],
+    writes: "The Label licence step and the Drive proof link. Reports to Nova only. Idle until a cover starts." },
+  { name: "Spark", role: "Content ideas", duty: "Ranks recent official posts by engagement per view and gives Nova 3 to 5 content ideas", time: "10:00",
+    grok: "13779fd0-37f4-4e62-986a-e601b3142e55",
+    why: "Once a day, ranks BADSCANDAL's recent official posts on Instagram, TikTok and YouTube by engagement per view, compares them with outlier posts by similar artists, and gives Nova 3 to 5 content ideas. Reports to Nova only. Never posts, comments, sends a DM, or touches an ad.",
+    schedule: [{ time: "10:00", what: "Rank the recent official posts and send Nova 3 to 5 ideas with content_ideas (hook, on-screen text, format, platform, why)." }],
+    writes: "The content ideas on Growth. Reports to Nova only. Never posts." },
 ];
 
 /* ---------- small helpers ---------- */
@@ -332,7 +342,11 @@ export async function getRoster(store) {
   const list = Array.isArray(data) && data.length ? data : DEFAULT_ROSTER;
   const edits = ed.data && typeof ed.data === "object" && !Array.isArray(ed.data) ? ed.data : {};
   /* Nova's fixes to a job card (roster_card, 17 Nov 2026) go on top of the seed: a re-seed never wipes them */
-  return list.filter((b) => b && b.name).map((b) => { const name = clean(b.name, 40), e = edits[low(name)]; if (!e) return { ...b, name }; const { by, at, ...f } = e; return { ...b, ...f, name, editedBy: by, editedAt: at }; });
+  const named = list.filter((b) => b && b.name).map((b) => { const name = clean(b.name, 40), e = edits[low(name)]; if (!e) return { ...b, name }; const { by, at, ...f } = e; return { ...b, ...f, name, editedBy: by, editedAt: at }; });
+  /* A seed loaded before Licence or Spark existed must still know those names, or the connector rejects the bot.
+     A shorter roster is left as it was: only these two are added back. */
+  const missing = DEFAULT_ROSTER.filter((b) => (b.name === "Licence" || b.name === "Spark") && !named.some((n) => low(n.name) === low(b.name)));
+  return missing.length ? named.concat(missing.map((b) => ({ ...b }))) : named;
 }
 /* roster_card (17 Nov 2026, Nova: Drop's card still listed royalties, Forge's times were old, and the private seed
    is not on this Mac): Nova (or Claude, Luke) fixes a bot's duty, why, usual time, schedule or role on the desk */
@@ -484,6 +498,7 @@ const msgKey = (month) => `msg/${month}.json`;
 export async function sendMessage(store, now, roster, a) {
   const from = whoIs(a.from, roster, { people: true });
   const to = low(a.to) === "all" || low(a.to) === "everyone" || low(a.to) === "team" ? "all" : whoIs(a.to, roster, { people: true });
+  if ((from === "Licence" || from === "Spark") && to !== "Nova") fail(`${from} reports to Nova only. Put Nova in to. Nothing was sent.`, "not_allowed");
   const text = cleanText(a.text, 1500);
   if (text.length < 2) fail("text is empty");
   if (from !== "HQ") noSecrets(text); /* the site's own report is scrubbed line by line in checkReport() */
@@ -4847,7 +4862,7 @@ export function workers(roster, { hq, updates, messages, cards, seen, today, now
     else if (b.time && nowHM && nowHM > b.time && !todays.length) state = "quiet";
     const s = seen[b.name] || null;
     const blk = blockerOf(cards[k], b.blockers || "", now);
-    return { name: b.name, role: b.role || "", why: b.why || "", duty: b.duty || "", time: b.time || "", schedule: b.schedule || [], writes: b.writes || "", access: b.access || "",
+    return { name: b.name, role: b.role || "", why: b.why || "", duty: b.duty || "", time: b.time || "", schedule: b.schedule || [], writes: b.writes || "", access: b.access || "", ...(b.grok ? { grok: b.grok } : {}),
       blockers: blk.blockers, blockersStale: blk.blockersStale, paused: b.state === "paused", state, duties: items, tasks: open.slice(0, 12), lateTasks: open.filter((t) => t.late).length,
       last: last ? { at: last.sp, status: last.status, message: last.message, link: last.link } : null, updatesToday: todays.length,
       card: cardNow(cards[k], today), waiting: asks.map((m) => ({ id: m.id, from: m.from, text: m.text.slice(0, 200), needs: m.needs, at: m.sp })),
@@ -5049,11 +5064,78 @@ export async function recordContentClaim(store, now, roster, a) {
   });
 }
 
+/* Spark's daily content ideas. One document. HQ stores them. Nothing here posts, comments, or changes an ad. */
+const IDEAS_KEY = "content-ideas.json";
+const IDEA_PLATFORMS = ["Instagram", "TikTok", "YouTube"];
+const ideaPlatform = (v) => {
+  const hit = IDEA_PLATFORMS.find((p) => low(p) === low(v));
+  if (!hit) fail("Platform must be Instagram, TikTok or YouTube. Nothing was saved.");
+  return hit;
+};
+const ideaNum = (v, label) => {
+  if (v == null || String(v).trim() === "") return null;
+  const n = Number(String(v).replace(/,/g, "").trim());
+  if (!Number.isFinite(n) || n < 0) fail(`${label} has to be a number, 0 or more. Nothing was saved.`);
+  return n;
+};
+export function contentIdeasView(doc) {
+  const d = doc && doc.latest ? doc.latest : doc;
+  if (!d || !d.at || !Array.isArray(d.ideas) || !d.ideas.length) return { reported: false, ideas: [], best: null, empty: "No content ideas yet. Spark sends them once a day. Nothing is posted." };
+  return { reported: true, at: d.at, day: d.day || "", by: d.by || "Spark", best: d.best || null, ideas: d.ideas, compared: d.compared || "", empty: "", note: "Ideas for Nova. HQ does not post, comment, send a DM, or change an ad." };
+}
+export async function readContentIdeas(store) {
+  const { data } = await readDoc(store, IDEAS_KEY, {});
+  return contentIdeasView(data);
+}
+export async function saveContentIdeas(store, now, a) {
+  if (a.by !== "Spark" && a.by !== "Nova") fail("Only Spark sends content ideas. Nova can record them. Nothing was saved.", "not_allowed");
+  for (const k of ["comment", "dm", "reply", "ad", "boost", "publish"]) if (a[k] != null && String(a[k]).trim() !== "") fail("Spark never posts, comments, sends a DM, or touches an ad. Nothing was saved.", "not_allowed");
+  const rawIdeas = Array.isArray(a.ideas) ? a.ideas : [];
+  if (rawIdeas.length < 3 || rawIdeas.length > 5) fail("Send 3 to 5 ideas. Nothing was saved.");
+  const ideas = rawIdeas.map((idea, i) => {
+    const hook = clean(idea && idea.hook, 160);
+    const text = clean(idea && (idea.text || idea.on_screen), 160);
+    const format = clean(idea && idea.format, 80);
+    const why = clean(idea && idea.why, 240);
+    if ([hook, text, format, why].some((s) => s.length < 2)) fail(`Idea ${i + 1} needs a hook, the on-screen text, a format and why. Nothing was saved.`);
+    const bad = secretIn([hook, text, why].join(" "));
+    if (bad) fail(`Idea ${i + 1} looks like ${bad}. Nothing was saved.`);
+    return { hook, text, format, platform: ideaPlatform(idea && idea.platform), why };
+  });
+  const posts = Array.isArray(a.posts) ? a.posts : [];
+  const ranked = [];
+  for (const p of posts) {
+    const views = ideaNum(p && p.views, "Views");
+    const likes = ideaNum(p && p.likes, "Likes");
+    const comments = ideaNum(p && p.comments, "Comments");
+    const saves = ideaNum(p && p.saves, "Saves");
+    const shares = ideaNum(p && p.shares, "Shares");
+    if (views == null || views <= 0 || [likes, comments, saves, shares].every((n) => n == null)) continue;
+    const whose = low(p.whose || p.kind || "ours");
+    if (whose !== "ours" && whose !== "similar") fail('Each post is whose "ours" or "similar". Nothing was saved.');
+    const link = p.link ? httpsLink(p.link) : "";
+    if (p.link && !link) fail("A post link must start with https://. Nothing was saved.");
+    const eng = (likes || 0) + (comments || 0) + (saves || 0) + (shares || 0);
+    ranked.push({ whose, platform: ideaPlatform(p.platform), title: clean(p.title, 120) || "Untitled", link, views, likes: likes || 0, comments: comments || 0, saves: saves || 0, shares: shares || 0, perView: Math.round((eng / views) * 10000) / 10000 });
+  }
+  const ours = ranked.filter((p) => p.whose === "ours").sort((x, y) => y.perView - x.perView);
+  if (!ours.length) fail("Name the official posts you ranked, with views and likes, comments, saves and shares. Nothing was saved.");
+  const { whose, ...best } = ours[0];
+  const compared = clean(a.compared, 400);
+  const row = { at: new Date(now).toISOString(), by: a.by, day: spDay(now), best, ideas, compared, posts: ranked.slice(0, 12) };
+  await mutate(store, IDEAS_KEY, {}, (doc) => {
+    const history = Array.isArray(doc.history) ? doc.history : [];
+    history.unshift(row);
+    return { value: row, replace: { latest: row, history: history.slice(0, 14) } };
+  });
+  return { saved: true, ...contentIdeasView({ latest: row }), shown_on: "badscandal.com/hq, Growth" };
+}
+
 export async function loadDesk(store, now) {
   const [roster, updates, messages, cardsDoc, config, releases, sightings] = await Promise.all([getRoster(store), listUpdates(store, now, 3), listMessages(store, now, 2), readDoc(store, "cards.json", {}), getConfig(store), listReleases(store), getSightings(store)]);
-  const [seen, read, income, closesDoc, profiles, claimsDoc] = await Promise.all([getSeen(store, roster), getRead(store, roster), incomeState(store, now), readDoc(store, "closes.json", []), getProfiles(store), readDoc(store, CLAIMS_KEY, { items: [] })]);
+  const [seen, read, income, closesDoc, profiles, claimsDoc, ideasDoc] = await Promise.all([getSeen(store, roster), getRead(store, roster), incomeState(store, now), readDoc(store, "closes.json", []), getProfiles(store), readDoc(store, CLAIMS_KEY, { items: [] }), readDoc(store, IDEAS_KEY, {})]);
   const claims = claimsDoc.data && Array.isArray(claimsDoc.data.items) ? { items: claimsDoc.data.items } : { items: [] };
-  return { roster, updates, messages, cards: cardsDoc.data || {}, seen, read, income, config, releases, sightings, closes: Array.isArray(closesDoc.data) ? closesDoc.data : [], profiles, claims };
+  return { roster, updates, messages, cards: cardsDoc.data || {}, seen, read, income, config, releases, sightings, closes: Array.isArray(closesDoc.data) ? closesDoc.data : [], profiles, claims, contentIdeas: ideasDoc.data || {} };
 }
 
 /* Has the person a message was sent to READ it? (V6, 11 Nov 2026: from the read markers, read/<name>,
@@ -5179,6 +5261,7 @@ export function board(desk, now, hq) {
     /* L5: RouteNote's inbox is not connected until Luke signs it in. Claims are only what Laura recorded. */
     mail: routeNoteMailSource(),
     claims: desk.claims && Array.isArray(desk.claims.items) ? { items: desk.claims.items.slice(0, 80) } : { items: [] },
+    contentIdeas: contentIdeasView(desk.contentIdeas),
     connector: { botsOn: desk.config.botsOn, changedAt: desk.config.changedAt, lastUsed: lastSeen ? { bot: lastSeen[0], at: lastSeen[1].at, tool: lastSeen[1].tool } : null,
       connected: staff.filter((w) => w.connected).length, total: staff.length, claudeSeen: desk.seen.Claude ? desk.seen.Claude.at : null },
     report: desk.messages.find((m) => m.from === "HQ" && m.kind === "report") || null,

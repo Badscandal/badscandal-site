@@ -806,7 +806,19 @@
   });
 
   /* ---------- Growth, Fans, Releases, Money, Team (the sheet) ---------- */
+  function drawIdeas() {
+    var box = $("ideasBox"); if (!box || !window.HQLib.contentIdeasCard) return;
+    var card = L.contentIdeasCard(staffBoard() && staffBoard().contentIdeas);
+    var h = '<div class="tile"><h3>' + esc(card.title) + '</h3><p class="sub">' + esc(card.reported ? card.note : card.empty) + "</p>";
+    if (card.reported) {
+      h += '<p class="d"><b>Best post</b> · ' + esc(card.best) + "</p>";
+      if (card.compared) h += '<p class="d">' + esc(card.compared) + "</p>";
+      h += "<ul>" + card.ideas.map(function (line) { return "<li>" + esc(line) + "</li>"; }).join("") + "</ul>";
+    }
+    box.innerHTML = h + "</div>";
+  }
   function drawGrowth() {
+    drawIdeas();
     if (!sheet) return;
     /* the account's health dot and its 7-day views live here (18 Nov 2026, Luke: the platform blocks cluttered Needs you) */
     var b = staffBoard(), dots = (L.accountHealthHome && b ? L.accountHealthHome(b.accountHealth).dots : []) || [];
@@ -1000,7 +1012,7 @@
       return out;
     },
     /* the staff desk answered (or was cleared): Today's attention, the site-check line and Data health read it */
-    boardChanged: function () { if (sheet || ov) { drawBriefing(); drawSongs(); } if (sheet) drawGrowth(); drawDataHealth(); drawSongTiles(); if (!staffBoard()) drawLive(); },
+    boardChanged: function () { if (sheet || ov) { drawBriefing(); drawSongs(); } drawIdeas(); if (sheet) drawGrowth(); drawDataHealth(); drawSongTiles(); if (!staffBoard()) drawLive(); },
     overview: function () { return ov; }, instagram: function () { return ig; } };
   /* hq-pages.js is loaded with defer right after this file: start once both are in */
   document.addEventListener("DOMContentLoaded", start);

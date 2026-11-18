@@ -1,8 +1,8 @@
 # BADSCANDAL HQ — full handoff
 
-**Written:** 18 Nov 2026, from the tree at `9e447e2` (`Fix the 18 Nov night-test findings on the HQ connector. (#88)`), which is `origin/main` at the time this file was added.
-**For:** the next agent (Claude, large context). Read this file before changing HQ. Then `docs/WORKING-WITH-LUKE.md`, `docs/HANDOFF.md`, `docs/STATUS.md` and `docs/HQ-ROADMAP.md`. If those shorter files disagree with this one, this file is the one that was checked against the code on 18 Nov 2026. `docs/HANDOFF.md` and `docs/STATUS.md` on `9e447e2` still say “through PR #84”, “40 tools” and “716 tests”. That is stale. Main is through PR #88, the connector has **47** tools, and `npm test` on this tree reported **745 pass, 0 fail, 0 cancelled** (Node v22.23.4, 18 Nov 2026).
-**This pull request changes docs only.** It does not change behaviour. Do not merge it until Luke says deploy or publish.
+**Written:** 18 Nov 2026, from the tree at `9e447e2` (`Fix the 18 Nov night-test findings on the HQ connector. (#88)`), which is `origin/main` at the time this file was added. Updated the same day for the Licence bot, then again after merging `main` (PRs #92 and #93, Instagram health by engagement per view) and adding Spark. This branch is not on `main` until Luke says deploy or publish.
+**For:** the next agent (Claude, large context). Read this file before changing HQ. Then `docs/WORKING-WITH-LUKE.md`, `docs/HANDOFF.md`, `docs/STATUS.md` and `docs/HQ-ROADMAP.md`. If those shorter files disagree with this one, this file is the one that was checked against the code on 18 Nov 2026. `docs/HANDOFF.md` and `docs/STATUS.md` on `9e447e2` still say “through PR #84”, “40 tools” and “716 tests”. That is stale. This branch’s connector has **49** tools (`content_ideas` is the newest; `licence_queue` is the one before it), Licence and Spark are on the roster, and `npm test` on this tree reported **774 pass, 0 fail, 0 cancelled**.
+**Do not merge until Luke says deploy or publish.**
 
 The repository is public and is the website. This file names environment variables and email addresses that are already in the source. It does not contain passwords, tokens, bank details, payer names, money from the real accounts, or lyrics.
 
@@ -12,7 +12,7 @@ The repository is public and is the website. This file names environment variabl
 
 ## How this file was checked
 
-Every claim below was taken from the source at `9e447e2`, from `git log` / `gh pr view` for the November pull requests, or from one public GET of `https://badscandal.com/hq-sw.js` at 06:23 UTC on 18 Nov 2026. The live file was byte-identical to `hq-sw.js` in this tree (`CACHE = "bs-hq-v8"`). That file was last changed in PR #87, and PR #88 did not touch it, so the identical file shows that production has published at least the #87 service worker. It does not, by itself, prove that the #88 function bundle is the one Netlify is running.
+The original pass was taken from the source at `9e447e2`, from `git log` / `gh pr view` for the November pull requests, or from one public GET of `https://badscandal.com/hq-sw.js` at 06:23 UTC on 18 Nov 2026. That live file matched `hq-sw.js` on `9e447e2` (`CACHE = "bs-hq-v8"`). That file was last changed in PR #87, and PR #88 did not touch it, so the identical file shows that production has published at least the #87 service worker. It does not, by itself, prove that the #88 function bundle is the one Netlify is running. This branch’s `hq-sw.js` is `bs-hq-v10` and is not what that GET saw.
 
 One fact is **not** in git and is labelled as such: the Netlify credits outage. Luke asked for it to be recorded here. A search of commit messages and GitHub issues on this repo found no “credits” note. PR #86 records a different deploy skip (see section 7).
 
@@ -56,13 +56,16 @@ The built-in roster (`DEFAULT_ROSTER` in `netlify/lib/staff.mjs`, from line 52) 
 | Verse | Lyrics | Musixmatch after release day. Pitch/lyrics approval is Luke’s. `preflight` is on his list. |
 | Webmaster | Website | Song pages, the home card, `site_ok`. |
 | Forge | Ads | Google and TikTok spend. Meta spend is recorded by HQ itself. Monday ad pick is a decision for Luke. Forge does not launch ads. |
+| Licence | Cover licensing | Idle until Luke starts producing covers. He writes the covers himself and keeps 100% of the songs. When a cover’s pack is ready: the mechanical licence through Easy Song Licensing, before Drop’s RouteNote upload. Saves the licence, the song and the assets to Google Drive. Reports to Nova only. Does not pay, and does not mark a cover licensed, without Luke’s yes for that song. No daily clock. |
+| Spark | Content ideas | Once a day around 10:00 São Paulo. Ranks BADSCANDAL’s recent official posts on Instagram, TikTok and YouTube by engagement per view, compares them with outlier posts by similar artists, and gives Nova 3 to 5 ideas. Reports to Nova only. Never posts, comments, sends a DM, or touches an ad. Grok Bot id `13779fd0-37f4-4e62-986a-e601b3142e55`. |
 
-Two more callers exist and are not in that table:
+`getRoster` appends the built-in Licence and Spark cards when a stored roster omits those names, so an older seed cannot make the connector reject them. A shorter roster is otherwise left as stored.
 
-- **Licence.** Not on the BADSCANDAL roster. `toolsFor("Licence")` returns only `releases` and `release_step`, and only for a Label cover (`netlify/lib/staff-tools.mjs` around line 547).
+One more caller is not in that table:
+
 - **HQ.** The site itself posts the three-times-a-day check, chase reminders, and some profile alerts, as the sender `HQ`.
 
-Luke’s list for this handoff named Nova, Forge, Kevin, Steve, Laura, Webmaster, Atlas, Drop, Verse, Ledger and Sheet. Alfred, Licence, Claude and HQ are in the code as well. Use the table when a tool says who may call it.
+Luke’s list for this handoff named Nova, Forge, Kevin, Steve, Laura, Webmaster, Atlas, Drop, Verse, Ledger and Sheet. Alfred, Licence, Spark, Claude and HQ are in the code as well. Use the table when a tool says who may call it.
 
 ### Architecture
 
@@ -114,8 +117,8 @@ If neither staff key is set, `/mcp` returns 503 “The connector's keys are not 
 
 **Service worker.** `hq-sw.js`.
 
-- `CACHE = "bs-hq-v8"` (comment: 18 Nov 2026, profile masters and the button contrast fix).
-- Content hash `V = "4ab434d19b82"` on every HQ script URL. Tests in `tests/hq-boot.test.mjs`, `tests/hq-staff.test.mjs` and `tests/profile-images.test.mjs` assert the cache name.
+- `CACHE = "bs-hq-v10"` (comment: 18 Nov 2026, Spark’s content ideas on Growth). v9 was the Needs-you count and the Label licence status. Production at 06:23 UTC the same day was still `bs-hq-v8` from PR #87. This branch has not been published.
+- Content hash `V = "2551ecc34211"` on every HQ script URL. Tests in `tests/hq-boot.test.mjs`, `tests/hq-staff.test.mjs` and `tests/profile-images.test.mjs` assert the cache name.
 - Registered from `js/hq-shell.js` with scope `/hq` only.
 - Precaches `/hq`, the HQ scripts, `hq.webmanifest`, and `assets/hq-icon-192-v1.png`.
 - Network first, 8 second timeout, then the cached copy. `/api/*` is never cached.
@@ -192,7 +195,7 @@ Rules in `netlify/lib/workspaces.mjs` (PR #84, tests in `tests/workspaces.test.m
 - Farm pages and Label covers, spend and payouts stay off the official numbers, the scoreboard, the USD 1,000 cap, and the official Instagram, TikTok and YouTube tools.
 - A card with `workspace` `farm` or `label` is on that workspace’s Needs you. It is not on the BADSCANDAL list. The same header string is used (`needsHeader`). The Farm/Label screen falls back to `0 need you · nothing at risk` when there is no header (`js/hq-workspaces.js` around lines 71–73).
 - Label is covers only. The genre list starts with UK garage. Each genre has a playlist placeholder, status “not set up”.
-- A Label cover’s steps are licence (owner bot `Licence`), then upload, then pitch. Drop’s upload stays blocked until the licence status is `licensed`. Only `Licence` or Nova can mark the licence step. HQ does not pay a licence.
+- A Label cover’s steps are pack (Nova), then licence (Licence), then Drop’s upload, then Atlas’s pitch. The licence step shows `waiting on licence` until it is `licensed`, and then shows the proof link. Drop’s upload stays blocked until the licence is licensed. Only Licence or Nova can mark it, and only after the pack is ready and Luke has said yes for that song. HQ does not pay a licence. The page draws this in `js/hq-workspaces.js` `stepCard`.
 - Official BADSCANDAL releases have no licence step.
 - `log_growth` with `workspace` `farm` (account or post) or `label`. `record_spend` with `workspace` `label` is not in the cap. `submit_income` with `workspace` `label` is a label payout.
 
@@ -377,21 +380,21 @@ Small labels on numbers that say where the figure came from, so a made-up number
 
 ---
 
-## 3. The 47 connector tools
+## 3. The 48 connector tools
 
-Counted from `export const TOOLS` in `netlify/lib/staff-tools.mjs` (the array ends just before `export const CLAUDE_TOOLS = []`). There are 47 names, all unique, and each has a `case` in `callTool`. `CLAUDE_TOOLS` is empty, so Claude gets the same 47.
+Counted from `export const TOOLS` in `netlify/lib/staff-tools.mjs` (the array ends just before `export const CLAUDE_TOOLS = []`). There are 49 names, all unique, and each has a `case` in `callTool`. `CLAUDE_TOOLS` is empty, so Claude gets the same 49. `content_ideas` is the one added for Spark. `licence_queue` is the one added for Licence. `account_health` is the read-only picture from `main` (PRs #92 and #93) and is kept.
 
-The tests that assert `TOOLS.length === 47` include `tests/mcp.test.mjs`, `tests/money-links.test.mjs`, `tests/profile-images.test.mjs`, `tests/song-pl.test.mjs`, `tests/watchers.test.mjs`, `tests/workspaces.test.mjs`, `tests/account-health.test.mjs`, `tests/expected-money.test.mjs`, `tests/fan-inbox.test.mjs` and `tests/hq-auto.test.mjs`.
+The tests that assert `TOOLS.length === 49` include `tests/mcp.test.mjs`, `tests/money-links.test.mjs`, `tests/profile-images.test.mjs`, `tests/song-pl.test.mjs`, `tests/watchers.test.mjs`, `tests/workspaces.test.mjs`, `tests/account-health.test.mjs`, `tests/expected-money.test.mjs`, `tests/fan-inbox.test.mjs` and `tests/hq-auto.test.mjs`. The Licence bot’s own cases are in `tests/licence-bot.test.mjs`. Spark’s are in `tests/spark-bot.test.mjs`.
 
 **Version.** `toolsVersion(tools)` is an FNV-1a hash of the sorted `name:prop` strings. It is `serverInfo.toolsVersion` on initialize / discover, and `connector.version` on `my_day`. `connectorStatus` asks for a reconnect only when `tools_seen` or `tool_names` differ. A version mismatch alone does not. PR #88 changed this. Older handoff text that says “reconnect when tools_version differs” is out of date.
 
-**Filtered list vs who may call.** `TOOL_USERS` (around line 534) only hides tools on `POST /mcp/<Bot>` and `POST /mcp?bot=`. A tool not listed there is visible to everyone. Nova, and any name not on the roster, sees all 47 (a typo must not hide a tool). **Who may succeed** is still the handler in `staff.mjs`. Seeing a tool is not the same as being allowed to write.
+**Filtered list vs who may call.** `TOOL_USERS` only hides tools on `POST /mcp/<Bot>` and `POST /mcp?bot=`. A tool not listed there is visible to everyone except Licence and Spark, who each have their own short list. `toolsFor("Licence")` returns `my_day`, `post_update`, `send_message`, `set_my_card`, `releases`, `release_step` and `licence_queue`, in that order. `toolsFor("Spark")` returns `my_day`, `post_update`, `send_message`, `set_my_card`, `content_ideas` and `account_health`. Spark does not get `instagram`: that tool can change a song link. Nova, and any name not on the roster, sees all 49 (a typo must not hide a tool). **Who may succeed** is still the handler in `staff.mjs`. Seeing a tool is not the same as being allowed to write. `my_day` and the other tools that take `bot` accept `Licence` and `Spark` because both names are on the roster (`whoIs`).
 
 `bot` is required on every tool. The tests assert that.
 
 ### Rules that apply to every tool
 
-- `whoIs` rejects a name that is not on the roster (Licence is special-cased).
+- `whoIs` rejects a name that is not on the roster. Licence and Spark are roster names. There is no string special case.
 - `config.botsOn === false` refuses every bot. Claude and Luke are separate.
 - `secretIn` / `noSecrets` refuse passwords, login codes, API keys, private keys, IBANs and card numbers. They must **not** refuse an ISRC, a UPC, a 15-digit ad account id, or the words “token: expired”.
 - Text is cleaned and cut. Links must be `https://`.
@@ -410,9 +413,9 @@ The tests that assert `TOOLS.length === 47` include `tests/mcp.test.mjs`, `tests
 - **Parameters:** `bot` required. Optional `tools_seen` (integer), `tool_names` (array of strings), `list_version`, `tools_version`, `luke_tap` `{id?, dedupe_key?, version, action}`.
 - **Reads:** the desk (duties, tasks, messages, releases, cards), `action-cards.json` for tap checks, Instagram state for blockers.
 - **Writes:** the read marker only.
-- **Returns:** duties with São Paulo deadlines, open `T-` tasks, `questions_to_luke`, `messages_for_you` (newest 30 since last read, plus `more_messages`), `card_answers`, release steps, the connector line (`tools` count and `version`), and `luke_tap` when you passed one.
-- **Example:** `{"bot":"Nova","tools_seen":47,"tool_names":["my_day","post_update"]}`
-- **A correct result:** `connector.tools` is 47, `reconnect_needed` is false when the count and the names match, and `luke_briefing` is not this tool.
+- **Returns:** duties with São Paulo deadlines, open `T-` tasks, `questions_to_luke`, `messages_for_you` (newest 30 since last read, plus `more_messages`), `card_answers`, release steps, the connector line (`tools` count and `version`), and `luke_tap` when you passed one. For Licence it also returns `reports_to: "Nova"`, `licence_queue` (the covers whose pack is ready) and `idle_until`. For Spark it also returns `reports_to: "Nova"`, `grok_bot`, `content_ideas` and `posts` (the read-only line).
+- **Example:** `{"bot":"Nova","tools_seen":48,"tool_names":["my_day","post_update"]}`
+- **A correct result:** `connector.tools` is 48, `reconnect_needed` is false when the count and the names match, and `luke_briefing` is not this tool.
 - **Check:** `tests/mcp.test.mjs`, `tests/tools-version.test.mjs`.
 
 ### `post_update` — Post an update
@@ -428,7 +431,7 @@ The tests that assert `TOOLS.length === 47` include `tests/mcp.test.mjs`, `tests
 ### `send_message` — Send a message
 
 - **Lines:** 158–192. **Write.** Not marked read-only.
-- **Who:** anyone on the roster, to Luke, Claude, a bot, or `all`.
+- **Who:** anyone on the roster, to Luke, Claude, a bot, or `all`. Licence and Spark are the exception: `to` must be Nova, and a card is refused. The sentence is “Licence reports to Nova only.” or “Spark reports to Nova only.”
 - **Parameters:** `bot`, `to`, `text` required. Optional `needs` (`none|reply|action|decision`), `reply_to`, `options` (2–4, only with one decision), `questions` (2–6, not with options, not to all), `about`, `approval` `{song, what: pitch|lyrics, text?}`, `answers`, `recommend`, `recommend_option`, `card` (see the card object in the schema: `kind`, `text`, `dedupe_key`, `action`, `owner`, `recipient`, `amount`, `currency`, `link`, `preview`, `deadline`, `expires_at`, `waiting_on`, `money_at_risk`, `ticket`, `workspace`).
 - **Writes:** `msg/<YYYY-MM>.json`, or `action-cards.json` when `card` is set. The same `dedupe_key` is never posted twice. A push sweep may follow a message that needs Luke. Desk push fires if that bot has a webhook (`docs/DESK-PUSH.md`): the POST body is `{desk, kind, bot, id, at}` only. No text, no amount, no link.
 - **Guards:** quiet hours on cards; approval is only pitch (Atlas) or lyrics (Verse) and stores Luke’s exact text; money questions are not something Nova may answer later; `workspace` `farm` or `label` stays off the BADSCANDAL Needs you.
@@ -650,10 +653,28 @@ The tests that assert `TOOLS.length === 47` include `tests/mcp.test.mjs`, `tests
 
 - **Lines:** 380–396. **Write.**
 - **Parameters:** `bot`, `song`, `step`, `status` (`todo|working|done|blocked|skipped`) required. Optional `note` (required for blocked and skipped), `link`, `done_on` (`YYYY-MM-DD` when the work was done on an earlier day), `workspace`, and for a Label licence: `esl_order_number`, `licence_pdf_url`, `drive_folder_url`, `original_title`, `original_writers`, `original_publisher`, `status` on the licence (`todo|ordered_waiting_luke|paid|licensed|flagged`), `flag_reason`, `s4a`.
-- **Who:** the step’s owner, Nova, Claude, or Luke. Luke’s own step: Luke only, for done or skipped. A waiting step: no bot, Nova included, may mark it done. Label `licence`: only `Licence` or Nova.
+- **Who:** the step’s owner, Nova, Claude, or Luke. Luke’s own step: Luke only, for done or skipped. A waiting step: no bot, Nova included, may mark it done. Label `pack`: Nova, Claude, or Luke. Label `licence`: only Licence or Nova, and `licensed` also needs the pack done and Luke’s yes for that song. The four Easy Song fields stay on this tool. A proof link alone is `licence_queue`.
 - **Writes:** `releases.json`, and a live-log line that does not close a daily duty.
 - **Example:** `{"bot":"Drop","song":"Night Drive","step":"upload","status":"done","link":"https://example.com/routenote/night-drive","done_on":"2026-11-10"}`
 - **Check:** `tests/staff-releases.test.mjs`, `tests/workspaces.test.mjs`.
+
+### `licence_queue` — Label licence queue
+
+- **Write** when `proof_link` or `luke_said` is set. **Read** otherwise.
+- **Who:** Licence reads the queue and marks one licensed. Nova, Claude, and Luke may read it. Nova, Claude, or Luke record Luke’s yes with `luke_said` (his exact words). Licence cannot record the yes. Only Licence or Nova may pass `proof_link`.
+- **Parameters:** `bot` required. Optional `song`, `proof_link` (https), `luke_said`.
+- **Reads / writes:** `ws/label/releases.json`. A read returns `queue` (pack ready, not licensed, each `status` `waiting on licence`) and `licensed` (with `proof_link`). A mark sets the licence and the step to licensed and opens Drop’s upload. An amount, a card, or a bank detail is refused. HQ does not take payment.
+- **Example:** `{"bot":"Licence","song":"Northwind Cover","proof_link":"https://example.com/licence.pdf"}`
+- **Check:** `tests/licence-bot.test.mjs`.
+
+### `content_ideas` — Content ideas for Nova
+
+- **Write** when `ideas`, `posts` or `compared` is set. **Read** otherwise. Read-only in the sense that HQ stores the ideas and never posts them.
+- **Who:** Spark or Nova may save. Anyone on the roster may read. A comment, a DM, a reply, an ad, a boost or a publish field is refused.
+- **Parameters:** `bot` required. Optional `posts` (each `whose` is `ours` or `similar`, with platform, views, likes, comments, saves, shares), `ideas` (3 to 5: hook, on-screen text, format, platform, why), `compared`.
+- **Reads / writes:** `content-ideas.json`. Engagement per view is `(likes + comments + saves + shares) / views`. `best` is the highest among official posts (`whose: "ours"`). A similar artist’s outlier cannot win. Growth draws the latest ideas and that best post (`#ideasBox`, `HQLib.contentIdeasCard`). Nothing is posted.
+- **Example:** `{"bot":"Spark","posts":[{"whose":"ours","platform":"Instagram","title":"Northwind clip","views":10000,"likes":400,"comments":10,"saves":10,"shares":10}],"ideas":[{"hook":"Open on the drop","text":"Northwind","format":"Reel","platform":"Instagram","why":"The first second holds."},{"hook":"One line","text":"Stay","format":"short","platform":"TikTok","why":"Outliers start with one line."},{"hook":"Chorus first","text":"Chorus","format":"short","platform":"YouTube","why":"That clip ranked higher."}]}`
+- **Check:** `tests/spark-bot.test.mjs`.
 
 ### `release_fill` — Fill one field of a release pack
 
@@ -777,7 +798,7 @@ The tests that assert `TOOLS.length === 47` include `tests/mcp.test.mjs`, `tests
 
 - **Lines:** 487–489. **Read-only.**
 - **Parameters:** `bot` only.
-- **Reads:** `guide.json`. The handler prepends a live line: “The connector has 47 tools right now: …” and the current money rules. That line wins over an older stored guide. The stored text is not rewritten.
+- **Reads:** `guide.json`. The handler prepends a live line: “The connector has 49 tools right now: …” and the current money rules. That line wins over an older stored guide. The stored text is not rewritten. The number is `TOOLS.length`, so it moves when a tool is added.
 - **Example:** `{"bot":"Verse"}`
 - **Check:** `tests/night-test-18nov.test.mjs` (the live tool line).
 
@@ -1043,7 +1064,7 @@ There is no blob job. State is on the message (`proposal`, `proposalResult`, `re
 
 ### Label licence status
 
-`todo`, `ordered_waiting_luke`, `paid`, `licensed`, `flagged`.
+Stored: `todo`, `ordered_waiting_luke`, `paid`, `licensed`, `flagged`. Shown on the Label page and in `releases` for that step: `waiting on licence` until `licensed`, then `licensed`, plus `proof_link` once it is licensed. `luke_yes` is `{ by, at, words }` and is set only by Luke, Claude, or Nova.
 
 ---
 
@@ -1189,7 +1210,7 @@ After a deploy, from a machine that can see the site:
 
 - `GET /hq` returns 200 (the login shell).
 - `POST /mcp` with no key returns 401.
-- `GET /hq-sw.js` contains `bs-hq-v8` and the same `V` hash as the scripts in `hq.html`.
+- `GET /hq-sw.js` contains `bs-hq-v10` and `V = "2551ecc34211"`, the same hash as the scripts in `hq.html`. Before this branch is published, production is still the cache `main` last shipped.
 - `GET /cleanslate-version.json` is `no-store` (unrelated to HQ, but the headers test covers it).
 
 This session confirmed the service-worker GET. It did not log in, and it did not call `/mcp`.
@@ -1198,18 +1219,18 @@ This session confirmed the service-worker GET. It did not log in, and it did not
 
 | Area | Test file | A correct result |
 |---|---|---|
-| Tool count and `bot` required | `tests/mcp.test.mjs` | 47 tools, every schema requires `bot`, unknown tool is an error |
+| Tool count and `bot` required | `tests/mcp.test.mjs` | 49 tools, every schema requires `bot`, unknown tool is an error |
 | Tool version / reconnect | `tests/tools-version.test.mjs` | Reconnect when the count or the names differ. Version alone does not |
 | Night-test fixes | `tests/night-test-18nov.test.mjs` | From/CC on the moderation draft, `needs_you` shape, live guide line |
 | Needs you / cards | `tests/hq-auto.test.mjs` | Quiet hours hold non-money cards. Same dedupe key does not post twice. Payment and signature never count as a tap-yes |
 | Phone home | `tests/hq-phone.test.mjs`, `tests/hq-look.test.mjs` | Pulse line, “not reported”, one received total per currency |
-| Blank screen | `tests/hq-boot.test.mjs` | Cache name `bs-hq-v8`, one hash, 8 second timeout |
+| Blank screen | `tests/hq-boot.test.mjs` | Cache name `bs-hq-v10`, one hash, 8 second timeout |
 | Staff desk | `tests/staff.test.mjs`, `tests/hq-staff.test.mjs` | Messages, read marks, duties, connector switch |
 | Releases | `tests/staff-releases.test.mjs`, `tests/staff-sightings.test.mjs` | Steps, waiting pitch, sightings, skip notes |
 | Watchers | `tests/watchers.test.mjs` | Inbox not connected, Verse once per release day, claims say “not reported” when blank |
 | Account health | `tests/account-health.test.mjs` | Green/watch/red from stored numbers. No platform fetch |
 | Profiles | `tests/profiles.test.mjs`, `tests/profile-images.test.mjs` | Masters, exact-size rework, jobs |
-| Workspaces | `tests/workspaces.test.mjs` | Farm and Label off the cap. Licence before upload. Card stays off the BADSCANDAL list |
+| Workspaces | `tests/workspaces.test.mjs` | Farm and Label off the cap. Pack, then licence, then upload, then pitch. Card stays off the BADSCANDAL list |
 | Money | `tests/money-one-entry.test.mjs`, `tests/money-links.test.mjs`, `tests/money-simple.test.mjs`, `tests/ledger-payments.test.mjs`, `tests/ledger-statements.test.mjs`, `tests/expected-money.test.mjs`, `tests/month-close.test.mjs` | Counted once at Revolut. Routes. Close needs evidence |
 | Per-song | `tests/song-pl.test.mjs` | Missing song stays “not linked to a song” |
 | Pitch | `tests/pitch-tracker.test.mjs` | Status, deadline, no auto-pitch |
@@ -1269,7 +1290,7 @@ For each tool, a correct **read** returns JSON with no `isError`. A correct **wr
 | `account_health` | read | `wrote: false`. Five accounts. Spotify may say “posts” (bug, not a pass to “fix” by inventing a number) |
 | `needs_you` | read | `open` equals the action cards only. 0 is correct when the phone’s other line is a message |
 | `song_pl` | read | Same figures as Money › Per song. Missing stays missing |
-| `read_guide` | read | The first lines say 47 tools and name them |
+| `read_guide` | read | The first lines say 49 tools and name them |
 | `sort_payment` | write | Unsorted row becomes received or transfer. A guess is not a successful call |
 | `profile_jobs` | read, and it may message Luke | Jobs for your slots. A stuck job asks once |
 | `profile_master` | read | Exact pixels. The URL needs the bearer |
@@ -1500,7 +1521,7 @@ Emulator health (#19) is Nova’s machine, not this repo.
 
 ### Waiting on the bots, once he has deployed a tool change
 
-This tree’s connector has 47 tools. `my_day` tells each bot to reconnect when their app’s count or names differ. The options that changed across #77, #79, #84, #87, and #88 mean a bot that last connected at 40 tools is stale. Nova’s message, when a deploy actually happens, is: refresh the connector; `needs_you`, `song_pl`, and `account_health` are read-only; the four profile tools are Atlas, Laura, Steve, and Kevin; Label `licence` is the Licence bot or Nova; money still counts once at Revolut; do not invent a number; do not post, pitch, or change an ad from HQ.
+This branch’s connector has 49 tools. `my_day` tells each bot to reconnect when their app’s count or names differ. A bot that last connected at 47 or 48 tools is stale once this is published, because `content_ideas` and `licence_queue` are on the list and Licence and Spark are on the roster. Nova’s message, when a deploy actually happens, is: refresh the connector; Licence is idle until Luke starts a cover, then reports to Nova only and uses `licence_queue`; Spark reports to Nova only and uses `content_ideas` once a day around 10:00 São Paulo, and never posts; `needs_you`, `song_pl`, and `account_health` are read-only; the four profile tools are Atlas, Laura, Steve, and Kevin; Label `licence` is the Licence bot or Nova, after Luke’s yes for that song; money still counts once at Revolut; do not invent a number; do not post, pitch, or change an ad from HQ.
 
 ### What the next agent should do first
 
@@ -1513,4 +1534,4 @@ This tree’s connector has 47 tools. `my_day` tells each bot to reconnect when 
 
 ## Message for Nova
 
-Not a deploy. This pull request is a handoff file only (`docs/HQ-FULL-HANDOFF.md`). The connector on main is already 47 tools if `9e447e2` is what Netlify published. If your app still lists 40 or 43 or 44, reconnect. `needs_you` counts action cards, not lyrics decisions. `account_health` can say “posts” for Spotify; that is the page’s wording, not a number you should invent. RouteNote mail is still not connected. Nothing in this change posts, pitches, or touches an ad.
+The connector on `main` at `9e447e2` has 47 tools if that commit is what Netlify published. Later `main` (PRs #92 and #93) added the Instagram health picture; this branch keeps that and adds Licence, Spark, `licence_queue` and `content_ideas`, so the count here is 49. If your app still lists 40, 43, 44, 47, or 48 after this is published, reconnect. `needs_you` counts action cards, not lyrics decisions. `account_health` can say “posts” for Spotify; that is the page’s wording, not a number you should invent. RouteNote mail is still not connected. Nothing in this change posts, pitches, pays a licence, or touches an ad.

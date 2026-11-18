@@ -390,8 +390,8 @@ test("read: Luke's answers say 'read' from the marker, and a note to everyone sa
   b = S.board(await S.loadDesk(d, NOW + 11000), NOW + 11000, null);
   assert.deepEqual([b.answered[0].reply.seen, b.answered[0].reply.seenAt], [true, new Date(NOW + 10000).toISOString()]);
   const n1 = b.messages.find((t) => t.id === note.id), n2 = b.messages.find((t) => t.id === fromNova.id);
-  assert.deepEqual([n1.seen, n1.read], [null, { by: 3, of: 12, names: ["Nova", "Atlas", "Drop"] }], "Read by 3 of 12");
-  assert.deepEqual([n2.read.by, n2.read.of], [2, 11], "its sender is not counted");
+  assert.deepEqual([n1.seen, n1.read], [null, { by: 3, of: 14, names: ["Nova", "Atlas", "Drop"] }], "Read by 3 of 14");
+  assert.deepEqual([n2.read.by, n2.read.of], [2, 13], "its sender is not counted");
   const reply = b.messages.find((t) => t.id === q.id).replies[0];
   assert.deepEqual([reply.seen, reply.read], [true, undefined], "a message to one bot has seen/seenAt, no count");
   /* the made-up board shows both kinds */

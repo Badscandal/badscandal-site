@@ -105,7 +105,9 @@ test("the connector at /mcp/<bot>: that bot's list; calls fill in and check the 
 /* ---------- 2. the duty reset ---------- */
 test("Nova resets the duties at 07:00, before every other bot's run, and the time comes from her card", () => {
   assert.equal(S.dutyResetTime(R), "07:00");
-  for (const b of R.filter((x) => x.name !== "Nova")) assert.ok(b.time > "07:00", `${b.name} runs at ${b.time}, after the reset`);
+  /* Licence has no daily clock: idle until a cover starts, so it is not part of the morning reset. */
+  for (const b of R.filter((x) => x.name !== "Nova" && x.time)) assert.ok(b.time > "07:00", `${b.name} runs at ${b.time}, after the reset`);
+  assert.equal(R.find((b) => b.name === "Licence").time, "");
   const nova = R.find((b) => b.name === "Nova");
   assert.ok(!JSON.stringify(nova).includes("08:05"));
   /* a seeded card with another time: that time */
