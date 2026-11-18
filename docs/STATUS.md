@@ -1,13 +1,16 @@
 # HQ status (update on every deploy)
 
-**Last updated:** 18 Nov 2026, by Cursor. Main is through PR #76. Account health is in flight, not live. Start with `docs/HANDOFF.md`.
-**Tests:** 678 on this branch, all passing on Node 24 and Node 22. **Connector:** 40 tools (no new tool). `log_growth` gained account-health fields on this branch, so Steve, Kevin, Laura, Atlas, Drop and Webmaster refresh when it is deployed. Claim fields are on main from #73. The instagram tool's `post` and `song` are on main from #75.
+**Last updated:** 18 Nov 2026, by Cursor. Main is through PR #80 (the phone look). Automation phase 1 (#79) and account health (#77) are live with it. Start with `docs/HANDOFF.md`.
+**Tests:** 710 on this branch, all passing on Node 24 and Node 22. **Connector:** 40 tools (no new tool). The phone look changes no option. Automation changed options on `my_day`, `send_message` and `post_update`, so every bot refreshes. `log_growth` account-health fields are live from #77. Claim fields are on main from #73. The instagram tool's `post` and `song` are on main from #75.
 No money amounts, payer names or account numbers in this file: the repo is public.
 
 ## Live (newest first)
 
 | When | PR | What |
 |------|----|------|
+| 18 Nov | #80 | Phone look. One received total per currency. The home keeps the Needs you header, one-tap Yes / No / Edit cards, quiet hours, Waiting on others, and the account-health dots. A missing number says not reported. Still 40 tools. No option changed. |
+| 18 Nov | #79 | Automation phase 1. One-tap cards, Waiting on others, scheduled site, cap, release-day and month checks, and the Monday draft. Desk push stays empty until Luke pastes an address. Still 40 tools. `my_day`, `send_message` and `post_update` gained options, so every bot refreshes. |
+| 18 Nov | #77 | Account health. One green / watch / red per official account, from numbers already on the desk. A red item goes on Needs you. The daily job (10:30 São Paulo) messages the owning bot only when it changes. Still 40 tools. `log_growth` records the check. HQ does not call Meta or Instagram for this. |
 | 18 Nov | #76 | Money counts once, when it lands in Revolut, in payments, month_check, income_status and the briefings. A route sums every link. A gap with no source is short, unexplained, never a fee. A rate is kept only when Revolut recorded it. `close_month` needs month_check ready and an https evidence link. No new tool. |
 | 18 Nov | #75 | Round-2 fixes from the bots' re-test. Pre-HQ packs, Canvas steps, schedule lines, lyrics blockers, signed-out lines, Instagram ranking and the 20-minute read cache, song links on posts, preflight flags, and `song_pages` reporting each page. Still 40 tools. |
 | 18 Nov | #73 | L5 watchers. RouteNote email says not connected until Luke signs the site into that inbox, read-only. Verse gets one desk note on the release day (São Paulo). Content ID claims are only what Laura records with `log_growth`. No new tool. HQ does not email anyone. |
@@ -54,14 +57,14 @@ No money amounts, payer names or account numbers in this file: the repo is publi
 
 ## In flight
 
-- Account health, branch `cursor/hq-account-health-aad1`. Not merged. No new tool. One health dot per official account on the phone. Red goes into Needs you. The daily check messages the owning bot only when it changes. HQ does not call Meta or Instagram for this, and does not invent a number.
+- HQ home screen blank on a bad connection, branch `cursor/hq-sw-consistent-cache-31c2`. Not merged and not live. HQ scripts, including `hq-look.js`, share one content hash. The service worker gives up after 8 seconds. A page that never paints shows Try again and Reset app.
 
 ## Next up
 
-- The phone HQ (#70), the connector bug fixes (#69), L1/L9 (#71), L5 watchers (#73), the round-2 fixes (#75) and the money-counting rule (#76) are on main. In flight, not live: account health. L3 part 2 is not built: a fan's country, and a ready reply he approves. HQ would still never send it. A later Profiles slice (reading an image from a platform) still needs his go, and HQ would still not log in.
+- The phone look (#80), automation phase 1 (#79), account health (#77), the money-counting rule (#76), the round-2 fixes (#75), L5 watchers (#73), L1/L9 (#71), the first phone HQ (#70) and the connector bug fixes (#69) are on main. L3 part 2 is not built: a fan's country, and a ready reply he approves. HQ would still never send it. A later Profiles slice (reading an image from a platform) still needs his go, and HQ would still not log in.
 - Still for Luke, not in #69: the public stream line ("as of September 2026"), where "Plugin store" sits on the home page, and checking pack genre and language against RouteNote's list.
 - Still needs Luke: B2 YouTube sign-in, the on-hold decisions H1–H4, and L11 (who "Luka" is). B1 and B5 are not needed; B4 Instagram is connected.
-- L10 still waits (it needs YouTube write access). Account health is the in-flight branch. L4 is live. Start any of it on his word.
+- L10 still waits (it needs YouTube write access). L4 is live. Start any of it on his word.
 
 ## Known gaps / watch
 
