@@ -5,6 +5,7 @@ import * as S from "../netlify/lib/staff.mjs";
 import { memoryDesk } from "../netlify/lib/staff-sample.mjs";
 import { callTool, TOOLS } from "../netlify/lib/staff-tools.mjs";
 import * as C from "../netlify/lib/action-cards.mjs";
+import { needsDesk } from "../netlify/lib/needs.mjs";
 
 await import("../js/hq-look.js");
 const V = globalThis.HQLook;
@@ -124,42 +125,58 @@ async function lyricsAsk(d, now) {
 test("Luke's 03:20 screen: one lyrics approval and no cards is 1 need you, everywhere", async () => {
   const d = memoryDesk();
   const m = await lyricsAsk(d, QUIET - 3600000);
-  const auto = await C.boardAuto(d, QUIET, { messages: [m] });
-  const server = C.needsCount({ messages: [m], cards: auto, report: null });
+  const desk = await needsDesk(d, QUIET, {});
+  const server = C.needsCount(desk, S.spDay(QUIET), QUIET);
   assert.equal(server.total, 1);
   assert.equal(server.line, "1 need you");
-  assert.equal(server.money, "");
-  const phone = V.needTotal({ messages: [m], auto, healthNeeds: [] });
+  assert.deepEqual(server.byKind, { decision: 1 });
+  const phone = V.needTotal({ messages: [m], auto: await C.boardAuto(d, QUIET, desk), healthNeeds: [] });
   assert.equal(phone.total, server.total);
   assert.equal(V.homePulse({ need: server.total, risk: 11 }).line, "1 need you · 11 to check");
   const tool = await call(d, "needs_you", { bot: "Nova" }, { now: QUIET });
   assert.equal(tool.total, 1);
   assert.equal(tool.line, "1 need you");
   assert.equal(tool.open, 0, "no Yes/No/Edit cards");
-  assert.equal(tool.decisions.length, 1);
-  assert.equal(tool.decisions[0].from, "Verse");
+  assert.equal(tool.waiting.length, 1);
+  assert.equal(tool.waiting[0].kind, "decision");
+  assert.equal(tool.waiting[0].what, "Verse asked you to decide something");
   assert.equal(tool.quiet_hours, true);
 });
 
-test("the count is decisions + cards (held ones too) + red accounts, and the phone's rule agrees", async () => {
+test("one list: messages, Spotify questions, cards (held ones too) and red accounts; the phone's rule agrees", async () => {
   const d = memoryDesk();
   const m = await lyricsAsk(d, NOW - 3600000);
   const other = (await S.sendMessage(d, NOW, R, { from: "Kevin", to: "Luke", needs: "reply", text: "A made-up question" })).message;
-  const pay = await C.saveCard(d, NOW, R, { by: "Ledger", kind: "payment", text: "Pay the made-up studio.", dedupe_key: "p-1", action: "pay it", amount: 12, currency: "USD", recipient: "Made Up Studio" });
+  const pay = await C.saveCard(d, NOW, R, { by: "Ledger", kind: "payment", text: "Pay the made-up studio 12.", dedupe_key: "p-1", action: "pay it", amount: 12, currency: "USD", recipient: "Made Up Studio" });
   const note = await C.saveCard(d, NOW, R, { by: "Nova", kind: "message", text: "Send the made-up note.", dedupe_key: "n-1", action: "send it" });
   const report = { accounts: [{ id: "ig", label: "Instagram", state: "red" }, { id: "yt", label: "YouTube", state: "watch" }], connection: { state: "down", text: "made up" } };
+  await import("../js/hq-lib.js");
   for (const now of [NOW, QUIET]) {
-    const auto = C.presentLuke([pay, note], false, now);
-    const server = C.needsCount({ messages: [m, other], cards: auto, report });
-    assert.equal(server.total, 1 + 2 + 2, "1 decision, 2 cards (one held at night), Instagram red + the connection down");
-    const health = globalThis.HQLib ? globalThis.HQLib.accountHealthHome(report) : null;
-    const phone = V.needTotal({ messages: [m, other], auto, healthNeeds: health ? health.needs : [{}, {}] });
+    const desk = await needsDesk(d, now, { report });
+    const server = C.needsCount(desk, S.spDay(now), now);
+    assert.equal(server.total, 2 + 2 + 2, "2 messages, 2 cards (one held at night), Instagram red + the connection down");
+    const auto = await C.boardAuto(d, now, desk);
+    const phone = V.needTotal({ messages: [m, other], auto, healthNeeds: globalThis.HQLib.accountHealthHome(report).needs });
     assert.equal(phone.total, server.total, "the phone's fallback says the same number");
-    assert.equal(server.money, "USD 12 at risk");
+    for (const x of server.items) assert.equal(/12|Studio|made-up/i.test(x.text), false, "lock-screen text never carries an amount, a payee or the message: " + x.text);
   }
   const tool = await call(d, "needs_you", { bot: "Nova" });
-  assert.equal(tool.total, 3, "the tool reads the real desk: 1 decision + 2 cards (no account report on this desk)");
+  assert.equal(tool.total, 4, "the tool reads the real desk: 2 messages + 2 cards (no red account on this desk)");
   assert.equal(tool.open, 2);
+});
+
+test("the app badge, Today's line and the push alerts count the same list", async () => {
+  const { pushApi } = await import("../netlify/lib/push-api.mjs");
+  const d = memoryDesk();
+  await lyricsAsk(d, NOW - 3600000);
+  await C.saveCard(d, NOW, R, { by: "Nova", kind: "message", text: "Send the made-up note.", dedupe_key: "n-2", action: "send it" });
+  const res = await pushApi(new Request("https://badscandal.com/api/hq/push/waiting"), { store: () => d, now: NOW });
+  const body = await res.json();
+  assert.equal(body.count, 2, "a decision and a card");
+  assert.deepEqual(body.items.map((x) => x.kind).sort(), ["card", "message"]);
+  const sample = await (await pushApi(new Request("https://badscandal.com/api/hq/push/waiting?sample=1"), { store: () => { throw new Error("no store in the sample"); }, now: NOW })).json();
+  assert.equal(sample.sample, true);
+  assert.ok(sample.count >= 1);
 });
 
 test("the phone no longer draws a second need-you line, and the briefing calls alerts to check", async () => {
@@ -189,4 +206,42 @@ test("Spotify's reach line talks about tracks, TikTok's still about posts", asyn
   const tiktok = reach("tiktok", "Kevin");
   assert.match(tiktok.text, /^The last 3 posts are each under 30%/);
   assert.equal(tiktok.source, "posts the bot recorded");
+});
+
+test("account_health reads what the board reads (the stored Instagram copy too), so the tool and the phone agree", async () => {
+  const { loadReport } = await import("../netlify/lib/account-health.mjs");
+  const d = memoryDesk(), ig = memoryDesk(), asked = [];
+  const get = ig.get.bind(ig);
+  ig.get = async (k, o) => { asked.push(k); return get(k, o); };
+  await ig.setJSON("posts.json", []);
+  const tool = await call(d, "account_health", { bot: "Nova" }, { ctx: { ig: () => ig } });
+  assert.ok(asked.includes("posts.json"), "the tool opened the stored Instagram posts");
+  const board = await loadReport({ store: d, ig, now: NOW, claims: { items: [] }, builds: [] });
+  assert.deepEqual(tool.accounts.map((a) => [a.id, a.state]), board.accounts.map((a) => [a.id, a.state]));
+});
+
+test("a partial read keeps the real reading time for Read by, and the answered list sees ids", async () => {
+  const d = memoryDesk();
+  await inbox(d, 25);
+  await call(d, "read_messages", { bot: "Kevin" });
+  const read = await S.readState(d, "Kevin");
+  assert.ok(read.also.length === 20);
+  const r = await d.get("read/kevin.json", { type: "json" });
+  assert.equal(r.readAt, new Date(NOW).toISOString(), "when the reading happened");
+  const all = await S.listMessages(d, NOW);
+  const handed = all.find((m) => read.also.includes(m.id));
+  const seen = S.seenBy({ Kevin: r }, "Kevin", handed.at, handed.id);
+  assert.equal(seen.seen, true);
+  assert.ok(seen.seenAt >= handed.at, "Read by is never earlier than the message");
+});
+
+test("the default read_messages view holds what my_day would hand over (about you, answers to yours)", async () => {
+  const d = memoryDesk();
+  const mine = (await S.sendMessage(d, NOW - 600000, R, { from: "Kevin", to: "Steve", needs: "reply", text: "Made-up question" })).message;
+  await S.sendMessage(d, NOW - 300000, R, { from: "Steve", to: "Nova", needs: "none", about: "Kevin", text: "A made-up note about Kevin" });
+  await S.sendMessage(d, NOW - 200000, R, { from: "Steve", to: "Kevin", needs: "none", re: mine.id, text: "A made-up answer" });
+  const got = await call(d, "read_messages", { bot: "Kevin" });
+  assert.ok(got.messages.some((m) => m.about === "Kevin"));
+  assert.equal(got.still_unread, undefined);
+  assert.equal((await call(d, "read_messages", { bot: "Kevin", count_only: true })).count, 0);
 });

@@ -135,7 +135,7 @@
     var need = (stack.top ? [stack.top].concat(stack.rest) : []).concat((auto && auto.needsYou) || []).concat(health.needs || []);
     /* ONE count (18 Nov 2026): the server's board.needs.total, the same number the needs_you tool gives. A card
        snoozed on this phone still counts: it is still waiting on Luke. */
-    var count = board && board.needs && typeof board.needs.total === "number" ? board.needs.total : V.needTotal({ messages: allWaiting, auto: auto, healthNeeds: health.needs }).total;
+    var count = board && board.needs && typeof board.needs.total === "number" ? board.needs.total : V.needTotal({ messages: allWaiting, sightings: board && board.sightings, auto: auto, healthNeeds: health.needs }).total;
     var snoozedN = allWaiting.filter(function (m) { return m && snoozed(m.id); }).length;
     var pulse = V.homePulse({ need: count, risk: risk });
     var ids = [stack.top].concat(stack.rest).filter(Boolean).map(function (c) { return c.id; });
@@ -152,10 +152,11 @@
       decision += '<article class="dcard" data-health="' + esc(n.id) + '"><p class="dfrom">' + esc(n.title) + '</p><p class="dline">' + esc(n.line) + "</p>" +
         (n.next ? '<p class="drec">' + esc(n.next) + "</p>" : "") + '<a class="linkbtn" href="' + esc(n.href || "#growth") + '">Open</a></article>';
     });
+    decision += alsoHtml(board, ids.concat(allWaiting.filter(function (m) { return m && snoozed(m.id); }).map(function (m) { return m.id; })));
     decision += healthDots(health);
     if (auto) decision += othersHtml(auto.waitingOnOthers);
     if (snoozedN) decision += '<p class="wcount">' + snoozedN + " snoozed on this phone (still counted above)</p>";
-    if (!need.length && !snoozedN && !(auto && auto.held && auto.held.length)) decision += '<p class="dnone">Nothing is waiting on you.</p>';
+    if (!count && !need.length && !snoozedN && !(auto && auto.held && auto.held.length)) decision += '<p class="dnone">Nothing is waiting on you.</p>';
     if (stack.parked.length) decision += '<details class="look-more"><summary>Waiting on Luke (' + stack.parked.length + ")</summary><ul>" + stack.parked.map(function (t) {
       return "<li><b>" + esc(t.id) + "</b> " + esc(t.title) + (t.note ? "<small>" + esc(t.note) + "</small>" : "") + "</li>";
     }).join("") + "</ul></details>";
@@ -175,6 +176,23 @@
     el.innerHTML = h;
     var ads = $("adsGauge");
     if (ads) ads.innerHTML = gaugeHtml(L.spendGauge(sheet && sheet.money && sheet.money.cap));
+  }
+
+  /* What the count holds that has no card of its own above: replies and actions he owes, a decision with no
+     options, a song in Spotify for Artists only he can name. Each one links to where it is answered.
+     shown: ids already drawn (wallets, snoozed). RouteNote's own card is drawn by the watchers. */
+  function alsoHtml(board, shown) {
+    var items = (board && board.needs && board.needs.items) || [];
+    var routenote = {};
+    ((board && board.waiting && board.waiting.luke) || []).forEach(function (m) { if (m && m.ask === "routenote") routenote[m.id] = true; });
+    var rows = items.filter(function (x) {
+      if (!x || (x.kind !== "message" && x.kind !== "spotify")) return false;
+      return shown.indexOf(x.id) < 0 && !routenote[x.id];
+    });
+    if (!rows.length) return "";
+    return '<div class="dcard"><p class="dfrom">Also waiting on you</p><ul class="also">' + rows.map(function (x) {
+      return '<li><a href="' + esc(x.href || "#messages") + '">' + esc(x.text) + "</a></li>";
+    }).join("") + "</ul></div>";
   }
 
   function healthDots(health) {

@@ -295,3 +295,24 @@ test("a devices list that is not a list is replaced, never written back", async 
   await sweep(d, DAY0 + MIN, breaks);
   assert.deepEqual(await d.get("push/devices.json", { type: "json" }), []);
 });
+
+test("a card and a red account are on the badge too, and their alert names who, never the amount (18 Nov 2026)", async () => {
+  const { needsDesk } = await import("../netlify/lib/needs.mjs");
+  const C = await import("../netlify/lib/action-cards.mjs");
+  const d = memoryDesk(), f = fakeSend();
+  await P.registerDevice(d, DAY0, dev(tok("c")));
+  const m1 = (await ask(d, DAY0)).message;
+  await P.sweep(d, DAY0 + MIN, { desk: () => needsDesk(d, DAY0 + MIN, { report: null }), env: ENV(), send: f.send });
+  await C.saveCard(d, DAY0 + 20 * MIN, R, { by: "Ledger", kind: "payment", text: "Pay the made-up studio.", dedupe_key: "pay-x", action: "pay it", amount: 99, currency: "EUR", recipient: "Made Up Studio" });
+  const report = { accounts: [{ id: "tiktok", label: "TikTok", state: "red" }] };
+  const r = await P.sweep(d, DAY0 + 30 * MIN, { desk: () => needsDesk(d, DAY0 + 30 * MIN, { report }), env: ENV(), send: f.send });
+  assert.equal(r.newKeys.length, 2);
+  const last = f.calls.at(-1).payload;
+  assert.equal(last.aps.badge, 3, "the message, the card and the red account");
+  assert.equal(last.aps.alert.body, "2 new things are waiting on you");
+  assert.ok(m1.id);
+  const one = await P.sweep(d, DAY0 + 50 * MIN, { desk: () => needsDesk(d, DAY0 + 50 * MIN, { report }), env: ENV(), send: f.send });
+  assert.deepEqual(one.newKeys, [], "nothing new: no second buzz");
+  const items = S.waitingOnLuke(await needsDesk(d, DAY0, { report }), "2026-11-12", DAY0);
+  assert.deepEqual(items.filter((x) => x.kind !== "message").map((x) => x.text).sort(), ["Ledger needs your yes or no", "TikTok needs a look"]);
+});

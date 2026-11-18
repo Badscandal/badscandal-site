@@ -5,9 +5,10 @@
 
    Written for bots that follow instructions literally: every description says when to use the tool
    and what to put in each field, and every refusal says what to do instead. */
-import { hasAccountCheck, loadReport, recordAccountCheck } from "./account-health.mjs";
+import { hasAccountCheck, recordAccountCheck } from "./account-health.mjs";
 import { SONGS, homeCardSong } from "./songs.mjs";
 import * as C from "./action-cards.mjs";
+import { healthReport, needsDesk } from "./needs.mjs";
 import { pingNames } from "./desk-push.mjs";
 import * as S from "./staff.mjs";
 import * as P from "./profile-images.mjs";
@@ -232,7 +233,7 @@ export const TOOLS = [
       note: str("One line (240 characters at most). Required with blocked (what is needed and from whom) and cancelled (why). With done: what was done. No passwords or codes."),
       title: str("Optional: the task's corrected wording, shown on HQ instead of the sheet's (for example a wrong number in it).") }, ["bot", "task", "status"]) },
   { name: "read_messages", title: "Read messages", readOnly: true,
-    description: 'Read the message board, newest first. show: mine (to you, to all, or from you: the default), open (everything still waiting on someone), all (the whole board). Narrow it with since, from, to, about or search; unread: true gives only what came for you since you last read; id gives ONE message in full; count_only: true answers just "anything new for me?" cheaply (it does not count as reading). Reading without since/from/to/about/search/id counts as reading your messages.',
+    description: 'Read the message board, newest first. show: mine (to you, to all, about you, answers to yours, or from you: the default), open (everything still waiting on someone), all (the whole board). Narrow it with since, from, to, about or search; unread: true gives only what came for you since you last read; id gives ONE message in full; count_only: true answers just "anything new for me?" cheaply (it does not count as reading). Reading without since/from/to/about/search/id counts as reading your messages.',
     inputSchema: obj({ bot: BOT, show: str("mine | open | all. Default mine.", { enum: ["mine", "open", "all"] }),
       limit: { type: "integer", description: "How many to return, 1 to 50. Default 20.", minimum: 1, maximum: 50 },
       since: str('Only messages written from then on: a day "YYYY-MM-DD" (from its start, São Paulo time) or "YYYY-MM-DD HH:MM" (São Paulo time).'),
@@ -479,7 +480,7 @@ export const TOOLS = [
     description: "Read only. The account-health picture HQ already has (Instagram, TikTok, YouTube, Spotify, the site). Nothing is fetched from a platform and nothing is written. Steve, Kevin, Laura, Atlas, Drop and Webmaster (Nova too). Use this instead of guessing, and instead of opening the platform in a browser.",
     inputSchema: obj({ bot: BOT }, ["bot"]) },
   { name: "needs_you", title: "What needs Luke right now (the count on his phone)", readOnly: true,
-    description: "Read only. What is waiting on Luke, counted the way his phone counts it: total = decisions waiting on him (lyrics and pitch approvals too) + his open Yes/No/Edit cards (open; in quiet hours most wait in held_until_morning) + accounts whose health is red. Alerts like a late step are not in total. Nothing is changed. Use this to see what is waiting before you ask again.",
+    description: "Read only. What is waiting on Luke, counted the way his phone and his app badge count it: total = messages waiting on him (decisions, lyrics and pitch approvals, replies, actions) + Spotify for Artists songs only he can name + his open Yes/No/Edit cards (open; in quiet hours most wait in held_until_morning) + accounts whose health is red. waiting lists each one. Alerts like a late step are not in total. Nothing is changed. Use this to see what is waiting before you ask again.",
     inputSchema: obj({ bot: BOT }, ["bot"]) },
   { name: "song_pl", title: "Per-song profit", readOnly: true,
     description: "Read only. Per-song money in, ad spend and the result, from records already on the desk. Ledger, Sheet, Forge and Nova. A figure that was not recorded stays missing. Nothing is written.",
@@ -669,8 +670,10 @@ function idsIn(v, out = new Set()) {
    moved it to "now" while returning 20 messages, so the rest looked already read). Everything for the reader
    since its last read that is NOT in the answer keeps the marker just before the oldest of them. Returns how
    many are still unread. */
-export async function settleRead(store, now, me, since, answer) {
-  const all = await S.listMessages(store, now, 2);
+export async function settleRead(store, now, me, since, answer, list = null) {
+  /* list: the messages the tool already loaded (the marker uses the call's start time, so one that arrived
+     during the call stays unread either way) */
+  const all = Array.isArray(list) ? list : await S.listMessages(store, now, 2);
   const unread = S.messagesFor(all, me, since, Infinity).list; /* oldest first */
   const handed = idsIn(answer);
   const left = unread.filter((m) => !handed.has(m.id));
@@ -681,7 +684,7 @@ export async function settleRead(store, now, me, since, answer) {
   const cut = new Date(at).toISOString();
   const also = [...(since ? since.also : []), ...unread.filter((m) => handed.has(m.id)).map((m) => m.id)];
   const byId = new Map(all.map((m) => [m.id, m]));
-  await S.touchRead(store, at, me, also.filter((id) => byId.has(id) && byId.get(id).at > cut));
+  await S.touchRead(store, at, me, also.filter((id) => byId.has(id) && byId.get(id).at > cut), now);
   return left.length;
 }
 export async function callTool(tool, args, ctx) {
@@ -689,7 +692,7 @@ export async function callTool(tool, args, ctx) {
   const answer = await runTool(tool, args, ctx, read);
   if (!read.me) return answer;
   let left = 0;
-  try { left = await settleRead(ctx.store, ctx.now, read.me, read.since, answer); } catch { /* a marker that could not move never fails the answer */ }
+  try { left = await settleRead(ctx.store, ctx.now, read.me, read.since, answer, read.list); } catch { /* a marker that could not move never fails the answer */ }
   if (left && tool.name === "read_messages" && answer && typeof answer === "object")
     answer.still_unread = `${left} message${left === 1 ? "" : "s"} for you ${left === 1 ? "is" : "are"} not in this answer and still count as unread: call read_messages with unread: true to get ${left === 1 ? "it" : "them"}.`;
   return answer;
@@ -900,13 +903,19 @@ async function runTool(tool, args, ctx, read) {
         return { you: me, message: short(m) };
       }
       const all = await S.listMessages(store, now, 2);
+      read.list = all;
       const forMe = (since) => { const got = S.messagesFor(all, me, since, 1000); return got.list.reverse(); };
       if (args.count_only === true) {
         const fresh = forMe(readSince);
         return { you: me, anything_new: fresh.length > 0, count: fresh.length, last_read: readSince ? S.spStamp(Date.parse(readSince.at)) : "never", waiting_on_you: S.waitingOn(all, me).length };
       }
       const show = args.unread === true ? "unread" : args.show || "mine", n = Math.min(50, Math.max(1, Number(args.limit) || 20));
-      let pick = show === "unread" ? forMe(readSince) : show === "all" ? all : show === "open" ? all.filter((m) => S.isOpen(m) && (m.to === me || m.from === me)) : all.filter((m) => m.to === me || m.to === "all" || m.from === me);
+      let pick = show === "unread" ? forMe(readSince) : show === "all" ? all : show === "open" ? all.filter((m) => S.isOpen(m) && (m.to === me || m.from === me)) : (() => {
+        /* mine = everything my_day would hand over (about you, answers to yours) plus what you sent, so a broad
+           read can always move the read marker past it (18 Nov 2026) */
+        const sent = new Set(all.filter((m) => m.from === me).map((m) => m.id));
+        return all.filter((m) => m.to === me || m.to === "all" || m.from === me || m.about === me || (!!m.re && sent.has(m.re)));
+      })();
       pick = S.filterMessages(pick, roster, args);
       /* unread hands over the OLDEST first, so a long backlog is read in order and the marker can move past it */
       const total = pick.length;
@@ -1225,23 +1234,27 @@ async function runTool(tool, args, ctx, read) {
       return { saved: true, song: r.title, field: f.key, label: f.label, value: v.length > 200 ? v.slice(0, 200) + `… (${v.length} characters saved)` : v };
     }
     case "account_health": {
-      const report = await loadReport({ store, now });
+      /* the same inputs as the board (stored Instagram copy, claims, song-page builds), so the tool and Luke's
+         phone show the same health (18 Nov 2026: the tool read without them) */
+      const report = await healthReport(store, now, { ig: ctx.ig ? ctx.ig() : null });
       return { read_only: true, wrote: false, accounts: (report.accounts || []).map((a) => ({ id: a.id, label: a.label, owner: a.owner, state: a.state, headline: a.headline })),
         ...(report.connection ? { connection: report.connection } : {}), note: "Read only. Nothing was fetched from a platform and nothing was written." };
     }
     case "needs_you": {
-      /* the same count as Luke's phone (C.needsCount, 18 Nov 2026): decisions + cards + red accounts */
-      const [board, msgs, claimsDoc, builds] = await Promise.all([C.workspaceNeeds(store, now, "badscandal"), S.listMessages(store, now, 2),
-        S.readDoc(store, "claims.json", { items: [] }).catch(() => ({ data: { items: [] } })), S.songPages(store, now).catch(() => [])]);
-      const report = await loadReport({ store, ig: ctx.ig ? ctx.ig() : null, now, claims: claimsDoc.data, builds }).catch(() => null);
-      const count = C.needsCount({ messages: msgs, cards: board, report });
-      const open = [].concat(board.needsYou || [], board.held || []);
-      return { read_only: true, wrote: false, total: count.total, line: count.line, quiet_hours: !!board.quiet,
-        decisions: C.decisionsForLuke(msgs).map((m) => ({ id: m.id, from: m.from, kind: m.approval && m.approval.what ? m.approval.what + " approval" : "decision", asked: m.sp, first_line: String(m.text || "").split("\n")[0].slice(0, 120) })),
-        open: open.length, needs_you: board.needsYou || [], held_until_morning: board.held || [],
-        accounts_red: C.redAccounts(report).map((a) => a.label),
-        ...(report ? {} : { accounts_note: "Account health could not be read just now: red accounts are not in total." }),
-        note: "Read only. total is the number on Luke's phone (\"N need you\"): decisions waiting on him, his open Yes/No/Edit cards (open, including the ones held until 08:00 in quiet hours) and red accounts. Alerts like late steps are not in it. Nothing was changed." };
+      /* the ONE list (S.waitingOnLuke on needsDesk, 18 Nov 2026): the number on Luke's phone, Today's line and
+         the app badge. Texts say who and what kind; the first line of a question is masked like my_day's. */
+      const [desk, board] = await Promise.all([needsDesk(store, now, { ig: ctx.ig ? ctx.ig() : null }), C.workspaceNeeds(store, now, "badscandal")]);
+      const count = C.needsCount(desk, today, now);
+      const byId = Object.fromEntries((desk.messages || []).map((m) => [m.id, m]));
+      return { read_only: true, wrote: false, total: count.total, line: count.line, by_kind: count.byKind, quiet_hours: !!board.quiet,
+        waiting: count.items.map((x) => {
+          const m = x.kind === "message" ? byId[x.id] : null;
+          return { kind: m ? (m.approval && m.approval.what ? m.approval.what + " approval" : m.needs) : x.kind, id: x.id, what: x.text,
+            ...(m ? { asked: m.sp, first_line: S.hidePrivate(String(m.text || "").split("\n")[0].slice(0, 120)) } : {}) };
+        }),
+        open: (board.needsYou || []).length + (board.held || []).length, needs_you: board.needsYou || [], held_until_morning: board.held || [],
+        ...(desk.health ? {} : { accounts_note: "Account health could not be read just now: red accounts are not in total." }),
+        note: "Read only. total is the number on Luke's phone (\"N need you\"), Today's \"N things waiting on you\" and the app badge: messages waiting on him (decisions, lyrics and pitch approvals, replies, actions), Spotify for Artists songs only he can name, his open Yes/No/Edit cards (open; in quiet hours most wait in held_until_morning) and red accounts. Alerts like a late step are not in it. Nothing was changed." };
     }
     case "song_pl": {
       const hqAns = ctx.hq ? await ctx.hq().catch(() => null) : null;
@@ -1270,6 +1283,7 @@ async function runTool(tool, args, ctx, read) {
   /* the rest need the whole desk and, when it can be read, the dashboard's numbers */
   const [desk, hqAns, cardDoc] = await Promise.all([S.loadDesk(store, now), ctx.hq ? ctx.hq().catch(() => null) : null, S.readDoc(store, "action-cards.json", []).catch(() => ({ data: [] }))]);
   const hq = hqAns && hqAns.team ? hqAns : null;
+  read.list = desk.messages;
   const b = S.board(desk, now, hq);
   const actionCards = Array.isArray(cardDoc && cardDoc.data) ? cardDoc.data : [];
   const rel = (desk.releases || []).map((r) => S.releaseView(r, today, { sightings: desk.sightings, messages: desk.messages, actionCards }));

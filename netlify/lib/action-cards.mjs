@@ -160,29 +160,31 @@ export function needsHeader(cards) {
 }
 
 /* THE Needs you count for BADSCANDAL (18 Nov 2026, handoff bug 1: the phone said "1 need you · 11 at risk" and
-   "0 need you · nothing at risk" on one screen, and the needs_you tool said open: 0). One rule, used by the board
-   (the phone's line) and the needs_you tool, and the same as js/hq-look.js needTotal():
-     decisions = open messages to Luke that need a decision and carry options (lyrics and pitch approvals too)
-     cards     = his open Yes/No/Edit cards, including the ones held for the morning in quiet hours
-     accounts  = accounts whose health is red, and the HQ connection when it is down
-   Alerts (late steps, the cap, quiet bots...) are NOT in it: the phone calls those "to check". */
-export function decisionsForLuke(messages) {
-  return (messages || []).filter((m) => m && !m.resolved && m.to === "Luke" && m.needs === "decision" && Array.isArray(m.options) && m.options.length > 0);
-}
-export function redAccounts(report) {
-  const out = ((report && report.accounts) || []).filter((a) => a && a.state === "red").map((a) => ({ id: a.id || "", label: a.label || "" }));
-  if (report && report.connection && report.connection.state === "down") out.push({ id: "connection", label: "HQ connection" });
-  return out;
-}
+   "0 need you · nothing at risk" on one screen, and the needs_you tool said open: 0). It is S.waitingOnLuke on a
+   desk that also carries his open cards and the account health (netlify/lib/needs.mjs needsDesk):
+     message  open messages to Luke that need a decision, a reply or an action (lyrics and pitch approvals too)
+     spotify  a song in Spotify for Artists only he can name
+     card     his open Yes/No/Edit cards, including the ones held for the morning in quiet hours
+     account  accounts whose health is red, and the HQ connection when it is down
+   The same list is the phone's pulse, Today's "N things waiting on you", the app badge and the push alerts,
+   and js/hq-look.js needTotal() is the same rule for an offline copy. Alerts (late steps, the cap, quiet
+   bots...) are NOT in it: the phone calls those "to check". */
+export const redAccounts = S.redAccounts;
 export const needLine = (n) => (n ? `${n} need you` : "Nothing needs you");
-export function needsCount({ messages, cards, report } = {}) {
-  const decisions = decisionsForLuke(messages);
-  const live = (cards && cards.needsYou) || [], held = (cards && cards.held) || [];
-  const red = redAccounts(report);
-  const total = decisions.length + live.length + held.length + red.length;
-  return { total, decisions: decisions.length, cards: live.length + held.length, held: held.length, accounts: red.length, line: needLine(total),
-    money: moneyLine([...live, ...held]) };
+export function needsCount(desk, today, now) {
+  const byMsg = new Map(((desk && desk.messages) || []).map((m) => [m.id, m]));
+  const items = S.waitingOnLuke(desk || {}, today, now).map((x) => {
+    const m = x.kind === "message" ? byMsg.get(x.id) : null;
+    return m ? { ...x, needs: m.needs, options: Array.isArray(m.options) && m.options.length > 0 } : x;
+  });
+  const byKind = {};
+  for (const x of items) {
+    const k = x.kind === "message" ? (x.needs === "decision" ? "decision" : x.needs) : x.kind;
+    byKind[k] = (byKind[k] || 0) + 1;
+  }
+  return { total: items.length, line: needLine(items.length), byKind, items: items.map(({ key, kind, needs, options, id, text, href }) => ({ key, kind, ...(needs ? { needs } : {}), ...(options ? { options } : {}), id, text, href })) };
 }
+
 function moneyOf(a) {
   const has = a.amount != null && String(a.amount).trim() !== "";
   if (!has) return { amount: null, currency: "" };

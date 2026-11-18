@@ -2775,9 +2775,12 @@ export async function getSeen(store, roster) {
    reply has been read"): read/<name>.json is written ONLY by the tools that hand a reader its messages
    (my_day, read_messages, and luke_briefing for Alfred). seen/<name>.json stays "last used the desk":
    a bot that only posts an update has used the desk, not read its messages. */
-export async function touchRead(store, now, name, also = []) {
-  const ids = [...new Set(also)].filter((x) => typeof x === "string").slice(-200);
-  try { await store.setJSON(`read/${low(name).replace(/[^a-z0-9]/g, "")}.json`, { at: new Date(now).toISOString(), ...(ids.length ? { also: ids } : {}) }); } catch {}
+/* at = everything up to it was handed over; also = ids handed over after it; readAt = when the reading happened
+   (shown as "Read by X <time>", never earlier than the message) */
+export async function touchRead(store, now, name, also = [], readAt = now) {
+  const ids = [...new Set(also)].filter((x) => typeof x === "string").slice(-1000);
+  const doc = { at: new Date(now).toISOString(), ...(ids.length ? { also: ids } : {}), ...(readAt !== now ? { readAt: new Date(readAt).toISOString() } : {}) };
+  try { await store.setJSON(`read/${low(name).replace(/[^a-z0-9]/g, "")}.json`, doc); } catch {}
 }
 /* the whole marker: {at, also} (also = ids newer than at that were handed over too; 18 Nov 2026, a read
    that handed over 20 of 25 must not mark the other 5) or null */
@@ -5048,7 +5051,7 @@ export async function loadDesk(store, now) {
 export function seenBy(read, to, at, id) {
   if (!to || to === "all" || to === "Luke" || to === "HQ") return { seen: null, seenAt: null };
   const s = read && read[to];
-  return wasRead(s, { at, id }) ? { seen: true, seenAt: s.at } : { seen: false, seenAt: null };
+  return wasRead(s, { at, id }) ? { seen: true, seenAt: s.readAt && s.readAt > s.at ? s.readAt : s.at } : { seen: false, seenAt: null };
 }
 /* a note to everyone: "Read by 7 of 12" = the bots on the roster (not its sender) that read it since */
 export function readCount(read, roster, m) {
@@ -5071,7 +5074,7 @@ export function answeredByLuke(messages, seen, now) {
     if (!at || at < since) continue;
     const text = rep ? rep.text : set.note && set.note !== "answered" ? set.note : "Marked as done";
     out.push({ id: m.id, from: m.from, to: m.to, text: m.text, needs: m.needs, at: m.at, sp: m.sp,
-      reply: { by: "Luke", kind: rep ? "reply" : "settled", text, at, sp: spStamp(Date.parse(at)), ...seenBy(seen, m.from, at) } });
+      reply: { by: "Luke", kind: rep ? "reply" : "settled", text, at, sp: spStamp(Date.parse(at)), ...seenBy(seen, m.from, at, rep ? rep.id : undefined) } });
   }
   return out.sort((a, b) => (a.reply.at < b.reply.at ? 1 : -1)).slice(0, 10);
 }
@@ -5101,11 +5104,27 @@ export const releaseStepsOut = () => RELEASE_STEPS.map((s) => ({ key: s.key, lab
    The text shows on a lock screen: it says who and what kind, NEVER the message itself (no amounts,
    payers, account names or lyrics). Oldest first. now (optional) = the clock for the sightings' claims. */
 const ASKS = { decision: "asked you to decide something", reply: "is waiting for your reply", action: "needs you to do something" };
+/* Accounts whose health is red, and the HQ connection when it is down (account-health.mjs report). */
+export function redAccounts(report) {
+  const out = ((report && report.accounts) || []).filter((a) => a && a.state === "red").map((a) => ({ id: a.id || "", label: a.label || "" }));
+  if (report && report.connection && report.connection.state === "down") out.push({ id: "connection", label: "HQ connection" });
+  return out;
+}
 export function waitingOnLuke(desk, today, now = null) {
   const out = [];
   for (const m of waitingOn(desk.messages || [], "Luke")) {
     if (!ASKS[m.needs]) continue;
     out.push({ key: "m:" + m.id, kind: "message", id: m.id, text: `${clean(m.from, 40)} ${ASKS[m.needs]}`, href: "#messages/" + m.id, at: m.at || null });
+  }
+  /* 18 Nov 2026 (handoff bug 1): his open Yes/No/Edit cards (held overnight ones too) and red accounts are
+     waiting on him as well, when the caller loaded them (netlify/lib/needs.mjs needsDesk). The lock-screen
+     text names who and what kind only: never an amount, a payer or the card's text. */
+  for (const c of desk.lukeCards || []) {
+    if (!c || !c.id) continue;
+    out.push({ key: "c:" + c.id, kind: "card", id: c.id, text: `${clean(c.owner || "HQ", 40)} needs your yes or no`, href: "#today", at: null });
+  }
+  for (const a of redAccounts(desk.health)) {
+    out.push({ key: "a:" + a.id, kind: "account", id: a.id, text: `${clean(a.label || "An account", 40)} needs a look`, href: "#growth", at: null });
   }
   const sv = sightingsView(desk.sightings || null, desk.releases || [], today, now);
   for (const x of sv.items) {

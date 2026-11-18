@@ -53,17 +53,19 @@
     var caughtUp = need === 0 && risk === 0;
     return { need: need, risk: risk, caughtUp: caughtUp, line: caughtUp ? "You're all caught up" : need + " need you · " + risk + " to check" };
   }
-  /* The server's rule (netlify/lib/action-cards.mjs needsCount), for when the board has no count (offline copy):
-     open decisions to Luke with options + his open cards (live and held) + red account rows. */
+  /* The server's rule (S.waitingOnLuke via action-cards.mjs needsCount), for when the board has no count (an
+     offline copy): open messages to Luke needing a decision, reply or action + Spotify for Artists songs only he
+     can name + his open cards (live and held) + red account rows. */
   function needTotal(o) {
     o = o || {};
-    var decisions = (o.messages || []).filter(function (m) {
-      return m && !m.resolved && m.to === "Luke" && m.needs === "decision" && (m.options || []).length > 0;
+    var messages = (o.messages || []).filter(function (m) {
+      return m && !m.resolved && m.to === "Luke" && /^(decision|reply|action)$/.test(String(m.needs || ""));
     }).length;
+    var spotify = ((o.sightings && o.sightings.items) || []).filter(function (x) { return x && (x.state === "unknown" || x.state === "retry"); }).length;
     var auto = o.auto || {};
     var cards = ((auto.needsYou || []).length) + ((auto.held || []).length);
     var accounts = (o.healthNeeds || []).length;
-    return { total: decisions + cards + accounts, decisions: decisions, cards: cards, accounts: accounts };
+    return { total: messages + spotify + cards + accounts, messages: messages, spotify: spotify, cards: cards, accounts: accounts };
   }
 
   /* A milestone only when the latest logged point crossed a mark the one before had not. */

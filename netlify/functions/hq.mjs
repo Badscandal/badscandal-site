@@ -65,7 +65,7 @@ export default async (req, context) => {
   /* the HQ apps' push alerts (12 Nov 2026): the same login, then netlify/lib/push-api.mjs */
   if (url.pathname.startsWith("/api/hq/push/")) {
     try {
-      return await pushApi(req, { store: () => (prod ? getStore({ name: "staff", consistency: "strong" }) : getDeployStore({ name: "staff", consistency: "strong" })), env: (k) => Netlify.env.get(k) });
+      return await pushApi(req, { store: () => (prod ? getStore({ name: "staff", consistency: "strong" }) : getDeployStore({ name: "staff", consistency: "strong" })), ig: () => igStore(prod), env: (k) => Netlify.env.get(k) });
     } catch (e) {
       console.error("hq push failed", e?.name || "Error");
       return json(500, { error: "Something went wrong" });

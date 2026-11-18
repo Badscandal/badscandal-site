@@ -19,6 +19,7 @@ import { morning, sweep } from "../lib/push.mjs";
 import * as S from "../lib/staff.mjs";
 import { readSongReport } from "../lib/github.mjs";
 import { profileAlerts } from "../lib/profile-images.mjs";
+import { needsDesk } from "../lib/needs.mjs";
 import { syncInstagram } from "../lib/instagram.mjs";
 import { syncAdPosts } from "../lib/postrank.mjs";
 import { loadHq } from "../lib/hq-load.mjs";
@@ -30,7 +31,8 @@ export default async () => {
   const store = getStore({ name: "staff", consistency: "strong" });
   const env = (k) => Netlify.env.get(k);
   let loaded = null;
-  const desk = () => loaded || (loaded = S.loadDesk(store, now));
+  /* the desk with Luke's open cards and the account health: the same "waiting on you" list as the phone */
+  const desk = () => loaded || (loaded = needsDesk(store, now, { ig: getStore({ name: "instagram", consistency: "strong" }) }));
   try {
     const s = await sweep(store, now, { desk, env });
     console.log(`push hourly sweep: ${s.skipped || `${s.newKeys.length} new, ${s.buzzed} buzzed, ${s.silent} silent`}`);
