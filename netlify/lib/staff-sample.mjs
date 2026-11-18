@@ -70,7 +70,7 @@ export function sampleReleases(now = Date.now()) {
       upload: { status: "done", note: "Uploaded with the release date", link: "https://example.com/sample/routenote", at: iso(-8), by: "Drop" },
       approved: { status: "blocked", note: "RouteNote wants a cover without the web address on it. Needs a new cover from Luke.", at: iso(-2), by: "Drop" },
       page: { status: "working", note: "Page made, waiting for the cover", at: iso(-1), by: "Webmaster" } }),
-    log: [L(-11, "Luke", "Luke started the pack"), L(-9, "Luke", "Luke sent it to the team for " + S.dayWords(mdsbDate)), L(-8, "Drop", "Drop: Uploaded to RouteNote with the release date — done"), L(-2, "Drop", "Drop: Approved by RouteNote (nothing waiting) — blocked")] };
+    log: [L(-11, "Luke", "Luke started the pack"), L(-9, "Luke", "Luke sent it to the team for " + S.dayWords(mdsbDate)), L(-8, "Drop", "Drop: Uploaded to RouteNote with the release date — done"), L(-2, "Drop", "Drop: Approved by RouteNote — blocked")] };
 
   const sbDate = d(24), sbSent = d(-2);
   const sb = { id: "slowburn", title: "Slow Burn", date: sbDate, status: "scheduled", createdAt: iso(-3), createdBy: "Luke", updatedAt: iso(0, 9), sentAt: iso(-2), tight: false,
@@ -166,7 +166,7 @@ export function sampleDesk(now = Date.now()) {
   seen.Claude = { at: new Date(ago(130)).toISOString(), tool: "send_message" };
   /* read markers (V6): the same six read their messages when they last came (my_day); so Luke's answer
      to Atlas reads "Read by Atlas", his reply to Drop "Not read yet", and Claude's note to everyone
-     "Read by 6 of 13" */
+     "Read by 6 of 14" */
   const read = Object.fromEntries(Object.entries(seen).filter(([n]) => n !== "Claude").map(([n, v]) => [n, { at: v.at }]));
   return { roster: ROSTER, updates, messages, cards: { atlas: { workingOn: "Backfilling Touch Me's daily rows to release day", needs: "", at: new Date(ago(200)).toISOString() }, kevin: { workingOn: "TikTok banner", needs: "Luke's phone code for TikTok", at: new Date(ago(400)).toISOString() } },
     seen, income: S.incomeReport(entries, checks, SOURCES.map((s) => ({ match: [], category: "Other", currency: "", lands: "", how: "", blocker: "", needsLuke: "", ...s })), today), config: { botsOn: true, changedAt: null },
@@ -194,6 +194,14 @@ export function sampleBankStatus(now = Date.now()) {
 
 export function sampleBoard(now = Date.now()) {
   const today = S.spDay(now), desk = sampleDesk(now);
+  desk.contentIdeas = { latest: { at: new Date(now - 3600000).toISOString(), by: "Spark", day: today,
+    best: { platform: "Instagram", title: "Northwind clip", views: 10000, likes: 400, comments: 20, saves: 80, shares: 40, perView: 0.054, link: "https://example.com/northwind" },
+    ideas: [
+      { hook: "Open on the drop", text: "Northwind", format: "Reel", platform: "Instagram", why: "The clip's first second holds." },
+      { hook: "One line, then the beat", text: "Stay for the beat", format: "short", platform: "TikTok", why: "Similar artists' outliers start with one line." },
+      { hook: "The chorus, no intro", text: "Chorus first", format: "short", platform: "YouTube", why: "The official clip with the chorus first had the higher rate." },
+    ],
+    compared: "A similar artist's outlier opened on the chorus." } };
   const sheets = sampleSheets(today, now);
   const hq = hqModel(sheets, today, {}, sampleMeta(sheets, today), S.spHM(now), { updates: desk.updates, overlay: S.dutyOverlay(desk.updates, today),
     releases: desk.releases.filter((r) => r.status !== "cancelled").map((r) => S.releaseView(r, today, { sightings: desk.sightings })), sightings: desk.sightings });

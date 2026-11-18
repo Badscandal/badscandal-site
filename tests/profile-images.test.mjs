@@ -157,7 +157,7 @@ test("a job open more than a day asks Luke once", async () => {
 });
 
 test("the new tools are on the connector for the owners, and the page buttons set their own colours", () => {
-  assert.equal(TOOLS.length, 48); /* profile image tools plus account_health, needs_you, song_pl (18 Nov 2026 night test) */
+  assert.equal(TOOLS.length, 49); /* content_ideas (Spark) + profile image tools plus account_health, needs_you, song_pl (18 Nov 2026 night test) */
   for (const name of ["profile_jobs", "profile_master", "profile_rework", "profile_uploaded"]) {
     assert.ok(TOOLS.some((t) => t.name === name), name);
     assert.ok(toolsFor("Atlas", R).some((t) => t.name === name), name);
@@ -172,7 +172,7 @@ test("the new tools are on the connector for the owners, and the page buttons se
   assert.match(page, /color-scheme:\s*dark/);
   assert.match(page, /id="profPhoto"/);
   assert.match(page, /id="profBanner"/);
-  assert.match(sw, /var CACHE = "bs-hq-v9"/);
+  assert.match(sw, /var CACHE = "bs-hq-v10"/);
   const fn = readFileSync(new URL("../netlify/functions/staff.mjs", import.meta.url), "utf8");
   assert.match(fn, /profile_rework/);
   assert.match(fn, /profile-file/);

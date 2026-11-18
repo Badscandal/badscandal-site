@@ -6,9 +6,10 @@
   command = ""
 
 # Server-side only (nothing here reaches the browser):
-#   netlify/functions/      hit.mjs (/api/hit, the visit counter), capi.mjs (/api/capi, Meta
-#                           Conversions API), admin.mjs (/api/admin/*), rollup.mjs (daily, 90-day rule)
-#   netlify/edge-functions/ touchme-geo.js (country flag for the /touchme consent bar)
+#   netlify/functions/      every function file names its own path or schedule in `export const config`
+#                           (hit, capi, admin, hq, staff, bank, feed and the scheduled jobs)
+#   netlify/edge-functions/ song-geo.js (country flag for the song pages' consent bar; its path list
+#                           is rewritten by tools/new-song.mjs)
 # Netlify installs @netlify/blobs from package.json for the functions.
 [functions]
   directory = "netlify/functions"

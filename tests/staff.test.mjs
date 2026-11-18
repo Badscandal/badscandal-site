@@ -126,7 +126,7 @@ test("staff: the roster, the sources and the guide are checked before they are s
   const d = memoryDesk();
   assert.equal((await S.getRoster(d)).length, S.DEFAULT_ROSTER.length, "the built-in team until the real roster is loaded");
   await S.setRoster(d, [{ name: "Nova", role: "Chief of staff", why: "Runs the day", time: "08:00", schedule: [{ time: "08:05", what: "Reset duties" }] }, { name: "Echo", role: "New" }]);
-  assert.deepEqual(S.botNames(await S.getRoster(d)), ["Nova", "Echo", "Licence"], "a seed from before Licence existed still knows the name");
+  assert.deepEqual(S.botNames(await S.getRoster(d)), ["Nova", "Echo", "Licence", "Spark"], "a seed from before Licence and Spark existed still knows the names");
   assert.throws(() => S.setRoster(d, [{ name: "Luke" }]), /can't be a bot name/);
   assert.throws(() => S.setRoster(d, [{ name: "Nova" }, { name: "nova" }]), /twice/);
   assert.throws(() => S.setRoster(d, [{ name: "Nova", access: "password: abc12345" }]), /Never write/);

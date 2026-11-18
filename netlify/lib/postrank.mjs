@@ -138,7 +138,7 @@ export function rankPosts(posts, adDoc, o = {}) {
         }
       }
     }
-    const row = { id: p.id, at: p.at, caption: p.caption || "", type: p.type || "post", link: p.link || "", window, views, engaged, rate: views ? engaged / views : null,
+    const row = { id: p.id, at: p.at, caption: p.caption || "", type: p.type || "post", link: p.link || "", ...(p.thumb ? { thumb: p.thumb } : {}), window, views, engaged, rate: views ? engaged / views : null,
       ...nums, ownComments: ownC, deep: views ? (nums.saves + nums.shares) / views : null,
       follows, followRate: follows != null && views ? follows / views : null, profileVisits: visits,
       song: songs[p.id] || songs[shortOf(p.link)] || "",

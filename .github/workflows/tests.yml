@@ -1,6 +1,7 @@
 # Every test on every pull request (17 Nov 2026): Luke works from his phone through Claude Code on the web, so the
 # PR itself shows a green tick or a red cross before he says "deploy". Node 22 = what the song-page build uses (a
-# timer that only failed there stopped /loveyou on 17 Nov 2026). Read only: it never pushes anything.
+# timer that only failed there stopped /loveyou on 17 Nov 2026). Node 24 too (18 Nov 2026): the rule is both.
+# Read only: it never pushes anything.
 name: Tests
 
 on:
@@ -14,10 +15,14 @@ jobs:
   test:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [22, 24]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: ${{ matrix.node }}
       - run: npm ci --no-audit --no-fund
       - run: npm test

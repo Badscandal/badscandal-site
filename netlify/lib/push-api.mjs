@@ -13,7 +13,8 @@
    writes and answers /waiting from the made-up desk. Logic: netlify/lib/push.mjs, netlify/lib/apns.mjs. */
 import { importPushKey, KEY_BLOB, pushKeyFromText, TEAM_ID } from "./apns.mjs";
 import { registerDevice, sendTest, unregisterDevice } from "./push.mjs";
-import { loadDesk, spDay, waitingOnLuke } from "./staff.mjs";
+import { spDay, waitingOnLuke } from "./staff.mjs";
+import { needsDesk, sampleNeedsDesk } from "./needs.mjs";
 import { sampleDesk } from "./staff-sample.mjs";
 
 const NO_STORE = { "Cache-Control": "no-store", "X-Robots-Tag": "noindex, nofollow" };
@@ -38,8 +39,8 @@ export async function pushApi(req, o) {
   const now = o.now || Date.now();
   if (req.method === "GET") {
     if (path !== "waiting") return json(404, { error: "Not found" });
-    if (sample) return json(200, { sample: true, ...waitingOut(sampleDesk(now), now) });
-    return json(200, waitingOut(await loadDesk(o.store(), now), now));
+    if (sample) return json(200, { sample: true, ...waitingOut(await sampleNeedsDesk(now), now) });
+    return json(200, waitingOut(await needsDesk(o.store(), now, { ig: o.ig ? o.ig() : null }), now));
   }
   if (req.method !== "POST" || !["register", "unregister", "test", "key"].includes(path)) return json(404, { error: "Not found" });
   const origin = req.headers.get("origin");

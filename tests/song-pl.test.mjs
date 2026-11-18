@@ -181,7 +181,7 @@ test("the page escapes a song name", () => {
 });
 
 test("recording a song on spend or a payment does not add a tool", async () => {
-  assert.equal(TOOLS.length, 48); /* account_health, needs_you, song_pl (18 Nov 2026 night test) + profile_jobs, profile_master, profile_rework, profile_uploaded (PR #87) */
+  assert.equal(TOOLS.length, 49); /* content_ideas (Spark) + account_health, needs_you, song_pl (18 Nov 2026 night test) + profile_jobs, profile_master, profile_rework, profile_uploaded (PR #87) */
   assert.ok(tool("record_spend").inputSchema.properties.song);
   assert.ok(tool("submit_income").inputSchema.properties.song);
   assert.ok(tool("submit_income").inputSchema.properties.store);

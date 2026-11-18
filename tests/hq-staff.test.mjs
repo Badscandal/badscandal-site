@@ -228,7 +228,7 @@ test("the page: Messages is the tenth tab, the new script is kept offline, and n
   assert.doesNotMatch(shell, /scrollBy\(/, "the deep link is one plain jump");
   assert.doesNotMatch(page, /scroll-behavior:\s*smooth/);
   /* 18 Nov 2026: profile masters. Cache is v8 so phones drop the old shell. */
-  assert.match(sw, /var CACHE = "bs-hq-v9"/);
+  assert.match(sw, /var CACHE = "bs-hq-v10"/);
   assert.match(sw, /"\/js\/hq-look\.js\?v=" \+ V/); assert.match(sw, /"\/js\/hq-phone\.js\?v=" \+ V/); assert.match(sw, /"\/js\/hq-workspaces\.js\?v=" \+ V/); assert.match(sw, /"\/js\/hq-cmd\.js\?v=" \+ V/); assert.match(sw, /"\/js\/hq-staff\.js\?v=" \+ V/); assert.match(sw, /"\/js\/hq-app\.js\?v=" \+ V/);
   for (const [name, src] of [["hq-staff.js", staff], ["hq.js", readFileSync(new URL("../js/hq.js", import.meta.url), "utf8")]]) assert.doesNotMatch(src, /\b(confirm|alert|prompt)\s*\(/, name + ": questions are asked on the page, never in a browser dialog");
   assert.doesNotMatch(staff, /innerHTML\s*=\s*[^;]*\b(m|th|r|w|e|s|a)\.(text|message|payer|note|name|task|blocker)\b(?![^;]*esc\()/, "board text is escaped");
@@ -261,9 +261,9 @@ test("replies: 'Read by Nova 17:10' / 'Not read yet' / 'Read by 7 of 12', and no
   assert.deepEqual(L.seenWords({ to: "all", seen: null, read: { by: 0, of: 11, names: [] } }, TODAY), { seen: false, text: "Not read yet", note: "" });
   for (const to of ["all", "Luke", "HQ"]) assert.equal(L.seenWords({ to, seen: null }, TODAY), null, to);
   assert.equal(L.seenWords(null, TODAY), null);
-  /* the made-up board: Claude's note to everyone reads "Read by 6 of 13" */
+  /* the made-up board: Claude's note to everyone reads "Read by 6 of 14" */
   const b = sampleBoard(NOW), note = b.messages.find((m) => m.to === "all" && m.from === "Claude");
-  assert.equal(L.seenWords(note, b.today).text, "Read by 6 of 13");
+  assert.equal(L.seenWords(note, b.today).text, "Read by 6 of 14");
   /* nowhere on the page says "Seen by" any more */
   const staff = readFileSync(new URL("../js/hq-staff.js", import.meta.url), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
   const lib = readFileSync(new URL("../js/hq-lib.js", import.meta.url), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
@@ -402,13 +402,13 @@ test("releases: one card per song (the desk's first), the sheet's own rows only 
   assert.match(L.cancelQuestion({ title: "X", status: "draft" }), /Nobody was told/);
   assert.match(L.cancelQuestion({ title: "X", status: "scheduled" }), /The team is told to stop/);
   /* the pipeline's own labels have short words for Today's sentences */
-  assert.equal(L.shortStep("Approved by RouteNote (nothing waiting)"), "RouteNote approval");
+  assert.equal(L.shortStep("Approved by RouteNote"), "RouteNote approval");
   assert.equal(L.shortStep("Something new"), "something new");
 });
 
 test("Team: a late or blocked release step is in Nova's message", () => {
   const w = sampleBoard(NOW).staff.find((x) => x.name === "Drop");
-  assert.match(L.novaMessage(w), /\nRelease step: Me Dá Seu Body: Approved by RouteNote \(nothing waiting\) \(blocked: RouteNote wants/);
+  assert.match(L.novaMessage(w), /\nRelease step: Me Dá Seu Body: Approved by RouteNote \(blocked: RouteNote wants/);
   assert.doesNotMatch(L.novaMessage(worker("A", "late")), /Release step/);
 });
 

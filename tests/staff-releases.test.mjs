@@ -204,8 +204,8 @@ test("releases: the view says what is missing (required first), what is late, an
   assert.equal(v.steps.find((x) => x.key === "page").dueIn, 6);
   assert.deepEqual([v.next.key, v.next.status, v.next.late], ["approved", "blocked", true]);
   /* blocked before late (review, 11 Nov 2026): the step waits on Luke's cover, not on Drop */
-  assert.equal(v.where, "1 of 9 steps done · next: Approved by RouteNote (nothing waiting), Drop, blocked: needs a new cover");
-  assert.deepEqual(v.warnings, ["Approved by RouteNote (nothing waiting) is blocked (Drop): needs a new cover", "Not showing in Spotify for Artists yet, 13 days before release: the pitch cannot be sent until it does"], "the lyrics are needed only after the release now (15 Nov 2026): not a warning 13 days before");
+  assert.equal(v.where, "1 of 9 steps done · next: Approved by RouteNote, Drop, blocked: needs a new cover");
+  assert.deepEqual(v.warnings, ["Approved by RouteNote is blocked (Drop): needs a new cover", "Not showing in Spotify for Artists yet, 13 days before release: the pitch cannot be sent until it does"], "the lyrics are needed only after the release now (15 Nov 2026): not a warning 13 days before");
   assert.deepEqual(v.deal, { kind: "Self-release", label: "", split: "", distributor: "RouteNote (badscandaladmin)", id: "x" });
   const draft = S.releaseView({ id: "y", title: "Y", status: "draft", pack: {} }, today);
   assert.deepEqual(draft.missing.filter((m) => m.required).map((m) => m.key), ["date", "kind", "wav", "artwork", "language", "explicit", "genre", "writers"]);
@@ -271,7 +271,7 @@ test("releases: the site's check names late and blocked steps and a field a step
   assert.ok(r.problems.includes("Me Dá Seu Body: Not showing in Spotify for Artists yet, 13 days before release: the pitch cannot be sent until it does"), r.problems.join("\n"));
   assert.ok(!r.problems.some((p) => /Spotify pitch sent is late|Showing as upcoming in Spotify for Artists is late/.test(p)), "the pitch waits; the Spotify step is said once, with what it means");
   assert.ok(r.problems.includes("'Velvet Night' is upcoming in Spotify for Artists but not in the pipeline: Luke has to say what it is"));
-  assert.ok(r.problems.some((p) => /^Me Dá Seu Body: Approved by RouteNote \(nothing waiting\) is blocked \(Drop\): RouteNote wants a cover/.test(p)));
+  assert.ok(r.problems.some((p) => /^Me Dá Seu Body: Approved by RouteNote is blocked \(Drop\): RouteNote wants a cover/.test(p)));
   assert.ok(!r.problems.some((p) => /lyrics still missing/i.test(p)), "the lyrics are needed after the release now (15 Nov 2026)");
   assert.ok(!r.problems.some((p) => /Approved by RouteNote.*is late/.test(p)), "a blocked step is said once, as blocked");
   assert.ok(!r.problems.some((p) => /^(Touch Me|Survivors|Slow Burn):/.test(p)), "the released one is done; the draft is Luke's; the label release is on time");

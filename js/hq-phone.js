@@ -7,7 +7,6 @@
   var L = window.HQLib;
   var $ = function (id) { return document.getElementById(id); };
   var esc = function (s) { return window.HQ ? HQ.esc(s) : String(s == null ? "" : s); };
-  var lyricsCache = {};
   var QUIET = "bs_hq_quiet", LATER = "bs_hq_later";
   var openCard = "", editing = "";
 
@@ -125,7 +124,8 @@
     var sheet = HQ.sheet ? HQ.sheet() : null;
     var ov = HQ.overview ? HQ.overview() : null;
     if (!V) { el.innerHTML = '<p class="look-empty">The layout did not load. <button type="button" class="sendbtn" data-look-retry>Retry</button></p>'; return; }
-    var waiting = ((board && board.waiting && board.waiting.luke) || []).filter(function (m) { return m && !snoozed(m.id); });
+    var allWaiting = (board && board.waiting && board.waiting.luke) || [];
+    var waiting = allWaiting.filter(function (m) { return m && !snoozed(m.id); });
     var tasks = (sheet && sheet.team && sheet.team.tasks) || (board && board.tasks) || [];
     var stack = V.decisionStack(waiting, tasks, board && board.actionCards);
     var auto = board && board.auto;
@@ -133,11 +133,16 @@
     var risk = [];
     try { risk = L.attention({ sheet: sheet, ov: ov, board: board, bank: window.HQStaff && HQStaff.bank ? HQStaff.bank() : null }); } catch (e) { risk = []; }
     var need = (stack.top ? [stack.top].concat(stack.rest) : []).concat((auto && auto.needsYou) || []).concat(health.needs || []);
-    var pulse = V.homePulse({ need: need, risk: risk });
+    /* ONE count (18 Nov 2026): the server's board.needs.total, the same number the needs_you tool gives. A card
+       snoozed on this phone still counts: it is still waiting on Luke. */
+    var count = board && board.needs && typeof board.needs.total === "number" ? board.needs.total : V.needTotal({ messages: allWaiting, sightings: board && board.sightings, auto: auto, healthNeeds: health.needs }).total;
+    var snoozedN = allWaiting.filter(function (m) { return m && snoozed(m.id); }).length;
+    var pulse = V.homePulse({ need: count, risk: risk });
     var ids = [stack.top].concat(stack.rest).filter(Boolean).map(function (c) { return c.id; });
     if (ids.indexOf(openId) < 0) openId = stack.top ? stack.top.id : "";
     var decision = "";
-    if (auto && auto.header) decision += '<p class="dhead">' + esc(auto.header) + "</p>" + stackHtml(auto.needsYou, true);
+    /* the cards' own line says only the money at risk (the count is the pulse above, said once) */
+    if (auto && auto.needsYou && auto.needsYou.length) decision += (auto.money ? '<p class="dhead">' + esc(auto.money) + "</p>" : "") + stackHtml(auto.needsYou, true);
     if (auto && auto.quiet && auto.held && auto.held.length) decision += '<p class="dnone">Quiet hours until 08:00. These wait.</p>' + stackHtml(auto.held, false);
     if (!stack.caughtUp) {
       decision += '<div class="wstack">' + [stack.top].concat(stack.rest).map(function (c) { return walletCard(c, c.id === openId); }).join("") + "</div>";
@@ -147,9 +152,11 @@
       decision += '<article class="dcard" data-health="' + esc(n.id) + '"><p class="dfrom">' + esc(n.title) + '</p><p class="dline">' + esc(n.line) + "</p>" +
         (n.next ? '<p class="drec">' + esc(n.next) + "</p>" : "") + '<a class="linkbtn" href="' + esc(n.href || "#growth") + '">Open</a></article>';
     });
+    decision += alsoHtml(board, ids.concat(allWaiting.filter(function (m) { return m && snoozed(m.id); }).map(function (m) { return m.id; })));
     decision += healthDots(health);
     if (auto) decision += othersHtml(auto.waitingOnOthers);
-    if (!need.length && !(auto && auto.held && auto.held.length)) decision += '<p class="dnone">Nothing is waiting on you.</p>';
+    if (snoozedN) decision += '<p class="wcount">' + snoozedN + " snoozed on this phone (still counted above)</p>";
+    if (!count && !need.length && !snoozedN && !(auto && auto.held && auto.held.length)) decision += '<p class="dnone">Nothing is waiting on you.</p>';
     if (stack.parked.length) decision += '<details class="look-more"><summary>Waiting on Luke (' + stack.parked.length + ")</summary><ul>" + stack.parked.map(function (t) {
       return "<li><b>" + esc(t.id) + "</b> " + esc(t.title) + (t.note ? "<small>" + esc(t.note) + "</small>" : "") + "</li>";
     }).join("") + "</ul></details>";
@@ -158,7 +165,8 @@
     var today = (board && board.today) || (sheet && sheet.today) || "";
     var hero = V.releaseHero((board && board.releases) || [], today, covers);
     var miles = V.milestones((sheet && sheet.songs) || []);
-    var kpis = V.platformKpis(sheet && sheet.growth, (board && (board.platformHealth || board.healthDots)) || null);
+    /* the platform numbers live on Growth & Fans (18 Nov 2026, Luke: they cluttered Needs you) */
+    var kpis = [];
     var watchers = (L.phoneWatchers ? L.phoneWatchers(board) : []).filter(function (w) { return V.lukeSees(w.line) && V.lukeSees(w.title); });
     var h = V.homeHtml({ pulse: pulse, decision: decision, milestones: miles, hero: hero, kpis: kpis });
     watchers.forEach(function (w) {
@@ -169,6 +177,23 @@
     el.innerHTML = h;
     var ads = $("adsGauge");
     if (ads) ads.innerHTML = gaugeHtml(L.spendGauge(sheet && sheet.money && sheet.money.cap));
+  }
+
+  /* What the count holds that has no card of its own above: replies and actions he owes, a decision with no
+     options, a song in Spotify for Artists only he can name. Each one links to where it is answered.
+     shown: ids already drawn (wallets, snoozed). RouteNote's own card is drawn by the watchers. */
+  function alsoHtml(board, shown) {
+    var items = (board && board.needs && board.needs.items) || [];
+    var routenote = {};
+    ((board && board.waiting && board.waiting.luke) || []).forEach(function (m) { if (m && m.ask === "routenote") routenote[m.id] = true; });
+    var rows = items.filter(function (x) {
+      if (!x || (x.kind !== "message" && x.kind !== "spotify")) return false;
+      return shown.indexOf(x.id) < 0 && !routenote[x.id];
+    });
+    if (!rows.length) return "";
+    return '<div class="dcard"><p class="dfrom">Also waiting on you</p><ul class="also">' + rows.map(function (x) {
+      return '<li><a href="' + esc(x.href || "#messages") + '">' + esc(x.text) + "</a></li>";
+    }).join("") + "</ul></div>";
   }
 
   function healthDots(health) {
@@ -211,7 +236,8 @@
     if (!pick) return "";
     var slide = function (p, label) {
       if (!p) return "";
-      var img = p.cover ? '<img src="' + esc(p.cover) + '" alt="">' : '<span class="nothumb">No cover on file</span>';
+      /* the post's picture; if Instagram's link has expired, the song's cover, else a plain tile with no "missing" words */
+      var img = p.cover ? '<img src="' + esc(p.cover) + '" alt="" loading="lazy" referrerpolicy="no-referrer" data-fallback="' + esc(p.fallback || "") + '">' : '<span class="nothumb">' + esc(p.song) + "</span>";
       return '<article class="mpick"><p class="dfrom">' + esc(label) + "</p>" + img + "<h3>" + esc(p.song) + "</h3>" +
         "<p>" + esc(p.rate) + "</p><p>" + esc(p.deep) + "</p><p>Cost per engagement: " + esc(p.cost) + "</p></article>";
     };
@@ -224,24 +250,7 @@
     return '<section class="monday"><h2>Monday pick</h2><div class="mswipes">' + slide(pick.pick, "This one") + slide(pick.runner, "Runner-up") + "</div>" + acts + "</section>";
   }
 
-  function lyricsCard(c) {
-    var got = lyricsCache[c.releaseId];
-    var body = !got ? '<p class="lyr-wait">Opening the lyrics…</p>' : got.error ? '<p class="lyr-wait">' + esc(got.error) + ' <button class="linkbtn" type="button" data-lyrics="' + esc(c.releaseId) + '">Try again</button></p>'
-      : got.empty ? '<p class="lyr-wait">No lyrics in the pack yet.</p>'
-      : '<div class="lyrics-prev"><p class="ly-title">' + esc(c.song || "Lyrics") + "</p>" + got.lines.map(function (l) { return "<p>" + (l ? esc(l) : " ") + "</p>"; }).join("") + "</div>";
-    return '<article class="dcard lyrics-card" data-card="' + esc(c.id) + '"><p class="dfrom">' + esc(c.from) + " · final lyrics</p>" + body + cardButtons(c) + "</article>";
-  }
-  function loadLyrics(c) {
-    if (!c.releaseId || lyricsCache[c.releaseId] || !window.HQ) return;
-    lyricsCache[c.releaseId] = { wait: true };
-    HQ.getJSON("/api/staff/release?id=" + encodeURIComponent(c.releaseId) + (HQ.sample ? "&sample=1" : "")).then(function (res) {
-      if (res.s !== 200 || !res.j || !res.j.release) { lyricsCache[c.releaseId] = { error: "Couldn't open the lyrics (" + res.s + ")." }; drawHome(); return; }
-      var text = res.j.release.pack && res.j.release.pack.lyrics;
-      var prev = L.lyricsPreview(text);
-      lyricsCache[c.releaseId] = prev.empty ? { empty: true } : { lines: prev.lines };
-      drawHome();
-    }, function () { lyricsCache[c.releaseId] = { error: "No connection." }; drawHome(); });
-  }
+  /* the lyrics card is walletCard() with the diff (18 Nov 2026: the unused lyricsCard()/loadLyrics() were removed) */
 
   function drawWeek() {
     var el = $("weekAhead"); if (!el || !window.HQ) return;
@@ -267,6 +276,15 @@
   function draw() { applyQuiet(); drawHome(); drawWeek(); drawTeam(); }
 
   document.addEventListener("hq:refreshed", draw);
+  /* a post picture whose Instagram link has expired: the song's cover, else a plain tile (18 Nov 2026) */
+  document.addEventListener("error", function (ev) {
+    var t = ev.target;
+    if (!t || t.tagName !== "IMG" || !t.hasAttribute("data-fallback")) return;
+    var f = t.getAttribute("data-fallback");
+    t.removeAttribute("data-fallback");
+    if (f) { t.src = f; return; }
+    var s = document.createElement("span"); s.className = "nothumb"; t.parentNode && t.parentNode.replaceChild(s, t);
+  }, true);
   document.addEventListener("click", function (ev) {
     var a = ev.target.closest && ev.target.closest("[data-aopen],[data-achoice],[data-asave]");
     if (a) {
@@ -281,7 +299,7 @@
       if (a.getAttribute("data-achoice") === "yes" || a.getAttribute("data-achoice") === "no") sendChoice(id, a.getAttribute("data-achoice"));
       return;
     }
-    var t = ev.target.closest && ev.target.closest("[data-expand],[data-wallet],[data-snooze],[data-lyrics],[data-dot],[data-source],.gapbtn,#quietBtn");
+    var t = ev.target.closest && ev.target.closest("[data-expand],[data-wallet],[data-snooze],[data-dot],[data-source],.gapbtn,#quietBtn");
     if (!t) return;
     if (t.id === "quietBtn") {
       try { localStorage.setItem(QUIET, quietOn() ? "0" : "1"); } catch (e) {}
@@ -308,7 +326,6 @@
       return;
     }
     if (t.hasAttribute("data-snooze")) { snooze(t.getAttribute("data-snooze")); return; }
-    if (t.hasAttribute("data-lyrics")) { delete lyricsCache[t.getAttribute("data-lyrics")]; drawHome(); return; }
     if (t.classList.contains("gapbtn")) {
       var why = t.nextElementSibling;
       if (why) { why.hidden = !why.hidden; t.setAttribute("aria-expanded", why.hidden ? "false" : "true"); }

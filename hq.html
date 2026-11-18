@@ -1400,6 +1400,7 @@ a.t-card:hover,button.t-card:hover,#shell a.tile:hover{border-color:var(--accent
 .dacts .sendbtn,.dacts .copybtn{min-height:48px;min-width:44px;padding:0 16px;font-size:16px}
 .dacts small{display:block;font-size:12px;font-weight:500;opacity:.75}
 .dnone{margin:0 0 12px;color:var(--muted)}
+.dcard ul.also{margin:6px 0 0;padding-left:18px}.dcard ul.also li{margin:4px 0}.dcard ul.also a{color:var(--accent,inherit)}
 .dhead{margin:0 0 10px;font-size:15px;font-weight:650}
 .astackbtn{all:unset;display:block;width:100%;box-sizing:border-box;min-height:44px;cursor:pointer;font-size:16px;text-align:left}
 .abody p{margin:8px 0;font-size:16px}
@@ -1587,6 +1588,36 @@ body.ws-on .nav{display:none}
   #shell button.whybtn,#shell button.ghost:not(.on),#shell button.more-btn,#shell button.chip:not(.on),label.profup{
     background-color:#ffffff;color:#12141a;border-color:rgba(18,20,26,.28)}
 }
+
+/* Upcoming, tidied (18 Nov 2026, Luke: buttons too close together, odd spacing) */
+.rdots i.on{background:#3DDC97}
+.tl-v li{display:flex;flex-direction:column;justify-content:center;gap:2px}
+.tl-v li b{font-weight:650}
+.tl-v li span{color:var(--muted);font-size:14px;line-height:1.4}
+.tl-v li.bad span{color:var(--red)}
+.tl-v li.ok b::after{content:" ✓";color:#3DDC97;font-weight:600}
+.readybox p{margin:0}
+.readybox ul{margin:8px 0 0;padding-left:18px}
+.relmail{margin-top:-4px}
+.relcard .rface > p{margin:6px 0}
+.relcard .rpitch{margin:2px 0 0}
+.relcard .rfold{border-bottom:.5px solid var(--glass-line)}
+.relcard .racts.racts-card{display:block;margin-top:16px;padding-top:0;border-top:0}
+.relcard .racts-more{margin-top:10px}
+.relcard .racts-main{display:flex;flex-wrap:wrap;gap:12px}
+.relcard .racts-main{align-items:center}
+.relcard .racts-main .copybtn{flex:1 1 140px;min-height:48px}
+.relcard .racts-more{display:flex;flex-wrap:wrap;gap:8px 28px;padding:0 2px}
+.relcard .racts-more .linkbtn{padding:10px 0}
+.relcard .racts-more .linkbtn.danger{color:var(--red)}
+.rdots-key{margin:2px 0 14px;font-size:13px;color:var(--muted)}
+.feed li > .feedmore{grid-column:2;margin-top:4px}
+.feed li > .feedmore > summary{font-size:13px;color:var(--muted);cursor:pointer;min-height:32px;display:flex;align-items:center}
+.feed li > .feedmore ul{list-style:none;margin:6px 0 0;padding:0}
+.balcard .linkbtn{padding-left:0;padding-right:0}
+.gdot{display:inline-flex;align-items:center;gap:6px;margin-left:8px;font-size:13px;font-weight:500;color:var(--muted);text-decoration:none;vertical-align:middle}
+.gdot i{width:9px;height:9px;border-radius:50%;background:#5c6370}
+.gdot.ok i{background:#3DDC97}.gdot.watch i{background:var(--amber,#E8A317)}.gdot.red i{background:var(--red)}.gdot.red span{color:var(--red)}
 </style>
 </head>
 <body>
@@ -1816,7 +1847,7 @@ body.ws-on .nav{display:none}
 
   <!-- Growth & Fans: one page since 12 Nov 2026 (Luke: "growth and fans can be on the same page"). The
        Fans part keeps its ids; #fans goes to #growth/fans (js/hq-shell.js ALIAS). -->
-  <section class="card view" id="growth"><h2>Growth &amp; Fans</h2><p class="sub">Followers per platform and the posts that went out on the days that grew most, then the people turning into fans.</p><div class="sheeterr" id="errGrowth" hidden></div><div class="grid g4" id="growthList"><div class="ph big"></div><div class="ph"></div></div><div class="subsec" id="igBox"></div><div class="subsec" id="claimsBox"></div>
+  <section class="card view" id="growth"><h2>Growth &amp; Fans</h2><p class="sub">Followers per platform and the posts that went out on the days that grew most, then the people turning into fans.</p><div class="sheeterr" id="errGrowth" hidden></div><div class="grid g4" id="growthList"><div class="ph big"></div><div class="ph"></div></div><div class="subsec" id="ideasBox"></div><div class="subsec" id="igBox"></div><div class="subsec" id="claimsBox"></div>
     <div class="subsec" id="growth-fans"><h3 class="sech">Fans forming</h3><p class="sub" id="fansSub"></p><div class="sheeterr" id="errFans" hidden></div><div class="tile"><div class="scroll"><table class="stack" id="fanTable"></table></div></div></div>
   </section>
   <section class="card view" id="profiles"><h2>Profiles</h2><p class="sub" id="profNote">The profile photo and the banner on every official platform. HQ never logs in and never changes one.</p>
@@ -1989,16 +2020,16 @@ body.ws-on .nav{display:none}
   }, 400);
 })();
 </script>
-<script src="js/crt.js?v=6d431b517d37" defer></script>
-<script src="js/hq-lib.js?v=6d431b517d37" defer></script>
-<script src="js/hq-look.js?v=6d431b517d37" defer></script>
-<script src="js/hq.js?v=6d431b517d37" defer></script>
-<script src="js/hq-staff.js?v=6d431b517d37" defer></script>
-<script src="js/hq-phone.js?v=6d431b517d37" defer></script>
-<script src="js/hq-shell.js?v=6d431b517d37" defer></script>
-<script src="js/hq-workspaces.js?v=6d431b517d37" defer></script>
-<script src="js/hq-app.js?v=6d431b517d37" defer></script>
-<script src="js/hq-cmd.js?v=6d431b517d37" defer></script>
-<script src="js/hq-pages.js?v=6d431b517d37" defer></script>
+<script src="js/crt.js?v=2551ecc34211" defer></script>
+<script src="js/hq-lib.js?v=2551ecc34211" defer></script>
+<script src="js/hq-look.js?v=2551ecc34211" defer></script>
+<script src="js/hq.js?v=2551ecc34211" defer></script>
+<script src="js/hq-staff.js?v=2551ecc34211" defer></script>
+<script src="js/hq-phone.js?v=2551ecc34211" defer></script>
+<script src="js/hq-shell.js?v=2551ecc34211" defer></script>
+<script src="js/hq-workspaces.js?v=2551ecc34211" defer></script>
+<script src="js/hq-app.js?v=2551ecc34211" defer></script>
+<script src="js/hq-cmd.js?v=2551ecc34211" defer></script>
+<script src="js/hq-pages.js?v=2551ecc34211" defer></script>
 </body>
 </html>

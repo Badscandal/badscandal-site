@@ -142,17 +142,49 @@ export function daysWaiting(from, now) {
   if (!Number.isFinite(t) || now == null) return null;
   return Math.max(0, Math.floor((now - t) / 86400000));
 }
-export function needsHeader(cards) {
-  const list = cards || [];
+/* "EUR 4 · USD 12 at risk": the money_at_risk amounts of these cards, by currency. "" when there are none. */
+export function moneyLine(cards) {
   const sums = {};
-  for (const c of list) {
+  for (const c of cards || []) {
     if (!c || !c.money_at_risk || c.amount == null || !c.currency) continue;
     sums[c.currency] = round((sums[c.currency] || 0) + Number(c.amount));
   }
   const rest = Object.keys(sums).filter((k) => k !== "EUR" && k !== "USD").sort();
   const bits = ["EUR", "USD", ...rest].filter((k) => sums[k] != null).map((k) => `${k} ${String(round(sums[k]))}`);
-  return `${list.length} need you · ${bits.length ? bits.join(" · ") + " at risk" : "nothing at risk"}`;
+  return bits.length ? bits.join(" · ") + " at risk" : "";
 }
+/* A Farm or Label workspace's own Needs you line (its cards are the only thing that needs Luke there). */
+export function needsHeader(cards) {
+  const list = cards || [];
+  return `${list.length} need you · ${moneyLine(list) || "nothing at risk"}`;
+}
+
+/* THE Needs you count for BADSCANDAL (18 Nov 2026, handoff bug 1: the phone said "1 need you · 11 at risk" and
+   "0 need you · nothing at risk" on one screen, and the needs_you tool said open: 0). It is S.waitingOnLuke on a
+   desk that also carries his open cards and the account health (netlify/lib/needs.mjs needsDesk):
+     message  open messages to Luke that need a decision, a reply or an action (lyrics and pitch approvals too)
+     spotify  a song in Spotify for Artists only he can name
+     card     his open Yes/No/Edit cards, including the ones held for the morning in quiet hours
+     account  accounts whose health is red, and the HQ connection when it is down
+   The same list is the phone's pulse, Today's "N things waiting on you", the app badge and the push alerts,
+   and js/hq-look.js needTotal() is the same rule for an offline copy. Alerts (late steps, the cap, quiet
+   bots...) are NOT in it: the phone calls those "to check". */
+export const redAccounts = S.redAccounts;
+export const needLine = (n) => (n ? `${n} need you` : "Nothing needs you");
+export function needsCount(desk, today, now) {
+  const byMsg = new Map(((desk && desk.messages) || []).map((m) => [m.id, m]));
+  const items = S.waitingOnLuke(desk || {}, today, now).map((x) => {
+    const m = x.kind === "message" ? byMsg.get(x.id) : null;
+    return m ? { ...x, needs: m.needs, options: Array.isArray(m.options) && m.options.length > 0 } : x;
+  });
+  const byKind = {};
+  for (const x of items) {
+    const k = x.kind === "message" ? (x.needs === "decision" ? "decision" : x.needs) : x.kind;
+    byKind[k] = (byKind[k] || 0) + 1;
+  }
+  return { total: items.length, line: needLine(items.length), byKind, items: items.map(({ key, kind, needs, options, id, text, href }) => ({ key, kind, ...(needs ? { needs } : {}), ...(options ? { options } : {}), id, text, href })) };
+}
+
 function moneyOf(a) {
   const has = a.amount != null && String(a.amount).trim() !== "";
   if (!has) return { amount: null, currency: "" };
@@ -464,7 +496,7 @@ function present(cards, tapsOn, now) {
   const quiet = quietNow(now);
   const needsYou = quiet ? all.filter((c) => c.money_at_risk) : all;
   const held = quiet ? all.filter((c) => !c.money_at_risk) : [];
-  return { quiet, needsYou, held, header: needsHeader(needsYou) };
+  return { quiet, needsYou, held, header: needsHeader(needsYou), money: moneyLine(needsYou) };
 }
 /* During quiet hours the phone shows only money-at-risk cards. The rest wait until 08:00.
    A Farm or Label card stays on that workspace. It is not on the BADSCANDAL Needs you. */

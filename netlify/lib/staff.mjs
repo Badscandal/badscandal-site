@@ -90,11 +90,16 @@ export const DEFAULT_ROSTER = [
   { name: "Forge", role: "Ads", duty: "Logs ad spend, checks the cap before any launch", time: "09:30",
     why: "Keeps ad spend inside USD 1,000 a month: logs what Meta, Google and TikTok spent and checks the cap before anything launches.",
     schedule: [{ time: "09:30", what: "Yesterday's Meta, Google and TikTok spend (record_spend)" }, { time: "Monday", what: "Compare the month's Meta total with Ads Manager" }, { time: "before any launch", what: "Month to date + planned budgets must stay under the cap" }, { time: "at USD 900", what: "Switch every ad off (never delete) and confirm" }], writes: "The Ads Tracker's daily log" },
-  { name: "Licence", role: "Cover licensing", duty: "Gets the mechanical licence for each Label cover, then saves it with the song and the assets", time: "09:25",
-    why: "A Label cover cannot go to RouteNote until the mechanical licence is in hand. Licence gets it through Easy Song Licensing after the release pack is ready and before Drop's upload, and reports to Nova only.",
-    schedule: [{ time: "09:25", what: "Read the Label queue. For each cover whose pack is ready, get the mechanical licence through Easy Song Licensing. Do not pay, and do not mark it licensed, until Luke has said yes for that song." },
+  { name: "Licence", role: "Cover licensing", duty: "Idle until Luke starts a cover. Then the mechanical licence, before Drop's upload", time: "",
+    why: "Idle until Luke starts producing covers. He writes the covers himself and keeps 100% of the songs. When a cover's pack is ready, get the mechanical licence through Easy Song Licensing before Drop's upload. Reports to Nova only. Never pays.",
+    schedule: [{ time: "when a cover starts", what: "Read the Label queue. Do not pay, and do not mark it licensed, until Luke has said yes for that song." },
       { time: "when a licence is done", what: "Save the licence, the song and the assets to Google Drive, then mark it with licence_queue and the proof link." }],
-    writes: "The Label licence step and the Drive proof link. Reports to Nova only." },
+    writes: "The Label licence step and the Drive proof link. Reports to Nova only. Idle until a cover starts." },
+  { name: "Spark", role: "Content ideas", duty: "Ranks recent official posts by engagement per view and gives Nova 3 to 5 content ideas", time: "10:00",
+    grok: "13779fd0-37f4-4e62-986a-e601b3142e55",
+    why: "Once a day, ranks BADSCANDAL's recent official posts on Instagram, TikTok and YouTube by engagement per view, compares them with outlier posts by similar artists, and gives Nova 3 to 5 content ideas. Reports to Nova only. Never posts, comments, sends a DM, or touches an ad.",
+    schedule: [{ time: "10:00", what: "Rank the recent official posts and send Nova 3 to 5 ideas with content_ideas (hook, on-screen text, format, platform, why)." }],
+    writes: "The content ideas on Growth. Reports to Nova only. Never posts." },
 ];
 
 /* ---------- small helpers ---------- */
@@ -338,10 +343,10 @@ export async function getRoster(store) {
   const edits = ed.data && typeof ed.data === "object" && !Array.isArray(ed.data) ? ed.data : {};
   /* Nova's fixes to a job card (roster_card, 17 Nov 2026) go on top of the seed: a re-seed never wipes them */
   const named = list.filter((b) => b && b.name).map((b) => { const name = clean(b.name, 40), e = edits[low(name)]; if (!e) return { ...b, name }; const { by, at, ...f } = e; return { ...b, ...f, name, editedBy: by, editedAt: at }; });
-  /* A seed loaded before Licence existed must still know the name, or the connector rejects the bot. */
-  if (named.some((b) => low(b.name) === "licence")) return named;
-  const built = DEFAULT_ROSTER.find((b) => low(b.name) === "licence");
-  return built ? named.concat([{ ...built }]) : named;
+  /* A seed loaded before Licence or Spark existed must still know those names, or the connector rejects the bot.
+     A shorter roster is left as it was: only these two are added back. */
+  const missing = DEFAULT_ROSTER.filter((b) => (b.name === "Licence" || b.name === "Spark") && !named.some((n) => low(n.name) === low(b.name)));
+  return missing.length ? named.concat(missing.map((b) => ({ ...b }))) : named;
 }
 /* roster_card (17 Nov 2026, Nova: Drop's card still listed royalties, Forge's times were old, and the private seed
    is not on this Mac): Nova (or Claude, Luke) fixes a bot's duty, why, usual time, schedule or role on the desk */
@@ -493,7 +498,7 @@ const msgKey = (month) => `msg/${month}.json`;
 export async function sendMessage(store, now, roster, a) {
   const from = whoIs(a.from, roster, { people: true });
   const to = low(a.to) === "all" || low(a.to) === "everyone" || low(a.to) === "team" ? "all" : whoIs(a.to, roster, { people: true });
-  if (from === "Licence" && to !== "Nova") fail("Licence reports to Nova only. Put Nova in to. Nothing was sent.", "not_allowed");
+  if ((from === "Licence" || from === "Spark") && to !== "Nova") fail(`${from} reports to Nova only. Put Nova in to. Nothing was sent.`, "not_allowed");
   const text = cleanText(a.text, 1500);
   if (text.length < 2) fail("text is empty");
   if (from !== "HQ") noSecrets(text); /* the site's own report is scrubbed line by line in checkReport() */
@@ -2785,9 +2790,25 @@ export async function getSeen(store, roster) {
    reply has been read"): read/<name>.json is written ONLY by the tools that hand a reader its messages
    (my_day, read_messages, and luke_briefing for Alfred). seen/<name>.json stays "last used the desk":
    a bot that only posts an update has used the desk, not read its messages. */
-export async function touchRead(store, now, name) {
-  try { await store.setJSON(`read/${low(name).replace(/[^a-z0-9]/g, "")}.json`, { at: new Date(now).toISOString() }); } catch {}
+/* at = everything up to it was handed over; also = ids handed over after it; readAt = when the reading happened
+   (shown as "Read by X <time>", never earlier than the message) */
+export async function touchRead(store, now, name, also = [], readAt = now) {
+  const ids = [...new Set(also)].filter((x) => typeof x === "string").slice(-1000);
+  const doc = { at: new Date(now).toISOString(), ...(ids.length ? { also: ids } : {}), ...(readAt !== now ? { readAt: new Date(readAt).toISOString() } : {}) };
+  try { await store.setJSON(`read/${low(name).replace(/[^a-z0-9]/g, "")}.json`, doc); } catch {}
 }
+/* the whole marker: {at, also} (also = ids newer than at that were handed over too; 18 Nov 2026, a read
+   that handed over 20 of 25 must not mark the other 5) or null */
+export async function readState(store, name) {
+  try {
+    const { data } = await readDoc(store, `read/${low(name).replace(/[^a-z0-9]/g, "")}.json`, null);
+    return data && data.at ? { at: data.at, also: Array.isArray(data.also) ? data.also : [] } : null;
+  } catch { return null; }
+}
+const sinceAt = (since) => (since && typeof since === "object" ? since.at : since) || null;
+const sinceAlso = (since) => new Set(since && typeof since === "object" && Array.isArray(since.also) ? since.also : []);
+/* was message m handed to a reader whose marker is r ({at, also}) */
+export const wasRead = (r, m) => !!(r && r.at && m && (r.at > m.at || (Array.isArray(r.also) && r.also.includes(m.id))));
 /* when this reader last took its messages (null = never); read BEFORE touchRead moves it */
 export async function lastRead(store, name) {
   try { const { data } = await readDoc(store, `read/${low(name).replace(/[^a-z0-9]/g, "")}.json`, null); return data && data.at ? data.at : null; } catch { return null; }
@@ -2798,7 +2819,8 @@ export async function lastRead(store, name) {
    first. more = how many older ones did not fit (read_messages has them). */
 export function messagesFor(messages, name, since, max = 30) {
   const mine = new Set(messages.filter((m) => m.from === name).map((m) => m.id));
-  const all = messages.filter((m) => m.from !== name && (!since || m.at > since) && (m.to === name || m.to === "all" || m.about === name || (!!m.re && mine.has(m.re))))
+  const at = sinceAt(since), also = sinceAlso(since);
+  const all = messages.filter((m) => m.from !== name && (!at || m.at > at) && !also.has(m.id) && (m.to === name || m.to === "all" || m.about === name || (!!m.re && mine.has(m.re))))
     .sort((a, b) => (a.at < b.at ? 1 : -1));
   return { list: all.slice(0, max).reverse(), more: Math.max(0, all.length - max) };
 }
@@ -3054,7 +3076,7 @@ export function noteStillCurrent(m, o = {}) {
    sent [late] but it didn't get sent because the song hasn't shown in spotify for artists yet"). */
 export const RELEASE_STEPS = [
   { key: "upload", label: "Uploaded to RouteNote with the release date", owner: "Drop", days: 21 },
-  { key: "approved", label: "Approved by RouteNote (nothing waiting)", owner: "Drop", days: 16 },
+  { key: "approved", label: "Approved by RouteNote", owner: "Drop", days: 16 },
   /* waits for RouteNote's approval (16 Nov 2026, Atlas: Love You showed "due today" while RouteNote still had
      it In Review); a label release skips the approval, so it never waits */
   { key: "spotify", label: "Showing as upcoming in Spotify for Artists", owner: "Atlas", days: 15, after: "approved" },
@@ -3327,10 +3349,13 @@ export async function upgradeReleases(store, now) {
 }
 /* everything a release on the desk is brought up to (15 and 16 Nov 2026); each part changes something only
    once, so a desk that is already up to date is never written */
-const OLD_ADS = "Ad drafts ready, inside the cap", OLD_VIDEO = "Video scheduled on YouTube";
+const OLD_ADS = "Ad drafts ready, inside the cap", OLD_VIDEO = "Video scheduled on YouTube", OLD_APPROVED = "Approved by RouteNote (nothing waiting)";
 function healOne(r, today, at) {
   if (!r || !Array.isArray(r.steps)) return false;
   const said = [];
+  /* the step's name only (18 Nov 2026: "(nothing waiting)" read as noise on Luke's card); no log line */
+  let renamed = false;
+  for (const x of r.steps) if (x && x.key === "approved" && x.label === OLD_APPROVED) { x.label = STEP.approved.label; renamed = true; }
   /* the song page step done with its link: the pack's page says it too (16 Nov 2026, Verse) */
   const pg = r.steps.find((s) => s.key === "page");
   if (pg && pg.status === "done" && httpsLink(pg.link) && !filled((r.pack || {}).page)) { r.pack = r.pack || {}; r.pack.page = httpsLink(pg.link); said.push("put the song page's link in the pack"); }
@@ -3358,7 +3383,7 @@ function healOne(r, today, at) {
   const vd = r.steps.find((s) => s.key === "video");
   if (vd && vd.label === OLD_VIDEO) { vd.label = STEP.video.label; said.push("the YouTube video goes public on the release day"); }
   if (said.length) logIt(r, at, "HQ", `HQ: ${joinWords(said)} (Luke, 16 Nov 2026)`);
-  return said.length > 0;
+  return said.length > 0 || renamed;
 }
 function tidyAll(rows, today, at) {
   const ids = new Set();
@@ -3408,6 +3433,14 @@ export const PITCH_WARN_DAYS = 14;
 export const PITCH_RECENT_DAYS = 28; /* a playlist add still shows for a month after release */
 export const PITCH_LOGGERS = ["Atlas", "Nova", "Claude", "Luke"];
 const EDITORIAL_CAP = 24;
+/* "Pitch: not this time. Me Dá Seu Body (out Tue 24 Nov) has the pitch for these two weeks…" (18 Nov 2026: it read
+   "Pitch: not pitched: … (Luke, 16 Nov 2026)" on Luke's card) */
+function skipLine(note) {
+  const n = String(note || "").replace(/\s*\(Luke, \d{1,2} \w{3} \d{4}\)\s*$/, "");
+  const m = n.match(/^Not pitched: (.+) is the song pitched in these two weeks, and Spotify takes one pitch at a time$/);
+  if (m) return `Pitch: not this time. ${m[1]} has the pitch for these two weeks, and Spotify takes one pitch at a time.`;
+  return n ? `Pitch: ${n.charAt(0).toLowerCase()}${n.slice(1)}` : "Pitch: not pitched";
+}
 const pitchStepOf = (v) => ((v && v.steps) || []).find((s) => s.key === "pitch") || null;
 const pitchedOnOf = (p) => (p && p.status === "done" ? (isDay(p.doneOn) ? p.doneOn : (p.at ? spDay(Date.parse(p.at)) : "")) : "");
 const samePlay = (a, b) => { const ka = songKey(a), kb = songKey(b); return ka || kb ? ka === kb : ownWords(a) !== "" && ownWords(a) === ownWords(b); };
@@ -3425,7 +3458,7 @@ export function pitchOf(v, today, editorial = null) {
   if (!pitch && !eds.length) return null;
   /* a skipped pitch has no deadline and does not ask Luke (18 Nov 2026) */
   if (pitch && pitch.status === "skipped") {
-    const note = pitch.note ? `Pitch: ${pitch.note.charAt(0).toLowerCase()}${pitch.note.slice(1)}` : "Pitch: not pitched";
+    const note = skipLine(pitch.note);
     return { status: "not pitched", skipped: true, waiting: false, pitchedOn: null, deadline: null, line: note, editorial: eds, ...(pitch.note ? { reason: pitch.note } : {}) };
   }
   const date = isDay(v.date) ? v.date : null;
@@ -3443,7 +3476,7 @@ export function pitchOf(v, today, editorial = null) {
   let line;
   /* 18 Nov 2026, Luke: a pitch Atlas sent is not an approval. The card's pitch line says who sent it. */
   if (done) line = (pitchedOn ? `Pitch: pitched ${dayWords(pitchedOn)}` : "Pitch: pitched") + (who ? ` by ${who}` : "");
-  else if (one) line = pitch.note ? `Pitch: ${pitch.note.charAt(0).toLowerCase()}${pitch.note.slice(1)}` : "Pitch: not pitched";
+  else if (one) line = skipLine(pitch.note);
   else if (missed) line = by ? `Pitch: missed. Spotify needed it by ${by}` : "Pitch: missed";
   else if (waiting) line = by ? `Pitch: not pitched yet. It waits until the song shows in Spotify for Artists. Deadline ${by}` : "Pitch: not pitched yet. It waits until the song shows in Spotify for Artists";
   else if (by && days != null && days >= PITCH_DEADLINE_DAYS && days <= PITCH_WARN_DAYS) line = `Pitch: not pitched. Still time: send it by ${by}`;
@@ -3920,12 +3953,13 @@ export function liveSongPages() {
     build: "https://github.com/Badscandal/badscandal-site/actions/workflows/song-page.yml",
     checked: ["title", "cover", s.spotifyTrack ? "button opens the track" : "button follows the artist"] }));
 }
-export async function songPages(store, now) {
+export async function songPages(store, now, peek = {}) {
   const list = (await listMessages(store, now, 2)).filter((m) => m.proposal && ["page", "track", "card"].includes(m.proposal.action));
   const card = homeCardPublished();
   const live = (p) => (p.action === "page" ? SONGS.some((x) => x.slug === p.slug) : p.action === "track" ? SONGS.some((x) => x.slug === p.slug && x.spotifyTrack === p.track) : card.slug === p.slug);
   return list.sort((a, b) => (a.at < b.at ? 1 : -1)).map((m) => {
-    const p = m.proposal, r = m.proposalResult;
+    const p = m.proposal, r0 = m.proposalResult;
+    const r = r0 && !r0.build && peek && peek[m.id] ? { ...r0, build: peek[m.id] } : r0;
     let state;
     if (isOpen(m)) state = "waiting on Luke";
     else if (!r && m.resolved && low(m.resolved.note) !== PROPOSE_YES) state = "Luke said no";
@@ -3946,17 +3980,27 @@ export async function songPages(store, now) {
      worked, but other tests failed after it went live -> ONE message from HQ to Claude (they never block a page).
    The report is claimed in the same write that keeps it, so two checks at once tell once. Run by song_pages and
    the hourly job. Returns the reports read this time. */
-export async function checkSongBuilds(store, now, roster) {
+async function pendingBuilds(store, now) {
   if (!songReports) return [];
   const pending = (await listMessages(store, now, 2)).filter((m) => m.proposal && ["page", "track", "card"].includes(m.proposal.action) &&
     m.proposalResult && m.proposalResult.done && !m.proposalResult.build && now - Date.parse(m.proposalResult.at) < 3 * 86400000);
-  const found = [];
-  await Promise.all(pending.map(async (m) => {
+  const out = await Promise.all(pending.map(async (m) => {
     let rep = null;
     try { rep = await songReports(m.id); } catch { rep = null; }
-    if (!rep || rep.msg !== m.id) return;
+    if (!rep || rep.msg !== m.id) return null;
     const build = { ok: !!rep.ok, ...(rep.ok ? {} : { step: clean(rep.step, 40), reason: clean(rep.reason, 300) }), ...(rep.others ? { others: clean(rep.others, 400) } : {}),
       run: /^https:\/\/github\.com\//.test(rep.run || "") ? rep.run : "", at: new Date(now).toISOString() };
+    return { m, build };
+  }));
+  return out.filter(Boolean);
+}
+/* the same reports, read and NOT kept or told (song_pages is read-only): {<message id>: build} */
+export async function peekSongBuilds(store, now) {
+  return Object.fromEntries((await pendingBuilds(store, now)).map((x) => [x.m.id, x.build]));
+}
+export async function checkSongBuilds(store, now, roster) {
+  const found = [];
+  await Promise.all((await pendingBuilds(store, now)).map(async ({ m, build }) => {
     let claimed = false;
     try {
       await mutate(store, msgKey(monthOfId(m.id)), [], (list) => {
@@ -4818,7 +4862,7 @@ export function workers(roster, { hq, updates, messages, cards, seen, today, now
     else if (b.time && nowHM && nowHM > b.time && !todays.length) state = "quiet";
     const s = seen[b.name] || null;
     const blk = blockerOf(cards[k], b.blockers || "", now);
-    return { name: b.name, role: b.role || "", why: b.why || "", duty: b.duty || "", time: b.time || "", schedule: b.schedule || [], writes: b.writes || "", access: b.access || "",
+    return { name: b.name, role: b.role || "", why: b.why || "", duty: b.duty || "", time: b.time || "", schedule: b.schedule || [], writes: b.writes || "", access: b.access || "", ...(b.grok ? { grok: b.grok } : {}),
       blockers: blk.blockers, blockersStale: blk.blockersStale, paused: b.state === "paused", state, duties: items, tasks: open.slice(0, 12), lateTasks: open.filter((t) => t.late).length,
       last: last ? { at: last.sp, status: last.status, message: last.message, link: last.link } : null, updatesToday: todays.length,
       card: cardNow(cards[k], today), waiting: asks.map((m) => ({ id: m.id, from: m.from, text: m.text.slice(0, 200), needs: m.needs, at: m.sp })),
@@ -5020,28 +5064,95 @@ export async function recordContentClaim(store, now, roster, a) {
   });
 }
 
+/* Spark's daily content ideas. One document. HQ stores them. Nothing here posts, comments, or changes an ad. */
+const IDEAS_KEY = "content-ideas.json";
+const IDEA_PLATFORMS = ["Instagram", "TikTok", "YouTube"];
+const ideaPlatform = (v) => {
+  const hit = IDEA_PLATFORMS.find((p) => low(p) === low(v));
+  if (!hit) fail("Platform must be Instagram, TikTok or YouTube. Nothing was saved.");
+  return hit;
+};
+const ideaNum = (v, label) => {
+  if (v == null || String(v).trim() === "") return null;
+  const n = Number(String(v).replace(/,/g, "").trim());
+  if (!Number.isFinite(n) || n < 0) fail(`${label} has to be a number, 0 or more. Nothing was saved.`);
+  return n;
+};
+export function contentIdeasView(doc) {
+  const d = doc && doc.latest ? doc.latest : doc;
+  if (!d || !d.at || !Array.isArray(d.ideas) || !d.ideas.length) return { reported: false, ideas: [], best: null, empty: "No content ideas yet. Spark sends them once a day. Nothing is posted." };
+  return { reported: true, at: d.at, day: d.day || "", by: d.by || "Spark", best: d.best || null, ideas: d.ideas, compared: d.compared || "", empty: "", note: "Ideas for Nova. HQ does not post, comment, send a DM, or change an ad." };
+}
+export async function readContentIdeas(store) {
+  const { data } = await readDoc(store, IDEAS_KEY, {});
+  return contentIdeasView(data);
+}
+export async function saveContentIdeas(store, now, a) {
+  if (a.by !== "Spark" && a.by !== "Nova") fail("Only Spark sends content ideas. Nova can record them. Nothing was saved.", "not_allowed");
+  for (const k of ["comment", "dm", "reply", "ad", "boost", "publish"]) if (a[k] != null && String(a[k]).trim() !== "") fail("Spark never posts, comments, sends a DM, or touches an ad. Nothing was saved.", "not_allowed");
+  const rawIdeas = Array.isArray(a.ideas) ? a.ideas : [];
+  if (rawIdeas.length < 3 || rawIdeas.length > 5) fail("Send 3 to 5 ideas. Nothing was saved.");
+  const ideas = rawIdeas.map((idea, i) => {
+    const hook = clean(idea && idea.hook, 160);
+    const text = clean(idea && (idea.text || idea.on_screen), 160);
+    const format = clean(idea && idea.format, 80);
+    const why = clean(idea && idea.why, 240);
+    if ([hook, text, format, why].some((s) => s.length < 2)) fail(`Idea ${i + 1} needs a hook, the on-screen text, a format and why. Nothing was saved.`);
+    const bad = secretIn([hook, text, why].join(" "));
+    if (bad) fail(`Idea ${i + 1} looks like ${bad}. Nothing was saved.`);
+    return { hook, text, format, platform: ideaPlatform(idea && idea.platform), why };
+  });
+  const posts = Array.isArray(a.posts) ? a.posts : [];
+  const ranked = [];
+  for (const p of posts) {
+    const views = ideaNum(p && p.views, "Views");
+    const likes = ideaNum(p && p.likes, "Likes");
+    const comments = ideaNum(p && p.comments, "Comments");
+    const saves = ideaNum(p && p.saves, "Saves");
+    const shares = ideaNum(p && p.shares, "Shares");
+    if (views == null || views <= 0 || [likes, comments, saves, shares].every((n) => n == null)) continue;
+    const whose = low(p.whose || p.kind || "ours");
+    if (whose !== "ours" && whose !== "similar") fail('Each post is whose "ours" or "similar". Nothing was saved.');
+    const link = p.link ? httpsLink(p.link) : "";
+    if (p.link && !link) fail("A post link must start with https://. Nothing was saved.");
+    const eng = (likes || 0) + (comments || 0) + (saves || 0) + (shares || 0);
+    ranked.push({ whose, platform: ideaPlatform(p.platform), title: clean(p.title, 120) || "Untitled", link, views, likes: likes || 0, comments: comments || 0, saves: saves || 0, shares: shares || 0, perView: Math.round((eng / views) * 10000) / 10000 });
+  }
+  const ours = ranked.filter((p) => p.whose === "ours").sort((x, y) => y.perView - x.perView);
+  if (!ours.length) fail("Name the official posts you ranked, with views and likes, comments, saves and shares. Nothing was saved.");
+  const { whose, ...best } = ours[0];
+  const compared = clean(a.compared, 400);
+  const row = { at: new Date(now).toISOString(), by: a.by, day: spDay(now), best, ideas, compared, posts: ranked.slice(0, 12) };
+  await mutate(store, IDEAS_KEY, {}, (doc) => {
+    const history = Array.isArray(doc.history) ? doc.history : [];
+    history.unshift(row);
+    return { value: row, replace: { latest: row, history: history.slice(0, 14) } };
+  });
+  return { saved: true, ...contentIdeasView({ latest: row }), shown_on: "badscandal.com/hq, Growth" };
+}
+
 export async function loadDesk(store, now) {
   const [roster, updates, messages, cardsDoc, config, releases, sightings] = await Promise.all([getRoster(store), listUpdates(store, now, 3), listMessages(store, now, 2), readDoc(store, "cards.json", {}), getConfig(store), listReleases(store), getSightings(store)]);
-  const [seen, read, income, closesDoc, profiles, claimsDoc] = await Promise.all([getSeen(store, roster), getRead(store, roster), incomeState(store, now), readDoc(store, "closes.json", []), getProfiles(store), readDoc(store, CLAIMS_KEY, { items: [] })]);
+  const [seen, read, income, closesDoc, profiles, claimsDoc, ideasDoc] = await Promise.all([getSeen(store, roster), getRead(store, roster), incomeState(store, now), readDoc(store, "closes.json", []), getProfiles(store), readDoc(store, CLAIMS_KEY, { items: [] }), readDoc(store, IDEAS_KEY, {})]);
   const claims = claimsDoc.data && Array.isArray(claimsDoc.data.items) ? { items: claimsDoc.data.items } : { items: [] };
-  return { roster, updates, messages, cards: cardsDoc.data || {}, seen, read, income, config, releases, sightings, closes: Array.isArray(closesDoc.data) ? closesDoc.data : [], profiles, claims };
+  return { roster, updates, messages, cards: cardsDoc.data || {}, seen, read, income, config, releases, sightings, closes: Array.isArray(closesDoc.data) ? closesDoc.data : [], profiles, claims, contentIdeas: ideasDoc.data || {} };
 }
 
 /* Has the person a message was sent to READ it? (V6, 11 Nov 2026: from the read markers, read/<name>,
    which only the tools that hand over messages write.) null for "all", Luke and HQ: one person's
    reading can't be told for them (a note to all carries readCount() instead). */
-export function seenBy(read, to, at) {
+export function seenBy(read, to, at, id) {
   if (!to || to === "all" || to === "Luke" || to === "HQ") return { seen: null, seenAt: null };
   const s = read && read[to];
-  return s && s.at > at ? { seen: true, seenAt: s.at } : { seen: false, seenAt: null };
+  return wasRead(s, { at, id }) ? { seen: true, seenAt: s.readAt && s.readAt > s.at ? s.readAt : s.at } : { seen: false, seenAt: null };
 }
 /* a note to everyone: "Read by 7 of 12" = the bots on the roster (not its sender) that read it since */
 export function readCount(read, roster, m) {
   const names = botNames(roster).filter((n) => n !== m.from);
-  const by = names.filter((n) => read && read[n] && read[n].at > m.at);
+  const by = names.filter((n) => read && wasRead(read[n], m));
   return { by: by.length, of: names.length, names: by };
 }
-const readMark = (read, roster, m) => ({ ...seenBy(read, m.to, m.at), ...(m.to === "all" ? { read: readCount(read, roster, m) } : {}) });
+const readMark = (read, roster, m) => ({ ...seenBy(read, m.to, m.at, m.id), ...(m.to === "all" ? { read: readCount(read, roster, m) } : {}) });
 /* the last 10 things Luke answered (a reply) or settled (an option, "mark as done") in 48 hours, newest
    first, each with whether its sender has READ it since */
 export function answeredByLuke(messages, seen, now) {
@@ -5056,7 +5167,7 @@ export function answeredByLuke(messages, seen, now) {
     if (!at || at < since) continue;
     const text = rep ? rep.text : set.note && set.note !== "answered" ? set.note : "Marked as done";
     out.push({ id: m.id, from: m.from, to: m.to, text: m.text, needs: m.needs, at: m.at, sp: m.sp,
-      reply: { by: "Luke", kind: rep ? "reply" : "settled", text, at, sp: spStamp(Date.parse(at)), ...seenBy(seen, m.from, at) } });
+      reply: { by: "Luke", kind: rep ? "reply" : "settled", text, at, sp: spStamp(Date.parse(at)), ...seenBy(seen, m.from, at, rep ? rep.id : undefined) } });
   }
   return out.sort((a, b) => (a.reply.at < b.reply.at ? 1 : -1)).slice(0, 10);
 }
@@ -5086,11 +5197,27 @@ export const releaseStepsOut = () => RELEASE_STEPS.map((s) => ({ key: s.key, lab
    The text shows on a lock screen: it says who and what kind, NEVER the message itself (no amounts,
    payers, account names or lyrics). Oldest first. now (optional) = the clock for the sightings' claims. */
 const ASKS = { decision: "asked you to decide something", reply: "is waiting for your reply", action: "needs you to do something" };
+/* Accounts whose health is red, and the HQ connection when it is down (account-health.mjs report). */
+export function redAccounts(report) {
+  const out = ((report && report.accounts) || []).filter((a) => a && a.state === "red").map((a) => ({ id: a.id || "", label: a.label || "" }));
+  if (report && report.connection && report.connection.state === "down") out.push({ id: "connection", label: "HQ connection" });
+  return out;
+}
 export function waitingOnLuke(desk, today, now = null) {
   const out = [];
   for (const m of waitingOn(desk.messages || [], "Luke")) {
     if (!ASKS[m.needs]) continue;
     out.push({ key: "m:" + m.id, kind: "message", id: m.id, text: `${clean(m.from, 40)} ${ASKS[m.needs]}`, href: "#messages/" + m.id, at: m.at || null });
+  }
+  /* 18 Nov 2026 (handoff bug 1): his open Yes/No/Edit cards (held overnight ones too) and red accounts are
+     waiting on him as well, when the caller loaded them (netlify/lib/needs.mjs needsDesk). The lock-screen
+     text names who and what kind only: never an amount, a payer or the card's text. */
+  for (const c of desk.lukeCards || []) {
+    if (!c || !c.id) continue;
+    out.push({ key: "c:" + c.id, kind: "card", id: c.id, text: `${clean(c.owner || "HQ", 40)} needs your yes or no`, href: "#today", at: null });
+  }
+  for (const a of redAccounts(desk.health)) {
+    out.push({ key: "a:" + a.id, kind: "account", id: a.id, text: `${clean(a.label || "An account", 40)} needs a look`, href: "#growth", at: null });
   }
   const sv = sightingsView(desk.sightings || null, desk.releases || [], today, now);
   for (const x of sv.items) {
@@ -5134,6 +5261,7 @@ export function board(desk, now, hq) {
     /* L5: RouteNote's inbox is not connected until Luke signs it in. Claims are only what Laura recorded. */
     mail: routeNoteMailSource(),
     claims: desk.claims && Array.isArray(desk.claims.items) ? { items: desk.claims.items.slice(0, 80) } : { items: [] },
+    contentIdeas: contentIdeasView(desk.contentIdeas),
     connector: { botsOn: desk.config.botsOn, changedAt: desk.config.changedAt, lastUsed: lastSeen ? { bot: lastSeen[0], at: lastSeen[1].at, tool: lastSeen[1].tool } : null,
       connected: staff.filter((w) => w.connected).length, total: staff.length, claudeSeen: desk.seen.Claude ? desk.seen.Claude.at : null },
     report: desk.messages.find((m) => m.from === "HQ" && m.kind === "report") || null,
