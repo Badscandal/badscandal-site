@@ -9,7 +9,7 @@ export function sampleSheets(today, now = Date.now()) {
   const prev = day(m + "-01", 1).slice(0, 7);
   const Growth = [["date", "platform", "account", "followers", "change", "views", "best_post", "best_post_link", "logged_by", "note"]];
   const Songs = [["date", "song", "spotify_streams", "spotify_listeners", "saves", "playlist_adds", "logged_by", "note"]];
-  const Spend = [["date", "platform", "campaign", "spend", "currency"]];
+  const Spend = [["date", "platform", "campaign", "spend", "currency", "song"]];
   for (let i = 30; i >= 1; i--) {
     const d = day(today, i), k = 30 - i;
     Growth.push([d, "Instagram", "@badscandal", 12900 + k * 21 + (k % 7 === 3 ? 60 : 0), 21 + (k % 7 === 3 ? 60 : 0), 5200 + k * 90, k % 7 === 3 ? "ok what is this vibe? (rooftop)" : "studio clip " + (k % 5), "https://www.instagram.com/badscandal/", "Steve", ""]);
@@ -22,7 +22,7 @@ export function sampleSheets(today, now = Date.now()) {
     }
     if (d.slice(0, 7) === m && k % 4 !== 0) Spend.push([d, "Meta", "Touch Me BR", (38 + (k % 3)).toFixed(2), "USD"]);
   }
-  Spend.push([day(today, 6), "TikTok", "Touch Me follows", "12.50", "EUR"], [day(today, 5), "Google", "YouTube subs", "9.00", "EUR"]);
+  Spend.push([day(today, 6), "TikTok", "Touch Me follows", "12.50", "EUR", "Touch Me"], [day(today, 5), "Google", "YouTube subs", "9.00", "EUR"]);
   const Fans = [["date", "platform", "handle", "signal", "quote", "post_link", "logged_by", "profile_link", "about", "how_to_engage"],
     [day(today, 1), "Instagram", "@sample_marina.br", "asked_song", "Qual o nome dessa música??", "https://www.instagram.com/badscandal/", "Steve", "https://www.instagram.com/", "São Paulo, posts DJ sets", "Reply with the song name and a 🔥, then follow back"],
     [day(today, 3), "Instagram", "@sample_marina.br", "repeat", "Essa música é muito viciante", "https://www.instagram.com/badscandal/", "Steve", "https://www.instagram.com/", "São Paulo, posts DJ sets", "Send her the Spotify link by DM"],
@@ -51,7 +51,7 @@ export function sampleSheets(today, now = Date.now()) {
     ["D-atlas-0", "Atlas", "Log Spotify numbers (yesterday's duty)", day(today, 1), "done", "", day(today, 1)]];
   const Royalties = [["month", "song", "store", "streams", "amount", "currency", "logged_by"],
     [prev, "Love You", "Spotify", "61000", "152.40", "EUR", "Drop"], [prev, "Love You", "Apple Music", "9000", "41.10", "EUR", "Drop"],
-    [m, "Touch Me", "Spotify", "14000", "38.20", "EUR", "Drop"]];
+    [m, "Touch Me", "Spotify", "14000", "38.20", "EUR", "Drop"], [m, "", "Deezer", "100", "3.50", "EUR", "Drop"]];
   const Income = [["month", "source", "category", "amount", "currency", "status"],
     [prev, "inGrooves", "Royalties (label deals)", "1137.39", "USD", "received"], [prev, "SoundCloud", "Royalties (label deals)", "104.04", "USD", "received"],
     [prev, "RouteNote", "Self-releases", "193.50", "EUR", "received"], [prev, "Jeff", "Production", "4388.43", "EUR", "received"],
@@ -70,6 +70,19 @@ export function sampleSheets(today, now = Date.now()) {
   /* the team's fixed monthly rate (batch 4, 15 Nov 2026): MADE UP for the sample */
   const Rates = [["EUR to USD, this month (sample, made up)", "1.08"]];
   return { Growth, Songs, Fans, Releases, Tasks, Royalties, Spend, Income, Updates, Rates };
+}
+
+/* MADE-UP payments for the per-song view (L4). One names a song (so it is not added on top of that
+   song's recorded royalties) and one does not (it stays "not linked to a song"). */
+export function samplePLPayments(today) {
+  const m = today.slice(0, 7);
+  return {
+    counted: [
+      { month: m, song: "Touch Me", store: "Spotify", amount: 20, currency: "EUR" },
+      { month: m, song: "", store: "", amount: 15, currency: "USD" },
+    ],
+    notReceived: 1, holding: 1,
+  };
 }
 
 /* A MADE-UP Meta read for /hq?sample=1 (11 Nov 2026): Meta's "own" numbers = the sample sheet's Meta
