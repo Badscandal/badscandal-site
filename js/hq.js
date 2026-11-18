@@ -63,9 +63,13 @@
       td.appendChild(v); td.setAttribute("data-l", head[c] || "");
     }
   }
-  function getJSON(url) {
+  function getJSON(url, tried) {
     return fetch(url, { credentials: "same-origin", cache: "no-store" })
-      .then(function (r) { return r.json().catch(function () { return {}; }).then(function (j) { return { s: r.status, j: j, u: url }; }); });
+      .then(function (r) {
+        /* one 401 is retried once (18 Nov 2026): a phone sometimes drops the cookie on a single call */
+        if (r.status === 401 && !tried) return new Promise(function (ok) { setTimeout(ok, 600); }).then(function () { return getJSON(url, 1); });
+        return r.json().catch(function () { return {}; }).then(function (j) { return { s: r.status, j: j, u: url }; });
+      });
   }
 
   /* the page's only writes (js/hq-staff.js): same cookie, our own origin; answers like getJSON */
@@ -188,9 +192,19 @@
       .then(function () { forget(); showLogin(""); });
   });
   /* any 401 / 503 from any of the three answers lands here */
+  /* one endpoint saying "not logged in" is not a sign-out (18 Nov 2026: phones were dropped after a
+     few minutes when a single answer 401'd). Two different answers, or the same one twice in a refresh, is. */
+  var denied = {};
   function authFail(res) {
-    if (res.s === 401) { if (!$("shell").hidden) noteSignout("401", res.u); showLogin(""); return true; }
-    if (res.s === 503 && /ADMIN_KEY/.test(res.j.error || "")) { showLogin("The password isn't set on Netlify yet (ADMIN_KEY)."); return true; }
+    if (res.s === 401) {
+      var path = String(res.u || "").split("?")[0];
+      denied[path] = (denied[path] || 0) + 1;
+      if (Object.keys(denied).length < 2 && denied[path] < 2) return false;
+      if (!$("shell").hidden) noteSignout("401", res.u);
+      showLogin("");
+      return true;
+    }
+    if (res.s === 503 && /ADMIN_KEY/.test((res.j && res.j.error) || "")) { showLogin("The password isn't set on Netlify yet (ADMIN_KEY)."); return true; }
     return false;
   }
 
@@ -213,6 +227,7 @@
   /* every 5 minutes while the page is on screen; coming back after longer than that refreshes at once */
   document.addEventListener("visibilitychange", function () { if (!document.hidden && started && Date.now() - lastRefresh > EVERY) refresh(); });
   function refresh() {
+    denied = {};
     var startedAt = lastRefresh = Date.now();
     /* the board may be the only answer that came back: Today still says what it knows */
     var after = function () {
@@ -410,11 +425,13 @@
     $("siteCheck").hidden = !chk;
     if (chk) { $("siteCheck").textContent = chk + " ›"; $("siteCheck").setAttribute("href", "#messages/" + String(board.report.id || "").replace(/[^a-z0-9]/gi, "")); }
     var att = L.attention({ sheet: sheet, ov: ov, board: board, bank: window.HQStaff ? window.HQStaff.bank() : null }), br = L.briefing({ sheet: sheet, ov: ov, attention: att }), ti = L.tiles({ sheet: sheet, ov: ov });
-    $("brief").innerHTML = br.map(function (x) { return "<p>" + esc(x) + "</p>"; }).join("");
+    var lead = br.slice(0, 1), rest = br.slice(1);
+    $("brief").innerHTML = lead.map(function (x) { return "<p>" + esc(x) + "</p>"; }).join("") +
+      (rest.length ? '<details class="fold"><summary>The rest of the note</summary>' + rest.map(function (x) { return "<p>" + esc(x) + "</p>"; }).join("") + "</details>" : "");
     $("attnCard").classList.toggle("has", att.length > 0);
-    $("attnList").innerHTML = att.length ? att.map(function (a) {
-      return '<li><a href="' + esc(a.href) + '"' + (a.href === "#health" ? " data-health" : "") + ">" + esc(a.text) + "</a></li>";
-    }).join("") : '<li class="calm">Nothing needs attention.</li>';
+    var item = function (a) { return '<li><a href="' + esc(a.href) + '"' + (a.href === "#health" ? " data-health" : "") + ">" + esc(a.text) + "</a></li>"; };
+    var top = att.slice(0, 4), moreAtt = att.slice(4);
+    $("attnList").innerHTML = att.length ? top.map(item).join("") + (moreAtt.length ? '<li class="foldli"><details class="fold"><summary>' + moreAtt.length + " more</summary><ul class=\"attn-list\">" + moreAtt.map(item).join("") + "</ul></details></li>" : "") : '<li class="calm">Nothing needs attention.</li>';
     $("tilesRange").textContent = ov ? "· " + (ov.range === "today" ? "today" : ov.range === "custom" ? ov.from.slice(5).replace("-", "/") + " to " + ov.to.slice(5).replace("-", "/") : "last " + ov.days + " days") + " for ads and taps" : "";
     $("tiles").innerHTML = ti.map(function (x) {
       var arrow = x.change.dir === "up" ? "▲ " : x.change.dir === "down" ? "▼ " : "";
@@ -516,17 +533,18 @@
         var dw = HQLib.dealWords(deal), rdate = (s && s.released) || (p && p.date) || "";
         out += '<p class="sdeal' + (dw.known ? "" : " no") + '">' + esc(dw.text) + (dw.known ? "" : ' <button class="linkbtn" type="button" data-adddeal="' + esc(dw.id) + '" data-title="' + esc(name) + '" data-date="' + esc(String(rdate).slice(0, 10)) + '">Add its details</button>') + "</p>";
       }
-      if (s) out += '<div class="big num">' + fmt(s.streams) + " <small>streams · " + esc(day(s.lastDay)) + "</small></div>" +
-        '<div class="d">' + signed(s.dayChange) + " vs the day before · " + fmt(s.week) + " in 7 days" + (s.prevWeek != null ? " (" + fmt(s.prevWeek) + " the 7 before)" : "") + "</div>" + spark(s.series) +
+      if (s) out += '<div class="big num">' + fmt(s.streams) + " <small>streams · " + esc(day(s.lastDay)) + "</small></div>";
+      var more = "";
+      if (s) more += '<div class="d">' + signed(s.dayChange) + " vs the day before · " + fmt(s.week) + " in 7 days" + (s.prevWeek != null ? " (" + fmt(s.prevWeek) + " the 7 before)" : "") + "</div>" + spark(s.series) +
         '<div class="d">' + fmt(s.listeners) + " listeners · " + fmt(s.saves) + " saves · " + fmt(s.adds) + " playlist adds" + (s.stale > 3 ? ' · <b style="color:var(--paper)">not logged for ' + s.stale + " days</b>" : "") + "</div>";
-      else out += '<p class="d" style="margin:8px 0">' + (broken("Songs") ? "The Songs tab can't be read." : sheet ? "No Spotify rows in the sheet yet." : "") + "</p>";
-      if (!p && ov) out += '<div class="kv" style="margin-top:8px"><span>Our page</span><b>no song page for this one</b></div>';
-      else out += '<div class="kv" style="margin-top:8px"><span>Our page · ' + esc(rangeTxt || "…") + "</span><b>" + (p ? fmt(p.visits) + " visits · " + fmt(p.people) + " people" : "–") + "</b></div>" +
+      else more += '<p class="d" style="margin:8px 0">' + (broken("Songs") ? "The Songs tab can't be read." : sheet ? "No Spotify rows in the sheet yet." : "") + "</p>";
+      if (!p && ov) more += '<div class="kv" style="margin-top:8px"><span>Our page</span><b>no song page for this one</b></div>';
+      else more += '<div class="kv" style="margin-top:8px"><span>Our page · ' + esc(rangeTxt || "…") + "</span><b>" + (p ? fmt(p.visits) + " visits · " + fmt(p.people) + " people" : "–") + "</b></div>" +
         '<div class="kv"><span>Real Spotify taps</span><b>' + (p ? fmt(p.taps) : "–") + "</b></div>" +
         '<div class="kv"><span>Meta spend · per tap</span><b>' + (sp ? esc(money(sp.spend, cur)) + " · " + esc(money(sp.cpt, cur)) : ov && ov.spend && !ov.spend.connected ? "not connected" : "–") + "</b></div>";
-      out += '<div class="kv"><span>Royalties so far</span><b>' + (s ? esc(amounts(s.royalties)) : "–") + "</b></div>" +
+      more += '<div class="kv"><span>Royalties so far</span><b>' + (s ? esc(amounts(s.royalties)) : "–") + "</b></div>" +
         (rw ? '<div class="kv"><span>' + esc(rw.label) + "</span><b>" + esc(rw.line) + "</b></div>" : "");
-      return out + "</div>";
+      return out + '<details class="fold"><summary>Numbers</summary>' + more + "</details></div>";
     }).join("");
   }
 

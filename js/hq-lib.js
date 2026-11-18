@@ -88,7 +88,9 @@
      "Friday" or "15/11") is shown as written: it used to read "Invalid Date" (A1, 17 Nov 2026) */
   function day(d) {
     if (!d) return "";
-    var s = String(d).trim(), m = /^(\d{4})-(\d{2})-(\d{2})(?:$|[ T])/.exec(s);
+    var s = String(d).trim();
+    if (/^invalid date$/i.test(s)) return "";
+    var m = /^(\d{4})-(\d{2})-(\d{2})(?:$|[ T])/.exec(s);
     var t = m ? new Date(m[1] + "-" + m[2] + "-" + m[3] + "T12:00:00Z") : null;
     if (!t || isNaN(t) || t.toISOString().slice(0, 10) !== m[1] + "-" + m[2] + "-" + m[3]) return s;
     return t.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" });
@@ -441,7 +443,8 @@
     var lines = ["Nova, please look at " + w.name + (w.role ? " (" + w.role + ")" : "") + ".", "State: " + workerLabel(w.state)];
     var bad = (w.duties || []).filter(function (d) { return d.status === "blocked" || d.late; });
     bad.forEach(function (d) { lines.push("Duty: " + d.task + " (" + dutyWhen(d) + ")"); if (d.blocker) lines.push("Blocker: " + d.blocker); });
-    if (!bad.some(function (d) { return d.blocker; }) && w.blockers) lines.push("Known blocker: " + w.blockers);
+    if (!bad.some(function (d) { return d.blocker; }) && w.blockers && !w.blockersStale) lines.push("Known blocker: " + w.blockers);
+    else if (w.blockers && w.blockersStale) lines.push("old, still true? " + w.blockers);
     if (w.card && w.card.needs) lines.push("Needs: " + w.card.needs);
     /* a late or blocked release step makes a card late / blocked too (11 Nov 2026): say which */
     (w.releaseSteps || []).filter(function (s) { return s.status === "blocked" || s.late; }).forEach(function (s) {
@@ -468,9 +471,17 @@
   /* ---- Messages ---- */
   /* "09:15" today, "Mon 9 Nov, 09:15" before (sp = "YYYY-MM-DD HH:MM", São Paulo) */
   function spWhen(sp, today) {
-    var s = String(sp || ""), hm = s.slice(11, 16);
-    if (!/^\d{4}-\d{2}-\d{2}/.test(s)) return "";
-    return s.slice(0, 10) === today ? hm : day(s) + (hm ? ", " + hm : "");
+    var s = String(sp || "").trim();
+    if (!s || /^invalid date$/i.test(s)) return "";
+    /* an ISO instant (the T) used to be sliced, so the clock was UTC. Convert it to São Paulo first. */
+    if (/T\d{2}:\d{2}/.test(s) || /[zZ]$/.test(s) || !/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}/.test(s)) {
+      var conv = spStampOf(s);
+      if (conv) s = conv;
+      else if (!/^\d{4}-\d{2}-\d{2}/.test(s)) return s;
+    }
+    var m = /^(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2})/.exec(s);
+    if (!m) return day(s) || s;
+    return m[1] === today ? m[2] : day(m[1]) + ", " + m[2];
   }
   /* the small label on a message: who it waits on, or how it ended. null = it never asked for anything */
   function waitLabel(m) {
@@ -753,7 +764,17 @@
      replied". So: the item leaves "Waiting on you" at once, a line says where it went and when, and
      "You answered" shows whether the bot has looked at the desk since. */
   /* an ISO time or ms -> "YYYY-MM-DD HH:MM" in São Paulo (UTC-3, no summer time since 2019) */
-  function spStampOf(at) { var v = t(at); return v == null ? "" : new Date(v - 3 * 3600000).toISOString().slice(0, 16).replace("T", " "); }
+  function spStampOf(at) {
+    var v = t(at);
+    if (v == null) return "";
+    try {
+      var g = {};
+      new Intl.DateTimeFormat("en-GB", { timeZone: "America/Sao_Paulo", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).formatToParts(new Date(v)).forEach(function (p) { if (p.type !== "literal") g[p.type] = p.value; });
+      var hh = g.hour === "24" ? "00" : g.hour;
+      if (g.year && g.month && g.day && hh && g.minute) return g.year + "-" + g.month + "-" + g.day + " " + hh + ":" + g.minute;
+    } catch (e) {}
+    return new Date(v - 3 * 3600000).toISOString().slice(0, 16).replace("T", " ");
+  }
   var CLAUDE_ROUNDS = "Claude reads the desk at 09:40, 15:40 and 21:40.";
   /* the small mark on a message: "Read by Nova 17:10" / "Not read yet" (v2, 11 Nov 2026: READ, from the
      desk's read markers, which only the tools that hand a bot its messages write; no longer "the bot used
@@ -841,8 +862,13 @@
       return { text: sn === LABEL_NOTE ? "not ours: the label delivers it" : sn === OUT_NOTE ? "already out when it was recorded" : "skipped" + (sn ? ": " + sn : ""), bad: false, done: false, skipped: true };
     }
     if (st.waiting && st.status !== "done" && st.status !== "blocked") return { text: st.waitingText || "waiting", bad: false, done: false, waiting: true };
-    /* 18 Nov 2026: a block that is only waiting (on a date, on Luke, or on a decision he made) is not red */
-    if (st.status === "blocked" && (st.waiting || blockWaitNote(st.label, st.note))) return { text: st.waitingText || "waiting on you", bad: false, done: false, waiting: true };
+    /* 18 Nov 2026: a block that is only waiting (on a date, on Luke, or on the release day) is not red.
+       The words come from the note, so the card never says "blocked" while the reason says it is waiting. */
+    if (st.status === "blocked" && (st.waiting || blockWaitNote(st.label, st.note))) {
+      var note = String(st.note || "").replace(/^\s*waiting:?\s*/i, "");
+      var text = st.waitingText || (st.waiting ? "waiting on you" : "waiting" + (note ? ": " + note : ""));
+      return { text: text, bad: false, done: false, waiting: true };
+    }
     var n = typeof st.dueIn === "number" ? st.dueIn : isDay(st.due) && isDay(today) ? dayDiff(today, st.due) : null;
     if (st.status === "done") {
       /* done_on (batch 3): the real day, when the bot said it was earlier than when it marked it */
@@ -899,6 +925,7 @@
     if (/\b(reject|rejected|fail|failed|error|denied|routenote|cover)\b/i.test(note)) return false;
     if (/^Ads made with Luke/i.test(label) && /\b(luke|no solo)\b/i.test(note)) return true;
     if (/\b(luke|you)\b/i.test(note) && /\b(need|needs|waiting|none provided|not yet|no solo)\b/i.test(note)) return true;
+    if (/\b(wait|waiting|waits|until|not until|starts on|once the song)\b/i.test(note) && /\b(release day|song is out|musixmatch|spotify for artists)\b/i.test(note)) return true;
     return false;
   }
   function warnTone(text, v) {
@@ -1442,8 +1469,9 @@
     });
     (w && w.releaseSteps || []).forEach(function (st) {
       var ss = stepState(st, today);
-      if (st.status === "blocked") blocked.push({ what: st.label, why: (st.title ? st.title + " · " : "") + "blocked" + (st.note ? ": " + st.note : "") });
-      else if (ss.bad && !ss.waiting) late.push({ what: st.label, why: (st.title ? st.title + " · " : "") + ss.text });
+      if (ss.waiting) return;
+      if (st.status === "blocked") blocked.push({ what: st.label, why: (st.title ? st.title + " · " : "") + ss.text });
+      else if (ss.bad) late.push({ what: st.label, why: (st.title ? st.title + " · " : "") + ss.text });
     });
     var out = blocked.concat(late);
     if (!out.length && w && w.state === "blocked" && w.last && w.last.status === "blocked") out.push({ what: "Said it is blocked", why: w.last.message || "" });

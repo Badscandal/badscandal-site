@@ -798,7 +798,7 @@ textarea.fld{min-height:112px;resize:vertical}
 .anslist li{padding:14px 0;border-top:.5px solid var(--glass-line)}
 .anslist li:first-child{border-top:0;padding-top:4px}
 .anslist li:last-child{padding-bottom:2px}
-.anslist .aq{margin:6px 0 0;font-size:14px;color:var(--muted);overflow-wrap:anywhere;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.anslist .aq{margin:6px 0 0;font-size:14px;color:var(--muted);overflow-wrap:anywhere}
 .anslist .ay{margin:8px 0 0;font-size:15px;line-height:1.45;color:var(--paper);white-space:pre-wrap;overflow-wrap:anywhere}
 .anslist .ay b{font-weight:700}
 .aseen{display:inline-flex;align-items:center;gap:8px;margin:8px 0 0;font-size:14px;font-weight:600;color:var(--uv)}
@@ -1035,7 +1035,7 @@ body::before{background:radial-gradient(50% 38% at 4% 0%,rgba(99,102,241,.30),tr
 a.t-card:hover,button.t-card:hover,#shell a.tile:hover{border-color:var(--accent-line)}
 .t-card,.htile,#shell .tile{transition:border-color .2s}
 /* header: a calmer glass bar; Search as a pill on wide screens, a magnifier on phones */
-.hdr{background:rgba(11,13,18,.58);border-bottom:.5px solid var(--glass-line)}
+.hdr{background:rgba(11,13,18,.94);border-bottom:.5px solid var(--glass-line)}
 .hq-tag{color:var(--accent)}
 .iconbtn,.rangebox select{background:rgba(255,255,255,.055);border:.5px solid var(--glass-line);box-shadow:inset 0 1px 0 rgba(255,255,255,.07)}
 .iconbtn:hover,.rangebox select:hover{background:rgba(255,255,255,.09)}
@@ -1051,9 +1051,9 @@ a.t-card:hover,button.t-card:hover,#shell a.tile:hover{border-color:var(--accent
     background:rgba(17,21,31,.74);box-shadow:inset 0 1px 0 var(--glass-edge),0 16px 40px rgba(0,0,0,.5)}
   .nav a,.nav button{min-height:56px;border-radius:24px;font-size:13px;transition:background .2s,color .2s}
   .nav [aria-current="page"],.nav .on{background:var(--accent-soft)}
-  main{padding-bottom:calc(112px + env(safe-area-inset-bottom))}
-  /* A1 (17 Nov 2026): at least 112 px, more when the bar is taller (js/hq-shell.js measures it) */
-  main{padding-bottom:max(calc(112px + env(safe-area-inset-bottom)),var(--navpad,0px))}
+  /* the floating bar still covered the last card at 112px (18 Nov 2026): the least is now 156px,
+     and js/hq-shell.js raises it to the bar's real height */
+  main{padding-bottom:max(calc(156px + env(safe-area-inset-bottom)),var(--navpad,0px))}
   .moresheet{border-radius:28px 28px 0 0}
   /* the More sheet: the bar stays on top of it, so More closes it; its items end above the bar */
   body.more-open .nav{z-index:45}
@@ -1089,20 +1089,19 @@ a.t-card:hover,button.t-card:hover,#shell a.tile:hover{border-color:var(--accent
   border:.5px solid var(--red-line);font-size:18px;box-shadow:inset 0 1px 0 rgba(255,255,255,.08)}
 .waitline::before{width:11px;height:11px;box-shadow:0 0 0 5px rgba(255,122,122,.16)}
 .attn-card.has{border:.5px solid var(--red-line);background:linear-gradient(180deg,rgba(255,122,122,.10),transparent 150px),var(--glass)}
-/* phones and tablets: one column in the order of a glance: the waiting line, the briefing, then the full
-   list of what needs you (a long list must not push the briefing off the first screen) */
+/* phones and tablets: what needs Luke first, then the numbers, then the morning note (18 Nov 2026) */
 @media(max-width:1099px){
   .today-grid{display:flex;flex-direction:column;gap:12px}
   .today-side,.today-main{display:contents}
   .today-grid .waitline{order:1}
-  .today-grid .brief{order:2;margin:0}
-  .today-grid .brief-actions{order:3;margin:0}
-  .today-grid .attn-card{order:4}
-  .today-grid #sinceCard{order:5}
-  .today-grid .sitecheck{order:6}
-  .today-grid .sect{order:7;margin:10px 0 0}
-  .today-grid .htiles{order:8;margin:0}
-  .today-grid .tgrid{order:9}
+  .today-grid .attn-card{order:2}
+  .today-grid .sect{order:3;margin:10px 0 0}
+  .today-grid .htiles{order:4;margin:0}
+  .today-grid .tgrid{order:5}
+  .today-grid .brief{order:6;margin:0}
+  .today-grid .brief-actions{order:7;margin:0}
+  .today-grid #sinceCard{order:8}
+  .today-grid .sitecheck{order:9}
 }
 /* small phones: the header fits with Search in it (wordmark, Search, range, Data health, Refresh) */
 @media(max-width:439px){
@@ -1368,6 +1367,17 @@ a.t-card:hover,button.t-card:hover,#shell a.tile:hover{border-color:var(--accent
 .profslot p{margin:4px 0;font-size:15px}
 .profslot .profrule{color:var(--muted);font-size:14px}
 .profslot a{overflow-wrap:anywhere}
+/* polish (18 Nov 2026): folded detail, 44px taps, text that wraps instead of being cut off */
+.fold > summary{min-height:44px;display:flex;align-items:center;cursor:pointer;font-size:15px;font-weight:600;color:var(--accent);list-style:none}
+.fold > summary::-webkit-details-marker{display:none}
+.fold > summary::after{content:"›";margin-left:auto;color:var(--muted);font-size:18px}
+.fold[open] > summary::after{content:"⌄"}
+.fold p{margin:8px 0 0}
+.brief .fold{margin-top:8px;border-top:.5px solid var(--glass-line);padding-top:4px}
+.brief .fold > summary{color:var(--uv);font-weight:600}
+.rsteps .linkbtn,.rsteps .copybtn,.racts .linkbtn,.racts2 .linkbtn,.macts .copybtn,.macts .linkbtn{min-height:44px;min-width:44px;padding:10px 14px;box-sizing:border-box}
+.bl{white-space:normal}
+#sinceCard > summary{width:100%}
 </style>
 </head>
 <body>
@@ -1432,7 +1442,7 @@ a.t-card:hover,button.t-card:hover,#shell a.tile:hover{border-color:var(--accent
     <div class="today-side">
     <a class="waitline" id="waitLine" href="#messages" hidden></a>
     <section class="t-card attn-card" id="attnCard" aria-labelledby="attnTitle"><h2 class="t-lbl" id="attnTitle">Needs attention</h2><ul class="attn-list" id="attnList"><li><span class="ph"></span></li></ul></section>
-    <section class="t-card" id="sinceCard" aria-labelledby="sinceTitle" hidden><h2 class="t-lbl" id="sinceTitle">Since you last looked <span id="sinceWhen"></span></h2><ul class="since-list" id="sinceList"></ul></section>
+    <details class="t-card fold" id="sinceCard" hidden><summary class="t-lbl" id="sinceTitle">Since you last looked <span id="sinceWhen"></span></summary><ul class="since-list" id="sinceList"></ul></details>
     <a class="sitecheck" id="siteCheck" href="#messages" hidden></a>
     </div>
     <div class="today-main">
@@ -1456,7 +1466,7 @@ a.t-card:hover,button.t-card:hover,#shell a.tile:hover{border-color:var(--accent
   </section>
 
   <section class="card view" id="songs">
-    <div class="row"><div><h2>Songs</h2><p class="sub">Everything we know per song: Spotify (from the sheet; about two days late), our page, Meta ads and royalties.</p></div></div>
+    <div class="row"><div><h2>Songs</h2><p class="sub">The number, then Numbers for the rest.</p></div></div>
     <div class="sheeterr" id="errSongs" hidden></div>
     <div id="artistCard"></div>
     <div class="grid g3" id="songList"><div class="ph big"></div><div class="ph"></div><div class="ph"></div></div>

@@ -79,9 +79,12 @@
   var L = window.HQLib;
   function sizeNav() {
     var n = $("nav"); if (!n || !L) return;
-    var r = n.getBoundingClientRect(), vh = window.innerHeight;
-    var bar = r.height > 0 && r.width > window.innerWidth / 2 && r.bottom > vh - 60; /* the phone's bar, not the rail */
-    document.documentElement.style.setProperty("--navpad", (bar ? L.navPad(r, vh) : 0) + "px");
+    var vv = window.visualViewport;
+    var vh = vv ? Math.round(vv.height + vv.offsetTop) : window.innerHeight;
+    var r = n.getBoundingClientRect();
+    var bar = r.height > 0 && r.width > window.innerWidth / 2 && r.bottom > vh - 80; /* the phone's bar, not the rail */
+    /* +36: the pill floats above the bottom edge, and its shadow was still covering the last card */
+    document.documentElement.style.setProperty("--navpad", (bar ? L.navPad(r, vh) + 36 : 0) + "px");
   }
   window.addEventListener("resize", sizeNav);
   window.addEventListener("orientationchange", sizeNav);

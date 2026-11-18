@@ -35,7 +35,7 @@
          and the line under a thread he answered on the board */
       landed: {}, tsent: {},
       /* the release pipeline: busy / error / the inline question per card, notes, open disclosures, the form */
-      rel: { busy: "", err: {}, ask: null, note: {}, open: {}, fold: {}, full: {}, loading: {} }, form: null,
+      rel: { busy: "", err: {}, ask: null, note: {}, open: {}, fold: {}, full: {}, fullFor: {}, loading: {} }, form: null,
       /* planning (14 Nov 2026): the month shown and the day picked on the calendar */
       cal: { ym: "", sel: "" },
       /* In Spotify for Artists (v2): the question being answered, the label typed, what was answered */
@@ -137,7 +137,7 @@
     else if (w.duty) why.push("<p><b>Every day</b>" + esc((w.time ? w.time + " · " : "") + w.duty) + "</p>");
     if (w.writes) why.push("<p><b>Writes</b>" + esc(w.writes) + "</p>");
     if (w.access) why.push("<p><b>Access</b>" + esc(w.access) + "</p>");
-    if (w.blockers) why.push("<p><b>Known blockers</b>" + esc(w.blockers) + "</p>");
+    if (w.blockers) why.push("<p><b>" + (w.blockersStale ? "Old, still true?" : "Known blockers") + "</b>" + esc(w.blockers) + "</p>");
     return ((w.duties || []).length ? '<p class="bsub">Today\'s duties</p><ul class="bduties">' + w.duties.map(function (d) {
         return '<li class="' + (d.status === "blocked" || d.late ? "bad" : d.status === "done" ? "done" : "") + '"><span class="bt">' + esc(d.task) + (d.blocker ? "<small>Blocked: " + esc(d.blocker) + "</small>" : "") + (d.gaps ? "<small>" + esc(window.HQLib.dutyGapsLine(d)) + "</small>" : "") +
           '</span><span class="bw">' + esc(L.dutyWhen(d)) + "</span></li>"; }).join("") + "</ul>" : "") +
@@ -169,9 +169,9 @@
     var list = w.releaseSteps || [];
     if (!list.length) return "";
     return '<p class="bsub">Release steps</p><ul class="bduties">' + list.map(function (s) {
-      var st = L.stepState(s, board.today), blocked = s.status === "blocked";
-      return '<li class="' + (st.bad ? "bad" : "") + '"><span class="bt">' + esc(s.label) + '<small>' + esc(s.title) + (s.due ? " · due " + esc(L.day(s.due)) : "") + "</small>" +
-        (blocked && s.note ? "<small>Blocked: " + esc(s.note) + "</small>" : "") + '</span><span class="bw">' + esc(blocked ? "blocked" : st.text) + "</span></li>";
+      var st = L.stepState(s, board.today);
+      return '<li class="' + (st.bad ? "bad" : "") + '"><span class="bt">' + esc(s.label) + '<small>' + esc(s.title) + (s.due && !st.waiting ? " · due " + esc(L.day(s.due)) : "") + "</small>" +
+        '</span><span class="bw">' + esc(st.text) + "</span></li>";
     }).join("") + "</ul>";
   }
   /* -> true when the board drew Team (js/hq.js falls back to the sheet's duty rows when it didn't) */
@@ -224,7 +224,7 @@
 
   /* ================= Messages ================= */
   var byId = {};
-  function when(m) { var at = Date.parse(m.at), w = L.spWhen(m.sp, board.today), a = isFinite(at) ? L.ago(Date.now() - at) : ""; return w + (w && a ? " · " : "") + a; }
+  function when(m) { var at = Date.parse(m.at), w = L.spWhen(m.sp, board.today) || L.spWhen(m.at, board.today), a = isFinite(at) ? L.ago(Date.now() - at) : ""; return w + (w && a ? " · " : "") + a; }
   function errLine(k) { return '<p class="ferr" role="alert">' + esc(ui.err[k] || "") + "</p>"; }
   function replyBox(k, m) {
     var to = m.from === "Luke" ? (m.to === "all" ? "everyone" : m.to) : m.from, busy = ui.busy === k;
@@ -786,19 +786,40 @@
   /* The board's copy of a release has no lyrics and no change log (11 Nov 2026: they made every refresh
      heavy). The whole release is asked for when Luke opens its details or its form, and kept while it is
      current (same updatedAt as the board's copy). */
-  function fullOf(v) { var f = v && ui.rel.full[v.id]; return v && !v.slim ? v : f && f.updatedAt === v.updatedAt ? f : null; }
+  /* the fetched release is kept against the board copy we asked for. A mismatch used to leave the
+     panel on "Opening…" and ask again forever (18 Nov 2026). */
+  function fullOf(v) {
+    if (!v) return null;
+    if (!v.slim) return v;
+    var f = ui.rel.full[v.id];
+    if (!f) return null;
+    var stamp = ui.rel.fullFor[v.id];
+    if (stamp != null && v.updatedAt && stamp !== v.updatedAt) return null;
+    return f;
+  }
   function loadFull(id) {
     var v = relById[id];
     if (!v || fullOf(v)) return Promise.resolve(fullOf(v));
     if (ui.rel.loading[id]) return ui.rel.loading[id];
+    var stamp = v.updatedAt || "";
+    var timer = setTimeout(function () {
+      if (!ui.rel.loading[id]) return;
+      ui.rel.err[id] = "Still opening. Close it and try again.";
+      drawReleases();
+    }, 12000);
     var p = ui.rel.loading[id] = HQ.getJSON("/api/staff/release?id=" + encodeURIComponent(id) + (HQ.sample ? "&sample=1" : "")).then(function (res) {
+      clearTimeout(timer);
       delete ui.rel.loading[id];
-      if (HQ.authFail(res)) return null;
-      if (res.s !== 200 || !res.j || !res.j.release) { ui.rel.err[id] = "Couldn't open the details (" + res.s + "). Try again."; drawReleases(); return null; }
-      ui.rel.full[id] = res.j.release; delete ui.rel.err[id];
+      if (!res || res.s !== 200 || !res.j || !res.j.release) {
+        if (!(res && HQ.authFail(res))) ui.rel.err[id] = "Couldn't open the details" + (res ? " (" + res.s + "). Try again." : ". Try again.");
+        else ui.rel.err[id] = "";
+        drawReleases();
+        return null;
+      }
+      ui.rel.full[id] = res.j.release; ui.rel.fullFor[id] = stamp; delete ui.rel.err[id];
       drawReleases();
       return res.j.release;
-    }, function () { delete ui.rel.loading[id]; ui.rel.err[id] = "No connection: couldn't open the details. Try again."; drawReleases(); return null; });
+    }, function () { clearTimeout(timer); delete ui.rel.loading[id]; ui.rel.err[id] = "No connection: couldn't open the details. Try again."; drawReleases(); return null; });
     return p;
   }
   function putRelease(v) {
@@ -825,7 +846,7 @@
     return '<li class="' + (st.done ? "done" : st.bad ? "bad" : st.skipped ? "skip" : st.waiting ? "wait" : "") + '"><i aria-hidden="true"></i><div class="rs"><b>' + esc(s.label) + "</b>" +
       '<span class="ro">' + esc((mine ? "You" : s.owner) + (s.due && !quiet ? " · due " + L.day(s.due) : "")) + "</span>" +
       '<span class="rline"><span class="rw">' + esc(cap(st.text)) + "</span>" + (lk || btn ? '<span class="racts2">' + lk + btn + "</span>" : "") + "</span>" +
-      (s.note && s.status !== "blocked" && !st.skipped ? '<span class="rn">' + esc(s.note) + "</span>" : "") + "</div></li>";
+      (s.note && !st.bad && !st.waiting && !st.skipped ? '<span class="rn">' + esc(s.note) + "</span>" : "") + "</div></li>";
   }
   /* the inline questions under a card: a new release day, or cancelling */
   function relAsk(v) {
