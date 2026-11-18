@@ -3,8 +3,8 @@
    It keeps a copy of the PAGE and its SCRIPTS so the home-screen app opens without signal. It never
    keeps the numbers (/api/* always goes to the network; the page shows this device's last good copy
    "as of <time>" when offline). Network first: a new version is used as soon as there is signal. */
-var CACHE = "bs-hq-v5"; /* v2 (11 Nov 2026): js/hq-staff.js; v3: js/hq-app.js; v4: js/hq-cmd.js; v5 (18 Nov 2026): js/hq-phone.js */
-var SHELL = ["/hq", "/js/hq-lib.js", "/js/hq.js", "/js/hq-staff.js", "/js/hq-phone.js", "/js/hq-pages.js", "/js/hq-shell.js", "/js/hq-app.js", "/js/hq-cmd.js", "/js/crt.js", "/hq.webmanifest", "/assets/hq-icon-192-v1.png"];
+var CACHE = "bs-hq-v6"; /* v5 (18 Nov 2026): js/hq-phone.js; v6: js/hq-look.js */
+var SHELL = ["/hq", "/js/hq-lib.js", "/js/hq-look.js", "/js/hq.js", "/js/hq-staff.js", "/js/hq-phone.js", "/js/hq-pages.js", "/js/hq-shell.js", "/js/hq-app.js", "/js/hq-cmd.js", "/js/crt.js", "/hq.webmanifest", "/assets/hq-icon-192-v1.png"];
 
 self.addEventListener("install", function (e) {
   e.waitUntil(caches.open(CACHE).then(function (c) { return c.addAll(SHELL); }).catch(function () {}).then(function () { return self.skipWaiting(); }));

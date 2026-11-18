@@ -1465,6 +1465,66 @@ body.quiet .botrow.is-done.pin{display:block}
 .rsteps .linkbtn,.rsteps .copybtn,.racts .linkbtn,.racts2 .linkbtn,.macts .copybtn,.macts .linkbtn{min-height:44px;min-width:44px;padding:10px 14px;box-sizing:border-box}
 .bl{white-space:normal}
 #sinceCard > summary{width:100%}
+/* the phone look (18 Nov 2026): fixed-height cards, a source on every number, light theme on request */
+.pulse-n{font:700 28px/1.15 var(--sans);letter-spacing:-.03em;margin:0 0 12px}
+.wallet{border-radius:var(--r-tile);background:var(--glass);border:.5px solid var(--glass-line);margin:0 0 10px;overflow:hidden}
+.wallet.gone{display:none}
+.whead,.whybtn,.relrow-h,.linkbtn,.sendbtn,.copybtn{min-height:44px}
+.whead{width:100%;display:flex;justify-content:space-between;gap:12px;align-items:center;padding:14px 16px;background:transparent;color:var(--paper);border:0;font:600 16px var(--sans);text-align:left}
+.wmeta{color:var(--uv);font:500 14px var(--sans)}
+.wbody{padding:0 16px 14px}
+.wbody p{margin:0 0 10px;font-size:16px}
+.look-more{margin:12px 0}
+.look-more summary{min-height:44px;display:flex;align-items:center;font-size:15px}
+.mile,.kcard,.balcard,.adpin,.siterow,.bestpost{background:var(--glass);border:.5px solid var(--glass-line);border-radius:var(--r-in);padding:14px}
+.miles{display:flex;flex-direction:column;gap:8px;margin:12px 0}
+.rhero{display:block;min-height:180px;border-radius:var(--r-tile);background:#111 center/cover no-repeat;color:#fff;text-decoration:none;position:relative;overflow:hidden;margin:12px 0}
+.rhero-in{position:absolute;left:0;right:0;bottom:0;padding:16px;background:linear-gradient(transparent,rgba(0,0,0,.72))}
+.rcount{display:block;font:700 22px var(--sans)}
+.krow,.balgrid,.adpins{display:grid;grid-template-columns:1fr;gap:8px}
+.kcard{min-height:148px}
+.kn{font:700 28px/1 var(--sans);font-variant-numeric:tabular-nums;display:flex;align-items:center;gap:8px;margin:6px 0}
+.kb{font:600 13px var(--sans);border-radius:999px;padding:2px 8px}
+.kb.up{color:#052e16;background:#86efac}
+.kb.dn{color:#450a0a;background:#fca5a5}
+.kb.flat{color:var(--ink);background:var(--uv)}
+.hdot,.pdot,.sdot{width:10px;height:10px;border-radius:50%;display:inline-block}
+.hdot.ok,.sdot.ok{background:var(--spot)}
+.hdot.bad,.sdot.bad,.pdot.bad{background:var(--red)}
+.hdot.off,.sdot.off{background:var(--muted)}
+.hdot.wait,.sdot.wait,.pdot.wait{background:#60a5fa}
+.sparkline{width:120px;height:36px;display:block}
+.sparkline .prev{fill:none;stroke:var(--uv);stroke-dasharray:2 3;stroke-width:1.5}
+.sparkline .now{fill:none;stroke:var(--paper);stroke-width:1.5}
+.sparkline .sofar{fill:none;stroke:var(--accent);stroke-dasharray:4 3;stroke-width:1.5}
+.relrow{margin:0 0 8px}
+.relrow-h{width:100%;display:flex;gap:8px;align-items:center;background:var(--glass);color:var(--paper);border:.5px solid var(--glass-line);border-radius:var(--r-in);padding:8px 12px}
+.tl-v{list-style:none;margin:8px 0;padding:0 0 0 14px;border-left:2px solid var(--glass-line)}
+.tl-v li{min-height:44px;padding:6px 0}
+.tl-v li.bad{color:var(--red)}
+.readybox{border:.5px solid var(--glass-line);border-radius:var(--r-in);padding:12px;margin:8px 0}
+.adpins{margin-bottom:12px}
+.matrix{position:relative;height:220px;background:var(--ink-3);border-radius:var(--r-in)}
+.matrix i{position:absolute;width:12px;height:12px;border-radius:50%;background:var(--accent)}
+.matrix i.over{background:var(--red)}
+.mchip{display:flex;flex-direction:column;gap:2px;margin:0 0 10px;font-size:14px}
+.mchip small{color:var(--uv)}
+.mchip.closed b{color:var(--spot)}
+.mchip.open b,.mchip.provisional b{color:var(--amber)}
+.whybox{margin-top:10px}
+.ldiff .del{text-decoration:line-through;color:var(--red)}
+.ldiff .add{background:rgba(165,180,252,.25)}
+.siterow{display:flex;justify-content:space-between;gap:8px;align-items:center;min-height:44px;margin:0 0 8px;text-decoration:none;color:var(--paper)}
+.siterow .ok{color:var(--spot)}
+.look-toast{position:fixed;left:50%;bottom:88px;transform:translateX(-50%);background:var(--paper);color:var(--ink);padding:12px 16px;border-radius:999px;z-index:20;font:600 15px var(--sans)}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+@media (min-width:700px){.krow{grid-template-columns:repeat(3,1fr)}.balgrid,.adpins{grid-template-columns:repeat(3,1fr)}}
+@media (prefers-color-scheme: light){
+  :root{--ink:#f4f5f7;--ink-2:#fff;--ink-3:#e6e8ee;--paper:#12141a;--muted:#4b5160;--uv:#3a4150;--accent:#3730a3;--accent-ink:#fff;
+    --glass:rgba(255,255,255,.86);--glass-line:rgba(18,20,26,.12);--glass-edge:rgba(255,255,255,.8);--red:#9f1239;--spot:#047857}
+  .hdr,.nav{background:rgba(255,255,255,.94);color:var(--paper)}
+  .rhero,.rhero-in{color:#fff}
+}
 </style>
 </head>
 <body>
@@ -1568,6 +1628,7 @@ body.quiet .botrow.is-done.pin{display:block}
     <div class="row"><div><h2>Ads</h2><p class="sub">The monthly cap, what the ads cost per real Spotify tap, and whether Meta gets our events. Read-only: nothing here changes an ad.</p></div></div>
     <div class="sheeterr" id="errAds" hidden></div>
     <div class="pgrid">
+      <div class="tile w12" id="adsPins"></div>
       <div class="tile w12" id="adsGauge"></div>
       <div class="tile w12" id="capCard">
         <div class="head"><div><h3>Monthly ad cap · all platforms</h3><p class="sub">Meta + Google + TikTok against USD 1,000. Warn at 750, every ad off at 900. Display only: this page never pauses anything.</p></div><span class="lbl" id="capMonth2"></span></div>
@@ -1704,6 +1765,7 @@ body.quiet .botrow.is-done.pin{display:block}
     <div id="relNow"></div>
     <div class="relhead"><h3 class="sech relh">Coming up</h3><button class="sendbtn" id="relNew" type="button" aria-controls="relForm" aria-expanded="false">New song</button></div>
     <p class="secsub">Sent to the team, soonest first.</p>
+    <div id="relRows"></div>
     <span class="fok" id="relMsg" role="status"></span>
     <form class="t-card relform" id="relForm" aria-labelledby="rfTitleH" novalidate hidden></form>
     <div class="relgrid" id="relDesk"></div>
@@ -1723,12 +1785,12 @@ body.quiet .botrow.is-done.pin{display:block}
     <h3 class="sech">Money coming in</h3>
     <p class="secsub">Read from Revolut by the site every morning, and sent in by the bots through the connector. Only money that has arrived counts.</p>
     <div id="incomeBody"><div class="ph big"></div><div class="ph"></div></div>
-    <h3 class="sech" style="margin-top:30px">Per song</h3>
-    <p class="secsub">Royalties recorded for a song, next to ad spend that names that song. Anything without a song says not linked to a song.</p>
-    <div id="songPL"><div class="ph"></div></div>
-    <h3 class="sech" style="margin-top:30px">Month by month</h3>
-    <p class="secsub">What was received each month, from the income sheet.</p>
-    <div class="tile"><div class="scroll"><table class="stack" id="moneyTable"></table></div></div><div id="moneyDetail"></div></section>
+    <details class="look-more" id="songFold"><summary>Per song</summary>
+    <p class="secsub">Royalties recorded for a song, next to ad spend that names that song. Shown once a song is actually linked.</p>
+    <div id="songPL"></div></details>
+    <details class="look-more" id="sheetFold"><summary>The income sheet</summary>
+    <p class="secsub">What was received each month, from the income sheet. The received cards above are the total.</p>
+    <div class="tile"><div class="scroll"><table class="stack" id="moneyTable"></table></div></div><div id="moneyDetail"></div></details></section>
   <section class="card view" id="team"><h2>Team</h2><p class="sub" id="teamSub"></p><div class="sheeterr" id="errTeam" hidden></div>
     <p class="note2" id="liveNote" hidden></p>
     <div id="teamStrip"></div>
@@ -1768,6 +1830,7 @@ body.quiet .botrow.is-done.pin{display:block}
 </div>
 <script src="js/crt.js" defer></script>
 <script src="js/hq-lib.js" defer></script>
+<script src="js/hq-look.js" defer></script>
 <script src="js/hq.js" defer></script>
 <script src="js/hq-staff.js" defer></script>
 <script src="js/hq-phone.js" defer></script>

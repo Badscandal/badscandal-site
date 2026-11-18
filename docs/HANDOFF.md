@@ -60,6 +60,8 @@ artist growth bot that all we will need is content and $".
 
 ## In flight (branches not merged)
 
+- **HQ phone look** (`cursor/hq-ui-overhaul-v2-a06f`, not merged). The phone home, the money cards (one received total per currency), release rows, ad tiles and song-page rows. Presentation only. Still 40 tools. Not live until Luke says deploy.
+
 - **L5 watchers** (PR #73, `cursor/hq-l5-watchers-5846`, not merged). Preview: https://deploy-preview-73--profound-haupia-db7ffa.netlify.app/hq?sample=1. RouteNote's moderation mail, Verse's release-day note, and Laura's Content ID claims. Still 40 tools. `log_growth` can record a claim (`claim`, `claimant`, `impact`, `date`). RouteNote email says **not connected**. The site has no mailbox. The Google key only reads the sheet. Meta, Instagram, Revolut and the desk keys are not a mailbox. Luke has to sign the site into that inbox, read-only (Gmail readonly, or a forward into a mailbox the site is allowed to read). Until then the card says "RouteNote email: not connected", Drop's own store status still shows, and HQ does not invent a moderation result and does not email anyone. On a release day (São Paulo) Verse gets one desk note to submit the approved lyrics on Musixmatch when the song shows there. A song not on Musixmatch yet is not a block. The same day does not send a second note. Growth & Fans shows only claims Laura recorded. A blank is "not reported". An empty list says none has been recorded. `luke_briefing` is unchanged.
 
 ## Waiting on someone
