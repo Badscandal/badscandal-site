@@ -62,16 +62,13 @@ and Claude's assessment the same morning. Luke said "perfect" to the order below
 | L9 | Exchange-rate cost per payout route | Ledger | todo |
 | L10 | Auto end screens and pinned comments linking badscandal.com/<song> | Laura | todo (needs YouTube write access) |
 | L11 | A split ledger for Luke's and "Luka's" shares | Ledger | needs Luke (who is "Luka"? Lilian's 50%?) |
+| L12 | **Profiles**: one place in HQ for the profile photo, and the banner, header, cover or wallpaper, on every official badscandal platform that has one | Luke | live (PR #64): HQ › Profiles. Current image and the day it changed; the size rule (L8 kinds, plus published profile and banner sizes; Instagram, TikTok and Deezer say "Rule not set"); a new image waits for "Yes, correct"; then the owner uploads it by hand. Atlas (DSPs), Laura (YouTube), Steve (Instagram and Facebook), Kevin (TikTok). X has no owner. The `profiles` tool. HQ never logs in and never changes a platform. No Meta or Instagram calls. |
 
 ## Ideas
 
-Luke, 17 Nov 2026, night. L12 was the one item here. Its first version is now being built (the row in this section). The login notes under it stay, for a later version that might read an image. Nothing in that version, or this one, logs in to Meta.
+Luke, 17 Nov 2026, night. L12's first version is live (PR #64, in Later above). The login notes under it stay, for a later version that might read an image. Nothing in that version, or this one, logs in to Meta.
 
-| # | What | Asked by | Status |
-|---|------|----------|--------|
-| L12 | **Profiles**: one place in HQ for the profile photo, and the banner, header, cover or wallpaper, on every official badscandal platform that has one | Luke | building (PR #64): HQ › Profiles. Current image and the day it changed; the size rule (L8 kinds, plus published profile and banner sizes; Instagram, TikTok and Deezer say "Rule not set"); a new image waits for "Yes, correct"; then the owner uploads it by hand. Atlas (DSPs), Laura (YouTube), Steve (Instagram and Facebook), Kevin (TikTok). X has no owner. The `profiles` tool. HQ never logs in and never changes a platform. No Meta or Instagram calls. |
-
-**First version (building).** One Profiles section. It records what is already live and asks Luke before a new image. After "Yes, correct" the owner bot uploads it by hand and then records the new link and the day. HQ does not log in and does not change any platform.
+**First version (live).** One Profiles section. It records what is already live and asks Luke before a new image. After "Yes, correct" the owner bot uploads it by hand and then records the new link and the day. HQ does not log in and does not change any platform.
 
 Platforms: Facebook Page, Instagram, YouTube, Spotify, Apple Music, TikTok, X, SoundCloud, Deezer, Amazon Music.
 

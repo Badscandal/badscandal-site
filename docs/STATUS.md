@@ -1,13 +1,14 @@
 # HQ status (update on every deploy)
 
-**Last updated:** 18 Nov 2026, by Cursor. L12 (Profiles) is in a branch, not on main yet. Start with `docs/HANDOFF.md`.
-**Tests on main:** 574, all passing on Node 24 and Node 22. **Connector on main:** 39 tools (`pitch_log` is new; every bot refreshes the tool list. Atlas uses it).
+**Last updated:** 18 Nov 2026, by Cursor (main after PR #64). Start with `docs/HANDOFF.md`.
+**Tests:** 582, all passing on Node 24 and Node 22. **Connector:** 40 tools (`profiles` is new; every bot refreshes the tool list. Atlas, Laura, Steve, Kevin and Nova use it).
 No money amounts, payer names or account numbers in this file: the repo is public.
 
 ## Live (newest first)
 
 | When | PR | What |
 |------|----|------|
+| 18 Nov | #64 | L12: Profiles. One section for the profile photo and the banner on every official platform: the current image and the day it changed, the size rule (or "Rule not set"), a new image waiting for "Yes, correct", then the owner uploads it by hand. Atlas (the music stores), Laura (YouTube), Steve (Instagram and Facebook), Kevin (TikTok). X has no owner yet. The `profiles` tool. HQ never logs in and never changes a platform. |
 | 18 Nov | #63 | L7: pitch tracker. Each upcoming and recent song shows not pitched, pitched with the day, or missed. Warns from 14 days out (Spotify needs the pitch 7 days before release). Two-week pitch slots on Upcoming. Atlas records the day and editorial playlists with `pitch_log`. HQ never pitches. |
 | 17 Nov | #61 | L8: asset checker. `preflight` checks a cover, Spotify Canvas, Spotify header or YouTube banner against that platform's rule; a Canvas link that isn't MP4 or JPG shows on the release card. Atlas and Laura have the tool. |
 | 17 Nov | #55 | B4: the Instagram reader (read-only): key pasted once in HQ (Growth & Fans › Connect Instagram), renewed weekly; followers to the desk, post numbers at 6 h / 1 day / 1 week, comments, countries; `instagram` tool for Steve and Kevin. B1 and B5 marked not needed (Luke). |
@@ -44,7 +45,7 @@ No money amounts, payer names or account numbers in this file: the repo is publi
 
 ## Next up
 
-- L7 is live. L12 Profiles is in PR #64 (not live): one Profiles section, the `profiles` tool, Luke's "Yes, correct", then the owner uploads by hand. HQ does not log in. Next, only on Luke's word: L3 fan inbox part 1.
+- L12 is live. Next, only on Luke's word: L3 fan inbox part 1. A later Profiles slice (reading an image from a platform) still needs his go, and HQ would still not log in.
 - Still needs Luke: B2 YouTube sign-in, the on-hold decisions H1–H4, and L11 (who "Luka" is). B1 and B5 are not needed; B4 Instagram is connected.
 - The rest of Later (L1, L4, L5, L9, L10) waits. Start any of it on his word.
 
