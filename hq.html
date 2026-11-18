@@ -724,6 +724,15 @@ textarea.fld{min-height:112px;resize:vertical}
 .inmonth .amt{margin:0;font-size:24px;line-height:1.25;font-weight:700;letter-spacing:-.01em;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
 .inmonth .amt.none{font-size:16px;font-weight:500;color:var(--muted)}
 @media(max-width:419px){.inmonth .amt{font-size:20px}}
+/* per song (L4): one compact card, stores and ads folded */
+#songPL{display:flex;flex-direction:column;gap:10px}
+.pltop{display:flex;justify-content:space-between;align-items:baseline;gap:12px}
+.pltop h3{margin:0;font-size:16px;overflow-wrap:anywhere}
+.pl .when{font-size:13px;color:var(--muted);white-space:nowrap}
+.plres{margin:8px 0 0;font-size:14px;color:var(--paper)}
+.plnote{margin:6px 0 0;font-size:13px;color:var(--muted)}
+.pl summary{display:flex;align-items:center;min-height:44px;cursor:pointer;font-size:14px;color:var(--uv)}
+.plrow{margin:0;padding:6px 0;border-top:1px solid var(--ink-3);font-size:14px;color:var(--paper);overflow-wrap:anywhere}
 .inprob{list-style:none;margin:0;padding:0}
 .inprob li{display:flex;gap:12px;align-items:baseline;padding:8px 0;border-top:.5px solid var(--glass-line);font-size:15px;color:var(--paper);overflow-wrap:anywhere}
 .inprob li:first-child{border-top:0;padding-top:0}
@@ -1620,6 +1629,9 @@ a.t-card:hover,button.t-card:hover,#shell a.tile:hover{border-color:var(--accent
     <h3 class="sech">Money coming in</h3>
     <p class="secsub">Read from Revolut by the site every morning, and sent in by the bots through the connector. Only money that has arrived counts.</p>
     <div id="incomeBody"><div class="ph big"></div><div class="ph"></div></div>
+    <h3 class="sech" style="margin-top:30px">Per song</h3>
+    <p class="secsub">Royalties recorded for a song, next to ad spend that names that song. Anything without a song says not linked to a song.</p>
+    <div id="songPL"><div class="ph"></div></div>
     <h3 class="sech" style="margin-top:30px">Month by month</h3>
     <p class="secsub">What was received each month, from the income sheet.</p>
     <div class="tile"><div class="scroll"><table class="stack" id="moneyTable"></table></div></div><div id="moneyDetail"></div></section>
