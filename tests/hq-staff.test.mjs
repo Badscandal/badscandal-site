@@ -227,10 +227,9 @@ test("the page: Messages is the tenth tab, the new script is kept offline, and n
   assert.match(shell, /MORE = \[[^\]]*"messages"\]/);
   assert.doesNotMatch(shell, /scrollBy\(/, "the deep link is one plain jump");
   assert.doesNotMatch(page, /scroll-behavior:\s*smooth/);
-  /* 18 Nov 2026: versioned urls (a failed fetch must not reuse an older file), so the cache name moved to v6.
-     The shell entry is the full url ("/js/….js?v=" + V), not the bare path. */
-  assert.match(sw, /var CACHE = "bs-hq-v6"/);
-  assert.match(sw, /"\/js\/hq-phone\.js\?v=" \+ V/); assert.match(sw, /"\/js\/hq-cmd\.js\?v=" \+ V/); assert.match(sw, /"\/js\/hq-staff\.js\?v=" \+ V/); assert.match(sw, /"\/js\/hq-app\.js\?v=" \+ V/);
+  /* 18 Nov 2026: versioned urls, including the phone look (hq-look.js). Cache v7, because v6 was the unversioned look. */
+  assert.match(sw, /var CACHE = "bs-hq-v7"/);
+  assert.match(sw, /"\/js\/hq-look\.js\?v=" \+ V/); assert.match(sw, /"\/js\/hq-phone\.js\?v=" \+ V/); assert.match(sw, /"\/js\/hq-cmd\.js\?v=" \+ V/); assert.match(sw, /"\/js\/hq-staff\.js\?v=" \+ V/); assert.match(sw, /"\/js\/hq-app\.js\?v=" \+ V/);
   for (const [name, src] of [["hq-staff.js", staff], ["hq.js", readFileSync(new URL("../js/hq.js", import.meta.url), "utf8")]]) assert.doesNotMatch(src, /\b(confirm|alert|prompt)\s*\(/, name + ": questions are asked on the page, never in a browser dialog");
   assert.doesNotMatch(staff, /innerHTML\s*=\s*[^;]*\b(m|th|r|w|e|s|a)\.(text|message|payer|note|name|task|blocker)\b(?![^;]*esc\()/, "board text is escaped");
   /* Luke's words: the visible text of the new parts never says MCP, token, endpoint or API */

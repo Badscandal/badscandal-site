@@ -6,7 +6,7 @@ import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import vm from "node:vm";
 
-const HQ_SCRIPTS = ["js/crt.js", "js/hq-lib.js", "js/hq.js", "js/hq-staff.js", "js/hq-phone.js", "js/hq-shell.js", "js/hq-app.js", "js/hq-cmd.js", "js/hq-pages.js"];
+const HQ_SCRIPTS = ["js/crt.js", "js/hq-lib.js", "js/hq-look.js", "js/hq.js", "js/hq-staff.js", "js/hq-phone.js", "js/hq-shell.js", "js/hq-app.js", "js/hq-cmd.js", "js/hq-pages.js"];
 
 function contentVersion() {
   const h = createHash("sha256");
@@ -23,7 +23,7 @@ test("every HQ script url carries the same content hash, and the service worker 
   const scripts = [...page.matchAll(/<script src="(js\/[^"]+)" defer><\/script>/g)].map((m) => m[1]);
   assert.deepEqual(scripts, HQ_SCRIPTS.map((s) => s + "?v=" + v));
   assert.match(sw, new RegExp('var V = "' + v + '"'));
-  assert.match(sw, /var CACHE = "bs-hq-v6"/);
+  assert.match(sw, /var CACHE = "bs-hq-v7"/);
   assert.match(sw, /var FETCH_MS = 8000/);
   for (const s of HQ_SCRIPTS) assert.match(sw, new RegExp('"\\/' + s.replace(/\./g, "\\.") + '\\?v=" \\+ V'));
   for (const tag of page.matchAll(/<link[^>]*rel="stylesheet"[^>]*>/g)) {
@@ -91,7 +91,7 @@ function boot() {
     location: { reload() { reloads++; } },
     navigator: { serviceWorker: { getRegistrations() { return Promise.resolve(regs); } } },
     caches: {
-      keys: async () => ["bs-hq-v5", "bs-hq-v6", "meta-cache"],
+      keys: async () => ["bs-hq-v5", "bs-hq-v6", "bs-hq-v7", "meta-cache"],
       delete: async (k) => { deleted.push(k); return true; },
     },
     Promise,
@@ -151,7 +151,7 @@ test("boot guard: Try again reloads; Reset app unregisters the HQ worker, clears
   reset.screen().children[2].listeners.click();
   await flush();
   assert.deepEqual(reset.unregistered, ["https://badscandal.com/hq"]);
-  assert.deepEqual(reset.deleted, ["bs-hq-v5", "bs-hq-v6"]);
+  assert.deepEqual(reset.deleted, ["bs-hq-v5", "bs-hq-v6", "bs-hq-v7"]);
   assert.equal(reset.reloads(), 1);
 });
 

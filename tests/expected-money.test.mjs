@@ -137,8 +137,11 @@ test("a route's cost is sent minus landed, and a currency change is not enough d
   const more = pay({ id: "ipaypal0002", date: "2026-11-01", payer: "Sample Distro", amount: 90, currency: "USD", status: "received", account: "PayPal", category: "Self-releases", movedTo: "irevolut0012" });
   const over = pay({ id: "irevolut0012", date: "2026-11-02", payer: "Sample Distro", amount: 100, currency: "USD", status: "received", account: "Revolut", category: "Self-releases", from: ["ipaypal0002"] });
   const extra = S.routeCosts([more, over], [src()])[0];
-  assert.deepEqual(extra.extra, { USD: 10 });
-  assert.match(S.routeCostText(extra), /Landed USD 10\.00 more than was sent/);
+  /* 18 Nov 2026: landed above what was sent is a wrong pairing, not a negative fee */
+  assert.deepEqual(extra.extra, {});
+  assert.equal(extra.checkLink, 1);
+  assert.match(S.routeCostText(extra), /Check link/);
+  assert.doesNotMatch(S.routeCostText(extra), /more than was sent/);
   assert.equal(S.routeCosts([statement], [src()]).length, 0);
   const lines = L.routeLines(mixed);
   assert.ok(lines.some((t) => t === "Exchange: not enough data."));
@@ -166,11 +169,11 @@ test("filing the route does not count the money twice, and luke_briefing's probl
   assert.deepEqual(brief.income_this_month.problems, i.problems);
   assert.equal(brief.expected_money, undefined, "luke_briefing's output does not gain a field");
   const status = await call(d, "income_status", { bot: "Ledger" });
-  assert.equal(status.expected_money.short, 1);
+  assert.equal(status.expected_money.short, 0, "18 Nov 2026: the USD 10 gap is the route fee, counted once");
   assert.match(status.payout_routes[0].cost, /Fees: USD 10\.00/);
   assert.match(status.payout_routes[0].cost, /1 payout/);
   const day = await call(d, "my_day", { bot: "Ledger" });
-  assert.match(day.expected_money, /1 short/);
+  assert.match(day.expected_money, /nothing to flag/, "18 Nov 2026: the gap is the route fee, so expected money does not also say short");
   assert.match(day.payout_routes, /Do not guess a rate/);
   assert.equal((await call(d, "my_day", { bot: "Atlas" })).expected_money, undefined);
   assert.equal(TOOLS.length, 40, "no new tool: income_status grew fields");
@@ -188,10 +191,9 @@ test("the sample shows a fee, a route with not enough data, and a missing source
   assert.match(S.routeCostText(thin), /not enough data/i);
   assert.equal(thin.rate, undefined);
   assert.ok(inc.expected.missing.some((m) => m.source === "Sample Label"));
-  assert.ok(inc.expected.summary.short >= 1);
+  /* 18 Nov 2026: the sample's USD 10 gap is the PayPal route's fee, not also a short */
+  assert.equal(inc.expected.summary.short, 0);
   assert.ok(!inc.problems.some((p) => /Expected money/.test(p)));
-  const row = inc.expected.rows.find((r) => r.shortBy);
-  assert.equal(L.expectedFlagKind(row), "bad");
-  assert.match(L.expectedFlags(row), /Short by USD 10\.00/);
+  assert.ok(!inc.expected.rows.some((r) => r.shortBy && r.shortBy.amount === 10));
   assert.ok(L.incomeProblems(inc, null).some((p) => p === "Expected money: " + inc.expected.summary.text));
 });

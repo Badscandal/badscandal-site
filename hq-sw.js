@@ -4,13 +4,14 @@
    keeps the numbers (/api/* always goes to the network; the page shows this device's last good copy
    "as of <time>" when offline). Network first, then the cached copy of that same url.
    An airline network can hang, so each fetch gives up after 8s and uses the cached copy.
-   Script urls carry ?v= (one content hash of the HQ scripts). The cache key is the full url, so a
-   new page can never be paired with an older script, and a failed fetch falls back to one version. */
-var CACHE = "bs-hq-v6"; /* v2 staff; v3 app; v4 search; v5 phone; v6 (18 Nov 2026) versioned urls */
-var V = "54dc995bd982";
+   Script urls carry ?v= (one content hash of the HQ scripts, including hq-look.js). The cache key
+   is the full url, so a new page can never be paired with an older script. */
+var CACHE = "bs-hq-v7"; /* v6 (18 Nov 2026): js/hq-look.js; v7: those urls carry ?v= */
+var V = "69da2a7841b6";
 var SHELL = ["/hq",
   "/js/crt.js?v=" + V,
   "/js/hq-lib.js?v=" + V,
+  "/js/hq-look.js?v=" + V,
   "/js/hq.js?v=" + V,
   "/js/hq-staff.js?v=" + V,
   "/js/hq-phone.js?v=" + V,

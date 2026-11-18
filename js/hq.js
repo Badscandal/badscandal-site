@@ -495,7 +495,12 @@
     var b = staffBoard(), today = new Date().toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" });
     var songs = ov.songs.filter(function (x) { return x.id && x.id !== "home" && x.date; });
     if (!songs.length) { box.innerHTML = ""; return; }
-    box.innerHTML = '<h3 class="sth">Song pages</h3><div class="stgrid">' + songs.map(function (x) {
+    var rows = window.HQLook ? HQLook.siteRows(songs.map(function (x) { return L.songTile(x, { today: today, now: Date.now(), card: ov.homeCard, builds: b && b.pageBuilds }); })) : [];
+    var strip = rows.length ? rows.map(function (r) {
+      return '<a class="siterow" href="https://' + esc(r.address) + '" target="_blank" rel="noopener"><span>' + esc(r.path) + " · " + esc(r.state) + (r.ago ? " · " + esc(r.ago) : "") + '</span><i class="' + (r.ok ? "ok" : "bad") + '" aria-hidden="true"></i></a>' +
+        (r.ok ? "" : '<p class="d">' + esc(r.detail.join(" · ")) + "</p>");
+    }).join("") : "";
+    box.innerHTML = strip + '<h3 class="sth">Song pages</h3><div class="stgrid">' + songs.map(function (x) {
       var t = L.songTile(x, { today: today, now: Date.now(), card: ov.homeCard, builds: b && b.pageBuilds });
       return '<div class="tile stile ' + t.tone + '"><div class="sthead"><button type="button" class="stpick" data-page="' + esc(t.id) + '">' + esc(t.title) + '</button>' +
         '<a class="staddr" href="https://' + esc(t.address) + '" target="_blank" rel="noopener">' + esc(t.address) + '</a></div><dl>' +
@@ -611,6 +616,7 @@
   }
   function drawAds() {
     drawCapCard();
+    drawLookAds();
     var sp = ov.spend;
     if (!sp || !sp.connected || sp.error) {
       $("spOn").hidden = true; $("spOff").hidden = false; $("spCur").textContent = "";
@@ -630,6 +636,29 @@
         "Read from Meta " + (sp.fetched ? sp.fetched.slice(11, 16) + " SP" : "") + ", refreshed hourly.";
     }
     drawHealth();
+  }
+  function drawLookAds() {
+    var box = $("adsPins");
+    if (!box || !window.HQLook) return;
+    var cap = (sheet && sheet.money && sheet.money.cap) || {};
+    var pins = HQLook.adsPins({ cap: cap, yesterday: ov && ov.yesterday, visits: ov && ov.people, prevVisits: ov && ov.prev && ov.prev.people }, L);
+    var ads = (ov && ov.spend && ov.spend.ads) || [];
+    var run = HQLook.runningNow(ads);
+    var plot = HQLook.creativePlot(ads);
+    var card = function (title, body, vs, source) {
+      return '<article class="adpin"><p class="kl">' + esc(title) + '</p><p class="kn num">' + esc(body) + '</p><p class="kt">' + esc(vs || "") + '</p><button type="button" class="whybtn" data-source="' + esc(source || title) + '">Source</button></article>';
+    };
+    var h = '<div class="adpins">' +
+      card("This month", pins.cap.label, pins.cap.missing.join(" · "), pins.cap.source) +
+      card("Yesterday", pins.yesterday.label, pins.yesterday.vs, pins.yesterday.source) +
+      card("Cost per engagement", pins.engagement.label, pins.engagement.vs, pins.engagement.source) +
+      card("Song-page visits", pins.visits.label, pins.visits.vs, pins.visits.source) + "</div>";
+    h += '<p class="d">' + esc(run.reported ? run.rows.map(function (r) { return r.name + ": " + (r.on ? "yes" : "no"); }).join(" · ") : run.line) + "</p>";
+    if (!plot.reported) h += '<p class="d">' + esc(plot.line) + "</p>";
+    else h += '<div class="matrix" aria-label="Spend against engagements">' + plot.points.map(function (p) {
+      return '<i class="' + (p.over ? "over" : "") + '" style="left:' + p.x + "%;top:" + p.y + '%" title="' + esc(p.name + (p.fatigue ? " · cost rising" : "")) + '"></i>';
+    }).join("") + "</div>";
+    box.innerHTML = h;
   }
   function drawHealth() {
     var h = ov.health, last = h && h.last, el = $("mstat");
@@ -685,16 +714,29 @@
     var inbox = ig.fanInbox || { questions: [], repeats: [] };
     var askIds = {};
     (inbox.questions || []).forEach(function (q) { askIds[q.id] = 1; });
+    if (st.connected && window.HQLook) {
+      var best = HQLook.bestPost(ig.ranking, (sheet && sheet.songs) || []);
+      h += best.reported ? '<article class="bestpost"><p class="kl">Best post this week</p><p class="kn">' + esc(best.title) + '</p><p>' + esc(best.why) + '</p>' +
+        (best.thumb ? '<img alt="" src="' + esc(best.thumb) + '" width="120" height="120">' : "") +
+        '<button type="button" class="whybtn" data-source="' + esc(best.source) + '">Source</button></article>' : '<p class="d">' + esc(best.line) + "</p>";
+      var fans = HQLook.fanCards(inbox);
+      if (fans.length) {
+        var fan = fans[0];
+        h += '<article class="wallet"><p class="kl">' + esc(fan.kind === "whose" ? "Ours or a fan?" : "Fan question") + '</p><p>' + esc(fan.user) + "</p><p>" + esc(fan.text) + "</p><p>" + esc(fan.flag || fan.whose || "") + "</p></article>";
+      }
+      var slots = HQLook.uploadSlots(ig.online);
+      if (slots) h += '<p class="d">Best hours are shaded from logged online followers.</p>';
+    }
     if (st.connected) {
       var qs = inbox.questions || [], rs = inbox.repeats || [];
       h += '<div class="tile faninbox" id="fanInbox"><h3>Fan inbox</h3><p class="sub">' + esc(L.FAN_INTRO) + "</p>";
       if (!qs.length && !rs.length) h += '<p class="d">' + esc(L.FAN_EMPTY) + "</p>";
       if (qs.length) {
-        h += "<h3>" + esc(L.FAN_ASK) + " (" + qs.length + ")</h3><ul>";
+        h += "<details class=\"look-more\"><summary>" + esc(L.FAN_ASK) + " (" + qs.length + ")</summary><ul>";
         qs.forEach(function (q) {
           h += '<li><span class="fanflag' + (q.needsReply ? "" : " ok") + '">' + esc(L.fanFlagWord(q.needsReply)) + '</span> <span class="lbl">' + esc(L.fanKindWord(q.kind)) + "</span> <b>" + esc(q.user) + "</b>: " + esc(q.text) + ' <span class="lbl">on ' + link(q.link, q.postCaption || "a post") + "</span></li>";
         });
-        h += "</ul>";
+        h += "</ul></details>";
       }
       if (rs.length) {
         h += "<h3>" + esc(L.FAN_BACK) + " (" + rs.length + ")</h3><ul>";
@@ -716,7 +758,7 @@
     var rk = ig.ranking;
     function rankItem(r) {
       var x = L.rankParts(r);
-      return '<li class="tile"><div class="row"><h3>' + link(r.link, r.caption || "(no caption)") + '</h3><span class="lbl">' + esc(r.type + " · " + day(String(r.at).slice(0, 10)) + " · " + x.window) + '</span></div>' +
+      return '<li class="tile"><div class="row"><h3>' + link(r.link, (r.song || r.type || "Post") + " · " + day(String(r.at).slice(0, 10))) + '</h3><span class="lbl">' + esc(x.window) + '</span></div>' +
         '<div class="big num">' + esc(x.rate) + '</div><div class="d">' + esc(x.views) + '</div><div class="d">' + esc(x.deep) + "</div>" + (x.follows ? '<div class="d">' + esc(x.follows) + "</div>" : "") +
         '<div class="d' + (r.paid ? "" : " muted") + '">' + esc(x.paid) + "</div>" + (x.before ? '<div class="d">' + esc(x.before) + "</div>" : "") + (x.own ? '<div class="d muted">' + esc(x.own) + "</div>" : "") + "</li>";
     }
@@ -735,8 +777,9 @@
     if (st.connected) h += '<details class="tile" style="margin:12px 0"><summary>Our own accounts (' + (ig.own || []).length + "): their comments don\u2019t count</summary>" +
       '<p class="d">' + esc((ig.own || []).map(function (x) { return "@" + x; }).join(", ")) + '</p><p class="d muted">Nova keeps this list (the connected account is always on it). Ask Nova to add or remove one.</p>' +
       ((ig.ownLog || []).length ? '<ul class="igcomments">' + ig.ownLog.slice(0, 10).map(function (x) { return "<li>" + esc(L.deskWhen(x.at, sheet && sheet.today) + " · " + x.by + " " + (x.action === "add" ? "added" : "removed") + " @" + x.handle) + ' <span class="lbl">' + esc(x.reason) + "</span></li>"; }).join("") + "</ul>" : "") + "</details>";
-    if ((ig.posts || []).length) h += '<div class="igposts">' + ig.posts.slice(0, 9).map(function (p) {
-      return '<div class="tile igpost"><div class="row"><h3>' + link(p.link, p.caption || "(no caption)") + '</h3><span class="lbl">' + esc((p.type || "post") + " · " + day(p.at.slice(0, 10))) + '</span></div><div class="d">' + esc(L.igPostNumbers(p) || "No numbers yet") + "</div></div>";
+    var shownPosts = (ig.posts || []).filter(function (p) { return p.views == null || Number(p.views) >= 1000; });
+    if (shownPosts.length) h += '<div class="igposts">' + shownPosts.slice(0, 9).map(function (p) {
+      return '<div class="tile igpost"><div class="row"><h3>' + link(p.link, (p.type || "Post") + " · " + day(p.at.slice(0, 10))) + '</h3></div><div class="d">' + esc(L.igPostNumbers(p) || "No numbers yet") + "</div></div>";
     }).join("") + "</div>";
     if ((ig.comments || []).length) h += '<div class="tile" style="margin-top:12px"><h3>Newest comments</h3><ul class="igcomments">' + ig.comments.slice(0, 8).map(function (c) {
       return "<li><b>" + esc(c.user) + "</b>: " + esc(c.text) + ' <span class="lbl">on ' + link(c.link, c.postCaption || "a post") + "</span></li>"; }).join("") + "</ul></div>";
@@ -810,7 +853,9 @@
   function drawMoney() {
     var incomeBad = broken("Income"), rows = HQLib.monthRows(sheet.money.months);
     var box = $("songPL");
-    if (box) box.innerHTML = sheet.songPL ? L.songPLHtml(L.songPLView(sheet.songPL)) : "";
+    var view = sheet.songPL ? L.songPLView(sheet.songPL) : null;
+    if (view) view.songs = view.songs.filter(function (s) { return s.moneyIn !== "nothing recorded" || s.adSpend !== "not linked to a song"; });
+    if (box) box.innerHTML = view && view.songs.length ? L.songPLHtml(view) : '<p class="empty2">No song is linked yet.</p>';
     setTable("moneyTable", rows.length ? "<tr><th>Month</th><th class='r'>Received</th></tr>" + rows.map(function (r) {
       return "<tr><td><b>" + esc(r.label) + "</b></td><td class='r'>" + (incomeBad ? "can't be read" : esc(r.amount)) + "</td></tr>";
     }).join("") : '<tr><td class="empty">' + (incomeBad ? "See the note above." : "No income rows yet.") + "</td></tr>");
