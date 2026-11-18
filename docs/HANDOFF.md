@@ -62,7 +62,8 @@ artist growth bot that all we will need is content and $".
 
 ## In flight (branches not merged)
 
-- **Night test, 18 Nov** (`cursor/hq-night-test-31d0`, not merged). 29 connector fixes: reconnect only when the tool list differs, duties after 07:00, lyrics after release, RouteNote mail from luke@badscandal.com with admin@badscandal.com in CC, three read-only tools (43). `luke_briefing` unchanged. Not on main.
+- **Night test, 18 Nov** (`cursor/hq-night-test-31d0`, not merged). 29 connector fixes, including RouteNote mail from luke@badscandal.com with admin@badscandal.com in CC, plus the three read-only tools. With PR #87's four profile tools the connector is 47. `luke_briefing` unchanged. Not on main.
+- **Profile masters** (PR #87, on main). Luke uploads one profile photo and one banner on Profiles. A fitting shape is resized on the page. A shape that does not fit is not cropped: Atlas, Laura and Kevin extend it with `profile_jobs`, `profile_master`, `profile_rework` and `profile_uploaded`. Problems open a Needs you card. Instagram is Luke's. Deezer, TikTok and Instagram have size rules. TIDAL is on the list. Secondary buttons set their own colours. Cache `bs-hq-v8`.
 
 - **Blank-screen fix** (PR #83, on main). One content hash on every HQ script, an 8-second fetch timeout, and Try again / Reset app when the page never paints.
 - **Phone look** (PR #80, on main). One received total per currency.
