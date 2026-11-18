@@ -1471,6 +1471,16 @@
     weeks.forEach(function (w) { w.items.sort(function (a, b) { return a.date < b.date ? -1 : a.date > b.date ? 1 : a.kind === b.kind ? 0 : a.kind === "release" ? -1 : 1; }); });
     return weeks;
   }
+  /* L7 (18 Nov 2026): the two-week pitch slots, in the words the Upcoming tab shows. slots = board.pitchSlots. */
+  function pitchBlock(slots) {
+    return (slots || []).map(function (s) {
+      var also = (s.also || []).map(function (a) {
+        return a.title + (a.dateWords ? " (" + a.dateWords + ")" : "") + (a.editorial && a.editorial.length ? ": " + a.editorial.join(", ") : "");
+      });
+      return { title: s.title, when: s.dateWords || "", line: s.line || "", editorial: s.editorial || [],
+        also: also.length ? "Also in these two weeks, not pitched: " + also.join(", ") : "" };
+    });
+  }
   /* B4 (17 Nov 2026): the Instagram reader's one line */
   /* L6 (17 Nov 2026, Webmaster's #15): one song page at a glance. s = an overview song (+ track, health);
      o = {today, now, card: {now, due} (the home card), builds: board.pageBuilds}. -> {id, title, address, tone,
@@ -1630,7 +1640,7 @@
     return scored.slice(0, max).map(function (y) { return y.x; });
   }
 
-  return { rankParts: rankParts, songTile: songTile, igStatusLine: igStatusLine, igPostNumbers: igPostNumbers, artistLines: artistLines, closedLine: closedLine, preflightLine: preflightLine, sixWeeks: sixWeeks, recommendLines: recommendLines, recommendedOption: recommendedOption, releaseTrouble: releaseTrouble, navPad: navPad, signoutWords: signoutWords, growthWhen: growthWhen, ago: ago, spMs: spMs, releaseWords: releaseWords, releaseDetail: releaseDetail, healthRows: healthRows, healthState: healthState, median: median, change: change, money: money, attention: attention, briefing: briefing,
+  return { rankParts: rankParts, songTile: songTile, igStatusLine: igStatusLine, igPostNumbers: igPostNumbers, artistLines: artistLines, closedLine: closedLine, preflightLine: preflightLine, sixWeeks: sixWeeks, pitchBlock: pitchBlock, recommendLines: recommendLines, recommendedOption: recommendedOption, releaseTrouble: releaseTrouble, navPad: navPad, signoutWords: signoutWords, growthWhen: growthWhen, ago: ago, spMs: spMs, releaseWords: releaseWords, releaseDetail: releaseDetail, healthRows: healthRows, healthState: healthState, median: median, change: change, money: money, attention: attention, briefing: briefing,
     snapshot: snapshot, changesSince: changesSince, tiles: tiles, summaryText: summaryText, shortStep: shortStep, day: day,
     slug: slug, workerLabel: workerLabel, sortWorkers: sortWorkers, workerView: workerView, dutyWhen: dutyWhen, workerCounts: workerCounts, seenLine: seenLine, connectorLine: connectorLine,
     novaMessage: novaMessage, liveFeed: liveFeed, spWhen: spWhen, waitLabel: waitLabel, needWords: needWords, reportParts: reportParts, siteCheckLine: siteCheckLine, composeNames: composeNames,

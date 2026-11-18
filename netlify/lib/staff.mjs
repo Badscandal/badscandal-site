@@ -77,7 +77,7 @@ export const DEFAULT_ROSTER = [
     schedule: [{ time: "09:10", what: "Subscribers, change, views, best video; up to 5 fan signals" }, { time: "7 days before a release", what: "Video scheduled" }], writes: "The Growth and Fans tabs; the release timeline's video step" },
   { name: "Atlas", role: "Spotify and stores", duty: "Daily numbers for every released song", time: "09:15",
     why: "Streams per song, day by day, are the number the whole plan is steered by. Atlas also sends every Spotify playlist pitch.",
-    schedule: [{ time: "09:15", what: "One row per released song for the newest full day, plus the Spotify followers row" }, { time: "14 days before a release", what: "Send the Spotify pitch (never later than 7 days before)" }], writes: "The Songs and Growth tabs; the release timeline's pitch step" },
+    schedule: [{ time: "09:15", what: "One row per released song for the newest full day, plus the Spotify followers row" }, { time: "14 days before a release", what: "Send the Spotify pitch (never later than 7 days before), then record the day with pitch_log. After release, record each new editorial playlist." }], writes: "The Songs and Growth tabs; the release timeline's pitch step; editorial playlist adds" },
   { name: "Drop", role: "Distribution", duty: "Where every release is at the distributor", time: "09:20",
     why: "Gets each self-release into the stores on time and keeps where each song is at the distributor (uploaded, in moderation, approved, live), telling Luke the moment a date can't be kept.",
     schedule: [{ time: "09:20", what: "Status of every unreleased song at the distributor (store_status)" }, { time: "4 weeks before a release", what: "Upload to RouteNote (3 weeks at the latest)" }], writes: "The release timeline and each song's store status" },
@@ -2204,6 +2204,79 @@ function dealNews(r, by, moved) {
    has passed is recorded this way when it is sent. */
 const outAlready = (r, today) => !!r.alreadyOut || (r.status === "draft" && isDay(r.date) && r.date < today);
 
+/* L7 (18 Nov 2026): the Spotify editorial pitch, as HQ shows it. HQ never pitches and never calls
+   Spotify. Atlas sends the pitch in Spotify for Artists and records the day; after release he records
+   each editorial playlist he sees there. Status is not pitched, pitched (with the day), or missed
+   (the deadline passed and it was not sent). A song the one-pitch rule skipped is not pitched, and
+   it is not missed. Deadline = 7 days before release. The warning runs from 14 days out, while there
+   is still time. */
+export const PITCH_DEADLINE_DAYS = 7;
+export const PITCH_WARN_DAYS = 14;
+export const PITCH_RECENT_DAYS = 28; /* a playlist add still shows for a month after release */
+export const PITCH_LOGGERS = ["Atlas", "Nova", "Claude", "Luke"];
+const EDITORIAL_CAP = 24;
+const pitchStepOf = (v) => ((v && v.steps) || []).find((s) => s.key === "pitch") || null;
+const pitchedOnOf = (p) => (p && p.status === "done" ? (isDay(p.doneOn) ? p.doneOn : (p.at ? spDay(Date.parse(p.at)) : "")) : "");
+const samePlay = (a, b) => { const ka = songKey(a), kb = songKey(b); return ka || kb ? ka === kb : ownWords(a) !== "" && ownWords(a) === ownWords(b); };
+export function editorialOf(r) {
+  return (Array.isArray(r && r.editorial) ? r.editorial : [])
+    .filter((e) => e && isDay(e.date) && clean(e.name, 80))
+    .map((e) => ({ name: clean(e.name, 80), date: e.date, by: clean(e.by, 40) }))
+    .slice(-EDITORIAL_CAP);
+}
+export function pitchOf(v, today, editorial = null) {
+  const eds = editorial || editorialOf(v);
+  if (!v || v.status === "cancelled" || v.status === "draft") return null;
+  const pitch = pitchStepOf(v);
+  if (v.alreadyOut) return eds.length ? { status: "not pitched", skipped: false, waiting: false, pitchedOn: null, deadline: null, line: "Pitch: not tracked (already out when it was recorded)", editorial: eds } : null;
+  if (!pitch && !eds.length) return null;
+  const date = isDay(v.date) ? v.date : null;
+  const deadline = date ? addDays(date, -PITCH_DEADLINE_DAYS) : null;
+  const days = v.daysToGo != null ? v.daysToGo : (date && isDay(today) ? daysBetween(today, date) : null);
+  const one = !!(pitch && pitch.status === "skipped" && pitch.rule === ONE_PITCH);
+  const sentBefore = !!(pitch && pitch.status === "skipped" && pitch.note === PITCHED_NOTE);
+  const done = !!(pitch && pitch.status === "done") || sentBefore;
+  const waiting = !!(pitch && pitch.waiting && !done && !one);
+  const missed = !!(pitch && !done && !one && days != null && days < PITCH_DEADLINE_DAYS);
+  const status = done ? "pitched" : missed ? "missed" : "not pitched";
+  const pitchedOn = done && pitch && pitch.status === "done" ? pitchedOnOf(pitch) : "";
+  const by = deadline ? dayWords(deadline) : "";
+  let line;
+  if (done) line = pitchedOn ? `Pitch: pitched ${dayWords(pitchedOn)}` : "Pitch: pitched";
+  else if (one) line = pitch.note ? `Pitch: ${pitch.note.charAt(0).toLowerCase()}${pitch.note.slice(1)}` : "Pitch: not pitched";
+  else if (missed) line = by ? `Pitch: missed. Spotify needed it by ${by}` : "Pitch: missed";
+  else if (waiting) line = by ? `Pitch: not pitched yet. It waits until the song shows in Spotify for Artists. Deadline ${by}` : "Pitch: not pitched yet. It waits until the song shows in Spotify for Artists";
+  else if (by && days != null && days >= PITCH_DEADLINE_DAYS && days <= PITCH_WARN_DAYS) line = `Pitch: not pitched. Still time: send it by ${by}`;
+  else line = by ? `Pitch: not pitched. Deadline ${by}` : "Pitch: not pitched";
+  return { status, skipped: one, waiting, pitchedOn: pitchedOn || null, deadline, line, editorial: eds, ...(one && pitch.note ? { reason: pitch.note } : {}) };
+}
+/* the two-week pitch slots: the song that holds the slot, then the songs the one-pitch rule left out.
+   Upcoming songs and songs out in the last 28 days. */
+export function pitchSlots(views, today) {
+  const rel = (views || []).filter((v) => v && v.status === "scheduled" && !v.alreadyOut && isDay(v.date))
+    .slice().sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+  const slots = [];
+  let cur = null;
+  const bit = (v, p) => ({ id: v.id, title: v.title, date: v.date, dateWords: v.dateWords || dayWords(v.date), status: p.status, line: p.line, pitchedOn: p.pitchedOn || null, deadline: p.deadline || null,
+    editorial: (p.editorial || []).map((e) => `${e.name} (${dayWords(e.date)})`) });
+  for (const v of rel) {
+    const p = v.pitch || pitchOf(v, today);
+    if (!p) continue;
+    if (p.skipped && cur) { cur.also.push(bit(v, p)); continue; }
+    cur = { ...bit(v, p), also: [] };
+    slots.push(cur);
+  }
+  const recent = (d) => isDay(d) && isDay(today) && daysBetween(today, d) >= -PITCH_RECENT_DAYS;
+  return slots.filter((s) => recent(s.date) || s.also.some((a) => recent(a.date)));
+}
+export function pitchSlotLines(slots) {
+  return (slots || []).map((s) => {
+    const ed = s.editorial && s.editorial.length ? `; editorial: ${s.editorial.join(", ")}` : "";
+    const also = s.also && s.also.length ? `; not pitched in this slot: ${s.also.map((a) => `${a.title} (out ${a.dateWords})`).join(", ")}` : "";
+    return `${s.title} (out ${s.dateWords}): ${s.line}${ed}${also}`;
+  });
+}
+
 /* what one release looks like to /hq and to the tools. o.sightings: the latest Spotify for Artists
    report (sightingsView or the stored document), for the warnings. */
 export function releaseView(r, today, o = {}) {
@@ -2256,6 +2329,7 @@ export function releaseView(r, today, o = {}) {
     store: storeOf(r),
     approvals: approvalsOf(r),
     log: (r.log || []).slice().reverse() };
+  v.pitch = pitchOf(v, today, editorialOf(r)); /* L7: not pitched / pitched with the day / missed */
   v.warnings = releaseWarnings(v, o.sightings || null, today);
   v.preflight = r.status === "cancelled" ? [] : preflightOf(r); /* A6, 17 Nov 2026 */
   v.where = whereWords(v, today);
@@ -2324,18 +2398,24 @@ export function warningsOf(v, sightings, today) {
   for (const s of v.steps) if (s.status === "blocked") out.push({ kind: "blocked", rank: 1, text: `${s.label} is blocked (${s.owner})` + (s.note ? `: ${cutNote(s.note, 160)}` : "") });
   /* batch 3: the distributor turned it down, and it hasn't been fixed yet */
   if (v.store && v.store.status === "rejected") out.push({ kind: "rejected", rank: 1, text: "Rejected at the distributor" + (v.store.reason ? `: ${cutNote(v.store.reason, 160)}` : "") + (v.store.by ? ` (${v.store.by})` : "") });
-  const pitchTooLate = pitch && !finished(pitch) && days > 0 && days < 7;
+  const pitchTooLate = pitch && !finished(pitch) && days > 0 && days < PITCH_DEADLINE_DAYS;
+  /* still time (L7, 18 Nov 2026): from 14 days out down to the deadline, and only when Atlas can
+     actually send it (not waiting on Spotify for Artists, not skipped by the one-pitch rule) */
+  const pitchSoon = pitch && !finished(pitch) && !pitch.waiting && days >= PITCH_DEADLINE_DAYS && days <= PITCH_WARN_DAYS;
   /* only while the pitch is still to go (11 Nov 2026, review): a pitch already sent (an older release
      moved, or marked by Luke) can't be held up by it */
   const other = otherDate(sightings, v);
   const spotMissing = spot && !finished(spot) && pitch && !finished(pitch) && days > 0 && days <= 14 && !inReport(sightings, v) && !other;
   for (const s of v.steps.filter((x) => x.late && x.status !== "blocked").sort((a, b) => a.dueIn - b.dueIn)) {
     if (s.key === "live" && days === 0) continue; /* said above */
-    if (s.key === "pitch" && pitchTooLate) continue; /* said below, with what it means */
+    if (s.key === "pitch" && (pitchTooLate || pitchSoon)) continue; /* said below, with what it means */
     if (s.key === "spotify" && spotMissing) continue;
     out.push({ kind: "late", rank: 2, text: `${s.label} is ${plural(-s.dueIn, "day")} late (${s.owner})` });
   }
   if (pitchTooLate) out.push({ kind: "pitch", rank: 3, text: "Too late for a Spotify pitch: Spotify needs it 7 days before release" });
+  if (pitchSoon) out.push({ kind: "pitch", rank: 3, text: days === PITCH_DEADLINE_DAYS
+    ? "Last day to pitch: Spotify needs it today (7 days before release)"
+    : `Still time to pitch: send it by ${dayWords(addDays(v.date, -PITCH_DEADLINE_DAYS))} (Spotify needs it 7 days before release)` });
   /* with fewer than 7 days to go the pitch is too late anyway (said above): no "until it does" */
   if (spotMissing) out.push({ kind: "spotify", rank: 3, text: `Not showing in Spotify for Artists yet, ${plural(days, "day")} before release` + (pitchTooLate ? "" : ": the pitch cannot be sent until it does") });
   /* the same song shows there on another day (11 Nov 2026, review): one of the two dates is wrong */
@@ -3009,6 +3089,8 @@ export async function setStep(store, now, roster, a) {
     const w = waitingFor(r.steps, st, r.date, today0);
     if (w && status === "done" && !PEOPLE.includes(by)) fail(`"${st.label}" ` + (w.key === "release" ? (st.key === "ads" ? `waits for the release day (${dayWords(r.date)}): the ads are made with Luke once the song is out, never before and never alone.` : `waits for the release day (${dayWords(r.date)}): the lyrics go on Musixmatch once the song is out and shows there. Not showing yet is not a block.`)
       : `is waiting for "${w.label}" (${w.owner}): it can't be done before that.` + (w.key === "spotify" ? " When the song shows as upcoming in Spotify for Artists, Atlas reports it with spotify_upcoming and the pitch opens." : w.key === "page" ? " The ads link to the song page (badscandal.com/<song>, with the Meta pixel), so they start once Webmaster has it live." : "")), "waiting");
+    /* L7: the one-pitch rule is not undone by marking the skipped pitch done */
+    if (st.key === "pitch" && status === "done" && st.status === "skipped" && st.rule === ONE_PITCH) fail(`${st.note || "This song is not pitched: another song is the one pitched in these two weeks."} Nothing was saved.`);
     if (st.status === status && st.note === note && (!link || st.link === link) && (!doneOn || st.doneOn === doneOn)) return { skip: true, value: { release: r, st, changed: false } };
     Object.assign(st, { status, note, ...(link ? { link } : {}), at, by });
     if (doneOn) st.doneOn = doneOn; else if (status !== "done") delete st.doneOn; /* reopened: the old day goes with it */
@@ -3025,6 +3107,69 @@ export async function setStep(store, now, roster, a) {
     } catch {} /* the step is saved; a full live log must not undo it */
   }
   return r;
+}
+
+/* L7 (18 Nov 2026): Atlas records a pitch he already sent, or an editorial playlist he saw in Spotify
+   for Artists. This never sends a pitch and never calls Spotify. pitched_on marks the pitch step done
+   on that day (the one-pitch rule then applies again). playlist + added_on is kept once the song is out. */
+export async function logPitch(store, now, roster, a) {
+  const by = whoIs(a.by, roster, { people: true });
+  if (!PITCH_LOGGERS.includes(by)) fail("Only Atlas records a Spotify pitch or an editorial playlist (Nova may record it for him). HQ never pitches a song: Atlas sends it in Spotify for Artists, then records it here.", "not_allowed");
+  const pitchedOn = a.pitched_on != null && String(a.pitched_on).trim() ? clean(a.pitched_on, 10) : "";
+  const playlist = clean(a.playlist, 80);
+  const addedOn = a.added_on != null && String(a.added_on).trim() ? clean(a.added_on, 10) : "";
+  if (!pitchedOn && !playlist) fail("Say what you saw. pitched_on is the day you sent the pitch, YYYY-MM-DD. Or playlist is the editorial playlist's name, with added_on. Nothing was saved.");
+  if (addedOn && !playlist) fail("added_on goes with playlist: the editorial playlist's name, as Spotify for Artists shows it. Nothing was saved.");
+  if (pitchedOn && !isDay(pitchedOn)) fail("pitched_on must be the day you sent the pitch, written YYYY-MM-DD. Nothing was saved.");
+  if (playlist && playlist.length < 2) fail("playlist must be the editorial playlist's name, as Spotify for Artists shows it. Nothing was saved.");
+  if (playlist && !addedOn) fail("added_on is the day the song was added to that playlist, YYYY-MM-DD. Nothing was saved.");
+  if (addedOn && !isDay(addedOn)) fail("added_on must be a date written YYYY-MM-DD. Nothing was saved.");
+  const today = spDay(now), at = new Date(now).toISOString();
+  if (pitchedOn && pitchedOn > today) fail(`pitched_on can't be in the future (${dayWords(pitchedOn)}). Nothing was saved.`);
+  if (addedOn && addedOn > today) fail(`added_on can't be in the future (${dayWords(addedOn)}). Nothing was saved.`);
+  if (playlist) noSecrets(playlist);
+  const out = await mutate(store, REL_KEY, [], (list) => {
+    const r = findRelease(list, a.song || a.id, { drafts: by === "Luke" || by === "Claude" });
+    if (r.status === "cancelled") fail(`${r.title} was cancelled. Nothing was saved.`);
+    if (r.status !== "scheduled") fail(`${r.title} has not been sent to the team yet. Nothing was saved.`);
+    let pitchChange = "", editChange = "", changed = false;
+    if (pitchedOn) {
+      const st = (r.steps || []).find((s) => s.key === "pitch");
+      if (!st) fail(`${r.title} has no Spotify pitch step. Nothing was saved.`);
+      if (st.status === "skipped" && st.rule === ONE_PITCH) fail(`${st.note || "This song is not pitched: another song is the one pitched in these two weeks."} Nothing was saved.`);
+      if (r.alreadyOut || (st.status === "skipped" && st.note === OUT_NOTE)) fail(`${r.title} was already out when it was recorded, so there is no pitch to log. Nothing was saved.`);
+      const w = waitingFor(r.steps, st, r.date, today);
+      if (w && !PEOPLE.includes(by)) fail(`The pitch is waiting for "${w.label}": it can't be sent before that. When the song shows as upcoming in Spotify for Artists, report it with spotify_upcoming. Nothing was saved.`, "waiting");
+      if (!(st.status === "done" && pitchedOnOf(st) === pitchedOn)) {
+        Object.assign(st, { status: "done", at, by, doneOn: pitchedOn });
+        freeWaiting(r, "pitch", today);
+        logIt(r, at, by, `${by} recorded the Spotify pitch: sent ${dayWords(pitchedOn)}`);
+        pitchChange = pitchedOn;
+        changed = true;
+        pitchRule(list, today, at);
+      }
+    }
+    if (playlist) {
+      if (!isDay(r.date) || r.date > today) fail(`Editorial playlist adds are recorded once ${r.title} is out${r.date ? ` (${dayWords(r.date)})` : ""}. Nothing was saved.`);
+      if (addedOn < r.date) fail(`added_on (${dayWords(addedOn)}) is before the release day (${dayWords(r.date)}). Nothing was saved.`);
+      const eds = Array.isArray(r.editorial) ? r.editorial : [];
+      if (!eds.some((e) => isDay(e.date) && e.date === addedOn && samePlay(e.name, playlist))) {
+        eds.push({ name: playlist, date: addedOn, by, at });
+        r.editorial = eds.slice(-EDITORIAL_CAP);
+        logIt(r, at, by, `${by} recorded an editorial playlist: ${playlist} (${dayWords(addedOn)})`);
+        editChange = playlist;
+        changed = true;
+      }
+    }
+    if (!changed) return { skip: true, value: { release: r, already: true, pitchChange: "", editChange: "" } };
+    r.updatedAt = at;
+    return { value: { release: r, already: false, pitchChange, editChange } };
+  });
+  if (!out.already && !PEOPLE.includes(by)) {
+    const bits = [out.pitchChange ? `Spotify pitch recorded, sent ${dayWords(out.pitchChange)}` : "", out.editChange ? `editorial playlist ${out.editChange}` : ""].filter(Boolean);
+    try { await postUpdate(store, now, roster, { bot: by, status: "info", message: `${out.release.title}: ${bits.join("; ")}` }, { release: out.release.id }); } catch {}
+  }
+  return { ...out, view: releaseView(out.release, today) };
 }
 
 /* Drop (Nova, Claude, Luke): where the song is at the distributor, from the fixed list, with history.
@@ -3442,7 +3587,7 @@ export function board(desk, now, hq) {
     updates: updates.slice(0, 60),
     messages: threads(desk.messages).slice(0, 80).map((t) => ({ ...mark(t), replies: t.replies.map(mark) })),
     answered: answeredByLuke(desk.messages, read, now),
-    releases: releaseOrder(views).slice(0, 20).map(slimRelease), packFields: packFieldsOut(), releaseSteps: releaseStepsOut(),
+    releases: releaseOrder(views).slice(0, 20).map(slimRelease), pitchSlots: pitchSlots(views, today), packFields: packFieldsOut(), releaseSteps: releaseStepsOut(),
     sightings: sightingsView(desk.sightings || null, desk.releases || [], today, now),
     waiting: { luke: waitingOn(desk.messages, "Luke"), claude: waitingOn(desk.messages, "Claude"), bots: desk.messages.filter((m) => isOpen(m) && !PEOPLE.includes(m.to)).length },
     income: desk.income,

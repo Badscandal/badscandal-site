@@ -1,6 +1,6 @@
 # HQ status (update on every deploy)
 
-**Last updated:** 17 Nov 2026, night São Paulo, by Cursor (main after PR #61). Start with `docs/HANDOFF.md`.
+**Last updated:** 18 Nov 2026, by Cursor. L7 is in a branch, not live. Start with `docs/HANDOFF.md`.
 **Tests:** 568, all passing on Node 24 and Node 22. **Connector:** 38 tools (`preflight` gained asset options on L8; Atlas, Laura and Webmaster were told to refresh their tool list).
 No money amounts, payer names or account numbers in this file: the repo is public.
 
@@ -43,7 +43,8 @@ No money amounts, payer names or account numbers in this file: the repo is publi
 
 ## Next up
 
-- L8 is live. Next candidates, only on Luke's word: L7 pitch tracker, L12 Profiles (an idea; needs his go), L3 fan inbox part 1.
+- L7 pitch tracker is in PR #63 (not live): pitch status on Upcoming and Today, a warning from 14 days out, the two-week slots, and `pitch_log` for Atlas. HQ never pitches. The branch's tests are 574 on Node 24 and 22.
+- L8 is live. After L7, only on Luke's word: L12 Profiles (an idea; needs his go), L3 fan inbox part 1.
 - Still needs Luke: B2 YouTube sign-in, the on-hold decisions H1–H4, and L11 (who "Luka" is). B1 and B5 are not needed; B4 Instagram is connected.
 - The rest of Later (L1, L4, L5, L9, L10) waits. Start any of it on his word.
 

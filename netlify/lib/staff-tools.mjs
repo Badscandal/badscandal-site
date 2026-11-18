@@ -46,6 +46,7 @@ const INSTRUCTION_LINES = [
   [null, "The release timeline (the team's rule): a song goes to RouteNote 4 weeks before its release day (3 weeks at the very least: less is tight and the pitch may miss), songs come out on Fridays, and there are at least 2 weeks between two releases."],
   ["Drop", "Drop: you submit everything to RouteNote (the master, the artwork, every detail and the release date) and you keep the schedule: upload on its day, check the approval, and tell Luke on the desk the moment a date can't be kept (a rejection, a missing file, a delay at the stores)."],
   ["Atlas", "Atlas: send the Spotify pitch the same day the song shows in Spotify for Artists; don't wait for its planned day. Before you send it, improve Luke's words from the pack (mood, instruments, story): keep his meaning and make it clear and strong."],
+  ["Atlas", "Atlas: when the pitch is sent, record the day with pitch_log (pitched_on). HQ never pitches a song and never changes Spotify: you send the pitch in Spotify for Artists, then record it here. When you see the song on a new editorial playlist in Spotify for Artists, record it the same day with pitch_log (playlist, added_on). A song the one-pitch rule skipped is not pitched: do not record a pitch for it."],
   ["Laura", "Laura: when the pack has a visualiser link, upload it to YouTube for the release and write its description like the other visualisers."],
   ["Webmaster", "Webmaster: make each song page (badscandal.com/<song>) before the song comes out, in the order the songs come out: a week after the previous song's release day. The home page shows a song as Out now for 7 days after its release day, then switches to the next upcoming song."],
   ["Verse", "Verse: the lyrics go on Musixmatch only once the song is out and shows there. Your lyrics step waits until the release day; from that day check Musixmatch every day and add Luke's approved text (the pack's lyrics) the day the song appears. A song not on Musixmatch yet is not a block. Only Luke writes the lyrics into the pack."],
@@ -327,6 +328,12 @@ export const TOOLS = [
         items: { type: "object", properties: { title: str("The title exactly as Spotify for Artists shows it."), date: str("Its release date, YYYY-MM-DD."),
           shown_as: str("Optional. The artist line and the label or distributor text, exactly as shown.") }, required: ["title", "date"], additionalProperties: false } },
       note: str("Optional. One line, for example \"two songs are on another artist's profile\".") }, ["bot", "releases"]) },
+  { name: "pitch_log", title: "Record a Spotify pitch or an editorial playlist", idempotent: true,
+    description: "ATLAS (Nova may record it for him). HQ never pitches a song and never changes anything on Spotify: you send the pitch yourself in Spotify for Artists, then record it here. pitched_on = the day you sent the pitch (YYYY-MM-DD). That marks \"Spotify pitch sent\" done on that day. A song the one-pitch rule skipped (another song is pitched in the same two weeks) cannot be recorded as pitched. playlist + added_on = an editorial playlist you saw the song on in Spotify for Artists, once the song is out: the playlist's name exactly as shown, and the day it was added. Log each NEW editorial playlist the day you see it. The same song, playlist and day again changes nothing. Example: song \"Night Drive\", pitched_on \"2026-11-27\". Example: song \"Night Drive\", playlist \"Dance Rising\", added_on \"2026-12-12\".",
+    inputSchema: obj({ bot: BOT, song: str("The song's title or its id."),
+      pitched_on: str("Optional. The day you sent the Spotify pitch, YYYY-MM-DD."),
+      playlist: str("Optional. An editorial playlist's name, exactly as Spotify for Artists shows it."),
+      added_on: str("With playlist: the day the song was added to that playlist, YYYY-MM-DD.") }, ["bot", "song"]) },
   { name: "read_guide", title: "Read the staff guide", readOnly: true,
     description: "The written guide to this desk: who does what, the daily times, how to log income, how messages work, the rules that never bend. Read it once when you are first connected, and again whenever Nova says it changed.",
     inputSchema: obj({ bot: BOT }, ["bot"]) },
@@ -357,7 +364,7 @@ export const TOOL_USERS = {
   submit_income: INCOME_TEAM, fix_payment: INCOME_TEAM, income_source: INCOME_TEAM, income_check: INCOME_TEAM, sort_payment: INCOME_TEAM,
   income_status: [...INCOME_TEAM, "Alfred"], payments: INCOME_TEAM, link_transfer: INCOME_TEAM, month_check: INCOME_TEAM, close_month: INCOME_TEAM,
   record_spend: ["Forge"], log_growth: ["Steve", "Atlas", "Kevin", "Laura"],
-  store_status: ["Drop"], spotify_upcoming: ["Atlas"], song_page: ["Webmaster"], roster_card: ["Nova"], recommend: ["Nova"], preflight: ["Forge", "Drop", "Verse", "Webmaster", "Atlas", "Laura"], instagram: ["Steve", "Kevin", "Forge"], song_pages: ["Webmaster"], upload_cover: ["Webmaster"],
+  store_status: ["Drop"], spotify_upcoming: ["Atlas"], pitch_log: ["Atlas"], song_page: ["Webmaster"], roster_card: ["Nova"], recommend: ["Nova"], preflight: ["Forge", "Drop", "Verse", "Webmaster", "Atlas", "Laura"], instagram: ["Steve", "Kevin", "Forge"], song_pages: ["Webmaster"], upload_cover: ["Webmaster"],
 };
 const onTeam = (bot, roster) => { const k = String(bot || "").trim().toLowerCase(); return k ? (roster.find((b) => b.name.toLowerCase() === k) || {}).name || "" : ""; };
 export function toolsFor(bot, roster) {
@@ -411,6 +418,9 @@ const approvalOut = (ap, what) => {
 const storeOut = (st) => (st.status || st.legacy ? { status: st.status || st.legacy, ...(st.since ? { since: when(st.since) } : {}), ...(st.reason ? { reason: st.reason } : {}),
   history: st.history.map((h) => `${S.dayWords(h.on)}: ${h.status}` + (h.reason ? `: ${h.reason}` : "") + (h.note ? ` (${h.note})` : "") + ` (${h.by})`) } : { status: "not recorded yet" });
 const dealOut = (d) => (d && d.kind ? { kind: d.kind, ...(d.label ? { label: d.label } : {}), ...(d.split ? { split: d.split } : {}), delivered_by: d.distributor } : "not recorded yet");
+/* L7: the pitch line Atlas and the desk read. HQ never pitches. */
+const pitchOut = (p) => (!p || !p.line ? "no pitch on this one" : { status: p.status, line: p.line, ...(p.pitchedOn ? { pitched_on: when(p.pitchedOn) } : {}), ...(p.deadline ? { deadline: when(p.deadline) } : {}),
+  ...(p.editorial && p.editorial.length ? { editorial: p.editorial.map((e) => `${e.name} (${when(e.date)})`) } : {}) });
 /* what Spotify for Artists showed in Atlas's last report, as the bots read it (V4) */
 const s4aOut = (sv) => ({ reported_at: sv.never ? "never" : sv.sp, ...(sv.stale ? { stale: "older than 48 hours" } : {}),
   unknown: sv.items.filter((x) => x.state === "unknown").map((x) => x.title), waiting_on_luke: sv.waitingOnLuke });
@@ -668,7 +678,9 @@ export async function callTool(tool, args, ctx) {
           release_day: when(v.date), days_to_go: v.daysToGo, where: v.where, deal: dealOut(v.deal), ...(v.tight ? { tight: "Sent late: steps that should already be done were due the day it was sent." } : {}),
           warnings: v.warnings, missing: v.missing.map(missingOut), steps_done: `${v.counts.done} of ${v.counts.total}`,
           at_the_distributor: v.store.status || v.store.legacy || "not recorded yet",
+          pitch: pitchOut(v.pitch),
           your_steps: v.steps.filter((s) => s.owner === me).map((s) => stepOut(s, v.pack)), ...(chase ? { all_steps: v.steps.map((s) => stepOut(s, v.pack)) } : {}) })),
+        pitch_slots: S.pitchSlotLines(S.pitchSlots(list, today)),
         spotify_for_artists: s4aOut(S.sightingsView(sightings, raw, today, now)),
         /* A5 (17 Nov 2026): Nova's 6-week calendar, every song's steps (drafts' release days too) */
         ...(chase ? { six_weeks: S.sixWeekLines(S.sixWeeks(list, today)) } : {}),
@@ -683,6 +695,7 @@ export async function callTool(tool, args, ctx) {
         pack: S.PACK_FIELDS.map((f) => ({ field: f.key, label: f.label, value: pack[f.key] || "", ...(pack[f.key] ? {} : { state: S.requiredNow(f, pack) ? "missing (required)" : f.neededBy ? `missing (needed for "${S.RELEASE_STEPS.find((x) => x.key === f.neededBy).label}")` : "not filled yet" }),
           filled_by: f.fill.length ? f.fill.join(" or ") + " (or Luke)" : "Luke" })),
         missing: v.missing.map(missingOut), steps: v.steps.map((s) => stepOut(s, pack)),
+        pitch: pitchOut(v.pitch),
         approvals: { pitch: approvalOut(v.approvals.pitch, "pitch"), lyrics: approvalOut(v.approvals.lyrics, "lyrics") },
         store: storeOut(v.store),
         how: "Everything you need for your step should be here. If a field you need is missing: mark your step blocked with release_step, naming the field, and send Luke ONE message naming the field (only once). Mark your step with release_step." };
@@ -695,6 +708,16 @@ export async function callTool(tool, args, ctx) {
         not_in_the_pipeline: sv.items.filter((x) => x.state === "unknown").map((x) => `${x.title}, ${x.dateWords}: Luke is asked what it is`),
         answered_by_luke: sv.items.filter((x) => x.state === "answered" || x.state === "retry").map((x) => `${x.title}: ${x.answer.text}`),
         steps_done: r.completed.map((c) => `${c.title}: ${c.label} (the Spotify pitch is open now)`),
+        shown_on: "badscandal.com/hq, Upcoming" };
+    }
+    case "pitch_log": {
+      const r = await S.logPitch(store, now, roster, { by: me, song: args.song, pitched_on: args.pitched_on, playlist: args.playlist, added_on: args.added_on });
+      const p = r.view.pitch;
+      return { saved: true, song: r.release.title, ...(p && p.line ? { pitch: p.line, status: p.status } : {}),
+        ...(r.pitchChange ? { pitched_on: when(r.pitchChange) } : {}),
+        ...(r.editChange ? { editorial: r.editChange, added_on: when(args.added_on) } : {}),
+        ...(r.already ? { already: "Already recorded. Nothing new." } : {}),
+        note: "HQ never pitches a song. This only records what you already sent, or a playlist you saw, in Spotify for Artists.",
         shown_on: "badscandal.com/hq, Upcoming" };
     }
     case "release_step": {
@@ -803,6 +826,7 @@ export async function callTool(tool, args, ctx) {
           : firstRs ? `You have ${rs.length} open release step${rs.length === 1 ? "" : "s"}; the soonest is "${firstRs.label}" for ${firstRs.title}, due ${when(firstRs.due)}${firstRs.late ? " (LATE)" : ""}. Read the pack with release_pack, do it, then mark it with release_step (done only when it is really done). `
           : rs.length ? `Your release step${rs.length === 1 ? " is" : "s are"} waiting for ${rs.every((x) => x.waiting_for === rs[0].waiting_for) ? rs[0].waiting_for : "the step before"}: nothing to do on ${rs.length === 1 ? "it" : "them"} yet. ` : "") +
           (me === "Atlas" && !spotNext ? "Every day: report what Spotify for Artists shows as upcoming with spotify_upcoming. " : "") +
+          (me === "Atlas" ? "Record a pitch you sent with pitch_log (pitched_on). When you see a new editorial playlist in Spotify for Artists, record it with pitch_log (playlist and added_on) the same day. HQ never pitches. " : "") +
           "Do your duty, then call post_update with status done and the number. If you are stuck, post_update with status blocked and say what is needed.",
         ...(sheetNote ? { note: sheetNote } : !w.duties.length && !w.paused ? { note: noRowNote() } : {}) };
     }
