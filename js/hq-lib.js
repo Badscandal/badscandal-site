@@ -265,7 +265,8 @@
         .sort(function (a, b) { return Math.abs(b.momentum) - Math.abs(a.momentum); })[0];
       if (moving) out.push(moving.song + " is " + moving.trend + ": " + fmt(moving.week) + " Spotify streams in 7 days, " + (moving.momentum > 0 ? "up " : "down ") + Math.abs(Math.round(moving.momentum)) + "%.");
     }
-    out.push(att.length ? (att.length === 1 ? "1 thing needs you" : att.length + " things need you") + " below." : "Nothing needs you today.");
+    /* alerts are "to check": "need you" is the phone's one count (18 Nov 2026, handoff bug 1) */
+    out.push(att.length ? (att.length === 1 ? "1 thing to check" : att.length + " things to check") + " below." : "Nothing to check today.");
     return out.slice(0, 5);
   }
 

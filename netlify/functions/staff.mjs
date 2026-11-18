@@ -206,7 +206,10 @@ async function api(req, context, path) {
   }
   if (path === "fields" && req.method === "GET") return json(200, { today: S.spDay(now), packFields: S.packFieldsOut(), releaseSteps: S.releaseStepsOut() });
   if (path === "board" && req.method === "GET") {
-    if (sample) return json(200, { sample: true, ...sampleBoard(now), auto: C.sampleAuto(now), accountHealth: sampleReport(now) });
+    if (sample) {
+      const sb = sampleBoard(now), sa = C.sampleAuto(now), sr = sampleReport(now);
+      return json(200, { sample: true, ...sb, auto: sa, accountHealth: sr, needs: C.needsCount({ messages: (sb.waiting && sb.waiting.luke) || [], cards: sa, report: sr }) });
+    }
     const st = stores(context);
     await P.profileAlerts(st.desk, now, await S.getRoster(st.desk)).catch(() => null);
     await S.upgradeReleases(st.desk, now).catch(() => null); /* releases sent before the pipeline changed (15 Nov 2026) */
@@ -219,7 +222,9 @@ async function api(req, context, path) {
     const auto = await C.boardAuto(st.desk, now, desk).catch(() => null);
     /* account health reads the desk and the stored Instagram copy. A failure here must not blank the board. */
     const accountHealth = await loadReport({ store: st.desk, ig: igStore(context), now, claims: desk.claims, builds: pageBuilds }).catch(() => null);
-    return json(200, { ...S.board(desk, now, hqAns && hqAns.team ? hqAns : null), pageBuilds, hqRead: !!(hqAns && hqAns.team), accountHealth, ...(auto ? { auto } : {}), keys: { bots: !!Netlify.env.get("STAFF_BOT_KEY"), claude: !!Netlify.env.get("STAFF_CLAUDE_KEY") } });
+    /* the ONE Needs you count (C.needsCount): the phone's line and the needs_you tool say the same number */
+    const needs = C.needsCount({ messages: desk.messages, cards: auto, report: accountHealth });
+    return json(200, { ...S.board(desk, now, hqAns && hqAns.team ? hqAns : null), pageBuilds, hqRead: !!(hqAns && hqAns.team), accountHealth, needs, ...(auto ? { auto } : {}), keys: { bots: !!Netlify.env.get("STAFF_BOT_KEY"), claude: !!Netlify.env.get("STAFF_CLAUDE_KEY") } });
   }
   if (path === "trace" && req.method === "GET") return sample ? json(200, { sample: true, trace: [] }) : json(200, { trace: await S.getTrace(stores(context).desk) });
   if (path === "workspace" && req.method === "GET") {

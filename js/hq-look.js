@@ -42,13 +42,28 @@
   }
   function https(url) { return /^https:\/\//.test(String(url || "")) ? String(url) : ""; }
 
-  /* "3 need you · 1 at risk". Both zero is the caught-up line. The words stay as written for 1 as well. */
+  /* "3 need you · 1 to check". need = the ONE Needs you count (board.needs.total from the server, else
+     needTotal() below: the same rule). The second number is alerts (late steps, the cap, quiet bots), which are
+     not money, so they are "to check", never "at risk" (18 Nov 2026, handoff bug 1). Both zero is the caught-up
+     line. The words stay as written for 1 as well. */
   function homePulse(o) {
     o = o || {};
     var need = Array.isArray(o.need) ? o.need.length : (num(o.need) || 0);
     var risk = Array.isArray(o.risk) ? o.risk.length : (num(o.risk) || 0);
     var caughtUp = need === 0 && risk === 0;
-    return { need: need, risk: risk, caughtUp: caughtUp, line: caughtUp ? "You're all caught up" : need + " need you · " + risk + " at risk" };
+    return { need: need, risk: risk, caughtUp: caughtUp, line: caughtUp ? "You're all caught up" : need + " need you · " + risk + " to check" };
+  }
+  /* The server's rule (netlify/lib/action-cards.mjs needsCount), for when the board has no count (offline copy):
+     open decisions to Luke with options + his open cards (live and held) + red account rows. */
+  function needTotal(o) {
+    o = o || {};
+    var decisions = (o.messages || []).filter(function (m) {
+      return m && !m.resolved && m.to === "Luke" && m.needs === "decision" && (m.options || []).length > 0;
+    }).length;
+    var auto = o.auto || {};
+    var cards = ((auto.needsYou || []).length) + ((auto.held || []).length);
+    var accounts = (o.healthNeeds || []).length;
+    return { total: decisions + cards + accounts, decisions: decisions, cards: cards, accounts: accounts };
   }
 
   /* A milestone only when the latest logged point crossed a mark the one before had not. */
@@ -549,7 +564,7 @@
   }
 
   var api = {
-    homePulse: homePulse, milestones: milestones, releaseHero: releaseHero, platformKpis: platformKpis, healthDot: healthDot,
+    homePulse: homePulse, needTotal: needTotal, milestones: milestones, releaseHero: releaseHero, platformKpis: platformKpis, healthDot: healthDot,
     sparkSvg: sparkSvg, decisionStack: decisionStack, releaseRows: releaseRows, releaseTimeline: releaseTimeline, readinessBox: readinessBox,
     lyricsState: lyricsState, adsPins: adsPins, runningNow: runningNow, creativePlot: creativePlot,
     moneyCards: moneyCards, monthChip: monthChip, whyPayments: whyPayments, splitOff: splitOff, plainStatus: plainStatus, paymentBucket: paymentBucket,

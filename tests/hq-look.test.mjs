@@ -5,8 +5,8 @@ import assert from "node:assert/strict";
 await import("../js/hq-look.js");
 const V = globalThis.HQLook;
 
-test("the opening line counts what needs Luke and what is at risk", () => {
-  assert.equal(V.homePulse({ need: [{}], risk: [{}, {}] }).line, "1 need you · 2 at risk");
+test("the opening line counts what needs Luke and what there is to check", () => {
+  assert.equal(V.homePulse({ need: [{}], risk: [{}, {}] }).line, "1 need you · 2 to check");
   assert.equal(V.homePulse({}).line, "You're all caught up");
 });
 
@@ -166,7 +166,7 @@ test("Luke's first screen hides the connector chatter", () => {
 
 test("the home markup carries the pulse line and a placeholder while it loads", () => {
   const html = V.homeHtml({ pulse: V.homePulse({ need: 1, risk: 0 }), decision: "<p>Decide</p>", milestones: [], hero: { reported: false }, kpis: [] });
-  assert.match(html, /1 need you · 0 at risk/);
+  assert.match(html, /1 need you · 0 to check/);
   assert.match(html, /No release on the board/);
   assert.match(V.homeHtml({ loading: true }), /class="ph big"/);
 });

@@ -142,16 +142,46 @@ export function daysWaiting(from, now) {
   if (!Number.isFinite(t) || now == null) return null;
   return Math.max(0, Math.floor((now - t) / 86400000));
 }
-export function needsHeader(cards) {
-  const list = cards || [];
+/* "EUR 4 · USD 12 at risk": the money_at_risk amounts of these cards, by currency. "" when there are none. */
+export function moneyLine(cards) {
   const sums = {};
-  for (const c of list) {
+  for (const c of cards || []) {
     if (!c || !c.money_at_risk || c.amount == null || !c.currency) continue;
     sums[c.currency] = round((sums[c.currency] || 0) + Number(c.amount));
   }
   const rest = Object.keys(sums).filter((k) => k !== "EUR" && k !== "USD").sort();
   const bits = ["EUR", "USD", ...rest].filter((k) => sums[k] != null).map((k) => `${k} ${String(round(sums[k]))}`);
-  return `${list.length} need you · ${bits.length ? bits.join(" · ") + " at risk" : "nothing at risk"}`;
+  return bits.length ? bits.join(" · ") + " at risk" : "";
+}
+/* A Farm or Label workspace's own Needs you line (its cards are the only thing that needs Luke there). */
+export function needsHeader(cards) {
+  const list = cards || [];
+  return `${list.length} need you · ${moneyLine(list) || "nothing at risk"}`;
+}
+
+/* THE Needs you count for BADSCANDAL (18 Nov 2026, handoff bug 1: the phone said "1 need you · 11 at risk" and
+   "0 need you · nothing at risk" on one screen, and the needs_you tool said open: 0). One rule, used by the board
+   (the phone's line) and the needs_you tool, and the same as js/hq-look.js needTotal():
+     decisions = open messages to Luke that need a decision and carry options (lyrics and pitch approvals too)
+     cards     = his open Yes/No/Edit cards, including the ones held for the morning in quiet hours
+     accounts  = accounts whose health is red, and the HQ connection when it is down
+   Alerts (late steps, the cap, quiet bots...) are NOT in it: the phone calls those "to check". */
+export function decisionsForLuke(messages) {
+  return (messages || []).filter((m) => m && !m.resolved && m.to === "Luke" && m.needs === "decision" && Array.isArray(m.options) && m.options.length > 0);
+}
+export function redAccounts(report) {
+  const out = ((report && report.accounts) || []).filter((a) => a && a.state === "red").map((a) => ({ id: a.id || "", label: a.label || "" }));
+  if (report && report.connection && report.connection.state === "down") out.push({ id: "connection", label: "HQ connection" });
+  return out;
+}
+export const needLine = (n) => (n ? `${n} need you` : "Nothing needs you");
+export function needsCount({ messages, cards, report } = {}) {
+  const decisions = decisionsForLuke(messages);
+  const live = (cards && cards.needsYou) || [], held = (cards && cards.held) || [];
+  const red = redAccounts(report);
+  const total = decisions.length + live.length + held.length + red.length;
+  return { total, decisions: decisions.length, cards: live.length + held.length, held: held.length, accounts: red.length, line: needLine(total),
+    money: moneyLine([...live, ...held]) };
 }
 function moneyOf(a) {
   const has = a.amount != null && String(a.amount).trim() !== "";
@@ -464,7 +494,7 @@ function present(cards, tapsOn, now) {
   const quiet = quietNow(now);
   const needsYou = quiet ? all.filter((c) => c.money_at_risk) : all;
   const held = quiet ? all.filter((c) => !c.money_at_risk) : [];
-  return { quiet, needsYou, held, header: needsHeader(needsYou) };
+  return { quiet, needsYou, held, header: needsHeader(needsYou), money: moneyLine(needsYou) };
 }
 /* During quiet hours the phone shows only money-at-risk cards. The rest wait until 08:00.
    A Farm or Label card stays on that workspace. It is not on the BADSCANDAL Needs you. */

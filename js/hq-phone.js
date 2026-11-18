@@ -7,7 +7,6 @@
   var L = window.HQLib;
   var $ = function (id) { return document.getElementById(id); };
   var esc = function (s) { return window.HQ ? HQ.esc(s) : String(s == null ? "" : s); };
-  var lyricsCache = {};
   var QUIET = "bs_hq_quiet", LATER = "bs_hq_later";
   var openCard = "", editing = "";
 
@@ -125,7 +124,8 @@
     var sheet = HQ.sheet ? HQ.sheet() : null;
     var ov = HQ.overview ? HQ.overview() : null;
     if (!V) { el.innerHTML = '<p class="look-empty">The layout did not load. <button type="button" class="sendbtn" data-look-retry>Retry</button></p>'; return; }
-    var waiting = ((board && board.waiting && board.waiting.luke) || []).filter(function (m) { return m && !snoozed(m.id); });
+    var allWaiting = (board && board.waiting && board.waiting.luke) || [];
+    var waiting = allWaiting.filter(function (m) { return m && !snoozed(m.id); });
     var tasks = (sheet && sheet.team && sheet.team.tasks) || (board && board.tasks) || [];
     var stack = V.decisionStack(waiting, tasks, board && board.actionCards);
     var auto = board && board.auto;
@@ -133,11 +133,16 @@
     var risk = [];
     try { risk = L.attention({ sheet: sheet, ov: ov, board: board, bank: window.HQStaff && HQStaff.bank ? HQStaff.bank() : null }); } catch (e) { risk = []; }
     var need = (stack.top ? [stack.top].concat(stack.rest) : []).concat((auto && auto.needsYou) || []).concat(health.needs || []);
-    var pulse = V.homePulse({ need: need, risk: risk });
+    /* ONE count (18 Nov 2026): the server's board.needs.total, the same number the needs_you tool gives. A card
+       snoozed on this phone still counts: it is still waiting on Luke. */
+    var count = board && board.needs && typeof board.needs.total === "number" ? board.needs.total : V.needTotal({ messages: allWaiting, auto: auto, healthNeeds: health.needs }).total;
+    var snoozedN = allWaiting.filter(function (m) { return m && snoozed(m.id); }).length;
+    var pulse = V.homePulse({ need: count, risk: risk });
     var ids = [stack.top].concat(stack.rest).filter(Boolean).map(function (c) { return c.id; });
     if (ids.indexOf(openId) < 0) openId = stack.top ? stack.top.id : "";
     var decision = "";
-    if (auto && auto.header) decision += '<p class="dhead">' + esc(auto.header) + "</p>" + stackHtml(auto.needsYou, true);
+    /* the cards' own line says only the money at risk (the count is the pulse above, said once) */
+    if (auto && auto.needsYou && auto.needsYou.length) decision += (auto.money ? '<p class="dhead">' + esc(auto.money) + "</p>" : "") + stackHtml(auto.needsYou, true);
     if (auto && auto.quiet && auto.held && auto.held.length) decision += '<p class="dnone">Quiet hours until 08:00. These wait.</p>' + stackHtml(auto.held, false);
     if (!stack.caughtUp) {
       decision += '<div class="wstack">' + [stack.top].concat(stack.rest).map(function (c) { return walletCard(c, c.id === openId); }).join("") + "</div>";
@@ -149,7 +154,8 @@
     });
     decision += healthDots(health);
     if (auto) decision += othersHtml(auto.waitingOnOthers);
-    if (!need.length && !(auto && auto.held && auto.held.length)) decision += '<p class="dnone">Nothing is waiting on you.</p>';
+    if (snoozedN) decision += '<p class="wcount">' + snoozedN + " snoozed on this phone (still counted above)</p>";
+    if (!need.length && !snoozedN && !(auto && auto.held && auto.held.length)) decision += '<p class="dnone">Nothing is waiting on you.</p>';
     if (stack.parked.length) decision += '<details class="look-more"><summary>Waiting on Luke (' + stack.parked.length + ")</summary><ul>" + stack.parked.map(function (t) {
       return "<li><b>" + esc(t.id) + "</b> " + esc(t.title) + (t.note ? "<small>" + esc(t.note) + "</small>" : "") + "</li>";
     }).join("") + "</ul></details>";
@@ -224,24 +230,7 @@
     return '<section class="monday"><h2>Monday pick</h2><div class="mswipes">' + slide(pick.pick, "This one") + slide(pick.runner, "Runner-up") + "</div>" + acts + "</section>";
   }
 
-  function lyricsCard(c) {
-    var got = lyricsCache[c.releaseId];
-    var body = !got ? '<p class="lyr-wait">Opening the lyrics…</p>' : got.error ? '<p class="lyr-wait">' + esc(got.error) + ' <button class="linkbtn" type="button" data-lyrics="' + esc(c.releaseId) + '">Try again</button></p>'
-      : got.empty ? '<p class="lyr-wait">No lyrics in the pack yet.</p>'
-      : '<div class="lyrics-prev"><p class="ly-title">' + esc(c.song || "Lyrics") + "</p>" + got.lines.map(function (l) { return "<p>" + (l ? esc(l) : " ") + "</p>"; }).join("") + "</div>";
-    return '<article class="dcard lyrics-card" data-card="' + esc(c.id) + '"><p class="dfrom">' + esc(c.from) + " · final lyrics</p>" + body + cardButtons(c) + "</article>";
-  }
-  function loadLyrics(c) {
-    if (!c.releaseId || lyricsCache[c.releaseId] || !window.HQ) return;
-    lyricsCache[c.releaseId] = { wait: true };
-    HQ.getJSON("/api/staff/release?id=" + encodeURIComponent(c.releaseId) + (HQ.sample ? "&sample=1" : "")).then(function (res) {
-      if (res.s !== 200 || !res.j || !res.j.release) { lyricsCache[c.releaseId] = { error: "Couldn't open the lyrics (" + res.s + ")." }; drawHome(); return; }
-      var text = res.j.release.pack && res.j.release.pack.lyrics;
-      var prev = L.lyricsPreview(text);
-      lyricsCache[c.releaseId] = prev.empty ? { empty: true } : { lines: prev.lines };
-      drawHome();
-    }, function () { lyricsCache[c.releaseId] = { error: "No connection." }; drawHome(); });
-  }
+  /* the lyrics card is walletCard() with the diff (18 Nov 2026: the unused lyricsCard()/loadLyrics() were removed) */
 
   function drawWeek() {
     var el = $("weekAhead"); if (!el || !window.HQ) return;
@@ -281,7 +270,7 @@
       if (a.getAttribute("data-achoice") === "yes" || a.getAttribute("data-achoice") === "no") sendChoice(id, a.getAttribute("data-achoice"));
       return;
     }
-    var t = ev.target.closest && ev.target.closest("[data-expand],[data-wallet],[data-snooze],[data-lyrics],[data-dot],[data-source],.gapbtn,#quietBtn");
+    var t = ev.target.closest && ev.target.closest("[data-expand],[data-wallet],[data-snooze],[data-dot],[data-source],.gapbtn,#quietBtn");
     if (!t) return;
     if (t.id === "quietBtn") {
       try { localStorage.setItem(QUIET, quietOn() ? "0" : "1"); } catch (e) {}
@@ -308,7 +297,6 @@
       return;
     }
     if (t.hasAttribute("data-snooze")) { snooze(t.getAttribute("data-snooze")); return; }
-    if (t.hasAttribute("data-lyrics")) { delete lyricsCache[t.getAttribute("data-lyrics")]; drawHome(); return; }
     if (t.classList.contains("gapbtn")) {
       var why = t.nextElementSibling;
       if (why) { why.hidden = !why.hidden; t.setAttribute("aria-expanded", why.hidden ? "false" : "true"); }
