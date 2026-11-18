@@ -1,7 +1,7 @@
 # HQ status (update on every deploy)
 
 **Last updated:** 18 Nov 2026, by Cursor. Main is through PR #80 (the phone look). Automation phase 1 (#79) and account health (#77) are live with it. Start with `docs/HANDOFF.md`.
-**Tests:** 705, all passing on Node 24 and Node 22. **Connector:** 40 tools (no new tool). The phone look changes no option. Automation changed options on `my_day`, `send_message` and `post_update`, so every bot refreshes. `log_growth` account-health fields are live from #77. Claim fields are on main from #73. The instagram tool's `post` and `song` are on main from #75.
+**Tests:** 710 on this branch, all passing on Node 24 and Node 22. **Connector:** 40 tools (no new tool). The phone look changes no option. Automation changed options on `my_day`, `send_message` and `post_update`, so every bot refreshes. `log_growth` account-health fields are live from #77. Claim fields are on main from #73. The instagram tool's `post` and `song` are on main from #75.
 No money amounts, payer names or account numbers in this file: the repo is public.
 
 ## Live (newest first)
@@ -57,7 +57,7 @@ No money amounts, payer names or account numbers in this file: the repo is publi
 
 ## In flight
 
-- Nothing.
+- HQ home screen blank on a bad connection, branch `cursor/hq-sw-consistent-cache-31c2`. Not merged and not live. HQ scripts, including `hq-look.js`, share one content hash. The service worker gives up after 8 seconds. A page that never paints shows Try again and Reset app.
 
 ## Next up
 

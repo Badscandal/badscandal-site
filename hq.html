@@ -1844,15 +1844,87 @@ body.quiet .botrow.is-done.pin{display:block}
   </section>
 </main>
 </div>
-<script src="js/crt.js" defer></script>
-<script src="js/hq-lib.js" defer></script>
-<script src="js/hq-look.js" defer></script>
-<script src="js/hq.js" defer></script>
-<script src="js/hq-staff.js" defer></script>
-<script src="js/hq-phone.js" defer></script>
-<script src="js/hq-shell.js" defer></script>
-<script src="js/hq-app.js" defer></script>
-<script src="js/hq-cmd.js" defer></script>
-<script src="js/hq-pages.js" defer></script>
+<script id="hq-boot">
+/* If the scripts never paint the page (a mixed cache, a thrown error, a hung load), say so.
+   This runs before the deferred scripts. 18 Nov 2026. */
+(function () {
+  var shown = false, timer = 0, pulse = 0;
+  function rendered() {
+    var ids = ["shell", "login", "boot"];
+    for (var i = 0; i < ids.length; i++) {
+      var n = document.getElementById(ids[i]);
+      if (n && !n.hidden) return true;
+    }
+    return false;
+  }
+  function hide() {
+    var el = document.getElementById("hqBootFail");
+    if (el && el.parentNode) el.parentNode.removeChild(el);
+    shown = false;
+  }
+  function btn(label, fill, action) {
+    var b = document.createElement("button");
+    b.type = "button";
+    b.textContent = label;
+    b.style.cssText = "font:inherit;font-weight:700;min-width:200px;padding:14px 22px;border-radius:999px;" + (fill ? "background:#F2F2F2;color:#050505;border:0" : "background:transparent;color:#F2F2F2;border:1px solid #F2F2F2");
+    b.addEventListener("click", action);
+    return b;
+  }
+  function fail() {
+    if (shown || rendered()) return;
+    shown = true;
+    var el = document.createElement("div");
+    el.id = "hqBootFail";
+    el.setAttribute("role", "alert");
+    el.style.cssText = "position:fixed;inset:0;z-index:100000;box-sizing:border-box;background:#0B0D12;color:#F2F2F2;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:calc(28px + env(safe-area-inset-top, 0px)) 24px calc(28px + env(safe-area-inset-bottom, 0px));text-align:center;font:17px/1.45 system-ui,-apple-system,sans-serif";
+    var p = document.createElement("p");
+    p.textContent = "HQ didn't finish loading";
+    p.style.cssText = "margin:0;font-size:22px;font-weight:700";
+    el.appendChild(p);
+    el.appendChild(btn("Try again", true, function () { location.reload(); }));
+    el.appendChild(btn("Reset app", false, resetApp));
+    (document.body || document.documentElement).appendChild(el);
+  }
+  function resetApp() {
+    var done = function () { location.reload(); };
+    var chain = Promise.resolve();
+    try {
+      if (navigator.serviceWorker && navigator.serviceWorker.getRegistrations) {
+        chain = navigator.serviceWorker.getRegistrations().then(function (rs) {
+          return Promise.all((rs || []).filter(function (r) { return !r.scope || r.scope.indexOf("/hq") >= 0; }).map(function (r) { return r.unregister(); }));
+        });
+      }
+    } catch (e) {}
+    chain.then(function () {
+      if (!window.caches || !caches.keys) return;
+      return caches.keys().then(function (keys) {
+        return Promise.all(keys.filter(function (k) { return String(k).indexOf("bs-hq-") === 0; }).map(function (k) { return caches.delete(k); }));
+      });
+    }).then(done, done);
+  }
+  window.onerror = function () { fail(); };
+  window.addEventListener("unhandledrejection", function () { fail(); });
+  window.addEventListener("error", function (ev) {
+    if (ev && ev.target && ev.target.tagName === "SCRIPT") fail();
+  });
+  timer = setTimeout(fail, 6000);
+  pulse = setInterval(function () {
+    if (!rendered()) return;
+    clearTimeout(timer);
+    clearInterval(pulse);
+    hide();
+  }, 400);
+})();
+</script>
+<script src="js/crt.js?v=69da2a7841b6" defer></script>
+<script src="js/hq-lib.js?v=69da2a7841b6" defer></script>
+<script src="js/hq-look.js?v=69da2a7841b6" defer></script>
+<script src="js/hq.js?v=69da2a7841b6" defer></script>
+<script src="js/hq-staff.js?v=69da2a7841b6" defer></script>
+<script src="js/hq-phone.js?v=69da2a7841b6" defer></script>
+<script src="js/hq-shell.js?v=69da2a7841b6" defer></script>
+<script src="js/hq-app.js?v=69da2a7841b6" defer></script>
+<script src="js/hq-cmd.js?v=69da2a7841b6" defer></script>
+<script src="js/hq-pages.js?v=69da2a7841b6" defer></script>
 </body>
 </html>

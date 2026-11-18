@@ -73,20 +73,29 @@ function sw() {
   const handlers = {};
   const ctx = { self: { addEventListener: (t, f) => { handlers[t] = f; }, skipWaiting() {}, clients: { claim() {} } }, location: { origin: "https://badscandal.com" },
     caches: { open: async () => ({ addAll: async () => {}, put: async () => {} }), keys: async () => [], match: async () => null, delete: async () => true },
-    fetch: async () => new Response("ok"), Response, URL, Promise };
+    fetch: async () => new Response("ok"), setTimeout: () => 0, clearTimeout: () => {}, Response, URL, Promise };
   ctx.self.location = ctx.location;
   vm.runInNewContext(readFileSync(new URL("../hq-sw.js", import.meta.url), "utf8"), ctx);
   return (url, mode = "no-cors", method = "GET") => { let used = false; handlers.fetch({ request: { url, mode, method }, respondWith: () => { used = true; } }); return used; };
 }
 test("offline helper: keeps only the /hq page and its scripts; never the numbers, never other sites or pages", () => {
+  const page = readFileSync(new URL("../hq.html", import.meta.url), "utf8");
+  const v = page.match(/js\/hq\.js\?v=([0-9a-f]+)/)[1];
   const f = sw();
+  const u = (path) => "https://badscandal.com" + path + "?v=" + v;
   assert.equal(f("https://badscandal.com/hq", "navigate"), true);
-  assert.equal(f("https://badscandal.com/js/hq.js"), true);
-  assert.equal(f("https://badscandal.com/js/hq-staff.js"), true, "the staff desk's script opens offline too (cache bs-hq-v2)");
-  assert.equal(f("https://badscandal.com/js/hq-app.js"), true, "the app bridge too (cache bs-hq-v3)");
-  assert.equal(f("https://badscandal.com/js/hq-cmd.js"), true, "and Search (cache bs-hq-v4)");
-  assert.equal(f("https://badscandal.com/js/hq-phone.js"), true, "the phone screen (cache bs-hq-v5, 18 Nov 2026)");
-  assert.equal(f("https://badscandal.com/js/hq-look.js"), true, "the phone look (cache bs-hq-v6, 18 Nov 2026)");
+  assert.equal(f("https://badscandal.com/hq?sample=1", "navigate"), true, "sample is the same cached page");
+  assert.equal(f(u("/js/hq.js")), true);
+  assert.equal(f(u("/js/hq-staff.js")), true, "the staff desk's script opens offline too");
+  assert.equal(f(u("/js/hq-app.js")), true, "the app bridge too");
+  assert.equal(f(u("/js/hq-cmd.js")), true, "and Search");
+  assert.equal(f(u("/js/hq-phone.js")), true, "the phone screen");
+  assert.equal(f(u("/js/hq-look.js")), true, "the phone look (18 Nov 2026)");
+  /* 18 Nov 2026: the cache key is the full url. An older file (no hash, or a different hash) is not served. */
+  assert.equal(f("https://badscandal.com/js/hq.js"), false);
+  assert.equal(f("https://badscandal.com/js/hq-phone.js"), false);
+  assert.equal(f("https://badscandal.com/js/hq-look.js"), false);
+  assert.equal(f(u("/js/hq.js").replace(v, "stale")), false);
   assert.equal(f("https://badscandal.com/api/hq/push/waiting"), false, "what is waiting always comes from the network");
   assert.equal(f("https://badscandal.com/api/staff/board"), false, "the board always comes from the network");
   assert.equal(f("https://badscandal.com/api/staff/message", "cors", "POST"), false, "a message is never answered from a copy");

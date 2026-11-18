@@ -1,8 +1,8 @@
 # Handoff: where HQ is and what's next (read this first)
 
-**Last updated:** 18 Nov 2026, by Cursor. The phone look is live (PR #80). Main also has automation phase 1 (PR #79) and account health (PR #77).
-**main:** every PR up to #80 is live. **Tests:** 705 pass on Node 24 and Node 22, none cancelled.
-**Connector:** 40 tools. The phone look adds no tool and changes no option. Automation phase 1 changed options on `my_day`, `send_message` and `post_update`, so every bot refreshes. `log_growth` has the account-health fields from PR #77, and `claim`, `claimant` and `impact` from PR #73. The instagram tool's `post` and `song` are on main from #75.
+**Last updated:** 18 Nov 2026, by Cursor. This branch is main through PR #80 plus the HQ blank-screen fix (one content hash on every HQ script, including `hq-look.js`, an 8-second fetch timeout, and a boot guard). Not live.
+**main:** every PR up to #80 is live (the phone look, automation phase 1, account health). **Tests on this branch:** 710 pass on Node 24 and Node 22, none cancelled.
+**Connector:** 40 tools. The blank-screen fix adds no tool and changes no option. The phone look adds no tool. Automation phase 1 changed options on `my_day`, `send_message` and `post_update`, so every bot refreshes. `log_growth` has the account-health fields from PR #77, and `claim`, `claimant` and `impact` from PR #73. The instagram tool's `post` and `song` are on main from #75.
 
 > **The rule (Luke, 17 Nov 2026):** every time anything is pushed to `main` for HQ, the same push updates THIS
 > file (and `docs/STATUS.md`). If Luke's computer crashes or a session ends mid-way, the next agent starts from
@@ -31,7 +31,7 @@ site + Luke's private dashboard /hq + the bots' connector /mcp).
 
 ## Where it stands (18 Nov 2026)
 
-**Where we left off:** The phone look is live (PR #80). The home keeps the Needs you header, one-tap Yes / No / Edit cards, the quiet-hours lane, Waiting on others, and the account-health dots. Money is one received total per currency: only what has landed in Revolut counts. Automation phase 1 is live (PR #79): one-tap cards, Waiting on others, the scheduled checks, and the Monday draft. Desk push stays empty until Luke pastes an address. Account health is live (PR #77): one green / watch / red per official account. A red item sits on Needs you. Money counts once, when it lands in Revolut (PR #76). The round-2 fixes (PR #75) and L5 watchers (PR #73) are on main. RouteNote email is still not connected. L1 and L9 (PR #71), the first phone HQ (PR #70), the connector bug fixes (PR #69), L4 (PR #67), L3 part 1 (PR #66), L12 (PR #64) and the release-card fix (PR #65) are on main.
+**Where we left off:** The phone look is live (PR #80). The home keeps the Needs you header, one-tap Yes / No / Edit cards, the quiet-hours lane, Waiting on others, and the account-health dots. Money is one received total per currency: only what has landed in Revolut counts. Automation phase 1 is live (PR #79): one-tap cards, Waiting on others, the scheduled checks, and the Monday draft. Desk push stays empty until Luke pastes an address. Account health is live (PR #77): one green / watch / red per official account. A red item sits on Needs you. Money counts once, when it lands in Revolut (PR #76). The round-2 fixes (PR #75) and L5 watchers (PR #73) are on main. RouteNote email is still not connected. L1 and L9 (PR #71), the first phone HQ (PR #70), the connector bug fixes (PR #69), L4 (PR #67), L3 part 1 (PR #66), L12 (PR #64) and the release-card fix (PR #65) are on main. This branch stops a bad connection mixing old and new HQ scripts. Not live.
 
 **HQ** (`badscandal.com/hq`, also inside the HQ apps on Luke's iPhone and Mac) has: Today, Songs, Ads, Pages
 (one tile per song page since #59), Growth & Fans (with the Instagram reader), Profiles (since #64), Upcoming (the release pipeline),
@@ -62,7 +62,7 @@ artist growth bot that all we will need is content and $".
 
 ## In flight (branches not merged)
 
-- Nothing. The phone look (PR #80), automation phase 1 (PR #79) and account health (PR #77) are on main.
+- **HQ home screen blank on a bad connection** (`cursor/hq-sw-consistent-cache-31c2`, not merged): HQ scripts, including `hq-look.js`, share one content hash. The service worker caches that full url and gives up after 8 seconds. A page that never paints shows Try again and Reset app. Not live. The phone look (PR #80), automation phase 1 (PR #79) and account health (PR #77) are on main.
 
 ## Waiting on someone
 
