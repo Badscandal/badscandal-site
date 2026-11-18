@@ -1610,6 +1610,13 @@
     if (n.shares != null) bits.push(fmt(n.shares) + " shares");
     return pick[0] + ": " + bits.join(" · ");
   }
+  /* L3 part 1 (18 Nov 2026): the fan inbox, in the words the page uses */
+  var FAN_INTRO = "People asking the song's name or where to listen, and people who comment on more than one post. A reply is yours: nothing here replies, likes or hides a comment.";
+  var FAN_EMPTY = "No song questions, and nobody has commented on more than one post, in the comments read so far.";
+  var FAN_ASK = "Asking the song's name or where to listen";
+  var FAN_BACK = "Comes back";
+  function fanKindWord(kind) { return kind === "listen" ? "Where to listen" : "Song name"; }
+  function fanFlagWord(needs) { return needs ? "Needs your reply" : "Answered"; }
   /* A8 (17 Nov 2026): the monthly listeners card on Songs: { big, sub } or null */
   function artistLines(a) {
     if (!a || a.monthly == null) return null;
@@ -1707,7 +1714,7 @@
     return scored.slice(0, max).map(function (y) { return y.x; });
   }
 
-  return { rankParts: rankParts, songTile: songTile, igStatusLine: igStatusLine, igPostNumbers: igPostNumbers, artistLines: artistLines, closedLine: closedLine, preflightLine: preflightLine, sixWeeks: sixWeeks, pitchBlock: pitchBlock, recommendLines: recommendLines, recommendedOption: recommendedOption, releaseTrouble: releaseTrouble, navPad: navPad, signoutWords: signoutWords, growthWhen: growthWhen, ago: ago, spMs: spMs, releaseWords: releaseWords, releaseDetail: releaseDetail, healthRows: healthRows, healthState: healthState, median: median, change: change, money: money, attention: attention, briefing: briefing,
+  return { rankParts: rankParts, songTile: songTile, igStatusLine: igStatusLine, igPostNumbers: igPostNumbers, fanKindWord: fanKindWord, fanFlagWord: fanFlagWord, FAN_INTRO: FAN_INTRO, FAN_EMPTY: FAN_EMPTY, FAN_ASK: FAN_ASK, FAN_BACK: FAN_BACK, artistLines: artistLines, closedLine: closedLine, preflightLine: preflightLine, sixWeeks: sixWeeks, pitchBlock: pitchBlock, recommendLines: recommendLines, recommendedOption: recommendedOption, releaseTrouble: releaseTrouble, navPad: navPad, signoutWords: signoutWords, growthWhen: growthWhen, ago: ago, spMs: spMs, releaseWords: releaseWords, releaseDetail: releaseDetail, healthRows: healthRows, healthState: healthState, median: median, change: change, money: money, attention: attention, briefing: briefing,
     snapshot: snapshot, changesSince: changesSince, tiles: tiles, summaryText: summaryText, shortStep: shortStep, day: day,
     slug: slug, workerLabel: workerLabel, sortWorkers: sortWorkers, workerView: workerView, dutyWhen: dutyWhen, workerCounts: workerCounts, seenLine: seenLine, connectorLine: connectorLine,
     novaMessage: novaMessage, liveFeed: liveFeed, spWhen: spWhen, waitLabel: waitLabel, needWords: needWords, reportParts: reportParts, siteCheckLine: siteCheckLine, composeNames: composeNames,

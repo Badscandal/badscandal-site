@@ -1,7 +1,7 @@
 # HQ status (update on every deploy)
 
-**Last updated:** 18 Nov 2026, by Cursor (main after PR #65). Start with `docs/HANDOFF.md`.
-**Tests:** 584, all passing on Node 24 and Node 22. **Connector:** 40 tools (no new tool in #65).
+**Last updated:** 18 Nov 2026, by Cursor (L3 fan inbox part 1, not merged; main includes PR #65). Start with `docs/HANDOFF.md`.
+**Tests:** 590, all passing on Node 24 and Node 22. **Connector:** 40 tools (no new tool). The `instagram` tool now returns the fan inbox: Steve, Kevin and Forge refresh when this is live. Nova has every tool, so she refreshes too.
 No money amounts, payer names or account numbers in this file: the repo is public.
 
 ## Live (newest first)
@@ -46,7 +46,7 @@ No money amounts, payer names or account numbers in this file: the repo is publi
 
 ## Next up
 
-- L12 and the release-card fix (#65) are live. Next, only on Luke's word: L3 fan inbox part 1. A later Profiles slice (reading an image from a platform) still needs his go, and HQ would still not log in.
+- L12 and the release-card fix (#65) are live. In flight, not live: PR #66, L3 fan inbox part 1 (song-name questions, where to listen, repeat fans; "Needs your reply" is Luke's; no extra Instagram call). Part 2 is not built: a fan's country, and a ready reply he approves. A later Profiles slice (reading an image from a platform) still needs his go, and HQ would still not log in.
 - Still needs Luke: B2 YouTube sign-in, the on-hold decisions H1–H4, and L11 (who "Luka" is). B1 and B5 are not needed; B4 Instagram is connected.
 - The rest of Later (L1, L4, L5, L9, L10) waits. Start any of it on his word.
 

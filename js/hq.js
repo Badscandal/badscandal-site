@@ -635,6 +635,30 @@
     if (!ig) { box.innerHTML = ""; return; }
     var st = ig.status || {}, line = L.igStatusLine(st, Date.now()), dis = sample || igBusy ? " disabled" : "";
     var h = '<h3 class="sech">Instagram</h3><p class="sub' + (st.lastError ? " igerr" : "") + '">' + esc(line) + "</p>";
+    /* L3 part 1: song questions and repeat fans, from the comments already read. A reply is Luke's. */
+    var inbox = ig.fanInbox || { questions: [], repeats: [] };
+    var askIds = {};
+    (inbox.questions || []).forEach(function (q) { askIds[q.id] = 1; });
+    if (st.connected) {
+      var qs = inbox.questions || [], rs = inbox.repeats || [];
+      h += '<div class="tile faninbox" id="fanInbox"><h3>Fan inbox</h3><p class="sub">' + esc(L.FAN_INTRO) + "</p>";
+      if (!qs.length && !rs.length) h += '<p class="d">' + esc(L.FAN_EMPTY) + "</p>";
+      if (qs.length) {
+        h += "<h3>" + esc(L.FAN_ASK) + " (" + qs.length + ")</h3><ul>";
+        qs.forEach(function (q) {
+          h += '<li><span class="fanflag' + (q.needsReply ? "" : " ok") + '">' + esc(L.fanFlagWord(q.needsReply)) + '</span> <span class="lbl">' + esc(L.fanKindWord(q.kind)) + "</span> <b>" + esc(q.user) + "</b>: " + esc(q.text) + ' <span class="lbl">on ' + link(q.link, q.postCaption || "a post") + "</span></li>";
+        });
+        h += "</ul>";
+      }
+      if (rs.length) {
+        h += "<h3>" + esc(L.FAN_BACK) + " (" + rs.length + ")</h3><ul>";
+        rs.forEach(function (r) {
+          h += "<li>" + (r.needsReply ? '<span class="fanflag">' + esc(L.fanFlagWord(true)) + "</span> " : "") + "<b>" + esc(r.user) + "</b> <span class=\"lbl\">" + r.posts + " post" + (r.posts === 1 ? "" : "s") + "</span>: " + esc(r.lastText) + ' <span class="lbl">on ' + link(r.link, r.postCaption || "a post") + "</span></li>";
+        });
+        h += "</ul>";
+      }
+      h += "</div>";
+    }
     if (!st.connected || st.errorKind === "refused") {
       h += '<div class="tile"><p class="d">Paste the key from Meta (the Graph API Explorer key after "Extend Access Token", or the Instagram setup\u2019s "Generate token"). HQ checks it with Instagram and keeps it to itself; a Facebook key is swapped for the Page\u2019s own key, which doesn\u2019t run out. Read-only: it can never post or change anything.</p>' +
         '<form class="igform" id="igForm" autocomplete="off"><input type="password" id="igKey" placeholder="The Instagram key" aria-label="The Instagram key"' + dis + '><button class="sendbtn" type="submit"' + dis + ">" + (igBusy ? "Checking…" : "Connect Instagram") + "</button></form>" +
@@ -658,8 +682,9 @@
       if ((rk.ranked || []).length) h += '<ol class="igrank">' + rk.ranked.slice(0, 8).map(rankItem).join("") + "</ol>";
       if ((rk.older || []).length) h += '<details class="tile" style="margin-bottom:12px"><summary>Older posts (' + rk.older.length + "): lifetime numbers, not the same age</summary>" + '<ol class="igrank">' + rk.older.slice(0, 10).map(rankItem).join("") + "</ol></details>";
     }
-    if ((ig.needsReply || []).length) h += '<div class="tile" style="margin:12px 0"><h3>Needs a reply (' + ig.needsReply.length + ')</h3><p class="sub">Questions nobody of ours has answered yet. Replying is yours.</p><ul class="igcomments">' +
-      ig.needsReply.map(function (c) { return "<li><b>" + esc(c.user) + "</b>: " + esc(c.text) + ' <span class="lbl">on ' + link(c.link, c.postCaption || "a post") + "</span></li>"; }).join("") + "</ul></div>";
+    var otherAsks = (ig.needsReply || []).filter(function (c) { return !askIds[c.id]; });
+    if (otherAsks.length) h += '<div class="tile" style="margin:12px 0"><h3>Needs a reply (' + otherAsks.length + ')</h3><p class="sub">Other questions nobody of ours has answered yet. Replying is yours.</p><ul class="igcomments">' +
+      otherAsks.map(function (c) { return "<li><b>" + esc(c.user) + "</b>: " + esc(c.text) + ' <span class="lbl">on ' + link(c.link, c.postCaption || "a post") + "</span></li>"; }).join("") + "</ul></div>";
     /* our own accounts (Nova keeps the list with the instagram tool; Luke sees it here) */
     if (st.connected) h += '<details class="tile" style="margin:12px 0"><summary>Our own accounts (' + (ig.own || []).length + "): their comments don\u2019t count</summary>" +
       '<p class="d">' + esc((ig.own || []).map(function (x) { return "@" + x; }).join(", ")) + '</p><p class="d muted">Nova keeps this list (the connected account is always on it). Ask Nova to add or remove one.</p>' +
