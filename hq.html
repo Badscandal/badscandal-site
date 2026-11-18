@@ -30,11 +30,11 @@
 :root{--ink:#050505;--ink-2:#0C0C0C;--ink-3:#1F1F1F;--ink-4:#2A2A2A;--paper:#F2F2F2;--muted:#8A8A8A;--silver:#6E6E6E;--uv:#B4B4B4;--spot:#1ED760;--grey-mark:#5A5A5A;
   --mono:"DM Mono",ui-monospace,Menlo,monospace;--sans:Figtree,system-ui,-apple-system,sans-serif;--r:16px;--pad:16px}
 *{box-sizing:border-box}
-html{scroll-padding-top:110px}
+html{scroll-padding-top:110px;color-scheme:dark}
 html,body{margin:0;background:var(--ink);color:var(--paper);font-family:var(--sans);-webkit-font-smoothing:antialiased}
 body{padding:0 0 calc(40px + env(safe-area-inset-bottom))}
 a{color:inherit}
-button{font:inherit;color:inherit}
+button{font:inherit;color:inherit;-webkit-appearance:none;appearance:none;background-color:transparent}
 [hidden]{display:none !important}
 .lbl{font-family:var(--mono);font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
 .num{font-variant-numeric:tabular-nums}
@@ -1553,11 +1553,39 @@ body.ws-on .nav{display:none}
 .look-toast{position:fixed;left:50%;bottom:88px;transform:translateX(-50%);background:var(--paper);color:var(--ink);padding:12px 16px;border-radius:999px;z-index:20;font:600 15px var(--sans)}
 .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
 @media (min-width:700px){.krow{grid-template-columns:repeat(3,1fr)}.balgrid,.adpins{grid-template-columns:repeat(3,1fr)}}
+/* contrast (18 Nov 2026): iOS paints a light pill, and color:inherit made the label the same light grey.
+   Secondary buttons set their own background and text. appearance is off so Safari cannot restyle them. */
+#shell button.whybtn,#shell button.ghost:not(.on),#shell button.more-btn,#shell button.chip:not(.on),label.profup{
+  -webkit-appearance:none;appearance:none;background-color:#1a1d27;color:#f2f2f2;border:1px solid rgba(255,255,255,.28)}
+#shell button.whybtn{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:0 14px;border-radius:999px;font:600 15px/1.2 var(--sans,sans-serif);cursor:pointer}
+#shell button.dotbtn,#shell button.linkbtn,#shell button.paybtn,#shell button.whead,#shell button.rel-btn{
+  -webkit-appearance:none;appearance:none;background-color:transparent}
+.profmasters{display:grid;gap:12px;margin:0 0 16px}
+@media(min-width:800px){.profmasters{grid-template-columns:1fr 1fr}}
+.profgrid{display:grid;gap:12px}
+@media(min-width:800px){.profgrid{grid-template-columns:1fr 1fr}}
+.profup{position:relative;display:inline-flex;align-items:center;justify-content:center;min-height:48px;padding:0 16px;border-radius:999px;font:600 16px/1.2 var(--sans,sans-serif);cursor:pointer}
+.profup input{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);border:0}
+.profprog{min-height:22px;margin:8px 0 0;font-size:15px;color:var(--paper)}
+.profprev{position:relative;background:#111;border-radius:12px;overflow:hidden;margin-top:10px;max-width:100%}
+.profprev img{position:absolute;inset:0;display:block;width:100%;height:100%;object-fit:contain;background:#111}
+.profprev.circle{width:min(220px,100%);aspect-ratio:1}
+.profprev.circle .safe{position:absolute;inset:12%;border:1.5px dashed rgba(255,255,255,.75);border-radius:50%;pointer-events:none}
+.profprev.banner{width:100%;aspect-ratio:16/9}
+.profslot{margin:0 0 14px;padding-top:10px;border-top:1px solid var(--glass-line)}
+.profstat{display:inline-flex;align-items:center;min-height:28px;margin:6px 0;padding:4px 10px;border-radius:999px;border:1px solid rgba(255,255,255,.28);background-color:#1a1d27;color:#f2f2f2;font:600 13px/1.2 var(--sans,sans-serif)}
+.profstat.ready{color:#86efac;border-color:#166534}
+.profstat.rework{color:#fca5a5;border-color:#7f1d1d}
+.profstat.uploaded{color:#f2f2f2}
+.profstat.wait{color:#d4d4d8}
 @media (prefers-color-scheme: light){
   :root{--ink:#f4f5f7;--ink-2:#fff;--ink-3:#e6e8ee;--paper:#12141a;--muted:#4b5160;--uv:#3a4150;--accent:#3730a3;--accent-ink:#fff;
     --glass:rgba(255,255,255,.86);--glass-line:rgba(18,20,26,.12);--glass-edge:rgba(255,255,255,.8);--red:#9f1239;--spot:#047857}
+  html{color-scheme:light}
   .hdr,.nav{background:rgba(255,255,255,.94);color:var(--paper)}
   .rhero,.rhero-in{color:#fff}
+  #shell button.whybtn,#shell button.ghost:not(.on),#shell button.more-btn,#shell button.chip:not(.on),label.profup{
+    background-color:#ffffff;color:#12141a;border-color:rgba(18,20,26,.28)}
 }
 </style>
 </head>
@@ -1792,6 +1820,23 @@ body.ws-on .nav{display:none}
     <div class="subsec" id="growth-fans"><h3 class="sech">Fans forming</h3><p class="sub" id="fansSub"></p><div class="sheeterr" id="errFans" hidden></div><div class="tile"><div class="scroll"><table class="stack" id="fanTable"></table></div></div></div>
   </section>
   <section class="card view" id="profiles"><h2>Profiles</h2><p class="sub" id="profNote">The profile photo and the banner on every official platform. HQ never logs in and never changes one.</p>
+    <div class="profmasters">
+      <article class="t-card">
+        <h3 class="t-lbl">Profile photo</h3>
+        <p class="secsub" id="profPhotoLine">One photo for every platform. It is only scaled down, never cropped. A circle shows the part people see.</p>
+        <label class="profup">Choose a photo<input id="profPhoto" type="file" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.heic,.heif"></label>
+        <p class="profprog" id="profPhotoProg" role="status"></p>
+        <div class="profprev circle" id="profPhotoPrev" hidden></div>
+      </article>
+      <article class="t-card">
+        <h3 class="t-lbl">Banner</h3>
+        <p class="secsub" id="profBannerLine">One banner. If a platform's shape does not match, nothing is cropped. A bot extends it.</p>
+        <label class="profup">Choose a banner<input id="profBanner" type="file" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.heic,.heif"></label>
+        <p class="profprog" id="profBannerProg" role="status"></p>
+        <div class="profprev banner" id="profBannerPrev" hidden></div>
+      </article>
+    </div>
+    <p class="secsub">HQ never logs in and never sends these to a platform.</p>
     <div class="profgrid" id="profList"><div class="ph big"></div><div class="ph"></div></div>
   </section>
   <!-- Upcoming (11 Nov 2026, v2: the tab's id stays "releases", so #releases and every deep link keep
@@ -1944,16 +1989,16 @@ body.ws-on .nav{display:none}
   }, 400);
 })();
 </script>
-<script src="js/crt.js?v=9a9b555e073e" defer></script>
-<script src="js/hq-lib.js?v=9a9b555e073e" defer></script>
-<script src="js/hq-look.js?v=9a9b555e073e" defer></script>
-<script src="js/hq.js?v=9a9b555e073e" defer></script>
-<script src="js/hq-staff.js?v=9a9b555e073e" defer></script>
-<script src="js/hq-phone.js?v=9a9b555e073e" defer></script>
-<script src="js/hq-shell.js?v=9a9b555e073e" defer></script>
-<script src="js/hq-workspaces.js?v=9a9b555e073e" defer></script>
-<script src="js/hq-app.js?v=9a9b555e073e" defer></script>
-<script src="js/hq-cmd.js?v=9a9b555e073e" defer></script>
-<script src="js/hq-pages.js?v=9a9b555e073e" defer></script>
+<script src="js/crt.js?v=4ab434d19b82" defer></script>
+<script src="js/hq-lib.js?v=4ab434d19b82" defer></script>
+<script src="js/hq-look.js?v=4ab434d19b82" defer></script>
+<script src="js/hq.js?v=4ab434d19b82" defer></script>
+<script src="js/hq-staff.js?v=4ab434d19b82" defer></script>
+<script src="js/hq-phone.js?v=4ab434d19b82" defer></script>
+<script src="js/hq-shell.js?v=4ab434d19b82" defer></script>
+<script src="js/hq-workspaces.js?v=4ab434d19b82" defer></script>
+<script src="js/hq-app.js?v=4ab434d19b82" defer></script>
+<script src="js/hq-cmd.js?v=4ab434d19b82" defer></script>
+<script src="js/hq-pages.js?v=4ab434d19b82" defer></script>
 </body>
 </html>

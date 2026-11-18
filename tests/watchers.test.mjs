@@ -161,6 +161,6 @@ test("Content ID claims are only what Laura records, and the panel never invents
   const full = rows.rows.find((x) => x.claim === "Sample claim");
   assert.equal(full.claimant, "Sample Channel");
   assert.equal(full.impact, "one video flagged");
-  assert.equal(TOOLS.length, 40, "no new tool: a claim is recorded with log_growth");
+  assert.equal(TOOLS.length, 44, "no new tool here: a claim is recorded with log_growth; the four profile image tools are separate");
   assert.ok(TOOLS.find((t) => t.name === "log_growth").inputSchema.properties.claim);
 });

@@ -14,9 +14,9 @@
 
    THE ONLY WRITES ON /hq ARE HERE: Luke's own messages (send, answer, mark as done), the bots' key
    switch, his Yes / No / Edit on an action card, the "taps count as Luke's yes" switch, one webhook
-   address per bot, and (11 Nov 2026) the release pipeline: save / send / move / cancel a release and mark a
-   step. Nothing here can touch an ad, a post, the sheet or any money. In /hq?sample=1 nothing is
-   sent at all and the page says so.
+   address per bot, the release pipeline, and the profile photo and banner he uploads on Profiles.
+   Nothing here can touch an ad, a post, the sheet or any money. Nothing is sent to a platform.
+   In /hq?sample=1 nothing is sent at all and the page says so.
 
    Everything on the board was typed by a bot or a person: it is ALWAYS escaped (esc), never put in
    the page as HTML, and a link is only a link when it starts with https://. */
@@ -1790,17 +1790,159 @@
     if (!board || !board.profiles) { el.innerHTML = problem ? '<p class="empty2">' + esc(problem) + "</p>" : '<div class="ph big"></div>'; return; }
     var b = L.profileBlocks(board.profiles);
     if ($("profNote")) $("profNote").textContent = b.note;
+    if ($("profPhotoLine") && b.masters && b.masters.photo) $("profPhotoLine").textContent = b.masters.photo + ". Only scaled down, never cropped.";
+    if ($("profBannerLine") && b.masters && b.masters.banner) $("profBannerLine").textContent = b.masters.banner + ". A shape that does not fit is not cropped.";
     el.innerHTML = b.platforms.map(function (p) {
       return '<article class="t-card" id="profiles-' + esc(p.id) + '"><h3 class="t-lbl">' + esc(p.platform) + '</h3><p class="secsub">' + esc(p.ownerLine) + "</p>" +
         p.slots.map(function (s) {
           var href = /^#messages\/[A-Za-z0-9]+$/.test(s.waitingHref) ? s.waitingHref : "";
-          return '<div class="profslot"><p><b>' + esc(s.kind) + "</b></p><p class=\"profrule\">" + esc(s.rule) + "</p>" +
+          var cls = s.status === "ready" || s.status === "uploaded" || s.status === "rework" ? s.status : "wait";
+          var src = /^\/api\/staff\/profile-file\/(?:master-(?:photo|banner)|slot-[a-z0-9-]+)$/.test(s.preview || "") ? s.preview : "";
+          var frame = s.circle ? " circle" : " banner";
+          var ratio = !s.circle && s.exactW > 0 && s.exactH > 0 ? ' style="aspect-ratio:' + Number(s.exactW) + " / " + Number(s.exactH) + '"' : "";
+          var preview = src ? '<div class="profprev' + frame + '"' + ratio + '><img alt="" src="' + esc(src) + '">' + (s.circle ? '<i class="safe"></i>' : "") + "</div>" : "";
+          return '<div class="profslot"><p><b>' + esc(s.kind) + "</b></p>" +
+            '<p class="profstat ' + cls + '">' + esc(s.statusLine) + "</p>" +
+            (s.sizeLine ? '<p class="secsub">' + esc(s.sizeLine) + "</p>" : "") +
+            preview +
+            (s.detail && s.status === "rework" ? '<p class="secsub">' + esc(s.detail) + "</p>" : "") +
+            '<p class="profrule">' + esc(s.rule) + "</p>" +
             (s.currentLink ? "<p>Current image: " + outLink(s.currentLink, shortUrl(s.currentLink)) + "</p><p class=\"secsub\">" + esc(s.currentLine) + "</p>" : '<p class="secsub">' + esc(s.currentLine) + "</p>") +
             (s.waitingLine ? '<p class="attn">' + esc(s.waitingLine) + (s.waitingLink ? " " + outLink(s.waitingLink, shortUrl(s.waitingLink)) : "") + (href ? ' <a href="' + esc(href) + '">Answer on Messages</a>' : "") + "</p>" : "") +
             (s.approvedLine ? "<p>" + esc(s.approvedLine) + (s.approvedLink ? " " + outLink(s.approvedLink, shortUrl(s.approvedLink)) : "") + "</p>" : "") + "</div>";
         }).join("") + "</article>";
     }).join("");
   }
+
+  /* Luke's master upload. The sized copies are drawn here, in the browser, and only scaled down. */
+  var profBusy = false;
+  function profSay(id, text) { var n = $(id); if (n) n.textContent = text || ""; }
+  function loadImage(file) {
+    return new Promise(function (ok, bad) {
+      var url = URL.createObjectURL(file);
+      var img = new Image();
+      img.onload = function () { URL.revokeObjectURL(url); ok(img); };
+      img.onerror = function () { URL.revokeObjectURL(url); bad(new Error("unreadable")); };
+      img.src = url;
+    });
+  }
+  function canvasJpeg(img, w, h, q) {
+    var c = document.createElement("canvas");
+    c.width = w; c.height = h;
+    var g = c.getContext("2d");
+    g.imageSmoothingEnabled = true;
+    g.imageSmoothingQuality = "high";
+    g.drawImage(img, 0, 0, w, h);
+    return new Promise(function (ok) { c.toBlob(function (b) { ok(b); }, "image/jpeg", q); });
+  }
+  function blobB64(blob) {
+    return new Promise(function (ok, bad) {
+      var r = new FileReader();
+      r.onload = function () { ok(String(r.result).split(",")[1] || ""); };
+      r.onerror = function () { bad(r.error); };
+      r.readAsDataURL(blob);
+    });
+  }
+  function postPic(url, body, onProg) {
+    return new Promise(function (ok, bad) {
+      var x = new XMLHttpRequest();
+      x.open("POST", url);
+      x.withCredentials = true;
+      x.setRequestHeader("Content-Type", "application/json");
+      x.upload.onprogress = function (e) { if (e.lengthComputable && onProg) onProg(e.loaded / e.total); };
+      x.onload = function () { var j = {}; try { j = JSON.parse(x.responseText); } catch (e) {} ok({ s: x.status, j: j }); };
+      x.onerror = function () { bad(new Error("network")); };
+      x.send(JSON.stringify(body));
+    });
+  }
+  function showLocal(boxId, img, circle) {
+    var box = $(boxId);
+    if (!box) return;
+    box.hidden = false;
+    box.className = "profprev" + (circle ? " circle" : " banner");
+    box.innerHTML = "";
+    var el = document.createElement("img");
+    el.alt = "";
+    var c = document.createElement("canvas");
+    var edge = Math.max(img.naturalWidth, img.naturalHeight) || 1;
+    var scale = Math.min(1, 480 / edge);
+    c.width = Math.max(1, Math.round(img.naturalWidth * scale));
+    c.height = Math.max(1, Math.round(img.naturalHeight * scale));
+    var g = c.getContext("2d");
+    g.imageSmoothingEnabled = true;
+    g.imageSmoothingQuality = "high";
+    g.drawImage(img, 0, 0, c.width, c.height);
+    el.src = c.toDataURL("image/jpeg", 0.8);
+    box.appendChild(el);
+    if (circle) { var i = document.createElement("i"); i.className = "safe"; box.appendChild(i); }
+  }
+  async function sizedCopy(img, w, h, mb) {
+    var cap = Math.min(mb || 4, 3.6) * 1024 * 1024;
+    var qs = [0.92, 0.85, 0.75, 0.6];
+    var blob = null;
+    for (var i = 0; i < qs.length; i++) {
+      blob = await canvasJpeg(img, w, h, qs[i]);
+      if (blob && blob.size <= cap) return blob;
+    }
+    return blob && blob.size <= cap ? blob : null;
+  }
+  async function takeMaster(kind, input) {
+    var prog = kind === "photo" ? "profPhotoProg" : "profBannerProg";
+    var box = kind === "photo" ? "profPhotoPrev" : "profBannerPrev";
+    var file = input.files && input.files[0];
+    input.value = "";
+    if (!file) return;
+    if (HQ.sample) { profSay(prog, "This is the sample. Uploads are switched off."); return; }
+    if (profBusy) { profSay(prog, "Still working on the last picture."); return; }
+    profBusy = true;
+    try {
+      profSay(prog, "Reading the picture…");
+      var img = await loadImage(file);
+      if (!img.naturalWidth || !img.naturalHeight) throw new Error("unreadable");
+      showLocal(box, img, kind === "photo");
+      var edge = Math.max(img.naturalWidth, img.naturalHeight);
+      var scale = Math.min(1, 3000 / edge);
+      var mw = Math.max(1, Math.round(img.naturalWidth * scale));
+      var mh = Math.max(1, Math.round(img.naturalHeight * scale));
+      profSay(prog, "Preparing the master…");
+      var master = null, q, qualities = [0.92, 0.85, 0.75, 0.62];
+      for (q = 0; q < qualities.length; q++) {
+        master = await canvasJpeg(img, mw, mh, qualities[q]);
+        if (master && master.size <= 3.6 * 1024 * 1024) break;
+      }
+      if (!master || master.size > 3.6 * 1024 * 1024) throw new Error("large");
+      profSay(prog, "Uploading… 0%");
+      var up = await postPic("/api/staff/profile-master", { kind: kind, image_base64: await blobB64(master) }, function (p) {
+        profSay(prog, "Uploading… " + Math.round(p * 100) + "%");
+      });
+      if (up.s !== 200) throw new Error((up.j && up.j.error) || "The master was not saved.");
+      var slots = (up.j && up.j.slots) || [];
+      var made = 0, skipped = 0;
+      for (var i = 0; i < slots.length; i++) {
+        var s = slots[i];
+        if (!s.fit || !s.out) { skipped++; continue; }
+        profSay(prog, "Making the " + s.platform + " " + String(s.kind || "").toLowerCase() + "…");
+        var copy = await sizedCopy(img, s.out[0], s.out[1], s.mb);
+        if (!copy) { profSay(prog, s.platform + " came out over the size limit. The others still go through."); continue; }
+        var saved = await postPic("/api/staff/profile-version", { slot: s.id, image_base64: await blobB64(copy) }, function (p) {
+          profSay(prog, s.platform + "… " + Math.round(p * 100) + "%");
+        });
+        if (saved.s !== 200) throw new Error((saved.j && saved.j.error) || ("Could not save " + s.platform));
+        made++;
+      }
+      profSay(prog, made ? "Saved. " + made + " sized " + (made === 1 ? "copy is" : "copies are") + " ready." + (skipped ? " " + skipped + " need a new shape, and nothing was cropped." : "") : "Saved. Nothing was cropped. The platforms that need a different shape are marked below.");
+      await reload(true);
+    } catch (e) {
+      profSay(prog, e && e.message === "unreadable" ? "That file could not be read. Use a JPG or PNG from your camera roll." : e && e.message === "large" ? "That picture is too big to send from this phone. Try a smaller one." : e && e.message === "network" ? "The upload did not finish. Try again." : (e && e.message) || "That picture was not saved.");
+    }
+    profBusy = false;
+  }
+  function bindProfiles() {
+    var photo = $("profPhoto"), banner = $("profBanner");
+    if (photo) photo.addEventListener("change", function () { takeMaster("photo", photo); });
+    if (banner) banner.addEventListener("change", function () { takeMaster("banner", banner); });
+  }
+  bindProfiles();
 
   window.HQStaff = { reload: reload, clear: clear, drawWorkers: drawWorkers, drawReleases: drawReleases, addDetails: addDetails, board: function () { return board; }, problem: function () { return problem; },
     /* Revolut's state (GET /api/bank/status) for Today and Data health */

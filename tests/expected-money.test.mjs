@@ -176,7 +176,7 @@ test("filing the route does not count the money twice, and luke_briefing's probl
   assert.match(day.expected_money, /nothing to flag/, "18 Nov 2026: the gap is the route fee, so expected money does not also say short");
   assert.match(day.payout_routes, /Do not guess a rate/);
   assert.equal((await call(d, "my_day", { bot: "Atlas" })).expected_money, undefined);
-  assert.equal(TOOLS.length, 40, "no new tool: income_status grew fields");
+  assert.equal(TOOLS.length, 44, "no new tool here: income_status grew fields; the four profile image tools are separate");
   assert.ok(!TOOLS.some((t) => t.name === "expected_money" || t.name === "payout_routes"));
   assert.match(INSTRUCTIONS, /not enough data/);
   assert.match(TOOLS.find((t) => t.name === "income_status").description, /payout_routes/);

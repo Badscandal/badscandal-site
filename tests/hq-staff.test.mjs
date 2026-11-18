@@ -227,8 +227,8 @@ test("the page: Messages is the tenth tab, the new script is kept offline, and n
   assert.match(shell, /MORE = \[[^\]]*"messages"\]/);
   assert.doesNotMatch(shell, /scrollBy\(/, "the deep link is one plain jump");
   assert.doesNotMatch(page, /scroll-behavior:\s*smooth/);
-  /* 18 Nov 2026: versioned urls, including the phone look and the workspace switcher. Cache stays v7: #83 locked that name, and the new script uses the same hash. */
-  assert.match(sw, /var CACHE = "bs-hq-v7"/);
+  /* 18 Nov 2026: profile masters. Cache is v8 so phones drop the old shell. */
+  assert.match(sw, /var CACHE = "bs-hq-v8"/);
   assert.match(sw, /"\/js\/hq-look\.js\?v=" \+ V/); assert.match(sw, /"\/js\/hq-phone\.js\?v=" \+ V/); assert.match(sw, /"\/js\/hq-workspaces\.js\?v=" \+ V/); assert.match(sw, /"\/js\/hq-cmd\.js\?v=" \+ V/); assert.match(sw, /"\/js\/hq-staff\.js\?v=" \+ V/); assert.match(sw, /"\/js\/hq-app\.js\?v=" \+ V/);
   for (const [name, src] of [["hq-staff.js", staff], ["hq.js", readFileSync(new URL("../js/hq.js", import.meta.url), "utf8")]]) assert.doesNotMatch(src, /\b(confirm|alert|prompt)\s*\(/, name + ": questions are asked on the page, never in a browser dialog");
   assert.doesNotMatch(staff, /innerHTML\s*=\s*[^;]*\b(m|th|r|w|e|s|a)\.(text|message|payer|note|name|task|blocker)\b(?![^;]*esc\()/, "board text is escaped");

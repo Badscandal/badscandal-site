@@ -801,6 +801,8 @@
           var cur = s.current && s.current.link ? s.current : null;
           var wait = s.waiting && s.waiting.link ? s.waiting : null;
           var ok = s.approved && s.approved.link ? s.approved : null;
+          var exact = s.exact && s.exact.length === 2 ? s.exact : null;
+          var status = s.status === "ready" || s.status === "uploaded" || s.status === "rework" ? s.status : "waiting";
           return {
             id: s.id || "", kind: s.kind || "", rule: s.rule || "Rule not set",
             currentLine: cur ? "Changed " + day(cur.changed) + (cur.by ? " · " + cur.by : "") : "Not recorded yet",
@@ -809,14 +811,27 @@
             waitingLink: wait ? wait.link : "",
             waitingHref: wait && wait.id ? "#messages/" + wait.id : "",
             approvedLine: ok ? "You said yes. " + (owner ? owner + " uploads it by hand." : "Luke uploads it himself.") + " HQ does not change the platform." : "",
-            approvedLink: ok ? ok.link : ""
+            approvedLink: ok ? ok.link : "",
+            status: status,
+            statusLine: s.statusLine || "Waiting",
+            sizeLine: s.sizeLine || s.rule || "",
+            preview: typeof s.preview === "string" ? s.preview : "",
+            circle: !!s.circle,
+            exactW: exact ? exact[0] : 0,
+            exactH: exact ? exact[1] : 0,
+            detail: s.detail || ""
           };
         })
       };
     });
     var waiting = 0;
     platforms.forEach(function (p) { p.slots.forEach(function (s) { if (s.waitingLine) waiting++; }); });
-    return { note: note, waiting: waiting, platforms: platforms };
+    var masters = (view && view.masters) || {};
+    return { note: note, waiting: waiting, platforms: platforms,
+      masters: {
+        photo: masters.photo && masters.photo.line ? masters.photo.line : "",
+        banner: masters.banner && masters.banner.line ? masters.banner.line : ""
+      } };
   }
   function payLine(p) { return p ? day(p.date) + " · " + money(p.amount, p.currency) + " · " + p.status : "none logged yet"; }
   /* a source paid into several accounts (round 2, Luke: "hq should show the second routenote account"):

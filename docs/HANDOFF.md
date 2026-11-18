@@ -62,6 +62,8 @@ artist growth bot that all we will need is content and $".
 
 ## In flight (branches not merged)
 
+- **Profile masters** (`cursor/hq-profile-masters-38be`, not merged). Luke uploads one profile photo and one banner on Profiles. A fitting shape is resized on the page. A shape that does not fit is not cropped: Atlas, Laura and Kevin extend it with `profile_jobs`, `profile_master`, `profile_rework` and `profile_uploaded`. Problems open a Needs you card. Instagram is Luke's. Deezer, TikTok and Instagram have size rules. TIDAL is on the list. Secondary buttons set their own colours. Cache `bs-hq-v8`. 44 tools once this merges: the bots refresh.
+
 - **Blank-screen fix** (PR #83, on main). One content hash on every HQ script, an 8-second fetch timeout, and Try again / Reset app when the page never paints.
 - **Phone look** (PR #80, on main). One received total per currency.
 - **One-tap cards** (PR #79, on main). Needs you header, Yes / No / Edit, Waiting on others, scheduled checks, desk push (empty until Luke pastes an address), Monday draft. Still 40 tools.

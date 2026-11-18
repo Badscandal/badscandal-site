@@ -51,6 +51,7 @@ import { COOKIE, readCookie, verifySession } from "../lib/session.mjs";
 import * as C from "../lib/action-cards.mjs";
 import { pingNames } from "../lib/desk-push.mjs";
 import * as S from "../lib/staff.mjs";
+import * as P from "../lib/profile-images.mjs";
 import * as W from "../lib/workspaces.mjs";
 import { sampleBoard, sampleReleases, sampleSightings } from "../lib/staff-sample.mjs";
 import { callTool, CLAUDE_TOOLS, INSTRUCTIONS, TOOLS, toolsFor, instructionsFor } from "../lib/staff-tools.mjs";
@@ -58,18 +59,20 @@ import { callTool, CLAUDE_TOOLS, INSTRUCTIONS, TOOLS, toolsFor, instructionsFor 
 const NO_STORE = { "Cache-Control": "no-store", "X-Robots-Tag": "noindex, nofollow" };
 const json = (status, data, extra = {}) => new Response(data === null ? null : JSON.stringify(data), { status, headers: { ...(data === null ? {} : { "Content-Type": "application/json; charset=utf-8" }), ...NO_STORE, ...extra } });
 const MAX_BODY = 64 * 1024;
-/* upload_cover carries the picture itself (16 Nov 2026, Webmaster: every upload was refused "Too large"): ONE
-   tools/call of upload_cover may be up to 5.8 MB (a 4 MB picture in base64, under Netlify's 6 MB); every other
-   request stays at 64 KB */
+/* upload_cover and profile_rework carry the picture itself: ONE of those calls may be up to 5.8 MB
+   (a 4 MB picture in base64, under Netlify's 6 MB). The page's master and sized-copy uploads are the
+   same size. Every other request stays at 64 KB. */
 const MAX_UPLOAD_BODY = 5.8 * 1024 * 1024;
-const isUpload = (v) => !!v && !Array.isArray(v) && v.method === "tools/call" && v.params && v.params.name === "upload_cover";
+const UPLOAD_TOOLS = new Set(["upload_cover", "profile_rework"]);
+const isUpload = (v) => !!v && !Array.isArray(v) && v.method === "tools/call" && v.params && UPLOAD_TOOLS.has(v.params.name);
 
-async function bodyOf(req, { upload = false } = {}) {
+async function bodyOf(req, { upload = false, raw = false } = {}) {
   const text = await req.text();
   if (text.length > MAX_BODY) {
     if (!upload || text.length > MAX_UPLOAD_BODY) return { tooBig: true, upload: upload && text.length > MAX_BODY };
     let v;
     try { v = JSON.parse(text); } catch { return { bad: true }; }
+    if (raw) return v && typeof v === "object" ? { value: v } : { bad: true };
     return isUpload(v) ? { value: v } : { tooBig: true };
   }
   try { return { value: JSON.parse(text) }; } catch { return { bad: true }; }
@@ -139,7 +142,7 @@ async function mcp(req, context) {
     return json(405, { jsonrpc: "2.0", id: null, error: { code: -32000, message: "Use POST" } }, { Allow: "POST, OPTIONS" });
   }
   const b = await bodyOf(req, { upload: true });
-  if (b.tooBig) return json(413, { jsonrpc: "2.0", id: null, error: { code: -32600, message: "Too large: a request may be 64 KB at most; only upload_cover may carry a picture (4 MB at most)" } });
+  if (b.tooBig) return json(413, { jsonrpc: "2.0", id: null, error: { code: -32600, message: "Too large: a request may be 64 KB at most; only upload_cover and profile_rework may carry a picture (4 MB at most)" } });
   if (b.bad) { await note(context, req, 400, who, "", "the body was not JSON"); return json(400, { jsonrpc: "2.0", id: null, error: { code: -32700, message: "Parse error: the body is not JSON" } }); }
   const st = stores(context), now = Date.now();
   const headers = Object.fromEntries([...req.headers].map(([k, v]) => [k.toLowerCase(), v]));
@@ -178,6 +181,12 @@ async function api(req, context, path) {
   const luke = await isLuke(req);
   const role = luke ? "luke" : await keyRole(req);
   if (!role) return json(401, { error: "Not logged in" });
+  /* the master and the sized copies are not public. Luke, Claude and the bots may read one.
+     A bot is refused everywhere else on /api/staff. */
+  if (req.method === "GET" && path.startsWith("profile-file/")) {
+    if (url.searchParams.get("sample") === "1") return json(404, { error: "Not found" });
+    return P.profileFileResponse(stores(context).desk, decodeURIComponent(path.slice("profile-file/".length)));
+  }
   if (role === "bot") return json(403, { error: "The bots use the connector at /mcp" });
   if (req.method !== "GET") {
     const origin = req.headers.get("origin");
@@ -199,6 +208,7 @@ async function api(req, context, path) {
   if (path === "board" && req.method === "GET") {
     if (sample) return json(200, { sample: true, ...sampleBoard(now), auto: C.sampleAuto(now), accountHealth: sampleReport(now) });
     const st = stores(context);
+    await P.profileAlerts(st.desk, now, await S.getRoster(st.desk)).catch(() => null);
     await S.upgradeReleases(st.desk, now).catch(() => null); /* releases sent before the pipeline changed (15 Nov 2026) */
     const [desk, hqAns] = await Promise.all([S.loadDesk(st.desk, now), hqLoader(st)().catch(() => null)]);
     /* the board hands Claude every message, so it counts as Claude having READ them (11 Nov 2026, review:
@@ -230,7 +240,8 @@ async function api(req, context, path) {
 
   const st = stores(context);
   const roster = await S.getRoster(st.desk);
-  const b = req.method === "GET" ? { value: {} } : await bodyOf(req);
+  const upload = path === "profile-master" || path === "profile-version";
+  const b = req.method === "GET" ? { value: {} } : await bodyOf(req, { upload, raw: upload });
   if (b.tooBig) return json(413, { error: "Too large" });
   if (b.bad || !b.value || typeof b.value !== "object") return json(400, { error: "Bad request" });
   const a = b.value;
@@ -289,6 +300,14 @@ async function api(req, context, path) {
       if (a.sources) { await S.setSources(st.desk, a.sources); done.push("sources"); }
       if (typeof a.guide === "string") { await S.setGuide(st.desk, now, a.guide); done.push("guide"); }
       return json(200, { ok: true, done });
+    }
+    if (path === "profile-master" && req.method === "POST") {
+      if (role !== "luke") return json(403, { error: "Only Luke uploads a master from the page" });
+      return json(200, { ok: true, ...(await P.saveProfileMaster(st.desk, now, roster, { by: "Luke", kind: a.kind, image_base64: a.image_base64 })) });
+    }
+    if (path === "profile-version" && req.method === "POST") {
+      if (role !== "luke") return json(403, { error: "Only Luke's page stores a sized copy" });
+      return json(200, { ok: true, ...(await P.saveProfileVersion(st.desk, now, roster, { by: "Luke", slot: a.slot, image_base64: a.image_base64, source: "resized" })) });
     }
   } catch (e) {
     if (e && e.name === "StaffError") return json(e.code === "not_found" ? 404 : e.code === "busy" ? 503 : 400, { error: e.message, ...(e.missing ? { missing: e.missing } : {}), ...(e.anyway ? { canSendAnyway: true } : {}) });

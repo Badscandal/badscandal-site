@@ -181,7 +181,7 @@ test("the page escapes a song name", () => {
 });
 
 test("recording a song on spend or a payment does not add a tool", async () => {
-  assert.equal(TOOLS.length, 40);
+  assert.equal(TOOLS.length, 44);
   assert.ok(tool("record_spend").inputSchema.properties.song);
   assert.ok(tool("submit_income").inputSchema.properties.song);
   assert.ok(tool("submit_income").inputSchema.properties.store);

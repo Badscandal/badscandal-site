@@ -228,7 +228,7 @@ export class StaffError extends Error {
   constructor(message, code = "bad_request") { super(message); this.name = "StaffError"; this.code = code; }
 }
 const fail = (m, code) => { throw new StaffError(m, code); };
-function noSecrets(...texts) {
+export function noSecrets(...texts) {
   for (const t of texts) { const what = secretIn(t); if (what) fail(`That looks like ${what}. Never write passwords, codes, keys, card or bank account numbers here. Say what is needed in words and ask Luke.`, "secret"); }
 }
 
@@ -822,6 +822,16 @@ export const ASSETS = {
     rule: "Amazon Music profile image: a JPG or PNG, at least 500 x 500, 15 MB at most (Amazon Music for Artists)." },
   amazon_background: { label: "Amazon Music background", formats: ["jpg", "jpeg", "png"], min: [1920, 1440], mb: 15,
     rule: "Amazon Music background: a JPG or PNG, at least 1920 x 1440, 15 MB at most. Keep the face in the upper part, near the middle (Amazon Music for Artists)." },
+  /* 18 Nov 2026: the three that said "Rule not set", filled from what each platform actually publishes,
+     plus TIDAL. Where a help page gives no pixel size, the rule says so. */
+  instagram_photo: { label: "Instagram profile photo", formats: ["jpg", "jpeg", "png"], ratio: 1, ratioWords: "square", min: [320, 320], mb: null,
+    rule: "Instagram's help centre does not publish a pixel size. We prepare a square JPG or PNG, 320 x 320 (the size the photo is stored at), scaled down, never up. It is shown as a circle. Luke uploads this one." },
+  tiktok_photo: { label: "TikTok profile photo", formats: ["jpg", "jpeg", "png"], ratio: 1, ratioWords: "square", min: [20, 20], recommended: [720, 720], mb: null,
+    rule: "TikTok's help only says the profile photo must be at least 20 x 20. We prepare a square JPG or PNG, 720 x 720 (our file, scaled down, never up). It is shown as a circle." },
+  deezer_photo: { label: "Deezer profile photo", formats: ["jpg", "jpeg", "png"], ratio: 1, ratioWords: "square", min: [1200, 1200], mb: 9,
+    rule: "Deezer's own artist-page guide does not list pixels. Distributor upload forms (Ditto, ONErpm) ask for a square JPG or PNG, at least 1200 x 1200, 9 MB at most. It is cropped to a circle." },
+  tidal_photo: { label: "TIDAL artist image", formats: ["jpg", "jpeg", "png"], ratio: 1, ratioWords: "square", min: [1500, 1500], mb: 10,
+    rule: "TIDAL artist image: a square JPG, 1500 x 1500, under 10 MB. It is cropped to a square and shown as a circle (TIDAL Artist Home)." },
 };
 const FORMAT_WORDS = { cover: "a JPG or PNG", canvas: "an MP4 or JPG", spotify_header: "a JPG, PNG or GIF", youtube_banner: "a JPG or PNG" };
 /* a file-type sentence for a kind added after the four above (L12). The original four keep FORMAT_WORDS. */
@@ -865,27 +875,82 @@ export function assetNotes(kind, o = {}) {
    The desk RECORDS what is live, and asks Luke "Yes, correct" before a new image. HQ never logs in and
    never changes a platform: after yes, the owner uploads it by hand and then records it.
    asset "" = no published size rule: the list says "Rule not set" and a proposal is not size-checked.
-   X has no owner yet. Instagram, TikTok and Deezer publish no size this list will enforce. */
+   X has no owner yet. Instagram is Luke's to upload. Deezer, TikTok and Instagram now have a prepare size
+   (18 Nov 2026): TikTok's published minimum is still 20 px; 720 is the file we make. */
 const PROF_KEY = "profiles.json";
 export const PROFILE_SLOTS = [
   { id: "facebook-photo", platformId: "facebook", platform: "Facebook Page", kind: "Profile photo", words: ["profile", "photo", "avatar", "picture"], owner: "Steve", asset: "facebook_photo" },
   { id: "facebook-cover", platformId: "facebook", platform: "Facebook Page", kind: "Cover", words: ["cover", "banner"], owner: "Steve", asset: "facebook_cover" },
-  { id: "instagram-photo", platformId: "instagram", platform: "Instagram", kind: "Profile photo", words: ["profile", "photo", "avatar", "picture"], owner: "Steve", asset: "" },
+  { id: "instagram-photo", platformId: "instagram", platform: "Instagram", kind: "Profile photo", words: ["profile", "photo", "avatar", "picture"], owner: "Luke", asset: "instagram_photo" },
   { id: "youtube-photo", platformId: "youtube", platform: "YouTube", kind: "Profile photo", words: ["profile", "photo", "avatar", "picture"], owner: "Laura", asset: "youtube_photo" },
   { id: "youtube-banner", platformId: "youtube", platform: "YouTube", kind: "Banner", words: ["banner"], owner: "Laura", asset: "youtube_banner" },
   { id: "spotify-photo", platformId: "spotify", platform: "Spotify", kind: "Profile photo", words: ["profile", "photo", "avatar", "picture"], owner: "Atlas", asset: "spotify_avatar" },
   { id: "spotify-header", platformId: "spotify", platform: "Spotify", kind: "Header", words: ["header", "banner"], owner: "Atlas", asset: "spotify_header" },
   { id: "apple-image", platformId: "apple", platform: "Apple Music", kind: "Artist image", words: ["image", "hero", "artist", "profile", "photo", "avatar"], owner: "Atlas", asset: "apple_image" },
-  { id: "tiktok-photo", platformId: "tiktok", platform: "TikTok", kind: "Profile photo", words: ["profile", "photo", "avatar", "picture"], owner: "Kevin", asset: "" },
+  { id: "tiktok-photo", platformId: "tiktok", platform: "TikTok", kind: "Profile photo", words: ["profile", "photo", "avatar", "picture"], owner: "Kevin", asset: "tiktok_photo" },
   { id: "x-photo", platformId: "x", platform: "X", kind: "Profile photo", words: ["profile", "photo", "avatar", "picture"], owner: "", asset: "x_photo" },
   { id: "x-header", platformId: "x", platform: "X", kind: "Header", words: ["header", "banner"], owner: "", asset: "x_header" },
   { id: "soundcloud-photo", platformId: "soundcloud", platform: "SoundCloud", kind: "Profile image", words: ["profile", "photo", "avatar", "picture", "image"], owner: "Atlas", asset: "soundcloud_photo" },
   { id: "soundcloud-header", platformId: "soundcloud", platform: "SoundCloud", kind: "Header", words: ["header", "banner"], owner: "Atlas", asset: "soundcloud_header" },
-  { id: "deezer-photo", platformId: "deezer", platform: "Deezer", kind: "Profile photo", words: ["profile", "photo", "avatar", "picture"], owner: "Atlas", asset: "" },
+  { id: "deezer-photo", platformId: "deezer", platform: "Deezer", kind: "Profile photo", words: ["profile", "photo", "avatar", "picture"], owner: "Atlas", asset: "deezer_photo" },
   { id: "amazon-photo", platformId: "amazon", platform: "Amazon Music", kind: "Profile image", words: ["profile", "photo", "avatar", "picture", "image"], owner: "Atlas", asset: "amazon_photo" },
   { id: "amazon-background", platformId: "amazon", platform: "Amazon Music", kind: "Background", words: ["background", "banner"], owner: "Atlas", asset: "amazon_background" },
+  { id: "tidal-photo", platformId: "tidal", platform: "TIDAL", kind: "Artist image", words: ["profile", "photo", "avatar", "picture", "image", "artist"], owner: "Atlas", asset: "tidal_photo" },
 ];
 const profileRule = (slot) => (slot.asset && ASSETS[slot.asset] ? ASSETS[slot.asset].rule : "Rule not set");
+/* the file we prepare for each slot. recommended wins over the minimum (YouTube banner is 2560, not 2048).
+   Facebook's cover has no recommended size: 851 x 315 is the file that loads fastest, prepare-only. */
+const PROFILE_PREPARE = { facebook_cover: [851, 315] };
+export function profileGroup(slot) {
+  return /banner|header|cover|background/i.test(String(slot && slot.kind || "")) ? "banner" : "photo";
+}
+export function profileSpec(slot) {
+  const a = slot && slot.asset && ASSETS[slot.asset] ? ASSETS[slot.asset] : null;
+  const group = profileGroup(slot);
+  const base = { id: slot.id, platform: slot.platform, kind: slot.kind, owner: slot.owner || "", group, circle: group === "photo", asset: slot.asset || "" };
+  if (!a) return { ...base, rule: "Rule not set", formats: [], exact: null, ratio: null, ratioWords: "", mb: null };
+  const exact = PROFILE_PREPARE[slot.asset] || a.recommended || a.min || null;
+  const ratio = exact ? exact[0] / exact[1] : (a.ratio || null);
+  return { ...base, rule: a.rule, formats: a.formats.slice(), exact, ratio, ratioWords: a.ratioWords || (exact ? exact[0] + " x " + exact[1] : ""), mb: a.mb || null };
+}
+/* fit = the master already has this shape and is at least the prepare size, so it can be scaled down.
+   A smaller master is not scaled up. A different shape is not cropped. */
+export function profilePlan(w, h, spec) {
+  if (!spec || !spec.exact) return { fit: false, status: "waiting", problem: "", alsoSmall: false, out: null, reason: "No size to prepare." };
+  const ew = spec.exact[0], eh = spec.exact[1], ratio = ew / eh;
+  const ratioOk = w > 0 && h > 0 && Math.abs(w / h - ratio) / ratio <= 0.02;
+  const out = [ew, eh];
+  if (!ratioOk) {
+    const alsoSmall = w < ew && h < eh;
+    return { fit: false, status: "rework", problem: "ratio", alsoSmall, out, reason: `The master is ${w} x ${h}. ${spec.platform} needs ${ew} x ${eh}. The shape does not match, so nothing was cropped.` };
+  }
+  if (w < ew || h < eh) return { fit: false, status: "rework", problem: "small", alsoSmall: true, out, reason: `The master is ${w} x ${h}. ${spec.platform} needs ${ew} x ${eh}. It was not scaled up.` };
+  return { fit: true, status: "ready", problem: "", alsoSmall: false, out, reason: "" };
+}
+function masterDoc(doc, group) {
+  const m = doc && doc.masters && doc.masters[group];
+  return m && m.w && m.h ? m : null;
+}
+function slotPicture(doc, slot) {
+  const spec = profileSpec(slot);
+  const master = masterDoc(doc, spec.group);
+  const plan = master ? profilePlan(master.w, master.h, spec) : { fit: false, problem: "", reason: "" };
+  const ver = doc && doc.versions && doc.versions[slot.id] && doc.versions[slot.id].w ? doc.versions[slot.id] : null;
+  const up = doc && doc.uploaded && doc.uploaded[slot.id] && doc.uploaded[slot.id].link ? doc.uploaded[slot.id] : null;
+  const rej = doc && doc.rejected && doc.rejected[slot.id] && doc.rejected[slot.id].note ? doc.rejected[slot.id] : null;
+  const job = (Array.isArray(doc && doc.jobs) ? doc.jobs : []).find((j) => j && j.slot === slot.id && j.status === "open") || null;
+  const rejAfter = (row) => rej && (!row || String(rej.at || "") >= String(row.at || ""));
+  let status = "waiting", statusLine = "Waiting";
+  if (up && !rejAfter(up)) { status = "uploaded"; statusLine = "Uploaded by " + (up.by || spec.owner || "the owner"); }
+  else if (ver && !rejAfter(ver)) { status = "ready"; statusLine = "Ready · " + ver.w + " x " + ver.h; }
+  else if (rej) { status = "rework"; statusLine = "Needs rework · the platform rejected it"; }
+  else if (plan.problem === "small") { status = "rework"; statusLine = "Needs rework · the master is too small"; }
+  else if (job || plan.problem === "ratio") { status = "rework"; statusLine = "Needs rework"; }
+  else if (plan.fit) { status = "waiting"; statusLine = "Waiting · the sized copy is not stored yet"; }
+  const preview = ver && status === "ready" ? "/api/staff/profile-file/slot-" + slot.id : (master ? "/api/staff/profile-file/master-" + spec.group : "");
+  const sizeLine = spec.exact ? spec.exact[0] + " x " + spec.exact[1] + (spec.ratioWords ? " · " + spec.ratioWords : "") : spec.rule;
+  return { status, statusLine, sizeLine, preview, circle: spec.circle, exact: spec.exact, fit: !!plan.fit, group: spec.group, detail: plan.reason || (rej ? rej.note : "") };
+}
 function profilePlatforms(q) {
   const want = fold(q);
   if (!want) return [];
@@ -952,12 +1017,16 @@ export function profilesView(doc, messages, platform) {
     const approved = approvedRaw && (!current || current.link !== approvedRaw.link) ? { link: approvedRaw.link, by: approvedRaw.by || "", at: approvedRaw.at || "" } : null;
     const wait = (messages || []).filter((m) => m && m.proposal && m.proposal.action === "profile" && m.proposal.slot === s.id && isOpen(m))
       .sort((a, b) => (a.at < b.at ? 1 : -1))[0] || null;
+    const pic = slotPicture(doc, s);
     p.slots.push({ id: s.id, kind: s.kind, asset: s.asset || "", rule: profileRule(s), current, approved,
-      waiting: wait ? { id: wait.id, link: wait.proposal.link || "", by: wait.from || "" } : null });
+      waiting: wait ? { id: wait.id, link: wait.proposal.link || "", by: wait.from || "" } : null,
+      status: pic.status, statusLine: pic.statusLine, sizeLine: pic.sizeLine, preview: pic.preview, circle: pic.circle, exact: pic.exact, fit: pic.fit, group: pic.group, detail: pic.detail });
   }
   const want = fold(platform);
   const shown = want ? platforms.filter((p) => fold(p.platform) === want || fold(p.platform).split(" ")[0] === want || p.id === want) : platforms;
-  return { note: "HQ never logs in and never changes a platform. A new image waits for your \"Yes, correct\". Then the owner uploads it by hand.", platforms: shown };
+  const masterLine = (group) => { const m = masterDoc(doc, group); return m ? { w: m.w, h: m.h, at: m.at || "", line: "Saved · " + m.w + " x " + m.h } : null; };
+  return { note: "HQ never logs in and never changes a platform. A new image waits for your \"Yes, correct\". Then the owner uploads it by hand. You can also upload one profile photo and one banner here. A copy is made when the shape fits. When it does not, nothing is cropped.",
+    masters: { photo: masterLine("photo"), banner: masterLine("banner") }, platforms: shown };
 }
 export async function recordProfile(store, now, roster, a) {
   const by = whoIs(a.by, roster, { people: true });
@@ -1025,7 +1094,7 @@ export async function proposeProfile(store, now, roster, a) {
   const who = slot.owner || "Luke";
   const text = `${by} asks: is this correct? A new ${slot.platform} ${slot.kind.toLowerCase()}. Link: ${link}. Rule: ${rule} ${checked}` +
     (why ? ` Why: ${why}` : "") + ` Nothing changes until you say "Yes, correct". After that, ${who} uploads it by hand. HQ does not log in and does not change ${slot.platform}.`;
-  const r = await sendMessage(store, now, roster, { from: by, to: "Luke", needs: "decision", text, ...(slot.owner && slot.owner !== by ? { about: slot.owner } : {}),
+  const r = await sendMessage(store, now, roster, { from: by, to: "Luke", needs: "decision", text, ...(slot.owner && slot.owner !== by && !PEOPLE.includes(slot.owner) ? { about: slot.owner } : {}),
     proposal: { action: "profile", slot: slot.id, platform: slot.platform, kind: slot.kind, title: `${slot.platform} ${slot.kind.toLowerCase()}`, link, owner: slot.owner || "", by, changes } });
   return { message: r.message, slot, rule, changes };
 }
@@ -3759,7 +3828,7 @@ export async function checkSongBuilds(store, now, roster) {
 export const COVER_BOTS = ["Webmaster", "Nova"];
 const COVER_MAX = 4 * 1024 * 1024;
 const COVER_TYPES = { jpg: "image/jpeg", png: "image/png", webp: "image/webp" };
-function pictureOf(buf) {
+export function pictureOf(buf) {
   const b = Buffer.from(buf);
   if (b.length > 24 && b.slice(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) return { ext: "png", w: b.readUInt32BE(16), h: b.readUInt32BE(20) };
   if (b.length > 12 && b.slice(0, 4).toString("latin1") === "RIFF" && b.slice(8, 12).toString("latin1") === "WEBP") return { ext: "webp", w: null, h: null };

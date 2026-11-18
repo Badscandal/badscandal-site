@@ -125,7 +125,7 @@ test("adding either account is refused without repeating the name; the instagram
   assert.equal(res.fan_inbox.repeat_fans[0].posts, 2);
   assert.match(res.fan_inbox.note, /Luke/);
   assert.match(res.fan_inbox.note, /[Nn]ever reply/);
-  assert.equal(TOOLS.length, 40, "no new tool");
+  assert.equal(TOOLS.length, 44, "no new tool here; the four profile image tools are separate");
   assert.match(TOOLS.find((t) => t.name === "instagram").description, /fan inbox/i);
   assert.match(INSTRUCTIONS, /fan_inbox/);
   const src = readFileSync(new URL("../netlify/lib/instagram.mjs", import.meta.url), "utf8");

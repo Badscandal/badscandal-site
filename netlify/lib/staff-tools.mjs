@@ -10,6 +10,7 @@ import { SONGS, homeCardSong } from "./songs.mjs";
 import * as C from "./action-cards.mjs";
 import { pingNames } from "./desk-push.mjs";
 import * as S from "./staff.mjs";
+import * as P from "./profile-images.mjs";
 import * as W from "./workspaces.mjs";
 import * as IG from "./instagram.mjs";
 import { rankLine } from "./postrank.mjs";
@@ -44,7 +45,7 @@ const INSTRUCTION_LINES = [
   ["Forge Drop Verse Webmaster", "Before anything goes to the stores or into an ad, run preflight: the artist name is badscandal, one word (capitalisation does not matter), the primary artist is Badscandal and matches Spotify artist 29kaubgb6Esvwu0idVndGy, ads and links go to https://badscandal.com/<song>, the master is a WAV, the artwork a JPG or PNG 3000 x 3000. Fix what it lists first."],
   ["Atlas Laura Webmaster", "Before you upload a Spotify Canvas, a Spotify header image, a YouTube banner or a cover, run preflight with asset (canvas, spotify_header, youtube_banner or cover) and the file's width, height, seconds, format and size_mb: it checks them against that platform's rule. Fix what it lists first."],
   /* L12 (18 Nov 2026): profile photos and banners. HQ never logs in. */
-  ["Atlas Laura Steve Kevin", "Profiles: HQ's Profiles section lists the profile photo and the banner on every official platform. Record the image that is live with profiles (action record: platform, image, the https link, changed = the day it last changed, YYYY-MM-DD). To put a new image up, propose it (action propose; give width, height, format and size_mb when that image has a size rule). Luke is asked \"Yes, correct\". Only after he says yes do you upload it yourself, by hand, and then record it. HQ never logs in and never changes a platform. X has no owner yet: Luke uploads that one himself. Instagram, TikTok and Deezer say \"Rule not set\": propose the link, and do not invent a size."],
+  ["Atlas Laura Steve Kevin", "Profiles: HQ's Profiles section lists the profile photo and the banner on every official platform. Luke uploads one master profile photo and one master banner there. When the shape fits, a sized copy is made. When it does not, nothing is cropped: profile_jobs lists the job, profile_master is the master and the size, profile_rework stores your extended file (exact pixels), and profile_uploaded records the https link after you put it on the platform yourself. HQ never logs in and never sends a file to a platform. Record the image that is live with profiles (action record). To propose a different image, action propose: Luke is asked \"Yes, correct\". Instagram is Luke's to upload. X has no owner yet: Luke uploads that one himself. Deezer is a square at least 1200. TikTok's help only requires 20 px; the file we prepare is 720. TIDAL is a square 1500."],
   /* A4 (17 Nov 2026): automatic chasing */
   [null, "When a duty or a release step of yours is late, HQ sends you ONE reminder (07:00 to 22:00). Do it then and post_update or release_step; if it is still not done 2 hours later, Nova is told and chases you."],
   ["Nova", "Nova: HQ reminds the bots about late duties and steps by itself and tells you only when one is still late 2 hours after its reminder: then chase that bot, or tell Luke if it needs him."],
@@ -458,10 +459,10 @@ export const TOOLS = [
       playlist: str("Optional. An editorial playlist's name, exactly as Spotify for Artists shows it."),
       added_on: str("With playlist: the day the song was added to that playlist, YYYY-MM-DD.") }, ["bot", "song"]) },
   { name: "profiles", title: "Profile photos and banners",
-    description: "ATLAS (Spotify, Apple Music, SoundCloud, Deezer, Amazon Music), LAURA (YouTube), STEVE (Instagram and Facebook), KEVIN (TikTok). Nova may do it for them. X has no owner yet: only Luke, Claude or Nova. action list = every platform, the image that is live, the day it changed, the size rule, a new image waiting for Luke, and one he already said yes to. action record = the image that is LIVE now (you saw it on the platform): platform, image, link (https), changed (YYYY-MM-DD, the day it last changed). action propose = a NEW image: the same, plus width, height, format and size_mb when the rule needs them. It is checked against the rule first. A bad file is not asked. Luke is asked \"Yes, correct\" or \"No\". Only after yes do you upload it yourself, by hand, and then record it. HQ never logs in and never changes a platform. Instagram, TikTok and Deezer have no size rule: the answer says \"Rule not set\". Do not invent one.",
+    description: "ATLAS (Spotify, Apple Music, SoundCloud, Deezer, Amazon Music, TIDAL), LAURA (YouTube), STEVE (Facebook), KEVIN (TikTok). Nova may do it for them. Instagram is Luke's: he uploads that photo. X has no owner yet: only Luke, Claude or Nova. action list = every platform, the image that is live, the day it changed, the size rule, a new image waiting for Luke, and one he already said yes to. action record = the image that is LIVE now (you saw it on the platform): platform, image, link (https), changed (YYYY-MM-DD, the day it last changed). action propose = a NEW image: the same, plus width, height, format and size_mb when the rule needs them. It is checked against the rule first. A bad file is not asked. Luke is asked \"Yes, correct\" or \"No\". Only after yes do you upload it yourself, by hand, and then record it. HQ never logs in and never changes a platform. A master that does not fit a platform is not cropped: use profile_jobs.",
     inputSchema: obj({ bot: BOT,
       action: str("list | record | propose. Default list.", { enum: ["list", "record", "propose"] }),
-      platform: str("Facebook, Instagram, YouTube, Spotify, Apple Music, TikTok, X, SoundCloud, Deezer or Amazon Music."),
+      platform: str("Facebook, Instagram, YouTube, Spotify, Apple Music, TikTok, X, SoundCloud, Deezer, Amazon Music or TIDAL."),
       image: str("Which image: profile, photo, header, banner, cover, background, or the id (spotify-header). Leave it out when the platform has only one."),
       link: str("The https link to the image. For record, the one that is live. For propose, the new one."),
       changed: str("With record: the day that live image last changed, YYYY-MM-DD, or \"unknown\"."),
@@ -484,6 +485,26 @@ export const TOOLS = [
       note: str("Optional: one line, for example where the money came from (\"from Sample Label via Wise\")."),
       song: str("Optional, only with received, and only when this payment is for one song. Never guess."),
       store: str("Optional, with song. The store this payment is for.") }, ["bot", "id", "status"]) },
+  { name: "profile_jobs", title: "List profile images that need a new shape",
+    description: "ATLAS (Spotify, Apple Music, SoundCloud, Deezer, Amazon Music, TIDAL), LAURA (YouTube), KEVIN (TikTok), STEVE (Facebook). Nova sees every job. A job exists when Luke's master banner or photo does not have that platform's shape. Nothing was cropped. Extend the canvas or pad it to the exact size. Do not scale it up. HQ never logs in and never sends a file to a platform. A job open more than a day is also told to Luke.",
+    inputSchema: obj({ bot: BOT }, ["bot"]) },
+  { name: "profile_master", title: "Download a profile master and its target size", readOnly: true,
+    description: "The master Luke uploaded, and the size a platform needs. kind = photo or banner, or slot = the id from profile_jobs (for example spotify-header). url is not public: open it with the same Authorization header you use for the connector. The answer has the exact width and height. HQ never logs in and never sends the file to a platform.",
+    inputSchema: obj({ bot: BOT,
+      kind: str("Optional. photo or banner, when you want the whole master."),
+      slot: str("Optional. The id from profile_jobs, for example youtube-banner. Use this when you are making one platform's file.") }, ["bot"]) },
+  { name: "profile_rework", title: "Upload a reworked profile image", idempotent: true,
+    description: "Upload the file you made for ONE platform. slot = the id from profile_jobs. image_base64 = the picture itself, a JPG or PNG at the EXACT width and height in the job, under that platform's size limit. A file of any other size is refused and not stored, and Luke is told. Do not crop the subject away and do not scale the picture up. HQ never logs in and never sends this file to a platform.",
+    inputSchema: obj({ bot: BOT,
+      slot: str("The id from profile_jobs, for example spotify-header."),
+      image_base64: str("The picture itself, base64. A JPG or PNG at the exact size the job names.") }, ["bot", "slot", "image_base64"]) },
+  { name: "profile_uploaded", title: "Mark a profile image as uploaded, or rejected", idempotent: true,
+    description: "After YOU put the image on the platform yourself, record the proof. slot = the id. link = an https link that shows it there. HQ does not upload it and does not log in. If the platform rejected it, set rejected true and put what it said in note: Luke is asked, and the job stays open. Nothing on the platform is changed from here.",
+    inputSchema: obj({ bot: BOT,
+      slot: str("The id from profile_jobs, for example youtube-banner."),
+      link: str("The https link that shows the image on the platform, after you uploaded it yourself."),
+      rejected: { type: "boolean", description: "True when the platform refused the image. Say what it said in note." },
+      note: str("With rejected: what the platform said, in its words.") }, ["bot", "slot"]) },
 ];
 
 /* Luke, 11 Nov 2026: "let them see my full revolut personal income to be able to actually see the
@@ -506,6 +527,8 @@ export const TOOL_USERS = {
   record_spend: ["Forge"], log_growth: ["Steve", "Atlas", "Kevin", "Laura"],
   store_status: ["Drop"], spotify_upcoming: ["Atlas"], pitch_log: ["Atlas"], song_page: ["Webmaster"], roster_card: ["Nova"], recommend: ["Nova"], preflight: ["Forge", "Drop", "Verse", "Webmaster", "Atlas", "Laura"], instagram: ["Steve", "Kevin", "Forge"], song_pages: ["Webmaster"], upload_cover: ["Webmaster"],
   profiles: ["Atlas", "Laura", "Steve", "Kevin"],
+  profile_jobs: ["Atlas", "Laura", "Steve", "Kevin"], profile_master: ["Atlas", "Laura", "Steve", "Kevin"],
+  profile_rework: ["Atlas", "Laura", "Steve", "Kevin"], profile_uploaded: ["Atlas", "Laura", "Steve", "Kevin"],
 };
 const onTeam = (bot, roster) => { const k = String(bot || "").trim().toLowerCase(); return k ? (roster.find((b) => b.name.toLowerCase() === k) || {}).name || "" : ""; };
 export function toolsFor(bot, roster) {
@@ -1033,7 +1056,7 @@ export async function callTool(tool, args, ctx) {
         const view = S.profilesView(await S.getProfiles(store), await S.listMessages(store, now), args.platform || args.platform_filter);
         return { note: view.note + " You upload a new image by hand only after Luke says yes, then record it.",
           profiles: view.platforms.map((p) => ({ platform: p.platform, owner: p.owner ? `${p.owner} uploads this` : "no owner yet: Luke uploads this himself",
-            images: p.slots.map((s) => ({ id: s.id, kind: s.kind, rule: s.rule,
+            images: p.slots.map((s) => ({ id: s.id, kind: s.kind, rule: s.rule, size: s.sizeLine || "", status: s.statusLine || "",
               current: s.current ? { link: s.current.link, changed: s.current.changed, by: s.current.by } : "not recorded yet",
               waiting_for_luke: s.waiting ? { link: s.waiting.link, message: s.waiting.id } : null,
               said_yes: s.approved ? { link: s.approved.link, upload: `${p.owner || "Luke"} uploads it by hand. HQ does not change the platform.` } : null })) })),
@@ -1315,6 +1338,10 @@ export async function callTool(tool, args, ctx) {
         needs_luke_sign_in: signIns.length ? signIns : ["nothing"],
         how_to_report: "Short: four lines at most, numbers exactly as given, \"not read\" never as 0." };
     }
+    case "profile_jobs": return P.listProfileJobs(store, now, roster, { by: me });
+    case "profile_master": return P.profileMasterFile(store, roster, { by: me, kind: args.kind, slot: args.slot });
+    case "profile_rework": return P.saveProfileVersion(store, now, roster, { by: me, slot: args.slot, image_base64: args.image_base64, source: "rework" });
+    case "profile_uploaded": return P.markProfileUploaded(store, now, roster, { by: me, slot: args.slot, link: args.link, rejected: args.rejected, note: args.note });
   }
   throw new S.StaffError("That tool is not available.");
 }
