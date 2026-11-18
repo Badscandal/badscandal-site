@@ -60,7 +60,8 @@ artist growth bot that all we will need is content and $".
 
 ## In flight (branches not merged)
 
-- **L1 + L9** (PR #71, `cursor/expected-money-routes-cbcf`, not merged): Expected money and the exchange-and-fee cost of each payout route, for Ledger and Sheet, on the phone Money screen from PR #70. No new tool (still 40). `income_status` gains `expected_money` and `payout_routes`. `my_day` for Ledger and Sheet gains the same summaries. `luke_briefing` is unchanged. A route with two currencies says "not enough data". HQ does not move money and does not guess a rate. No new tool and no new option, so this branch does not by itself ask the bots to refresh. Preview: https://deploy-preview-71--profound-haupia-db7ffa.netlify.app/hq?sample=1
+- **L1 + L9** (PR #71, on main): Expected money and what a payout route cost. Still 40 tools. `luke_briefing` is unchanged.
+- **Money links** (`cursor/hq-money-link-fixes-bf45`, not merged): one counting rule (received means Revolut) for payments, month_check, income_status and the briefings. A route sums every link. A gap with no source is short, unexplained, never a fee. A rate is kept only when Revolut recorded it. `close_month` needs month_check ready and an https evidence link. No new tool. HQ does not write the Google Sheet and does not decide a ledger month.
 
 ## Waiting on someone
 

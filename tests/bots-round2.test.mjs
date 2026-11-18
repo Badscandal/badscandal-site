@@ -91,7 +91,8 @@ test("submit_income: the same payment under two spellings of one payer name is k
 });
 
 test("incomeReport: a payment already logged twice under two payer names counts once, and says so", () => {
-  const e = (o) => ({ id: o.id, at: o.at, by: "Ledger", date: "2026-11-05", payer: "Sample Holdings", amount: 812.30, currency: "EUR", status: "received", category: "Salary", account: "Wise", reference: "", ...o });
+  /* 18 Nov 2026: received means Revolut. The point of this fixture is that two payer names count once. */
+  const e = (o) => ({ id: o.id, at: o.at, by: "Ledger", date: "2026-11-05", payer: "Sample Holdings", amount: 812.30, currency: "EUR", status: "received", category: "Salary", account: "Revolut", reference: "", ...o });
   const entries = [e({ id: "i1", at: "2026-11-05T10:00:00Z", payer: "Sample Holdings LLC" }), e({ id: "i2", at: "2026-11-05T11:00:00Z", by: "Sheet" }),
     e({ id: "i3", at: "2026-11-06T09:00:00Z", payer: "Northwind Music Ltd", amount: 400, category: "Label deals", status: "unsorted", by: "HQ" }),
     e({ id: "i4", at: "2026-11-06T10:00:00Z", payer: "Starlit Records via Northwind", amount: 400, category: "Label deals" })];
