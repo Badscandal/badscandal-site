@@ -4,6 +4,10 @@
 **Tests:** 611, all passing on Node 24 and Node 22. **Connector:** 40 tools (no new tool in #69). Options changed, so every bot refreshes the tool list.
 No money amounts, payer names or account numbers in this file: the repo is public.
 
+## In review (not live)
+
+Phone HQ on `cursor/hq-phone-needs-you-048c`. Needs you opens first. Money shows received (Revolut) apart from payable and Wise/PayPal. The ad gauge is display only. The desk answers from the unmerged polish (PR #68) are in this branch: reconnect line, optional working_on, stale blockers, questions to Luke, unsorted payment ids, a waiting step is not blocked. Includes main through the connector bug fixes (PR #69). 627 tests on Node 24 and Node 22. Not live until Luke says deploy.
+
 ## Live (newest first)
 
 | When | PR | What |

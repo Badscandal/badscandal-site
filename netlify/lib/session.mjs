@@ -61,8 +61,10 @@ export function readCookie(header, name) {
   return "";
 }
 
-export function sessionCookie(value) {
-  return `${COOKIE}=${value}; Path=/; Max-Age=${SESSION_DAYS * 86400}; HttpOnly; Secure; SameSite=Strict`;
+export function sessionCookie(value, now = Date.now()) {
+  /* Expires as well as Max-Age (18 Nov 2026): some phone browsers treated Max-Age-only as a short session */
+  const exp = new Date(now + SESSION_DAYS * 86400000).toUTCString();
+  return `${COOKIE}=${value}; Path=/; Max-Age=${SESSION_DAYS * 86400}; Expires=${exp}; HttpOnly; Secure; SameSite=Strict`;
 }
 
 export function clearCookie() {

@@ -77,7 +77,7 @@ export const DEFAULT_ROSTER = [
     schedule: [{ time: "09:10", what: "Subscribers, change, views, best video; up to 5 fan signals" }, { time: "7 days before a release", what: "Video scheduled" }], writes: "The Growth and Fans tabs; the release timeline's video step" },
   { name: "Atlas", role: "Spotify and stores", duty: "Daily numbers for every released song", time: "09:15",
     why: "Streams per song, day by day, are the number the whole plan is steered by. Atlas also sends every Spotify playlist pitch.",
-    schedule: [{ time: "09:15", what: "One row per released song for the newest full day, plus the Spotify followers row" }, { time: "14 days before a release", what: "Send the Spotify pitch (never later than 7 days before), then record the day with pitch_log. After release, record each new editorial playlist." }], writes: "The Songs and Growth tabs; the release timeline's pitch step; editorial playlist adds" },
+    schedule: [{ time: "09:15", what: "One row per released song for the newest full day, the Spotify followers row, and the artist's monthly listeners and Brazil listeners (log_growth fields monthly_listeners and brazil_listeners, not a note)" }, { time: "14 days before a release", what: "Send the Spotify pitch (never later than 7 days before), then record the day with pitch_log. After release, record each new editorial playlist." }], writes: "The Songs and Growth tabs; the release timeline's pitch step; editorial playlist adds" },
   { name: "Drop", role: "Distribution", duty: "Where every release is at the distributor", time: "09:20",
     why: "Gets each self-release into the stores on time and keeps where each song is at the distributor (uploaded, in moderation, approved, live), telling Luke the moment a date can't be kept.",
     schedule: [{ time: "09:20", what: "Status of every unreleased song at the distributor (store_status)" }, { time: "4 weeks before a release", what: "Upload to RouteNote (3 weeks at the latest)" }], writes: "The release timeline and each song's store status" },
@@ -1103,6 +1103,17 @@ export function filterMessages(list, roster, a = {}) {
   return out;
 }
 export function isOpen(m) { return m.needs !== "none" && !m.resolved; }
+/* how long a question has waited, in short words (18 Nov 2026) */
+export function waitedFor(ms) {
+  if (!Number.isFinite(ms) || ms < 0) return "";
+  const m = Math.round(ms / 60000);
+  if (m < 1) return "just now";
+  if (m < 60) return `${m} min`;
+  const h = Math.floor(m / 60);
+  if (h < 48) return `${h} h`;
+  const d = Math.floor(h / 24);
+  return `${d} day${d === 1 ? "" : "s"}`;
+}
 /* what is waiting on one name, oldest first */
 export const waitingOn = (messages, name) => messages.filter((m) => isOpen(m) && low(m.to) === low(name)).sort((a, b) => (a.at < b.at ? -1 : 1));
 export function threads(messages) {
@@ -2107,19 +2118,25 @@ async function restitch(store, now, key) {
 /* ---------- cards (what a bot says it is working on) and last-seen ---------- */
 export async function setCard(store, now, roster, a) {
   const bot = whoIs(a.bot, roster);
-  /* working_on is optional (18 Nov 2026): left out, the last line stands, so a blocker can be cleared on its own */
-  const hasW = a.working_on !== undefined && a.working_on !== null;
-  const card = { needs: cleanText(a.needs, 400), at: new Date(now).toISOString(), ...(hasW ? { workingOn: cleanText(a.working_on, 400) } : {}) };
-  /* blockers (14 Nov 2026): the bot's own word on what stands in its way. It replaces the blocker written
-     in its roster profile; "" clears it. Left out, the last word stands. */
+  /* working_on is optional (18 Nov 2026): a bot can clear only a blocker, or update needs, without
+     rewriting what it is working on. Sending one keeps the others. Anything else already on the card stays. */
+  const setW = a.working_on !== undefined && a.working_on !== null;
+  const setN = a.needs !== undefined && a.needs !== null;
   const setB = a.blockers !== undefined && a.blockers !== null;
-  if (setB) { card.blockers = cleanText(a.blockers, 300); card.blockersAt = card.at; }
-  noSecrets(card.workingOn || "", card.needs, card.blockers || "");
+  if (!setW && !setN && !setB) fail('Say what to change: working_on, needs, or blockers. To clear only a blocker, send blockers as "" (empty).');
+  const at = new Date(now).toISOString();
+  const workingOn = setW ? cleanText(a.working_on, 400) : "";
+  const needs = setN ? cleanText(a.needs, 400) : "";
+  const blockers = setB ? cleanText(a.blockers, 300) : "";
+  noSecrets(workingOn, needs, blockers);
   const saved = await mutate(store, "cards.json", {}, (all) => {
-    const old = all[low(bot)];
-    const c = { ...(old && typeof old === "object" ? old : {}), ...card };
-    if (!hasW) c.workingOn = old && old.workingOn ? old.workingOn : "";
-    if (!setB && old && typeof old.blockers === "string") { c.blockers = old.blockers; c.blockersAt = old.blockersAt || ""; }
+    const old = all[low(bot)] && typeof all[low(bot)] === "object" ? all[low(bot)] : {};
+    const c = { ...old, at };
+    c.workingOn = setW ? workingOn : (old.workingOn || "");
+    c.needs = setN ? needs : (old.needs || "");
+    /* blockers: "" clears. Left out, the last word stands, and its clock (blockersAt) is not restarted. */
+    if (setB) { c.blockers = blockers; c.blockersAt = at; }
+    else if (typeof old.blockers === "string") { c.blockers = old.blockers; c.blockersAt = old.blockersAt || old.at || ""; }
     all[low(bot)] = c;
     return { value: c };
   });
@@ -2892,6 +2909,8 @@ export function blockIsWait(st) {
   if (/\b(reject|rejected|fail|failed|error|denied|routenote|cover)\b/i.test(note)) return false;
   if (/^Ads made with Luke/i.test(label) && /\b(luke|no solo)\b/i.test(note)) return true;
   if (/\b(luke|you)\b/i.test(note) && /\b(need|needs|waiting|none provided|not yet|no solo)\b/i.test(note)) return true;
+  /* "blocked" while the note says it is waiting for the release day (18 Nov 2026): that is a wait, not a failure */
+  if (/\b(wait|waiting|waits|until|not until|starts on|once the song)\b/i.test(note) && /\b(release day|song is out|musixmatch|spotify for artists)\b/i.test(note)) return true;
   return false;
 }
 export const releaseWarnings = (v, sightings, today) => warningsOf(v, sightings, today).map((w) => w.text);
@@ -3934,7 +3953,17 @@ export async function answerSighting(store, now, roster, a) {
 /* hq: the dashboard model from netlify/lib/hq.mjs (optional): gives each bot its duty and tasks.
    releases: releaseView()s (optional): each bot's open release steps; a late or blocked one makes the
    bot late / blocked, like a duty does (11 Nov 2026). */
-export function workers(roster, { hq, updates, messages, cards, seen, today, nowHM, releases = [], deskUpdates = [] }) {
+const BLOCKER_STALE = 48 * 3600000;
+/* a card blocker not said again for 48 hours (18 Nov 2026): still readable, marked old, not a headline */
+function blockerOf(card, rosterText, now) {
+  const fromCard = !!(card && typeof card.blockers === "string");
+  const text = fromCard ? card.blockers : (rosterText || "");
+  if (!text) return { blockers: "", blockersStale: false };
+  const at = fromCard ? Date.parse(card.blockersAt || card.at || "") : NaN;
+  const stale = fromCard && Number.isFinite(at) && now != null && now - at > BLOCKER_STALE;
+  return { blockers: text, blockersStale: stale };
+}
+export function workers(roster, { hq, updates, messages, cards, seen, today, nowHM, now = null, releases = [], deskUpdates = [] }) {
   const duties = (hq && hq.team && hq.team.duties && hq.team.duties.byOwner) || [];
   const tasks = (hq && hq.team && hq.team.tasks) || [];
   return roster.map((b) => {
@@ -3953,7 +3982,7 @@ export function workers(roster, { hq, updates, messages, cards, seen, today, now
       .sort((a, b) => (a.due < b.due ? -1 : a.due > b.due ? 1 : 0));
     let state = "idle";
     if (b.state === "paused") state = "paused";
-    else if (items.some((d) => d.status === "blocked") || relSteps.some((s) => s.status === "blocked") || (last && last.status === "blocked" && last.sp.slice(0, 10) === today)) state = "blocked";
+    else if (items.some((d) => d.status === "blocked") || relSteps.some((s) => s.status === "blocked" && !blockIsWait(s)) || (last && last.status === "blocked" && last.sp.slice(0, 10) === today)) state = "blocked";
     else if (items.some((d) => d.late) || relSteps.some((s) => s.late)) state = "late";
     else if (items.length && items.every((d) => d.status === "done")) state = "done";
     else if (todays.length && todays[0].status === "working") state = "working"; /* updates are newest first */
@@ -3961,8 +3990,9 @@ export function workers(roster, { hq, updates, messages, cards, seen, today, now
     else if (items.length) state = "todo";
     else if (b.time && nowHM && nowHM > b.time && !todays.length) state = "quiet";
     const s = seen[b.name] || null;
+    const blk = blockerOf(cards[k], b.blockers || "", now);
     return { name: b.name, role: b.role || "", why: b.why || "", duty: b.duty || "", time: b.time || "", schedule: b.schedule || [], writes: b.writes || "", access: b.access || "",
-      blockers: cards[k] && typeof cards[k].blockers === "string" ? cards[k].blockers : b.blockers || "", paused: b.state === "paused", state, duties: items, tasks: open.slice(0, 12), lateTasks: open.filter((t) => t.late).length,
+      blockers: blk.blockers, blockersStale: blk.blockersStale, paused: b.state === "paused", state, duties: items, tasks: open.slice(0, 12), lateTasks: open.filter((t) => t.late).length,
       last: last ? { at: last.sp, status: last.status, message: last.message, link: last.link } : null, updatesToday: todays.length,
       card: cardNow(cards[k], today), waiting: asks.map((m) => ({ id: m.id, from: m.from, text: m.text.slice(0, 200), needs: m.needs, at: m.sp })),
       releaseSteps: relSteps, seen: s ? s.at : null, connected: !!s };
@@ -4070,8 +4100,17 @@ export function board(desk, now, hq) {
   /* one log: when the sheet was read, its Updates tab and the connector are already merged there
      (hqModel -> team.live.feed), so a bot that still writes only the sheet is not shown as silent */
   const live = hq && hq.team && hq.team.live && hq.team.live.ready ? hq.team.live.feed : null;
-  const updates = live ? live.map((u) => ({ sp: u.at, at: u.at, bot: u.bot, status: u.status, message: u.message, link: u.link || "" })) : desk.updates;
-  const staff = workers(desk.roster, { hq, updates, messages: desk.messages, cards: desk.cards, seen: desk.seen, today, nowHM, releases: views, deskUpdates: desk.updates || [] });
+  /* a sheet time that is already "YYYY-MM-DD HH:MM" stays; an ISO instant becomes São Paulo (18 Nov 2026:
+     slicing an ISO string showed the wrong clock, and "Invalid Date" must never be a time) */
+  const asSp = (v) => {
+    const s = String(v || "");
+    if (/^invalid date$/i.test(s.trim())) return "";
+    if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}/.test(s)) return s.slice(0, 16);
+    const t = Date.parse(s);
+    return Number.isFinite(t) ? spStamp(t) : s;
+  };
+  const updates = live ? live.map((u) => ({ sp: asSp(u.at), at: /^\d{4}-\d{2}-\d{2}T/.test(String(u.at || "")) ? u.at : u.at, bot: u.bot, status: u.status, message: u.message, link: u.link || "" })) : desk.updates;
+  const staff = workers(desk.roster, { hq, updates, messages: desk.messages, cards: desk.cards, seen: desk.seen, today, nowHM, now, releases: views, deskUpdates: desk.updates || [] });
   const lastSeen = Object.entries(desk.seen).filter(([n]) => n !== "Claude").sort((a, b) => (a[1].at < b[1].at ? 1 : -1))[0] || null;
   return {
     today, now: spStamp(now), staff,

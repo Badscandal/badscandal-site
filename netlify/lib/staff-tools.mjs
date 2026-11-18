@@ -88,7 +88,7 @@ const INSTRUCTION_LINES = [
   [null, "To add a song to the releases or change one (its title, day or details), use propose_release: Luke is asked if it is correct first, and nothing changes until he says yes. Never tell Luke a song is added or changed before that."],
   ["Webmaster", "Webmaster: check song_pages first (what happened to each request, and which song the home card should show today); a cover that isn't on a public link goes up with upload_cover; the home card changes with song_page kind card, Luke confirming."],
   ["Webmaster Nova", "Webmaster: song pages are made with song_page (kind new: address, title, day, cover link; kind track: the Spotify link on release day). Luke confirms, then GitHub builds and checks the page: never Luke's Mac, never by hand."],
-  [null, "my_day's connector line says how many tools the desk has and the version of their list. If your app shows fewer tools, or that version is new to you, refresh the tool list (reconnect the connector) before you work: a tool or an option you can't see may have been added."],
+  [null, "my_day's connector line says how many tools the desk has and the version of their list. Pass tools_seen (the number your app lists) when you call my_day. If your app shows fewer tools, or the version is different, the answer says reconnect needed: refresh the tool list (reconnect the connector) before you work."],
   [null, "Nova's yes counts as Luke's, as long as Luke told Nova yes himself: Nova records it with record_luke_answer (Luke's exact words), and it reaches you as Luke's answer, via Nova. Never for money (income, payments, ad spend): only Luke answers those."],
 ];
 export const INSTRUCTIONS = INSTRUCTION_LINES.map((l) => l[1]).join("\n");
@@ -100,11 +100,33 @@ export function toolsVersion(tools) {
   for (let i = 0; i < text.length; i++) { h ^= text.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; }
   return h.toString(16).padStart(8, "0");
 }
+/* what my_day says about the tool list (18 Nov 2026). reconnect_needed is true only when the bot
+   reports a count or a version that is not the live one. The sentence always names the live count. */
+export function connectorStatus(tools, args) {
+  const version = toolsVersion(tools), n = tools.length;
+  const seenRaw = args && args.tools_seen;
+  const listVer = args && args.list_version != null ? String(args.list_version).trim() : "";
+  const toolsVer = args && args.tools_version != null ? String(args.tools_version).trim() : "";
+  const ver = listVer || toolsVer;
+  const reportedCount = !(seenRaw == null || seenRaw === "");
+  const seen = reportedCount ? Number(seenRaw) : null;
+  const countBad = reportedCount && seen !== n;
+  const verBad = ver !== "" && ver !== version;
+  const old = countBad || verBad;
+  const yours = countBad ? `you see ${Number.isFinite(seen) ? seen : "an unreadable number of"} tools` : verBad ? `your version is ${ver}` : "";
+  const status = old
+    ? `reconnect needed: your tool list is old (${yours}; the desk has ${n} tools, version ${version}). Refresh the connector, then call my_day again.`
+    : `The desk has ${n} tools, version ${version}. If your app does not list exactly ${n} tools, reconnect needed: refresh the tool list before you work.`;
+  return { tools: n, version, reconnect_needed: old, status, check: status };
+}
 
 export const TOOLS = [
   { name: "my_day", title: "My day", readOnly: true,
-    description: "START HERE, every run. Returns who you are on the team, today's duties and their deadlines (São Paulo time), your open tasks, messages waiting on you, every new message for you since your last read (messages_for_you: Luke's answers to you included), new notes for the whole team, and the rules. Read it before doing anything else.",
-    inputSchema: obj({ bot: BOT, tools_version: str("Optional. The version your app last loaded. If it is not the current one, the answer says reconnect.") }, ["bot"]) },
+    description: "START HERE, every run. Returns who you are on the team, today's duties and their deadlines (São Paulo time), your open tasks, messages waiting on you, your open questions to Luke and how long each has waited (questions_to_luke), every new message for you since your last read (messages_for_you: Luke's answers to you included), new notes for the whole team, and the rules. The first lines are the live tool count and version: pass tools_seen (how many tools your app lists) and tools_version or list_version (the version your app last loaded). If that number or version is not the desk's, the answer says reconnect needed. Read it before doing anything else.",
+    inputSchema: obj({ bot: BOT,
+      tools_seen: { type: "integer", description: "How many tools your app lists right now. If this is not the desk's count, the answer says reconnect needed." },
+      list_version: str("Optional. The version from your last my_day. If it is not the desk's version, the answer says reconnect needed."),
+      tools_version: str("Optional. The version your app last loaded. Same check as list_version: if it is not the current one, the answer says reconnect needed.") }, ["bot"]) },
   { name: "post_update", title: "Post an update", idempotent: false,
     description: "Add one line to the live log Luke sees on the dashboard. Call it when you START a duty (status working), when you FINISH it (status done, with the number you logged), when you are STUCK (status blocked, say exactly what is needed and from whom) or when something FAILED (status error). One line, plain words, no secrets. Finishing a duty here also marks it done on the dashboard.",
     inputSchema: obj({ bot: BOT,
@@ -267,9 +289,9 @@ export const TOOLS = [
     description: "For a SHORT message to Luke (Alfred). Four things, ready to say: ad spend against the monthly cap (with the rate and what was not read), income this month, the top 3 decisions waiting on Luke by deadline (the soonest first; how many more), and ONE list of everything that needs Luke to sign in (codes, logins, signed-out accounts). It hands over no messages: luke_briefing is the full one. Say it as given; \"not read\" is never 0.",
     inputSchema: obj({ bot: BOT }, ["bot"]) },
   { name: "set_my_card", title: "Say what I am working on", idempotent: true,
-    description: "Update your card on the dashboard's Team page: what you are working on beyond the daily duty, and anything you need (an access, a file, a decision). Replace the whole text each time; keep it current.",
-    inputSchema: obj({ bot: BOT, working_on: str("What you are working on now, plain words (400 characters at most)."), needs: str("Optional. What you need and from whom. Empty if nothing. Say it again each day it still stands: after 2 days without a new card it stops showing as an ask."),
-      blockers: str('Optional. Your known blockers as they are NOW (300 characters at most). "" (empty) = nothing stands in your way any more: it clears the blocker written in your profile (my_day: your_known_blockers). Leave it out to keep the last one. working_on is optional: leave it out to keep the last line.') }, ["bot"]) },
+    description: "Update your card on the dashboard's Team page. working_on is optional: leave it out to keep what you last said, so you can clear only a blocker (blockers \"\"). needs is what you need and from whom. A blocker not said again for 48 hours is shown as old and drops off the headline: send it again if it still stands.",
+    inputSchema: obj({ bot: BOT, working_on: str("Optional. What you are working on now, plain words (400 characters at most). Leave it out to keep the last one. \"\" clears it."), needs: str("Optional. What you need and from whom. Empty if nothing. Say it again each day it still stands: after 2 days without a new card it stops showing as an ask."),
+      blockers: str('Optional. Your known blockers as they are NOW (300 characters at most). "" (empty) = nothing stands in your way any more: it clears the blocker written in your profile (my_day: your_known_blockers). Leave it out to keep the last one. You can send blockers on their own, with no working_on.') }, ["bot"]) },
   { name: "releases", title: "Releases and my steps", readOnly: true,
     description: "Every release Luke has sent to the team that is coming up or came out in the last 14 days: the song, its release day, how many days to go, where it is at, its warnings, whose release it is (self-release or with a label), what is still missing from its pack, and YOUR steps for it with their due dates and state (to do, working, late, blocked, done, waiting, skipped). waiting = it can't start yet (the pitch waits until the song shows in Spotify for Artists); skipped = it does not apply (the label delivers it). Call it when my_day lists release steps for you, or when Nova asks about a release.",
     inputSchema: obj({ bot: BOT }, ["bot"]) },
@@ -434,7 +456,8 @@ const WAIT_ADS = "the release day: the ads are made WITH Luke once the song is o
 const WAIT_OTHER = { approved: "RouteNote to approve the song (Drop's step \"Approved by RouteNote\"): until then it can't show in Spotify for Artists", page: "Webmaster's song page (badscandal.com/<song>) to be live: the ads link to it", release: "the release day: then check Musixmatch every day and add the lyrics the day the song shows there" };
 const waitFor = (s) => (s.waitingFor === "release" && (s.key === "ads" || s.step === "ads") ? WAIT_ADS : s.waitingFor === "spotify" || !s.waitingFor ? WAIT_SPOTIFY : WAIT_OTHER[s.waitingFor] ? WAIT_OTHER[s.waitingFor] : `the step "${(S.RELEASE_STEPS.find((x) => x.key === s.waitingFor) || {}).label || s.waitingFor}"`);
 const SPOT_HOW = "done by your spotify_upcoming report, not by release_step";
-const stepState = (s) => (s.status === "done" ? "done" : s.status === "skipped" ? "skipped" : s.waiting ? "waiting" : s.status === "blocked" ? "blocked" : s.late ? "late" : s.status === "working" ? "working" : "to do");
+/* a block whose note says it is waiting (for the release day, for Luke) is waiting, not blocked (18 Nov 2026) */
+const stepState = (s) => (!s ? "to do" : s.status === "done" ? "done" : s.status === "skipped" ? "skipped" : (s.waiting || S.blockIsWait(s)) ? "waiting" : s.status === "blocked" ? "blocked" : s.late ? "late" : s.status === "working" ? "working" : "to do");
 const when = (d) => (d ? `${S.dayWords(d)} (${d})` : "no date yet");
 const stepOut = (s, pack) => ({ step: s.key, label: s.label, owner: s.owner, due: when(s.due), state: stepState(s), ...(s.note ? { note: s.note } : {}), ...(s.link ? { link: s.link } : {}), ...(s.status === "done" && s.by ? { done_by: s.by } : {}),
   ...(s.status === "done" && s.doneOn ? { done_on: when(s.doneOn) } : {}), ...(s.key === "live" && pack && pack.spotifyTrack ? { spotify_track: pack.spotifyTrack } : {}),
@@ -930,41 +953,54 @@ export async function callTool(tool, args, ctx) {
 
   switch (tool.name) {
     case "my_day": {
-      if (me === "Claude") return { you: "Claude", today, now: b.now, waiting_on_you: b.waiting.claude.map(short), ...forYou(b.waiting.claude.map((m) => m.id)), waiting_on_luke: b.waiting.luke.map(short),
+      const conn = connectorStatus(TOOLS, args); /* the bots share ONE connector: their app lists every tool */
+      /* ids and dates of unsorted payments (18 Nov 2026). luke_briefing keeps the short count. */
+      const incomeProblems = (inc) => (inc && inc.problems || []).map((p) => {
+        if (!/nobody has sorted/.test(p) || !(inc.unsorted || []).length) return p;
+        const listed = inc.unsorted.slice(0, 12).map((e) => `${e.id} (${e.date})`).join(", ");
+        const more = inc.unsortedCount > 12 ? ` (+${inc.unsortedCount - 12} more)` : "";
+        return `${p}: ${listed}${more}`;
+      });
+      const questions = (from) => desk.messages.filter((m) => S.isOpen(m) && m.to === "Luke" && m.from === from).map((m) => ({
+        id: m.id, needs: m.needs, waiting: S.waitedFor(now - Date.parse(m.at)), since: m.sp, text: m.text.length > 180 ? m.text.slice(0, 179) + "…" : m.text }));
+      if (me === "Claude") return { reconnect: conn.status, connector: conn, you: "Claude", today, now: b.now, waiting_on_you: b.waiting.claude.map(short), questions_to_luke: questions("Claude"), ...forYou(b.waiting.claude.map((m) => m.id)), waiting_on_luke: b.waiting.luke.map(short),
         releases: rel.filter((v) => S.releaseActive(v) || v.status === "draft").map((v) => `${v.title}: ${v.status === "draft" ? "draft" : v.released ? "released" : "coming"}, ${when(v.date)}, ${v.counts.done} of ${v.counts.total} steps done` + (v.counts.late ? `, ${v.counts.late} late` : "") + (v.counts.blocked ? `, ${v.counts.blocked} blocked` : "") + (v.missing.length ? `; missing: ${v.missing.map((m) => m.short).join(", ")}` : "")),
         unknown_in_spotify: b.sightings.items.filter((x) => x.state === "unknown").map((x) => `${x.title}, ${x.dateWords}`),
         ...(sheetNote ? { note: sheetNote } : {}) };
       const w = b.staff.find((x) => x.name === me);
       const since = now - 4 * 86400000;
       const rs = w.releaseSteps.map((s) => ({ song: s.title, step: s.key, label: s.label, due: when(s.due), state: stepState(s), ...(s.note ? { note: s.note } : {}), ...(s.link ? { link: s.link } : {}),
-        ...(s.spotifyTrack ? { spotify_track: s.spotifyTrack } : {}), ...(s.waiting ? { waiting_for: waitFor(s) } : {}), ...(s.key === "spotify" ? { how: SPOT_HOW } : {}) }));
-      /* the soonest step the bot can work on now; a waiting one is not something to do today */
-      const firstRs = w.releaseSteps.find((s) => !s.waiting);
+        ...(s.spotifyTrack ? { spotify_track: s.spotifyTrack } : {}), ...((s.waiting || S.blockIsWait(s)) ? { waiting_for: s.waiting ? waitFor(s) : (s.note || "the note on this step") } : {}), ...(s.key === "spotify" ? { how: SPOT_HOW } : {}) }));
+      /* the soonest step the bot can work on now; a waiting one (including a block that is only a wait) is not today's job */
+      const firstRs = w.releaseSteps.find((s) => !s.waiting && !S.blockIsWait(s));
       const notes = desk.messages.filter((m) => m.to === "all" && !m.resolved && Date.parse(m.at) > since).slice(0, 5);
       /* the spotify step is done by the daily report, never by release_step (11 Nov 2026, review) */
       const spotNext = firstRs && firstRs.key === "spotify";
-      const mine = TOOLS; /* the bots share ONE connector (/mcp): their app lists every tool */
-      const ver = toolsVersion(mine);
       const nextRel = rel.find((v) => v.date && v.date >= today);
       const realWhen = (line) => { const m = /(\d+)\s+days?\s+before(?: a release)?/i.exec(String(line || "")); if (!m || !nextRel) return line; const d = new Date(Date.parse(nextRel.date + "T12:00:00Z") - Number(m[1]) * 86400000).toISOString().slice(0, 10); return String(line).replace(m[0], S.dayWords(d)); };
       const revolutLive = ((desk.income && desk.income.entries) || []).some((e) => /revolut/i.test(e.account || ""));
       let igConnected = false;
       try { if (ctx.ig) { const st = await ctx.ig().get("state.json"); igConnected = !!(st && (st.lastOkAt || st.username)); } } catch {}
-      const blockers = S.freshBlocker(w.blockers, { igConnected, revolutLive });
+      const dutyTask = (task) => (me === "Atlas" && /monthly listeners in note|salvation/i.test(task || "")
+        ? "Log yesterday's Spotify numbers for every released song, plus monthly listeners and Brazil listeners in their own fields (monthly_listeners and brazil_listeners). There is no Salvation card."
+        : S.freshDuty(task));
+      const shownBlocker = S.freshBlocker(w.blockers, { igConnected, revolutLive });
       const asks = desk.messages.filter((m) => m.from === me && m.to === "Luke" && S.isOpen(m)).slice(0, 8);
       const signedOut = [];
       for (const person of b.staff) for (const bit of [person.blockers, person.card && person.card.needs]) if (bit && /sign-?in|signed out|log in/i.test(bit)) signedOut.push(S.hidePrivate(`${person.name}: ${bit}`));
-      return { you: me, role: w.role, why_you_are_needed: S.freshWhy(me, w.why), today, now_sao_paulo: b.now,
-        connector: { tools: mine.length, version: ver, check: `If your app lists fewer than ${mine.length} tools, or this version is new to you, refresh the tool list (reconnect the connector) first.`, ...(args.tools_version && String(args.tools_version) !== ver ? { reconnect_needed: "Your tool list is old. Reconnect the connector, then start again." } : {}) },
+      return { reconnect: conn.status, connector: conn, you: me, role: w.role, why_you_are_needed: S.freshWhy(me, w.why), today, now_sao_paulo: b.now,
+        ...(me === "Atlas" ? { numbers_how: "Monthly listeners and Brazil listeners go in log_growth as monthly_listeners and brazil_listeners. They are not a note, and there is no Salvation card." } : {}),
         daily_duty: S.freshDuty(w.duty), usual_time: w.time, schedule: (w.schedule || []).map((s) => typeof s === "string" ? realWhen(s) : { ...s, time: realWhen(s.time), what: realWhen(s.what) }),
-        duties_today: w.duties.filter((d) => !S.staleTask(d)).map((d) => ({ id: d.id, task: S.freshDuty(d.task), due: d.due || "today", status: d.late ? "late" : d.status, ...(d.blocker ? { blocker: S.freshBlocker(d.blocker, { igConnected, revolutLive }) } : {}) })),
-        open_tasks: w.tasks.filter((t) => !S.staleTask(t)).map((t) => ({ id: t.id, task: S.freshDuty(t.task), deadline: t.deadline, status: t.late ? "late" : t.status, ...(t.blocker ? { blocker: t.blocker } : {}), ...(t.note ? { your_note: t.note } : {}) })),
+        duties_today: w.duties.filter((d) => !S.staleTask(d)).map((d) => ({ id: d.id, task: dutyTask(d.task), due: d.due || "today", status: d.late ? "late" : d.status, ...(d.blocker ? { blocker: S.freshBlocker(d.blocker, { igConnected, revolutLive }) } : {}) })),
+        open_tasks: w.tasks.filter((t) => !S.staleTask(t)).map((t) => ({ id: t.id, task: dutyTask(t.task), deadline: /^invalid date$/i.test(String(t.deadline || "")) ? "" : t.deadline, status: t.late ? "late" : t.status, ...(t.blocker ? { blocker: t.blocker } : {}), ...(t.note ? { your_note: t.note } : {}) })),
+        questions_to_luke: questions(me),
         ...(asks.length ? { open_questions: asks.map((m) => ({ id: m.id, waiting: `${Math.max(0, Math.floor((now - Date.parse(m.at)) / 3600000))} h`, text: S.hidePrivate(m.text).slice(0, 140) })) } : {}),
         ...(signedOut.length ? { signed_out_accounts: signedOut.slice(0, 6) } : {}),
         waiting_on_you: w.waiting, notes_for_everyone: notes.map(short), ...forYou(w.waiting.map((m) => m.id).concat(notes.map((m) => m.id))),
         your_last_update: w.last ? `${w.last.at} ${w.last.status}: ${w.last.message}` : "none yet",
-        ...(blockers ? { your_known_blockers: blockers, your_known_blockers_how: 'If this no longer stands in your way, clear it: set_my_card with blockers "" (empty). If it changed, send the new words in blockers.' } : {}),
-        ...(/^(ledger|sheet|nova|alfred)$/i.test(me) ? { income_problems: b.income.problems } : {}),
+        ...(shownBlocker && !w.blockersStale ? { your_known_blockers: shownBlocker, your_known_blockers_how: 'If this no longer stands in your way, clear it: set_my_card with blockers "" (empty). working_on can be left out. If it changed, send the new words in blockers.' } : {}),
+        ...(shownBlocker && w.blockersStale ? { your_known_blockers_old: "old, still true? " + shownBlocker, your_known_blockers_how: 'This blocker is more than 48 hours old, so it is off the headline. If it still stands, send it again with set_my_card (blockers). If it does not, send blockers "".' } : {}),
+        ...(/^(ledger|sheet|nova|alfred)$/i.test(me) ? { income_problems: incomeProblems(b.income) } : {}),
         release_steps: rs, rules: RULES,
         next: (spotNext ? `Report what Spotify for Artists shows as upcoming with spotify_upcoming: the first report that lists ${firstRs.title} marks "${firstRs.label}" done (due ${when(firstRs.due)}${firstRs.late ? ", LATE" : ""}). Do not mark it with release_step.${rs.length > 1 ? ` You have ${rs.length} open release steps in all: see release_steps.` : ""} `
           : firstRs ? `You have ${rs.length} open release step${rs.length === 1 ? "" : "s"}; the soonest is "${firstRs.label}" for ${firstRs.title}, due ${when(firstRs.due)}${firstRs.late ? " (LATE)" : ""}. Read the pack with release_pack, do it, then mark it with release_step (done only when it is really done). `
