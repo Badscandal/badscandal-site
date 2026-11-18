@@ -108,6 +108,11 @@ test("every existing endpoint still answers as before", async () => {
   assert.equal((await call("/api/admin/csv")).status, 401);
   assert.equal((await call("/api/admin/exclude", { method: "POST" })).status, 401);
   assert.equal((await call("/api/admin/nothing", { headers: { cookie } })).status, 404);
+  /* 18 Nov 2026: the open page touches /api/admin/session so the cookie slides. No cookie is still 401. */
+  assert.equal((await call("/api/admin/session")).status, 401);
+  const slid = await call("/api/admin/session", { headers: { cookie } });
+  assert.equal(slid.status, 200);
+  assert.match(slid.headers.get("set-cookie") || "", /__Host-bs_admin=.*Max-Age=\d+/);
   const out = await call("/api/admin/logout", { method: "POST" });
   assert.match(out.headers.get("set-cookie"), /Max-Age=0/);
 });

@@ -56,11 +56,12 @@ artist growth bot that all we will need is content and $".
 
 ## In flight (branches not merged)
 
-- Nothing in flight. L3 fan inbox part 1 shipped on main as PR #66 (`dab08d2`).
+- `cursor/hq-phone-needs-you-048c`: phone HQ (Needs you first, release and team strips, quiet mode, money lines, ad gauge) plus the desk answers from PR #68 (tool-list reconnect line, optional working_on, stale blockers, questions to Luke, unsorted payment ids, a waiting step is not blocked). 606 tests, Node 24 and Node 22. Not live. PR #68 can close in favour of this branch. L3 part 1 is live as PR #66 (`dab08d2`).
 
 ## Waiting on someone
 
-- **Nova (after #66):** tell Steve, Kevin and Forge to refresh the tool list (still 40 tools). The instagram tool now includes the fan inbox: song-name questions, where to listen, and repeat fans. `needs_reply` true is for Luke. They never reply, like, hide or delete a comment.
+- **Nova (after this phone HQ is deployed):** tell every bot to refresh. Still 40 tools. `my_day` says "reconnect needed" when `tools_seen` is not 40. `set_my_card` can clear a blocker without `working_on`. A blocker not restated for 48 hours shows as "old, still true?". `questions_to_luke` lists each open question and how long it has waited. Ledger, Sheet, Nova and Alfred: `income_problems` names unsorted payments by id and date. Atlas: if a duty still says "monthly listeners in note" or mentions a Salvation card, change that row. Those numbers are `monthly_listeners` and `brazil_listeners` on `log_growth`.
+- **Nova (after #66):** Steve, Kevin and Forge: the instagram tool includes the fan inbox (song-name questions, where to listen, repeat fans). `needs_reply` true is for Luke. They never reply, like, hide or delete a comment.
 - **Nova (after #64):** Atlas, Laura, Steve and Kevin: `profiles` records the image that is live (the link and the day it changed) and proposes a new one. Luke says "Yes, correct", then that bot uploads it by hand and records it. HQ never logs in. X has no owner yet: Luke uploads that one himself. Instagram, TikTok and Deezer say "Rule not set".
 - **Nova (after #63, still open):** Atlas: after he sends a Spotify pitch, record the day with `pitch_log` (`pitched_on`). When he sees the song on a new editorial playlist in Spotify for Artists, record it the same day (`playlist`, `added_on`). HQ never pitches. A song the one-pitch rule skipped is not pitched.
 - **Nova (after #60, still open):** other own accounts still go on the desk with the instagram tool (`our_accounts: "add"`, a handle and a reason). The two accounts named for the fan inbox are already filtered in code and never shown. Add the Monday routine to the
