@@ -496,6 +496,8 @@
     if (ov && ov.spend && ov.spend.connected && !ov.spend.error) ov.spend.songs.forEach(function (s) { spendBy[adKey(s.title)] = s; });
     var cur = ov && ov.spend ? ov.spend.currency : "";
     var rangeTxt = !ov ? "" : ov.range === "today" ? "today" : ov.range === "custom" ? ov.days + " days" : "last " + ov.days + " days";
+    var plBy = {};
+    if (sheet && sheet.songPL) L.songPLView(sheet.songPL).songs.forEach(function (x) { plBy[adKey(x.song)] = x; });
     /* A8 (17 Nov 2026, Atlas): the artist's Spotify monthly listeners and Brazil's share, with their trend */
     var al = L.artistLines(sheet && sheet.artist);
     $("artistCard").innerHTML = al ? '<div class="tile"><div class="row"><h3>Spotify monthly listeners</h3><span class="lbl">the artist, all songs</span></div><div class="big num">' + esc(al.big) + '</div><div class="d">' + esc(al.sub) + "</div>" + spark(sheet.artist.series) + "</div>" : "";
@@ -525,6 +527,7 @@
         '<div class="kv"><span>Real Spotify taps</span><b>' + (p ? fmt(p.taps) : "–") + "</b></div>" +
         '<div class="kv"><span>Meta spend · per tap</span><b>' + (sp ? esc(money(sp.spend, cur)) + " · " + esc(money(sp.cpt, cur)) : ov && ov.spend && !ov.spend.connected ? "not connected" : "–") + "</b></div>";
       out += '<div class="kv"><span>Royalties so far</span><b>' + (s ? esc(amounts(s.royalties)) : "–") + "</b></div>" +
+        (plBy[k] ? '<div class="kv"><span>Ad spend for this song</span><b>' + esc(plBy[k].adSpend) + "</b></div>" : "") +
         (rw ? '<div class="kv"><span>' + esc(rw.label) + "</span><b>" + esc(rw.line) + "</b></div>" : "");
       return out + "</div>";
     }).join("");
@@ -763,6 +766,8 @@
   /* month by month: just the month and what was received (16 Nov 2026, Luke) */
   function drawMoney() {
     var incomeBad = broken("Income"), rows = HQLib.monthRows(sheet.money.months);
+    var box = $("songPL");
+    if (box) box.innerHTML = sheet.songPL ? L.songPLHtml(L.songPLView(sheet.songPL)) : "";
     setTable("moneyTable", rows.length ? "<tr><th>Month</th><th class='r'>Received</th></tr>" + rows.map(function (r) {
       return "<tr><td><b>" + esc(r.label) + "</b></td><td class='r'>" + (incomeBad ? "can't be read" : esc(r.amount)) + "</td></tr>";
     }).join("") : '<tr><td class="empty">' + (incomeBad ? "See the note above." : "No income rows yet.") + "</td></tr>");

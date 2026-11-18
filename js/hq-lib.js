@@ -1657,6 +1657,76 @@
     return { ym: ym, title: MONTHS[mo - 1] + " " + y, prev: prev, next: next, weeks: weeks };
   }
 
+  /* ---------- Per-song profit (L4, 18 Nov 2026) ----------
+     Money in is royalties recorded for that song (per store). Ad spend counts only when the row
+     names the song. A payment counts for a song only when it names the song. Anything else is
+     "not linked to a song". Currencies are never added. A single figure across currencies is an
+     estimate at each month's average rate, and only when every rate is there. */
+  function songPLList(o) {
+    var keys = Object.keys(o || {}).filter(function (c) { return o[c] != null && isFinite(Number(o[c])); }).sort();
+    return keys.length ? keys.map(function (c) { return money(Number(o[c]), c); }).join(" + ") : "";
+  }
+  function songPLView(pl) {
+    if (!pl || !pl.songs) return null;
+    var songs = pl.songs.map(function (s) {
+      var moneyIn = songPLList(s.in) || "nothing recorded";
+      var adSpend = s.out ? (songPLList(s.out) || "nothing recorded") : "not linked to a song";
+      var result;
+      if (!s.out) result = "No result: ad spend is not linked to a song.";
+      else if (!songPLList(s.in)) result = "Ad spend only: " + songPLList(s.out) + ". No royalties recorded for this song.";
+      else if (s.nets && Object.keys(s.nets).length === 1) result = songPLList(s.nets);
+      else if (s.estimate && !s.estimate.missing && s.estimate.eur != null) result = songPLList(s.in) + " in, " + songPLList(s.out) + " out. About " + money(s.estimate.eur, "EUR") + " (an estimate at each month's average rate).";
+      else result = songPLList(s.in) + " in, " + songPLList(s.out) + " out. No estimate: a rate is missing.";
+      var note = "";
+      if (s.inFrom === "payments") note = "From payments that name this song.";
+      if (s.landed && songPLList(s.landed)) note = "Landed payments for this song are not added (" + songPLList(s.landed) + "): they may be the same money as the royalties.";
+      return {
+        song: s.song, date: s.date || "", dateLine: s.date ? day(s.date) : "No release date recorded",
+        moneyIn: moneyIn, adSpend: adSpend, result: result,
+        stores: (s.stores || []).map(function (st) { return (st.store ? st.store : "Store not named") + " · " + songPLList(st.amounts); }),
+        ads: (s.platforms || []).map(function (p) { return (p.platform || "Ad") + " · " + songPLList(p.amounts); }),
+        note: note,
+      };
+    });
+    var u = pl.unlinked || {}, notes = [];
+    var named = songs.some(function (s) { return s.adSpend !== "not linked to a song"; });
+    if (named && songPLList(u.spend && u.spend.amounts)) notes.push("Ad spend that names a song is on that song. This is the rest. They are not added together.");
+    if (pl.notReceived) notes.push(pl.notReceived === 1 ? "1 royalty payment is not received yet, so it is not counted." : pl.notReceived + " royalty payments are not received yet, so they are not counted.");
+    if (pl.holding) notes.push(pl.holding === 1 ? "1 royalty payment is still in Wise or PayPal, so it is not counted until it reaches Revolut." : pl.holding + " royalty payments are still in Wise or PayPal, so they are not counted until they reach Revolut.");
+    return {
+      how: "Money in is the royalties recorded for that song, per store. Ad spend counts only when it names the song. A payment counts for a song only when it names the song. Anything else is not linked to a song. Currencies stay separate. A single figure across currencies is an estimate at each month's average rate.",
+      songs: songs,
+      unlinked: {
+        label: "not linked to a song",
+        royalties: songPLList(u.royalties && u.royalties.amounts),
+        royaltyStores: ((u.royalties && u.royalties.stores) || []).map(function (st) { return (st.store || "Store not named") + " · " + songPLList(st.amounts); }),
+        payments: songPLList(u.payments && u.payments.amounts),
+        spend: songPLList(u.spend && u.spend.amounts),
+        spendPlatforms: ((u.spend && u.spend.platforms) || []).map(function (p) { return (p.platform || "Ad") + " · " + songPLList(p.amounts); }),
+        note: notes.join(" "),
+      },
+    };
+  }
+  function songPLEsc(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); }
+  function songPLHtml(v) {
+    if (!v) return "";
+    var kv = function (a, b) { return '<div class="kv"><span>' + songPLEsc(a) + "</span><b>" + songPLEsc(b) + "</b></div>"; };
+    var fold = function (lines) { return lines.length ? '<details><summary>Details</summary>' + lines.map(function (line) { return '<p class="plrow">' + songPLEsc(line) + "</p>"; }).join("") + "</details>" : ""; };
+    var songs = v.songs.map(function (s) {
+      return '<article class="tile pl"><div class="pltop"><h3>' + songPLEsc(s.song) + '</h3><span class="when">' + songPLEsc(s.dateLine) + "</span></div>" +
+        kv("Money in", s.moneyIn) + kv("Ad spend", s.adSpend) +
+        '<p class="plres">' + songPLEsc(s.result) + "</p>" +
+        (s.note ? '<p class="plnote">' + songPLEsc(s.note) + "</p>" : "") + fold(s.stores.concat(s.ads)) + "</article>";
+    }).join("");
+    var u = v.unlinked, rows = "";
+    if (u.royalties) rows += kv("Royalties", u.royalties);
+    if (u.payments) rows += kv("Payments", u.payments);
+    if (u.spend) rows += kv("Ad spend", u.spend);
+    return songs + '<article class="tile pl"><div class="pltop"><h3>Not linked to a song</h3></div>' +
+      (rows || '<p class="plnote">Nothing is waiting here.</p>') +
+      (u.note ? '<p class="plnote">' + songPLEsc(u.note) + "</p>" : "") + fold((u.royaltyStores || []).concat(u.spendPlatforms || [])) + "</article>";
+  }
+
   /* ---------- "Search or Ask" (the HQ redesign, 12 Nov 2026) ----------
      One bar (⌘K, or the magnifier) that jumps anywhere. cmdIndex builds the list from what the page has
      already loaded (o.board = the staff board, o.songs = [{name, id}] as Songs draws them); cmdResults
@@ -1742,5 +1812,7 @@
     /* Team, simpler (13 Nov 2026) */
     teamGroups: teamGroups, teamCounts: teamCounts, botProblems: botProblems, botNext: botNext,
     /* planning releases (14 Nov 2026) */
-    PLAN_RULE: PLAN_RULE, PLAN_TIMELINE: PLAN_TIMELINE, suggestDates: suggestDates, planAdvice: planAdvice, calendarMonth: calendarMonth };
+    PLAN_RULE: PLAN_RULE, PLAN_TIMELINE: PLAN_TIMELINE, suggestDates: suggestDates, planAdvice: planAdvice, calendarMonth: calendarMonth,
+    /* per-song profit (L4, 18 Nov 2026) */
+    songPLView: songPLView, songPLHtml: songPLHtml };
 });

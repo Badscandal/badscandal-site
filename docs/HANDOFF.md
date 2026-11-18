@@ -1,8 +1,8 @@
 # Handoff: where HQ is and what's next (read this first)
 
-**Last updated:** 18 Nov 2026, by Cursor, after PR #66 was merged.
-**main:** every PR up to #66 is live. **Tests:** 590 pass on Node 24 and Node 22, none cancelled.
-**Connector:** 40 tools. No new tool. The `instagram` tool now returns the fan inbox, so Steve, Kevin and Forge must refresh (Nova too: she has every tool).
+**Last updated:** 18 Nov 2026, by Cursor, on the L4 branch (not merged; main is through PR #66).
+**main:** every PR up to #66 is live. **Tests on this branch:** 600 pass on Node 24 and Node 22, none cancelled.
+**Connector:** 40 tools. No new tool. L3's fan inbox is on the `instagram` tool (Steve, Kevin, Forge and Nova refresh if they have not since #66). L4 adds `per_song` on `income_status`, and an optional song on `record_spend`, `submit_income`, `fix_payment` and `sort_payment`, so Ledger, Sheet, Forge and Nova refresh once this is live.
 
 > **The rule (Luke, 17 Nov 2026):** every time anything is pushed to `main` for HQ, the same push updates THIS
 > file (and `docs/STATUS.md`). If Luke's computer crashes or a session ends mid-way, the next agent starts from
@@ -31,7 +31,7 @@ site + Luke's private dashboard /hq + the bots' connector /mcp).
 
 ## Where it stands (18 Nov 2026)
 
-**Where we left off:** L3 fan inbox, part 1, is live on main (PR #66, commit `dab08d2`). Nothing else is in flight. L12 (Profiles, PR #64) and the release-card fix (PR #65) are live.
+**Where we left off:** L3 fan inbox, part 1, is live on main (PR #66, commit `dab08d2`). L4 per-song profit is in flight on `cursor/song-pl-bfd9` and is not live. L12 (Profiles, PR #64) and the release-card fix (PR #65) are live.
 
 **HQ** (`badscandal.com/hq`, also inside the HQ apps on Luke's iPhone and Mac) has: Today, Songs, Ads, Pages
 (one tile per song page since #59), Growth & Fans (with the Instagram reader), Profiles (since #64), Upcoming (the release pipeline),
@@ -56,7 +56,7 @@ artist growth bot that all we will need is content and $".
 
 ## In flight (branches not merged)
 
-- Nothing in flight. L3 fan inbox part 1 shipped on main as PR #66 (`dab08d2`).
+- **L4 per-song profit** on `cursor/song-pl-bfd9`, PR #67 (not merged). Preview: https://deploy-preview-67--profound-haupia-db7ffa.netlify.app/hq?sample=1 . Money › Per song: royalties by store next to ad spend that names the song, and the release date. Spend or a royalty payment with no song says "not linked to a song". No new tool (still 40). `income_status` gains `per_song`. Ledger, Sheet, Forge and Nova refresh after it is live.
 
 ## Waiting on someone
 
@@ -96,7 +96,7 @@ Later, if he asks:
 2. **After a week of Instagram data:** check the ranking with Luke against what he sees in the app; tune the
    300-view floor and the 1-day window if needed.
 3. **B2 YouTube Analytics** (one Google sign-in from Luke), so Laura's numbers come in by themselves.
-4. **The rest of Later** (L1 expected money, L4 per-song P&L, L5, L9, L10): see docs/HQ-ROADMAP.md.
+4. **The rest of Later** (L1 expected money, L5, L9, L10): see docs/HQ-ROADMAP.md. L4 (per-song profit) is in flight as PR #67, not live.
 5. **H1–H4** stay on hold until Luke decides (they would touch ads, posting or fans' data).
 
 ## How to check your work

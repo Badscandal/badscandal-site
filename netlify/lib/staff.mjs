@@ -1079,8 +1079,11 @@ export async function submitIncome(store, now, roster, a) {
   if (!category) fail(`category must be one of: ${CATEGORIES.join(", ")}`);
   const account = clean(a.account, 40);
   if (!account) fail("account is empty. Write where the money landed (Wise, PayPal, Revolut, Bank) or \"Statement only\" if you only saw a statement.");
+  const song = clean(a.song, 120), storeName = clean(a.store, 80);
+  if (storeName && !song) fail("A store needs the song it belongs to. Or leave both out: the payment is not linked to a song.");
+  noSecrets(song, storeName);
   const e = { id: newId("i", now), at: new Date(now).toISOString(), by, date, payer, amount, currency, status, category, account,
-    reference: clean(a.reference, 80), period: clean(a.period, 40), source: clean(a.source, 40), note: clean(a.note, 240) };
+    reference: clean(a.reference, 80), period: clean(a.period, 40), source: clean(a.source, 40), note: clean(a.note, 240), ...(song ? { song } : {}), ...(storeName ? { store: storeName } : {}) };
   noSecrets(e.payer, e.note, e.period);
   { const what = secretIn(e.reference, { reference: true }); if (what) fail(`reference looks like ${what}. It must be the payment's own transaction id, nothing else.`, "secret"); }
 
@@ -1160,6 +1163,15 @@ const PAY_ID = /^i[0-9a-z]{8,16}$/;
    it, in its month or the three before (the rule the bank reader's own upgrade uses). */
 const pendingFits = (p, e) => OWED.includes(p.status) && p.amount === e.amount && p.currency === e.currency && p.date <= e.date && monthsBack(e.date.slice(0, 7), 4).includes(String(p.date).slice(0, 7));
 const monthsBack = (m, n) => { const out = []; for (let i = 0; i < n; i++, m = prevMonth(m)) out.push(m); return out; };
+/* one payment logged twice under two payer names counts once. Kept: a decided status before an
+   unsorted one, else the first logged. The list stays in its original order. */
+const PAY_RANK = { received: 0, payable: 1, pending: 2, "statement only": 3, transfer: 4, unsorted: 5 };
+export function uniquePayments(entries) {
+  const twice = [], kept = [];
+  const order = [...entries].sort((a, b) => (PAY_RANK[a.status] ?? 6) - (PAY_RANK[b.status] ?? 6) || ((a.at || "") < (b.at || "") ? -1 : (a.at || "") > (b.at || "") ? 1 : 0));
+  for (const e of order) { const k = kept.find((x) => samePayment(x, e)); if (k) twice.push([k, e]); else kept.push(e); }
+  return { entries: twice.length ? entries.filter((e) => kept.includes(e)) : entries, twice };
+}
 /* a.pending_id (with status received): the payment is the money of THAT statement, logged earlier as
    pending. The statement is upgraded as the bank reader's own upgrade does it (received, arrived = the
    credit's day, the credit's id kept as its reference or bankRef) and the unsorted row is taken off the
@@ -1184,7 +1196,11 @@ export async function sortIncome(store, now, roster, a) {
     srcId = hit.id;
   }
   const sortNote = a.note != null ? clean(a.note, 240) : "";
-  noSecrets(sortNote);
+  const song = a.song == null || String(a.song).trim() === "" ? "" : clean(a.song, 120);
+  const storeName = a.store == null || String(a.store).trim() === "" ? "" : clean(a.store, 80);
+  if ((song || storeName) && status !== "received") fail("A transfer is not a song's royalties. Leave the song out.");
+  if (storeName && !song) fail("A store needs the song it belongs to. Or leave both out: the payment is not linked to a song.");
+  noSecrets(sortNote, song, storeName);
   let months = [clean(a.month, 7)];
   if (!/^\d{4}-\d{2}$/.test(months[0])) months = monthsBack(spDay(now).slice(0, 7), UNSORTED_MONTHS);
   const sortable = (e) => {
@@ -1205,7 +1221,7 @@ export async function sortIncome(store, now, roster, a) {
       sortable(e);
       const at = new Date(now).toISOString();
       e.history = (e.history || []).concat({ at, by, from: e.status, to: status }).slice(-10);
-      e.status = status; if (category) e.category = category; if (srcId) e.source = srcId; if (sortNote) e.note = sortNote; e.updatedAt = at;
+      e.status = status; if (category) e.category = category; if (srcId) e.source = srcId; if (sortNote) e.note = sortNote; if (song) e.song = song; if (storeName) e.store = storeName; e.updatedAt = at;
       return { value: e };
     });
     if (hit) return hit;
@@ -1241,8 +1257,28 @@ async function mergePending(store, now, by, e, month, pid) {
 }
 /* batch 4 (15 Nov 2026): a payment already on the desk, corrected by the bot that submitted it (or Ledger,
    Sheet, Nova, Claude, Luke), within its own month, with the reason kept beside what changed */
-const FIX_FIELDS = ["date", "payer", "amount", "currency", "status", "category", "account", "reference", "note", "source", "paidBy"];
+const FIX_FIELDS = ["date", "payer", "amount", "currency", "status", "category", "account", "reference", "note", "source", "paidBy", "song", "store"];
 export const ROYALTY_CATS = ["Self-releases", "Label deals", "Publishing"];
+/* royalty payments for the per-song view (L4). Only received music money that counts (Revolut, not
+   holding, not already moved). A song is used only when the payment names one. */
+export function plPayments(entries, sources) {
+  const isHold = holdingOf(sources);
+  const mapped = (entries || []).filter(Boolean).map((e) => (e.arrived && e.arrived !== e.date ? { ...e, statement: e.date, date: e.arrived } : e));
+  const { entries: list } = uniquePayments(mapped);
+  const counted = [];
+  let notReceived = 0, holding = 0;
+  for (const e of list) {
+    if (!ROYALTY_CATS.includes(e.category)) continue;
+    if (e.status === "transfer" || e.status === "unsorted") continue;
+    if (e.paidBy && OWED.includes(e.status)) continue;
+    if (e.movedTo) continue;
+    if (isHold(e)) { holding++; continue; }
+    if (e.status !== "received") { notReceived++; continue; }
+    const month = String(e.date || "").slice(0, 7);
+    counted.push({ month: /^\d{4}-\d{2}$/.test(month) ? month : "", song: e.song || "", store: e.store || "", amount: e.amount, currency: e.currency });
+  }
+  return { counted, notReceived, holding };
+}
 export async function fixIncome(store, now, roster, a) {
   const by = whoIs(a.by, roster, { people: true });
   const id = clean(a.id, 20), month = clean(a.month, 7);
@@ -1262,6 +1298,9 @@ export async function fixIncome(store, now, roster, a) {
   if (a.account != null && String(a.account).trim()) want.account = clean(a.account, 40);
   if (a.reference != null) want.reference = clean(a.reference, 80);
   if (a.note != null) want.note = clean(a.note, 240);
+  if (a.song != null) want.song = clean(a.song, 120);
+  if (a.store != null) want.store = clean(a.store, 80);
+  if ("song" in want || "store" in want) noSecrets(want.song || "", want.store || "");
   /* source (16 Nov 2026, Ledger): tie ANY payment to its income source, HQ's Revolut rows included */
   if (a.source != null && String(a.source).trim()) {
     const k = low(clean(a.source, 60)), list = await getSources(store), hit = list.find((x) => x.kind !== "account" && (x.id === k || low(x.name) === k));
@@ -1290,6 +1329,9 @@ export async function fixIncome(store, now, roster, a) {
     if (e.by !== by && !SORTERS.includes(by)) fail(`That payment was submitted by ${e.by}: only ${e.by}, Ledger, Sheet, Nova, Claude or Luke fix it. Tell ${e.by}.`, "not_allowed");
     if (e.status === "unsorted") fail("That payment is unsorted: say what it is with sort_payment, not fix_payment.", "not_allowed");
     if (want.paidBy && !OWED.includes(e.status)) fail(`Only a statement (pending, payable or statement only) can be marked paid with paid_by; this payment is ${e.status}.`, "not_allowed");
+    const songNext = "song" in want ? want.song : (e.song || "");
+    const storeNext = "store" in want ? want.store : (e.store || "");
+    if (storeNext && !songNext) fail("A store needs the song it belongs to. Clear the store, or name the song. Nothing was changed.");
     const changed = {};
     for (const k of FIX_FIELDS) if (k in want && (e[k] ?? "") !== want[k]) changed[k] = [e[k] ?? "", want[k]];
     if (!Object.keys(changed).length) return { skip: true, value: { entry: e, fixed: [] } };
@@ -1611,11 +1653,9 @@ export function incomeReport(entries, checks, sources, today, older = []) {
   entries = entries.map((e) => (e.arrived && e.arrived !== e.date ? { ...e, statement: e.date, date: e.arrived } : e));
   /* round 2: one payment logged twice under two names of its payer (before the desk knew they were one)
      counts once. Kept: a decided status before an unsorted one, else the first logged. */
-  const twice = [];
-  { const RANK = { received: 0, payable: 1, pending: 2, "statement only": 3, transfer: 4, unsorted: 5 }, kept = [];
-    const order = [...entries].sort((a, b) => (RANK[a.status] ?? 6) - (RANK[b.status] ?? 6) || ((a.at || "") < (b.at || "") ? -1 : (a.at || "") > (b.at || "") ? 1 : 0));
-    for (const e of order) { const k = kept.find((x) => samePayment(x, e)); if (k) twice.push([k, e]); else kept.push(e); }
-    if (twice.length) entries = entries.filter((e) => kept.includes(e)); }
+  const uniq = uniquePayments(entries);
+  entries = uniq.entries;
+  const twice = uniq.twice;
   for (const e of entries) {
     if (e.date.slice(0, 7) !== month || e.status === "transfer" || e.status === "unsorted") continue;
     if (e.paidBy && OWED.includes(e.status)) continue; /* a statement settled by a received payment counts nowhere */
@@ -1727,6 +1767,12 @@ export async function incomeState(store, now) {
   const flat = (docs) => docs.flatMap((d) => (Array.isArray(d.data) ? d.data : []));
   return incomeReport(flat(inc.slice(0, 4)), flat(chk), sources, today, flat(inc.slice(4)));
 }
+/* royalty payments across the year the desk keeps, for the per-song view (L4) */
+export async function listPLPayments(store, now) {
+  const months = monthsBack(spDay(now).slice(0, 7), UNSORTED_MONTHS);
+  const [docs, sources] = await Promise.all([Promise.all(months.map((m) => readDoc(store, incKey(m), []))), getSources(store)]);
+  return plPayments(docs.flatMap((d) => (Array.isArray(d.data) ? d.data : [])), sources);
+}
 
 /* ---------- batch 4 (15 Nov 2026): ad spend and growth numbers the bots log on the desk ----------
    The site can't write the team's sheets; these rows live on the desk and HQ reads them WITH the sheet's
@@ -1753,19 +1799,20 @@ export async function recordSpend(store, now, roster, a) {
     currency = clean(a.currency, 12).toUpperCase();
     if (!/^[A-Z]{3}$/.test(currency)) fail("currency must be the three-letter code the account is billed in (USD, EUR...). Never convert.");
   } else if (notRead.length < 3) fail("Give amount or not_read: the amount with its currency, or why the number could not be read.");
-  noSecrets(account, notRead);
+  const song = clean(a.song, 120);
+  noSecrets(account, notRead, song);
   const at = new Date(now).toISOString();
   return mutate(store, spendKey(date.slice(0, 7)), [], (list) => {
-    const old = list.find((x) => x.platform === platform && low(x.account) === low(account) && x.date === date);
+    const old = list.find((x) => x.platform === platform && low(x.account) === low(account) && x.date === date && low(x.song || "") === low(song));
     if (old) {
       if (!has) return { skip: true, value: { entry: old, added: false, updated: false, duplicate: true } }; /* a number already there stays */
       if (old.amount === amount && old.currency === currency) return { skip: true, value: { entry: old, added: false, updated: false, duplicate: true } };
       if (old.amount != null) old.was = old.amount;
-      Object.assign(old, { amount, currency, notRead: "", by, at });
+      Object.assign(old, { amount, currency, notRead: "", song, by, at });
       return { value: { entry: old, added: false, updated: true, duplicate: false } };
     }
     if (list.length >= 500) fail("This month's spend list is full. Tell Claude.", "limit");
-    const e = { id: newId("s", now), platform, account, date, amount, currency, notRead: has ? "" : notRead, by, at };
+    const e = { id: newId("s", now), platform, account, date, amount, currency, notRead: has ? "" : notRead, song, by, at };
     list.push(e);
     return { value: { entry: e, added: true, updated: false, duplicate: false } };
   });
@@ -1786,8 +1833,9 @@ export async function recordMetaSpend(store, now, roster, rows, { since, until }
   const have = await Promise.all([since.slice(0, 7), until.slice(0, 7)].filter((m, i, a) => a.indexOf(m) === i).map((m) => readDoc(store, spendKey(m), [])));
   const desk = have.flatMap((d) => (Array.isArray(d.data) ? d.data : [])).filter((x) => x.platform === "Meta");
   for (let d = since; d <= until && d < spDay(now); d = addDays(d, 1)) {
-    const mine = desk.filter((x) => x.date === d);
-    if (mine.length > 1) { out.skipped++; continue; }
+    const dayRows = desk.filter((x) => x.date === d);
+    const mine = dayRows.filter((x) => !x.song); /* a row that names a song is that song's, not the account total */
+    if (mine.length > 1 || (mine.length === 0 && dayRows.length > 0)) { out.skipped++; continue; }
     const r = await recordSpend(store, now, roster, { by: "HQ", platform: "Meta", account: mine.length ? mine[0].account : "Meta", date: d, amount: (byDay[d] || 0).toFixed(2), currency });
     if (r.added) out.added++; else if (r.updated) out.updated++; else out.skipped++;
   }
