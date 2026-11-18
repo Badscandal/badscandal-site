@@ -31,12 +31,12 @@
      without losing a half-written reply or closing what Luke opened. */
   var ui = fresh();
   function fresh() {
-    return { reply: "", ask: null, drafts: {}, err: {}, busy: "", open: {}, why: {}, payAll: false, expectAll: false, allThreads: false, keyAsk: false, keyErr: "", keyBusy: false,
+    return { reply: "", ask: null, drafts: {}, err: {}, busy: "", open: {}, why: {}, whyCur: "", payAll: false, expectAll: false, allThreads: false, keyAsk: false, keyErr: "", keyBusy: false,
       /* replies that visibly land (11 Nov 2026): what Luke just answered (id -> the line in its place)
          and the line under a thread he answered on the board */
       landed: {}, tsent: {},
       /* the release pipeline: busy / error / the inline question per card, notes, open disclosures, the form */
-      rel: { busy: "", err: {}, ask: null, note: {}, open: {}, fold: {}, full: {}, loading: {}, gen: {}, tried: {} }, form: null, payOpen: {},
+      rel: { busy: "", err: {}, ask: null, note: {}, open: {}, fold: {}, full: {}, loading: {}, gen: {}, tried: {}, time: "", shut: {} }, form: null, payOpen: {},
       /* planning (14 Nov 2026): the month shown and the day picked on the calendar */
       cal: { ym: "", sel: "" }, hookDraft: {}, tapAsk: false, tapErr: "", tapBusy: false,
       /* In Spotify for Artists (v2): the question being answered, the label typed, what was answered */
@@ -86,7 +86,7 @@
     $("msgText").value = ""; counter(); $("msgErr").textContent = ""; $("msgOk").textContent = "";
     $("waitList").innerHTML = $("threadList").innerHTML = $("dutyList").innerHTML = $("incomeBody").innerHTML = '<div class="ph"></div>';
     $("answeredList").innerHTML = ""; $("answeredCard").hidden = true;
-    $("relForm").hidden = true; $("relForm").innerHTML = ""; $("relDesk").innerHTML = $("relOut").innerHTML = $("relPipe").innerHTML = $("relSpot").innerHTML = ""; $("relMsg").textContent = "";
+    $("relForm").hidden = true; $("relForm").innerHTML = ""; $("relDesk").innerHTML = $("relOut").innerHTML = $("relPipe").innerHTML = $("relSpot").innerHTML = ""; if ($("relRows")) $("relRows").innerHTML = ""; $("relMsg").textContent = "";
     draw();
   }
   function draw() {
@@ -537,9 +537,16 @@
     if (!m || (m.options || []).indexOf(choice) < 0) return;
     b.disabled = true;
     var said = String(choice).trim().length < 2 ? "Answer: " + choice : String(choice);
+    var card = b.closest && b.closest(".wallet");
+    if (card) card.classList.add("gone");
     answer(m, said, String(choice).slice(0, 240)).then(function (r) {
       b.disabled = false;
-      if (!r.ok) { var n = document.createElement("p"); n.className = "ferr"; n.setAttribute("role", "alert"); n.textContent = r.error || "That didn't send."; b.insertAdjacentElement("afterend", n); return; }
+      if (!r.ok) {
+        if (card) card.classList.remove("gone");
+        try { document.dispatchEvent(new CustomEvent("hq:decided", { detail: { ok: false, error: r.error || "That didn't send." } })); } catch (e) {}
+        var n = document.createElement("p"); n.className = "ferr"; n.setAttribute("role", "alert"); n.textContent = r.error || "That didn't send."; b.insertAdjacentElement("afterend", n); return;
+      }
+      try { document.dispatchEvent(new CustomEvent("hq:decided", { detail: { ok: true, id: m.id } })); } catch (e) {}
       reload();
     });
   });
@@ -572,13 +579,17 @@
   }
   function routeHtml(inc) {
     var routes = inc.routes || [];
-    var h = '<h4 class="lblh">Exchange and fees</h4><div class="tile routes"><p class="t-hint">What the exchange and the fees cost, from the amount that was sent and the amount that landed. No rate is guessed.</p>';
-    if (!routes.length) return h + '<p class="empty2">Not enough data. This fills in when money sent from a source is tied to what landed in Revolut.</p></div>';
-    h += '<ul class="routes">' + routes.map(function (r) {
+    var lines = routes.map(function (r) { return L.routeLines(r); });
+    var rich = lines.some(function (row) { return row.some(function (t) { return !/not enough data/i.test(String(t)); }); });
+    var body = '<div class="tile routes"><p class="t-hint">What the exchange and the fees cost, from the amount that was sent and the amount that landed. No rate is guessed.</p>';
+    if (!routes.length) body += '<p class="empty2">Not enough data. This fills in when money sent from a source is tied to what landed in Revolut.</p>';
+    else body += '<ul class="routes">' + routes.map(function (r, i) {
       return '<li class="rrow"><b class="en">' + esc(r.name) + '</b><span class="ej">' + esc(r.payouts === 1 ? "1 payout" : r.payouts + " payouts") + "</span>" +
-        L.routeLines(r).map(function (t) { return '<span class="rl">' + esc(t) + "</span>"; }).join("") + "</li>";
-    }).join("") + "</ul></div>";
-    return h;
+        lines[i].map(function (t) { return '<span class="rl">' + esc(t) + "</span>"; }).join("") + "</li>";
+    }).join("") + "</ul>";
+    body += "</div>";
+    if (rich) return '<h4 class="lblh">Exchange and fees</h4>' + body;
+    return '<details class="look-more"><summary>Exchange and fees</summary>' + body + "</details>";
   }
   function drawIncome() {
     var el = $("incomeBody");
@@ -599,19 +610,26 @@
       var l = L.accountLine(a, today);
       return '<div class="tile' + (l.attn ? " attn-t" : "") + '"><p class="an">' + esc(a.name) + '</p><p class="al">' + esc(cap(l.text)) + "</p>" + (a.needsLuke ? '<p class="al need">Needs you: ' + esc(a.needsLuke) + "</p>" : "") + "</div>";
     }).join("") + "</div>";
-    /* ONE total: received in the month (16 Nov 2026, Luke), and the months before with ‹ › */
+    /* ONE received total per currency (18 Nov 2026). Pending stays on its own line and is never added in. */
     var rms = L.receivedMonths(inc, inc.month), mi = Math.min(ui.incMonth || 0, Math.max(0, rms.length - 1)), rm = rms[mi];
-    var head = L.moneyHead(inc), showSplit = !mi;
-    h += '<div class="inmonth one"><div class="tile"><div class="rmhead"><p class="t-lbl">Received this month' + (rm && rm.label ? " · " + esc(rm.label) : "") + "</p>" +
+    var V = window.HQLook;
+    var monthKey = rm && rm.month;
+    var cards = V ? V.moneyCards({ income: inc, entries: entries, month: monthKey }, L) : { cards: [] };
+    var chip = V ? V.monthChip({ month: monthKey, closes: board.closes, unsorted: monthKey && monthKey === inc.month ? (inc.unsorted || []).length : 0, pending: cards.cards.some(function (c) { return c.pending; }), ready: inc.ready === true }) : null;
+    h += '<div class="inmonth one"><div class="tile balbox"><div class="rmhead"><p class="t-lbl">Received' + (rm && rm.label ? " · " + esc(rm.label) : "") + "</p>" +
       '<span class="rmnav"><button class="copybtn" type="button" data-inc-month="' + (mi + 1) + '"' + (mi + 1 >= rms.length ? " disabled" : "") + ' aria-label="The month before">‹</button>' +
       '<button class="copybtn" type="button" data-inc-month="' + (mi - 1) + '"' + (mi <= 0 ? " disabled" : "") + ' aria-label="The month after">›</button></span></div>' +
-      (rm && rm.lines.length ? rm.lines.map(function (l) { return '<p class="t-big">' + esc(l) + "</p>"; }).join("") : '<p class="t-big empty3">Nothing received yet</p>') +
-      (showSplit && head.payable.length ? '<p class="t-side">Payable: ' + esc(head.payable.join(" · ")) + "</p>" : "") +
-      (showSplit && head.waiting.length ? '<p class="t-side">Waiting in Wise/PayPal: ' + esc(head.waiting.join(" · ")) + "</p>" : "") +
-      (showSplit && !head.payable.length ? '<p class="t-side">Payable: nothing</p>' : "") +
-      (showSplit && !head.waiting.length ? '<p class="t-side">Waiting in Wise/PayPal: nothing</p>' : "") +
-      closedHtml(rm) +
-      '<p class="t-hint">Received is money that landed in Revolut. Payable, and money still in Wise or PayPal, are separate and never added in.</p></div></div>';
+      (chip ? '<p class="mchip ' + esc(chip.status) + '"><b>' + esc(chip.text) + "</b>" + (chip.reason ? "<small>" + esc(chip.reason) + "</small>" : "") + "</p>" : "") +
+      '<div class="balgrid">' + cards.cards.map(function (c) {
+        return '<article class="balcard"><p class="an">' + esc(c.currency) + '</p><p class="t-big">' + esc(c.landedText) + '</p><p class="t-side">On the way: ' + esc(c.pendingText) + '</p><button class="linkbtn" type="button" data-why="' + esc(c.currency) + '">Why this number</button></article>';
+      }).join("") + "</div>";
+    if (ui.whyCur && V) {
+      var why = V.whyPayments(entries, ui.whyCur, monthKey);
+      h += '<div class="whybox"><p class="t-lbl">' + esc(ui.whyCur) + " · what landed</p>" + (why.length ? "<ul>" + why.map(function (p) {
+        return "<li><b>" + esc(p.payer) + "</b> " + esc(L.money(p.amount, p.currency)) + " · " + esc(p.date) + (p.evidence ? ' <a href="' + esc(p.evidence) + '" target="_blank" rel="noopener">Evidence</a>' : "") + "</li>";
+      }).join("") + "</ul>" : "<p>No landed payment in this currency.</p>") + "</div>";
+    }
+    h += closedHtml(rm) + '<p class="t-hint">Only money that has landed in Revolut counts. On the way stays separate.</p></div></div>';
     h += toSortHtml(inc);
     if (probs.length) h += '<div class="t-card attn-card has"><p class="t-lbl">To look at</p><ul class="inprob">' + probs.map(function (p) { return "<li><span>" + esc(p) + "</span></li>"; }).join("") + "</ul></div>";
     /* the main sources, this month: neutral as every month starts, green once received, red once their day has
@@ -630,16 +648,28 @@
         return "<tr><td><b>" + esc(s.name) + "</b>" + (s.lands ? "<small>Lands in " + esc(s.lands) + (s.editedBy ? " · updated by " + esc(s.editedBy) : "") + "</small>" : "") + (s.byAccount ? "<small>" + esc(L.accountsLine(s)) + "</small>" : "") + "</td><td>" + esc(s.category || "–") + "</td><td>" + esc(L.cadenceWord(s.cadence)) + "</td><td>" + esc(cap(L.payLine(s.last))) + "</td><td>" + esc(mt.length ? mt.join(" + ") : "Nothing yet") +
           "</td><td>" + (st.attn ? '<span class="attn">' + esc(st.text) + "</span>" : esc(st.text)) + (s.needsLuke ? '<small class="need">Needs you: ' + esc(s.needsLuke) + "</small>" : "") + "</td></tr>";
       }).join("") : '<tr><td class="empty">No other sources.</td></tr>') + "</table></div></details>";
-    /* transfers and payments still to sort say so in words, their amount greyed: never in the totals */
-    var rows = entries.slice(0, ui.payAll ? 60 : 15), stat = function (e) { return L.payStatus(e).text; }, nc = function (e) { return L.payStatus(e).counted ? "" : " nc"; };
-    h += '<h4 class="lblh">Latest payments</h4><div class="tile">' + (!rows.length ? '<p class="empty2">No payments have been submitted yet.</p>'
-      : '<ul class="paylist">' + rows.map(function (e) {
-        var open = !!ui.payOpen[e.id], flow = L.payFlow(e, entries);
-        return '<li><button class="paybtn" type="button" data-pay="' + esc(e.id || "") + '" aria-expanded="' + open + '"><b>' + esc(e.payer) + '</b><span class="pa' + nc(e) + '">' + esc(L.money(e.amount, e.currency)) + '</span><span class="pm">' + esc([L.day(e.date), e.account, e.by ? "by " + e.by : ""].filter(Boolean).join(" · ")) +
-          '</span><span class="ps">' + esc(stat(e)) + "</span></button>" + (e.note ? '<span class="pn">' + esc(e.note) + "</span>" : "") +
-          (open ? '<ol class="flow">' + flow.map(function (s) { return '<li class="' + (s.missing ? "miss" : "ok") + '"><b>' + esc(s.label) + "</b><span>" + esc(s.text) + "</span></li>"; }).join("") + "</ol>" : "") + "</li>";
-      }).join("") + "</ul>") +
-      (entries.length > rows.length ? '<button class="copybtn more-row" type="button" data-pay-more>Show more (' + (Math.min(60, entries.length) - rows.length) + ")</button>" : "") + "</div>";
+    /* Wise and PayPal confirming rows sit under the Revolut payment. Statements and transfers stay behind More. */
+    var bucket = function (e) { return V ? V.paymentBucket(e) : "main"; };
+    var plain = function (e) { var t = L.payStatus(e).text; return V ? V.plainStatus(t) : t; };
+    var mainEntries = entries.filter(function (e) { return bucket(e) === "main"; });
+    var confirming = entries.filter(function (e) { return bucket(e) === "confirming"; });
+    var tucked = entries.filter(function (e) { var b = bucket(e); return b === "statement" || b === "transfer"; });
+    var rows = mainEntries.slice(0, ui.payAll ? 60 : 15), nc = function (e) { return L.payStatus(e).counted ? "" : " nc"; };
+    function payLine(e, open) {
+      var flow = L.payFlow(e, entries);
+      var dots = (e.status === "unsorted" ? '<i class="pdot wait" aria-label="Waiting for you to sort"></i>' : "") + (V && V.splitOff(e) ? '<i class="pdot bad" aria-label="The split does not add up"></i>' : "");
+      var kids = confirming.filter(function (c) { return c.movedTo === e.id; });
+      return '<li>' + dots + '<button class="paybtn" type="button" data-pay="' + esc(e.id || "") + '" aria-expanded="' + open + '"><b>' + esc(e.payer) + '</b><span class="pa' + nc(e) + '">' + esc(L.money(e.amount, e.currency)) + '</span><span class="pm">' + esc([L.day(e.date), e.account, e.by ? "by " + e.by : ""].filter(Boolean).join(" · ")) +
+        '</span><span class="ps">' + esc(plain(e)) + "</span></button>" + (e.note ? '<span class="pn">' + esc(e.note) + "</span>" : "") +
+        (open && kids.length ? '<ul class="confirming">' + kids.map(function (c) { return "<li>" + esc(c.payer) + " · " + esc(L.money(c.amount, c.currency)) + " · " + esc(plain(c)) + "</li>"; }).join("") + "</ul>" : "") +
+        (open ? '<ol class="flow">' + flow.map(function (s) { return '<li class="' + (s.missing ? "miss" : "ok") + '"><b>' + esc(V ? V.plainStatus(s.label) : s.label) + "</b><span>" + esc(V ? V.plainStatus(s.text) : s.text) + "</span></li>"; }).join("") + "</ol>" : "") + "</li>";
+    }
+    h += '<h4 class="lblh">Latest payments</h4><div class="tile">' + (!rows.length ? '<p class="empty2">No payments have landed yet.</p>'
+      : '<ul class="paylist">' + rows.map(function (e) { return payLine(e, !!ui.payOpen[e.id]); }).join("") + "</ul>") +
+      (mainEntries.length > rows.length ? '<button class="copybtn more-row" type="button" data-pay-more>Show more (' + (Math.min(60, mainEntries.length) - rows.length) + ")</button>" : "") +
+      (tucked.length ? '<details class="look-more"><summary>Statements and transfers (' + tucked.length + ")</summary><ul class=\"paylist\">" + tucked.slice(0, 20).map(function (e) {
+        return "<li><b>" + esc(e.payer) + "</b> " + esc(L.money(e.amount, e.currency)) + " · " + esc(plain(e)) + "</li>";
+      }).join("") + "</ul></details>" : "") + "</div>";
     /* a redraw (the 5-minute refresh, the answer to a sort) must not lose where Luke is: focus goes
        back to the same control, or to the line that took a sorted payment's place */
     var act = document.activeElement, keep = act && el.contains(act) ? (act.id ? "#" + act.id : act.getAttribute("data-sort") ? '[data-sort="' + act.getAttribute("data-sort") + '"][data-id="' + safe(act.getAttribute("data-id")) + '"]' + (act.getAttribute("data-cat") ? '[data-cat="' + act.getAttribute("data-cat").replace(/[^a-z -]/gi, "") + '"]' : "")
@@ -656,6 +686,7 @@
     if (b.hasAttribute("data-expect-more")) { ui.expectAll = true; drawIncome(); }
     if (b.hasAttribute("data-pay")) { var pid = b.getAttribute("data-pay"); ui.payOpen[pid] = !ui.payOpen[pid]; drawIncome(); }
     if (b.hasAttribute("data-inc-month")) { ui.incMonth = Math.max(0, Number(b.getAttribute("data-inc-month")) || 0); drawIncome(); }
+    if (b.hasAttribute("data-why")) { var cur = b.getAttribute("data-why"); ui.whyCur = ui.whyCur === cur ? "" : cur; drawIncome(); }
     if (b.hasAttribute("data-bank")) bankClick(b.getAttribute("data-bank"));
     if (b.hasAttribute("data-sort")) sortClick(b.getAttribute("data-sort"), b.getAttribute("data-id") || "", b.getAttribute("data-cat") || "");
   });
@@ -1119,7 +1150,7 @@
       '<p class="rwhen">' + esc(face.when) + "</p>" + dealHtml(v) + "</div>" + ring +
       '<span class="' + (pill.bad ? "bstate late" : "pill" + (pill.rel ? " rel" : "")) + '">' + esc(pill.text) + "</span></div>" +
       (face.prehq ? '<p class="prehq">pre-HQ</p>' : "") + dots + nxt +
-      (face.distributor ? '<p class="rdist">' + esc(face.distributor) + "</p>" : "") +
+      (face.distributor && !/ISRC|UPC/i.test(face.distributor) ? '<p class="rdist">' + esc(face.distributor) + "</p>" : "") +
       (face.mailLine ? '<p class="rdist">' + esc(face.mailLine) + "</p>" : "") + stats +
       (ui.rel.note[v.id] ? '<p class="rdone" role="status">' + esc(ui.rel.note[v.id]) + "</p>" : "") +
       (!face.prehq && (st.bad || st.caution) ? '<p class="rstat' + (st.bad ? " bad" : " caution") + '">' + esc(st.text) + (st.more ? ' <span class="rmore">+' + st.more + " more</span>" : "") + "</p>" : "") +
@@ -1236,6 +1267,32 @@
       Object.keys(groups).map(function (g) { return '<div class="rpsec"><p class="t-lbl">' + esc(GROUPS[g] || g) + '</p><dl class="rpfields">' + groups[g].map(function (f) { return "<dt>" + esc(f.label) + "</dt><dd>" + show(f) + "</dd>"; }).join("") + "</dl></div>"; }).join("") +
       "</article>";
   }
+  function drawRelRows(list) {
+    var box = $("relRows");
+    if (!box || !window.HQLook) return;
+    var rows = HQLook.releaseRows(list, board.today);
+    rows.forEach(function (r) {
+      var rel = relById[r.id];
+      var tl = rel ? HQLook.releaseTimeline(rel) : [];
+      if (!ui.rel.time && !ui.rel.shut[r.id] && tl.some(function (s) { return s.autoOpen; })) ui.rel.time = r.id;
+    });
+    box.innerHTML = rows.map(function (r) {
+      var open = ui.rel.time === r.id;
+      var rel = relById[r.id];
+      var tl = open && rel ? HQLook.releaseTimeline(rel) : [];
+      var blockers = [];
+      if (open && rel) {
+        try {
+          var view = L.releaseView(rel, board.today);
+          blockers = (view.missing || []).map(function (m) { return m && (m.label || m.text || m); });
+        } catch (e) { blockers = []; }
+      }
+      var ready = open ? HQLook.readinessBox(blockers) : null;
+      return '<article class="relrow"><button type="button" class="relrow-h" data-rel="time" data-id="' + esc(r.id) + '"><i class="sdot ' + esc(r.store.tone) + '" aria-label="' + esc(r.store.label) + '"></i><b>' + esc(r.title) + '</b><span>' + esc(r.when) + '</span><span class="rdots">' + r.dots.map(function (d) { return '<i class="' + (d.on ? "on" : "") + '" title="' + esc(d.label) + '"></i>'; }).join("") + '</span></button>' +
+        (open ? '<ol class="tl-v">' + tl.map(function (s) { return '<li class="' + (s.bad ? "bad" : s.done ? "ok" : "") + '"><b>' + esc(s.label) + "</b><span>" + esc(s.note || s.at || "") + "</span></li>"; }).join("") + "</ol>" +
+          (ready ? '<div class="readybox"><p>' + esc(ready.line) + "</p>" + (ready.items.length ? "<ul>" + ready.items.map(function (i) { return "<li>" + esc(i) + "</li>"; }).join("") + "</ul>" : "") + "</div>" : "") : "") + "</article>";
+    }).join("");
+  }
   function drawReleases() {
     if (!board || !Array.isArray(board.releases)) return false;
     var sheet = HQ.sheet(), lists = L.releaseLists(board, sheet);
@@ -1248,6 +1305,7 @@
     var act = document.activeElement, fk = act && act.getAttribute ? act.getAttribute("data-reldate") : null;
     $("relPipe").innerHTML = lists.pipeline.length ? lists.pipeline.map(pipeCard).join("") : '<p class="empty2">Nothing is being prepared right now. Start one with New song.</p>';
     $("relDesk").innerHTML = lists.coming.map(relCard).join("");
+    drawRelRows(lists.coming);
     if (sheet && HQ.releasesBroken()) $("relList").innerHTML = '<p class="empty">See the note above.</p>';
     else $("relList").innerHTML = lists.sheetOnly.map(HQ.sheetReleaseCard).join("") ||
       (lists.coming.length ? "" : '<p class="empty2">Nothing has been sent to the team yet. A song moves here from “In the pipeline” when you send it.</p>');
@@ -1389,6 +1447,13 @@
     var b = ev.target.closest && ev.target.closest("[data-rel]");
     if (!b || !board) return;
     var act = b.getAttribute("data-rel"), id = b.getAttribute("data-id") || "", v = relById[id];
+    if (act === "time") {
+      ui.rel.time = ui.rel.time === id ? "" : id;
+      if (!ui.rel.time) ui.rel.shut[id] = true;
+      else delete ui.rel.shut[id];
+      drawReleases();
+      return;
+    }
     var focusSel = function (sel) { var el = $("releases").querySelector(sel); if (el) el.focus(); };
     var sid = id.replace(/[^a-z0-9]/gi, "");
     if (act === "page") { ui.rel.page = id; drawReleases(); var pgEl = $("relPage"); if (pgEl) pgEl.scrollIntoView({ block: "start" }); return; }

@@ -54,14 +54,14 @@ No money amounts, payer names or account numbers in this file: the repo is publi
 
 ## In flight
 
-- Account health, branch `cursor/hq-account-health-aad1`. Not merged. No new tool. One health dot per official account on the phone. Red goes into Needs you. The daily check messages the owning bot only when it changes. HQ does not call Meta or Instagram for this, and does not invent a number.
+- HQ phone look, branch `cursor/hq-ui-overhaul-v2-a06f`. In review. Not merged and not live. One received total per currency. The phone home keeps the Needs you header, one-tap cards, quiet hours, Waiting on others, and the account-health dots. Still 40 tools.
 
 ## Next up
 
-- The phone HQ (#70), the connector bug fixes (#69), L1/L9 (#71), L5 watchers (#73), the round-2 fixes (#75) and the money-counting rule (#76) are on main. In flight, not live: account health. L3 part 2 is not built: a fan's country, and a ready reply he approves. HQ would still never send it. A later Profiles slice (reading an image from a platform) still needs his go, and HQ would still not log in.
+- The phone HQ (#70), the connector bug fixes (#69), L1/L9 (#71), L5 watchers (#73), the round-2 fixes (#75), the money-counting rule (#76), account health (#77) and automation phase 1 (#79) are on main. In review, not live: the phone look. L3 part 2 is not built: a fan's country, and a ready reply he approves. HQ would still never send it. A later Profiles slice (reading an image from a platform) still needs his go, and HQ would still not log in.
 - Still for Luke, not in #69: the public stream line ("as of September 2026"), where "Plugin store" sits on the home page, and checking pack genre and language against RouteNote's list.
 - Still needs Luke: B2 YouTube sign-in, the on-hold decisions H1–H4, and L11 (who "Luka" is). B1 and B5 are not needed; B4 Instagram is connected.
-- L10 still waits (it needs YouTube write access). Account health is the in-flight branch. L4 is live. Start any of it on his word.
+- L10 still waits (it needs YouTube write access). The phone look is the in-review branch. L4 is live. Start any of it on his word.
 
 ## Known gaps / watch
 
