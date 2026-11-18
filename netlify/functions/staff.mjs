@@ -40,6 +40,7 @@
    Keys travel ONLY in the Authorization header, are compared in constant time and are never logged.
    Luke can switch the bots' key off from /hq at once (config.botsOn) without touching Netlify.
    Deploy previews use their own throwaway store. Nothing here can touch ads, posts or the sheets. */
+import { loadReport, sampleReport } from "../lib/account-health.mjs";
 import { getDeployStore, getStore } from "@netlify/blobs";
 import { keyOk } from "../lib/feed.mjs";
 import { dispatchSongJob, readSongReport } from "../lib/github.mjs";
@@ -195,7 +196,7 @@ async function api(req, context, path) {
   }
   if (path === "fields" && req.method === "GET") return json(200, { today: S.spDay(now), packFields: S.packFieldsOut(), releaseSteps: S.releaseStepsOut() });
   if (path === "board" && req.method === "GET") {
-    if (sample) return json(200, { sample: true, ...sampleBoard(now), auto: C.sampleAuto(now) });
+    if (sample) return json(200, { sample: true, ...sampleBoard(now), auto: C.sampleAuto(now), accountHealth: sampleReport(now) });
     const st = stores(context);
     await S.upgradeReleases(st.desk, now).catch(() => null); /* releases sent before the pipeline changed (15 Nov 2026) */
     const [desk, hqAns] = await Promise.all([S.loadDesk(st.desk, now), hqLoader(st)().catch(() => null)]);
@@ -205,7 +206,9 @@ async function api(req, context, path) {
     /* L6: what happened to each song-page request (the Pages tab's tiles) */
     const pageBuilds = await S.songPages(st.desk, now).catch(() => []);
     const auto = await C.boardAuto(st.desk, now, desk).catch(() => null);
-    return json(200, { ...S.board(desk, now, hqAns && hqAns.team ? hqAns : null), pageBuilds, hqRead: !!(hqAns && hqAns.team), ...(auto ? { auto } : {}), keys: { bots: !!Netlify.env.get("STAFF_BOT_KEY"), claude: !!Netlify.env.get("STAFF_CLAUDE_KEY") } });
+    /* account health reads the desk and the stored Instagram copy. A failure here must not blank the board. */
+    const accountHealth = await loadReport({ store: st.desk, ig: igStore(context), now, claims: desk.claims, builds: pageBuilds }).catch(() => null);
+    return json(200, { ...S.board(desk, now, hqAns && hqAns.team ? hqAns : null), pageBuilds, hqRead: !!(hqAns && hqAns.team), accountHealth, ...(auto ? { auto } : {}), keys: { bots: !!Netlify.env.get("STAFF_BOT_KEY"), claude: !!Netlify.env.get("STAFF_CLAUDE_KEY") } });
   }
   if (path === "trace" && req.method === "GET") return sample ? json(200, { sample: true, trace: [] }) : json(200, { trace: await S.getTrace(stores(context).desk) });
   if (path === "release" && req.method === "GET") {

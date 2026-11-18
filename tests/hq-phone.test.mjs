@@ -139,3 +139,25 @@ test("Monday's pick uses the ranking, and Yes is the decision's own option", () 
   assert.equal(bare.yes, "");
   assert.equal(bare.pick.cost, "not reported");
 });
+
+test("a red account is in Needs you, and a watch or a green is only a dot", () => {
+  const home = L.accountHealthHome({
+    accounts: [
+      { id: "tiktok", label: "TikTok", state: "red", known: true, headline: "The last 3 posts are each under 30%.", next: "Pause hashtags, check Account Status, post normally, no deleting." },
+      { id: "youtube", label: "YouTube", state: "watch", known: true, headline: "One recent post is under 30%." },
+      { id: "instagram", label: "Instagram", state: "green", known: true, headline: "Recent posts are in line." },
+      { id: "spotify", label: "Spotify", state: "watch", known: false, headline: "Not enough data." },
+    ],
+    connection: { state: "watch", text: "Meta asked HQ to slow down. This is the connection, not the account." },
+  });
+  assert.deepEqual(home.needs.map((n) => n.id), ["tiktok"]);
+  assert.match(home.needs[0].next, /Pause hashtags, check Account Status, post normally, no deleting/);
+  assert.equal(home.dots.find((d) => d.id === "youtube").state, "watch");
+  assert.equal(home.dots.find((d) => d.id === "instagram").state, "green");
+  assert.equal(home.dots.find((d) => d.id === "spotify").state, "gap", "only missing numbers is not a warning dot");
+  assert.equal(home.connection.state, "watch");
+  const down = L.accountHealthHome({ accounts: [], connection: { state: "down", text: "Meta told HQ to stop, so HQ has stopped reading Instagram." } });
+  assert.equal(down.needs[0].title, "HQ connection");
+  assert.match(down.needs[0].line, /connection|stopped/i);
+  assert.equal(L.accountHealthHome(null).needs.length, 0);
+});

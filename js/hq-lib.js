@@ -2034,6 +2034,26 @@
       return { claim: c.claim || "not reported", claimant: c.claimant ? c.claimant : "not reported", impact: c.impact ? c.impact : "not reported", date: c.date ? day(c.date) : "not reported" };
     }) };
   }
+  /* Phone home: one dot per official account. Red is the only state that needs Luke.
+     A watch that is only missing numbers shows as a gap, so "not enough data" is not a warning. */
+  function accountHealthHome(report) {
+    report = report || {};
+    var accounts = report.accounts || [];
+    var dots = accounts.map(function (a) {
+      var state = a.state === "watch" && a.known === false ? "gap" : (a.state || "gap");
+      return { id: a.id || "", label: a.label || "", state: state, owner: a.owner || "" };
+    });
+    var needs = accounts.filter(function (a) { return a && a.state === "red"; }).map(function (a) {
+      return { id: a.id || "", title: (a.label || "Account") + " needs a look", line: a.headline || "", next: a.next || "", href: "#growth" };
+    });
+    var c = report.connection, connection = null;
+    if (c && c.state && c.state !== "ok" && c.state !== "gap") {
+      connection = { state: c.state, title: "HQ connection", line: c.text || "" };
+      if (c.state === "down") needs.push({ id: "connection", title: "HQ connection", line: c.text || "", next: "Check Account Status and record what that page says. This is the connection, not the account.", href: "#growth" });
+    }
+    return { dots: dots, needs: needs, connection: connection };
+  }
+
   /* Phone Needs you: the mailbox sign-in, and a RouteNote rejection that needs Luke. */
   function phoneWatchers(board) {
     board = board || {};
@@ -2161,5 +2181,7 @@
     releaseFace: releaseFace, teamDots: teamDots, weekAhead: weekAhead, quietFeed: quietFeed, followerStrip: followerStrip,
     mondayPick: mondayPick, lyricsPreview: lyricsPreview,
     /* L5 watchers (18 Nov 2026) */
-    routeMailLine: routeMailLine, contentClaimRows: contentClaimRows, phoneWatchers: phoneWatchers };
+    routeMailLine: routeMailLine, contentClaimRows: contentClaimRows, phoneWatchers: phoneWatchers,
+    /* account health (18 Nov 2026) */
+    accountHealthHome: accountHealthHome };
 });
