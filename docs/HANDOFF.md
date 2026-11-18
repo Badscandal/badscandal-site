@@ -1,8 +1,8 @@
 # Handoff: where HQ is and what's next (read this first)
 
-**Last updated:** 18 Nov 2026, by Cursor, on the L4 branch (not merged; main is through PR #66).
-**main:** every PR up to #66 is live. **Tests on this branch:** 600 pass on Node 24 and Node 22, none cancelled.
-**Connector:** 40 tools. No new tool. L3's fan inbox is on the `instagram` tool (Steve, Kevin, Forge and Nova refresh if they have not since #66). L4 adds `per_song` on `income_status`, and an optional song on `record_spend`, `submit_income`, `fix_payment` and `sort_payment`, so Ledger, Sheet, Forge and Nova refresh once this is live.
+**Last updated:** 18 Nov 2026, by Cursor, after PR #67 was merged.
+**main:** every PR up to #67 is live. **Tests:** 600 pass on Node 24 and Node 22, none cancelled.
+**Connector:** 40 tools. No new tool in #67. `income_status` now includes `per_song`. `record_spend`, `submit_income`, `fix_payment` and `sort_payment` can name a song, so Ledger, Sheet, Forge and Nova refresh the tool list.
 
 > **The rule (Luke, 17 Nov 2026):** every time anything is pushed to `main` for HQ, the same push updates THIS
 > file (and `docs/STATUS.md`). If Luke's computer crashes or a session ends mid-way, the next agent starts from
@@ -31,7 +31,7 @@ site + Luke's private dashboard /hq + the bots' connector /mcp).
 
 ## Where it stands (18 Nov 2026)
 
-**Where we left off:** L3 fan inbox, part 1, is live on main (PR #66, commit `dab08d2`). L4 per-song profit is in flight on `cursor/song-pl-bfd9` and is not live. L12 (Profiles, PR #64) and the release-card fix (PR #65) are live.
+**Where we left off:** L4 per-song profit is live on main (PR #67, commit `52a8c42`). Nothing else is in flight. L3 fan inbox part 1 (PR #66), L12 (Profiles, PR #64) and the release-card fix (PR #65) are live.
 
 **HQ** (`badscandal.com/hq`, also inside the HQ apps on Luke's iPhone and Mac) has: Today, Songs, Ads, Pages
 (one tile per song page since #59), Growth & Fans (with the Instagram reader), Profiles (since #64), Upcoming (the release pipeline),
@@ -39,7 +39,9 @@ Money (Revolut is the main account), Team, Messages. The bots (Nova, Alfred, Led
 Atlas, Drop, Verse, Webmaster, Forge) work through the connector `/mcp`.
 
 **Done (17–18 Nov):** the bots' roadmap Batch A (A1–A8) and B3; B4 Instagram; L6 song page tiles; L2 ("What engages
-best"); L8, the asset checker; L7, the pitch tracker (PR #63); L12, Profiles (PR #64); the release-card fix (PR #65); L3 fan inbox part 1 (PR #66). B1 and B5 were dropped by Luke.
+best"); L8, the asset checker; L7, the pitch tracker (PR #63); L12, Profiles (PR #64); the release-card fix (PR #65); L3 fan inbox part 1 (PR #66); L4 per-song profit (PR #67). B1 and B5 were dropped by Luke.
+
+**L4, live:** Money › Per song, and one "Ad spend for this song" line on each Songs card. Royalties by store are money in. Ad spend and a royalty payment count for a song only when that row names the song. Anything else says "not linked to a song" and is not added in. One currency: money in minus that spend. Across currencies: an estimate at each month's average rate, and only when every rate is there. HQ only reads and records. `/hq` answered 200 and `/mcp` answered 401 right after the merge.
 
 **L3 part 1, live:** Growth & Fans shows comments asking the song's name or where to listen, and people who comment on more than one post. "Needs your reply" is for Luke. HQ never replies, likes, hides or deletes a comment, and it makes no extra Instagram call. The two accounts Luke named are never shown. Part 2 (a fan's country, and a ready reply he approves) is not built.
 
@@ -56,11 +58,12 @@ artist growth bot that all we will need is content and $".
 
 ## In flight (branches not merged)
 
-- **L4 per-song profit** on `cursor/song-pl-bfd9`, PR #67 (not merged). Preview: https://deploy-preview-67--profound-haupia-db7ffa.netlify.app/hq?sample=1 . Money › Per song: royalties by store next to ad spend that names the song, and the release date. Spend or a royalty payment with no song says "not linked to a song". No new tool (still 40). `income_status` gains `per_song`. Ledger, Sheet, Forge and Nova refresh after it is live.
+- Nothing in flight. L4 shipped on main as PR #67 (`52a8c42`).
 
 ## Waiting on someone
 
-- **Nova (after #66):** tell Steve, Kevin and Forge to refresh the tool list (still 40 tools). The instagram tool now includes the fan inbox: song-name questions, where to listen, and repeat fans. `needs_reply` true is for Luke. They never reply, like, hide or delete a comment.
+- **Nova (after #67):** tell Ledger, Sheet, Forge and Nova to refresh the tool list (still 40 tools). `income_status` now includes `per_song`. Ledger and Sheet: name the song, and the store when they know it, on a royalty payment only when that payment is for that one song. If it covers more than one, leave the song out. Never guess. Forge: name the song on `record_spend` only when that amount is for one song. Leave it out for an account total. Never guess a song from a campaign name, and never record the same money both ways.
+- **Nova (after #66):** tell Steve, Kevin and Forge to refresh the tool list (still 40 tools) if they have not since #66. The instagram tool now includes the fan inbox: song-name questions, where to listen, and repeat fans. `needs_reply` true is for Luke. They never reply, like, hide or delete a comment.
 - **Nova (after #64):** Atlas, Laura, Steve and Kevin: `profiles` records the image that is live (the link and the day it changed) and proposes a new one. Luke says "Yes, correct", then that bot uploads it by hand and records it. HQ never logs in. X has no owner yet: Luke uploads that one himself. Instagram, TikTok and Deezer say "Rule not set".
 - **Nova (after #63, still open):** Atlas: after he sends a Spotify pitch, record the day with `pitch_log` (`pitched_on`). When he sees the song on a new editorial playlist in Spotify for Artists, record it the same day (`playlist`, `added_on`). HQ never pitches. A song the one-pitch rule skipped is not pitched.
 - **Nova (after #60, still open):** other own accounts still go on the desk with the instagram tool (`our_accounts: "add"`, a handle and a reason). The two accounts named for the fan inbox are already filtered in code and never shown. Add the Monday routine to the
@@ -84,6 +87,7 @@ artist growth bot that all we will need is content and $".
 - **L7:** Atlas's first `pitch_log` (a pitch day, then an editorial playlist after a song is out). HQ only records what he saw.
 - **L12:** the first `profiles` record (what is live now) and the first new image Luke says yes to. HQ only stores the link. The bot uploads it.
 - **L3 part 1:** the fan inbox fills from comments already read (every 3 hours, on posts from the last 8 days). If it stays empty after a day of real comments, the phrases in `askKind` need a line fans actually write.
+- **L4:** the first royalty payment Ledger names to one song, and the first day's spend Forge names to one song. Until then, Money says "not linked to a song" for those amounts. A campaign name is never used.
 
 ## What's next (start any of these only on Luke's word)
 
@@ -96,7 +100,7 @@ Later, if he asks:
 2. **After a week of Instagram data:** check the ranking with Luke against what he sees in the app; tune the
    300-view floor and the 1-day window if needed.
 3. **B2 YouTube Analytics** (one Google sign-in from Luke), so Laura's numbers come in by themselves.
-4. **The rest of Later** (L1 expected money, L5, L9, L10): see docs/HQ-ROADMAP.md. L4 (per-song profit) is in flight as PR #67, not live.
+4. **The rest of Later** (L1 expected money, L5, L9, L10): see docs/HQ-ROADMAP.md. L4 is live.
 5. **H1–H4** stay on hold until Luke decides (they would touch ads, posting or fans' data).
 
 ## How to check your work
