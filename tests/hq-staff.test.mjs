@@ -782,7 +782,7 @@ test("Revolut in the sample: made-up rows to sort and a transfer, none of them i
   assert.deepEqual(inc.unsorted.map((e) => [e.payer, e.account, e.status]), [["A. Example", "Revolut", "unsorted"], ["Made-up Studio Ltd", "Revolut", "unsorted"]]);
   assert.equal(L.toSortWords(inc), "2 payments in Revolut to sort");
   assert.ok(inc.entries.some((e) => e.account === "Revolut" && L.payStatus(e).text === "Your own transfer"));
-  assert.deepEqual(inc.received, { USD: 420.5 }, "neither the payments to sort nor the transfer count; the PayPal payment counts only once it reaches Revolut (17 Nov 2026)");
+  assert.deepEqual(inc.received, { USD: 520.5 }, "neither the payments to sort nor the transfer count; the PayPal payment counts only once it reaches Revolut (17 Nov 2026). The sample's made-up route lands USD 100 (18 Nov 2026)");
   const { sampleBankStatus } = await import("../netlify/lib/staff-sample.mjs");
   const st = sampleBankStatus(NOW);
   assert.equal(L.bankLine(st, NOW), "Revolut: read today at 06:50 · 2 payments in · approval ends in 86 days");

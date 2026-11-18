@@ -30,7 +30,7 @@
      without losing a half-written reply or closing what Luke opened. */
   var ui = fresh();
   function fresh() {
-    return { reply: "", ask: null, drafts: {}, err: {}, busy: "", open: {}, why: {}, payAll: false, allThreads: false, keyAsk: false, keyErr: "", keyBusy: false,
+    return { reply: "", ask: null, drafts: {}, err: {}, busy: "", open: {}, why: {}, payAll: false, expectAll: false, allThreads: false, keyAsk: false, keyErr: "", keyBusy: false,
       /* replies that visibly land (11 Nov 2026): what Luke just answered (id -> the line in its place)
          and the line under a thread he answered on the board */
       landed: {}, tsent: {},
@@ -479,6 +479,36 @@
     var list = L.curList(o);
     return list.length ? list.map(function (x) { return '<p class="amt num">' + esc(x) + "</p>"; }).join("") : '<p class="amt none">' + esc(none) + "</p>";
   }
+  /* Expected money (L1) and the cost of each payout route (L9). Read-only: nothing here moves money. */
+  function expectedHtml(inc) {
+    var ex = inc.expected || { rows: [], missing: [], learned: [], summary: { text: "nothing to flag" } };
+    var rows = ex.rows || [], show = ui.expectAll ? rows : rows.slice(0, 6);
+    var learned = (ex.learned || []).map(L.learnedLine).filter(Boolean);
+    var h = '<h4 class="lblh">Expected</h4><div class="tile expect"><p class="t-hint">Each statement, and the day its money is due. A statement is not income until it lands in Revolut.</p>';
+    if (learned.length) h += learned.map(function (t) { return '<p class="el">' + esc(t) + "</p>"; }).join("");
+    if ((ex.missing || []).length) h += '<ul class="expect">' + ex.missing.map(function (m) {
+      return '<li class="erow"><b class="en">' + esc(m.source) + '</b><span class="ef">Missing</span><span class="ej">' + esc(L.missingLine(m)) + "</span></li>";
+    }).join("") + "</ul>";
+    if (!rows.length && !(ex.missing || []).length) h += '<p class="empty2">No statements yet. When Ledger files one, it shows here with the day the money is due.</p>';
+    else if (rows.length) h += '<ul class="expect">' + show.map(function (r) {
+      var kind = L.expectedFlagKind(r);
+      return '<li class="erow"><span class="et"><b class="en">' + esc(r.source || r.payer) + '</b><span class="ea nc">' + esc(L.money(r.amount, r.currency)) + "</span></span>" +
+        '<span class="ej">' + esc(L.expectedDue(r)) + '</span><span class="ef' + (kind === "bad" ? "" : " wait") + '">' + esc(L.expectedFlags(r)) + "</span>" +
+        '<span class="ej">' + esc(L.expectedJourney(r)) + "</span></li>";
+    }).join("") + "</ul>";
+    if (rows.length > show.length) h += '<button class="copybtn more-row" type="button" data-expect-more>Show more (' + (rows.length - show.length) + ")</button>";
+    return h + "</div>";
+  }
+  function routeHtml(inc) {
+    var routes = inc.routes || [];
+    var h = '<h4 class="lblh">Exchange and fees</h4><div class="tile routes"><p class="t-hint">What the exchange and the fees cost, from the amount that was sent and the amount that landed. No rate is guessed.</p>';
+    if (!routes.length) return h + '<p class="empty2">Not enough data. This fills in when money sent from a source is tied to what landed in Revolut.</p></div>';
+    h += '<ul class="routes">' + routes.map(function (r) {
+      return '<li class="rrow"><b class="en">' + esc(r.name) + '</b><span class="ej">' + esc(r.payouts === 1 ? "1 payout" : r.payouts + " payouts") + "</span>" +
+        L.routeLines(r).map(function (t) { return '<span class="rl">' + esc(t) + "</span>"; }).join("") + "</li>";
+    }).join("") + "</ul></div>";
+    return h;
+  }
   function drawIncome() {
     var el = $("incomeBody");
     if (!board) {
@@ -515,6 +545,8 @@
       var st = s.thisMonth ? s.thisMonth.state : "waiting";
       return '<div class="tile srcm ' + (st === "received" ? "got" : st === "late" ? "late" : "") + '"><p class="an">' + esc(s.name) + '</p><p class="al">' + esc(L.sourceMonthLine(s)) + "</p>" + (s.category ? '<p class="t-hint">' + esc(s.category) + "</p>" : "") + "</div>";
     }).join("") + "</div>" : '<p class="secsub">Ledger marks the main income sources here (each with the day it usually pays by).</p>');
+    h += expectedHtml(inc);
+    h += routeHtml(inc);
     sources = others;
     h += '<details class="tile srcother"><summary>Other sources (' + others.length + ')</summary><div class="scroll"><table class="stack" id="srcTable">' +
       (sources.length ? "<tr><th>Source</th><th>Type</th><th>Usually paid</th><th>Last payment</th><th>This month</th><th>State</th></tr>" + sources.map(function (s) {
@@ -546,6 +578,7 @@
     if (!b) return;
     if (b.hasAttribute("data-retry")) reload();
     if (b.hasAttribute("data-pay-more")) { ui.payAll = true; drawIncome(); }
+    if (b.hasAttribute("data-expect-more")) { ui.expectAll = true; drawIncome(); }
     if (b.hasAttribute("data-inc-month")) { ui.incMonth = Math.max(0, Number(b.getAttribute("data-inc-month")) || 0); drawIncome(); }
     if (b.hasAttribute("data-bank")) bankClick(b.getAttribute("data-bank"));
     if (b.hasAttribute("data-sort")) sortClick(b.getAttribute("data-sort"), b.getAttribute("data-id") || "", b.getAttribute("data-cat") || "");

@@ -68,6 +68,8 @@ const INSTRUCTION_LINES = [
   ["Ledger Sheet", "Ledger: a wage Luke moves in himself every month from another bank of his shows as his own transfer: sort it as received, category Salary, with its source (Luke tells you which source it is)."],
   ["Ledger Sheet", "Ledger: Luke's main income sources are highlighted on Money every month: mark each with income_source main true and due_day (the day of the month it usually pays by); add one the desk doesn't have with create true. Only received money counts: a main source turns green when its money is received, red once its day has passed without it."],
   ["Ledger Sheet", "Ledger and Sheet: keep your income sources current with income_source (where the money lands, state, reason; clear needs_luke when it no longer stands), and correct a payment with fix_payment (with the reason). Statuses: statement only (not payable yet) and payable (owed, ready to pay out)."],
+  /* L1 + L9 (18 Nov 2026): expected money and what a payout route cost. No new tool. */
+  ["Ledger Sheet", "Ledger and Sheet: income_status lists expected_money (each statement, the day it is due, and whether it is short, late or missing) and payout_routes (what the exchange and the fees cost, from the amounts already recorded). File every statement with submit_income (statement only, payable or pending). When a received payment pays a statement, set paid_by. When money moves from Wise or PayPal into Revolut, use link_transfer. If a route says not enough data, do not guess a rate or a fee. HQ never moves money."],
   /* batch 5 (15 Nov 2026) */
   [null, "A duty you finish before Nova has put today's duty rows on the board still counts: post_update with status done as usual, and it is marked done once the row appears."],
   ["Nova", "Nova: reset today's duty rows at 07:00 São Paulo, before Ledger's 07:30 run, so every bot finds its row."],
@@ -243,7 +245,7 @@ export const TOOLS = [
     inputSchema: obj({ bot: BOT, month: str("YYYY-MM (default: this month)."), account: str("Optional: Revolut, Wise, PayPal..."), source: str("Optional: a source's name or id."),
       payer: str("Optional: words in the payer's name."), status: str("Optional: received | pending | payable | statement only | transfer | unsorted"), limit: { type: "integer", description: "1 to 200 (default 100)." } }, ["bot"]) },
   { name: "income_status", title: "Income so far and what is missing", readOnly: true,
-    description: "For a month or an account, or every payment with its id, use payments. This month's income as logged (received and pending, per currency, never mixed), the newest payments, every known source of income with when it last paid, which accounts were checked today, and the list of problems (not checked, overdue, blocked, a payer nobody has named). Use it before the daily check and before reporting to Luke.",
+    description: "For a month or an account, or every payment with its id, use payments. This month's income as logged (received and pending, per currency, never mixed), the newest payments, every known source of income with when it last paid, which accounts were checked today, and the list of problems (not checked, overdue, blocked, a payer nobody has named). Also expected_money (each statement, its due day, and short, late or missing) and payout_routes (what the exchange and the fees cost, from amounts already recorded; not enough data when a rate would have to be guessed). Do not guess a rate or an amount. Use it before the daily check and before reporting to Luke.",
     inputSchema: obj({ bot: BOT }, ["bot"]) },
   { name: "team_board", title: "The whole team right now", readOnly: true,
     description: "Every bot with today's duties (done, to do, late, blocked), its latest update, what it says it is working on, what is waiting on it, and when it last used this desk; every release with its late steps and warnings, and what Spotify for Artists showed in Atlas's last report. For Nova's standup, the 12:00 chase and the 21:00 wrap-up.",
@@ -677,7 +679,17 @@ export async function callTool(tool, args, ctx) {
         ...(i.count > 15 ? { more_payments: `${i.count - 15} more this month: use payments (month ${i.month}) to see every one, with its id` } : {}),
         /* in the account, not yet said what they are: counted as nothing until sorted (tool sort_payment) */
         unsorted: i.unsorted.map((e) => ({ id: e.id, month: e.date.slice(0, 7), line: `${e.date} · ${e.payer} · ${e.currency} ${e.amount.toFixed(2)} · ${e.account}`,
-          ...(e.pendingMatch ? { pending_match: { id: e.pendingMatch.id, line: `${e.pendingMatch.date} · ${e.pendingMatch.payer} · ${e.pendingMatch.currency} ${e.pendingMatch.amount.toFixed(2)} · pending` } } : {}) })) };
+          ...(e.pendingMatch ? { pending_match: { id: e.pendingMatch.id, line: `${e.pendingMatch.date} · ${e.pendingMatch.payer} · ${e.pendingMatch.currency} ${e.pendingMatch.amount.toFixed(2)} · pending` } } : {}) })),
+        /* L1 + L9 (18 Nov 2026). Amounts already on the desk only. A missing rate is "not enough data", never a guess. */
+        expected_money: { summary: i.expected.summary.text, late: i.expected.summary.late, short: i.expected.summary.short, missing: i.expected.summary.missing,
+          rows: i.expected.rows.slice(0, 30).map((r) => ({ id: r.id, source: r.source || r.payer, amount: `${r.currency} ${Number(r.amount).toFixed(2)}`, due: r.due || "not known yet", due_from: r.dueNote || "not known yet",
+            flags: r.flags.length ? r.flags : (r.open ? ["waiting"] : ["landed"]), ...(r.shortBy ? { short_by: `${r.shortBy.currency} ${r.shortBy.amount.toFixed(2)}` } : {}),
+            statement: r.statement.date, payable: r.payable || r.payableState, paid: r.paid ? r.paid.date : (r.missingLink ? "the payment isn't in the months read" : "not there yet"),
+            landed: r.landed ? r.landed.date : "not there yet", days: r.days })),
+          missing_sources: i.expected.missing.map((m) => ({ source: m.source, due: m.due, why: m.why })),
+          learned: i.expected.learned.filter((x) => x.enough).map((x) => ({ source: x.source, pay_day: x.day, from_payments: x.payments })),
+          not_enough_to_learn: i.expected.learned.filter((x) => !x.enough).map((x) => ({ source: x.source, payments: x.payments, why: x.why })) },
+        payout_routes: (i.routes || []).map((r) => ({ route: r.name, payouts: r.payouts, cost: S.routeCostText(r) })) };
     }
     case "sort_payment": {
       const e = await S.sortIncome(store, now, roster, { by: me, id: args.id, month: args.month, status: args.status, category: args.category, pending_id: args.pending_id, source: args.source, note: args.note });
@@ -862,6 +874,8 @@ export async function callTool(tool, args, ctx) {
         your_last_update: w.last ? `${w.last.at} ${w.last.status}: ${w.last.message}` : "none yet",
         ...(w.blockers ? { your_known_blockers: w.blockers, your_known_blockers_how: 'If this no longer stands in your way, clear it: set_my_card with blockers "" (empty). If it changed, send the new words in blockers.' } : {}),
         ...(/^(ledger|sheet|nova|alfred)$/i.test(me) ? { income_problems: b.income.problems } : {}),
+        /* L1 + L9: Ledger and Sheet see the summary at the start of the day. The full rows are in income_status. luke_briefing is unchanged. */
+        ...(me === "Ledger" || me === "Sheet" ? { expected_money: b.income.expected ? b.income.expected.summary.text : "not read", payout_routes: S.routeSummary(b.income.routes) } : {}),
         release_steps: rs, rules: RULES,
         next: (spotNext ? `Report what Spotify for Artists shows as upcoming with spotify_upcoming: the first report that lists ${firstRs.title} marks "${firstRs.label}" done (due ${when(firstRs.due)}${firstRs.late ? ", LATE" : ""}). Do not mark it with release_step.${rs.length > 1 ? ` You have ${rs.length} open release steps in all: see release_steps.` : ""} `
           : firstRs ? `You have ${rs.length} open release step${rs.length === 1 ? "" : "s"}; the soonest is "${firstRs.label}" for ${firstRs.title}, due ${when(firstRs.due)}${firstRs.late ? " (LATE)" : ""}. Read the pack with release_pack, do it, then mark it with release_step (done only when it is really done). `

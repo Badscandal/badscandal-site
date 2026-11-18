@@ -1598,6 +1598,255 @@ const DUE_DAYS = { daily: 2, monthly: 45, quarterly: 110 };
    logged in another of Luke's own accounts (Wise, PayPal: the account sources) is HOLDING: seen, counted nowhere,
    until link_transfer ties it to the Revolut credit that carried it (movedTo). */
 export const isMainAccount = (acc) => /revolut/i.test(String(acc || ""));
+
+/* ---------- Expected money (L1) and what a payout route cost (L9), 18 Nov 2026 ----------
+   Built on the records already on the desk. A statement (statement only / payable / pending, or one
+   later tied with paid_by or turned into the payment that arrived) IS the expected row. Its due date
+   comes from the source's due day when Ledger set one on a monthly source, else from the gap between
+   earlier statements and the day they landed, else from the day of the month the money usually arrives.
+   Nothing here is guessed: too few payments, or pay days too far apart, is "not known" / "not enough".
+   Short = the same currency arrived for less than the statement. Late = the due day passed and the
+   money has not landed in Revolut. Missing = a monthly source's pay day passed with no statement and
+   nothing received. The route cost is sent minus landed, and only when both amounts were recorded in
+   the same currency. A different currency is "not enough data": no rate is invented. */
+const LEARN_LAG_MIN = 2, LEARN_LAG_SPREAD = 21, LEARN_DAY_MIN = 3, LEARN_DAY_SPREAD = 10, RECENT_LANDED = 62;
+const ordinalN = (n) => { const t = n % 100, u = n % 10; return n + (t >= 11 && t <= 13 ? "th" : u === 1 ? "st" : u === 2 ? "nd" : u === 3 ? "rd" : "th"); };
+const medianInt = (list) => { const a = list.slice().sort((x, y) => x - y), m = Math.floor(a.length / 2); return a.length % 2 ? a[m] : Math.round((a[m - 1] + a[m]) / 2); };
+const monthLen = (ym) => new Date(Date.UTC(Number(ym.slice(0, 4)), Number(ym.slice(5, 7)), 0)).getUTCDate();
+const clampDay = (ym, dayNum) => ym + "-" + String(Math.min(Math.max(1, dayNum), monthLen(ym))).padStart(2, "0");
+const nextYm = (ym) => { const y = Number(ym.slice(0, 4)), n = Number(ym.slice(5, 7)); return n === 12 ? `${y + 1}-01` : `${y}-${String(n + 1).padStart(2, "0")}`; };
+const onOrAfter = (from, dayNum) => { const inM = clampDay(from.slice(0, 7), dayNum); return inM >= from ? inM : clampDay(nextYm(from.slice(0, 7)), dayNum); };
+const spanDays = (a, b) => { if (!a || !b || !DAY.test(a) || !DAY.test(b)) return null; const n = daysBetween(a, b); return n < 0 ? null : n; };
+const normPay = (e) => { if (!e || typeof e !== "object") return null; return e.arrived && e.arrived !== e.date ? { ...e, statement: e.statement || e.date, date: e.arrived } : { ...e }; };
+const wasStatement = (e) => !!(e && (OWED.includes(e.status) || e.paidBy || e.statement || (e.history || []).some((h) => OWED.includes(h.from) || OWED.includes(h.to))));
+const payerSource = (e, sources) => {
+  if (!e) return null;
+  if (e.source) { const s = (sources || []).find((x) => x.kind !== "account" && x.id === e.source); if (s) return s; }
+  return (sources || []).find((x) => x.kind !== "account" && srcMatches(x, e.payer)) || null;
+};
+const histDay = (h) => { if (!h || !h.at) return null; const t = Date.parse(h.at); if (Number.isNaN(t)) return null; const d = spDay(t); return DAY.test(d) ? d : null; };
+function payableOf(e, statementDate) {
+  const hit = (e.history || []).find((h) => h.to === "payable");
+  if (hit) { const d = histDay(hit); return d ? { state: "date", date: d } : { state: "not_recorded", date: null }; }
+  if (e.status === "payable" || (e.history || []).some((h) => h.from === "payable")) return { state: "date", date: statementDate };
+  if (e.status === "statement only") return { state: "not_yet", date: null };
+  return { state: "not_recorded", date: null };
+}
+function moneyEnd(e, byId) {
+  const target = e.paidBy ? byId.get(e.paidBy) : null;
+  const holder = target || (e.status === "received" ? e : null);
+  if (!holder) return { paid: null, landed: null, missingLink: !!(e.paidBy && !target) };
+  const paid = { date: holder.date, amount: holder.amount, currency: holder.currency, account: holder.account };
+  if (isMainAccount(holder.account)) return { paid, landed: { date: holder.date, amount: holder.amount, currency: holder.currency }, missingLink: false };
+  const rev = holder.movedTo ? byId.get(holder.movedTo) : null;
+  if (rev && isMainAccount(rev.account)) return { paid, landed: { date: rev.date, amount: rev.amount, currency: rev.currency }, missingLink: false };
+  return { paid, landed: null, missingLink: false };
+}
+const viaOf = (froms) => { const v = []; for (const f of froms) { if (!f || !f.account || isMainAccount(f.account) || STATEMENT.test(f.account)) continue; if (!v.includes(f.account)) v.push(f.account); } return v.sort(); };
+const routeSourceName = (occ, sources) => {
+  const names = [];
+  const add = (e) => { if (!e) return; const s = payerSource(e, sources), name = s ? s.name : e.payer; if (name && !names.includes(name)) names.push(name); };
+  add(occ.stmt);
+  if (!names.length) for (const f of occ.froms) add(f);
+  if (!names.length) add(occ.rev);
+  return names.join(" + ") || "Unknown payer";
+};
+function priceRoute(occ) {
+  const rev = occ.rev;
+  if (!rev || rev.amount == null || !rev.currency) return { incomplete: true };
+  const known = occ.froms.filter(Boolean);
+  if (occ.froms.length && known.length !== occ.froms.length) return { incomplete: true };
+  const landed = { currency: rev.currency, amount: rev.amount };
+  const sumCur = (list) => {
+    const by = {};
+    for (const f of list) { if (f.amount == null || !f.currency) return null; by[f.currency] = round((by[f.currency] || 0) + f.amount); }
+    return Object.keys(by).sort().map((c) => ({ currency: c, amount: by[c] }));
+  };
+  const sent = occ.stmt && occ.stmt.amount != null && occ.stmt.currency ? [{ currency: occ.stmt.currency, amount: occ.stmt.amount }] : sumCur(known);
+  if (!sent || !sent.length) return { incomplete: true };
+  if (sent.length === 1 && sent[0].currency === landed.currency) return { incomplete: false, mixed: false, fee: round(sent[0].amount - landed.amount), currency: landed.currency, sent, landed };
+  const hop = known.length ? sumCur(known) : null;
+  if (hop && hop.length === 1 && hop[0].currency === landed.currency) return { incomplete: false, mixed: true, fee: round(hop[0].amount - landed.amount), currency: landed.currency, sent, landed };
+  return { incomplete: false, mixed: true, fee: null, currency: "", sent, landed };
+}
+function learnDay(list) {
+  if (!list || list.length < LEARN_DAY_MIN) return { day: null, payments: list ? list.length : 0, enough: false, why: "not enough payments yet" };
+  const s = list.slice().sort((a, b) => a - b);
+  if (s[s.length - 1] - s[0] > LEARN_DAY_SPREAD) return { day: null, payments: list.length, enough: false, why: "the pay days are too spread out to name one" };
+  return { day: medianInt(list), payments: list.length, enough: true, why: "" };
+}
+function learnLag(list) {
+  if (!list || list.length < LEARN_LAG_MIN) return null;
+  const s = list.slice().sort((a, b) => a - b);
+  if (s[s.length - 1] - s[0] > LEARN_LAG_SPREAD) return null;
+  return { days: medianInt(list), payments: list.length };
+}
+/* What each payout route cost, from amounts already on the desk. routes: [{ name, source, via, payouts,
+   fees, feePayouts, extra, extraPayouts, noFee, mixed, mixedExamples, incomplete }] */
+export function routeCosts(entries, sources) {
+  const pool = []; const seen = new Set();
+  for (const raw of entries || []) { const e = normPay(raw); if (!e || !e.id || seen.has(e.id)) continue; seen.add(e.id); pool.push(e); }
+  const byId = new Map(pool.map((e) => [e.id, e]));
+  const occs = []; const seenRev = new Set();
+  const push = (rev, froms, stmt) => { if (!rev || seenRev.has(rev.id)) { const o = occs.find((x) => rev && x.rev.id === rev.id); if (o && stmt && !o.stmt) o.stmt = stmt; return; } seenRev.add(rev.id); occs.push({ rev, froms, stmt, via: viaOf(froms) }); };
+  for (const rev of pool) {
+    if (!isMainAccount(rev.account) || !Array.isArray(rev.from) || !rev.from.length) continue;
+    const froms = rev.from.map((id) => byId.get(id) || null);
+    const ids = new Set(rev.from);
+    const linked = pool.find((e) => wasStatement(e) && e.paidBy && (ids.has(e.paidBy) || e.paidBy === rev.id) && !ids.has(e.id));
+    push(rev, froms, linked || froms.find((f) => f && wasStatement(f)) || null);
+  }
+  for (const e of pool) {
+    if (!wasStatement(e) || !e.paidBy) continue;
+    const target = byId.get(e.paidBy);
+    if (!target) continue;
+    if (isMainAccount(target.account)) push(target, [], e);
+    else if (target.movedTo && byId.get(target.movedTo) && isMainAccount(byId.get(target.movedTo).account)) push(byId.get(target.movedTo), [target], e);
+  }
+  for (const e of pool) {
+    if (!wasStatement(e) || e.paidBy || !e.movedTo) continue;
+    const rev = byId.get(e.movedTo);
+    if (rev && isMainAccount(rev.account)) push(rev, [e], e);
+  }
+  const groups = new Map();
+  for (const occ of occs) {
+    const source = routeSourceName(occ, sources), via = occ.via, key = source + "|" + via.join("+");
+    const g = groups.get(key) || { name: via.length ? `${source} via ${via.join(" and ")} into Revolut` : `${source} into Revolut`, source, via, payouts: 0, fees: {}, feePayouts: 0, extra: {}, extraPayouts: 0, noFee: 0, mixed: 0, mixedExamples: [], incomplete: 0 };
+    g.payouts++;
+    const p = priceRoute(occ);
+    if (p.incomplete) g.incomplete++;
+    else {
+      if (p.mixed) { g.mixed++; if (g.mixedExamples.length < 3) g.mixedExamples.push({ sent: p.sent, landed: p.landed }); }
+      if (p.fee > 0) { g.fees[p.currency] = round((g.fees[p.currency] || 0) + p.fee); g.feePayouts++; }
+      else if (p.fee < 0) { g.extra[p.currency] = round((g.extra[p.currency] || 0) + (-p.fee)); g.extraPayouts++; }
+      else if (p.fee === 0) g.noFee++;
+    }
+    groups.set(key, g);
+  }
+  return [...groups.values()].sort((a, b) => (a.name < b.name ? -1 : 1));
+}
+const moneyBits = (o) => Object.keys(o || {}).sort().map((c) => `${c} ${Number(o[c]).toFixed(2)}`);
+const sentBits = (parts) => (parts || []).map((p) => `${p.currency} ${Number(p.amount).toFixed(2)}`).join(" + ");
+/* One sentence for the bots. Same-currency gaps are fees. A currency change is "not enough data". */
+export function routeCostText(r) {
+  if (!r || !r.payouts) return "Not enough data.";
+  const bits = [];
+  const fees = moneyBits(r.fees);
+  if (fees.length) bits.push(`Fees: ${fees.join(" + ")} on ${r.feePayouts} payout${r.feePayouts === 1 ? "" : "s"}`);
+  const extra = moneyBits(r.extra);
+  if (extra.length) bits.push(`Landed ${extra.join(" + ")} more than was sent. No fee to show`);
+  if (r.noFee && !fees.length && !extra.length && !r.mixed) bits.push("No fee on the amounts recorded");
+  if (r.mixed) {
+    for (const m of r.mixedExamples || []) bits.push(`${sentBits(m.sent)} sent, ${m.landed.currency} ${Number(m.landed.amount).toFixed(2)} landed`);
+    bits.push("Exchange: not enough data");
+  }
+  if (!bits.length) bits.push("Not enough data");
+  return bits.join(". ") + ".";
+}
+export function routeSummary(routes) {
+  if (!routes || !routes.length) return "Not enough data yet. Tie what was sent to what landed in Revolut, then income_status shows the cost. Do not guess a rate.";
+  const thin = routes.filter((r) => r.mixed || (r.incomplete && !Object.keys(r.fees || {}).length)).length;
+  return `${routes.length} payout route${routes.length === 1 ? "" : "s"}` + (thin ? `, ${thin} with not enough data for the exchange` : "") + ". Read payout_routes in income_status. Do not guess a rate.";
+}
+/* expected: { rows, missing, learned, summary }. Every figure comes from a recorded amount or date. */
+export function moneyExpectations(entries, sources, today) {
+  const pool = []; const seen = new Set();
+  for (const raw of entries || []) { const e = normPay(raw); if (!e || !e.id || seen.has(e.id)) continue; seen.add(e.id); pool.push(e); }
+  const byId = new Map(pool.map((e) => [e.id, e]));
+  const arrivals = new Map(), lagLists = new Map();
+  const journeys = [];
+  for (const e of pool) {
+    if (e.status === "received" && !e.from && DAY.test(e.date || "")) {
+      const s = payerSource(e, sources);
+      if (s) { const a = arrivals.get(s.id) || []; a.push(Number(e.date.slice(8, 10))); arrivals.set(s.id, a); }
+    }
+    if (!wasStatement(e)) continue;
+    const statementDate = DAY.test(e.statement || "") ? e.statement : (DAY.test(e.date || "") ? e.date : "");
+    if (!statementDate) continue;
+    const end = moneyEnd(e, byId);
+    journeys.push({ e, statementDate, payable: payableOf(e, statementDate), ...end });
+    if (end.landed && DAY.test(end.landed.date)) {
+      const gap = daysBetween(statementDate, end.landed.date);
+      const s = payerSource(e, sources);
+      if (s && gap >= 0) { const a = lagLists.get(s.id) || []; a.push(gap); lagLists.set(s.id, a); }
+    }
+  }
+  const learnedDay = new Map(), learned = [];
+  for (const s of sources || []) {
+    if (!s || s.kind === "account") continue;
+    const days = arrivals.get(s.id);
+    if (!days) continue;
+    const got = learnDay(days);
+    learnedDay.set(s.id, got);
+    learned.push({ sourceId: s.id, source: s.name, day: got.day, payments: got.payments, enough: got.enough, ...(got.why ? { why: got.why } : {}) });
+  }
+  const learnedLag = new Map();
+  for (const [id, list] of lagLists) { const g = learnLag(list); if (g) learnedLag.set(id, g); }
+  const rows = [];
+  for (const j of journeys) {
+    const e = j.e, src = payerSource(e, sources);
+    const monthlyDue = src && Number.isInteger(src.dueDay) && (src.cadence || "monthly") === "monthly" ? src.dueDay : null;
+    const lag = src ? learnedLag.get(src.id) : null;
+    const dayL = src ? learnedDay.get(src.id) : null;
+    let due = null, dueFrom = "", dueNote = "";
+    if (monthlyDue) {
+      due = onOrAfter(j.statementDate, monthlyDue); dueFrom = "set";
+      dueNote = `the day this source pays by (the ${ordinalN(monthlyDue)})`;
+      if (lag && Math.abs(lag.days - daysBetween(j.statementDate, due)) > 7) dueNote += `. Earlier payments landed about ${lag.days} days after the statement`;
+    } else if (lag) { due = addDays(j.statementDate, lag.days); dueFrom = "lag"; dueNote = `about ${lag.days} days after the statement, from ${lag.payments} earlier payments`; }
+    else if (dayL && dayL.day) { due = onOrAfter(j.statementDate, dayL.day); dueFrom = "day"; dueNote = `usually around the ${ordinalN(dayL.day)}, from ${dayL.payments} payments`; }
+    /* short only when a different recorded amount, in the same currency, is below the statement */
+    const other = j.landed && j.landed.currency === e.currency ? j.landed : (j.paid && j.paid.currency === e.currency && j.paid.amount !== e.amount ? j.paid : null);
+    const gap = other ? round(e.amount - other.amount) : 0;
+    const shortBy = gap > 0 ? { amount: gap, currency: e.currency } : null;
+    const flags = [];
+    if (!j.landed && due && due < today) flags.push("late");
+    if (shortBy) flags.push("short");
+    const age = j.landed && DAY.test(j.landed.date) ? daysBetween(j.landed.date, today) : null;
+    if (j.landed && !shortBy && age != null && age > RECENT_LANDED) continue;
+    const payableDate = j.payable.state === "date" ? j.payable.date : null;
+    rows.push({
+      id: e.id, payer: e.payer, source: src ? src.name : "", sourceId: src ? src.id : "", amount: e.amount, currency: e.currency, status: e.status,
+      due, dueFrom, dueNote, flags, shortBy, open: !j.landed, missingLink: j.missingLink,
+      statement: { date: j.statementDate, amount: e.amount, currency: e.currency },
+      payable: payableDate, payableState: j.payable.state,
+      paid: j.paid, landed: j.landed,
+      days: { payable: spanDays(j.statementDate, payableDate), paid: spanDays(payableDate, j.paid && j.paid.date), landed: spanDays(j.paid && j.paid.date, j.landed && j.landed.date) },
+      landedAfter: j.landed && due && j.landed.date > due ? daysBetween(due, j.landed.date) : null,
+    });
+  }
+  const rank = (r) => (r.flags.includes("late") ? 0 : r.flags.includes("short") ? 1 : r.open ? 2 : 3);
+  rows.sort((a, b) => rank(a) - rank(b) || ((a.due || "9") < (b.due || "9") ? -1 : (a.due || "9") > (b.due || "9") ? 1 : 0) || (a.statement.date < b.statement.date ? -1 : 1));
+  const shown = rows.slice(0, 40);
+  const missing = [];
+  for (const s of sources || []) {
+    if (!s || s.kind === "account" || s.cadence !== "monthly" || s.state === "not_tracked" || s.state === "blocked") continue;
+    const dayN = Number.isInteger(s.dueDay) ? s.dueDay : (learnedDay.get(s.id) && learnedDay.get(s.id).day);
+    if (!dayN) continue;
+    const due = clampDay(today.slice(0, 7), dayN);
+    if (due >= today) continue;
+    const month = today.slice(0, 7);
+    const hit = pool.some((e) => {
+      const ps = payerSource(e, sources);
+      if (!ps || ps.id !== s.id || e.status === "transfer" || e.status === "unsorted" || (Array.isArray(e.from) && e.from.length)) return false;
+      if (wasStatement(e) && OWED.includes(e.status) && !e.paidBy) return true;
+      if (e.status === "received" && !e.movedTo && String(e.date).slice(0, 7) === month) return true;
+      if (wasStatement(e) && String(e.statement || e.date).slice(0, 7) === month) return true;
+      return false;
+    });
+    if (hit) continue;
+    missing.push({ sourceId: s.id, source: s.name, due, dueDay: dayN, why: `No statement and nothing received. It usually pays by the ${ordinalN(dayN)}.` });
+  }
+  missing.sort((a, b) => (a.source < b.source ? -1 : 1));
+  const summary = { late: shown.filter((r) => r.flags.includes("late")).length, short: shown.filter((r) => r.flags.includes("short")).length, missing: missing.length, text: "" };
+  const parts = [];
+  if (summary.late) parts.push(`${summary.late} late`);
+  if (summary.short) parts.push(`${summary.short} short`);
+  if (summary.missing) parts.push(`${summary.missing} missing`);
+  summary.text = parts.length ? parts.join(", ") : "nothing to flag";
+  return { expected: { rows: shown, missing, learned, summary }, routes: routeCosts(pool, sources) };
+}
+
 export function holdingOf(sources) {
   const own = (sources || []).filter((s) => s.kind === "account" && !isMainAccount(s.name));
   return (e) => !!e && e.status === "received" && !e.movedTo && !isMainAccount(e.account) && own.some((s) => srcMatches(s, e.account));
@@ -1713,7 +1962,10 @@ export function incomeReport(entries, checks, sources, today, older = []) {
     seenM.push(e); add(receivedByMonth[e.date.slice(0, 7)] || (receivedByMonth[e.date.slice(0, 7)] = {}), e.currency, e.amount);
   }
   const duplicates = twice.map(([k, e]) => ({ kept: k.payer, also: e.payer, amount: e.amount, currency: e.currency, date: e.date, id: e.id }));
+  const seenId = new Set(entries.map((e) => e && e.id));
+  const money = moneyExpectations(entries.concat((older || []).filter((e) => e && !seenId.has(e.id))), sources, today);
   return { month, received, pending, payable, statementOnly, royaltiesOnly, pendingOnly, receivedYear, receivedByMonth, duplicates, byCategory: byCat, count: entries.filter((e) => e.date.slice(0, 7) === month).length, unsorted: unsorted.slice(0, 40).map(withMatch), unsortedCount: unsorted.length,
+    expected: money.expected, routes: money.routes,
     entries: [...entries].sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : a.at < b.at ? 1 : -1)).slice(0, 60).map((e) => (isHold(e) ? { ...e, holding: true } : e)),
     holding, holdingList: entries.concat(older || []).filter(isHold).sort((a, b) => (a.date < b.date ? 1 : -1)).slice(0, 40),
     accounts, sources: src, unknown, problems,

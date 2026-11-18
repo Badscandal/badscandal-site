@@ -1,8 +1,8 @@
 # Handoff: where HQ is and what's next (read this first)
 
-**Last updated:** 18 Nov 2026, by Cursor. L3 fan inbox part 1 is on this branch, not merged. PR #65 is live on main.
-**main:** every PR up to #65 is live. **This branch:** 590 tests pass on Node 24 and Node 22, none cancelled.
-**Connector:** 40 tools. No new tool. The `instagram` tool now also returns the fan inbox, so Steve, Kevin and Forge should refresh when this is live (Nova too: she has every tool). `profiles` (L12) is still the newest tool: every bot refreshes if they have not since #64.
+**Last updated:** 18 Nov 2026, by Cursor. L3 fan inbox part 1 is on main (PR #66). L1 and L9 are in flight on `cursor/expected-money-routes-cbcf` (not merged).
+**main:** every PR up to #66 is live. **Tests on main:** 590 pass on Node 24 and Node 22, none cancelled.
+**Connector:** 40 tools. No new tool in #66, and none on the L1/L9 branch. The `instagram` tool now also returns the fan inbox, so Steve, Kevin and Forge should refresh if they have not since #66 (Nova too: she has every tool). `profiles` (L12) is still the newest tool name.
 
 > **The rule (Luke, 17 Nov 2026):** every time anything is pushed to `main` for HQ, the same push updates THIS
 > file (and `docs/STATUS.md`). If Luke's computer crashes or a session ends mid-way, the next agent starts from
@@ -31,7 +31,7 @@ site + Luke's private dashboard /hq + the bots' connector /mcp).
 
 ## Where it stands (18 Nov 2026)
 
-**Where we left off:** L3 fan inbox, part 1, is written on `cursor/l3-fan-inbox-b12c` (PR #66) and is not on main. It uses the Instagram comments HQ already stores. Growth & Fans shows people asking the song's name or where to listen, and people who comment on more than one post. "Needs your reply" is for Luke. HQ never replies, likes, hides or deletes a comment, and it makes no extra Instagram call. Part 2 is not built. Main already has L12 (PR #64) and the release-card fix (PR #65, `f1cf96c`): a sent Spotify pitch is not an approval, and red on a release card is only a real failure.
+**Where we left off:** L3 fan inbox, part 1, is on main (PR #66, `dab08d2`). Growth & Fans shows people asking the song's name or where to listen, and people who comment on more than one post. "Needs your reply" is for Luke. HQ never replies. Part 2 is not built. L1 (expected money) and L9 (what a payout route cost) are built on `cursor/expected-money-routes-cbcf` and are not live yet. L12 (PR #64) and the release-card fix (PR #65) are live.
 
 **HQ** (`badscandal.com/hq`, also inside the HQ apps on Luke's iPhone and Mac) has: Today, Songs, Ads, Pages
 (one tile per song page since #59), Growth & Fans (with the Instagram reader), Profiles (since #64), Upcoming (the release pipeline),
@@ -54,7 +54,7 @@ artist growth bot that all we will need is content and $".
 
 ## In flight (branches not merged)
 
-- **`cursor/l3-fan-inbox-b12c` (PR #66):** L3 fan inbox, part 1. Not merged. Song-name questions, where to listen, and repeat fans, from comments already stored. "Needs your reply" goes to Luke. Two accounts he named are filtered in code (`HIDDEN_HANDLES`) and never shown. No new tool (still 40). When this is live, Steve, Kevin and Forge refresh the tool list so the instagram description matches. Preview: https://deploy-preview-66--profound-haupia-db7ffa.netlify.app/hq?sample=1#growth
+- **L1 + L9** (`cursor/expected-money-routes-cbcf`, not merged): Expected money and the exchange-and-fee cost of each payout route, for Ledger and Sheet. No new tool (still 40). `income_status` gains `expected_money` and `payout_routes`. `my_day` for Ledger and Sheet gains the same summaries. `luke_briefing` is unchanged. A route with two currencies says "not enough data". HQ does not move money and does not guess a rate. Ledger and Sheet do not need a new tool refresh: no tool was added and no option was added.
 
 ## Waiting on someone
 
@@ -93,7 +93,7 @@ Later, if he asks:
 2. **After a week of Instagram data:** check the ranking with Luke against what he sees in the app; tune the
    300-view floor and the 1-day window if needed.
 3. **B2 YouTube Analytics** (one Google sign-in from Luke), so Laura's numbers come in by themselves.
-4. **The rest of Later** (L1 expected money, L4 per-song P&L, L5, L9, L10): see docs/HQ-ROADMAP.md.
+4. **The rest of Later** (L4 per-song P&L, L5, L10): see docs/HQ-ROADMAP.md. L1 and L9 are the in-flight branch above.
 5. **H1–H4** stay on hold until Luke decides (they would touch ads, posting or fans' data).
 
 ## How to check your work

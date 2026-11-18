@@ -665,7 +665,65 @@
     var out = ((inc && inc.problems) || []).filter(function (p) { return !/^New payer\(s\) not on the list/.test(p) && !/ that nobody has sorted yet$/.test(p) && !(reader && /^Revolut:/i.test(p)); });
     var u = (inc && inc.unknown) || [];
     if (u.length) out.push((u.length === 1 ? "New payer not on the list: " : "New payers not on the list: ") + u.join(", "));
+    /* L1 (18 Nov 2026): one line, from the expected-money summary. The desk's own problems are unchanged,
+       so Alfred's briefing does not grow a new sentence. */
+    var ex = inc && inc.expected && inc.expected.summary;
+    if (ex && (ex.late || ex.short || ex.missing)) out.push("Expected money: " + ex.text);
     return out;
+  }
+  /* "Payable 5 Nov, 3 days" / "the same day" / "" when that step was not recorded */
+  function stepSpan(n) { return n == null ? "" : n === 0 ? ", the same day" : ", " + n + " day" + (n === 1 ? "" : "s"); }
+  /* One statement's path, in words. A step with no recorded day is said as not there yet, or not recorded. */
+  function expectedJourney(row) {
+    if (!row) return "";
+    var s = row.statement || {}, bits = ["Statement " + (s.date ? day(s.date) : "not recorded")];
+    if (row.payableState === "date" && row.payable) bits.push("Payable " + day(row.payable) + stepSpan(row.days && row.days.payable));
+    else if (row.payableState === "not_yet") bits.push("Payable: not there yet");
+    else bits.push("Payable: not recorded");
+    if (row.paid && row.paid.date) bits.push("Paid " + day(row.paid.date) + stepSpan(row.days && row.days.paid));
+    else if (row.missingLink) bits.push("Paid: the payment isn't in the months read");
+    else bits.push("Paid: not there yet");
+    if (row.landed && row.landed.date) bits.push("Landed " + day(row.landed.date) + stepSpan(row.days && row.days.landed));
+    else bits.push("Landed: not there yet");
+    return bits.join(" · ");
+  }
+  function expectedDue(row) {
+    if (!row || !row.due) return "Due date not known yet";
+    var late = row.landedAfter ? " · Landed " + row.landedAfter + " day" + (row.landedAfter === 1 ? "" : "s") + " after the due day" : "";
+    return "Due " + day(row.due) + (row.dueNote ? " · " + row.dueNote : "") + late;
+  }
+  function expectedFlags(row) {
+    if (!row) return "";
+    var f = [];
+    if ((row.flags || []).indexOf("late") >= 0) f.push("Late");
+    if (row.shortBy) f.push("Short by " + money(row.shortBy.amount, row.shortBy.currency));
+    if (!f.length) return row.landed ? "Landed" : "Waiting";
+    return f.join(" · ");
+  }
+  function expectedFlagKind(row) {
+    var f = (row && row.flags) || [];
+    if (f.indexOf("late") >= 0 || f.indexOf("short") >= 0) return "bad";
+    return row && row.landed ? "landed" : "wait";
+  }
+  function missingLine(m) { return m ? m.source + ": no statement and nothing received. It usually pays by the " + ordinal(m.dueDay) + "." : ""; }
+  function learnedLine(s) {
+    if (!s || !s.enough || s.day == null) return "";
+    return s.source + " usually pays around the " + ordinal(s.day) + " (from " + s.payments + " payment" + (s.payments === 1 ? "" : "s") + ").";
+  }
+  function partMoney(parts) { return (parts || []).map(function (p) { return money(p.amount, p.currency); }).join(" + "); }
+  /* What a payout route cost. Same-currency gaps are fees. A currency change is "not enough data". */
+  function routeLines(r) {
+    if (!r || !r.payouts) return ["Not enough data."];
+    var lines = [], fees = curList(r.fees), extra = curList(r.extra);
+    if (fees.length) lines.push("Fees: " + fees.join(" + ") + " on " + r.feePayouts + " payout" + (r.feePayouts === 1 ? "" : "s"));
+    if (extra.length) lines.push("Landed " + extra.join(" + ") + " more than was sent. No fee to show.");
+    if (r.noFee && !fees.length && !extra.length && !r.mixed) lines.push("No fee on the amounts recorded.");
+    if (r.mixed) {
+      (r.mixedExamples || []).forEach(function (m) { lines.push(partMoney(m.sent) + " sent, " + money(m.landed.amount, m.landed.currency) + " landed."); });
+      lines.push("Exchange: not enough data.");
+    }
+    if (!lines.length) lines.push("Not enough data.");
+    return lines;
   }
   /* "Mon 9 Nov · USD 104.04 · received" */
   /* ---------- the release page (17 Nov 2026, Nova for Luke): the whole release in one view ----------
@@ -1719,7 +1777,7 @@
     slug: slug, workerLabel: workerLabel, sortWorkers: sortWorkers, workerView: workerView, dutyWhen: dutyWhen, workerCounts: workerCounts, seenLine: seenLine, connectorLine: connectorLine,
     novaMessage: novaMessage, liveFeed: liveFeed, spWhen: spWhen, waitLabel: waitLabel, needWords: needWords, reportParts: reportParts, siteCheckLine: siteCheckLine, composeNames: composeNames,
     threadRoot: threadRoot, answerTarget: answerTarget, questionLines: questionLines, questionsLeft: questionsLeft, stepButton: stepButton, formKey: formKey, storeLine: storeLine, storeHistory: storeHistory, capRateLine: capRateLine, capMissingLine: capMissingLine, dutyGapsLine: dutyGapsLine, incomeTotals: incomeTotals, approvalLines: approvalLines, approvalUndo: approvalUndo, warnTone: warnTone, warnGroups: warnGroups, resubmitAsk: resubmitAsk, relStatus: relStatus, relProgress: relProgress, stepGroups: stepGroups, upcomingAsks: upcomingAsks, staffAttention: staffAttention, staffHealth: staffHealth, curList: curList, cadenceWord: cadenceWord, accountLine: accountLine, sourceState: sourceState, payLine: payLine, accountsLine: accountsLine, receivedMonths: receivedMonths, releasePage: releasePage, monthRows: monthRows, mainSources: mainSources, sourceMonthLine: sourceMonthLine, proposalRows: proposalRows, proposalConfirm: proposalConfirm, profileBlocks: profileBlocks,
-    incomeEmpty: incomeEmpty, incomeProblems: incomeProblems,
+    incomeEmpty: incomeEmpty, incomeProblems: incomeProblems, expectedJourney: expectedJourney, expectedDue: expectedDue, expectedFlags: expectedFlags, expectedFlagKind: expectedFlagKind, missingLine: missingLine, learnedLine: learnedLine, routeLines: routeLines,
     /* replies that visibly land + the release pipeline (11 Nov 2026) */
     spStampOf: spStampOf, seenWords: seenWords, sentLine: sentLine, answeredList: answeredList, CLAUDE_ROUNDS: CLAUDE_ROUNDS,
     formGroups: formGroups, releaseDayNote: releaseDayNote, releaseWhen: releaseWhen, stepState: stepState, missingWords: missingWords, packLine: packLine, missingSentence: missingSentence,
