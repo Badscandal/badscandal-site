@@ -700,15 +700,49 @@ export const ASSETS = {
     rule: "Spotify for Artists header image: a JPG or PNG, at least 2660 x 1140, 20 MB at most; keep faces and text in the middle (it is cropped on phones)." },
   youtube_banner: { label: "YouTube banner", formats: ["jpg", "jpeg", "png", "gif", "bmp"], ratio: 16 / 9, ratioWords: "16:9", min: [2048, 1152], mb: 6,
     rule: "YouTube channel banner: a JPG, PNG, GIF or BMP, 16:9, at least 2048 x 1152, 6 MB at most; text and logos inside the middle 1235 x 338 (what every device shows)." },
+  /* L12 (18 Nov 2026): profile photos and banners whose platforms publish a size. A platform with no
+     published size is not given a kind here: the Profiles list says "Rule not set" instead. */
+  spotify_avatar: { label: "Spotify profile photo", formats: ["jpg", "jpeg", "png", "gif"], min: [750, 750], mb: 20,
+    rule: "Spotify profile photo (avatar): a JPG, PNG or GIF, at least 750 x 750, 20 MB at most (Spotify's artist image guidelines)." },
+  youtube_photo: { label: "YouTube profile photo", formats: ["jpg", "jpeg", "png", "gif", "bmp"], ratio: 1, ratioWords: "square", min: [800, 800], mb: 15,
+    rule: "YouTube profile photo: a JPG, PNG, GIF or BMP, square, at least 800 x 800, 15 MB at most; not an animated GIF. YouTube shows it as a circle." },
+  apple_image: { label: "Apple Music artist image", formats: ["jpg", "jpeg", "png"], ratio: 1, ratioWords: "square", min: [800, 800], mb: null,
+    rule: "Apple Music artist image: a square JPG or PNG, at least 800 x 800; 2400 x 2400 or larger is preferred. The same image can show on Shazam (Apple's artist image guidelines)." },
+  x_photo: { label: "X profile photo", formats: ["jpg", "jpeg", "png", "gif"], ratio: 1, ratioWords: "square", min: [400, 400], mb: 2,
+    rule: "X profile photo: a JPG, PNG or GIF, square, at least 400 x 400 (X's recommended size), 2 MB at most. It is shown as a circle." },
+  x_header: { label: "X header", formats: ["jpg", "jpeg", "png", "gif"], ratio: 3, ratioWords: "3:1", min: [1500, 500], mb: null,
+    rule: "X header: a JPG, PNG or GIF, 3:1, at least 1500 x 500 (X's recommended size). About 60 px at the top and bottom can be cropped." },
+  soundcloud_photo: { label: "SoundCloud profile image", formats: ["jpg", "jpeg", "png"], ratio: 1, ratioWords: "square", min: [800, 800], mb: 2,
+    rule: "SoundCloud profile image: a square JPG or PNG, at least 800 x 800, 2 MB at most. It is shown as a circle (SoundCloud Help Center)." },
+  soundcloud_header: { label: "SoundCloud header", formats: ["jpg", "jpeg", "png"], min: [2480, 520], mb: 2,
+    rule: "SoundCloud header: a JPG or PNG, at least 2480 x 520, 2 MB at most. Text in it gets cropped on small screens (SoundCloud Help Center)." },
+  facebook_photo: { label: "Facebook profile photo", formats: ["jpg", "jpeg", "png"], ratio: 1, ratioWords: "square", min: [320, 320], mb: null,
+    rule: "Facebook Page profile photo: a JPG or PNG, square, at least 320 x 320 (Facebook's size for best quality). It is cropped to a circle." },
+  facebook_cover: { label: "Facebook cover", formats: ["jpg", "jpeg", "png"], min: [400, 150], mb: null,
+    rule: "Facebook Page cover: a JPG or PNG, at least 400 x 150. 851 x 315 JPG loads fastest. It is cropped differently on a computer and a phone, and the profile photo covers the left side (Facebook Help Center)." },
+  amazon_photo: { label: "Amazon Music profile image", formats: ["jpg", "jpeg", "png"], min: [500, 500], mb: 15,
+    rule: "Amazon Music profile image: a JPG or PNG, at least 500 x 500, 15 MB at most (Amazon Music for Artists)." },
+  amazon_background: { label: "Amazon Music background", formats: ["jpg", "jpeg", "png"], min: [1920, 1440], mb: 15,
+    rule: "Amazon Music background: a JPG or PNG, at least 1920 x 1440, 15 MB at most. Keep the face in the upper part, near the middle (Amazon Music for Artists)." },
 };
 const FORMAT_WORDS = { cover: "a JPG or PNG", canvas: "an MP4 or JPG", spotify_header: "a JPG or PNG", youtube_banner: "a JPG, PNG, GIF or BMP" };
+/* a file-type sentence for a kind added after the four above (L12). The original four keep FORMAT_WORDS. */
+function formatWords(kind, a) {
+  if (FORMAT_WORDS[kind]) return FORMAT_WORDS[kind];
+  const name = { jpg: "JPG", jpeg: "JPG", png: "PNG", gif: "GIF", bmp: "BMP", mp4: "MP4" };
+  const seen = [];
+  for (const f of a.formats || []) { const w = name[f] || String(f).toUpperCase(); if (!seen.includes(w)) seen.push(w); }
+  if (seen.length <= 1) return "a " + (seen[0] || "file");
+  if (seen.length === 2) return "a " + seen[0] + " or " + seen[1];
+  return "a " + seen.slice(0, -1).join(", ") + " or " + seen[seen.length - 1];
+}
 export function assetProblems(kind, o = {}) {
   const a = Object.prototype.hasOwnProperty.call(ASSETS, kind) ? ASSETS[kind] : null;
-  if (!a) fail("asset must be cover, canvas, spotify_header or youtube_banner.");
+  if (!a) fail("asset must be one of: " + Object.keys(ASSETS).join(", ") + ".");
   const num = (v) => (v == null || v === "" ? null : Number(v));
   const w = num(o.width), h = num(o.height), sec = num(o.seconds), mb = num(o.mb);
   const fmt = String(o.format == null ? "" : o.format).trim().toLowerCase().replace(/^\./, "");
-  const out = fmt && !a.formats.includes(fmt) ? [`${a.label} must be ${FORMAT_WORDS[kind]}, not a .${fmt}.`] : [];
+  const out = fmt && !a.formats.includes(fmt) ? [`${a.label} must be ${formatWords(kind, a)}, not a .${fmt}.`] : [];
   if (kind === "cover") return [...(w != null && h != null ? coverWarnings(w, h) : []), ...out]; /* A6's wording, kept */
   if (w != null && h != null && a.ratio && Math.abs(w / h - a.ratio) / a.ratio > 0.02) out.push(`${w} x ${h} is not ${a.ratioWords}: ${a.label} needs ${a.ratioWords}.`);
   if (a.min && w != null && h != null && (w < a.min[0] || h < a.min[1])) out.push(`${w} x ${h} is too small: ${a.label} needs at least ${a.min[0]} x ${a.min[1]}.`);
@@ -716,6 +750,183 @@ export function assetProblems(kind, o = {}) {
   if (a.seconds && sec != null && (sec < a.seconds[0] || sec > a.seconds[1])) out.push(`${sec} seconds: ${a.label} must be ${a.seconds[0]} to ${a.seconds[1]} seconds.`);
   if (a.mb && mb != null && mb > a.mb) out.push(`${mb} MB: ${a.label} is ${a.mb} MB at most.`);
   return out;
+}
+
+/* ---------- profiles (L12, 18 Nov 2026) ----------
+   One list of the profile photo and the banner (header, cover, wallpaper) on every official platform.
+   The desk RECORDS what is live, and asks Luke "Yes, correct" before a new image. HQ never logs in and
+   never changes a platform: after yes, the owner uploads it by hand and then records it.
+   asset "" = no published size rule: the list says "Rule not set" and a proposal is not size-checked.
+   X has no owner yet. Instagram, TikTok and Deezer publish no size this list will enforce. */
+const PROF_KEY = "profiles.json";
+export const PROFILE_SLOTS = [
+  { id: "facebook-photo", platformId: "facebook", platform: "Facebook Page", kind: "Profile photo", words: ["profile", "photo", "avatar", "picture"], owner: "Steve", asset: "facebook_photo" },
+  { id: "facebook-cover", platformId: "facebook", platform: "Facebook Page", kind: "Cover", words: ["cover", "banner"], owner: "Steve", asset: "facebook_cover" },
+  { id: "instagram-photo", platformId: "instagram", platform: "Instagram", kind: "Profile photo", words: ["profile", "photo", "avatar", "picture"], owner: "Steve", asset: "" },
+  { id: "youtube-photo", platformId: "youtube", platform: "YouTube", kind: "Profile photo", words: ["profile", "photo", "avatar", "picture"], owner: "Laura", asset: "youtube_photo" },
+  { id: "youtube-banner", platformId: "youtube", platform: "YouTube", kind: "Banner", words: ["banner"], owner: "Laura", asset: "youtube_banner" },
+  { id: "spotify-photo", platformId: "spotify", platform: "Spotify", kind: "Profile photo", words: ["profile", "photo", "avatar", "picture"], owner: "Atlas", asset: "spotify_avatar" },
+  { id: "spotify-header", platformId: "spotify", platform: "Spotify", kind: "Header", words: ["header", "banner"], owner: "Atlas", asset: "spotify_header" },
+  { id: "apple-image", platformId: "apple", platform: "Apple Music", kind: "Artist image", words: ["image", "hero", "artist", "profile", "photo", "avatar"], owner: "Atlas", asset: "apple_image" },
+  { id: "tiktok-photo", platformId: "tiktok", platform: "TikTok", kind: "Profile photo", words: ["profile", "photo", "avatar", "picture"], owner: "Kevin", asset: "" },
+  { id: "x-photo", platformId: "x", platform: "X", kind: "Profile photo", words: ["profile", "photo", "avatar", "picture"], owner: "", asset: "x_photo" },
+  { id: "x-header", platformId: "x", platform: "X", kind: "Header", words: ["header", "banner"], owner: "", asset: "x_header" },
+  { id: "soundcloud-photo", platformId: "soundcloud", platform: "SoundCloud", kind: "Profile image", words: ["profile", "photo", "avatar", "picture", "image"], owner: "Atlas", asset: "soundcloud_photo" },
+  { id: "soundcloud-header", platformId: "soundcloud", platform: "SoundCloud", kind: "Header", words: ["header", "banner"], owner: "Atlas", asset: "soundcloud_header" },
+  { id: "deezer-photo", platformId: "deezer", platform: "Deezer", kind: "Profile photo", words: ["profile", "photo", "avatar", "picture"], owner: "Atlas", asset: "" },
+  { id: "amazon-photo", platformId: "amazon", platform: "Amazon Music", kind: "Profile image", words: ["profile", "photo", "avatar", "picture", "image"], owner: "Atlas", asset: "amazon_photo" },
+  { id: "amazon-background", platformId: "amazon", platform: "Amazon Music", kind: "Background", words: ["background", "banner"], owner: "Atlas", asset: "amazon_background" },
+];
+const profileRule = (slot) => (slot.asset && ASSETS[slot.asset] ? ASSETS[slot.asset].rule : "Rule not set");
+function profilePlatforms(q) {
+  const want = fold(q);
+  if (!want) return [];
+  return PROFILE_SLOTS.filter((s) => { const name = fold(s.platform); return name === want || name.split(" ")[0] === want; });
+}
+function pickProfile(platform, image) {
+  const slots = profilePlatforms(platform);
+  if (!slots.length) fail(`There is no profile for "${clean(platform, 40)}". The platforms are: ${[...new Set(PROFILE_SLOTS.map((s) => s.platform))].join(", ")}.`);
+  const want = fold(image);
+  if (!want) {
+    if (slots.length === 1) return slots[0];
+    fail(`${slots[0].platform} has more than one image. Say which in image: ${slots.map((s) => s.kind.toLowerCase()).join(", ")}.`);
+  }
+  const hit = slots.filter((s) => s.id === want || fold(s.kind) === want || (s.words || []).includes(want));
+  if (hit.length === 1) return hit[0];
+  if (!hit.length) fail(`${slots[0].platform} has no image called "${clean(image, 40)}". Say one of: ${slots.map((s) => s.kind.toLowerCase()).join(", ")}.`);
+  fail(`"${clean(image, 40)}" matches more than one ${slots[0].platform} image: ${hit.map((s) => s.kind.toLowerCase()).join(", ")}. Say which.`);
+}
+function profileMay(by, slot) {
+  if (by === "Luke" || by === "Claude" || by === "Nova" || (slot.owner && by === slot.owner)) return;
+  if (!slot.owner) fail(`${slot.platform} has no owner yet. Luke uploads it himself. Tell him, or ask Nova. Nothing was saved.`, "not_allowed");
+  fail(`${slot.platform}'s ${slot.kind.toLowerCase()} is ${slot.owner}'s. Tell ${slot.owner}. Nothing was saved.`, "not_allowed");
+}
+function profileNum(v, name) {
+  if (v == null || String(v).trim() === "") return null;
+  const n = Number(v);
+  if (!(n > 0) || !Number.isFinite(n)) fail(`${name} must be a number above 0, as the file shows it. Nothing was asked.`);
+  return n;
+}
+export async function getProfiles(store) {
+  const { data } = await readDoc(store, PROF_KEY, {});
+  return data && typeof data === "object" && !Array.isArray(data) ? data : {};
+}
+function profileSlotOf(doc, id) {
+  const slots = doc && doc.slots && typeof doc.slots === "object" && !Array.isArray(doc.slots) ? doc.slots : {};
+  const s = slots[id];
+  return s && typeof s === "object" ? s : {};
+}
+async function writeProfile(store, id, fn) {
+  return mutate(store, PROF_KEY, {}, (doc) => {
+    if (!doc || typeof doc !== "object" || Array.isArray(doc)) {
+      const fresh = { slots: {} }, next = fn({});
+      if (!next) return { skip: true, value: null };
+      fresh.slots[id] = next;
+      return { replace: fresh, value: next };
+    }
+    doc.slots = doc.slots && typeof doc.slots === "object" && !Array.isArray(doc.slots) ? doc.slots : {};
+    const cur = doc.slots[id] && typeof doc.slots[id] === "object" ? doc.slots[id] : {};
+    const next = fn(cur);
+    if (!next) return { skip: true, value: cur };
+    doc.slots[id] = next;
+    return { value: next };
+  });
+}
+/* the list HQ and the profiles tool show. messages = the board, so an open "Yes, correct" shows as waiting. */
+export function profilesView(doc, messages) {
+  const platforms = [];
+  for (const s of PROFILE_SLOTS) {
+    let p = platforms.find((x) => x.id === s.platformId);
+    if (!p) { p = { id: s.platformId, platform: s.platform, owner: s.owner || "", slots: [] }; platforms.push(p); }
+    const stored = profileSlotOf(doc, s.id);
+    const current = stored.current && stored.current.link ? { link: stored.current.link, changed: stored.current.changed || "", by: stored.current.by || "" } : null;
+    const approvedRaw = stored.approved && stored.approved.link ? stored.approved : null;
+    const approved = approvedRaw && (!current || current.link !== approvedRaw.link) ? { link: approvedRaw.link, by: approvedRaw.by || "", at: approvedRaw.at || "" } : null;
+    const wait = (messages || []).filter((m) => m && m.proposal && m.proposal.action === "profile" && m.proposal.slot === s.id && isOpen(m))
+      .sort((a, b) => (a.at < b.at ? 1 : -1))[0] || null;
+    p.slots.push({ id: s.id, kind: s.kind, asset: s.asset || "", rule: profileRule(s), current, approved,
+      waiting: wait ? { id: wait.id, link: wait.proposal.link || "", by: wait.from || "" } : null });
+  }
+  return { note: "HQ never logs in and never changes a platform. A new image waits for your \"Yes, correct\". Then the owner uploads it by hand.", platforms };
+}
+export async function recordProfile(store, now, roster, a) {
+  const by = whoIs(a.by, roster, { people: true });
+  const slot = pickProfile(a.platform, a.image);
+  profileMay(by, slot);
+  const link = httpsLink(a.link);
+  if (!link) fail("link must be an https link to the image. Nothing was saved.");
+  noSecrets(link);
+  const changed = clean(a.changed, 10);
+  if (!isDay(changed)) fail("changed must be the day the image last changed, written YYYY-MM-DD (for example 2026-10-01). Nothing was saved.");
+  if (changed > spDay(now)) fail(`${dayWords(changed)} is in the future. changed is the day the image last changed, not a day still to come. Nothing was saved.`);
+  const at = new Date(now).toISOString();
+  let already = false;
+  await writeProfile(store, slot.id, (cur) => {
+    const prev = cur.current || null;
+    if (prev && prev.link === link && prev.changed === changed) { already = true; return null; }
+    const next = { ...cur, current: { link, changed, by, at } };
+    if (next.approved && next.approved.link === link) delete next.approved;
+    return next;
+  });
+  return { saved: true, already, platform: slot.platform, image: slot.kind, link, changed,
+    note: already ? "Already recorded. Nothing new. HQ did not change the platform." : "Recorded as the image that is live now. HQ did not change the platform." };
+}
+export async function proposeProfile(store, now, roster, a) {
+  const by = whoIs(a.by, roster, { people: true });
+  const slot = pickProfile(a.platform, a.image);
+  profileMay(by, slot);
+  const link = httpsLink(a.link);
+  if (!link) fail("link must be an https link to the new image. Nothing was asked.");
+  noSecrets(link);
+  const why = cleanText(a.why, 300);
+  if (why) noSecrets(why);
+  const doc = await getProfiles(store);
+  const saved = profileSlotOf(doc, slot.id);
+  const current = saved.current && saved.current.link ? saved.current : null;
+  const approved = saved.approved && saved.approved.link && (!current || saved.approved.link !== current.link) ? saved.approved.link : "";
+  if (approved) fail(approved === link
+    ? `Luke already said yes to that image. ${slot.owner || "Luke"} uploads it by hand, then record it with profiles. Nothing was asked.`
+    : `Luke already said yes to a new ${slot.platform} ${slot.kind.toLowerCase()} that is not recorded as live yet. Upload that one and record it before asking about another. Nothing was asked.`);
+  if (current && current.link === link) fail(`That link is already the current ${slot.platform} ${slot.kind.toLowerCase()}${current.changed ? ` (changed ${dayWords(current.changed)})` : ""}. Nothing was asked.`);
+  const asset = slot.asset && ASSETS[slot.asset] ? ASSETS[slot.asset] : null;
+  let checked = "Rule not set: the size was not checked.";
+  if (asset) {
+    const got = { width: profileNum(a.width, "width"), height: profileNum(a.height, "height"), format: String(a.format == null ? "" : a.format).trim(), size_mb: profileNum(a.size_mb, "size_mb") };
+    const need = ["width", "height", "format"].concat(asset.mb ? ["size_mb"] : []);
+    const missing = need.filter((k) => (k === "format" ? !got.format : got[k] == null));
+    if (missing.length) fail(`Give ${missing.join(", ")} so it can be checked. The rule: ${asset.rule} Nothing was asked.`);
+    const problems = assetProblems(slot.asset, { width: got.width, height: got.height, format: got.format, mb: got.size_mb });
+    if (problems.length) fail(`${problems.join(" ")} Fix the image, then propose again. Nothing was asked.`);
+    const bits = [`${got.width} x ${got.height}`, got.format.replace(/^\./, "").toLowerCase()];
+    if (got.size_mb != null) bits.push(`${got.size_mb} MB`);
+    checked = bits.join(", ") + ": nothing to fix";
+  }
+  const open = (await listMessages(store, now)).find((m) => m.proposal && m.proposal.action === "profile" && m.proposal.slot === slot.id && isOpen(m));
+  if (open) fail(`Luke has not answered the last question about the ${slot.platform} ${slot.kind.toLowerCase()} yet (message ${open.id}, from ${open.from}). Wait for his answer. Nothing was asked.`, "exists");
+  const rule = profileRule(slot);
+  const changes = [
+    { label: "Platform", from: "", to: slot.platform },
+    { label: "Image", from: "", to: slot.kind },
+    { label: "New image", from: current ? current.link : "", to: link },
+    { label: "Rule", from: "", to: rule },
+    { label: "Checked", from: "", to: checked },
+  ];
+  const who = slot.owner || "Luke";
+  const text = `${by} asks: is this correct? A new ${slot.platform} ${slot.kind.toLowerCase()}. Link: ${link}. Rule: ${rule} ${checked}` +
+    (why ? ` Why: ${why}` : "") + ` Nothing changes until you say "Yes, correct". After that, ${who} uploads it by hand. HQ does not log in and does not change ${slot.platform}.`;
+  const r = await sendMessage(store, now, roster, { from: by, to: "Luke", needs: "decision", text, ...(slot.owner && slot.owner !== by ? { about: slot.owner } : {}),
+    proposal: { action: "profile", slot: slot.id, platform: slot.platform, kind: slot.kind, title: `${slot.platform} ${slot.kind.toLowerCase()}`, link, owner: slot.owner || "", by, changes } });
+  return { message: r.message, slot, rule, changes };
+}
+/* Luke said yes: remember the image. The live one changes only when the owner records the upload. */
+export async function approveProfile(store, now, p, asker, msg) {
+  const slot = PROFILE_SLOTS.find((s) => s.id === p.slot);
+  if (!slot) throw new StaffError("That profile is no longer on the list. Nothing was saved.");
+  const link = httpsLink(p.link);
+  if (!link) throw new StaffError("The image link is not an https link. Nothing was saved.");
+  await writeProfile(store, slot.id, (cur) => ({ ...cur, approved: { link, by: asker, at: new Date(now).toISOString(), msg: clean(msg, 20) } }));
+  const who = slot.owner ? `${slot.owner} uploads it by hand, then records it with profiles (the link and the day it changed).` : "No owner yet: Luke uploads it himself, then it is recorded with profiles.";
+  return `${slot.platform} ${slot.kind.toLowerCase()}: Luke said yes. ${who} HQ does not log in and does not change the platform.`;
 }
 
 /* ---------- recommendations (A3, 17 Nov 2026, Nova: "Luke's decisions inbox with my recommendation on each card") ----------
@@ -2775,6 +2986,9 @@ async function applyProposal(store, now, roster, parent, via) {
       out = { done: true, text: p.action === "card" ? `GitHub is putting ${p.title} on the home card now (about 2 minutes). Open badscandal.com to make sure.` : p.action === "page"
         ? `GitHub is building badscandal.com/${p.slug} now. It runs the song-page checks and puts it live in about 2 minutes; if a check fails nothing goes live and you get a "Not done" message here with the reason. Open the page to make sure, then mark your page step done with the link.`
         : `GitHub is putting the Spotify link on badscandal.com/${p.slug} now (about 2 minutes). Open the page to make sure the button says Listen on Spotify and opens the song.` };
+    } else if (p.action === "profile") {
+      /* L12: yes remembers the image. The platform changes only when the owner uploads it and records it. */
+      out = { done: true, text: await approveProfile(store, now, p, asker, parent.id) };
     } else if (p.action === "add") {
       const r = await saveRelease(store, now, roster, { by: "Luke", title: p.title, date: p.date || "", pack: p.pack || {}, from: said });
       let sent = "";
@@ -3494,8 +3708,8 @@ function cardNow(card, today) {
 }
 export async function loadDesk(store, now) {
   const [roster, updates, messages, cardsDoc, config, releases, sightings] = await Promise.all([getRoster(store), listUpdates(store, now, 3), listMessages(store, now, 2), readDoc(store, "cards.json", {}), getConfig(store), listReleases(store), getSightings(store)]);
-  const [seen, read, income, closesDoc] = await Promise.all([getSeen(store, roster), getRead(store, roster), incomeState(store, now), readDoc(store, "closes.json", [])]);
-  return { roster, updates, messages, cards: cardsDoc.data || {}, seen, read, income, config, releases, sightings, closes: Array.isArray(closesDoc.data) ? closesDoc.data : [] };
+  const [seen, read, income, closesDoc, profiles] = await Promise.all([getSeen(store, roster), getRead(store, roster), incomeState(store, now), readDoc(store, "closes.json", []), getProfiles(store)]);
+  return { roster, updates, messages, cards: cardsDoc.data || {}, seen, read, income, config, releases, sightings, closes: Array.isArray(closesDoc.data) ? closesDoc.data : [], profiles };
 }
 
 /* Has the person a message was sent to READ it? (V6, 11 Nov 2026: from the read markers, read/<name>,
@@ -3588,6 +3802,7 @@ export function board(desk, now, hq) {
     messages: threads(desk.messages).slice(0, 80).map((t) => ({ ...mark(t), replies: t.replies.map(mark) })),
     answered: answeredByLuke(desk.messages, read, now),
     releases: releaseOrder(views).slice(0, 20).map(slimRelease), pitchSlots: pitchSlots(views, today), packFields: packFieldsOut(), releaseSteps: releaseStepsOut(),
+    profiles: profilesView(desk.profiles || {}, desk.messages || []), /* L12 */
     sightings: sightingsView(desk.sightings || null, desk.releases || [], today, now),
     waiting: { luke: waitingOn(desk.messages, "Luke"), claude: waitingOn(desk.messages, "Claude"), bots: desk.messages.filter((m) => isOpen(m) && !PEOPLE.includes(m.to)).length },
     income: desk.income,

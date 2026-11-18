@@ -6,8 +6,8 @@
 (function () {
   "use strict";
   var $ = function (id) { return document.getElementById(id); };
-  var TABS = ["today", "songs", "ads", "pages", "growth", "releases", "money", "team", "messages"];
-  var MORE = ["pages", "growth", "releases", "team", "messages"];
+  var TABS = ["today", "songs", "ads", "pages", "growth", "profiles", "releases", "money", "team", "messages"];
+  var MORE = ["pages", "growth", "profiles", "releases", "team", "messages"];
   /* addresses that moved: Fans is a part of the Growth & Fans page since 12 Nov 2026 (Luke: "growth and
      fans can be on the same page"); an old #fans link or bookmark lands on that part */
   var ALIAS = { fans: "growth/fans" };

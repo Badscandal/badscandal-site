@@ -131,6 +131,10 @@ export function sampleDesk(now = Date.now()) {
       proposal: { action: "add", title: "Paper Moon", date: "2026-11-27", pack: { kind: "Self-release", featuring: "Sample Singer", upc: "0000000000017", storeStatus: "in moderation" }, send: false, by: "Nova",
         changes: [{ label: "Title", from: "", to: "Paper Moon" }, { label: "Release day", from: "", to: "Fri 27 Nov" }, { label: "Self-release or label", from: "", to: "Self-release" }, { label: "Featured artists", from: "", to: "Sample Singer" }, { label: "UPC", from: "", to: "0000000000017" }, { label: "Status at the distributor", from: "", to: "in moderation" }] } }),
     M(20, "msample0011a", "Drop", "Luke", "Me Dá Seu Body: ready to resubmit to the distributor? It was rejected: \"(sample) The cover has a web address on it\". What changed: the new cover from the folder is uploaded.", "decision", { options: S.RESUBMIT_OPTIONS.slice(), release: "medaseubody", ask: "resubmit" }),
+    /* L12: a new YouTube banner waiting for "Yes, correct" (made up) */
+    M(18, "msampleprof2", "Laura", "Luke", "Laura asks: is this correct? A new YouTube banner. Link: https://example.com/sample/yt-banner.jpg. Nothing changes until you say \"Yes, correct\". After that, Laura uploads it by hand. HQ does not log in and does not change YouTube.", "decision", { options: S.PROPOSE_OPTIONS.slice(),
+      proposal: { action: "profile", slot: "youtube-banner", platform: "YouTube", kind: "Banner", title: "YouTube banner", link: "https://example.com/sample/yt-banner.jpg", owner: "Laura", by: "Laura",
+        changes: [{ label: "Platform", from: "", to: "YouTube" }, { label: "Image", from: "", to: "Banner" }, { label: "New image", from: "", to: "https://example.com/sample/yt-banner.jpg" }, { label: "Rule", from: "", to: "YouTube channel banner" }, { label: "Checked", from: "", to: "2560 x 1440, jpg, 2 MB: nothing to fix" }] } }),
   ];
   messages.sort((a, b) => (a.at < b.at ? 1 : -1)); /* newest first, as the real desk lists them */
   const E = (back, payer, amount, currency, status, account, category, by = "Ledger") => ({ id: "i" + back + payer.length, at: new Date(ago(back * 1440 + 90)).toISOString(), by, date: d(back), payer, amount, currency, status, category, account, reference: "", period: "", source: "", note: "" });
@@ -152,7 +156,13 @@ export function sampleDesk(now = Date.now()) {
   const read = Object.fromEntries(Object.entries(seen).filter(([n]) => n !== "Claude").map(([n, v]) => [n, { at: v.at }]));
   return { roster: ROSTER, updates, messages, cards: { atlas: { workingOn: "Backfilling Touch Me's daily rows to release day", needs: "", at: new Date(ago(200)).toISOString() }, kevin: { workingOn: "TikTok banner", needs: "Luke's phone code for TikTok", at: new Date(ago(400)).toISOString() } },
     seen, income: S.incomeReport(entries, checks, SOURCES.map((s) => ({ match: [], category: "Other", currency: "", lands: "", how: "", blocker: "", needsLuke: "", ...s })), today), config: { botsOn: true, changedAt: null },
-    releases: sampleReleases(now), read, sightings: sampleSightings(now) };
+    releases: sampleReleases(now), read, sightings: sampleSightings(now),
+    /* L12: a live Spotify header, and an Instagram photo Luke already said yes to (made-up links) */
+    profiles: { slots: {
+      "spotify-header": { current: { link: "https://example.com/sample/spotify-header.jpg", changed: d(40), by: "Atlas", at: new Date(ago(40 * 1440)).toISOString() } },
+      "instagram-photo": { current: { link: "https://example.com/sample/ig-now.jpg", changed: d(20), by: "Steve", at: new Date(ago(20 * 1440)).toISOString() },
+        approved: { link: "https://example.com/sample/ig-next.jpg", by: "Steve", at: new Date(ago(30)).toISOString(), msg: "msampleprof1" } },
+    } } };
 }
 
 /* MADE-UP state of the Revolut reader for /hq?sample=1 (GET /api/bank/status?sample=1): connected,

@@ -36,6 +36,8 @@ const INSTRUCTION_LINES = [
   /* A6 (17 Nov 2026): pre-flight checks */
   ["Forge Drop Verse Webmaster", "Before anything goes to the stores or into an ad, run preflight: the artist name is exactly badscandal (all lowercase, one word), ads and links go to https://badscandal.com/<song>, the master is a WAV, the artwork a JPG or PNG 3000 x 3000. Fix what it lists first."],
   ["Atlas Laura Webmaster", "Before you upload a Spotify Canvas, a Spotify header image, a YouTube banner or a cover, run preflight with asset (canvas, spotify_header, youtube_banner or cover) and the file's width, height, seconds, format and size_mb: it checks them against that platform's rule. Fix what it lists first."],
+  /* L12 (18 Nov 2026): profile photos and banners. HQ never logs in. */
+  ["Atlas Laura Steve Kevin", "Profiles: HQ's Profiles section lists the profile photo and the banner on every official platform. Record the image that is live with profiles (action record: platform, image, the https link, changed = the day it last changed, YYYY-MM-DD). To put a new image up, propose it (action propose; give width, height, format and size_mb when that image has a size rule). Luke is asked \"Yes, correct\". Only after he says yes do you upload it yourself, by hand, and then record it. HQ never logs in and never changes a platform. X has no owner yet: Luke uploads that one himself. Instagram, TikTok and Deezer say \"Rule not set\": propose the link, and do not invent a size."],
   /* A4 (17 Nov 2026): automatic chasing */
   [null, "When a duty or a release step of yours is late, HQ sends you ONE reminder (07:00 to 22:00). Do it then and post_update or release_step; if it is still not done 2 hours later, Nova is told and chases you."],
   ["Nova", "Nova: HQ reminds the bots about late duties and steps by itself and tells you only when one is still late 2 hours after its reminder: then chase that bot, or tell Luke if it needs him."],
@@ -134,11 +136,11 @@ export const TOOLS = [
       option: str("Optional: the option you recommend, exactly as listed on the message."),
       why: str("Why, in one or two sentences (300 characters at most).") }, ["bot", "message_id", "why"]) },
   { name: "preflight", title: "Check a song, a text or a link before it goes out", idempotent: true, readOnly: true,
-    description: "FORGE, DROP, VERSE, WEBMASTER, ATLAS, LAURA (Nova too). Pre-flight checks before anything reaches the stores or the ads. song = every check on that release's pack (the artist name exactly \"badscandal\", all lowercase, in primary/featured artists, producers, split and copyright; the master a WAV; the artwork a JPG or PNG, 3000 x 3000; the Canvas an MP4 or JPG; the song page and every link in the ad plan going to badscandal.com/<song>). text = check the artist name in any text (credits, a description). link = an ad link: it must be https://badscandal.com/<the song> (utm tags are fine), never Feature.fm or a store link. asset = check a file against its platform's rule BEFORE you upload it: cover, canvas (Spotify Canvas), spotify_header (Spotify for Artists header image) or youtube_banner; give what the file shows (width, height, seconds, format, size_mb); anything left out is not checked, and the answer's rule says the whole rule. ok true = nothing to fix. It changes nothing.",
+    description: "FORGE, DROP, VERSE, WEBMASTER, ATLAS, LAURA (Nova too). Pre-flight checks before anything reaches the stores or the ads. song = every check on that release's pack (the artist name exactly \"badscandal\", all lowercase, in primary/featured artists, producers, split and copyright; the master a WAV; the artwork a JPG or PNG, 3000 x 3000; the Canvas an MP4 or JPG; the song page and every link in the ad plan going to badscandal.com/<song>). text = check the artist name in any text (credits, a description). link = an ad link: it must be https://badscandal.com/<the song> (utm tags are fine), never Feature.fm or a store link. asset = check a file against its platform's rule BEFORE you upload it: cover, canvas, spotify_header, youtube_banner, or a profile photo or banner (the profiles tool lists them). Give what the file shows (width, height, seconds, format, size_mb); anything left out is not checked, and the answer's rule says the whole rule. ok true = nothing to fix. It changes nothing.",
     inputSchema: obj({ bot: BOT, song: str("Optional: the song's title or id (every check on its pack)."),
       text: str("Optional: any text to check the artist name in."),
       link: str("Optional: an ad link to check (with song, it must go to that song's page)."),
-      asset: { type: "string", enum: ["cover", "canvas", "spotify_header", "youtube_banner"], description: "Optional: the kind of file to check against its platform's rule." },
+      asset: { type: "string", enum: Object.keys(S.ASSETS), description: "Optional: the kind of file to check against its platform's rule (cover, canvas, a profile photo or a banner)." },
       width: { type: "number", description: "With asset: the file's width in px." },
       height: { type: "number", description: "With asset: the file's height in px." },
       seconds: { type: "number", description: "With asset canvas: the video's length in seconds." },
@@ -334,6 +336,19 @@ export const TOOLS = [
       pitched_on: str("Optional. The day you sent the Spotify pitch, YYYY-MM-DD."),
       playlist: str("Optional. An editorial playlist's name, exactly as Spotify for Artists shows it."),
       added_on: str("With playlist: the day the song was added to that playlist, YYYY-MM-DD.") }, ["bot", "song"]) },
+  { name: "profiles", title: "Profile photos and banners",
+    description: "ATLAS (Spotify, Apple Music, SoundCloud, Deezer, Amazon Music), LAURA (YouTube), STEVE (Instagram and Facebook), KEVIN (TikTok). Nova may do it for them. X has no owner yet: only Luke, Claude or Nova. action list = every platform, the image that is live, the day it changed, the size rule, a new image waiting for Luke, and one he already said yes to. action record = the image that is LIVE now (you saw it on the platform): platform, image, link (https), changed (YYYY-MM-DD, the day it last changed). action propose = a NEW image: the same, plus width, height, format and size_mb when the rule needs them. It is checked against the rule first. A bad file is not asked. Luke is asked \"Yes, correct\" or \"No\". Only after yes do you upload it yourself, by hand, and then record it. HQ never logs in and never changes a platform. Instagram, TikTok and Deezer have no size rule: the answer says \"Rule not set\". Do not invent one.",
+    inputSchema: obj({ bot: BOT,
+      action: str("list | record | propose. Default list.", { enum: ["list", "record", "propose"] }),
+      platform: str("Facebook, Instagram, YouTube, Spotify, Apple Music, TikTok, X, SoundCloud, Deezer or Amazon Music."),
+      image: str("Which image: profile, photo, header, banner, cover, background, or the id (spotify-header). Leave it out when the platform has only one."),
+      link: str("The https link to the image. For record, the one that is live. For propose, the new one."),
+      changed: str("With record: the day that live image last changed, YYYY-MM-DD."),
+      width: { type: "number", description: "With propose, when the image has a size rule: width in px." },
+      height: { type: "number", description: "With propose, when the image has a size rule: height in px." },
+      format: str("With propose, when the image has a size rule: jpg, png, gif or whatever the file is."),
+      size_mb: { type: "number", description: "With propose, when the rule has a size limit: the file's size in MB." },
+      why: str("Optional, with propose: one line on why this image.") }, ["bot"]) },
   { name: "read_guide", title: "Read the staff guide", readOnly: true,
     description: "The written guide to this desk: who does what, the daily times, how to log income, how messages work, the rules that never bend. Read it once when you are first connected, and again whenever Nova says it changed.",
     inputSchema: obj({ bot: BOT }, ["bot"]) },
@@ -365,6 +380,7 @@ export const TOOL_USERS = {
   income_status: [...INCOME_TEAM, "Alfred"], payments: INCOME_TEAM, link_transfer: INCOME_TEAM, month_check: INCOME_TEAM, close_month: INCOME_TEAM,
   record_spend: ["Forge"], log_growth: ["Steve", "Atlas", "Kevin", "Laura"],
   store_status: ["Drop"], spotify_upcoming: ["Atlas"], pitch_log: ["Atlas"], song_page: ["Webmaster"], roster_card: ["Nova"], recommend: ["Nova"], preflight: ["Forge", "Drop", "Verse", "Webmaster", "Atlas", "Laura"], instagram: ["Steve", "Kevin", "Forge"], song_pages: ["Webmaster"], upload_cover: ["Webmaster"],
+  profiles: ["Atlas", "Laura", "Steve", "Kevin"],
 };
 const onTeam = (bot, roster) => { const k = String(bot || "").trim().toLowerCase(); return k ? (roster.find((b) => b.name.toLowerCase() === k) || {}).name || "" : ""; };
 export function toolsFor(bot, roster) {
@@ -719,6 +735,28 @@ export async function callTool(tool, args, ctx) {
         ...(r.already ? { already: "Already recorded. Nothing new." } : {}),
         note: "HQ never pitches a song. This only records what you already sent, or a playlist you saw, in Spotify for Artists.",
         shown_on: "badscandal.com/hq, Upcoming" };
+    }
+    case "profiles": {
+      const action = String(args.action || "list").trim().toLowerCase();
+      if (action === "list" || !args.action) {
+        const view = S.profilesView(await S.getProfiles(store), await S.listMessages(store, now));
+        return { note: view.note + " You upload a new image by hand only after Luke says yes, then record it.",
+          profiles: view.platforms.map((p) => ({ platform: p.platform, owner: p.owner ? `${p.owner} uploads this` : "no owner yet: Luke uploads this himself",
+            images: p.slots.map((s) => ({ id: s.id, kind: s.kind, rule: s.rule,
+              current: s.current ? { link: s.current.link, changed: s.current.changed, by: s.current.by } : "not recorded yet",
+              waiting_for_luke: s.waiting ? { link: s.waiting.link, message: s.waiting.id } : null,
+              said_yes: s.approved ? { link: s.approved.link, upload: `${p.owner || "Luke"} uploads it by hand. HQ does not change the platform.` } : null })) })),
+          shown_on: "badscandal.com/hq, Profiles" };
+      }
+      if (action === "record") return S.recordProfile(store, now, roster, { by: me, platform: args.platform, image: args.image, link: args.link, changed: args.changed });
+      if (action === "propose") {
+        const r = await S.proposeProfile(store, now, roster, { by: me, platform: args.platform, image: args.image, link: args.link, width: args.width, height: args.height, format: args.format, size_mb: args.size_mb, why: args.why });
+        const who = r.slot.owner || "Luke";
+        return { asked: true, message_id: r.message.id, platform: r.slot.platform, image: r.slot.kind, rule: r.rule,
+          note: `Luke is asked "Yes, correct" or "No" (message ${r.message.id}). Nothing is uploaded until he says yes. Then ${who} uploads it by hand and records it. HQ does not log in and does not change the platform.`,
+          shown_on: "badscandal.com/hq, Profiles and Messages" };
+      }
+      throw new S.StaffError("action must be list, record or propose.");
     }
     case "release_step": {
       const r = await S.setStep(store, now, roster, { by: me, id: args.song, step: args.step, status: args.status, note: args.note, link: args.link, done_on: args.done_on, due: args.due });
