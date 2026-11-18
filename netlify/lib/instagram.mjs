@@ -201,7 +201,7 @@ export async function syncInstagram({ store, now, fetchImpl = fetch, logGrowth =
     const self = key.route === "fb" ? key.igId : "me";
     const me = await igGet(self, { fields: key.route === "fb" ? "username,followers_count,media_count,profile_picture_url" : "user_id,username,followers_count,media_count,profile_picture_url" }, key, fetchImpl);
     out.username = me.username || key.username; out.followers = num(me.followers_count);
-    const media = await igGet(`${self}/media`, { fields: "id,caption,media_type,media_product_type,timestamp,permalink,like_count,comments_count", limit: "25" }, key, fetchImpl);
+    const media = await igGet(`${self}/media`, { fields: "id,caption,media_type,media_product_type,timestamp,permalink,like_count,comments_count,media_url,thumbnail_url", limit: "25" }, key, fetchImpl);
     const posts = await readDoc(store, "posts.json", []);
     const byId = new Map(posts.map((p) => [p.id, p]));
     const fresh = [];
@@ -209,6 +209,10 @@ export async function syncInstagram({ store, now, fetchImpl = fetch, logGrowth =
       const at = Date.parse(m.timestamp || "");
       if (!m.id || !isFinite(at)) continue;
       const p = byId.get(m.id) || { id: String(m.id), at: new Date(at).toISOString(), snaps: {} };
+      /* the post's own picture, from the same read (no extra call; 18 Nov 2026: the Monday pick said "No cover on file").
+         Instagram's links expire after a while; the hourly read renews them, and the page falls back to the song's cover */
+      const pic = String((m.media_type === "VIDEO" ? m.thumbnail_url : m.media_url || m.thumbnail_url) || "");
+      if (/^https:\/\//.test(pic)) p.thumb = pic.slice(0, 1200);
       Object.assign(p, { caption: capOf(m.caption), type: String(m.media_product_type || m.media_type || "").toLowerCase(), link: /^https:\/\//.test(m.permalink || "") ? m.permalink : "",
         likes: num(m.like_count), comments: num(m.comments_count) });
       const age = now - at;

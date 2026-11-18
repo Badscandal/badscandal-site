@@ -64,7 +64,7 @@ test("deal: a label release the label delivers has its RouteNote upload and appr
   const self = await sent(d, "Was Self", "2026-12-18");
   const nowLabel = await S.saveRelease(d, NOW + 1, R, { by: "Luke", id: self.id, pack: { kind: "With a label", label: "Sample Records", split: "50/50" } });
   assert.equal(step(nowLabel, "upload").status, "skipped");
-  assert.match(nowLabel.log.at(-1).what, /skipped Uploaded to RouteNote with the release date and Approved by RouteNote \(nothing waiting\) \(the label delivers it\)$/);
+  assert.match(nowLabel.log.at(-1).what, /skipped Uploaded to RouteNote with the release date and Approved by RouteNote \(the label delivers it\)$/);
   assert.equal(step(await S.saveRelease(d, NOW + 2, R, { by: "Luke", id: self.id, pack: { kind: "Self-release" } }), "upload").status, "todo", "back to a self-release: ours again");
 });
 
@@ -406,8 +406,8 @@ test("team_board: each release lists its late steps and its warnings", async () 
   await sent(d, "Close One", "2026-11-25", FULL, Date.parse("2026-11-01T12:00:00Z"));
   const rel = (await call(d, "team_board", { bot: "Nova" })).releases[0];
   /* Spotify for Artists waits for RouteNote's approval (16 Nov 2026): not late */
-  assert.deepEqual(rel.late_steps, ["Uploaded to RouteNote with the release date (Drop)", "Approved by RouteNote (nothing waiting) (Drop)"]);
-  assert.deepEqual(rel.warnings, ["Uploaded to RouteNote with the release date is 8 days late (Drop)", "Approved by RouteNote (nothing waiting) is 3 days late (Drop)",
+  assert.deepEqual(rel.late_steps, ["Uploaded to RouteNote with the release date (Drop)", "Approved by RouteNote (Drop)"]);
+  assert.deepEqual(rel.warnings, ["Uploaded to RouteNote with the release date is 8 days late (Drop)", "Approved by RouteNote is 3 days late (Drop)",
     "Not showing in Spotify for Artists yet, 13 days before release: the pitch cannot be sent until it does"], "the lyrics are needed after the release now (15 Nov 2026)");
 });
 
@@ -615,7 +615,7 @@ test("the deal changed after sending: Drop is told once, an upload already start
   const toDrop = (await all(d)).filter((m) => m.to === "Drop");
   assert.equal(toDrop.length, 1);
   assert.deepEqual([toDrop[0].from, toDrop[0].needs], ["HQ", "action"]);
-  assert.equal(toDrop[0].text, 'Luke changed whose release Switch is (out Fri 11 Dec): Sample Records delivers it to the stores, not us. Approved by RouteNote (nothing waiting) is skipped. "Uploaded to RouteNote with the release date" is already working: stop, and tell Luke on the desk whether it went to RouteNote, so the song is not delivered twice.');
+  assert.equal(toDrop[0].text, 'Luke changed whose release Switch is (out Fri 11 Dec): Sample Records delivers it to the stores, not us. Approved by RouteNote is skipped. "Uploaded to RouteNote with the release date" is already working: stop, and tell Luke on the desk whether it went to RouteNote, so the song is not delivered twice.');
   assert.ok(S.releaseView(lab, TODAY).warnings.includes("A label release, but Uploaded to RouteNote with the release date is working (Drop): one song must not be delivered twice"));
   const rep = S.checkReport({ desk: await S.loadDesk(d, NOW), hq: null, hqState: null, now: NOW });
   assert.ok(rep.problems.some((p) => /Switch: A label release, but Uploaded to RouteNote/.test(p)), rep.problems.join("\n"));
@@ -625,7 +625,7 @@ test("the deal changed after sending: Drop is told once, an upload already start
   /* back to a self-release, weeks later: the approval is his again, due today at the earliest, and he is told */
   const back = await S.saveRelease(d, Date.parse("2026-11-28T12:00:00Z"), R, { by: "Luke", id: r.id, pack: { kind: "Self-release" } });
   assert.deepEqual([step(back, "approved").status, step(back, "approved").due], ["todo", "2026-11-28"]);
-  assert.match((await S.listMessages(d, Date.parse("2026-11-28T12:00:00Z"))).find((m) => m.to === "Drop").text, /we deliver it now, through RouteNote \(badscandaladmin\)\. Approved by RouteNote \(nothing waiting\) is yours again/);
+  assert.match((await S.listMessages(d, Date.parse("2026-11-28T12:00:00Z"))).find((m) => m.to === "Drop").text, /we deliver it now, through RouteNote \(badscandaladmin\)\. Approved by RouteNote is yours again/);
 });
 
 test("small wording: release_step says Upcoming; 'started the song'; a blocked next step says blocked; a pitch too late has no 'until it does'", async () => {

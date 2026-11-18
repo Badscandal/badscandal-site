@@ -203,12 +203,15 @@ function sig(id, level, text, source, at) {
 }
 const gap = (id, text, source) => sig(id, "gap", "Not enough data: " + text, source, "");
 
-function reachSignal(points, today, source) {
+/* unit: what a reach point is on this platform. Spotify has tracks, not posts (18 Nov 2026, handoff bug 2). */
+const POSTS = { one: "post", many: "posts", Many: "Posts" };
+const TRACKS = { one: "track", many: "tracks", Many: "Tracks" };
+function reachSignal(points, today, source, u = POSTS) {
   const usable = (points || []).filter((p) => p && isDay(p.day) && num(p.value) != null && daysBetween(p.day, today) >= 0 && daysBetween(p.day, today) <= 30);
   const byAt = new Map();
   for (const p of usable) byAt.set(p.at || p.day, p);
   const pts = [...byAt.values()].sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0));
-  if (pts.length < 7) return gap("reach", `this account has ${pts.length} post${pts.length === 1 ? "" : "s"} with a view or reach number in 30 days. A run of weak posts needs at least 7 (3 recent, and 4 older to take a median from).`, source);
+  if (pts.length < 7) return gap("reach", `this account has ${pts.length} ${pts.length === 1 ? u.one : u.many} with a view or reach number in 30 days. A run of weak ${u.many} needs at least 7 (3 recent, and 4 older to take a median from).`, source);
   const same = pts.filter((p) => p.age === "1 day" && p.metric === "views");
   const series = same.length >= 7 ? same : pts;
   const note = same.length >= 7 ? "views at 1 day" : (series[0].metric === "views" ? "views" : "views or reach");
@@ -217,7 +220,7 @@ function reachSignal(points, today, source) {
   const inWin = (list, days) => list.filter((p) => daysBetween(p.day, today) <= days);
   const med = (list) => (list.length >= 4 ? median(list.map((p) => p.value)) : null);
   const med14 = med(inWin(older, 14)), med30 = med(inWin(older, 30));
-  if (med14 == null && med30 == null) return gap("reach", "the older posts are not enough for a 14-day or a 30-day median (4 older posts in the window).", source);
+  if (med14 == null && med30 == null) return gap("reach", `the older ${u.many} are not enough for a 14-day or a 30-day median (4 older ${u.many} in the window).`, source);
   const under = (m) => m != null && last3.every((p) => p.value < 0.3 * m);
   const primary = med30 != null ? med30 : med14;
   const window = med30 != null ? "30-day" : "14-day";
@@ -226,16 +229,16 @@ function reachSignal(points, today, source) {
     (med14 != null ? `; 14-day median ${fmt(Math.round(med14))}` : "");
   const at = last3[0].at || last3[0].day;
   if (under(med30) || (med30 == null && under(med14))) {
-    return sig("reach", "red", `The last 3 posts are each under 30% of this account's own ${window} median (${nums}). Possible suppression.`, source, at);
+    return sig("reach", "red", `The last 3 ${u.many} are each under 30% of this account's own ${window} median (${nums}). Possible suppression.`, source, at);
   }
   if (med14 != null && med30 != null && under(med14)) {
-    return sig("reach", "watch", `The last 3 posts are under 30% of the 14-day median, and not under the 30-day median (${nums}). One short dip, not a 30-day drop.`, source, at);
+    return sig("reach", "watch", `The last 3 ${u.many} are under 30% of the 14-day median, and not under the 30-day median (${nums}). One short dip, not a 30-day drop.`, source, at);
   }
   const weak = series.filter((p) => p.value < 0.3 * primary);
   const newestWeak = series[0].value < 0.3 * primary;
-  if (newestWeak && weak.length === 1) return sig("reach", "watch", `One recent post is under 30% of the ${window} median (${fmt(series[0].value)} against ${fmt(Math.round(primary))}). The posts before it are not. That is one post, not a run.`, source, at);
-  if (newestWeak && weak.length === 2) return sig("reach", "watch", `Two recent posts are under 30% of the ${window} median (${nums}). Not three in a row.`, source, at);
-  return sig("reach", "ok", `Recent posts are in line with this account's own median (${nums}).`, source, at);
+  if (newestWeak && weak.length === 1) return sig("reach", "watch", `One recent ${u.one} is under 30% of the ${window} median (${fmt(series[0].value)} against ${fmt(Math.round(primary))}). The ${u.many} before it are not. That is one ${u.one}, not a run.`, source, at);
+  if (newestWeak && weak.length === 2) return sig("reach", "watch", `Two recent ${u.many} are under 30% of the ${window} median (${nums}). Not three in a row.`, source, at);
+  return sig("reach", "ok", `Recent ${u.many} are in line with this account's own median (${nums}).`, source, at);
 }
 
 function shareSignal(rows, today) {
@@ -480,9 +483,9 @@ export function evaluate(input) {
     } else {
       const g = growthRows(growth, id);
       const reachPts = id === "instagram" && igPosts == null ? [] : id === "instagram" ? igSeries(igPosts) : recordedSeries(checks, id);
-      const reachSource = id === "instagram" ? (input && input.igUnread ? "Instagram posts could not be read from the store just now" : "Instagram reads HQ already stored") : "posts the bot recorded";
+      const reachSource = id === "instagram" ? (input && input.igUnread ? "Instagram posts could not be read from the store just now" : "Instagram reads HQ already stored") : id === "spotify" ? "tracks Atlas recorded" : "posts the bot recorded";
       if (id === "instagram" && input && input.igUnread) signals.push(gap("reach", "the stored Instagram posts could not be read just now. Nothing was fetched from Instagram.", reachSource));
-      else signals.push(reachSignal(reachPts, today, reachSource));
+      else signals.push(reachSignal(reachPts, today, reachSource, id === "spotify" ? TRACKS : POSTS));
       signals.push(shareSignal(shareRows(checks, id, id === "instagram" ? igPosts : []), today));
       signals.push(followerSignal(g.map((r) => ({ date: r.date, change: r.change, views: r.views, followers: r.followers })), today));
       signals.push(visibilitySignal(latestReading(checks, id, "visible"), today));

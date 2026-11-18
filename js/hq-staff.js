@@ -620,7 +620,10 @@
       '<span class="rmnav"><button class="copybtn" type="button" data-inc-month="' + (mi + 1) + '"' + (mi + 1 >= rms.length ? " disabled" : "") + ' aria-label="The month before">‹</button>' +
       '<button class="copybtn" type="button" data-inc-month="' + (mi - 1) + '"' + (mi <= 0 ? " disabled" : "") + ' aria-label="The month after">›</button></span></div>' +
       (chip ? '<p class="mchip ' + esc(chip.status) + '"><b>' + esc(chip.text) + "</b>" + (chip.reason ? "<small>" + esc(chip.reason) + "</small>" : "") + "</p>" : "") +
-      '<div class="balgrid">' + cards.cards.map(function (c) {
+      '<div class="balgrid">' + cards.cards.filter(function (c) {
+        /* EUR and USD always; another currency only when something came in or is on the way (18 Nov 2026: an empty GBP card) */
+        return c.currency === "EUR" || c.currency === "USD" || !!c.landed || !!c.pending;
+      }).map(function (c) {
         return '<article class="balcard"><p class="an">' + esc(c.currency) + '</p><p class="t-big">' + esc(c.landedText) + '</p><p class="t-side">On the way: ' + esc(c.pendingText) + '</p><button class="linkbtn" type="button" data-why="' + esc(c.currency) + '">Why this number</button></article>';
       }).join("") + "</div>";
     if (ui.whyCur && V) {
@@ -1126,9 +1129,9 @@
      approvals, the files) folds behind "Steps and details", remembered per song. */
   function relCard(v) {
     var today = board.today, pill = L.upcomingPill(v, today), live = v.status === "scheduled" && !v.released, off = HQ.sample ? " disabled" : "";
-    var acts = ['<button class="copybtn" type="button" data-rel="page" data-id="' + esc(v.id) + '">Release page</button>', '<button class="copybtn" type="button" data-rel="edit" data-id="' + esc(v.id) + '">Edit the details</button>'];
-    if (live) acts.push('<button class="linkbtn" type="button" data-rel="date" data-id="' + esc(v.id) + '"' + off + ">Change the date</button>",
-      '<button class="linkbtn" type="button" data-rel="cancel" data-id="' + esc(v.id) + '"' + off + ">Cancel release</button>");
+    var acts = ['<div class="racts-main"><button class="copybtn" type="button" data-rel="page" data-id="' + esc(v.id) + '">Release page</button><button class="copybtn" type="button" data-rel="edit" data-id="' + esc(v.id) + '">Edit the details</button></div>'];
+    if (live) acts.push('<div class="racts-more"><button class="linkbtn" type="button" data-rel="date" data-id="' + esc(v.id) + '"' + off + ">Change the date</button>" +
+      '<button class="linkbtn danger" type="button" data-rel="cancel" data-id="' + esc(v.id) + '"' + off + ">Cancel release</button></div>");
     var asking = ui.rel.ask && ui.rel.ask.id === v.id, wg = L.warnGroups(v), st = L.relStatus(v, today), pr = L.relProgress(v), g = L.stepGroups(v);
     var badLeft = st.bad ? wg.bad.slice(1) : wg.bad;
     var allDone = v.released && v.counts && v.counts.total && v.counts.done === v.counts.total;
@@ -1142,7 +1145,8 @@
     var ring = face.progress.total ? '<span class="ring" style="--p:' + face.progress.pct + '" aria-label="' + esc(face.progress.text) + '"><b>' + face.progress.done + "/" + face.progress.total + "</b></span>" : "";
     var dots = face.dots.length ? '<p class="rdots" aria-hidden="true">' + face.dots.map(function (t) { return '<i class="' + t + '"></i>'; }).join("") + "</p>" : "";
     var nxt = face.next ? '<p class="rnext">Next: ' + esc(face.next.label) + " · " + esc(face.next.owner) + (face.next.when ? " · " + esc(face.next.when) : "") + "</p>" : "";
-    var stats = (face.people != null || face.taps != null) ? '<p class="rstats">' + (face.people != null ? esc(L.fmt(face.people)) + " people" : "") + (face.taps != null ? " · " + esc(L.fmt(face.taps)) + " Spotify taps" : "") + "</p>" : "";
+    var statBits = [face.people != null ? L.fmt(face.people) + " people" : "", face.taps != null ? L.fmt(face.taps) + " Spotify taps" : ""].filter(Boolean);
+    var stats = statBits.length ? '<p class="rstats">' + esc(statBits.join(" · ")) + "</p>" : "";
     if (face.prehq) { badLeft = []; wg = { bad: [], caution: [] }; }
     return '<article class="tile relcard rstrip" id="releases-' + esc(safe(v.id)) + '">' +
       (face.cover ? '<img class="rcover" src="' + esc(face.cover) + '" alt="">' : "") +
@@ -1151,7 +1155,7 @@
       '<span class="' + (pill.bad ? "bstate late" : "pill" + (pill.rel ? " rel" : "")) + '">' + esc(pill.text) + "</span></div>" +
       (face.prehq ? '<p class="prehq">pre-HQ</p>' : "") + dots + nxt +
       (face.distributor && !/ISRC|UPC/i.test(face.distributor) ? '<p class="rdist">' + esc(face.distributor) + "</p>" : "") +
-      (face.mailLine ? '<p class="rdist">' + esc(face.mailLine) + "</p>" : "") + stats +
+      (face.mailLine && !/^RouteNote email: (not connected|not reported)$/.test(face.mailLine) ? '<p class="rdist">' + esc(face.mailLine) + "</p>" : "") + stats +
       (ui.rel.note[v.id] ? '<p class="rdone" role="status">' + esc(ui.rel.note[v.id]) + "</p>" : "") +
       (!face.prehq && (st.bad || st.caution) ? '<p class="rstat' + (st.bad ? " bad" : " caution") + '">' + esc(st.text) + (st.more ? ' <span class="rmore">+' + st.more + " more</span>" : "") + "</p>" : "") +
       "</div>" +
@@ -1161,7 +1165,7 @@
       (badLeft.length ? '<ul class="rwarn" aria-label="Warnings">' + badLeft.map(function (w) { return "<li>" + esc(w) + "</li>"; }).join("") + "</ul>" : "") +
       (wg.caution.length ? '<ul class="rwarn note" aria-label="Notes">' + wg.caution.map(function (w) { return "<li>" + esc(w) + "</li>"; }).join("") + "</ul>" : "") +
       storeHtml(v) + steps + approvalsHtml(v) + packHtml(v) + relPack(v) + "</details>" +
-      (asking && (ui.rel.ask.kind === "date" || ui.rel.ask.kind === "cancel") ? relAsk(v) : '<div class="racts">' + acts.join("") + "</div>") +
+      (asking && (ui.rel.ask.kind === "date" || ui.rel.ask.kind === "cancel") ? relAsk(v) : '<div class="racts racts-card">' + acts.join("") + "</div>") +
       '<p class="ferr" role="alert">' + esc(ui.rel.err[v.id] || "") + "</p></article>";
   }
   /* Needs you (the overhaul): what on this tab waits on Luke, first; each one opens its card (or the message,
@@ -1271,6 +1275,7 @@
     var box = $("relRows");
     if (!box || !window.HQLook) return;
     var rows = HQLook.releaseRows(list, board.today);
+    var key = rows.length ? '<p class="rdots-key">Dots, in order: in Spotify for Artists · pitched · Canvas · lyrics · song page. Filled = done.</p>' : "";
     rows.forEach(function (r) {
       var rel = relById[r.id];
       var tl = rel ? HQLook.releaseTimeline(rel) : [];
@@ -1289,9 +1294,12 @@
       }
       var ready = open ? HQLook.readinessBox(blockers) : null;
       return '<article class="relrow"><button type="button" class="relrow-h" data-rel="time" data-id="' + esc(r.id) + '"><i class="sdot ' + esc(r.store.tone) + '" aria-label="' + esc(r.store.label) + '"></i><b>' + esc(r.title) + '</b><span>' + esc(r.when) + '</span><span class="rdots">' + r.dots.map(function (d) { return '<i class="' + (d.on ? "on" : "") + '" title="' + esc(d.label) + '"></i>'; }).join("") + '</span></button>' +
-        (open ? '<ol class="tl-v">' + tl.map(function (s) { return '<li class="' + (s.bad ? "bad" : s.done ? "ok" : "") + '"><b>' + esc(s.label) + "</b><span>" + esc(s.note || s.at || "") + "</span></li>"; }).join("") + "</ol>" +
+        (open ? '<ol class="tl-v">' + tl.map(function (s) {
+          var when = HQLook.stampDay ? HQLook.stampDay(s.at, L) : "";
+          var sub = s.note || (s.done && when ? when : "");
+          return '<li class="' + (s.bad ? "bad" : s.done ? "ok" : "") + '"><b>' + esc(s.label) + "</b>" + (sub ? "<span>" + esc(sub) + "</span>" : "") + "</li>"; }).join("") + "</ol>" +
           (ready ? '<div class="readybox"><p>' + esc(ready.line) + "</p>" + (ready.items.length ? "<ul>" + ready.items.map(function (i) { return "<li>" + esc(i) + "</li>"; }).join("") + "</ul>" : "") + "</div>" : "") : "") + "</article>";
-    }).join("");
+    }).join("") + key;
   }
   function drawReleases() {
     if (!board || !Array.isArray(board.releases)) return false;

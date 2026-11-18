@@ -117,13 +117,15 @@ test("a failed build: song_pages says Not done with the reason, and Webmaster ge
   const list = await S.songPages(d, later + MIN);
   assert.equal(list[0].state, 'not done: GitHub\'s build stopped at "Make the page": the cover link answered with a web page, not a picture');
 });
-test("song_pages checks the builds itself before answering", async (t) => {
+test("song_pages reads the builds itself, but only the hourly check keeps and tells (18 Nov 2026: song_pages is read-only)", async (t) => {
   const d = memoryDesk(), reports = {};
   const id = await sent(d, reports, t);
   reports[id] = { msg: id, slug: "papermoon", kind: "new", ok: false, step: "Song-page checks", reason: "a song-page check failed: made up", run: RUN, at: new Date(NOW).toISOString() };
   const s = await callTool(TOOLS.find((x) => x.name === "song_pages"), { bot: "Webmaster" }, { store: d, now: NOW + 5 * MIN, role: "bot", hq: async () => null });
   assert.match(s.requests[0].state, /^not done: GitHub's build stopped at "Song-page checks"/);
-  assert.equal((await toWebmaster(d, NOW + 5 * MIN)).filter((m) => /^Not done:/.test(m.text)).length, 1);
+  assert.equal((await toWebmaster(d, NOW + 5 * MIN)).filter((m) => /^Not done:/.test(m.text)).length, 0);
+  await S.checkSongBuilds(d, NOW + 6 * MIN, R);
+  assert.equal((await toWebmaster(d, NOW + 6 * MIN)).filter((m) => /^Not done:/.test(m.text)).length, 1);
 });
 test("a build that worked: no Not done; other tests failing afterwards go to Claude, once", async (t) => {
   const d = memoryDesk(), reports = {};

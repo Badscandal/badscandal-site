@@ -39,7 +39,7 @@ test("briefing: Luke's example sentences, 3 to 5 of them", () => {
   assert.equal(b[0], "Yesterday: USD 25.97 for 25 real Spotify taps (USD 1.04 each).");
   assert.match(b[1], /^USD \d[\d,]* left this month\.$/);
   assert.equal(b[2], "Me Dá Seu Body is out in 13 days; 1 step is late (Spotify pitch, Atlas).");
-  assert.match(b[b.length - 1], /things? needs? you below\.$|^Nothing needs you today\.$/);
+  assert.match(b[b.length - 1], /things? to check below\.$|^Nothing to check today\.$/);
 });
 
 test("briefing: no spend yesterday, a cap warning, everything on time", () => {
@@ -50,7 +50,7 @@ test("briefing: no spend yesterday, a cap warning, everything on time", () => {
   assert.equal(b[0], "Yesterday: 3 real Spotify taps from 12 people, with no ad spend.");
   assert.equal(b[1], "Ad spend is past 750: USD 802 of 1,000 this month.");
   assert.equal(b[2], "Me Dá Seu Body is out in 13 days; everything is on time.");
-  assert.equal(b[b.length - 1], "Nothing needs you today.");
+  assert.equal(b[b.length - 1], "Nothing to check today.");
 });
 
 test("needs attention: every rule, each with its place to go", () => {

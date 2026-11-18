@@ -573,9 +573,8 @@ and its connector (`staff`, `mcp`: the handlers run against
 `tests/fixtures/fake-blobs.mjs`), the release pipeline (`staff-releases`,
 `staff-sightings`) and the Revolut reader (`bank`: a fake Enable Banking
 with a throwaway key made in memory; no real bank is ever called). No test
-reads this file. `tests/mcp.test.mjs` is ORDER-DEPENDENT in one place: its
-bank test relies on the roster an earlier test leaves (Nova and Echo) and
-must run before the release tests, which reseed the full roster. For the
+reads this file. `tests/mcp.test.mjs`'s bank test seeds its own roster (Nova and Echo) since 18 Nov 2026,
+so it no longer depends on the test before it. For the
 pages, verify by:
 
     node --check js/store.js js/main.js js/flow.js js/crt.js
@@ -1240,7 +1239,7 @@ write the sheets and shouldn't). Nothing here can touch ads, posts, sheets or mo
   `read_guide` · then `releases`, `release_pack`, `release_step`, `release_fill`, `spotify_upcoming` (the
   release pipeline section), `sort_payment` (the Revolut section), `task_update` and `record_luke_answer`
   (14 Nov 2026, below). Descriptions are written for bots that follow instructions literally.
-  `tests/mcp.test.mjs` asserts the count (20) in five places.
+  `tests/mcp.test.mjs` asserts the count (47 since 18 Nov 2026) in several places.
 * **Guard rails in `staff.mjs`:** names only from the roster; every text cleaned and cut; links only
   `https://`; `secretIn()` refuses passwords, login codes, API keys, private keys, IBANs and card numbers
   (it must NOT refuse ISRCs, UPCs, 15-digit ad account ids or "token: expired": tested); an amount that
@@ -2494,3 +2493,23 @@ Read-only. Nothing sends email, changes an ad, or writes to Instagram or Meta. N
 - **When messages are supplied** (tests, and later a real mailbox), `applyRouteNoteMail` matches a release by title, sets that release's store status from the email, and notes Drop once. A rejection also notes Luke (`ask: "routenote"`, needs action) and Needs you shows it. The drafted fix is the existing rule: change what RouteNote named, then `store_status` ready_to_resubmit. An email with no known phrase, or no matching song, does not change a card. A body that looks like a password is dropped and never stored. HQ does not email anyone.
 - **Verse, on the release day** (São Paulo). `verseReleaseDay` sends one desk note to Verse to submit the approved lyrics on Musixmatch when the song shows there. A song not on Musixmatch yet is not a block. The pack's lyrics are not copied into the note. The same day does not send a second note. The day before and the day after do nothing. `my_day` for Verse gains `lyrics_duty` that day.
 - **Content ID claims.** Laura records one with `log_growth` (`claim`, and `claimant` / `impact` when YouTube showed them, plus `date`). Steve, Atlas and Kevin are refused. A blank shows as "not reported". Growth & Fans shows only what was recorded. An empty list says "No Content ID claim has been recorded." The sample has one made-up claim marked "(sample)". Tests: `tests/watchers.test.mjs`.
+
+## Handoff fixes (18 Nov 2026, PR #90)
+
+The suspected bugs in `docs/HQ-FULL-HANDOFF.md` section 9, fixed. Tests: `tests/handoff-fixes.test.mjs`.
+* **One "waiting on you" list.** `S.waitingOnLuke` on `needsDesk()` (`netlify/lib/needs.mjs`: the desk + Luke's open
+  Yes/No/Edit cards + account health from the board's inputs) = messages to Luke needing a decision, reply or action,
+  Spotify for Artists songs only he can name, his cards (held ones too), red accounts. It feeds the phone's pulse
+  (`board.needs`, `C.needsCount`), Today's line and the app badge (`/api/hq/push/waiting`), the push alerts, and the
+  `needs_you` tool. `HQLook.needTotal()` is the same rule offline. Alerts are "to check", never "need you"/"at risk".
+  Lock-screen texts say who and what kind, never an amount or a payee.
+* **Read-only means read-only.** A test calls every `readOnly` tool and diffs the desk. `profile_jobs` lists only
+  (the hourly job asks Luke about a stuck job); `song_pages` peeks at build reports (`S.peekSongBuilds`); `instagram`
+  is not `readOnly`. Opening /hq does not send the profile question either.
+* **Read marker:** `read/<name>.json` = `{at, also, readAt}`. `callTool` → `settleRead` moves it only past what the
+  answer handed over; `read_messages` says `still_unread`; `unread: true` hands over the oldest first.
+* Spotify account health says tracks. `netlify.toml` names `song-geo.js` (tested). CI runs Node 22 and 24.
+* Luke's screenshots, same day: Upcoming rows say dates in words (`HQLook.stampDay`), buttons spaced (`.racts-card`), the
+  step is "Approved by RouteNote" (old ones renamed quietly in `healOne`); Money hides the bots' id list (`incomeProblems`);
+  Needs you has no platform blocks (Growth cards carry the health dot + 7-day views) and no RouteNote email card
+  (`phoneWatchers`); Instagram posts keep `thumb` from the same `/media` read, the Monday pick falls back to the song cover.

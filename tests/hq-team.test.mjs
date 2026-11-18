@@ -27,7 +27,7 @@ test("teamCounts: the three numbers on top", () => {
 
 test("botProblems: only what is wrong, in words, blocked before late; nothing for a bot on track", () => {
   assert.deepEqual(L.botProblems(bot("Kevin"), b.today), [{ what: "Log TikTok followers + best post", why: "Blocked: TikTok login expired" }]);
-  assert.deepEqual(L.botProblems(bot("Drop"), b.today), [{ what: "Approved by RouteNote (nothing waiting)", why: "Me Dá Seu Body · blocked: RouteNote wants a cover without the web address on it. Needs a new cover from Luke." }]);
+  assert.deepEqual(L.botProblems(bot("Drop"), b.today), [{ what: "Approved by RouteNote", why: "Me Dá Seu Body · blocked: RouteNote wants a cover without the web address on it. Needs a new cover from Luke." }]);
   const atlas = L.botProblems(bot("Atlas"), b.today);
   assert.deepEqual(atlas, [], "a step waiting for RouteNote's approval is not a problem (16 Nov 2026); a done duty neither");
   assert.equal(bot("Atlas").releaseSteps.find((s) => s.key === "spotify").waitingText, "waiting: RouteNote has not approved it yet");

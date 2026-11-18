@@ -352,3 +352,27 @@ test("comments keep who replied (usernames only), so a question we answered isn'
   const v = await IG.igView(st, NOW);
   assert.equal(v.needsReply.length, 0, "our own account replied");
 });
+
+test("the post's own picture comes in the same read (no extra call), and an expired one falls back on the page (18 Nov 2026)", async () => {
+  const posts = [
+    { id: "p1", caption: "Made up reel", media_type: "VIDEO", media_product_type: "REELS", timestamp: new Date(NOW - 7 * H).toISOString(), permalink: "https://www.instagram.com/reel/madeup1/", like_count: 40, comments_count: 2, thumbnail_url: "https://cdn.example.com/thumb1.jpg", media_url: "https://cdn.example.com/video1.mp4" },
+    { id: "p2", caption: "Made up photo", media_type: "IMAGE", timestamp: new Date(NOW - 30 * DAY).toISOString(), permalink: "https://www.instagram.com/p/madeup2/", like_count: 9, comments_count: 0, media_url: "https://cdn.example.com/photo2.jpg" },
+    { id: "p3", caption: "No picture", media_type: "IMAGE", timestamp: new Date(NOW - 31 * DAY).toISOString(), permalink: "https://www.instagram.com/p/madeup3/", like_count: 1, comments_count: 0, media_url: "javascript:alert(1)" }];
+  const ig = fakeIg({ posts }), st = memStore();
+  await IG.saveKey(st, TOKEN, NOW, ig.f);
+  const before = ig.calls.length;
+  await IG.syncInstagram({ store: st, now: NOW, fetchImpl: ig.f });
+  const media = ig.calls.slice(before).filter((c) => /\/media$/.test(c.path));
+  assert.equal(media.length, 1, "one media read, as before");
+  assert.match(media[0].q.fields, /media_url,thumbnail_url/);
+  const saved = await st.get("posts.json");
+  assert.equal(saved.find((p) => p.id === "p1").thumb, "https://cdn.example.com/thumb1.jpg", "a video shows its thumbnail, never the video file");
+  assert.equal(saved.find((p) => p.id === "p2").thumb, "https://cdn.example.com/photo2.jpg");
+  assert.equal(saved.find((p) => p.id === "p3").thumb, undefined, "only https pictures");
+  const pick = HL.mondayPick({ ranked: [{ caption: "Made up reel", thumb: "https://cdn.example.com/thumb1.jpg", song: "Made Up Song", rate: 0.05 }] }, null, [{ title: "Made Up Song", cover: "/assets/made-up-cover.webp" }]);
+  assert.equal(pick.pick.cover, "https://cdn.example.com/thumb1.jpg");
+  assert.equal(pick.pick.fallback, "/assets/made-up-cover.webp", "the linked song's cover if Instagram's link expired");
+  assert.equal(pick.pick.song, "Made Up Song");
+  const noThumb = HL.mondayPick({ ranked: [{ caption: "Studio night", song: "Made Up Song", rate: 0.05 }] }, null, [{ title: "Made Up Song", cover: "/assets/made-up-cover.webp" }]);
+  assert.equal(noThumb.pick.cover, "/assets/made-up-cover.webp", "the song Steve or Forge linked gives the cover even when the caption doesn't name it");
+});

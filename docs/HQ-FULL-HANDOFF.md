@@ -87,7 +87,7 @@ Sheet IMPORTDATA  --?key---->  GET /api/feed/meta-daily.csv , meta-ads.csv
 
 Preview URL shape, from `docs/WORKING-WITH-LUKE.md`: `https://deploy-preview-<PR>--profound-haupia-db7ffa.netlify.app/hq`. `?sample=1` shows made-up numbers after login and does not open a real store.
 
-**Storage.** Five Blob stores (see section 5):
+**Storage.** Six Blob stores (see section 5):
 
 | Store | Consistency in code | Holds |
 |---|---|---|
@@ -1177,7 +1177,7 @@ That is `tests/songs.test.mjs`, `tests/song-pages-desk.test.mjs`, `tests/webmast
 
 `tests/js-syntax.test.mjs` parses every browser script. A broken apostrophe in `js/hq.js` once took HQ and both apps down (PR #57). Keep that test.
 
-`tests/mcp.test.mjs` is order-sensitive in one older place: a bank test can rely on a roster an earlier test left behind. Run the file as part of `npm test`, not as a hand-picked subset, if you are chasing a roster failure.
+`tests/mcp.test.mjs`'s bank test seeds its own roster since 18 Nov 2026, so the file no longer depends on test order there.
 
 Do not point tests at the live desk. `tests/fixtures/fake-blobs.mjs` replaces `@netlify/blobs`. `?sample=1` uses in-memory stores. No test should contain a real payer, a real amount from the accounts, or lyrics.
 
@@ -1395,6 +1395,25 @@ The comment says `touchme-geo.js`. The file is `song-geo.js`. Behaviour follows 
 - L3 part 2 and L10 are not built.
 - The public home still has the stream line Luke called out (“as of September 2026”) and the Plugin store placement. Those were left for him on purpose. They are not HQ bugs.
 - `tests/mcp.test.mjs` still has comments from when the tool count was 20. The assertion is 47. The comment can mislead a search.
+
+### Fixed after the handoff (18 Nov 2026, branch `claude/laughing-babbage-0jjpdu`, not merged until Luke says deploy)
+
+Tests for every fix are in `tests/handoff-fixes.test.mjs` (and one each in `tests/push.test.mjs` and `tests/instagram.test.mjs`). 765 pass on Node 24 and Node 22.
+
+| # | Bug | Fix |
+|---|---|---|
+| 1 | Two different “need you” lines | ONE list, `S.waitingOnLuke` on `needsDesk()` (`netlify/lib/needs.mjs`): messages to Luke needing a decision, reply or action (lyrics and pitch approvals too), Spotify for Artists songs only he can name, his open Yes/No/Edit cards (held overnight ones too) and red accounts. It is the phone's pulse (`board.needs`), Today's “N things waiting on you” and the app badge (`/api/hq/push/waiting`), the push alerts (a new card or red account buzzes once, by who and kind, never an amount), and the `needs_you` tool (`total`, `line`, `waiting`). `HQLook.needTotal()` is the same rule for an offline copy. Alerts are “to check”, never “at risk” or “need you” (pulse and desktop briefing). The card stack's own line says only the money at risk. Anything counted without its own card is listed under “Also waiting on you”. A snoozed card still counts and the phone says so. The unused `lyricsCard()` was removed. Farm and Label keep their own header. Checked in Chromium on the sample: board 10, badge 10, Today “10 things waiting on you”, 10 items drawn. |
+| 2 | Spotify health said “posts” | The reach line says tracks for Spotify (“tracks Atlas recorded”). TikTok and YouTube still say posts. |
+| 3, 4 | Short docs and #88's message behind the tree | HANDOFF.md and STATUS.md point here. #88's commit message can't be changed: the tree is right (47 tools). |
+| 5 | `profile_jobs` messaged Luke | It only lists now and is marked read-only. The hourly job (`pushhourly.mjs`) and the board ask Luke about a job stuck over a day, once. |
+| 6 | Read-only tools that wrote | A test calls every read-only tool and checks the desk is unchanged apart from the caller's own markers. `account_health` now reads the same inputs as the board (stored Instagram copy, claims, builds), so the tool and the phone agree. Opening /hq no longer sends the stuck-profile-job question (the hourly job does). `song_pages` reads the build reports without saving them or messaging (the hourly job still does both). `instagram` is no longer labelled read-only (post+song and our-accounts writes, and a fresh read can use a Meta call). `my_day`, `read_messages` and Alfred's `luke_briefing` still move only the caller's own read marker. |
+| 7 | `read_messages` marked unread messages read | The marker moves only past what the answer handed over: `read/<name>.json` is `{at, also}` (ids handed over after `at`). A read that returns 20 of 25 says `still_unread` and the other 5 stay unread. `unread: true` hands over the oldest first, so a backlog is read to the end. The default view now includes what `my_day` hands over (about you, answers to yours). “Read by X” uses the time the reading happened (`readAt`). `luke_briefing`'s output did not change. |
+| 8 | RouteNote mail can't be read | Not a code bug: it needs Luke to sign the inbox in, read-only. Nothing invented meanwhile. |
+| 9 | `netlify.toml` named `touchme-geo.js` | It names `song-geo.js`, and a test checks every file the toml names exists. |
+| 10 | Stale PRs | #72, #74, #78, #81, #82 and #86 closed with a note (their content is on main). |
+| 12 | Luke's screenshots, 18 Nov | Upcoming: the release rows' list showed raw timestamps glued to the label ("Uploaded2026-11-16T22:15…") and "Ready to send" for songs already sent: now "Uploaded ✓ / Mon 16 Nov", notes on their own line, "Files and details: nothing missing"; the row dots light up (CSS used `.done`, rows used `.on`) and have a one-line key. Cards: "RouteNote email: not connected" said once above the list, not on every card; no empty line when a song has no page numbers; the two buttons share a row and the two text links (Cancel in red) sit on their own row with room; the step "Approved by RouteNote (nothing waiting)" is now "Approved by RouteNote" (old releases renamed quietly); the one-pitch skip reads "Pitch: not this time. … has the pitch for these two weeks…". Money: no empty GBP card, "On the way: nothing", and "To look at" no longer shows the bots' id list. Team: "1 earlier" sits under the update. Checked in Chromium at 390 px, dark: no raw timestamps, "Invalid Date", "undefined" or "NaN" on any tab. |
+| 13 | Luke, 18 Nov (more) | Needs you: the four platform stat blocks are gone (their numbers live on Growth & Fans: each card now carries the account-health dot and "N views in the last 7 days"); the "RouteNote email: not connected" card is gone everywhere (Luke: RouteNote mail is forwarded to his inbox; a rejection that reaches the desk still shows); the Monday pick shows each post's own picture, read in the SAME hourly Instagram call (`media_url` / `thumbnail_url`, no extra call), falling back to the linked song's cover when Instagram's link expires. |
+| 11 | Smaller things | The four clocks and the two “card” files are explained above. The Blob store table lists six stores, not five. `tests/mcp.test.mjs`'s bank test seeds its own roster (no longer order-dependent). GitHub Actions runs the tests on Node 22 AND 24. `needs_you` masks private digits like `my_day`. |
 
 ---
 

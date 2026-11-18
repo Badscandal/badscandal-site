@@ -48,6 +48,7 @@ import { loadHq } from "../lib/hq-load.mjs";
 import { handle } from "../lib/mcp.mjs";
 import { sweep as pushSweep } from "../lib/push.mjs";
 import { COOKIE, readCookie, verifySession } from "../lib/session.mjs";
+import { needsDesk, sampleNeedsDesk } from "../lib/needs.mjs";
 import * as C from "../lib/action-cards.mjs";
 import { pingNames } from "../lib/desk-push.mjs";
 import * as S from "../lib/staff.mjs";
@@ -102,7 +103,7 @@ function stores(context) {
 /* a push sweep after something new may wait on Luke; never throws, never fails the call it follows */
 function pushAfter(context, st, now) {
   const p = (async () => {
-    try { await pushSweep(st.desk, now, { desk: () => S.loadDesk(st.desk, now), env: (k) => Netlify.env.get(k) }); }
+    try { await pushSweep(st.desk, now, { desk: () => needsDesk(st.desk, now, { ig: igStore(context) }), env: (k) => Netlify.env.get(k) }); }
     catch (e) { console.error("push sweep failed", e?.name || "Error"); }
   })();
   if (context && typeof context.waitUntil === "function") { try { context.waitUntil(p); return Promise.resolve(); } catch {} }
@@ -206,9 +207,9 @@ async function api(req, context, path) {
   }
   if (path === "fields" && req.method === "GET") return json(200, { today: S.spDay(now), packFields: S.packFieldsOut(), releaseSteps: S.releaseStepsOut() });
   if (path === "board" && req.method === "GET") {
-    if (sample) return json(200, { sample: true, ...sampleBoard(now), auto: C.sampleAuto(now), accountHealth: sampleReport(now) });
+    if (sample) return json(200, { sample: true, ...sampleBoard(now), auto: C.sampleAuto(now), accountHealth: sampleReport(now), needs: C.needsCount(await sampleNeedsDesk(now), S.spDay(now), now) });
     const st = stores(context);
-    await P.profileAlerts(st.desk, now, await S.getRoster(st.desk)).catch(() => null);
+    /* a stuck profile job is asked about by the hourly job (pushhourly.mjs), not by opening the page (18 Nov 2026) */
     await S.upgradeReleases(st.desk, now).catch(() => null); /* releases sent before the pipeline changed (15 Nov 2026) */
     const [desk, hqAns] = await Promise.all([S.loadDesk(st.desk, now), hqLoader(st)().catch(() => null)]);
     /* the board hands Claude every message, so it counts as Claude having READ them (11 Nov 2026, review:
@@ -219,7 +220,9 @@ async function api(req, context, path) {
     const auto = await C.boardAuto(st.desk, now, desk).catch(() => null);
     /* account health reads the desk and the stored Instagram copy. A failure here must not blank the board. */
     const accountHealth = await loadReport({ store: st.desk, ig: igStore(context), now, claims: desk.claims, builds: pageBuilds }).catch(() => null);
-    return json(200, { ...S.board(desk, now, hqAns && hqAns.team ? hqAns : null), pageBuilds, hqRead: !!(hqAns && hqAns.team), accountHealth, ...(auto ? { auto } : {}), keys: { bots: !!Netlify.env.get("STAFF_BOT_KEY"), claude: !!Netlify.env.get("STAFF_CLAUDE_KEY") } });
+    /* the ONE Needs you count (C.needsCount): the phone's line and the needs_you tool say the same number */
+    const needs = C.needsCount(await needsDesk(st.desk, now, { desk, auto, report: accountHealth }), S.spDay(now), now);
+    return json(200, { ...S.board(desk, now, hqAns && hqAns.team ? hqAns : null), pageBuilds, hqRead: !!(hqAns && hqAns.team), accountHealth, needs, ...(auto ? { auto } : {}), keys: { bots: !!Netlify.env.get("STAFF_BOT_KEY"), claude: !!Netlify.env.get("STAFF_CLAUDE_KEY") } });
   }
   if (path === "trace" && req.method === "GET") return sample ? json(200, { sample: true, trace: [] }) : json(200, { trace: await S.getTrace(stores(context).desk) });
   if (path === "workspace" && req.method === "GET") {

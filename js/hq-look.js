@@ -42,13 +42,30 @@
   }
   function https(url) { return /^https:\/\//.test(String(url || "")) ? String(url) : ""; }
 
-  /* "3 need you · 1 at risk". Both zero is the caught-up line. The words stay as written for 1 as well. */
+  /* "3 need you · 1 to check". need = the ONE Needs you count (board.needs.total from the server, else
+     needTotal() below: the same rule). The second number is alerts (late steps, the cap, quiet bots), which are
+     not money, so they are "to check", never "at risk" (18 Nov 2026, handoff bug 1). Both zero is the caught-up
+     line. The words stay as written for 1 as well. */
   function homePulse(o) {
     o = o || {};
     var need = Array.isArray(o.need) ? o.need.length : (num(o.need) || 0);
     var risk = Array.isArray(o.risk) ? o.risk.length : (num(o.risk) || 0);
     var caughtUp = need === 0 && risk === 0;
-    return { need: need, risk: risk, caughtUp: caughtUp, line: caughtUp ? "You're all caught up" : need + " need you · " + risk + " at risk" };
+    return { need: need, risk: risk, caughtUp: caughtUp, line: caughtUp ? "You're all caught up" : need + " need you · " + risk + " to check" };
+  }
+  /* The server's rule (S.waitingOnLuke via action-cards.mjs needsCount), for when the board has no count (an
+     offline copy): open messages to Luke needing a decision, reply or action + Spotify for Artists songs only he
+     can name + his open cards (live and held) + red account rows. */
+  function needTotal(o) {
+    o = o || {};
+    var messages = (o.messages || []).filter(function (m) {
+      return m && !m.resolved && m.to === "Luke" && /^(decision|reply|action)$/.test(String(m.needs || ""));
+    }).length;
+    var spotify = ((o.sightings && o.sightings.items) || []).filter(function (x) { return x && (x.state === "unknown" || x.state === "retry"); }).length;
+    var auto = o.auto || {};
+    var cards = ((auto.needsYou || []).length) + ((auto.held || []).length);
+    var accounts = (o.healthNeeds || []).length;
+    return { total: messages + spotify + cards + accounts, messages: messages, spotify: spotify, cards: cards, accounts: accounts };
   }
 
   /* A milestone only when the latest logged point crossed a mark the one before had not. */
@@ -270,9 +287,17 @@
       return { key: stage.key, label: stage.label, done: done && !bad, bad: !!bad, at: stampOf(step, store, stage.key), note: note || (bad ? "No reason reported" : ""), autoOpen: !!bad && !!(note || store.reason || (step && step.note)) };
     });
   }
+  /* under a song that was already sent: are its files and details complete? (18 Nov 2026: it said "Ready to send"
+     for songs that had been sent) */
   function readinessBox(blockers) {
     var list = (blockers || []).filter(Boolean).map(function (b) { return typeof b === "string" ? b : (b.text || b.label || ""); }).filter(Boolean);
-    return { ready: !list.length, items: list, line: list.length ? list.length + " still in the way" : "Ready to send" };
+    return { ready: !list.length, items: list, line: list.length ? (list.length === 1 ? "1 thing missing" : list.length + " things missing") + " from the files and details" : "Files and details: nothing missing" };
+  }
+  /* "Mon 16 Nov" from a stored stamp (an ISO instant or a day); "" when it isn't one (never the raw text) */
+  function stampDay(at, L) {
+    var m = String(at || "").match(/^(\d{4}-\d{2}-\d{2})/);
+    if (!m) return "";
+    return L && L.day ? L.day(m[1]) : m[1];
   }
 
   function adsPins(o, L) {
@@ -373,7 +398,7 @@
         landed: landed,
         pending: pending,
         landedText: landed == null ? "not reported" : landed === 0 ? "Nothing received" : money(landed, c, L),
-        pendingText: pending == null ? "not reported" : pending === 0 ? "Nothing waiting" : money(pending, c, L)
+        pendingText: pending == null ? "not reported" : pending === 0 ? "nothing" : money(pending, c, L)
       };
     }) };
   }
@@ -549,7 +574,7 @@
   }
 
   var api = {
-    homePulse: homePulse, milestones: milestones, releaseHero: releaseHero, platformKpis: platformKpis, healthDot: healthDot,
+    homePulse: homePulse, needTotal: needTotal, stampDay: stampDay, milestones: milestones, releaseHero: releaseHero, platformKpis: platformKpis, healthDot: healthDot,
     sparkSvg: sparkSvg, decisionStack: decisionStack, releaseRows: releaseRows, releaseTimeline: releaseTimeline, readinessBox: readinessBox,
     lyricsState: lyricsState, adsPins: adsPins, runningNow: runningNow, creativePlot: creativePlot,
     moneyCards: moneyCards, monthChip: monthChip, whyPayments: whyPayments, splitOff: splitOff, plainStatus: plainStatus, paymentBucket: paymentBucket,
