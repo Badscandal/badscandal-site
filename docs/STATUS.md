@@ -6,7 +6,7 @@ No money amounts, payer names or account numbers in this file: the repo is publi
 
 ## In review (not live)
 
-HQ polish, branch `cursor/hq-polish-declutter-c9eb`. Today leads with what needs Luke. Long notes fold behind "The rest of the note", "Numbers" and "Steps and details". The phone bar leaves the last card clear. A step whose note says it is waiting is not shown as blocked, and is not red. `my_day` says reconnect needed when the bot reports an old tool list. `set_my_card` can clear a blocker on its own. A card blocker older than 48 hours is "old, still true?" and drops off the headline. Open questions to Luke include how long they have waited. Unsorted payments are named by id and date on `my_day` only (Alfred's briefing stays as it is).
+HQ polish, PR #68, branch `cursor/hq-polish-declutter-c9eb`. Today leads with what needs Luke. Long notes fold behind "The rest of the note", "Numbers" and "Steps and details". The phone bar leaves the last card clear. A step whose note says it is waiting is not shown as blocked, and is not red. `my_day` says reconnect needed when the bot reports an old tool list. `set_my_card` can clear a blocker on its own. A card blocker older than 48 hours is "old, still true?" and drops off the headline. Open questions to Luke include how long they have waited. Unsorted payments are named by id and date on `my_day` only (Alfred's briefing stays as it is).
 
 ## Live (newest first)
 

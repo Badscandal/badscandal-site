@@ -56,7 +56,7 @@ artist growth bot that all we will need is content and $".
 
 ## In flight (branches not merged)
 
-- HQ polish (`cursor/hq-polish-declutter-c9eb`): calmer /hq (what needs Luke first, details folded, the phone bar clears the last card) and desk fixes (`my_day` reconnect line, optional `working_on`, stale blockers, questions to Luke, unsorted payment ids, a waiting step is not "blocked"). Not merged. L3 part 1 is live as PR #66 (`dab08d2`).
+- HQ polish (PR #68, `cursor/hq-polish-declutter-c9eb`): calmer /hq (what needs Luke first, details folded, the phone bar clears the last card) and desk fixes (`my_day` reconnect line, optional `working_on`, stale blockers, questions to Luke, unsorted payment ids, a waiting step is not "blocked"). Not merged. L3 part 1 is live as PR #66 (`dab08d2`).
 
 ## Waiting on someone
 
