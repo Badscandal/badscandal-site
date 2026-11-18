@@ -51,7 +51,7 @@ No money amounts, payer names or account numbers in this file: the repo is publi
 
 ## In flight
 
-- L5 (watchers), branch `cursor/hq-l5-watchers-5846`. Not merged. No new tool. RouteNote email is not connected: Luke has to sign the site into that inbox, read-only, before a moderation result can show. Until then the card says "not connected". Verse gets one desk note on the release day (São Paulo). Content ID claims are only what Laura records with `log_growth`. HQ does not email anyone and does not invent a number.
+- L5 (watchers), PR #73, branch `cursor/hq-l5-watchers-5846`. Not merged. Preview: https://deploy-preview-73--profound-haupia-db7ffa.netlify.app/hq?sample=1. No new tool. RouteNote email is not connected: Luke has to sign the site into that inbox, read-only, before a moderation result can show. Until then the card says "not connected". Verse gets one desk note on the release day (São Paulo). Content ID claims are only what Laura records with `log_growth`. HQ does not email anyone and does not invent a number.
 
 ## Next up
 
