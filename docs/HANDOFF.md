@@ -56,7 +56,7 @@ artist growth bot that all we will need is content and $".
 
 ## In flight (branches not merged)
 
-- **L4 per-song profit** on `cursor/song-pl-bfd9` (not merged). Money › Per song: royalties by store next to ad spend that names the song, and the release date. Spend or a royalty payment with no song says "not linked to a song". No new tool (still 40). `income_status` gains `per_song`. Ledger, Sheet, Forge and Nova refresh after it is live.
+- **L4 per-song profit** on `cursor/song-pl-bfd9`, PR #67 (not merged). Preview: https://deploy-preview-67--profound-haupia-db7ffa.netlify.app/hq?sample=1 . Money › Per song: royalties by store next to ad spend that names the song, and the release date. Spend or a royalty payment with no song says "not linked to a song". No new tool (still 40). `income_status` gains `per_song`. Ledger, Sheet, Forge and Nova refresh after it is live.
 
 ## Waiting on someone
 
@@ -96,7 +96,7 @@ Later, if he asks:
 2. **After a week of Instagram data:** check the ranking with Luke against what he sees in the app; tune the
    300-view floor and the 1-day window if needed.
 3. **B2 YouTube Analytics** (one Google sign-in from Luke), so Laura's numbers come in by themselves.
-4. **The rest of Later** (L1 expected money, L5, L9, L10): see docs/HQ-ROADMAP.md. L4 (per-song profit) is in flight on `cursor/song-pl-bfd9`, not live.
+4. **The rest of Later** (L1 expected money, L5, L9, L10): see docs/HQ-ROADMAP.md. L4 (per-song profit) is in flight as PR #67, not live.
 5. **H1–H4** stay on hold until Luke decides (they would touch ads, posting or fans' data).
 
 ## How to check your work

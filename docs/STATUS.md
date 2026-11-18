@@ -47,7 +47,7 @@ No money amounts, payer names or account numbers in this file: the repo is publi
 
 ## Next up
 
-- L3 fan inbox part 1 is live (PR #66). L4 (per-song profit) is in flight on `cursor/song-pl-bfd9`, not live. Next, only on Luke's word: L3 part 2 (a fan's country, and a ready reply he approves). HQ would still never send it. A later Profiles slice (reading an image from a platform) still needs his go, and HQ would still not log in.
+- L3 fan inbox part 1 is live (PR #66). L4 (per-song profit) is in flight as PR #67, not live. Next, only on Luke's word: L3 part 2 (a fan's country, and a ready reply he approves). HQ would still never send it. A later Profiles slice (reading an image from a platform) still needs his go, and HQ would still not log in.
 - Still needs Luke: B2 YouTube sign-in, the on-hold decisions H1–H4, and L11 (who "Luka" is). B1 and B5 are not needed; B4 Instagram is connected.
 - The rest of Later (L1, L5, L9, L10) waits. Start any of it on his word.
 
