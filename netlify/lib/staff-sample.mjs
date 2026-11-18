@@ -171,6 +171,8 @@ export function sampleDesk(now = Date.now()) {
   return { roster: ROSTER, updates, messages, cards: { atlas: { workingOn: "Backfilling Touch Me's daily rows to release day", needs: "", at: new Date(ago(200)).toISOString() }, kevin: { workingOn: "TikTok banner", needs: "Luke's phone code for TikTok", at: new Date(ago(400)).toISOString() } },
     seen, income: S.incomeReport(entries, checks, SOURCES.map((s) => ({ match: [], category: "Other", currency: "", lands: "", how: "", blocker: "", needsLuke: "", ...s })), today), config: { botsOn: true, changedAt: null },
     releases: sampleReleases(now), read, sightings: sampleSightings(now),
+    /* L5: one made-up claim so the panel has a shape under the SAMPLE banner. Mail stays not connected. */
+    claims: { items: [{ claim: "Sample claim (sample)", claimant: "Sample Channel", impact: "one video flagged", date: "2026-11-01", by: "Laura" }] },
     /* L12: a live Spotify header, and an Instagram photo Luke already said yes to (made-up links) */
     profiles: { slots: {
       "spotify-header": { current: { link: "https://example.com/sample/spotify-header.jpg", changed: d(40), by: "Atlas", at: new Date(ago(40 * 1440)).toISOString() } },

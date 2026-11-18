@@ -1058,7 +1058,7 @@
         (g.done.length ? '<details class="bwhy" data-fold="done:' + esc(v.id) + '"' + (ui.rel.fold["done:" + v.id] ? " open" : "") + "><summary>Done or not ours (" + g.done.length + ")</summary>" + stepList(g.done) + "</details>" : "");
     var sheetSong = (HQ.sheet() && HQ.sheet().songs || []).filter(function (s) { return L.titleKey(s.song) === L.titleKey(v.title); })[0];
     var pageSong = (HQ.overview && HQ.overview() && HQ.overview().songs || []).filter(function (s) { return L.titleKey(s.title) === L.titleKey(v.title); })[0];
-    var face = L.releaseFace(v, today, { cover: (pageSong && pageSong.cover) || (sheetSong && sheetSong.cover) || "", taps: pageSong ? pageSong.taps : null, people: pageSong ? pageSong.people : null, spend: "" });
+    var face = L.releaseFace(v, today, { cover: (pageSong && pageSong.cover) || (sheetSong && sheetSong.cover) || "", taps: pageSong ? pageSong.taps : null, people: pageSong ? pageSong.people : null, spend: "", mail: board && board.mail });
     var ring = face.progress.total ? '<span class="ring" style="--p:' + face.progress.pct + '" aria-label="' + esc(face.progress.text) + '"><b>' + face.progress.done + "/" + face.progress.total + "</b></span>" : "";
     var dots = face.dots.length ? '<p class="rdots" aria-hidden="true">' + face.dots.map(function (t) { return '<i class="' + t + '"></i>'; }).join("") + "</p>" : "";
     var nxt = face.next ? '<p class="rnext">Next: ' + esc(face.next.label) + " · " + esc(face.next.owner) + (face.next.when ? " · " + esc(face.next.when) : "") + "</p>" : "";
@@ -1070,7 +1070,8 @@
       '<p class="rwhen">' + esc(face.when) + "</p>" + dealHtml(v) + "</div>" + ring +
       '<span class="' + (pill.bad ? "bstate late" : "pill" + (pill.rel ? " rel" : "")) + '">' + esc(pill.text) + "</span></div>" +
       (face.prehq ? '<p class="prehq">pre-HQ</p>' : "") + dots + nxt +
-      (face.distributor ? '<p class="rdist">' + esc(face.distributor) + "</p>" : "") + stats +
+      (face.distributor ? '<p class="rdist">' + esc(face.distributor) + "</p>" : "") +
+      (face.mailLine ? '<p class="rdist">' + esc(face.mailLine) + "</p>" : "") + stats +
       (ui.rel.note[v.id] ? '<p class="rdone" role="status">' + esc(ui.rel.note[v.id]) + "</p>" : "") +
       (!face.prehq && (st.bad || st.caution) ? '<p class="rstat' + (st.bad ? " bad" : " caution") + '">' + esc(st.text) + (st.more ? ' <span class="rmore">+' + st.more + " more</span>" : "") + "</p>" : "") +
       "</div>" +
