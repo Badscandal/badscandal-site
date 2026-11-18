@@ -26,20 +26,23 @@ test("every official platform is listed, with its owner and only the images it h
   const ids = S.PROFILE_SLOTS.map((s) => s.id);
   assert.equal(new Set(ids).size, ids.length);
   assert.deepEqual(S.PROFILE_SLOTS.map((s) => s.platform).filter((p, i, a) => a.indexOf(p) === i),
-    ["Facebook Page", "Instagram", "YouTube", "Spotify", "Apple Music", "TikTok", "X", "SoundCloud", "Deezer", "Amazon Music"]);
+    ["Facebook Page", "Instagram", "YouTube", "Spotify", "Apple Music", "TikTok", "X", "SoundCloud", "Deezer", "Amazon Music", "TIDAL"]);
   const owner = (platform) => S.PROFILE_SLOTS.filter((s) => s.platform === platform).map((s) => s.owner);
   assert.deepEqual(owner("Facebook Page"), ["Steve", "Steve"]);
-  assert.deepEqual(owner("Instagram"), ["Steve"]);
+  assert.deepEqual(owner("Instagram"), ["Luke"]);
   assert.deepEqual(owner("YouTube"), ["Laura", "Laura"]);
   assert.deepEqual(owner("TikTok"), ["Kevin"]);
   assert.deepEqual(owner("X"), ["", ""]);
-  for (const p of ["Spotify", "Apple Music", "SoundCloud", "Deezer", "Amazon Music"]) assert.ok(owner(p).every((o) => o === "Atlas"), p);
+  for (const p of ["Spotify", "Apple Music", "SoundCloud", "Deezer", "Amazon Music", "TIDAL"]) assert.ok(owner(p).every((o) => o === "Atlas"), p);
   assert.deepEqual(S.PROFILE_SLOTS.filter((s) => s.platform === "Instagram").map((s) => s.kind), ["Profile photo"], "Instagram has no banner");
   const view = S.profilesView({}, []);
-  assert.equal(view.platforms.length, 10);
-  assert.equal(slot(view, "Instagram", "instagram-photo").rule, "Rule not set");
-  assert.equal(slot(view, "TikTok", "tiktok-photo").rule, "Rule not set");
-  assert.equal(slot(view, "Deezer", "deezer-photo").rule, "Rule not set");
+  assert.equal(view.platforms.length, 11);
+  assert.match(slot(view, "Instagram", "instagram-photo").rule, /does not publish/);
+  assert.match(slot(view, "Instagram", "instagram-photo").rule, /320 x 320/);
+  assert.match(slot(view, "TikTok", "tiktok-photo").rule, /at least 20 x 20/);
+  assert.match(slot(view, "TikTok", "tiktok-photo").rule, /720 x 720/);
+  assert.match(slot(view, "Deezer", "deezer-photo").rule, /1200 x 1200/);
+  assert.match(slot(view, "TIDAL", "tidal-photo").rule, /1500 x 1500/);
   assert.match(slot(view, "Spotify", "spotify-header").rule, /2660 x 1140/);
   assert.match(slot(view, "YouTube", "youtube-banner").rule, /min 2048x1152, 2560x1440 recommended/); /* 18 Nov 2026: minimum restored */
   assert.equal(slot(view, "Spotify", "spotify-header").current, null);
@@ -74,12 +77,13 @@ test("new size rules are the published ones; a kind with no rule is not invented
 
 test("the owner records the live image; another bot cannot; a bad link or a future day is refused", async () => {
   const d = memoryDesk();
-  const saved = await call(d, "profiles", { bot: "Steve", action: "record", platform: "Instagram", link: "https://example.com/ig-now.jpg", changed: "2026-10-01" });
+  const saved = await call(d, "profiles", { bot: "Nova", action: "record", platform: "Instagram", link: "https://example.com/ig-now.jpg", changed: "2026-10-01" });
   assert.equal(saved.saved, true);
   assert.match(saved.note, /did not change/i);
-  const again = await call(d, "profiles", { bot: "Steve", action: "record", platform: "Instagram", image: "profile", link: "https://example.com/ig-now.jpg", changed: "2026-10-01" });
+  const again = await call(d, "profiles", { bot: "Nova", action: "record", platform: "Instagram", image: "profile", link: "https://example.com/ig-now.jpg", changed: "2026-10-01" });
   assert.equal(again.already, true);
-  assert.match(String((await call(d, "profiles", { bot: "Kevin", action: "record", platform: "Instagram", link: "https://example.com/x.jpg", changed: "2026-10-01" })).error), /Steve/);
+  assert.match(String((await call(d, "profiles", { bot: "Steve", action: "record", platform: "Instagram", link: "https://example.com/x.jpg", changed: "2026-10-01" })).error), /Luke/);
+  assert.match(String((await call(d, "profiles", { bot: "Kevin", action: "record", platform: "Instagram", link: "https://example.com/x.jpg", changed: "2026-10-01" })).error), /Luke/);
   assert.match(String((await call(d, "profiles", { bot: "Atlas", action: "record", platform: "X", image: "profile", link: "https://example.com/x.jpg", changed: "2026-10-01" })).error), /no owner yet/i);
   assert.match(String((await call(d, "profiles", { bot: "Steve", action: "record", platform: "Facebook", image: "cover", link: "http://example.com/a.jpg", changed: "2026-10-01" })).error), /https/);
   assert.match(String((await call(d, "profiles", { bot: "Steve", action: "record", platform: "Facebook", image: "cover", link: "https://example.com/a.jpg", changed: "2026-11-19" })).error), /future|YYYY-MM-DD/);
@@ -111,9 +115,10 @@ test("a new image is checked, then waits for Yes, correct; a bad file is not ask
   assert.match(again.error, /Atlas/);
   const twice = await call(d, "profiles", { bot: "Atlas", action: "propose", platform: "Spotify", image: "header", link: "https://example.com/third.jpg", ...GOOD["spotify-header"] });
   assert.match(twice.error, /not answered/);
-  const ig = await call(d, "profiles", { bot: "Steve", action: "propose", platform: "Instagram", link: "https://example.com/ig-next.jpg", why: "Made-up." });
+  const ig = await call(d, "profiles", { bot: "Nova", action: "propose", platform: "Instagram", link: "https://example.com/ig-next.jpg", width: 320, height: 320, format: "jpg", why: "Made-up." });
   assert.equal(ig.asked, true, ig.error || "");
-  assert.equal(ig.rule, "Rule not set");
+  assert.match(ig.rule, /320 x 320/);
+  assert.match(String((await call(d, "profiles", { bot: "Steve", action: "propose", platform: "Instagram", link: "https://example.com/ig-next.jpg", width: 320, height: 320, format: "jpg" })).error), /Luke/);
   const msg = (await S.listMessages(d, NOW)).find((m) => m.id === ok.message_id);
   assert.deepEqual(msg.options, ["Yes, correct", "No"]);
   assert.equal(msg.proposal.action, "profile");
@@ -145,9 +150,9 @@ test("Yes, correct records the approval and leaves the live image until the bot 
 
 test("No leaves the live image and does not approve anything", async () => {
   const d = memoryDesk();
-  const asked = await call(d, "profiles", { bot: "Kevin", action: "propose", platform: "TikTok", link: "https://example.com/tt.jpg" });
+  const asked = await call(d, "profiles", { bot: "Kevin", action: "propose", platform: "TikTok", link: "https://example.com/tt.jpg", width: 720, height: 720, format: "jpg" });
   assert.equal(asked.asked, true, asked.error || "");
-  assert.equal(asked.rule, "Rule not set");
+  assert.match(asked.rule, /720 x 720/);
   const no = await call(d, "record_luke_answer", { bot: "Alfred", reply_to: asked.message_id, luke_said: "No", option: "No" });
   assert.equal(no.saved, true, no.error || "");
   const view = S.profilesView(await S.getProfiles(d), await S.listMessages(d, NOW));
@@ -168,7 +173,7 @@ test("the page's lines, the card's confirm, and who has the tool", () => {
   assert.equal(spot.currentLine, "Changed Thu 1 Oct · Atlas");
   assert.equal(spot.currentLink, "https://example.com/spot.jpg");
   const ig = blocks.platforms.find((p) => p.platform === "Instagram").slots[0];
-  assert.match(ig.approvedLine, /Steve uploads it by hand/);
+  assert.match(ig.approvedLine, /Luke uploads it by hand/);
   assert.match(ig.approvedLine, /does not change the platform/);
   const yt = blocks.platforms.find((p) => p.platform === "YouTube").slots.find((s) => s.id === "youtube-banner");
   assert.match(yt.waitingLine, /Yes, correct/);

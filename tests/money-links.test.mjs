@@ -199,7 +199,7 @@ test("the counted export and changed_since are read-only", async () => {
   assert.equal(all.writes_to_sheet, false);
   const none = await call(d, "payments", { bot: "Ledger", month: "2026-11", changed_since: "2026-12-01T00:00:00Z" });
   assert.equal(none.total, 0);
-  assert.equal(TOOLS.length, 40);
+  assert.equal(TOOLS.length, 44);
 });
 
 test("read_guide names the money words added on 18 Nov", async () => {

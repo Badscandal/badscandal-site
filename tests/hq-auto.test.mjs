@@ -15,8 +15,8 @@ const tool = (n) => TOOLS.find((t) => t.name === n);
 const call = (d, name, args, now = NOW) => callTool(tool(name), args, { store: d, now, role: "bot", hq: async () => null });
 const roster = S.DEFAULT_ROSTER;
 
-test("the connector stays at 40 tools", () => {
-  assert.equal(TOOLS.length, 40);
+test("the connector stays at 44 tools", () => {
+  assert.equal(TOOLS.length, 44);
   assert.ok(tool("my_day").inputSchema.properties.luke_tap);
   assert.ok(tool("send_message").inputSchema.properties.card);
   assert.ok(tool("post_update").inputSchema.properties.card);
