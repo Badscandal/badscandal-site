@@ -184,7 +184,7 @@ test("the pitch WAITS while the song is not in Spotify for Artists, and is an or
   const t = await call(d, "my_day", { bot: "Atlas" });
   assert.deepEqual(t.release_steps.find((s) => s.step === "pitch").state, "waiting");
   /* the spotify step is done by the daily report, never by release_step (review, 11 Nov 2026) */
-  assert.match(t.next, /^Report what Spotify for Artists shows as upcoming with spotify_upcoming: the first report that lists Wait For It marks "Showing as upcoming in Spotify for Artists" done \(due Tue 10 Nov \(2026-11-10\), LATE\)\. Do not mark it with release_step\. You have 2 open release steps in all/, "the waiting pitch is not what to do next");
+  assert.match(t.next, /^Report what Spotify for Artists shows as upcoming with spotify_upcoming: the first report that lists Wait For It marks "Showing as upcoming in Spotify for Artists" done \(due Thu 12 Nov \(2026-11-12\)\)\. Do not mark it with release_step\. You have 2 open release steps in all/, "18 Nov 2026: due is the approval day plus 3, so it is not late yet");
   assert.equal(t.next.split("spotify_upcoming").length - 1, 1, "said once, not again as 'Every day: …'");
   assert.equal(t.release_steps.find((s) => s.step === "spotify").how, "done by your spotify_upcoming report, not by release_step");
   assert.equal(t.release_steps.find((s) => s.step === "pitch").waiting_for, "the song to show as upcoming in Spotify for Artists");
@@ -225,7 +225,11 @@ test("warnings: each sentence, most urgent first", () => {
   assert.deepEqual(warn(p6).filter((w) => /pitch/i.test(w)), ["Too late for a Spotify pitch: Spotify needs it 7 days before release"]);
   assert.ok(!warn(made("2026-11-19", "2026-11-01", { set: S2("spotify", { status: "done" }) })).some((w) => /Too late for a Spotify pitch/.test(w)), "7 days before: still in time");
   /* sent fewer than 21 days before release */
-  assert.ok(warn(made("2026-11-25", TODAY, { set: S2("spotify", { status: "done" }) })).includes("Sent 13 days before release: the usual 21 days for the stores could not be kept"));
+  /* 18 Nov 2026: counted from the distributor upload, not the day the song was added */
+  assert.ok(!warn(made("2026-11-25", TODAY, { set: S2("spotify", { status: "done" }) })).some((w) => /before release: the usual 21 days/.test(w)));
+  const uploaded = made("2026-11-25", TODAY, { set: S2("spotify", { status: "done" }) });
+  uploaded.storeLog = [{ status: "uploaded", on: "2026-11-12", by: "Drop" }];
+  assert.ok(warn(uploaded).includes("Uploaded 13 days before release: the usual 21 days for the stores could not be kept"));
   /* release day */
   assert.equal(warn(made(TODAY, "2026-10-01", { set: Object.fromEntries(S.RELEASE_STEPS.filter((s) => s.key !== "live").map((s) => [s.key, { status: "done" }])) }))[0], "Out today and the Spotify link is not on the song page yet");
   /* a label release with no split; not also said as "sent without" */
@@ -453,7 +457,7 @@ test("an older release (no kind, no Spotify step) still reads, is never given a 
   assert.equal(S.board(await S.loadDesk(d, NOW), NOW, null).releases[0].steps.length, 9, "reading never adds a step");
   const m = await S.moveRelease(d, NOW, R, { by: "Luke", id: "oldsong", date: "2026-12-18" });
   assert.deepEqual(m.release.steps.map((s) => s.key), ["upload", "approved", "spotify", "pitch", "canvas", "page", "video", "ads", "live", "lyrics"]);
-  assert.equal(step(m.release, "spotify").due, "2026-12-03");
+  assert.equal(step(m.release, "spotify").due, "2026-12-05"); /* 18 Nov 2026: Spotify upcoming is the approval day plus 3 */
   assert.match(m.release.log.at(-1).what, /; added the step "Showing as upcoming in Spotify for Artists"$/);
   assert.equal((await S.moveRelease(d, NOW, R, { by: "Luke", id: "oldsong", date: "2026-12-25" })).release.steps.length, 10, "once");
 });

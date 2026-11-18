@@ -1,5 +1,5 @@
 {
-  "_readme": "THE song list (10 Nov 2026). One entry per release page (badscandal.com/<slug>). Read by the song pages (button link on release day), /hq, the visit counter, the Meta Conversions API and the edge function. Since 16 Nov 2026 Webmaster adds a song (and its Spotify link on release day) with the staff desk's song_page tool: Luke confirms, then GitHub builds the page, runs every check and publishes it (.github/workflows/song-page.yml). Never edit this file or a song page by hand. No pre-save links, ever.",
+  "_readme": "THE song list (10 Nov 2026). One entry per release page (badscandal.com/<slug>). Read by the song pages (button link on release day), /hq, the visit counter, the Meta Conversions API and the edge function. Since 16 Nov 2026 Webmaster adds a song (and its Spotify link on release day) with the staff desk's song_page tool: Luke confirms, then GitHub builds the page, runs every check and publishes it (.github/workflows/song-page.yml). kind track strips a ?si= from the Spotify link and can warn when an ISRC does not match the pack. kind new takes an optional artists line. Never edit this file or a song page by hand. No pre-save links, ever.",
   "artist": "BADSCANDAL",
   "spotifyArtist": "https://open.spotify.com/artist/29kaubgb6Esvwu0idVndGy",
   "songs": [

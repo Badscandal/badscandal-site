@@ -34,7 +34,10 @@ test("payments: every payment of a month, with its id, filtered by account, sour
   assert.equal(all.total, 26);
   assert.equal(all.payments.length, 26, "no 15-row cap");
   const p = all.payments[0];
-  assert.deepEqual(Object.keys(p).sort(), ["account", "added_by", "amount", "category", "currency", "date", "id", "month", "payer", "source", "status"].sort().concat(p.note ? ["note"] : []).sort());
+  /* 18 Nov 2026: statement month and landing month are both shown */
+  const keys = ["account", "added_by", "amount", "category", "counts_in", "counts_note", "counted", "currency", "date", "id", "landed_month", "payer", "source", "statement_month", "status"];
+  if (p.note) keys.push("note");
+  assert.deepEqual(Object.keys(p).sort(), keys.sort());
   assert.match(p.id, /^i/);
   assert.ok(all.payments.every((x, i, a) => i === 0 || a[i - 1].date >= x.date), "newest first");
   assert.equal((await call(d, "payments", { bot: "Ledger", month: "2026-11", account: "revolut" })).total, 13);
@@ -64,7 +67,7 @@ test("fix_payment takes source: any payment (HQ's Revolut rows too) is tied to i
 test("a full Revolut read clears 'blocked' and 'not connected': on the Revolut account, and a source waiting only for Revolut", async () => {
   const d = await desk();
   let i = await S.incomeState(d, NOW);
-  assert.ok(i.problems.some((p) => /Revolut: blocked/.test(p)));
+  assert.ok(!i.problems.some((p) => /Revolut: blocked/.test(p)), "18 Nov 2026: Revolut rows are already arriving, so the warning is hidden");
   const changed = await S.afterBankRead(d, NOW);
   assert.deepEqual(changed.sort(), ["revolut", "store"]);
   i = await S.incomeState(d, NOW);

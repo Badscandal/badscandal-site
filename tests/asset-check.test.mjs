@@ -1,9 +1,9 @@
 /* L8 (17 Nov 2026, Atlas via Nova: "cover, Canvas and banner vs each platform's rules"): the A6 cover warnings
    extended to the Spotify Canvas and the two banners. Each platform's published rule:
    - cover (RouteNote / the stores): JPG or PNG, square, at least 3000 x 3000
-   - Spotify Canvas: MP4 or JPG, 9:16 portrait, at least 720 px tall, 3 to 8 seconds
-   - Spotify artist header: JPG or PNG, at least 2660 x 1140, 20 MB at most
-   - YouTube channel banner: JPG, PNG, GIF or BMP, 16:9, at least 2048 x 1152, 6 MB at most
+   - Spotify Canvas: MP4 or JPG, 9:16 portrait, 720 to 1080 px tall (18 Nov 2026), 3 to 8 seconds
+   - Spotify artist header: JPG, PNG or GIF, at least 2660 x 1140, 20 MB at most
+   - YouTube channel banner: JPG or PNG, 16:9. 2560 x 1440 is recommended, not a minimum (18 Nov 2026)
    Nothing is refused: the preflight tool lists the problems, the release card shows a bad Canvas link. */
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -28,9 +28,11 @@ test("cover: the A6 wording is unchanged", () => {
   assert.match(S.assetProblems("cover", { format: "webp" })[0], /JPG or PNG/);
 });
 
-test("Spotify Canvas: 9:16, 720 px tall, 3 to 8 seconds, MP4 or JPG", () => {
-  assert.deepEqual(S.assetProblems("canvas", { width: 1080, height: 1920, seconds: 8, format: "mp4" }), []);
-  assert.deepEqual(S.assetProblems("canvas", { width: 720, height: 1280, seconds: 3 }), []);
+test("Spotify Canvas: 9:16, 720 to 1080 px tall, 3 to 8 seconds, MP4 or JPG", () => {
+  /* 18 Nov 2026: 1080 x 1920 is too tall. A legal canvas is 9:16 and at most 1080 px tall. */
+  assert.match(S.assetProblems("canvas", { width: 1080, height: 1920, seconds: 8, format: "mp4" }).join(" "), /too tall/);
+  assert.deepEqual(S.assetProblems("canvas", { width: 608, height: 1080, seconds: 8, format: "mp4" }), []);
+  assert.deepEqual(S.assetProblems("canvas", { width: 405, height: 720, seconds: 3 }), []);
   assert.match(S.assetProblems("canvas", { width: 1920, height: 1080 })[0], /1920 x 1080 is not 9:16/);
   assert.match(S.assetProblems("canvas", { width: 360, height: 640 }).join(" "), /640 px tall is too small.*at least 720 px tall/);
   assert.match(S.assetProblems("canvas", { seconds: 12 })[0], /12 seconds.*3 to 8/);
@@ -44,9 +46,11 @@ test("banners: Spotify header and YouTube banner", () => {
   assert.match(S.assetProblems("spotify_header", { mb: 25 })[0], /25 MB.*20 MB at most/);
   assert.deepEqual(S.assetProblems("youtube_banner", { width: 2560, height: 1440, format: "jpg", mb: 2 }), []);
   assert.match(S.assetProblems("youtube_banner", { width: 2048, height: 1000 }).join(" "), /not 16:9/);
-  assert.match(S.assetProblems("youtube_banner", { width: 1600, height: 900 }).join(" "), /at least 2048 x 1152/);
+  /* 18 Nov 2026: 1600 x 900 is 16:9 and under the recommended size, not a failure */
+  assert.deepEqual(S.assetProblems("youtube_banner", { width: 1600, height: 900 }), []);
+  assert.match(S.assetNotes("youtube_banner", { width: 1600, height: 900 }).join(" "), /recommended/);
   assert.match(S.assetProblems("youtube_banner", { mb: 8 })[0], /6 MB at most/);
-  assert.match(S.assetProblems("youtube_banner", { format: "webp" })[0], /JPG, PNG, GIF or BMP/);
+  assert.match(S.assetProblems("youtube_banner", { format: "webp" })[0], /JPG or PNG/);
 });
 
 test("nothing known = nothing flagged; an unknown kind is refused in words", () => {
@@ -72,7 +76,7 @@ test("the preflight tool checks an asset and gives the rule", async () => {
   assert.match(a.rule, /9:16/);
   const b = await call(d, "preflight", { bot: "Laura", asset: "youtube_banner", width: 2560, height: 1440 });
   assert.equal(b.ok, true);
-  assert.match(b.rule, /2048 x 1152/);
+  assert.match(b.rule, /2560 x 1440/);
   assert.match(String((await call(d, "preflight", { bot: "Atlas", asset: "poster" })).error), /cover, canvas/);
   assert.match(String((await call(d, "preflight", { bot: "Atlas" })).error), /Give song, text, link or asset/);
   assert.match(String((await call(d, "preflight", { bot: "Atlas", asset: "canvas", width: "big" })).error), /width.*number/);
