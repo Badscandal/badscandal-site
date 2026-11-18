@@ -237,6 +237,17 @@ test("warnings: each sentence, most urgent first", () => {
   assert.deepEqual(warn({ ...made("2026-11-25", "2026-11-01"), status: "draft" }), [], "a draft has no warnings");
 });
 
+test("a block that is only waiting is not a warning; a failed check still is (18 Nov 2026)", () => {
+  const adsNote = "Luke 16 Nov 20:00: no solo builds. Luke runs the ad build himself after release";
+  const ads = warn(made("2026-12-11", "2026-11-01", { set: { ads: { status: "blocked", note: adsNote } } }));
+  assert.ok(!ads.some((w) => /Ads made with Luke/.test(w)), ads.join("\n"));
+  const lyrics = warn(made("2026-12-11", "2026-11-01", { set: { lyrics: { status: "blocked", note: "Need the full lyrics text from Luke in the pack. None provided yet" } } }));
+  assert.ok(!lyrics.some((w) => /Lyrics live on Musixmatch is blocked/.test(w)), lyrics.join("\n"));
+  assert.ok(warn(made("2026-12-05", "2026-11-01", { set: { upload: { status: "blocked", note: "Needs the cover" } } })).includes("Uploaded to RouteNote with the release date is blocked (Drop): Needs the cover"));
+  assert.equal(S.blockIsWait({ status: "blocked", waiting: true, label: "Anything", note: "not started" }), true);
+  assert.equal(S.blockIsWait({ status: "blocked", label: "Uploaded to RouteNote with the release date", note: "Needs the cover" }), false);
+});
+
 /* ---------- unknown songs everywhere they must show ---------- */
 test("a song upcoming in Spotify for Artists that is not in the pipeline: on the board, in the briefing, team_board, releases and the site check", async () => {
   const d = memoryDesk();

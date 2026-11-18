@@ -70,7 +70,7 @@ test("pitch status: not pitched, pitched with the day, missed; the deadline is 7
 
   const logged = await call(win, "pitch_log", { bot: "Atlas", song: "Window", pitched_on: "2026-11-12" });
   assert.equal(logged.status, "pitched");
-  assert.equal(logged.pitch, "Pitch: pitched Thu 12 Nov");
+  assert.equal(logged.pitch, "Pitch: pitched Thu 12 Nov by Atlas"); /* 18 Nov 2026: who sent it, on the pitch line */
   assert.equal(logged.pitched_on, "Thu 12 Nov (2026-11-12)");
   assert.match(logged.note, /never pitches/);
   v = await view(win, "Window");
@@ -147,8 +147,8 @@ test("the releases tool shows the pitch and the slots; Atlas is told to log a ne
   const out = await call(d, "releases", { bot: "Atlas" });
   const row = out.releases.find((r) => r.song === "Night Drive");
   assert.equal(row.pitch.status, "pitched");
-  assert.equal(row.pitch.line, "Pitch: pitched Thu 12 Nov");
-  assert.ok(out.pitch_slots.some((s) => /Night Drive/.test(s) && /pitched Thu 12 Nov/.test(s)));
+  assert.equal(row.pitch.line, "Pitch: pitched Thu 12 Nov by Atlas");
+  assert.ok(out.pitch_slots.some((s) => /Night Drive/.test(s) && /pitched Thu 12 Nov by Atlas/.test(s)));
   const pack = await call(d, "release_pack", { bot: "Atlas", song: "Night Drive" });
   assert.equal(pack.pitch.status, "pitched");
   const day = await call(d, "my_day", { bot: "Atlas" });
@@ -170,9 +170,11 @@ test("the releases tool shows the pitch and the slots; Atlas is told to log a ne
   assert.doesNotMatch(fn, /fetch\(|api\.spotify|spotify\.com/);
 });
 
-test("Today shows the warning while there is still time to pitch", () => {
-  const board = { releases: [{ id: "window", title: "Window", status: "scheduled", alreadyOut: false, daysToGo: 10, warnings: ["Still time to pitch: send it by Thu 19 Nov (Spotify needs it 7 days before release)"] }] };
-  const att = L.releaseAttention(null, board);
-  assert.equal(att[0].text, "Window: Still time to pitch: send it by Thu 19 Nov (Spotify needs it 7 days before release)");
-  assert.equal(att[0].href, "#releases/window");
+test("still time to pitch is a caution, not a red Needs attention line (18 Nov 2026)", () => {
+  const text = "Still time to pitch: send it by Thu 19 Nov (Spotify needs it 7 days before release)";
+  const board = { releases: [{ id: "window", title: "Window", status: "scheduled", alreadyOut: false, daysToGo: 10, warnings: [text], steps: [] }] };
+  assert.equal(L.warnTone(text, board.releases[0]), "caution");
+  assert.deepEqual(L.releaseAttention(null, board), []);
+  assert.equal(L.relStatus(board.releases[0], "2026-11-12").caution, true);
+  assert.equal(L.relStatus(board.releases[0], "2026-11-12").bad, false);
 });

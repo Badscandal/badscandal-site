@@ -2240,9 +2240,11 @@ export function pitchOf(v, today, editorial = null) {
   const missed = !!(pitch && !done && !one && days != null && days < PITCH_DEADLINE_DAYS);
   const status = done ? "pitched" : missed ? "missed" : "not pitched";
   const pitchedOn = done && pitch && pitch.status === "done" ? pitchedOnOf(pitch) : "";
+  const who = done && pitch && pitch.status === "done" ? clean(pitch.by, 40) : "";
   const by = deadline ? dayWords(deadline) : "";
   let line;
-  if (done) line = pitchedOn ? `Pitch: pitched ${dayWords(pitchedOn)}` : "Pitch: pitched";
+  /* 18 Nov 2026, Luke: a pitch Atlas sent is not an approval. The card's pitch line says who sent it. */
+  if (done) line = (pitchedOn ? `Pitch: pitched ${dayWords(pitchedOn)}` : "Pitch: pitched") + (who ? ` by ${who}` : "");
   else if (one) line = pitch.note ? `Pitch: ${pitch.note.charAt(0).toLowerCase()}${pitch.note.slice(1)}` : "Pitch: not pitched";
   else if (missed) line = by ? `Pitch: missed. Spotify needed it by ${by}` : "Pitch: missed";
   else if (waiting) line = by ? `Pitch: not pitched yet. It waits until the song shows in Spotify for Artists. Deadline ${by}` : "Pitch: not pitched yet. It waits until the song shows in Spotify for Artists";
@@ -2321,7 +2323,7 @@ export function releaseView(r, today, o = {}) {
     deal: dealOf(r),
     packFilled: own.filter((f) => filled(pack[f.key])).length, packTotal: own.length, missing, steps,
     counts: { done: steps.filter((s) => s.status === "done").length, total: steps.filter((s) => s.status !== "skipped").length, late: steps.filter((s) => s.late).length,
-      blocked: steps.filter((s) => s.status === "blocked").length, skipped: steps.filter((s) => s.status === "skipped").length, waiting: steps.filter((s) => s.waiting).length },
+      blocked: steps.filter((s) => s.status === "blocked" && !blockIsWait(s)).length, skipped: steps.filter((s) => s.status === "skipped").length, waiting: steps.filter((s) => s.waiting).length },
     next: next ? { key: next.key, label: next.label, owner: next.owner, due: next.due, dueIn: next.dueIn, status: next.status, late: next.late, waiting: next.waiting, note: next.note || "",
       ...(next.waiting ? { waitingFor: next.waitingFor, waitingText: next.waitingText } : {}) } : null,
     /* batch 3: the status at the distributor with its history, and Luke's approvals (the lyrics' one says
@@ -2395,7 +2397,7 @@ export function warningsOf(v, sightings, today) {
   const live = st("live"), pitch = st("pitch"), spot = st("spotify");
   const days = v.daysToGo;
   if (days === 0 && live && !finished(live)) out.push({ kind: "today", rank: 0, text: "Out today and the Spotify link is not on the song page yet" });
-  for (const s of v.steps) if (s.status === "blocked") out.push({ kind: "blocked", rank: 1, text: `${s.label} is blocked (${s.owner})` + (s.note ? `: ${cutNote(s.note, 160)}` : "") });
+  for (const s of v.steps) if (s.status === "blocked" && !blockIsWait(s)) out.push({ kind: "blocked", rank: 1, text: `${s.label} is blocked (${s.owner})` + (s.note ? `: ${cutNote(s.note, 160)}` : "") });
   /* batch 3: the distributor turned it down, and it hasn't been fixed yet */
   if (v.store && v.store.status === "rejected") out.push({ kind: "rejected", rank: 1, text: "Rejected at the distributor" + (v.store.reason ? `: ${cutNote(v.store.reason, 160)}` : "") + (v.store.by ? ` (${v.store.by})` : "") });
   const pitchTooLate = pitch && !finished(pitch) && days > 0 && days < PITCH_DEADLINE_DAYS;
@@ -2448,6 +2450,17 @@ export function warningsOf(v, sightings, today) {
     if (sentDays < 21) out.push({ kind: "tight", rank: 6, text: `Sent ${plural(sentDays, "day")} before release: the usual 21 days for the stores could not be kept` });
   }
   return out.sort((a, b) => a.rank - b.rank).map(({ kind, text }) => ({ kind, text }));
+}
+/* 18 Nov 2026, Luke: red is for a failure. A blocked step that is waiting (on a date, on him, or on a
+   decision he already made) is not a failure. */
+export function blockIsWait(st) {
+  if (!st || st.status !== "blocked") return false;
+  if (st.waiting) return true;
+  const note = String(st.note || ""), label = String(st.label || "");
+  if (/\b(reject|rejected|fail|failed|error|denied|routenote|cover)\b/i.test(note)) return false;
+  if (/^Ads made with Luke/i.test(label) && /\b(luke|no solo)\b/i.test(note)) return true;
+  if (/\b(luke|you)\b/i.test(note) && /\b(need|needs|waiting|none provided|not yet|no solo)\b/i.test(note)) return true;
+  return false;
 }
 export const releaseWarnings = (v, sightings, today) => warningsOf(v, sightings, today).map((w) => w.text);
 
@@ -3235,6 +3248,8 @@ export async function approveRelease(store, now, roster, a) {
     if (r.status === "cancelled") fail(`${r.title} was cancelled. Nothing was saved.`);
     r.approvals = r.approvals || {};
     if (a.withdraw) {
+      /* 18 Nov 2026, Luke: a Spotify pitch that has been sent can't be undone */
+      if (what === "pitch" && (r.steps || []).some((s) => s.key === "pitch" && s.status === "done")) fail(`The Spotify pitch for ${r.title} was already sent. A sent pitch can't be taken back. Nothing was changed.`);
       if (!r.approvals[what]) return { skip: true, value: r };
       delete r.approvals[what]; r.updatedAt = at;
       logIt(r, at, by, `Luke took back the approval: ${APPROVALS[what].label.toLowerCase()}`);
@@ -3646,7 +3661,7 @@ export function checkReport({ desk, hq, hqState, now }) {
      pushed the rest of the report past its cut */
   const sightings = desk.sightings || null;
   for (const v of (desk.releases || []).map((r) => releaseView(r, today, { sightings })).filter(releaseActive)) {
-    for (const st of v.steps) if (st.status === "blocked") problems.push(`${v.title}: ${st.label} is blocked (${st.owner})` + (st.note ? `: ${st.note.replace(/\s+/g, " ").slice(0, 120)}` : ""));
+    for (const st of v.steps) if (st.status === "blocked" && !blockIsWait(st)) problems.push(`${v.title}: ${st.label} is blocked (${st.owner})` + (st.note ? `: ${st.note.replace(/\s+/g, " ").slice(0, 120)}` : ""));
     /* the warnings that say what lateness MEANS (V5): said instead of the plain late line for that step */
     const warn = warningsOf(v, sightings, today).filter((w) => ["today", "twice", "rejected", "pitch", "spotify", "date", "without", "split"].includes(w.kind));
     const said = new Set([...(warn.some((w) => w.kind === "pitch") ? ["pitch"] : []), ...(warn.some((w) => w.kind === "spotify") ? ["spotify"] : [])]);

@@ -922,6 +922,8 @@ textarea.fld.lyrics{min-height:220px}
 .rwarn li{display:flex;gap:10px;align-items:baseline;padding:6px 0;font-size:15px;line-height:1.4;color:var(--paper);overflow-wrap:anywhere}
 .rwarn li + li{border-top:.5px solid var(--glass-line)}
 .rwarn li::before{content:"";flex:none;width:9px;height:9px;border-radius:50%;background:var(--red);transform:translateY(-1px)}
+.rwarn.note{border-color:rgba(251,191,36,.5)}
+.rwarn.note li::before{background:var(--amber,#FBBF24)}
 /* batch 3 (14 Nov 2026): where it is at the distributor, Luke's approvals, Drop's "ready to resubmit?" */
 .rstore{margin:12px 0 0}
 .rstore-now{margin:0;font-size:15px;line-height:1.45;color:var(--uv);overflow-wrap:anywhere}
@@ -930,7 +932,8 @@ textarea.fld.lyrics{min-height:220px}
 .rappr{margin:12px 0 0;font-size:15px;line-height:1.45;color:var(--uv)}
 .rappr b{display:block;font-size:13px;font-weight:600;color:var(--muted)}
 .rappr ul{list-style:none;margin:4px 0 0;padding:0}
-.rappr li{display:flex;flex-wrap:wrap;gap:6px 12px;align-items:center;justify-content:space-between;padding:4px 0;overflow-wrap:anywhere}
+.rappr li{display:flex;flex-wrap:nowrap;gap:6px 12px;align-items:center;justify-content:space-between;padding:4px 0}
+.rappr li span:first-child{min-width:0;overflow-wrap:anywhere}
 .rappr li.ok span:first-child{color:var(--paper)}
 .rappr li.stale span:first-child{font-weight:600;color:var(--paper)}
 .rask{margin:12px 0 0;padding:12px 14px;border-radius:14px;background:var(--glass-2);border:.5px solid var(--glass-line)}
@@ -1292,6 +1295,7 @@ a.t-card:hover,button.t-card:hover,#shell a.tile:hover{border-color:var(--accent
 .rprog span{flex:none;font-size:13px;color:var(--muted)}
 .rstat{margin:10px 0 0;font-size:15px;line-height:1.45;font-weight:600;color:var(--paper);overflow-wrap:anywhere}
 .rstat.bad{color:var(--red)}
+.rstat.caution{color:var(--amber,#FBBF24)}
 .rmore{margin-left:6px;padding:2px 8px;border-radius:99px;background:var(--red-soft);font-size:13px;font-weight:600;color:var(--red);white-space:nowrap}
 .rfold{margin-top:12px;border-top:.5px solid var(--glass-line)}
 .rfold > summary{display:flex;align-items:center;justify-content:space-between;min-height:44px;font-size:14px;font-weight:600;color:var(--accent);cursor:pointer;list-style:none}

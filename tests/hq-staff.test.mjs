@@ -534,7 +534,8 @@ test("v2: a step that is not ours, and the pitch that waits for Spotify for Arti
   assert.equal(st({ status: "skipped", note: "Already out when it was recorded" }).text, "already out when it was recorded");
   assert.equal(st({ status: "skipped", note: "No video for this one" }).text, "skipped: No video for this one");
   assert.deepEqual(st({ due: "2026-11-01", waiting: true, waitingText: "waiting: the song is not in Spotify for Artists yet" }), { text: "waiting: the song is not in Spotify for Artists yet", bad: false, done: false, waiting: true }, "waiting is never late");
-  assert.equal(st({ status: "blocked", note: "No mood yet", waiting: true }).text, "blocked: No mood yet", "blocked says blocked");
+  assert.equal(st({ status: "blocked", note: "No mood yet", waiting: true }).text, "waiting on you", "18 Nov 2026: a block that is waiting is not a failure");
+  assert.equal(st({ status: "blocked", note: "Needs the cover" }).text, "blocked: Needs the cover", "a real block stays red");
   assert.equal(L.stepButton({ status: "scheduled" }, { owner: "Drop", status: "skipped" }), null, "not ours: no button");
   /* review, 11 Nov 2026: one tap must not record a pitch that could not have gone out */
   assert.equal(L.stepButton({ status: "scheduled" }, { owner: "Atlas", status: "todo", waiting: true }), null, "a waiting pitch has no Mark done");
@@ -554,7 +555,10 @@ test("v2: an Upcoming card: where it is at, its warnings counted in its pill", (
   const b = sampleBoard(NOW), v = (id) => b.releases.find((r) => r.id === id);
   const mdsb = v("medaseubody");
   assert.ok(mdsb.warnings.length >= 2, mdsb.warnings.join(" | "));
-  assert.deepEqual(L.upcomingPill(mdsb, b.today), { text: mdsb.warnings.length + " warnings", bad: true, rel: false });
+  /* 18 Nov 2026: "not showing in Spotify for Artists yet" is a wait, so it is not in the red count */
+  const badN = L.warnGroups(mdsb).bad.length;
+  assert.ok(badN >= 1 && badN < mdsb.warnings.length);
+  assert.deepEqual(L.upcomingPill(mdsb, b.today), { text: badN + " warnings", bad: true, rel: false });
   assert.deepEqual(L.upcomingPill({ ...mdsb, warnings: ["Lyrics live is 2 days late (Verse)"] }, b.today), { text: "1 warning", bad: true, rel: false });
   assert.deepEqual(L.upcomingPill({ ...mdsb, warnings: [], counts: { done: 2, total: 10, late: 0, blocked: 0 } }, b.today), { text: "On time", bad: false, rel: false });
   assert.deepEqual(L.upcomingPill(v("survivors"), b.today), { text: "Draft", bad: false, rel: false });
