@@ -1,13 +1,14 @@
 # HQ status (update on every deploy)
 
-**Last updated:** 17 Nov 2026, evening São Paulo, by Claude (main after PR #60). Start with `docs/HANDOFF.md`.
-**Tests:** 561, all passing on Node 24 and Node 22. **Connector:** 38 tools (the instagram tool gained options: bots refresh their tool list).
+**Last updated:** 17 Nov 2026, night São Paulo, by Cursor (main after PR #61). Start with `docs/HANDOFF.md`.
+**Tests:** 568, all passing on Node 24 and Node 22. **Connector:** 38 tools (`preflight` gained asset options on L8; Atlas, Laura and Webmaster were told to refresh their tool list).
 No money amounts, payer names or account numbers in this file: the repo is public.
 
 ## Live (newest first)
 
 | When | PR | What |
 |------|----|------|
+| 17 Nov | #61 | L8: asset checker. `preflight` checks a cover, Spotify Canvas, Spotify header or YouTube banner against that platform's rule; a Canvas link that isn't MP4 or JPG shows on the release card. Atlas and Laura have the tool. |
 | 17 Nov | #55 | B4: the Instagram reader (read-only): key pasted once in HQ (Growth & Fans › Connect Instagram), renewed weekly; followers to the desk, post numbers at 6 h / 1 day / 1 week, comments, countries; `instagram` tool for Steve and Kevin. B1 and B5 marked not needed (Luke). |
 | 17 Nov | #56 | B4: the Facebook-login route (Meta blocks linking the Instagram-login app to the business portfolio): HQ takes a Facebook key and keeps only the Page's key, which doesn't run out. Safety brake: a Meta rate limit pauses Instagram reads for a day; a block, restriction or refused key stops them until a new key is pasted. A normal hour is at most 3 read calls. |
 | 17 Nov | #57 | Fix: HQ and both HQ apps wouldn't open after #56 (an apostrophe broke js/hq.js). New test `tests/js-syntax.test.mjs` parses every browser script, so a broken script can't ship again. |
@@ -42,7 +43,9 @@ No money amounts, payer names or account numbers in this file: the repo is publi
 
 ## Next up
 
-- Batch A and B3 are done. What's left needs Luke: B2 YouTube sign-in (B1 and B5 not needed; B4 Instagram connected 17 Nov), the on-hold decisions H1–H4, and L11. The "Later" list (L1–L10) waits for the API feeds; start any of it on Luke's word.
+- L8 is live. Next candidates, only on Luke's word: L7 pitch tracker, L12 Profiles (an idea; needs his go), L3 fan inbox part 1.
+- Still needs Luke: B2 YouTube sign-in, the on-hold decisions H1–H4, and L11 (who "Luka" is). B1 and B5 are not needed; B4 Instagram is connected.
+- The rest of Later (L1, L4, L5, L9, L10) waits. Start any of it on his word.
 
 ## Known gaps / watch
 
