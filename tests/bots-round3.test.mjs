@@ -137,7 +137,7 @@ test("a pitch sent without an approval on the desk reads as sent, not 'not appro
   const pack = await call(d, "release_pack", { bot: "Atlas", song: "Night Drive" });
   /* 18 Nov 2026: a done step with no approval record is not an ask */
   assert.deepEqual([pack.approvals.pitch.approved, pack.approvals.pitch.sent], [null, true]);
-  assert.match(pack.approvals.pitch.state, /done, approval not needed \(sent Sat 14 Nov by Atlas; no approval was recorded on the desk/);
+  assert.match(pack.approvals.pitch.state, /pitched Sat 14 Nov by Atlas/);
   const v = S.releaseView(await rel(d, r.id), TODAY);
   /* 18 Nov 2026, Luke: a pitch Atlas sent is not his approval, so it is not a row. The pitch line says it. */
   assert.ok(!L.approvalLines(v).some((x) => x.key === "pitch"));
@@ -224,10 +224,9 @@ test("short briefing: each sign-in once (by account), a 'signed in again' is no 
   const lines = ["Google Ads 111-111-1111 needs Luke to sign in (made up)", "Google Ads 111-111-1111: signed out again, sign in please", "TikTok Ads is signed in again"];
   for (const [i, m] of lines.entries()) await S.postUpdate(d, NOW - (10 - i) * MIN, R, { bot: "Forge", status: "blocked", message: m });
   const sb = await call(d, "luke_short_briefing", { bot: "Alfred" });
-  /* 18 Nov 2026: the account number is hidden in the tool's answer */
-  const google = sb.needs_luke_sign_in.filter((x) => /Google Ads \[account\]/.test(x));
+  /* 18 Nov 2026 night test: a Google Ads customer id is kept (it is not a card number) and the two lines are one */
+  const google = sb.needs_luke_sign_in.filter((x) => /Google Ads 111-111-1111/.test(x));
   assert.equal(google.length, 1, JSON.stringify(sb.needs_luke_sign_in));
-  assert.ok(!sb.needs_luke_sign_in.some((x) => /111-111-1111/.test(x)));
   assert.ok(!sb.needs_luke_sign_in.some((x) => /signed in again/i.test(x)));
 });
 

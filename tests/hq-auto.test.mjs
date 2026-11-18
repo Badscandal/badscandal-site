@@ -16,7 +16,7 @@ const call = (d, name, args, now = NOW) => callTool(tool(name), args, { store: d
 const roster = S.DEFAULT_ROSTER;
 
 test("the connector stays at 40 tools", () => {
-  assert.equal(TOOLS.length, 40);
+  assert.equal(TOOLS.length, 43); /* + account_health, needs_you, song_pl (18 Nov 2026 night test) */
   assert.ok(tool("my_day").inputSchema.properties.luke_tap);
   assert.ok(tool("send_message").inputSchema.properties.card);
   assert.ok(tool("post_update").inputSchema.properties.card);

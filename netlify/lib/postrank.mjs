@@ -158,7 +158,15 @@ export function rankPosts(posts, adDoc, o = {}) {
     if (!s || claimed.has(s) || !(Number(s.amount) > 0) || !/meta|facebook|instagram/i.test(s.platform || "Meta")) continue;
     const candidates = pool.filter((r) => !r.paid && (dayOf(r.at) === s.date || nextDay(dayOf(r.at)) === s.date));
     const dayAfter = candidates.filter((r) => nextDay(dayOf(r.at)) === s.date);
-    const pick = dayAfter.length === 1 ? dayAfter[0] : (candidates.length === 1 ? candidates[0] : null);
+    let pick = dayAfter.length === 1 ? dayAfter[0] : (candidates.length === 1 ? candidates[0] : null);
+    /* several posts that day: match the spend's song to the caption or the linked song (18 Nov 2026 night test) */
+    if (!pick && candidates.length > 1) {
+      const name = String(s.song || "").trim().toLowerCase();
+      if (name.length >= 3) {
+        const named = candidates.filter((r) => `${r.caption || ""} ${r.song || ""}`.toLowerCase().includes(name));
+        if (named.length === 1) pick = named[0];
+      }
+    }
     if (!pick) continue;
     claimed.add(s);
     pick.boosted = true;
@@ -194,7 +202,8 @@ export function rankLine(r) {
       (r.paid.spendOnly ? "engagements not on this spend row" : `${fmt(r.paid.engaged)} engagements from the ad`) +
       (r.paid.costPerEng != null ? `, ${c} ${r.paid.costPerEng.toFixed(3)} each` : "");
   } else s += " · not boosted";
-  if (r.before) s += ` · before the ad (${r.before.mark}): ${pct(r.before.rate)} of ${fmt(r.before.views)} views`;
+  if (r.before) s += ` · organic before the ad (${r.before.mark}): ${pct(r.before.rate)} of ${fmt(r.before.views)} views`;
+  else if (r.paid) s += " · organic before the ad: not stored separately";
   s += r.song ? ` · song ${r.song}` : " · song not linked";
   if (r.under_1000) s += " · under 1,000 views";
   if (r.under_10) s += " · under USD 10";

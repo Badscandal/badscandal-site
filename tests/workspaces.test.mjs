@@ -35,7 +35,7 @@ test("the switch, the farm note and Add genre are on the page", () => {
   assert.match(read("js/hq-workspaces.js"), /not set up/);
   assert.match(read("js/hq-workspaces.js"), /class="dhead"/);
   assert.match(read("js/hq-workspaces.js"), /data-wschoice/);
-  assert.equal(TOOLS.length, 40, "no new tool: licence is a release_step value");
+  assert.equal(TOOLS.length, 43, "account_health, needs_you, song_pl (18 Nov 2026 night test); licence is still a release_step value");
   const step = tool("release_step");
   assert.ok(step.inputSchema.properties.step.enum.includes("licence"));
   assert.ok(step.inputSchema.properties.step.enum.includes("upload"));

@@ -112,7 +112,7 @@ test("rankPosts: same age (1 day), engagement per view wins, our own comments le
 });
 test("rankLine: one post in plain words, for Luke and the bots", () => {
   const r = P.rankPosts(posts, adDoc, { now: NOW, comments });
-  assert.equal(P.rankLine(r.ranked[1]), "“Clip A: the drop” · reels · 2026-11-14 · 1 day: 7.8% engaged (1,797 of 23,000 views) · saves + shares 0.7% · 120 follows (0.5%) · 300 profile visits · 3 of our own comments left out · boosted USD 90.00 (ACTIVE): 1,550 engagements from the ad, USD 0.058 each · before the ad (6 hours): 8.6% of 2,100 views · song not linked");
+  assert.equal(P.rankLine(r.ranked[1]), "“Clip A: the drop” · reels · 2026-11-14 · 1 day: 7.8% engaged (1,797 of 23,000 views) · saves + shares 0.7% · 120 follows (0.5%) · 300 profile visits · 3 of our own comments left out · boosted USD 90.00 (ACTIVE): 1,550 engagements from the ad, USD 0.058 each · organic before the ad (6 hours): 8.6% of 2,100 views · song not linked");
   assert.equal(P.rankLine(r.ranked[0]), "“Cover reveal” · feed · 2026-11-13 · 1 day: 11.2% engaged (560 of 5,000 views) · saves + shares 0.8% · 40 follows (0.8%) · not boosted · song not linked");
   /* 18 Nov 2026: an old post the current ads don't cover says boost unknown, and the song is not guessed from the caption */
   assert.equal(P.rankLine(r.older[0]), "“Old reel” · reels · 2026-10-18 · lifetime: 11.1% engaged (1,000 of 9,000 views) · saves + shares 1.0% · boost unknown · song not linked");

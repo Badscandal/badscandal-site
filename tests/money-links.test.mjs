@@ -46,7 +46,7 @@ test("Wise money is not received, and payments, month_check and income_status ag
   assert.equal(listed.received, "EUR 20.00");
   assert.equal(status.received_this_month, "EUR 20.00");
   assert.equal(check.received, "EUR 20.00");
-  assert.equal(listed.payments.find((p) => p.account === "Wise").status, "in Wise, not received");
+  assert.equal(listed.payments.find((p) => p.account === "Wise").status, "waiting in Wise");
   assert.equal(listed.payments.find((p) => p.id === rev.entry.id).counted, true);
   assert.match(listed.received_note, /Revolut only/);
   assert.equal(listed.writes_to_sheet, false);
@@ -199,7 +199,7 @@ test("the counted export and changed_since are read-only", async () => {
   assert.equal(all.writes_to_sheet, false);
   const none = await call(d, "payments", { bot: "Ledger", month: "2026-11", changed_since: "2026-12-01T00:00:00Z" });
   assert.equal(none.total, 0);
-  assert.equal(TOOLS.length, 40);
+  assert.equal(TOOLS.length, 43); /* + account_health, needs_you, song_pl (18 Nov 2026 night test) */
 });
 
 test("read_guide names the money words added on 18 Nov", async () => {

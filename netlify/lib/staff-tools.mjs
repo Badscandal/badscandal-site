@@ -5,7 +5,7 @@
 
    Written for bots that follow instructions literally: every description says when to use the tool
    and what to put in each field, and every refusal says what to do instead. */
-import { hasAccountCheck, recordAccountCheck } from "./account-health.mjs";
+import { hasAccountCheck, loadReport, recordAccountCheck } from "./account-health.mjs";
 import { SONGS, homeCardSong } from "./songs.mjs";
 import * as C from "./action-cards.mjs";
 import { pingNames } from "./desk-push.mjs";
@@ -97,7 +97,7 @@ const INSTRUCTION_LINES = [
   [null, "To add a song to the releases or change one (its title, day or details), use propose_release: Luke is asked if it is correct first, and nothing changes until he says yes. Never tell Luke a song is added or changed before that."],
   ["Webmaster", "Webmaster: check song_pages first (what happened to each request, and which song the home card should show today); a cover that isn't on a public link goes up with upload_cover; the home card changes with song_page kind card, Luke confirming."],
   ["Webmaster Nova", "Webmaster: song pages are made with song_page (kind new: address, title, day, cover link; kind track: the Spotify link on release day). Luke confirms, then GitHub builds and checks the page: never Luke's Mac, never by hand."],
-  [null, "my_day's connector line says how many tools the desk has and the version of their list. Pass tools_seen (the number your app lists) when you call my_day. If your app shows fewer tools, or the version is different, the answer says reconnect needed: refresh the tool list (reconnect the connector) before you work."],
+  [null, "my_day's connector line says how many tools the desk has and the version of their list. Pass tools_seen (the number your app lists) and, if you have them, tool_names. Reconnect only when the count or the names differ. A version difference by itself is not a reconnect. The version is also on the connector when you connect."],
   [null, "Nova's yes counts as Luke's, as long as Luke told Nova yes himself: Nova records it with record_luke_answer (Luke's exact words), and it reaches you as Luke's answer, via Nova. Never for money (income, payments, ad spend): only Luke answers those."],
   [null, "A finished action Luke can tap is a card: send_message with card {kind, text, dedupe_key, action, owner, recipient, amount, currency, link, preview, deadline, expires_at, waiting_on, money_at_risk, ticket}. The same dedupe_key is never posted twice. Read his answer in my_day (card_answers): choice, time and the card version. An edit after a Yes is a new version and needs a new Yes. The card is done only when you post_update with card (the id) and proof_message, proof_ref or proof_link. Until Luke switches on \"taps count as Luke's yes\", a Yes is recorded and you still confirm with him. Payments and signatures always say Luke does this himself. Only a money_at_risk card may reach him between 23:00 and 08:00 São Paulo. Ads and the Monday pick: HQ never changes an ad and never chooses an amount."],
   ["Drop", "Drop: before you distribute, resubmit, or reply to a moderation note, call my_day with luke_tap (the card id or dedupe_key, the version, and the action). Go ahead only when it says yes and gives the time he tapped. A tap while \"taps count as Luke's yes\" is off does not let you proceed. Payments and signatures are never yours to send."],
@@ -111,34 +111,35 @@ export function toolsVersion(tools) {
   for (let i = 0; i < text.length; i++) { h ^= text.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; }
   return h.toString(16).padStart(8, "0");
 }
-/* what my_day says about the tool list (18 Nov 2026). reconnect_needed is true only when the bot
-   reports a count or a version that is not the live one. The sentence always names the live count. */
+/* what my_day says about the tool list (18 Nov 2026 night test). reconnect_needed is true only when
+   the count or the tool names differ. A version-only bump is not a reconnect. The sentence is said
+   only when reconnect_needed is true. */
 export function connectorStatus(tools, args) {
   const version = toolsVersion(tools), n = tools.length;
+  const names = tools.map((t) => t.name).sort();
   const seenRaw = args && args.tools_seen;
-  const listVer = args && args.list_version != null ? String(args.list_version).trim() : "";
-  const toolsVer = args && args.tools_version != null ? String(args.tools_version).trim() : "";
-  const ver = listVer || toolsVer;
   const reportedCount = !(seenRaw == null || seenRaw === "");
   const seen = reportedCount ? Number(seenRaw) : null;
   const countBad = reportedCount && seen !== n;
-  const verBad = ver !== "" && ver !== version;
-  const old = countBad || verBad;
-  const yours = countBad ? `you see ${Number.isFinite(seen) ? seen : "an unreadable number of"} tools` : verBad ? `your version is ${ver}` : "";
+  const rawNames = args && (args.tool_names || args.tools_names);
+  const nameList = Array.isArray(rawNames) ? rawNames.map((x) => String(x).trim()).filter(Boolean).sort() : null;
+  const namesBad = !!nameList && (nameList.length !== names.length || nameList.some((x, i) => x !== names[i]));
+  const old = countBad || namesBad;
+  const yours = countBad ? `you see ${Number.isFinite(seen) ? seen : "an unreadable number of"} tools` : namesBad ? "the tool names differ" : "";
   const status = old
     ? `reconnect needed: your tool list is old (${yours}; the desk has ${n} tools, version ${version}). Refresh the connector, then call my_day again.`
-    : `The desk has ${n} tools, version ${version}. If your app does not list exactly ${n} tools, reconnect needed: refresh the tool list before you work.`;
-  /* the sentence is said once, on my_day.reconnect. status and check are not copies of it (18 Nov 2026). */
+    : `The desk has ${n} tools, version ${version}.`;
   return { tools: n, version, reconnect_needed: old, status };
 }
 
 export const TOOLS = [
   { name: "my_day", title: "My day", readOnly: true,
-    description: "START HERE, every run. Returns who you are on the team, today's duties and their deadlines (São Paulo time), your open tasks, messages waiting on you, your open questions to Luke and how long each has waited (questions_to_luke), every new message for you since your last read (messages_for_you: Luke's answers to you included), card_answers (Luke's Yes, No or Edit on your action cards, with the version and the time), new notes for the whole team, and the rules. Before an irreversible step, pass luke_tap (id or dedupe_key, version, action): yes is true only when he tapped yes for that exact action and version and the tap counts. The first lines are the live tool count and version: pass tools_seen (how many tools your app lists) and tools_version or list_version (the version your app last loaded). If that number or version is not the desk's, the answer says reconnect needed. Read it before doing anything else.",
+    description: "START HERE, every run. Returns who you are on the team, today's duties and their deadlines (São Paulo time), your open tasks, messages waiting on you, your open questions to Luke and how long each has waited (questions_to_luke: one list, a clean excerpt, the id and the link), every new message for you since your last read (messages_for_you: Luke's answers to you included), card_answers (Luke's Yes, No or Edit on your action cards, with the version and the time), new notes for the whole team, and the rules. Before an irreversible step, pass luke_tap (id or dedupe_key, version, action): yes is true only when he tapped yes for that exact action and version and the tap counts. Pass tools_seen (how many tools your app lists) and tool_names when you have them. Reconnect is needed only when the count or the names differ. A version difference by itself is not. The version is on the connector when you connect. Read it before doing anything else.",
     inputSchema: obj({ bot: BOT,
       tools_seen: { type: "integer", description: "How many tools your app lists right now. If this is not the desk's count, the answer says reconnect needed." },
-      list_version: str("Optional. The version from your last my_day. If it is not the desk's version, the answer says reconnect needed."),
-      tools_version: str("Optional. The version your app last loaded. Same check as list_version: if it is not the current one, the answer says reconnect needed."),
+      tool_names: { type: "array", items: { type: "string" }, description: "Optional. The tool names your app lists. If they differ from the desk's names, reconnect is needed." },
+      list_version: str("Optional. The version from your last my_day. Kept so you can compare it. A difference by itself does not mean reconnect."),
+      tools_version: str("Optional. The version your app last loaded. Same as list_version: a difference by itself does not mean reconnect."),
       luke_tap: { type: "object", description: "Before an irreversible step (Drop: distribute, resubmit, or a reply to moderation). Did Luke tap yes for this exact action and card version, and when.",
         properties: { id: str("The card id (it starts with k)."), dedupe_key: str("The card's dedupe_key, if you do not have the id."), version: { type: "integer", description: "The card version you are about to act on." }, action: str("The card's action, exactly, for example distribute, resubmit or moderation.") }, additionalProperties: false } }, ["bot"]) },
   { name: "post_update", title: "Post an update", idempotent: false,
@@ -203,7 +204,8 @@ export const TOOLS = [
     description: "FORGE, DROP, VERSE, WEBMASTER, ATLAS, LAURA (Nova too). Pre-flight checks before anything reaches the stores or the ads. song = every check on that release's pack (the artist name exactly \"badscandal\", all lowercase, in primary/featured artists, producers, split and copyright; the master a WAV; the artwork a JPG or PNG, 3000 x 3000; the Canvas an MP4 or JPG; the song page and every link in the ad plan going to badscandal.com/<song>). text = check the artist name in any text (credits, a description). link = an ad link: it must be https://badscandal.com/<the song> (utm tags are fine), never Feature.fm or a store link. asset = check a file against its platform's rule BEFORE you upload it: cover, canvas, spotify_header, youtube_banner, or a profile photo or banner (the profiles tool lists them). Give what the file shows (width, height, seconds, format, size_mb); anything left out is not checked, and the answer's rule says the whole rule. ok true = nothing to fix. It changes nothing.",
     inputSchema: obj({ bot: BOT, song: str("Optional: the song's title or id (every check on its pack)."),
       text: str("Optional: any text to check the artist name in."),
-      link: str("Optional: an ad link to check (with song, it must go to that song's page)."),
+      link: str("Optional: an ad link to check (with song, it must go to that song's page). With mode track, a release-day Spotify track link instead."),
+      mode: str("Optional. track = this link is the release-day Spotify track (https://open.spotify.com/track/<id>). ?si= is flagged. Leave it out for an ad link, which must be badscandal.com/<song>."),
       asset: { type: "string", enum: Object.keys(S.ASSETS), description: "Optional: the kind of file to check against its platform's rule (cover, canvas, a profile photo or a banner)." },
       width: { type: "number", description: "With asset: the file's width in px." },
       height: { type: "number", description: "With asset: the file's height in px." },
@@ -472,6 +474,15 @@ export const TOOLS = [
       format: str("With propose, when the image has a size rule: jpg, png, gif or whatever the file is."),
       size_mb: { type: "number", description: "With propose, when the rule has a size limit: the file's size in MB." },
       why: str("Optional, with propose: one line on why this image.") }, ["bot"]) },
+  { name: "account_health", title: "Read account health", readOnly: true,
+    description: "Read only. The account-health picture HQ already has (Instagram, TikTok, YouTube, Spotify, the site). Nothing is fetched from a platform and nothing is written. Steve, Kevin, Laura, Atlas, Drop and Webmaster (Nova too). Use this instead of guessing, and instead of opening the platform in a browser.",
+    inputSchema: obj({ bot: BOT }, ["bot"]) },
+  { name: "needs_you", title: "Open Needs you cards", readOnly: true,
+    description: "Read only. The open action cards waiting on Luke (and any held until morning). Nothing is changed. Use this to see what is waiting before you ask again.",
+    inputSchema: obj({ bot: BOT }, ["bot"]) },
+  { name: "song_pl", title: "Per-song profit", readOnly: true,
+    description: "Read only. Per-song money in, ad spend and the result, from records already on the desk. Ledger, Sheet, Forge and Nova. A figure that was not recorded stays missing. Nothing is written.",
+    inputSchema: obj({ bot: BOT }, ["bot"]) },
   { name: "read_guide", title: "Read the staff guide", readOnly: true,
     description: "The written guide to this desk: who does what, the daily times, how to log income, how messages work, the rules that never bend. Read it once when you are first connected, and again whenever Nova says it changed.",
     inputSchema: obj({ bot: BOT }, ["bot"]) },
@@ -504,6 +515,8 @@ export const TOOL_USERS = {
   submit_income: INCOME_TEAM, fix_payment: INCOME_TEAM, income_source: INCOME_TEAM, income_check: INCOME_TEAM, sort_payment: INCOME_TEAM,
   income_status: [...INCOME_TEAM, "Alfred"], payments: INCOME_TEAM, link_transfer: INCOME_TEAM, month_check: INCOME_TEAM, close_month: INCOME_TEAM,
   record_spend: ["Forge"], log_growth: ["Steve", "Atlas", "Kevin", "Laura"],
+  account_health: ["Steve", "Kevin", "Laura", "Atlas", "Drop", "Webmaster"],
+  song_pl: ["Ledger", "Sheet", "Forge"],
   store_status: ["Drop"], spotify_upcoming: ["Atlas"], pitch_log: ["Atlas"], song_page: ["Webmaster"], roster_card: ["Nova"], recommend: ["Nova"], preflight: ["Forge", "Drop", "Verse", "Webmaster", "Atlas", "Laura"], instagram: ["Steve", "Kevin", "Forge"], song_pages: ["Webmaster"], upload_cover: ["Webmaster"],
   profiles: ["Atlas", "Laura", "Steve", "Kevin"],
 };
@@ -555,6 +568,7 @@ const stampWords = (iso) => { const t = S.spStamp(Date.parse(iso)); return `${S.
 const approvalOut = (ap, what) => {
   if (ap && ap.skipped) return { approved: null, state: "skipped: approval not needed" };
   if (!ap) return { approved: false, state: `not approved yet: ask Luke with send_message and approval (what: ${what})` };
+  if (ap.sentOnly && what === "pitch") return { approved: null, sent: true, state: `pitched ${S.dayWords(ap.on) || "already"}${ap.by ? ` by ${ap.by}` : ""}` };
   if (ap.sentOnly) return { approved: null, sent: true, state: `done, approval not needed (sent ${S.dayWords(ap.on) || "already"}${ap.by ? ` by ${ap.by}` : ""}; no approval was recorded on the desk)` };
   const by = "Luke" + (ap.via ? ` (via ${ap.via})` : "");
   if (what === "lyrics" && ap.current === false) return { approved: false, state: `approved by ${by} on ${stampWords(ap.at)}, but the lyrics changed since: ask Luke again`, by };
@@ -570,6 +584,27 @@ const pitchOut = (p) => (!p || !p.line ? "no pitch on this one" : { status: p.st
 const s4aOut = (sv) => ({ reported_at: sv.never ? "never" : sv.sp, ...(sv.stale ? { stale: "older than 48 hours" } : {}),
   unknown: sv.items.filter((x) => x.state === "unknown").map((x) => x.title), waiting_on_luke: sv.waitingOnLuke });
 const missingOut = (m) => (m.required ? m.short : `${m.short} (needed for "${m.step}", ${m.owner})`);
+/* One sentence. An empty list and a field that says "not filled yet" were the same gap said two ways
+   (18 Nov 2026 night test). */
+function missingForNext(v) {
+  const next = (v.steps || []).find((s) => s.status !== "done" && s.status !== "skipped" && !s.waiting);
+  const rows = (v.missing || []).filter((m) => m.required || (next && m.neededBy === next.key));
+  if (!rows.length) return "nothing missing for the next step";
+  return "missing for next step: " + rows.map(missingOut).join(", ");
+}
+function releaseCard(v, me, chase, mail) {
+  const tightText = (v.warnings || []).map((w) => (w && w.text) || w).find((t) => typeof t === "string" && /Uploaded .+ before release/.test(t));
+  const mailLine = !mail || mail.connected !== true ? "not connected" : (v.mail && (v.mail.status || v.mail.on) ? `${v.mail.status || "read"}${v.mail.on ? " " + v.mail.on : ""}` : "no data yet");
+  return { song: v.title, id: v.id, status: v.status === "draft" ? "draft (not sent to the team yet)" : v.released ? "released" : "coming",
+    release_day: when(v.date), days_to_go: v.daysToGo, where: v.where, deal: dealOut(v.deal), ...(tightText ? { tight: tightText } : {}),
+    warnings: v.warnings, missing: missingForNext(v), steps_done: `${v.counts.done} of ${v.counts.total}`,
+    at_the_distributor: v.store.status || v.store.legacy || "not recorded yet",
+    moderation: (v.store && v.store.status) || (v.mail && v.mail.status) || "no data yet",
+    routenote_email: mailLine, email_watch: mailLine, inbox: (mail && mail.inbox) || S.ROUTE_NOTE_INBOX,
+    ...(v.mail && v.mail.status === "rejected" ? { moderation_draft: { from: S.MODERATION_FROM, cc: S.MODERATION_CC, to: S.MODERATION_TO, note: "HQ does not send this email." } } : {}),
+    pitch: pitchOut(v.pitch),
+    your_steps: v.steps.filter((s) => s.owner === me).map((s) => stepOut(s, v.pack)), ...(chase ? { all_steps: v.steps.map((s) => stepOut(s, v.pack)) } : {}) };
+}
 
 const cur = (o) => Object.entries(o || {}).map(([c, a]) => `${c} ${Number(a).toFixed(2)}`).join(" + ") || "nothing logged";
 /* the recommendations on a decision, for Alfred's SHORT briefing only (A3, 17 Nov 2026); luke_briefing stays as it is */
@@ -634,7 +669,8 @@ export async function callTool(tool, args, ctx) {
         card_done = C.botCard(done);
       }
       const u = await S.postUpdate(store, now, roster, { ...args, bot: me });
-      return { saved: true, id: u.id, at: u.sp, bot: u.bot, status: u.status, message: u.message, shown_on: "badscandal.com/hq, Team", ...(card_done ? { card_done, may_act: card_done.may_act } : {}) };
+      const proof = card_done && card_done.proof && card_done.proof.link ? card_done.proof.link : (S.httpsLink(args.proof_link) || "");
+      return { saved: true, id: u.id, at: u.sp, bot: u.bot, status: u.status, message: u.message, ...(u.link ? { link: u.link } : {}), ...(proof ? { proof_link: proof } : {}), shown_on: "badscandal.com/hq, Team", ...(card_done ? { card_done, may_act: card_done.may_act } : {}) };
     }
     case "send_message": {
       if (args.card && typeof args.card === "object") {
@@ -682,13 +718,13 @@ export async function callTool(tool, args, ctx) {
       const fresh = oa === "add" || oa === "remove" || oa === "list";
       if (!fresh) {
         const cached = await IG.readToolCache(ig, now);
-        if (cached && cached.body) return { ...cached.body, calls_left: await callsLeft(false), cached: `This is the read from ${S.spStamp(cached.at)}. It did not use a call.` };
+        if (cached && cached.body) return { ...cached.body, last_read: S.spStamp(cached.at), cached: `This is the read from ${S.spStamp(cached.at)}. It did not use a call.` };
       }
       const v = await IG.igView(ig, now, { spend });
       const ourAccounts = { handles: v.own.map((h) => "@" + h), count: v.own.length, note: "Comments from these accounts never count: not in the ranking, the fans' list or needs_reply. The connected account is always on it. Only Nova changes it.",
         changes: (v.ownLog || []).map((x) => ({ on: S.spStamp(x.at), by: x.by, what: `${x.action} @${x.handle}`, reason: x.reason })) };
       const calls_left = await callsLeft(oa !== "list");
-      if (oa === "list") return { our_accounts: ourAccounts, calls_left, note: "Listing our accounts does not use a call. The numbers are below only when you ask for the ranking." };
+      if (oa === "list") return { our_accounts: ourAccounts, own_accounts: ourAccounts.handles, calls_left, note: "Listing our accounts does not use a call. The numbers are below only when you ask for the ranking." };
       const st = v.status;
       const lineOf = (c) => `${c.at.slice(0, 16).replace("T", " ")} · ${c.user}: ${c.text} (on “${c.postCaption}”)` + (c.id ? ` · comment ${c.id}` : "") + (c.link ? ` · ${c.link}` : "");
       const flags = [];
@@ -697,7 +733,7 @@ export async function callTool(tool, args, ctx) {
       if (v.ranking.noClearWinner) flags.push("no clear winner: the top two are within 1 point");
       const answer = { connected: st.connected, ...(st.connected ? { account: "@" + st.username } : { how: "Luke connects it once in HQ (Growth & Fans › Connect Instagram)." }),
         ...(st.picture ? { profile_picture: st.picture } : {}),
-        ...(st.lastError ? { problem: st.lastError } : {}), followers: st.followers, last_read: st.lastOkAt ? S.spStamp(st.lastOkAt) : "never", calls_left,
+        ...(st.lastError ? { problem: st.lastError } : {}), followers: st.followers, last_read: S.spStamp(now), calls_left,
         posts: v.posts.map(IG.postLine), new_comments: v.comments.slice(0, 20).map(lineOf),
         top_countries: v.countries.map((c) => `${c.country} ${c.count}`),
         ranking: { how: "Every recent post at the SAME age: its numbers at 1 day. Best first by engagement per view. Posts older than 3 weeks are in older, even when a 1-day number exists. A boost is the ad's spend, its engagements and the cost per engagement, or HQ's recorded Meta spend the day of the post or the next day. 'before the ad' is the post's numbers before that spend. Posts under 1,000 views are not ranked. Follows per view and profile visits are on the line when Instagram sent them.",
@@ -710,12 +746,18 @@ export async function callTool(tool, args, ctx) {
         needs_reply: v.needsReply.map(lineOf),
         needs_reply_note: "Questions from fans nobody of ours has answered. Replying goes outside the team: Luke decides and replies. Put them in your update for Luke; never reply yourself.",
         fan_inbox: { note: "People asking the song's name or where to listen, and people who commented on more than one post. needs_reply true is for Luke: put it in your update for him. Never reply, like, hide or delete a comment.",
-          questions: (v.fanInbox ? v.fanInbox.questions : []).map((q) => ({ needs_reply: q.needsReply, kind: q.kind === "listen" ? "where to listen" : q.kind === "use" ? "using the music" : "song name", when: String(q.at || "").slice(0, 16).replace("T", " "), user: q.user, text: q.text, on: q.postCaption, ...(q.id ? { comment: q.id } : {}), ...(q.link ? { link: q.link } : {}) })),
+          questions: (v.fanInbox ? v.fanInbox.questions : []).map((q) => ({ needs_reply: q.needsReply, kind: q.kind === "listen" ? "where to listen" : q.kind === "use" ? "using the music" : "song name", when: String(q.at || "").slice(0, 16).replace("T", " "), user: q.user, text: q.text, on: q.postCaption, ...(q.id ? { comment: q.id } : {}), ...(q.link ? { link: q.link } : {}), ...(q.needsReply ? {} : { replied_by: q.repliedBy && q.repliedBy.length ? q.repliedBy.join(", ") : "one of our accounts", replied_at: q.repliedAt || "the time was not on the comment" }) })),
           repeat_fans: (v.fanInbox ? v.fanInbox.repeats : []).map((r) => ({ needs_reply: r.needsReply, user: r.user, posts: r.posts, comments: r.comments, latest: r.lastText, on: r.postCaption })) },
-        own_accounts: v.own.map((h) => "@" + h), ...(oa ? { our_accounts: ourAccounts } : {}),
+        our_accounts: oa ? ourAccounts : v.own.map((h) => "@" + h), own_accounts: v.own.map((h) => "@" + h),
+        do_not_reply: IG.HIDDEN_HANDLES.map((h) => "@" + h),
+        do_not_reply_note: "These accounts are do-not-reply. Never reply, and never count their comments. @liliancardos and @liliancardosomakeup are on this list.",
+        ...(oa && oa !== "add" && oa !== "remove" && oa !== "list" ? { our_accounts_list: ourAccounts } : {}),
         ...(changed ? { done: `${changed.change.action === "add" ? "Added" : "Removed"} @${changed.change.handle}.` } : {}),
         note: "Read-only. 3 reads an hour. A read from the last 20 minutes is reused and does not use a call. Don't open Instagram in a browser for these numbers. Never change, start, pause or create ads." };
-      if (!oa && !changed) { try { await IG.writeToolCache(ig, now, answer); } catch { /* the answer still goes out */ } }
+      if (!oa && !changed) {
+        try { await IG.writeToolCache(ig, now, answer); } catch { /* the answer still goes out */ }
+        try { if (typeof ig.setJSON === "function") await ig.setJSON("tool-read.json", { at: now }); } catch { /* the stamp is only for last_read */ }
+      }
       return answer;
     }
     case "close_month": {
@@ -758,7 +800,15 @@ export async function callTool(tool, args, ctx) {
       }
       if (has("asset")) { for (const t of S.assetNotes(String(args.asset).trim().toLowerCase(), { width: args.width, height: args.height, seconds: args.seconds, format: args.format, mb: args.size_mb }) || []) notes.push(t); checked.push("platform size and format"); }
       if (has("text")) { for (const t of S.artistProblems(args.text)) problems.push(`Text: ${t}`); for (const t of S.artistNotes(args.text)) notes.push(t); checked.push("the text"); }
-      if (has("link")) { const pr = S.adLinkProblem(args.link, "", own); if (pr) problems.push(`Link: ${pr}`); checked.push(pr ? "the link" : "the link points at badscandal.com/<song>"); }
+      if (has("link")) {
+        if (String(args.mode || "") === "track") {
+          const t = S.spotifyTrackProblem(args.link);
+          if (t.problem) problems.push(`Link: ${t.problem}`);
+          else { checked.push("the Spotify track link"); if (t.si) notes.push(`The ?si= part is a personal share code. Use ${t.clean}.`); }
+        } else {
+          const pr = S.adLinkProblem(args.link, "", own); if (pr) problems.push(`Link: ${pr}`); checked.push(pr ? "the link" : "the link points at badscandal.com/<song>");
+        }
+      }
       return { ok: problems.length === 0, problems, ...(flags.length ? { flags } : {}), ...(notes.length ? { notes } : {}), ...(checked.length ? { checked } : {}), ...(couldnt.length ? { couldnt_check: couldnt } : {}), ...(rule ? { rule } : {}), note: problems.length ? "Fix these before it goes out (release_fill for your own fields; tell Luke for his)." : flags.length ? "Flagged only: nothing is blocking it." : "Nothing to fix." };
     }
     case "recommend": {
@@ -920,7 +970,7 @@ export async function callTool(tool, args, ctx) {
     case "payments": {
       const r = await S.listPayments(store, now, { month: args.month, account: args.account, source: args.source, payer: args.payer, status: args.status, limit: args.limit, changed_since: args.changed_since });
       return { month: r.month, total: r.total, received: cur(r.received), received_note: r.received_note, writes_to_sheet: false,
-        counted: r.counted, payments: r.payments.map((e) => { const o = S.payOut(e, r.month); return { id: e.id, statement_month: o.statement_month, landed_month: o.landed_month, counts_in: o.counts_in, date: o.date, payer: o.payer, amount: e.amount, currency: e.currency, status: o.status,
+        counted: r.counted, payments: r.payments.map((e) => { const o = S.payOut(e, r.month, r.lookup); return { id: e.id, statement_month: o.statement_month, landed_month: o.landed_month, counts_in: o.counts_in, date: o.date, payer: o.payer, amount: e.amount, currency: e.currency, status: o.status,
         category: e.category, source: e.source || "", account: o.account, added_by: e.by, counted: o.counted, ...(e.song ? { song: e.song } : {}), ...(e.store ? { store: e.store } : {}), ...(o.counts_note ? { counts_note: o.counts_note } : {}), ...(o.note ? { note: o.note } : {}), ...(o.paid_by ? { paid_by: o.paid_by } : {}), ...(o.moved_to ? { moved_to: o.moved_to } : {}) }; }),
         ...(r.total > r.payments.length ? { more: `${r.total - r.payments.length} more: narrow it (account, source, payer, status) or raise limit` } : {}) };
     }
@@ -948,7 +998,7 @@ export async function callTool(tool, args, ctx) {
         sources: i.sources.map(line), problems: i.problems,
         /* what you submitted yourself, with the id and month fix_payment needs */
         your_payments: i.entries.filter((e) => e.by === me).slice(0, 15).map((e) => ({ id: e.id, month: (e.statement || e.date).slice(0, 7), line: `${e.date} · ${e.payer} · ${e.currency} ${e.amount.toFixed(2)} · ${e.status} · ${e.account} · ${e.category}` })),
-        newest_payments: i.entries.slice(0, 15).map((e) => { const o = S.payOut(e); return `${o.date} · ${o.payer} · ${e.currency} ${e.amount.toFixed(2)} · ${o.status} · ${o.account} · by ${e.by} (id ${e.id})`; }),
+        newest_payments: i.entries.slice(0, 15).map((e) => { const o = S.payOut(e, i.month, i.entries); return `${o.date} · ${o.payer} · ${e.currency} ${e.amount.toFixed(2)} · ${o.status} · ${o.account} · by ${e.by} (id ${e.id})`; }),
         ...(i.count > 15 ? { more_payments: `${i.count - 15} more this month: use payments (month ${i.month}) to see every one, with its id` } : {}),
         /* in the account, not yet said what they are: counted as nothing until sorted (tool sort_payment) */
         unsorted: i.unsorted.map((e) => ({ id: e.id, month: e.date.slice(0, 7), line: `${e.date} · ${e.payer} · ${e.currency} ${e.amount.toFixed(2)} · ${e.account}`,
@@ -976,16 +1026,13 @@ export async function callTool(tool, args, ctx) {
     }
     case "releases": {
       if (String(args.workspace || "").trim().toLowerCase() === "label") return W.labelList(store, now);
-      const [raw, sightings] = await Promise.all([S.listReleases(store), S.getSightings(store)]);
-      const list = raw.map((r) => S.releaseView(r, today, { sightings }));
+      const [raw, sightings, messages, cardDoc] = await Promise.all([S.listReleases(store), S.getSightings(store), S.listMessages(store, now), S.readDoc(store, "action-cards.json", []).catch(() => ({ data: [] }))]);
+      const actionCards = Array.isArray(cardDoc && cardDoc.data) ? cardDoc.data : [];
+      const mail = S.routeNoteMailSource();
+      const list = raw.map((r) => S.releaseView(r, today, { sightings, messages, actionCards }));
       const chase = me === "Nova" || me === "Claude"; /* the two who chase everyone see every step */
       const show = list.filter((v) => S.releaseActive(v) || (me === "Claude" && v.status === "draft"));
-      return { you: me, today, releases: show.sort((a, b) => ((a.date || "9") < (b.date || "9") ? -1 : 1)).map((v) => ({ song: v.title, id: v.id, status: v.status === "draft" ? "draft (not sent to the team yet)" : v.released ? "released" : "coming",
-          release_day: when(v.date), days_to_go: v.daysToGo, where: v.where, deal: dealOut(v.deal), ...(v.tight ? { tight: "Sent late: steps that should already be done were due the day it was sent." } : {}),
-          warnings: v.warnings, missing: v.missing.map(missingOut), steps_done: `${v.counts.done} of ${v.counts.total}`,
-          at_the_distributor: v.store.status || v.store.legacy || "not recorded yet",
-          pitch: pitchOut(v.pitch),
-          your_steps: v.steps.filter((s) => s.owner === me).map((s) => stepOut(s, v.pack)), ...(chase ? { all_steps: v.steps.map((s) => stepOut(s, v.pack)) } : {}) })),
+      return { you: me, today, email_watch: mail.line, inbox: mail.inbox, moderation_from: mail.from, moderation_cc: mail.cc, releases: show.sort((a, b) => ((a.date || "9") < (b.date || "9") ? -1 : 1)).map((v) => releaseCard(v, me, chase, mail)),
         pitch_slots: S.pitchSlotLines(S.pitchSlots(list, today)),
         spotify_for_artists: s4aOut(S.sightingsView(sightings, raw, today, now)),
         /* A5 (17 Nov 2026): Nova's 6-week calendar, every song's steps (drafts' release days too) */
@@ -993,15 +1040,16 @@ export async function callTool(tool, args, ctx) {
         how: "Read a song's whole pack with release_pack. Mark your own step with release_step. Fill your own fields with release_fill." };
     }
     case "release_pack": {
-      const [raw, sightings] = await Promise.all([S.listReleases(store), S.getSightings(store)]);
+      const [raw, sightings, msgs, cardDoc] = await Promise.all([S.listReleases(store), S.getSightings(store), S.listMessages(store, now), S.readDoc(store, "action-cards.json", []).catch(() => ({ data: [] }))]);
       const r = S.findRelease(raw, args.song, { drafts: me === "Claude" });
-      const msgs = await S.listMessages(store, now);
+      const actionCards = Array.isArray(cardDoc && cardDoc.data) ? cardDoc.data : [];
       const lyricsPending = msgs.some((m) => m.proposal && !m.resolved && m.needs === "decision" && (m.proposal.id === r.id || m.proposal.title === r.title) && m.proposal.pack && String(m.proposal.pack.lyrics || "").trim());
-      const v = S.releaseView(r, today, { sightings, lyricsPending }), pack = r.pack || {};
+      const v = S.releaseView(r, today, { sightings, lyricsPending, messages: msgs, actionCards }), pack = r.pack || {};
+      const nextStep = (v.steps || []).find((s) => s.status !== "done" && s.status !== "skipped" && !s.waiting);
       return { song: v.title, id: v.id, status: v.status === "cancelled" ? "cancelled: do not work on it" : v.status === "draft" ? "draft (not sent to the team yet)" : v.alreadyOut ? "already out (recorded for its deal: no steps)" : v.released ? "released" : "coming",
         release_day: when(v.date), days_to_go: v.daysToGo, where: v.where, deal: dealOut(v.deal), warnings: v.warnings,
-        pack: S.PACK_FIELDS.map((f) => S.packFieldView(f, pack, r.steps, { storeStatus: v.store && v.store.status })),
-        missing: v.missing.map(missingOut), steps: v.steps.map((s) => stepOut(s, pack)),
+        pack: S.PACK_FIELDS.map((f) => S.packFieldView(f, pack, r.steps, { storeStatus: v.store && v.store.status, nextKey: nextStep && nextStep.key })),
+        missing: missingForNext(v), steps: v.steps.map((s) => stepOut(s, pack)),
         pitch: pitchOut(v.pitch),
         approvals: { pitch: approvalOut(v.approvals.pitch, "pitch"), lyrics: approvalOut(v.approvals.lyrics, "lyrics") },
         store: storeOut(v.store),
@@ -1081,7 +1129,7 @@ export async function callTool(tool, args, ctx) {
       const list = await S.songPages(store, now);
       const card = S.homeCardNow(), rule = homeCardSong(SONGS, S.spDay(now));
       const fetchFn = ctx.fetch || globalThis.fetch;
-      const checkedAt = new Date(now).toISOString();
+      const checkedAt = S.spStamp(now);
       const live = await Promise.all(SONGS.map(async (s) => {
         const url = `https://badscandal.com/${s.slug}`;
         if (typeof fetchFn !== "function") return { slug: s.slug, status: null, note: "couldn't check" };
@@ -1113,35 +1161,69 @@ export async function callTool(tool, args, ctx) {
       const v = r.pack[f.key];
       return { saved: true, song: r.title, field: f.key, label: f.label, value: v.length > 200 ? v.slice(0, 200) + `… (${v.length} characters saved)` : v };
     }
+    case "account_health": {
+      const report = await loadReport({ store, now });
+      return { read_only: true, wrote: false, accounts: (report.accounts || []).map((a) => ({ id: a.id, label: a.label, owner: a.owner, state: a.state, headline: a.headline })),
+        ...(report.connection ? { connection: report.connection } : {}), note: "Read only. Nothing was fetched from a platform and nothing was written." };
+    }
+    case "needs_you": {
+      const board = await C.workspaceNeeds(store, now, "badscandal");
+      const open = [].concat(board.needsYou || [], board.held || []);
+      return { read_only: true, wrote: false, quiet_hours: !!board.quiet, open: open.length, needs_you: board.needsYou || [], held_until_morning: board.held || [],
+        note: "Read only. These are the open action cards. Nothing was changed." };
+    }
+    case "song_pl": {
+      const hqAns = ctx.hq ? await ctx.hq().catch(() => null) : null;
+      const pl = await perSongAnswer(store, now, hqAns);
+      return { read_only: true, wrote: false, ...pl, note: "Read only. A figure that was not recorded stays missing. Nothing was written." };
+    }
     case "read_guide": {
       const g = await S.getGuide(store);
-      /* the guide is written by hand and can fall behind the connector (Sheet, 16 Nov 2026: "says 18 tools, the
-         connector has 28"): the live list goes first, and wins where they differ */
+      /* the live rules win over a stored guide from 12 Nov (18 Nov 2026 night test). The stored text is not rewritten. */
       const live = `The connector has ${TOOLS.length} tools right now: ${TOOLS.map((t) => t.name).join(", ")}. Where the guide below says otherwise, this line and the tools' own descriptions are right.`;
-      const money = "Money counts once, when it lands in Revolut. A Wise or PayPal row that has moved there shows as moved to Revolut and is not counted again. paid_by is who paid it out. link_transfer ties a Revolut credit to the Wise or PayPal rows it carried. month_check says what is still to sort. close_month locks a finished month.";
-      const moneyMore = "paid_by marks the payment that settled a statement, and that statement then shows as settled, not still payable. Moved to Revolut means the row is not counted again. expected_money lists each statement (Expected) and whether it is short, late or missing. payout_routes shows Exchange and fees from amounts already recorded. A gap with no source is short, unexplained, never a fee. A conversion keeps its rate and where that rate came from; otherwise it says not enough data. close_month runs only when month_check says the month is ready and an evidence link (https) is attached. A split with no rule Luke confirmed says rule pending. HQ never writes to the Google Sheet.";
+      const current = [
+        "CURRENT MONEY RULES (these win over any older date in the guide below):",
+        "Income counts once, when it lands in Revolut, in the month it lands. A Wise or PayPal row that moved to Revolut is not counted again. Only received money in Revolut is income.",
+        "Money in Wise is waiting in Wise. Money in PayPal is waiting in PayPal. Neither is received until link_transfer ties it to the Revolut credit that carried it.",
+        "A statement that is still payable is settled the same way payments settles it: paid_by. It then shows as settled, not still payable.",
+        "expected_money lists each statement. payout_routes shows Exchange and fees from amounts already recorded. A gap with no source is short, unexplained, never a fee. A split with no rule Luke confirmed says rule pending. close_month needs an evidence link (https). A remainder of 1.00 or less after every Revolut leg of one Wise or PayPal payment is left in Wise or PayPal, not a fee.",
+        "A payment counts in the month it arrived. HQ never moves money and never writes to the Google Sheet.",
+        `RouteNote mail is read from ${S.ROUTE_NOTE_INBOX} (Lilian's mail is forwarded there). A draft to a moderation team is From ${S.MODERATION_FROM}, CC ${S.MODERATION_CC}. HQ does not send the email.`,
+      ].join("\n");
       let text = g.text || BUILT_IN_GUIDE;
       text = text.replace(/eighteen tools/gi, `${TOOLS.length} tools`);
-      if (!/counts once/i.test(text)) text += "\n\n" + money;
-      if (!/expected_money/i.test(text)) text += "\n\n" + moneyMore;
-      return g.text ? `${live}\n\nSTAFF GUIDE (updated ${g.at ? g.at.slice(0, 10) : "?"})\n\n${text}` : `${live}\n\n${text}`;
+      return `${current}\n\n${live}\n\n` + (g.text ? `STAFF GUIDE (stored ${g.at ? g.at.slice(0, 10) : "?"}; the current rules above win)\n\n${text}` : text);
     }
   }
 
   /* the rest need the whole desk and, when it can be read, the dashboard's numbers */
-  const [desk, hqAns] = await Promise.all([S.loadDesk(store, now), ctx.hq ? ctx.hq().catch(() => null) : null]);
+  const [desk, hqAns, cardDoc] = await Promise.all([S.loadDesk(store, now), ctx.hq ? ctx.hq().catch(() => null) : null, S.readDoc(store, "action-cards.json", []).catch(() => ({ data: [] }))]);
   const hq = hqAns && hqAns.team ? hqAns : null;
   const b = S.board(desk, now, hq);
-  const rel = (desk.releases || []).map((r) => S.releaseView(r, today, { sightings: desk.sightings }));
+  const actionCards = Array.isArray(cardDoc && cardDoc.data) ? cardDoc.data : [];
+  const rel = (desk.releases || []).map((r) => S.releaseView(r, today, { sightings: desk.sightings, messages: desk.messages, actionCards }));
   const sheetNote = hq ? null : "The team's Google Sheet could not be read just now, so duties and tasks are missing from this answer. Carry on with your job card.";
   /* no duty row for the caller: before Nova's reset (no rows for anyone yet) that is expected, and work
      done now still counts (batch 5); after it, the row is missing */
   const resetAt = S.dutyResetTime(roster);
-  const noRowNote = () => (resetAt && S.spHM(now) < resetAt && !(hq.team.duties && hq.team.duties.total)
-    ? `Today's duty rows are not on the board yet: Nova puts them there at ${resetAt}. Do your daily duty now anyway and post_update with status done: it counts, and shows as done once your row appears.`
-    : "The task board has no duty row for you today. Do your daily duty at your usual time anyway, and tell Nova the row is missing.");
-  const worker = (w) => ({ name: w.name, role: w.role, state: w.state, duties: w.duties.map((d) => ({ id: d.id, task: d.task, due: d.due || "today", status: d.late ? "late" : d.status, ...(d.blocker ? { blocker: d.blocker } : {}) })),
-    last_update: w.last ? `${w.last.at} ${w.last.status}: ${w.last.message}` : "none", working_on: w.card ? w.card.workingOn : "", needs: w.card ? w.card.needs : "",
+  const hmNow = S.spHM(now);
+  const quietHours = hmNow >= "23:00" || hmNow < "08:00";
+  const beforeReset = !!(resetAt && hmNow < resetAt);
+  /* note and next say the same thing about the duty. Before the rows exist, or in quiet hours, do not
+     say "do your daily duty now" (18 Nov 2026 night test). */
+  const dutyLine = (hasRows) => (quietHours || beforeReset) && !hasRows
+    ? "Today's duties appear after 07:00. Work you finish now still counts, and shows as done once your row appears."
+    : !hasRows
+      ? "The task board has no duty row for you today. Do your daily duty at your usual time anyway, and tell Nova the row is missing."
+      : "Do your duty, then call post_update with status done and the number. If you are stuck, post_update with status blocked and say what is needed.";
+  const waitingSpotify = (w) => {
+    const steps = w.releaseSteps || [];
+    const realLate = (w.duties || []).some((d) => d.late) || steps.some((s) => s.late);
+    const spot = steps.some((s) => s.key === "spotify" && s.waiting && /spotify/i.test(s.waitingText || ""));
+    return !realLate && spot;
+  };
+  const worker = (w) => ({ name: w.name, role: w.role, state: waitingSpotify(w) ? "waiting on Spotify" : w.state, ...(waitingSpotify(w) ? { waiting_on: "Spotify" } : {}), duties: w.duties.map((d) => ({ id: d.id, task: d.task, due: d.due || "today", status: d.late ? "late" : d.status, ...(d.blocker ? { blocker: d.blocker } : {}) })),
+    last_update: w.last ? `${w.last.at} ${w.last.status}: ${w.last.message}${w.last.link ? " " + w.last.link : ""}` : "none", working_on: w.card ? w.card.workingOn : "", needs: w.card ? w.card.needs : "",
     open_tasks: w.tasks.length, late_tasks: w.lateTasks, waiting_on_it: w.waiting.length, last_used_the_desk: w.seen ? S.spStamp(Date.parse(w.seen)) : "never" });
   /* everything new for the caller since its last read (S.messagesFor), not repeating what the same answer
      already lists (shown = ids); a reply to one of its own messages carries the start of that message */
@@ -1159,13 +1241,16 @@ export async function callTool(tool, args, ctx) {
       const luke_tap = args.luke_tap && typeof args.luke_tap === "object" ? await C.checkTap(store, args.luke_tap, now) : null;
       /* ids and dates of unsorted payments (18 Nov 2026). luke_briefing keeps the short count. */
       const incomeProblems = (inc) => (inc && inc.problems || []).map((p) => {
-        if (!/nobody has sorted/.test(p) || !(inc.unsorted || []).length) return p;
+        const base = String(p).replace(/\s*\(id [^)]+\)/gi, "").replace(/\s{2,}/g, " ").trim();
+        if (!/nobody has sorted/.test(base) || !(inc.unsorted || []).length) return base;
         const listed = inc.unsorted.slice(0, 12).map((e) => `${e.id} (${e.date})`).join(", ");
         const more = inc.unsortedCount > 12 ? ` (+${inc.unsortedCount - 12} more)` : "";
-        return `${p}: ${listed}${more}`;
+        return `${base}: ${listed}${more}`;
       });
-      const questions = (from) => desk.messages.filter((m) => S.isOpen(m) && m.to === "Luke" && m.from === from).map((m) => ({
-        id: m.id, needs: m.needs, waiting: S.waitedFor(now - Date.parse(m.at)), since: m.sp, text: m.text.length > 180 ? m.text.slice(0, 179) + "…" : m.text }));
+      const questions = (from) => desk.messages.filter((m) => S.isOpen(m) && m.to === "Luke" && m.from === from).map((m) => {
+        const link = S.httpsLink(m.link) || (Array.isArray(m.links) ? m.links.map((x) => S.httpsLink(x)).find(Boolean) : "");
+        return { id: m.id, needs: m.needs, waiting: S.waitedFor(now - Date.parse(m.at)), since: m.sp, text: S.excerptText(S.hidePrivate(m.text), 160), ...(link ? { link } : {}) };
+      });
       if (me === "Claude") return { reconnect: conn.status, connector: { tools: conn.tools, version: conn.version, reconnect_needed: conn.reconnect_needed }, you: "Claude", today, now: b.now, waiting_on_you: b.waiting.claude.map(short), questions_to_luke: questions("Claude"), card_answers, ...(luke_tap ? { luke_tap } : {}), ...forYou(b.waiting.claude.map((m) => m.id)), waiting_on_luke: b.waiting.luke.map(short),
         releases: rel.filter((v) => S.releaseActive(v) || v.status === "draft").map((v) => `${v.title}: ${v.status === "draft" ? "draft" : v.released ? "released" : "coming"}, ${when(v.date)}, ${v.counts.done} of ${v.counts.total} steps done` + (v.counts.late ? `, ${v.counts.late} late` : "") + (v.counts.blocked ? `, ${v.counts.blocked} blocked` : "") + (v.missing.length ? `; missing: ${v.missing.map((m) => m.short).join(", ")}` : "")),
         unknown_in_spotify: b.sightings.items.filter((x) => x.state === "unknown").map((x) => `${x.title}, ${x.dateWords}`),
@@ -1198,10 +1283,9 @@ export async function callTool(tool, args, ctx) {
         : uncut(task));
       const clearBlock = (text) => S.blockerForDuty("", S.freshBlocker(text, { igConnected, revolutLive, ...lyricOpt }), titles);
       const shownBlocker = clearBlock(w.blockers);
-      const asks = desk.messages.filter((m) => m.from === me && m.to === "Luke" && S.isOpen(m)).slice(0, 8);
       const signedRaw = [];
       for (const person of b.staff) for (const bit of [person.blockers, person.card && person.card.needs]) if (bit && /sign-?in|signed out|log in/i.test(bit)) signedRaw.push(`${person.name}: ${bit}`);
-      const signOutLine = (line) => line.replace(/\b\d{3}-\d{3}-\d{4}\b/g, "").replace(/(?:\*{2,}|x{2,}|•{2,}|·{2,})\s*\d{2,4}/gi, "").replace(/\[account\]/g, "an account").replace(/\s{2,}/g, " ").trim();
+      const signOutLine = (line) => line.replace(/\b\d{3}-\d{3}-\d{4}\b/g, "").replace(/(?:\*{2,}|x{2,}|•{2,}|·{2,})\s*\d{2,4}/gi, "").replace(/\[account\]/g, "an account").replace(/\(\s*\)/g, "").replace(/\s{2,}/g, " ").replace(/\s+([,.:])/g, "$1").trim();
       const signedOut = signedRaw.map(signOutLine);
       const duties = w.duties.filter((d) => !S.staleTask(d)).map((d) => {
         const blocker = S.blockerForDuty(d.task, S.freshBlocker(d.blocker, { igConnected, revolutLive, ...lyricOpt }), titles);
@@ -1214,10 +1298,18 @@ export async function callTool(tool, args, ctx) {
         duties_today: duties,
         open_tasks: w.tasks.filter((t) => !S.staleTask(t) && S.signInOpen(t, signedRaw.join(" "))).map((t) => ({ id: t.id, task: dutyTask(t.task), deadline: /^invalid date$/i.test(String(t.deadline || "")) ? "" : t.deadline, status: t.late ? "late" : t.status, ...(t.blocker ? { blocker: t.blocker } : {}), ...(t.note ? { your_note: t.note } : {}) })),
         questions_to_luke: questions(me), card_answers, ...(luke_tap ? { luke_tap } : {}),
-        ...(asks.length ? { open_questions: asks.map((m) => ({ id: m.id, waiting: `${Math.max(0, Math.floor((now - Date.parse(m.at)) / 3600000))} h`, text: S.hidePrivate(m.text).slice(0, 140) })) } : {}),
         ...(signedOut.length ? { signed_out_accounts: signedOut.slice(0, 6) } : {}),
         waiting_on_you: w.waiting, notes_for_everyone: notes.map(short), ...forYou(w.waiting.map((m) => m.id).concat(notes.map((m) => m.id))),
-        your_last_update: w.last ? `${w.last.at} ${w.last.status}: ${w.last.message}` : "none yet",
+        your_last_update: (() => {
+          if (!w.last) return "none yet";
+          let line = `${w.last.at} ${w.last.status}: ${w.last.message}${w.last.link ? " " + w.last.link : ""}`;
+          if (w.last.status === "blocked") {
+            const fresh = S.freshBlocker(w.last.message, { igConnected, revolutLive, ...lyricOpt });
+            const cardClear = w.card && !String(w.card.blockers || "").trim() && w.card.oldBlockers;
+            if (fresh === "" || cardClear) line += " (stale: that blocker was resolved)";
+          }
+          return line;
+        })(),
         ...(shownBlocker && !w.blockersStale ? { your_known_blockers: shownBlocker, your_known_blockers_how: 'If this no longer stands in your way, clear it: set_my_card with blockers "" (empty). working_on can be left out. If it changed, send the new words in blockers.' } : {}),
         ...(shownBlocker && w.blockersStale ? { your_known_blockers_old: "old, still true? " + shownBlocker, your_known_blockers_how: 'This blocker is more than 48 hours old, so it is off the headline. If it still stands, send it again with set_my_card (blockers). If it does not, send blockers "".' } : {}),
         ...(/^(ledger|sheet|nova|alfred)$/i.test(me) ? { income_problems: incomeProblems(b.income) } : {}),
@@ -1231,13 +1323,13 @@ export async function callTool(tool, args, ctx) {
           : rs.length ? `Your release step${rs.length === 1 ? " is" : "s are"} waiting for ${rs.every((x) => x.waiting_for === rs[0].waiting_for) ? rs[0].waiting_for : "the step before"}: nothing to do on ${rs.length === 1 ? "it" : "them"} yet. ` : "") +
           (me === "Atlas" && !spotNext ? "Every day: report what Spotify for Artists shows as upcoming with spotify_upcoming. " : "") +
           (me === "Atlas" ? "Record a pitch you sent with pitch_log (pitched_on). When you see a new editorial playlist in Spotify for Artists, record it with pitch_log (playlist and added_on) the same day. HQ never pitches. " : "") +
-          "Do your duty, then call post_update with status done and the number. If you are stuck, post_update with status blocked and say what is needed.",
-        ...(sheetNote ? { note: sheetNote } : !w.duties.length && !w.paused ? { note: noRowNote() } : {}) };
+          dutyLine(duties.length),
+        ...((() => { const dutyNote = !duties.length && !w.paused ? dutyLine(false) : ""; const note = [dutyNote, sheetNote].filter(Boolean).join(" "); return note ? { note } : {}; })()) };
     }
     case "team_board":
       return { today, now_sao_paulo: b.now, duties: hq ? { done: hq.team.duties.done, total: hq.team.duties.total, late: hq.team.duties.late, blocked: hq.team.duties.blocked } : "not read",
         team: b.staff.map(worker), waiting_on_luke: b.waiting.luke.map(short), waiting_on_claude: b.waiting.claude.map(short), open_messages_for_bots: b.waiting.bots,
-        latest_updates: b.updates.slice(0, 20).map((u) => `${u.sp} ${u.bot} ${u.status}: ${u.message}`),
+        latest_updates: b.updates.slice(0, 20).map((u) => `${u.sp} ${u.bot} ${u.status}: ${u.message}${u.link ? " " + u.link : ""}`),
         releases: rel.filter(S.releaseActive).map((v) => ({ song: v.title, date: when(v.date), done: `${v.counts.done} of ${v.counts.total}`, late: v.counts.late, blocked: v.counts.blocked,
           late_steps: v.steps.filter((s) => s.late).map((s) => `${s.label} (${s.owner})`), warnings: v.warnings })),
         spotify_for_artists: s4aOut(b.sightings),
@@ -1295,13 +1387,21 @@ export async function callTool(tool, args, ctx) {
       const PLACES = /google ads|tiktok|meta|facebook|instagram|youtube|spotify|routenote|revolut|tipalti|paypal|wise|symphonic|soundcloud|gmail|google/i;
       /* the same account number is one sign-in whoever says it; a platform's name only within one bot (Kevin's
          TikTok profile and Forge's TikTok Ads are two accounts) */
-      const keyOf = (who, t) => { const num = /\d{3}-\d{3}-\d{4}|\d{6,}/.exec(t); if (num) return "n:" + num[0]; const pl = PLACES.exec(t); return pl ? "p:" + who + "|" + pl[0].toLowerCase() : "t:" + who + "|" + t.toLowerCase(); };
+      const keyOf = (who, t) => {
+        const day = /\b(\d{1,2}\s+(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*|\d{4}-\d{2}-\d{2})\b/i.exec(t);
+        const dayBit = day ? "|" + day[0].toLowerCase().replace(/\s+/g, "") : "";
+        const num = /\d{3}-\d{3}-\d{4}|\d{6,}/.exec(t);
+        if (num) return "n:" + num[0] + dayBit;
+        const pl = PLACES.exec(t);
+        return (pl ? "p:" + who + "|" + pl[0].toLowerCase() : "t:" + who + "|" + t.toLowerCase()) + dayBit;
+      };
       const add = (who, text) => {
         const t = String(text || "").trim(); const line = who ? `${who}: ${t}` : t;
-        if (!t || !SIGN_IN.test(t) || (DONE_IN.test(t) && !STILL.test(t))) return;
+        if (!t || /none right now/i.test(t) || !SIGN_IN.test(t) || (DONE_IN.test(t) && !STILL.test(t))) return;
+        if (!PLACES.test(t) && !/\d{3}-\d{3}-\d{4}/.test(t)) return;
         const k = keyOf(who, t);
         if (seenKeys.has(k) || signIns.includes(line)) return;
-        seenKeys.add(k); signIns.push(S.hidePrivate(line));
+        seenKeys.add(k); signIns.push(S.hidePrivate(line, { keepAdsId: true }));
       };
       for (const w of b.staff) {
         add(w.name, w.blockers);

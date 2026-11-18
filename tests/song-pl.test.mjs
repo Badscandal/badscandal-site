@@ -181,11 +181,11 @@ test("the page escapes a song name", () => {
 });
 
 test("recording a song on spend or a payment does not add a tool", async () => {
-  assert.equal(TOOLS.length, 40);
+  assert.equal(TOOLS.length, 43); /* + account_health, needs_you, song_pl (18 Nov 2026 night test) */
   assert.ok(tool("record_spend").inputSchema.properties.song);
   assert.ok(tool("submit_income").inputSchema.properties.song);
   assert.ok(tool("submit_income").inputSchema.properties.store);
-  assert.equal(TOOLS.find((t) => t.name === "song_pl"), undefined);
+  assert.ok(TOOLS.find((t) => t.name === "song_pl"), "song_pl is the read-only per-song tool (18 Nov 2026 night test)");
   assert.match(instructionsFor("Forge", R), /not linked to a song/);
   assert.match(instructionsFor("Ledger", R), /per_song/);
   assert.doesNotMatch(instructionsFor("Steve", R), /per_song/);

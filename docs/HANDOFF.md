@@ -62,6 +62,8 @@ artist growth bot that all we will need is content and $".
 
 ## In flight (branches not merged)
 
+- **Night test, 18 Nov** (`cursor/hq-night-test-31d0`, not merged). 29 connector fixes: reconnect only when the tool list differs, duties after 07:00, lyrics after release, RouteNote mail from luke@badscandal.com with admin@badscandal.com in CC, three read-only tools (43). `luke_briefing` unchanged. Not on main.
+
 - **Blank-screen fix** (PR #83, on main). One content hash on every HQ script, an 8-second fetch timeout, and Try again / Reset app when the page never paints.
 - **Phone look** (PR #80, on main). One received total per currency.
 - **One-tap cards** (PR #79, on main). Needs you header, Yes / No / Edit, Waiting on others, scheduled checks, desk push (empty until Luke pastes an address), Monday draft. Still 40 tools.
