@@ -319,7 +319,7 @@ test("release pipeline: Luke's routes, the bots' four tools, refusals as sentenc
   assert.match((await tool("release_step", { bot: "Drop", song: "Night Drive" })).content[0].text, /^Missing: step, status\./);
   const myDay = (await tool("my_day", { bot: "Drop" })).data;
   assert.deepEqual(myDay.release_steps.map((s) => s.step), ["approved"]);
-  assert.match(myDay.next, /^You have 1 open release step; the soonest is "Approved by RouteNote \(nothing waiting\)" for Night Drive/);
+  assert.match(myDay.next, /^You have 1 open release step; the soonest is "Approved by RouteNote" for Night Drive/);
   /* 15 Nov 2026: Forge's ads wait for Webmaster's song page (the ads link to it) */
   assert.match((await tool("my_day", { bot: "Forge" })).data.next, /^Your release step is waiting for the release day: the ads are made WITH Luke once the song is out \(never before, never on your own\): nothing to do on it yet\./, "16 Nov 2026 (Luke)");
   assert.match((await tool("release_step", { bot: "Forge", song: "Night Drive", step: "ads", status: "done" })).content[0].text, /waits for the release day .*: the ads are made with Luke once the song is out, never before and never alone\./, "16 Nov 2026 (Luke)");

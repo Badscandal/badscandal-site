@@ -3061,7 +3061,7 @@ export function noteStillCurrent(m, o = {}) {
    sent [late] but it didn't get sent because the song hasn't shown in spotify for artists yet"). */
 export const RELEASE_STEPS = [
   { key: "upload", label: "Uploaded to RouteNote with the release date", owner: "Drop", days: 21 },
-  { key: "approved", label: "Approved by RouteNote (nothing waiting)", owner: "Drop", days: 16 },
+  { key: "approved", label: "Approved by RouteNote", owner: "Drop", days: 16 },
   /* waits for RouteNote's approval (16 Nov 2026, Atlas: Love You showed "due today" while RouteNote still had
      it In Review); a label release skips the approval, so it never waits */
   { key: "spotify", label: "Showing as upcoming in Spotify for Artists", owner: "Atlas", days: 15, after: "approved" },
@@ -3334,10 +3334,13 @@ export async function upgradeReleases(store, now) {
 }
 /* everything a release on the desk is brought up to (15 and 16 Nov 2026); each part changes something only
    once, so a desk that is already up to date is never written */
-const OLD_ADS = "Ad drafts ready, inside the cap", OLD_VIDEO = "Video scheduled on YouTube";
+const OLD_ADS = "Ad drafts ready, inside the cap", OLD_VIDEO = "Video scheduled on YouTube", OLD_APPROVED = "Approved by RouteNote (nothing waiting)";
 function healOne(r, today, at) {
   if (!r || !Array.isArray(r.steps)) return false;
   const said = [];
+  /* the step's name only (18 Nov 2026: "(nothing waiting)" read as noise on Luke's card); no log line */
+  let renamed = false;
+  for (const x of r.steps) if (x && x.key === "approved" && x.label === OLD_APPROVED) { x.label = STEP.approved.label; renamed = true; }
   /* the song page step done with its link: the pack's page says it too (16 Nov 2026, Verse) */
   const pg = r.steps.find((s) => s.key === "page");
   if (pg && pg.status === "done" && httpsLink(pg.link) && !filled((r.pack || {}).page)) { r.pack = r.pack || {}; r.pack.page = httpsLink(pg.link); said.push("put the song page's link in the pack"); }
@@ -3365,7 +3368,7 @@ function healOne(r, today, at) {
   const vd = r.steps.find((s) => s.key === "video");
   if (vd && vd.label === OLD_VIDEO) { vd.label = STEP.video.label; said.push("the YouTube video goes public on the release day"); }
   if (said.length) logIt(r, at, "HQ", `HQ: ${joinWords(said)} (Luke, 16 Nov 2026)`);
-  return said.length > 0;
+  return said.length > 0 || renamed;
 }
 function tidyAll(rows, today, at) {
   const ids = new Set();
@@ -3415,6 +3418,14 @@ export const PITCH_WARN_DAYS = 14;
 export const PITCH_RECENT_DAYS = 28; /* a playlist add still shows for a month after release */
 export const PITCH_LOGGERS = ["Atlas", "Nova", "Claude", "Luke"];
 const EDITORIAL_CAP = 24;
+/* "Pitch: not this time. Me Dá Seu Body (out Tue 24 Nov) has the pitch for these two weeks…" (18 Nov 2026: it read
+   "Pitch: not pitched: … (Luke, 16 Nov 2026)" on Luke's card) */
+function skipLine(note) {
+  const n = String(note || "").replace(/\s*\(Luke, \d{1,2} \w{3} \d{4}\)\s*$/, "");
+  const m = n.match(/^Not pitched: (.+) is the song pitched in these two weeks, and Spotify takes one pitch at a time$/);
+  if (m) return `Pitch: not this time. ${m[1]} has the pitch for these two weeks, and Spotify takes one pitch at a time.`;
+  return n ? `Pitch: ${n.charAt(0).toLowerCase()}${n.slice(1)}` : "Pitch: not pitched";
+}
 const pitchStepOf = (v) => ((v && v.steps) || []).find((s) => s.key === "pitch") || null;
 const pitchedOnOf = (p) => (p && p.status === "done" ? (isDay(p.doneOn) ? p.doneOn : (p.at ? spDay(Date.parse(p.at)) : "")) : "");
 const samePlay = (a, b) => { const ka = songKey(a), kb = songKey(b); return ka || kb ? ka === kb : ownWords(a) !== "" && ownWords(a) === ownWords(b); };
@@ -3432,7 +3443,7 @@ export function pitchOf(v, today, editorial = null) {
   if (!pitch && !eds.length) return null;
   /* a skipped pitch has no deadline and does not ask Luke (18 Nov 2026) */
   if (pitch && pitch.status === "skipped") {
-    const note = pitch.note ? `Pitch: ${pitch.note.charAt(0).toLowerCase()}${pitch.note.slice(1)}` : "Pitch: not pitched";
+    const note = skipLine(pitch.note);
     return { status: "not pitched", skipped: true, waiting: false, pitchedOn: null, deadline: null, line: note, editorial: eds, ...(pitch.note ? { reason: pitch.note } : {}) };
   }
   const date = isDay(v.date) ? v.date : null;
@@ -3450,7 +3461,7 @@ export function pitchOf(v, today, editorial = null) {
   let line;
   /* 18 Nov 2026, Luke: a pitch Atlas sent is not an approval. The card's pitch line says who sent it. */
   if (done) line = (pitchedOn ? `Pitch: pitched ${dayWords(pitchedOn)}` : "Pitch: pitched") + (who ? ` by ${who}` : "");
-  else if (one) line = pitch.note ? `Pitch: ${pitch.note.charAt(0).toLowerCase()}${pitch.note.slice(1)}` : "Pitch: not pitched";
+  else if (one) line = skipLine(pitch.note);
   else if (missed) line = by ? `Pitch: missed. Spotify needed it by ${by}` : "Pitch: missed";
   else if (waiting) line = by ? `Pitch: not pitched yet. It waits until the song shows in Spotify for Artists. Deadline ${by}` : "Pitch: not pitched yet. It waits until the song shows in Spotify for Artists";
   else if (by && days != null && days >= PITCH_DEADLINE_DAYS && days <= PITCH_WARN_DAYS) line = `Pitch: not pitched. Still time: send it by ${by}`;

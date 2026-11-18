@@ -1588,6 +1588,33 @@ body.ws-on .nav{display:none}
   #shell button.whybtn,#shell button.ghost:not(.on),#shell button.more-btn,#shell button.chip:not(.on),label.profup{
     background-color:#ffffff;color:#12141a;border-color:rgba(18,20,26,.28)}
 }
+
+/* Upcoming, tidied (18 Nov 2026, Luke: buttons too close together, odd spacing) */
+.rdots i.on{background:#3DDC97}
+.tl-v li{display:flex;flex-direction:column;justify-content:center;gap:2px}
+.tl-v li b{font-weight:650}
+.tl-v li span{color:var(--muted);font-size:14px;line-height:1.4}
+.tl-v li.bad span{color:var(--red)}
+.tl-v li.ok b::after{content:" ✓";color:#3DDC97;font-weight:600}
+.readybox p{margin:0}
+.readybox ul{margin:8px 0 0;padding-left:18px}
+.relmail{margin-top:-4px}
+.relcard .rface > p{margin:6px 0}
+.relcard .rpitch{margin:2px 0 0}
+.relcard .rfold{border-bottom:.5px solid var(--glass-line)}
+.relcard .racts.racts-card{display:block;margin-top:16px;padding-top:0;border-top:0}
+.relcard .racts-more{margin-top:10px}
+.relcard .racts-main{display:flex;flex-wrap:wrap;gap:12px}
+.relcard .racts-main{align-items:center}
+.relcard .racts-main .copybtn{flex:1 1 140px;min-height:48px}
+.relcard .racts-more{display:flex;flex-wrap:wrap;gap:8px 28px;padding:0 2px}
+.relcard .racts-more .linkbtn{padding:10px 0}
+.relcard .racts-more .linkbtn.danger{color:var(--red)}
+.rdots-key{margin:2px 0 14px;font-size:13px;color:var(--muted)}
+.feed li > .feedmore{grid-column:2;margin-top:4px}
+.feed li > .feedmore > summary{font-size:13px;color:var(--muted);cursor:pointer;min-height:32px;display:flex;align-items:center}
+.feed li > .feedmore ul{list-style:none;margin:6px 0 0;padding:0}
+.balcard .linkbtn{padding-left:0;padding-right:0}
 </style>
 </head>
 <body>
@@ -1850,6 +1877,7 @@ body.ws-on .nav{display:none}
     <div id="relNow"></div>
     <div class="relhead"><h3 class="sech relh">Coming up</h3><button class="sendbtn" id="relNew" type="button" aria-controls="relForm" aria-expanded="false">New song</button></div>
     <p class="secsub">Sent to the team, soonest first.</p>
+    <p class="secsub relmail" id="relMail" hidden></p>
     <div id="relRows"></div>
     <span class="fok" id="relMsg" role="status"></span>
     <form class="t-card relform" id="relForm" aria-labelledby="rfTitleH" novalidate hidden></form>
@@ -1990,16 +2018,16 @@ body.ws-on .nav{display:none}
   }, 400);
 })();
 </script>
-<script src="js/crt.js?v=2396d22d5ff0" defer></script>
-<script src="js/hq-lib.js?v=2396d22d5ff0" defer></script>
-<script src="js/hq-look.js?v=2396d22d5ff0" defer></script>
-<script src="js/hq.js?v=2396d22d5ff0" defer></script>
-<script src="js/hq-staff.js?v=2396d22d5ff0" defer></script>
-<script src="js/hq-phone.js?v=2396d22d5ff0" defer></script>
-<script src="js/hq-shell.js?v=2396d22d5ff0" defer></script>
-<script src="js/hq-workspaces.js?v=2396d22d5ff0" defer></script>
-<script src="js/hq-app.js?v=2396d22d5ff0" defer></script>
-<script src="js/hq-cmd.js?v=2396d22d5ff0" defer></script>
-<script src="js/hq-pages.js?v=2396d22d5ff0" defer></script>
+<script src="js/crt.js?v=6318ed53aec3" defer></script>
+<script src="js/hq-lib.js?v=6318ed53aec3" defer></script>
+<script src="js/hq-look.js?v=6318ed53aec3" defer></script>
+<script src="js/hq.js?v=6318ed53aec3" defer></script>
+<script src="js/hq-staff.js?v=6318ed53aec3" defer></script>
+<script src="js/hq-phone.js?v=6318ed53aec3" defer></script>
+<script src="js/hq-shell.js?v=6318ed53aec3" defer></script>
+<script src="js/hq-workspaces.js?v=6318ed53aec3" defer></script>
+<script src="js/hq-app.js?v=6318ed53aec3" defer></script>
+<script src="js/hq-cmd.js?v=6318ed53aec3" defer></script>
+<script src="js/hq-pages.js?v=6318ed53aec3" defer></script>
 </body>
 </html>

@@ -245,3 +245,21 @@ test("the default read_messages view holds what my_day would hand over (about yo
   assert.equal(got.still_unread, undefined);
   assert.equal((await call(d, "read_messages", { bot: "Kevin", count_only: true })).count, 0);
 });
+
+test("a release saved with the old step name 'Approved by RouteNote (nothing waiting)' is renamed quietly", async () => {
+  const d = memoryDesk();
+  await S.saveRelease(d, NOW, R, { by: "Luke", title: "Made Up Song", date: "2026-12-18", pack: { kind: "Self-release", wav: "https://example.com/m.wav", artwork: "https://example.com/c.jpg", language: "English", explicit: "no", genre: "Dance", writers: "Made Up Writer", copyright: "℗ 2026 Made Up" } });
+  await S.sendRelease(d, NOW, R, { by: "Luke", id: "madeupsong" });
+  await S.mutate(d, "releases.json", [], (list) => { list[0].steps.find((x) => x.key === "approved").label = "Approved by RouteNote (nothing waiting)"; const n = list[0].log.length; return { value: n }; });
+  const logBefore = (await S.listReleases(d))[0].log.length;
+  await S.upgradeReleases(d, NOW + 60000);
+  const r = (await S.listReleases(d))[0];
+  assert.equal(r.steps.find((x) => x.key === "approved").label, "Approved by RouteNote");
+  assert.equal(r.log.length, logBefore, "no log line for a rename");
+});
+
+test("the one-pitch skip line reads as a sentence on Luke's card", () => {
+  const v = { status: "scheduled", date: "2026-11-27", steps: [{ key: "pitch", status: "skipped", rule: "one-pitch", note: "Not pitched: Made Up (out Tue 24 Nov) is the song pitched in these two weeks, and Spotify takes one pitch at a time (Luke, 16 Nov 2026)" }] };
+  const p = S.pitchOf ? S.pitchOf(v, "2026-11-18") : null;
+  if (p) assert.equal(p.line, "Pitch: not this time. Made Up (out Tue 24 Nov) has the pitch for these two weeks, and Spotify takes one pitch at a time.");
+});

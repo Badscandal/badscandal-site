@@ -70,7 +70,7 @@ export function sampleReleases(now = Date.now()) {
       upload: { status: "done", note: "Uploaded with the release date", link: "https://example.com/sample/routenote", at: iso(-8), by: "Drop" },
       approved: { status: "blocked", note: "RouteNote wants a cover without the web address on it. Needs a new cover from Luke.", at: iso(-2), by: "Drop" },
       page: { status: "working", note: "Page made, waiting for the cover", at: iso(-1), by: "Webmaster" } }),
-    log: [L(-11, "Luke", "Luke started the pack"), L(-9, "Luke", "Luke sent it to the team for " + S.dayWords(mdsbDate)), L(-8, "Drop", "Drop: Uploaded to RouteNote with the release date — done"), L(-2, "Drop", "Drop: Approved by RouteNote (nothing waiting) — blocked")] };
+    log: [L(-11, "Luke", "Luke started the pack"), L(-9, "Luke", "Luke sent it to the team for " + S.dayWords(mdsbDate)), L(-8, "Drop", "Drop: Uploaded to RouteNote with the release date — done"), L(-2, "Drop", "Drop: Approved by RouteNote — blocked")] };
 
   const sbDate = d(24), sbSent = d(-2);
   const sb = { id: "slowburn", title: "Slow Burn", date: sbDate, status: "scheduled", createdAt: iso(-3), createdBy: "Luke", updatedAt: iso(0, 9), sentAt: iso(-2), tight: false,

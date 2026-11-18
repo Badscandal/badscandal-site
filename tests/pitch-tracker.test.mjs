@@ -89,7 +89,7 @@ test("the one-pitch rule: the later song is not pitched, and it is not missed", 
   const early = await view(d, "Second");
   assert.equal(early.pitch.status, "not pitched");
   assert.equal(early.pitch.skipped, true);
-  assert.match(early.pitch.line, /not pitched: First \(out Fri 4 Dec\) is the song pitched in these two weeks/);
+  assert.match(early.pitch.line, /^Pitch: not this time\. First \(out Fri 4 Dec\) has the pitch for these two weeks, and Spotify takes one pitch at a time\.$/);
   assert.ok(!early.warnings.some((w) => /Still time|Last day|Too late|missed/i.test(w)));
   /* the deadline has passed for Second, and it is still not "missed" */
   const late = await view(d, "Second", Date.parse("2026-12-08T15:00:00Z"));

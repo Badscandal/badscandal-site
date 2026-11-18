@@ -287,9 +287,17 @@
       return { key: stage.key, label: stage.label, done: done && !bad, bad: !!bad, at: stampOf(step, store, stage.key), note: note || (bad ? "No reason reported" : ""), autoOpen: !!bad && !!(note || store.reason || (step && step.note)) };
     });
   }
+  /* under a song that was already sent: are its files and details complete? (18 Nov 2026: it said "Ready to send"
+     for songs that had been sent) */
   function readinessBox(blockers) {
     var list = (blockers || []).filter(Boolean).map(function (b) { return typeof b === "string" ? b : (b.text || b.label || ""); }).filter(Boolean);
-    return { ready: !list.length, items: list, line: list.length ? list.length + " still in the way" : "Ready to send" };
+    return { ready: !list.length, items: list, line: list.length ? (list.length === 1 ? "1 thing missing" : list.length + " things missing") + " from the files and details" : "Files and details: nothing missing" };
+  }
+  /* "Mon 16 Nov" from a stored stamp (an ISO instant or a day); "" when it isn't one (never the raw text) */
+  function stampDay(at, L) {
+    var m = String(at || "").match(/^(\d{4}-\d{2}-\d{2})/);
+    if (!m) return "";
+    return L && L.day ? L.day(m[1]) : m[1];
   }
 
   function adsPins(o, L) {
@@ -390,7 +398,7 @@
         landed: landed,
         pending: pending,
         landedText: landed == null ? "not reported" : landed === 0 ? "Nothing received" : money(landed, c, L),
-        pendingText: pending == null ? "not reported" : pending === 0 ? "Nothing waiting" : money(pending, c, L)
+        pendingText: pending == null ? "not reported" : pending === 0 ? "nothing" : money(pending, c, L)
       };
     }) };
   }
@@ -566,7 +574,7 @@
   }
 
   var api = {
-    homePulse: homePulse, needTotal: needTotal, milestones: milestones, releaseHero: releaseHero, platformKpis: platformKpis, healthDot: healthDot,
+    homePulse: homePulse, needTotal: needTotal, stampDay: stampDay, milestones: milestones, releaseHero: releaseHero, platformKpis: platformKpis, healthDot: healthDot,
     sparkSvg: sparkSvg, decisionStack: decisionStack, releaseRows: releaseRows, releaseTimeline: releaseTimeline, readinessBox: readinessBox,
     lyricsState: lyricsState, adsPins: adsPins, runningNow: runningNow, creativePlot: creativePlot,
     moneyCards: moneyCards, monthChip: monthChip, whyPayments: whyPayments, splitOff: splitOff, plainStatus: plainStatus, paymentBucket: paymentBucket,

@@ -61,7 +61,10 @@ test("a rejected release opens on the moderator's words", () => {
   assert.ok(bad.length);
   assert.match(bad[0].note, /Artwork is 2000 px/);
   assert.equal(V.readinessBox(["Artwork is 2000 px"]).ready, false);
-  assert.equal(V.readinessBox([]).line, "Ready to send");
+  assert.equal(V.readinessBox([]).line, "Files and details: nothing missing");
+  assert.equal(V.readinessBox(["Artwork is 2000 px"]).line, "1 thing missing from the files and details");
+  assert.equal(V.stampDay("2026-11-16T22:15:20.940Z", { day: (d) => "day " + d }), "day 2026-11-16");
+  assert.equal(V.stampDay("not a date"), "");
 });
 
 test("ad tiles name a missing account and never invent a cost per engagement", () => {
@@ -95,7 +98,7 @@ test("one received card per currency, and only landed money counts", () => {
   assert.equal(eur.landedText, "Nothing received");
   assert.equal(eur.pending, 10);
   assert.equal(gbp.landedText, "Nothing received");
-  assert.equal(gbp.pendingText, "Nothing waiting");
+  assert.equal(gbp.pendingText, "nothing");
   const unread = V.moneyCards({});
   assert.ok(unread.cards.every((c) => c.landedText === "not reported"));
 });

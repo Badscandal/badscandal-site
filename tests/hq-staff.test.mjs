@@ -402,13 +402,13 @@ test("releases: one card per song (the desk's first), the sheet's own rows only 
   assert.match(L.cancelQuestion({ title: "X", status: "draft" }), /Nobody was told/);
   assert.match(L.cancelQuestion({ title: "X", status: "scheduled" }), /The team is told to stop/);
   /* the pipeline's own labels have short words for Today's sentences */
-  assert.equal(L.shortStep("Approved by RouteNote (nothing waiting)"), "RouteNote approval");
+  assert.equal(L.shortStep("Approved by RouteNote"), "RouteNote approval");
   assert.equal(L.shortStep("Something new"), "something new");
 });
 
 test("Team: a late or blocked release step is in Nova's message", () => {
   const w = sampleBoard(NOW).staff.find((x) => x.name === "Drop");
-  assert.match(L.novaMessage(w), /\nRelease step: Me Dá Seu Body: Approved by RouteNote \(nothing waiting\) \(blocked: RouteNote wants/);
+  assert.match(L.novaMessage(w), /\nRelease step: Me Dá Seu Body: Approved by RouteNote \(blocked: RouteNote wants/);
   assert.doesNotMatch(L.novaMessage(worker("A", "late")), /Release step/);
 });
 

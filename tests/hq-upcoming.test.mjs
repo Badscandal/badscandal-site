@@ -41,7 +41,7 @@ test("red only for a failure: a wait is calm, a tight send is amber, a failed ch
   const ads = "Ads made with Luke, after the release is blocked (Forge): Luke 16 Nov 20:00: no solo builds. Luke runs the ad build himself after release";
   const lyrics = "Lyrics live on Musixmatch is blocked (Verse): Need the full lyrics text from Luke in the pack. None provided yet";
   const tight = "Sent 10 days before release: the usual 21 days for the stores could not be kept";
-  const failed = "Approved by RouteNote (nothing waiting) is blocked (Drop): needs a new cover";
+  const failed = "Approved by RouteNote is blocked (Drop): needs a new cover";
   const song = rel({ warnings: [ads, tight], steps: [step("ads", "Ads made with Luke, after the release", "Forge", "2026-12-13", { status: "blocked", waiting: true, waitingText: "waiting: the ads are made with Luke once the song is out", note: "Luke 16 Nov 20:00: no solo builds" })] });
   assert.equal(L.warnTone(ads, song), "wait");
   assert.equal(L.warnTone(lyrics, rel()), "wait");
