@@ -2007,7 +2007,39 @@
       dots: (v.steps || []).filter(function (s) { return s && s.status !== "skipped"; }).map(stepTone),
       next: next ? { label: next.label || "", owner: next.owner === "Luke" ? "You" : (next.owner || ""), when: stepState(next, today).text } : null,
       distributor: bits.join(" · "), warnings: pre ? [] : (wg.bad || []),
+      mailLine: routeMailLine(extra.mail, v),
       cover: extra.cover || "", taps: extra.taps == null ? null : extra.taps, people: extra.people == null ? null : extra.people, spend: extra.spend || "" };
+  }
+
+  /* L5. RouteNote's inbox is not connected until Luke signs it in. A song with no parsed email says not reported. */
+  function routeMailLine(src, release) {
+    if (!src || src.connected !== true) return "RouteNote email: not connected";
+    var mail = release && release.mail;
+    if (!mail || !mail.status) return "RouteNote email: not reported";
+    var bits = ["RouteNote email: " + mail.status];
+    if (mail.on) bits.push(day(mail.on));
+    if (mail.reason && mail.reason !== "not reported") bits.push(mail.reason);
+    else if (mail.status === "rejected") bits.push("reason not reported");
+    return bits.join(" · ");
+  }
+  /* What YouTube showed, as Laura recorded it. An empty list is none recorded, never a made-up claim. */
+  function contentClaimRows(claims) {
+    var list = !claims ? [] : (Array.isArray(claims) ? claims : (claims.items || []));
+    if (!list.length) return { reported: false, rows: [], empty: "No Content ID claim has been recorded." };
+    return { reported: true, empty: "", rows: list.map(function (c) {
+      return { claim: c.claim || "not reported", claimant: c.claimant ? c.claimant : "not reported", impact: c.impact ? c.impact : "not reported", date: c.date ? day(c.date) : "not reported" };
+    }) };
+  }
+  /* Phone Needs you: the mailbox sign-in, and a RouteNote rejection that needs Luke. */
+  function phoneWatchers(board) {
+    board = board || {};
+    var out = [], mail = board.mail;
+    if (!mail || mail.connected !== true) out.push({ kind: "connect", title: "RouteNote email: not connected", line: (mail && mail.steps) || "HQ cannot read RouteNote's inbox yet.", href: "#releases" });
+    ((board.waiting && board.waiting.luke) || []).forEach(function (m) {
+      if (!m || m.ask !== "routenote" || m.resolved) return;
+      out.push({ kind: "routenote", title: "RouteNote needs you", line: m.text || "", href: m.id ? "#messages/" + m.id : "#releases", id: m.id || "" });
+    });
+    return out;
   }
 
   function teamDots(workers) {
@@ -2123,5 +2155,7 @@
     /* phone HQ (18 Nov 2026): Needs you, the release strip, the team dots, the week, money, the spend gauge */
     deskWhen: deskWhen, moneyHead: moneyHead, payFlow: payFlow, spendGauge: spendGauge, decisionCards: decisionCards,
     releaseFace: releaseFace, teamDots: teamDots, weekAhead: weekAhead, quietFeed: quietFeed, followerStrip: followerStrip,
-    mondayPick: mondayPick, lyricsPreview: lyricsPreview };
+    mondayPick: mondayPick, lyricsPreview: lyricsPreview,
+    /* L5 watchers (18 Nov 2026) */
+    routeMailLine: routeMailLine, contentClaimRows: contentClaimRows, phoneWatchers: phoneWatchers };
 });
