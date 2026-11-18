@@ -31,8 +31,7 @@ site + Luke's private dashboard /hq + the bots' connector /mcp).
 
 ## Where it stands (18 Nov 2026)
 
-**Where we left off:** L12 (Profiles) is live on main (PR #64, commit `a6f67a7`). Luke merged it.
-Nothing else is in flight. A new session starts from this file.
+**Where we left off:** L12 (Profiles) is live on main (PR #64, commit `a6f67a7`). A small fix is in flight on `cursor/pitch-take-back-feb7` (PR #65): a sent pitch is not an approval, and red on a release card is only a real failure. Not on main yet.
 
 **HQ** (`badscandal.com/hq`, also inside the HQ apps on Luke's iPhone and Mac) has: Today, Songs, Ads, Pages
 (one tile per song page since #59), Growth & Fans (with the Instagram reader), Profiles (since #64), Upcoming (the release pipeline),
@@ -55,7 +54,7 @@ artist growth bot that all we will need is content and $".
 
 ## In flight (branches not merged)
 
-- Nothing in flight. L12 shipped on main as PR #64 (`a6f67a7`).
+- **`cursor/pitch-take-back-feb7` (PR #65, waiting for Nova to merge):** updated onto main after L12. A sent Spotify pitch is not under Your approvals, and Take it back only sits next to a real approval and names it. Red on a release card is only a failure: a step waiting on a date, on Luke, or on a decision he made stays calm, and "Sent N days before release" is amber. Tests 584 on Node 24 and 22.
 
 ## Waiting on someone
 

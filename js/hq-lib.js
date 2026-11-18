@@ -197,7 +197,7 @@
   function stepBlocked(st) { return !!st && !st.done && !st.skipped && /^blocked\b/i.test(String(st.note || "").trim()); }
   function releaseTrouble(r) {
     var steps = (r && r.steps) || [], late = steps.filter(function (st) { return st && st.late && !st.done; }).length;
-    var blocked = steps.filter(stepBlocked).length, warnings = ((r && r.warnings) || []).length;
+    var blocked = steps.filter(stepBlocked).length, warnings = ((r && r.warnings) || []).filter(function (w) { return warnTone(w, r) === "bad"; }).length;
     return { late: late, blocked: blocked, warnings: warnings, onTime: !late && !blocked && !warnings };
   }
   /* the space under a page on phones: from the top of the bottom bar to the bottom of the screen, + 24 px;
@@ -840,7 +840,9 @@
       var sn = String(st.note || "").trim();
       return { text: sn === LABEL_NOTE ? "not ours: the label delivers it" : sn === OUT_NOTE ? "already out when it was recorded" : "skipped" + (sn ? ": " + sn : ""), bad: false, done: false, skipped: true };
     }
-    if (st.waiting && st.status !== "done" && st.status !== "blocked") return { text: st.waitingText || "waiting: the song is not in Spotify for Artists yet", bad: false, done: false, waiting: true };
+    if (st.waiting && st.status !== "done" && st.status !== "blocked") return { text: st.waitingText || "waiting", bad: false, done: false, waiting: true };
+    /* 18 Nov 2026: a block that is only waiting (on a date, on Luke, or on a decision he made) is not red */
+    if (st.status === "blocked" && (st.waiting || blockWaitNote(st.label, st.note))) return { text: st.waitingText || "waiting on you", bad: false, done: false, waiting: true };
     var n = typeof st.dueIn === "number" ? st.dueIn : isDay(st.due) && isDay(today) ? dayDiff(today, st.due) : null;
     if (st.status === "done") {
       /* done_on (batch 3): the real day, when the bot said it was earlier than when it marked it */
@@ -867,36 +869,70 @@
       return (isDay(h.on) ? day(h.on) + " · " : "") + h.status + (h.reason ? ": " + h.reason : "") + (h.note ? " (" + h.note + ")" : "") + (h.by ? " (" + h.by + ")" : "");
     });
   }
-  /* the two approvals in words: [{key, text, ok, stale}] (ok = approved and still current) */
+  /* the two approvals in words: [{key, text, ok, stale, undo}] (ok = approved and still current;
+     undo = Take it back may show, and only next to this row). A pitch Atlas sent, with no approval
+     from Luke, is not a row: the card's pitch line says it (18 Nov 2026). A pitch already sent
+     can't be taken back. */
   var APPROVAL_WORDS = [["pitch", "Pitch"], ["lyrics", "Final lyrics"]];
   function approvalLines(v) {
-    var a = v && v.approvals || {};
-    return APPROVAL_WORDS.map(function (w) {
+    var a = v && v.approvals || {}, steps = (v && v.steps) || [], out = [];
+    APPROVAL_WORDS.forEach(function (w) {
       var ap = a[w[0]];
-      if (!ap) return { key: w[0], text: w[1] + ": not approved yet", ok: false, stale: false };
-      if (ap.sentOnly) return { key: w[0], text: "Pitch sent" + (isDay(ap.on) ? " " + day(ap.on) : "") + (ap.by ? " by " + ap.by : "") + " (no approval recorded)", ok: true, stale: false, sent: true };
+      if (ap && ap.sentOnly) return;
+      if (!ap) { out.push({ key: w[0], text: w[1] + ": not approved yet", ok: false, stale: false, undo: false }); return; }
       var on = ap.at ? day(spStampOf(ap.at).slice(0, 10)) : "", stale = w[0] === "lyrics" && ap.current === false;
-      return { key: w[0], text: w[1] + " approved by Luke" + (ap.via ? " (via " + ap.via + ")" : "") + (on ? ", " + on : "") + (stale ? ", but changed since" : ""), ok: !stale, stale: stale };
+      var sent = w[0] === "pitch" && steps.some(function (s) { return s.key === "pitch" && s.status === "done"; });
+      out.push({ key: w[0], text: w[1] + " approved by Luke" + (ap.via ? " (via " + ap.via + ")" : "") + (on ? ", " + on : "") + (stale ? ", but changed since" : ""), ok: !stale, stale: stale, undo: !stale && !sent });
     });
+    return out;
   }
+  /* the words on the button, so it names the approval and never a sent pitch */
+  function approvalUndo(x) { return x && x.undo ? (x.key === "pitch" ? "Take back the pitch" : "Take back the lyrics") : ""; }
   /* Drop's open "ready to resubmit?" question about this release, or null */
   /* ---------- the Upcoming tab, overhauled (15 Nov 2026, Luke: "too chaotic … more user friendly") ----------
      Each song is a compact card: its day, a progress bar and ONE status line; the rest folds behind a tap. */
   var openStep = function (s) { return s && s.status !== "done" && s.status !== "skipped"; };
   var byDue = function (a, b) { return (a.due || "9") < (b.due || "9") ? -1 : (a.due || "9") > (b.due || "9") ? 1 : 0; };
-  /* the one line: the most urgent warning (the desk sorts them) and how many more; else the soonest step
-     someone can do now ("Next: …", or "Late: …" when it is past its day); else what the steps wait for */
+  /* red only for a failure (18 Nov 2026, Luke). A wait is calm. "Sent N days before" is a caution: amber, not red. */
+  function blockWaitNote(label, note) {
+    note = String(note || ""); label = String(label || "");
+    if (/\b(reject|rejected|fail|failed|error|denied|routenote|cover)\b/i.test(note)) return false;
+    if (/^Ads made with Luke/i.test(label) && /\b(luke|no solo)\b/i.test(note)) return true;
+    if (/\b(luke|you)\b/i.test(note) && /\b(need|needs|waiting|none provided|not yet|no solo)\b/i.test(note)) return true;
+    return false;
+  }
+  function warnTone(text, v) {
+    var t = String(text || "");
+    if (/^Sent \d+ days? before release: the usual 21 days/.test(t)) return "caution";
+    if (/^Not showing in Spotify for Artists yet/.test(t)) return "wait";
+    if (/^Still time to pitch|^Last day to pitch/.test(t)) return "caution";
+    var m = /^(.*) is blocked \([^)]+\)(?::\s*([\s\S]*))?$/.exec(t);
+    if (m) {
+      var label = m[1], note = m[2] || "", st = ((v && v.steps) || []).filter(function (s) { return s.label === label; })[0];
+      if ((st && st.waiting) || blockWaitNote(label, (st && st.note) || note)) return "wait";
+      return "bad";
+    }
+    return "bad";
+  }
+  function warnGroups(v) {
+    var g = { bad: [], caution: [], wait: [] };
+    ((v && v.warnings) || []).forEach(function (w) { g[warnTone(w, v)].push(w); });
+    return g;
+  }
+  /* the one line: the most urgent failure (and how many more); else the soonest step someone can do;
+     a wait is calm. A caution is amber and is not the headline while a step can still be said calmly. */
   function relStatus(v, today) {
-    var w = (v && v.warnings) || [];
-    if (w.length) return { text: w[0], bad: true, more: w.length - 1 };
-    var steps = ((v && v.steps) || []).filter(openStep), can = steps.filter(function (s) { return !s.waiting; }).sort(byDue);
+    var g = warnGroups(v);
+    if (g.bad.length) return { text: g.bad[0], bad: true, more: g.bad.length - 1 };
+    var steps = ((v && v.steps) || []).filter(openStep), can = steps.filter(function (s) { return !s.waiting && !(s.status === "blocked" && blockWaitNote(s.label, s.note)); }).sort(byDue);
     if (can.length) {
       var s = can[0], who = s.owner === "Luke" ? "You" : s.owner, n = isDay(s.due) && isDay(today) ? dayDiff(today, s.due) : null;
       if (s.status === "blocked") return { text: "Blocked: " + shortStep(s.label) + " · " + who + (s.note ? " · " + s.note : ""), bad: true, more: 0 };
       if (n != null && n < 0) return { text: "Late: " + shortStep(s.label) + " · " + who + " · " + plural(-n, "day"), bad: true, more: 0 };
       return { text: "Next: " + shortStep(s.label) + " · " + who + (isDay(s.due) ? " · " + day(s.due) : ""), bad: false, more: 0 };
     }
-    if (steps.length) { var t = String(steps[0].waitingText || "waiting for the step before").replace(/^waiting: /i, ""); return { text: "Waiting: " + t, bad: false, more: 0 }; }
+    if (steps.length) { var t = String(steps[0].waitingText || (blockWaitNote(steps[0].label, steps[0].note) ? "waiting on you" : "waiting for the step before")).replace(/^waiting: /i, ""); return { text: "Waiting: " + t, bad: false, more: 0 }; }
+    if (g.caution.length) return { text: g.caution[0], bad: false, caution: true, more: g.caution.length - 1 };
     return { text: "All steps done", bad: false, more: 0 };
   }
   function relProgress(v) {
@@ -1116,9 +1152,9 @@
     return st ? "needed for the " + shortStep(st.label) : "";
   }
 
-  /* an Upcoming card's pill: its warnings counted ("2 warnings", red), else the plain pill */
+  /* an Upcoming card's pill: red only for a failure. A wait or a caution is not a warning. */
   function upcomingPill(v, today) {
-    var n = v && v.status === "scheduled" && !v.alreadyOut ? (v.warnings || []).length : 0;
+    var n = v && v.status === "scheduled" && !v.alreadyOut ? warnGroups(v).bad.length : 0;
     return n ? { text: plural(n, "warning"), bad: true, rel: false } : relPill(v, today);
   }
   /* "where it is at", one line: the desk's own (releaseView.where), else what the page can say itself
@@ -1136,8 +1172,8 @@
      first (freshest); without it, the sheet's merged desk rows. */
   function releaseAttention(sheet, board) {
     var list = board && Array.isArray(board.releases)
-      ? board.releases.filter(function (v) { return v.status === "scheduled" && !v.alreadyOut; }).map(function (v) { return { id: v.id, title: v.title, days: v.daysToGo, w: v.warnings || [] }; })
-      : ((sheet && sheet.releases) || []).filter(function (r) { return r.desk; }).map(function (r) { return { id: r.id, title: r.song, days: r.daysToGo, w: r.warnings || [] }; });
+      ? board.releases.filter(function (v) { return v.status === "scheduled" && !v.alreadyOut; }).map(function (v) { return { id: v.id, title: v.title, days: v.daysToGo, w: warnGroups(v).bad }; })
+      : ((sheet && sheet.releases) || []).filter(function (r) { return r.desk; }).map(function (r) { return { id: r.id, title: r.song, days: r.daysToGo, w: warnGroups(r).bad }; });
     var all = [];
     list.filter(function (x) { return x.days == null || x.days >= -14; }).sort(function (a, b) { return (a.days == null ? 999 : a.days) - (b.days == null ? 999 : b.days); }).forEach(function (x) {
       x.w.forEach(function (w, i) { all.push({ key: "rw:" + x.id + ":" + i, text: x.title + ": " + w, href: "#releases/" + String(x.id || "").replace(/[^a-z0-9]/gi, "") }); });
@@ -1675,7 +1711,7 @@
     snapshot: snapshot, changesSince: changesSince, tiles: tiles, summaryText: summaryText, shortStep: shortStep, day: day,
     slug: slug, workerLabel: workerLabel, sortWorkers: sortWorkers, workerView: workerView, dutyWhen: dutyWhen, workerCounts: workerCounts, seenLine: seenLine, connectorLine: connectorLine,
     novaMessage: novaMessage, liveFeed: liveFeed, spWhen: spWhen, waitLabel: waitLabel, needWords: needWords, reportParts: reportParts, siteCheckLine: siteCheckLine, composeNames: composeNames,
-    threadRoot: threadRoot, answerTarget: answerTarget, questionLines: questionLines, questionsLeft: questionsLeft, stepButton: stepButton, formKey: formKey, storeLine: storeLine, storeHistory: storeHistory, capRateLine: capRateLine, capMissingLine: capMissingLine, dutyGapsLine: dutyGapsLine, incomeTotals: incomeTotals, approvalLines: approvalLines, resubmitAsk: resubmitAsk, relStatus: relStatus, relProgress: relProgress, stepGroups: stepGroups, upcomingAsks: upcomingAsks, staffAttention: staffAttention, staffHealth: staffHealth, curList: curList, cadenceWord: cadenceWord, accountLine: accountLine, sourceState: sourceState, payLine: payLine, accountsLine: accountsLine, receivedMonths: receivedMonths, releasePage: releasePage, monthRows: monthRows, mainSources: mainSources, sourceMonthLine: sourceMonthLine, proposalRows: proposalRows, proposalConfirm: proposalConfirm, profileBlocks: profileBlocks,
+    threadRoot: threadRoot, answerTarget: answerTarget, questionLines: questionLines, questionsLeft: questionsLeft, stepButton: stepButton, formKey: formKey, storeLine: storeLine, storeHistory: storeHistory, capRateLine: capRateLine, capMissingLine: capMissingLine, dutyGapsLine: dutyGapsLine, incomeTotals: incomeTotals, approvalLines: approvalLines, approvalUndo: approvalUndo, warnTone: warnTone, warnGroups: warnGroups, resubmitAsk: resubmitAsk, relStatus: relStatus, relProgress: relProgress, stepGroups: stepGroups, upcomingAsks: upcomingAsks, staffAttention: staffAttention, staffHealth: staffHealth, curList: curList, cadenceWord: cadenceWord, accountLine: accountLine, sourceState: sourceState, payLine: payLine, accountsLine: accountsLine, receivedMonths: receivedMonths, releasePage: releasePage, monthRows: monthRows, mainSources: mainSources, sourceMonthLine: sourceMonthLine, proposalRows: proposalRows, proposalConfirm: proposalConfirm, profileBlocks: profileBlocks,
     incomeEmpty: incomeEmpty, incomeProblems: incomeProblems,
     /* replies that visibly land + the release pipeline (11 Nov 2026) */
     spStampOf: spStampOf, seenWords: seenWords, sentLine: sentLine, answeredList: answeredList, CLAUDE_ROUNDS: CLAUDE_ROUNDS,

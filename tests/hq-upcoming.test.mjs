@@ -37,6 +37,26 @@ test("relStatus: one line, the most urgent first: a warning (with how many more)
     { text: "All steps done", bad: false, more: 0 });
 });
 
+test("red only for a failure: a wait is calm, a tight send is amber, a failed check stays red (18 Nov 2026)", () => {
+  const ads = "Ads made with Luke, after the release is blocked (Forge): Luke 16 Nov 20:00: no solo builds. Luke runs the ad build himself after release";
+  const lyrics = "Lyrics live on Musixmatch is blocked (Verse): Need the full lyrics text from Luke in the pack. None provided yet";
+  const tight = "Sent 10 days before release: the usual 21 days for the stores could not be kept";
+  const failed = "Approved by RouteNote (nothing waiting) is blocked (Drop): needs a new cover";
+  const song = rel({ warnings: [ads, tight], steps: [step("ads", "Ads made with Luke, after the release", "Forge", "2026-12-13", { status: "blocked", waiting: true, waitingText: "waiting: the ads are made with Luke once the song is out", note: "Luke 16 Nov 20:00: no solo builds" })] });
+  assert.equal(L.warnTone(ads, song), "wait");
+  assert.equal(L.warnTone(lyrics, rel()), "wait");
+  assert.equal(L.warnTone(tight, rel()), "caution");
+  assert.equal(L.warnTone(failed, rel()), "bad");
+  assert.equal(L.warnTone("Not showing in Spotify for Artists yet, 10 days before release", rel()), "wait");
+  assert.deepEqual(L.upcomingPill(song, TODAY), { text: "On time", bad: false, rel: false });
+  assert.equal(L.relStatus(song, TODAY).bad, false);
+  assert.match(L.relStatus(song, TODAY).text, /^Waiting: /);
+  const broke = rel({ warnings: [failed, tight] });
+  assert.deepEqual(L.upcomingPill(broke, TODAY), { text: "1 warning", bad: true, rel: false });
+  assert.deepEqual(L.relStatus(broke, TODAY), { text: failed, bad: true, more: 0 });
+  assert.deepEqual(L.warnGroups(rel({ warnings: [tight] })).caution, [tight]);
+});
+
 test("relProgress: done of the steps that count (skipped ones don't), and a whole percentage", () => {
   assert.deepEqual(L.relProgress({ counts: { done: 1, total: 4 } }), { done: 1, total: 4, pct: 25, text: "1 of 4 steps done" });
   assert.deepEqual(L.relProgress({ counts: { done: 0, total: 0 } }), { done: 0, total: 0, pct: 0, text: "" });

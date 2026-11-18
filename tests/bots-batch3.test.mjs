@@ -160,7 +160,8 @@ test("Luke approves the lyrics himself on HQ, or withdraws an approval; nobody e
   const slim = S.slimRelease(v);
   assert.equal(slim.approvals.lyrics.text, undefined);
   assert.equal(slim.approvals.lyrics.textChars, LYRICS.length);
-  assert.deepEqual(L.approvalLines(v).map((x) => [x.key, x.ok]), [["pitch", false], ["lyrics", true]]);
+  assert.deepEqual(L.approvalLines(v).map((x) => [x.key, x.ok, x.undo]), [["pitch", false, false], ["lyrics", true, true]]);
+  assert.equal(L.approvalUndo(L.approvalLines(v)[1]), "Take back the lyrics");
   assert.match(L.approvalLines(v)[1].text, /^Final lyrics approved by Luke, Sat 14 Nov/);
   assert.match(L.approvalLines(v)[0].text, /^Pitch: not approved yet/);
 });

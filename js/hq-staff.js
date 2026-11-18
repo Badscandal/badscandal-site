@@ -918,16 +918,17 @@
     var a = ui.rel.ask, busy = ui.rel.busy === "ask:" + v.id, dis = HQ.sample || busy ? " disabled" : "";
     var hasLyrics = !!(v.lyricsChars || (v.pack && v.pack.lyrics));
     var rows = L.approvalLines(v).map(function (x) {
-      var btn = "";
-      if (x.ok && !x.sent) btn = '<button class="linkbtn" type="button" data-rel="unapprove" data-id="' + esc(v.id) + '" data-what="' + x.key + '"' + dis + ">Take it back</button>";
-      else if (x.key === "lyrics" && hasLyrics) btn = '<button class="copybtn" type="button" data-rel="approve" data-id="' + esc(v.id) + '" data-what="lyrics"' + dis + ">" + (x.stale ? "Approve them again" : "Approve the final lyrics") + "</button>";
+      var undo = L.approvalUndo(x), btn = "";
+      if (undo) btn = '<button class="linkbtn" type="button" data-rel="unapprove" data-id="' + esc(v.id) + '" data-what="' + x.key + '"' + dis + ">" + esc(undo) + "</button>";
+      else if (x.key === "lyrics" && hasLyrics && !x.ok) btn = '<button class="copybtn" type="button" data-rel="approve" data-id="' + esc(v.id) + '" data-what="lyrics"' + dis + ">" + (x.stale ? "Approve them again" : "Approve the final lyrics") + "</button>";
       return '<li class="' + (x.ok ? "ok" : x.stale ? "stale" : "") + '"><span>' + esc(x.text) + "</span>" + (btn ? '<span class="racts2">' + btn + "</span>" : "") + "</li>";
     }).join("");
     var conf = "";
     if (a && a.id === v.id && (a.kind === "approve" || a.kind === "unapprove")) {
-      var q = a.kind === "approve" ? "Approve the lyrics of " + v.title + " as they are in Files and details now? Verse sees that they are final." : "Take back your approval of the " + (a.what === "pitch" ? "pitch" : "final lyrics") + " of " + v.title + "?";
+      var which = a.what === "pitch" ? "pitch" : "lyrics";
+      var q = a.kind === "approve" ? "Approve the lyrics of " + v.title + " as they are in Files and details now? Verse sees that they are final." : "Take back your approval of the " + (which === "pitch" ? "pitch" : "final lyrics") + " of " + v.title + "?";
       conf = '<div class="confirm" role="group" aria-label="Confirm"><p>' + esc(q) + '</p><div class="conn-acts"><button class="sendbtn" type="button" data-rel="' + a.kind + '-yes" data-id="' + esc(v.id) + '"' + dis + ">" +
-        (busy ? "Saving…" : a.kind === "approve" ? "Yes, approve" : "Yes, take it back") + '</button><button class="copybtn" type="button" data-rel="no" data-id="' + esc(v.id) + '"' + (busy ? " disabled" : "") + ">Cancel</button></div></div>";
+        (busy ? "Saving…" : a.kind === "approve" ? "Yes, approve" : "Yes, take back the " + which) + '</button><button class="copybtn" type="button" data-rel="no" data-id="' + esc(v.id) + '"' + (busy ? " disabled" : "") + ">Cancel</button></div></div>";
     }
     return '<div class="rappr"><b>Your approvals</b><ul>' + rows + "</ul>" + conf + "</div>";
   }
@@ -960,7 +961,8 @@
     var acts = ['<button class="copybtn" type="button" data-rel="page" data-id="' + esc(v.id) + '">Release page</button>', '<button class="copybtn" type="button" data-rel="edit" data-id="' + esc(v.id) + '">Edit the details</button>'];
     if (live) acts.push('<button class="linkbtn" type="button" data-rel="date" data-id="' + esc(v.id) + '"' + off + ">Change the date</button>",
       '<button class="linkbtn" type="button" data-rel="cancel" data-id="' + esc(v.id) + '"' + off + ">Cancel release</button>");
-    var asking = ui.rel.ask && ui.rel.ask.id === v.id, warn = v.warnings || [], st = L.relStatus(v, today), pr = L.relProgress(v), g = L.stepGroups(v);
+    var asking = ui.rel.ask && ui.rel.ask.id === v.id, wg = L.warnGroups(v), st = L.relStatus(v, today), pr = L.relProgress(v), g = L.stepGroups(v);
+    var badLeft = st.bad ? wg.bad.slice(1) : wg.bad;
     var allDone = v.released && v.counts && v.counts.total && v.counts.done === v.counts.total;
     var stepList = function (list) { return '<ol class="rsteps" aria-label="Steps">' + list.map(function (s) { return relStep(v, s); }).join("") + "</ol>"; };
     var steps = allDone ? '<p class="rnote">All ' + v.counts.total + " steps done.</p>"
@@ -971,11 +973,12 @@
       '<span class="' + (pill.bad ? "bstate late" : "pill" + (pill.rel ? " rel" : "")) + '">' + esc(pill.text) + "</span></div>" +
       (ui.rel.note[v.id] ? '<p class="rdone" role="status">' + esc(ui.rel.note[v.id]) + "</p>" : "") +
       (pr.total ? '<div class="rprog"><div class="rbar" role="progressbar" aria-valuemin="0" aria-valuemax="' + pr.total + '" aria-valuenow="' + pr.done + '" aria-label="' + esc(pr.text) + '"><i style="width:' + pr.pct + '%"></i></div><span>' + esc(pr.text) + "</span></div>" : "") +
-      '<p class="rstat' + (st.bad ? " bad" : "") + '">' + esc(st.text) + (st.more ? ' <span class="rmore">+' + st.more + " more</span>" : "") + "</p>" +
+      '<p class="rstat' + (st.bad ? " bad" : st.caution ? " caution" : "") + '">' + esc(st.text) + (st.more ? ' <span class="rmore">+' + st.more + " more</span>" : "") + "</p>" +
       pitchHtml(v) +
       resubmitHtml(v) + preflightHtml(v) +
       '<details class="rfold" data-fold="card:' + esc(v.id) + '"' + (ui.rel.fold["card:" + v.id] ? " open" : "") + "><summary>Steps and details</summary>" +
-      (warn.length > 1 ? '<ul class="rwarn" aria-label="Warnings">' + warn.map(function (w) { return "<li>" + esc(w) + "</li>"; }).join("") + "</ul>" : "") +
+      (badLeft.length ? '<ul class="rwarn" aria-label="Warnings">' + badLeft.map(function (w) { return "<li>" + esc(w) + "</li>"; }).join("") + "</ul>" : "") +
+      (wg.caution.length ? '<ul class="rwarn note" aria-label="Notes">' + wg.caution.map(function (w) { return "<li>" + esc(w) + "</li>"; }).join("") + "</ul>" : "") +
       storeHtml(v) + steps + approvalsHtml(v) + packHtml(v) + relPack(v) + "</details>" +
       (asking && (ui.rel.ask.kind === "date" || ui.rel.ask.kind === "cancel") ? relAsk(v) : '<div class="racts">' + acts.join("") + "</div>") +
       '<p class="ferr" role="alert">' + esc(ui.rel.err[v.id] || "") + "</p></article>";

@@ -136,7 +136,11 @@ test("a pitch sent without an approval on the desk reads as sent, not 'not appro
   assert.deepEqual([pack.approvals.pitch.approved, pack.approvals.pitch.sent], [false, true]);
   assert.match(pack.approvals.pitch.state, /^sent Sat 14 Nov by Atlas; no approval was recorded on the desk/);
   const v = S.releaseView(await rel(d, r.id), TODAY);
-  assert.deepEqual(L.approvalLines(v)[0], { key: "pitch", text: "Pitch sent Sat 14 Nov by Atlas (no approval recorded)", ok: true, stale: false, sent: true });
+  /* 18 Nov 2026, Luke: a pitch Atlas sent is not his approval, so it is not a row. The pitch line says it. */
+  assert.ok(!L.approvalLines(v).some((x) => x.key === "pitch"));
+  assert.equal(v.pitch.line, "Pitch: pitched Sat 14 Nov by Atlas");
+  assert.equal(L.approvalUndo(L.approvalLines(v).find((x) => x.key === "lyrics")), "");
+  await fails(S.approveRelease(d, NOW, R, { by: "Luke", id: r.id, what: "pitch", withdraw: true }), /already sent/);
 });
 
 test("the song page step done with its link fills the pack's page (and old releases get it once)", async () => {
