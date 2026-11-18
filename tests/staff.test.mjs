@@ -110,8 +110,9 @@ test("staff: one payment is recorded once; pending becomes received; nothing is 
     { id: "revolut", name: "Revolut", kind: "account", state: "blocked", blocker: "Not connected" }, { id: "northlight", name: "Northlight Records", category: "Label deals", cadence: "monthly", state: "active" },
     { id: "pub", name: "Sample Publishing", category: "Publishing", cadence: "quarterly", state: "active" }, { id: "plug", name: "Plug-in sales", state: "not_tracked" }]);
   const i = await S.incomeState(d, NOW);
-  assert.deepEqual(i.received, { EUR: 112.01 }, "currencies are never mixed; the transfer is not income; the PayPal money counts only once it reaches Revolut (17 Nov 2026)");
-  assert.deepEqual(i.holding, { USD: 104.04 }, "seen in PayPal, once");
+  /* 18 Nov 2026: received means Revolut. The statement is still "Statement only", and the PayPal row has not moved, so neither is income. */
+  assert.deepEqual(i.received, {}, "currencies are never mixed; the transfer is not income; nothing here has reached Revolut (18 Nov 2026)");
+  assert.deepEqual(i.holding, { EUR: 112.01, USD: 104.04 }, "the statement marked received, and the PayPal money, are seen and not counted");
   assert.deepEqual(i.pending, {});
   const v = Object.fromEntries(i.accounts.concat(i.sources).map((s) => [s.id, s.verdict]));
   assert.deepEqual(v, { wise: "ok", paypal: "ok", revolut: "blocked", northlight: "ok", pub: "never", plug: "not_tracked" });
@@ -194,7 +195,8 @@ test("staff: one payment stays one payment, whichever way the bot sends it", asy
   await S.submitIncome(d, NOW + 6, R, { ...base, amount: 80, date: "2026-10-28", account: "Statement only", status: "pending" });
   await S.submitIncome(d, NOW + 7, R, { ...base, amount: 80, date: "2026-11-11", account: "Wise", status: "received" });
   const i = await S.incomeState(d, NOW);
-  assert.deepEqual(i.received, { EUR: 192.01, USD: 100 }); assert.deepEqual(i.pending, {});
+  /* 18 Nov 2026: these landings are Wise and PayPal, so they are holding until Revolut. The dedupe (four payments, one statement date) is unchanged. */
+  assert.deepEqual(i.received, {}); assert.deepEqual(i.holding, { EUR: 192.01, USD: 100 }); assert.deepEqual(i.pending, {});
   assert.equal(i.entries.length, 4, "four payments, not seven");
   assert.equal(i.entries.find((e) => e.amount === 80).statement, "2026-10-28");
   assert.equal(S.secretIn("AB12CDEF3456GH789", { reference: true }), "");

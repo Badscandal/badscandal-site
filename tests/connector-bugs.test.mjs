@@ -35,7 +35,10 @@ test("stale duty lines and closed sign-in tasks are rewritten on read", () => {
   assert.match(S.freshDuty("Record Meta too until the meta-api-feed brief says LIVE, and Google (EUR)"), /currency not confirmed/);
   assert.equal(S.freshWhy("Drop", "reports what each song earned"), "Gets each self-release into the stores on time.");
   assert.equal(S.freshBlocker("Revolut can't be read", { revolutLive: true }), "");
-  assert.equal(S.staleTask({ id: "T-30", task: "Forge's TikTok Ads sign-in" }), true);
+  /* 18 Nov 2026: a sign-in task follows the live signed-out list, so this line is not always stale */
+  assert.equal(S.staleTask({ id: "T-30", task: "Forge's TikTok Ads sign-in" }), false);
+  assert.equal(S.signInOpen({ id: "T-30", task: "Forge's TikTok Ads sign-in" }, "Forge: TikTok Ads signed out"), true);
+  assert.equal(S.signInOpen({ id: "T-30", task: "Forge's TikTok Ads sign-in" }, "Laura: YouTube signed out"), false);
   assert.match(S.hidePrivate("card ending 4242 and account 376-151-8792"), /\[hidden\].*\[account\]/);
   assert.equal(S.hidePrivate("the song is 4 minutes"), "the song is 4 minutes");
 });

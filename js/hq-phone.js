@@ -121,7 +121,13 @@
         (c.line.length > 90 ? '<button class="linkbtn" type="button" data-expand>More</button>' : "") +
         (c.recommended ? '<p class="drec">Recommended: ' + esc(c.recommended) + "</p>" : "") + cardButtons(c) + "</article>";
     });
-    if (!cards.length && !(auto && auto.needsYou && auto.needsYou.length)) h += '<p class="dnone">Nothing is waiting on you.</p>';
+    var watchers = L.phoneWatchers ? L.phoneWatchers(board) : [];
+    watchers.forEach(function (w) {
+      h += '<article class="dcard"><p class="dfrom">' + esc(w.title) + '</p><p class="dline' + (w.line.length > 160 ? " clamp" : "") + '">' + esc(w.line) + "</p>" +
+        (w.line.length > 160 ? '<button class="linkbtn" type="button" data-expand>More</button>' : "") +
+        (w.href ? '<a class="linkbtn" href="' + esc(w.href) + '">Open</a>' : "") + "</article>";
+    });
+    if (!cards.length && !(auto && auto.needsYou && auto.needsYou.length) && !watchers.length) h += '<p class="dnone">Nothing is waiting on you.</p>';
     if (auto) h += othersHtml(auto.waitingOnOthers);
     h += stripHtml(sheet, ov);
     h += mondayHtml(board);

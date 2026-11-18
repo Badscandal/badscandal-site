@@ -38,6 +38,8 @@ const SOURCES = [
   /* the bank reader (11 Nov 2026): the site itself reads this one every morning */
   { id: "revolut", name: "Revolut", kind: "account", owner: "HQ", cadence: "daily", state: "active", how: "read-only, read by the site every morning" },
   { id: "plugin", name: "Plug-in sales", kind: "payer", category: "Other", currency: "USD", lands: "PayPal", cadence: "monthly", owner: "", state: "not_tracked" },
+  /* L1 (18 Nov 2026): a monthly source with a pay day and nothing filed, so Expected can show "missing". Made up. */
+  { id: "label", name: "Sample Label", kind: "payer", category: "Label deals", currency: "EUR", lands: "Wise", cadence: "monthly", owner: "Ledger", state: "active", match: ["sample label"], main: true, dueDay: 3 },
 ];
 
 /* MADE-UP releases for the pipeline (11 Nov 2026; V2-V5 the same evening). Four, one of each kind:
@@ -146,6 +148,18 @@ export function sampleDesk(now = Date.now()) {
      total) and one of Luke's own transfers between his accounts (never income) */
   const R = (back, payer, amount, status) => ({ ...E(back, payer, amount, "EUR", status, "Revolut", "Other", "HQ"), id: "irevsample" + back + payer.length + "x" + amount, reference: "sample-tx-" + back + payer.length + "x" + amount, note: "Read from Revolut" });
   entries.push(R(0, "A. Example", 60, "unsorted"), R(1, "Made-up Studio Ltd", 350, "unsorted"), R(1, "Own savings pocket", 200, "transfer"));
+  /* L1 + L9 (18 Nov 2026), made up. One statement still open (due on the source's pay day). One statement
+     of USD 110 paid as USD 104.04 in PayPal and USD 100 in Revolut, so the route's fee is the gap.
+     One Wise payout in EUR that landed in USD, so the exchange is "not enough data". */
+  const pp = entries.find((e) => e.payer === "Sample Distro" && e.amount === 104.04);
+  pp.id = "isamplepp01"; pp.source = "distro"; pp.movedTo = "isamplerev01";
+  const wise = entries.find((e) => e.payer === "Northlight Records" && e.account === "Wise");
+  wise.id = "isamplewise1"; wise.source = "northlight"; wise.movedTo = "isamplerev02";
+  entries.push(
+    { id: "isamplerev01", at: pp.at, by: "Ledger", date: today, payer: "Sample Distro", amount: 100, currency: "USD", status: "received", category: "Self-releases", account: "Revolut", reference: "", period: "", source: "distro", note: "From PayPal", from: ["isamplepp01"] },
+    { id: "isamplestmt1", at: new Date(ago(20 * 1440)).toISOString(), by: "Ledger", date: d(20), payer: "Sample Distro", amount: 110, currency: "USD", status: "pending", category: "Self-releases", account: "Statement only", reference: "", period: "", source: "distro", note: "", paidBy: "isamplepp01" },
+    { id: "isamplestmt2", at: new Date(ago(8 * 1440)).toISOString(), by: "Ledger", date: today.slice(0, 7) + "-01", payer: "Sample Distro", amount: 40, currency: "USD", status: "statement only", category: "Self-releases", account: "Statement only", reference: "", period: "", source: "distro", note: "" },
+    { id: "isamplerev02", at: wise.at, by: "Ledger", date: wise.date, payer: "Northlight Records", amount: 100, currency: "USD", status: "received", category: "Label deals", account: "Revolut", reference: "", period: "", source: "northlight", note: "From Wise", from: ["isamplewise1"] });
   const checks = [{ at: new Date(ago(6)).toISOString(), day: today, by: "Ledger", account: "Wise", new: 0, note: "" }, { at: new Date(ago(6)).toISOString(), day: today, by: "Ledger", account: "PayPal", new: 1, note: "" },
     { at: new Date(ago(200)).toISOString(), day: today, by: "HQ", account: "Revolut", new: 2, note: "" }];
   const seen = Object.fromEntries(["Ledger", "Atlas", "Nova", "Steve", "Forge", "Drop"].map((n, i) => [n, { at: new Date(ago(6 + i * 27)).toISOString(), tool: "post_update" }]));
@@ -157,6 +171,8 @@ export function sampleDesk(now = Date.now()) {
   return { roster: ROSTER, updates, messages, cards: { atlas: { workingOn: "Backfilling Touch Me's daily rows to release day", needs: "", at: new Date(ago(200)).toISOString() }, kevin: { workingOn: "TikTok banner", needs: "Luke's phone code for TikTok", at: new Date(ago(400)).toISOString() } },
     seen, income: S.incomeReport(entries, checks, SOURCES.map((s) => ({ match: [], category: "Other", currency: "", lands: "", how: "", blocker: "", needsLuke: "", ...s })), today), config: { botsOn: true, changedAt: null },
     releases: sampleReleases(now), read, sightings: sampleSightings(now),
+    /* L5: one made-up claim so the panel has a shape under the SAMPLE banner. Mail stays not connected. */
+    claims: { items: [{ claim: "Sample claim (sample)", claimant: "Sample Channel", impact: "one video flagged", date: "2026-11-01", by: "Laura" }] },
     /* L12: a live Spotify header, and an Instagram photo Luke already said yes to (made-up links) */
     profiles: { slots: {
       "spotify-header": { current: { link: "https://example.com/sample/spotify-header.jpg", changed: d(40), by: "Atlas", at: new Date(ago(40 * 1440)).toISOString() } },

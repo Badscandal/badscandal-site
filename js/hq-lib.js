@@ -678,7 +678,67 @@
     var out = ((inc && inc.problems) || []).filter(function (p) { return !/^New payer\(s\) not on the list/.test(p) && !/ that nobody has sorted yet$/.test(p) && !(reader && /^Revolut:/i.test(p)); });
     var u = (inc && inc.unknown) || [];
     if (u.length) out.push((u.length === 1 ? "New payer not on the list: " : "New payers not on the list: ") + u.join(", "));
+    /* L1 (18 Nov 2026): one line, from the expected-money summary. The desk's own problems are unchanged,
+       so Alfred's briefing does not grow a new sentence. */
+    var ex = inc && inc.expected && inc.expected.summary;
+    if (ex && (ex.late || ex.short || ex.missing)) out.push("Expected money: " + ex.text);
     return out;
+  }
+  /* "Payable 5 Nov, 3 days" / "the same day" / "" when that step was not recorded */
+  function stepSpan(n) { return n == null ? "" : n === 0 ? ", the same day" : ", " + n + " day" + (n === 1 ? "" : "s"); }
+  /* One statement's path, in words. A step with no recorded day is said as not there yet, or not recorded. */
+  function expectedJourney(row) {
+    if (!row) return "";
+    var s = row.statement || {}, bits = ["Statement " + (s.date ? day(s.date) : "not recorded")];
+    if (row.payableState === "date" && row.payable) bits.push("Payable " + day(row.payable) + stepSpan(row.days && row.days.payable));
+    else if (row.payableState === "not_yet") bits.push("Payable: not there yet");
+    else bits.push("Payable: not recorded");
+    if (row.paid && row.paid.date) bits.push("Paid " + day(row.paid.date) + stepSpan(row.days && row.days.paid));
+    else if (row.missingLink) bits.push("Paid: the payment isn't in the months read");
+    else bits.push("Paid: not there yet");
+    if (row.landed && row.landed.date) bits.push("Landed " + day(row.landed.date) + stepSpan(row.days && row.days.landed));
+    else bits.push("Landed: not there yet");
+    return bits.join(" · ");
+  }
+  function expectedDue(row) {
+    if (!row || !row.due) return "Due date not known yet";
+    var late = row.landedAfter ? " · Landed " + row.landedAfter + " day" + (row.landedAfter === 1 ? "" : "s") + " after the due day" : "";
+    return "Due " + day(row.due) + (row.dueNote ? " · " + row.dueNote : "") + late;
+  }
+  function expectedFlags(row) {
+    if (!row) return "";
+    var f = [];
+    if ((row.flags || []).indexOf("late") >= 0) f.push("Late");
+    if (row.shortBy) f.push((row.shortReason === "unexplained" ? "Short, unexplained " : "Short by ") + money(row.shortBy.amount, row.shortBy.currency));
+    if (!f.length) return row.landed ? "Landed" : "Waiting";
+    return f.join(" · ");
+  }
+  function expectedFlagKind(row) {
+    var f = (row && row.flags) || [];
+    if (f.indexOf("late") >= 0 || f.indexOf("short") >= 0) return "bad";
+    return row && row.landed ? "landed" : "wait";
+  }
+  function missingLine(m) { return m ? m.source + ": no statement and nothing received. It usually pays by the " + ordinal(m.dueDay) + "." : ""; }
+  function learnedLine(s) {
+    if (!s || !s.enough || s.day == null) return "";
+    return s.source + " usually pays around the " + ordinal(s.day) + " (from " + s.payments + " payment" + (s.payments === 1 ? "" : "s") + ").";
+  }
+  function partMoney(parts) { return (parts || []).map(function (p) { return money(p.amount, p.currency); }).join(" + "); }
+  /* What a payout route cost. A fee needs a source. A currency change keeps a recorded rate or says not enough data. */
+  function routeLines(r) {
+    if (!r || !r.payouts) return ["Not enough data."];
+    var lines = [], fees = curList(r.fees);
+    if (fees.length) lines.push("Fees: " + fees.join(" + ") + " on " + r.feePayouts + " payout" + (r.feePayouts === 1 ? "" : "s") + ".");
+    if (r.checkLink) lines.push("Check link.");
+    if (r.noFee && !fees.length && !r.checkLink && !r.mixed) lines.push("No fee on the amounts recorded.");
+    if (r.mixed) {
+      (r.mixedExamples || []).forEach(function (m) { lines.push(partMoney(m.sent) + " sent, " + money(m.landed.amount, m.landed.currency) + " landed."); });
+      if (r.rate && r.rate.source) lines.push("Rate " + r.rate.value + " " + r.rate.from + " to " + r.rate.to + ", from " + r.rate.source + ".");
+      else lines.push("Exchange: not enough data.");
+    }
+    if (r.split === "rule pending") lines.push("Split: rule pending.");
+    if (!lines.length) lines.push("Not enough data.");
+    return lines;
   }
   /* "Mon 9 Nov · USD 104.04 · received" */
   /* ---------- the release page (17 Nov 2026, Nova for Luke): the whole release in one view ----------
@@ -694,13 +754,21 @@
       if (st.status === "skipped") return;
       check.push({ key: "step:" + st.key, ok: st.status === "done", text: st.label + " (" + st.owner + "): " + stepState(st, today).text });
     });
-    if (!pre) { var lyr = approvalLines(v).filter(function (x) { return x.key === "lyrics"; })[0]; check.push({ key: "lyrics", ok: !!(lyr && lyr.ok), text: lyr ? lyr.text : "Final lyrics: not approved yet" }); }
+    var lyr = approvalLines(v).filter(function (x) { return x.key === "lyrics"; })[0]; check.push({ key: "lyrics", ok: !!(lyr && lyr.ok), text: lyr ? lyr.text : "Final lyrics: not approved yet" });
     check.push({ key: "adplan", ok: has(pack.adplan), text: has(pack.adplan) ? "Ad plan: written" : "Ad plan: not written yet (your notes on the ads you set up)" });
     var okN = check.filter(function (c) { return c.ok; }).length;
+    var routeNot = { kind: 1, label: 1, split: 1, distributor: 1, deal: 1, wav: 1, artwork: 1, folder: 1, language: 1, explicit: 1, genre: 1, subgenre: 1, version: 1, writers: 1, producers: 1, featuring: 1, primary: 1, copyright: 1 };
+    var fromStep = { video: "video", page: "page", spotifyTrack: "live" };
     var fields = (o.fields || []).filter(function (f) { return f.key !== "prehq" && f.key !== "adplan"; }).map(function (f) {
       var val = f.key === "lyrics" && !has(pack.lyrics) && v.lyricsChars ? v.lyricsChars + " characters" : pack[f.key];
+      var doneOn = "";
+      if (!has(val) && fromStep[f.key]) {
+        var st = ((v && v.steps) || []).filter(function (s) { return s.key === fromStep[f.key] && s.status === "done" && s.link; })[0];
+        if (st) { val = st.link; doneOn = st.doneOn || ""; }
+      }
       var miss = ((v && v.missing) || []).filter(function (m) { return m.key === f.key; })[0];
-      return { key: f.key, label: f.short || f.label, group: f.group, value: has(val) ? String(val) : "", state: has(val) ? "filled" : pre ? "not needed" : miss ? (miss.required ? "missing" : "needed later") : "optional" };
+      var state = has(val) ? "filled" : pre && routeNot[f.key] ? "not needed" : miss ? (miss.required ? "missing" : "needed later") : "optional";
+      return { key: f.key, label: f.short || f.label, group: f.group, value: has(val) ? String(val) : "", state: state, ...(doneOn ? { done_on: doneOn } : {}) };
     });
     var results = [];
     if (v && v.released && o.song && o.song.week != null) results.push(fmt(o.song.week) + " Spotify streams in the last 7 days" + (o.song.prevWeek != null ? " (" + fmt(o.song.prevWeek) + " the 7 before)" : ""));
@@ -1379,6 +1447,7 @@
     /* one entry per payment (17 Nov 2026): Wise / PayPal money counts when it reaches Revolut */
     if (e && e.movedTo) return { text: "Moved to Revolut", counted: false };
     if (e && e.holding) return { text: "In " + e.account + ": counts when it reaches Revolut", counted: false };
+    if (s === "received" && e && e.account && !/revolut/i.test(e.account) && !/^statement/i.test(e.account)) return { text: "In " + e.account + ": counts when it reaches Revolut", counted: false };
     if (s === "unsorted") return { text: "To sort", counted: false };
     if (s === "transfer") return { text: e.by === "HQ" && !(e.history || []).length ? "Your own transfer" : "Not income", counted: false };
     /* batch 4: a statement under the payout line counts nowhere yet; payable is owed to us */
@@ -1715,8 +1784,9 @@
       if (!s.out) result = "No result: ad spend is not linked to a song.";
       else if (!songPLList(s.in)) result = "Ad spend only: " + songPLList(s.out) + ". No royalties recorded for this song.";
       else if (s.nets && Object.keys(s.nets).length === 1) result = songPLList(s.nets);
-      else if (s.estimate && !s.estimate.missing && s.estimate.eur != null) result = songPLList(s.in) + " in, " + songPLList(s.out) + " out. About " + money(s.estimate.eur, "EUR") + " (an estimate at each month's average rate).";
-      else result = songPLList(s.in) + " in, " + songPLList(s.out) + " out. No estimate: a rate is missing.";
+      else if (s.estimate && s.estimate.recorded && s.estimate.eur != null) result = songPLList(s.in) + " in, " + songPLList(s.out) + " out. About " + money(s.estimate.eur, "EUR") + " (a rate that was recorded: " + s.estimate.source + ").";
+      else if (s.out && songPLList(s.in) && Object.keys(s.nets || {}).length > 1) result = songPLList(s.in) + " in, " + songPLList(s.out) + " out. No estimate: a rate is missing.";
+      else result = songPLList(s.in) + " in, " + songPLList(s.out) + " out.";
       var note = "";
       if (s.inFrom === "payments") note = "From payments that name this song.";
       if (s.landed && songPLList(s.landed)) note = "Landed payments for this song are not added (" + songPLList(s.landed) + "): they may be the same money as the royalties.";
@@ -1734,7 +1804,7 @@
     if (pl.notReceived) notes.push(pl.notReceived === 1 ? "1 royalty payment is not received yet, so it is not counted." : pl.notReceived + " royalty payments are not received yet, so they are not counted.");
     if (pl.holding) notes.push(pl.holding === 1 ? "1 royalty payment is still in Wise or PayPal, so it is not counted until it reaches Revolut." : pl.holding + " royalty payments are still in Wise or PayPal, so they are not counted until they reach Revolut.");
     return {
-      how: "Money in is the royalties recorded for that song, per store. Ad spend counts only when it names the song. A payment counts for a song only when it names the song. Anything else is not linked to a song. Currencies stay separate. A single figure across currencies is an estimate at each month's average rate.",
+      how: "Money in is the royalties recorded for that song, per store. Ad spend counts only when it names the song. A payment counts for a song only when it names the song. Anything else is not linked to a song. Currencies stay separate. A single figure across currencies is shown only when a rate was recorded for that money, with where the rate came from.",
       songs: songs,
       unlinked: {
         label: "not linked to a song",
@@ -1941,7 +2011,39 @@
       dots: (v.steps || []).filter(function (s) { return s && s.status !== "skipped"; }).map(stepTone),
       next: next ? { label: next.label || "", owner: next.owner === "Luke" ? "You" : (next.owner || ""), when: stepState(next, today).text } : null,
       distributor: bits.join(" · "), warnings: pre ? [] : (wg.bad || []),
+      mailLine: routeMailLine(extra.mail, v),
       cover: extra.cover || "", taps: extra.taps == null ? null : extra.taps, people: extra.people == null ? null : extra.people, spend: extra.spend || "" };
+  }
+
+  /* L5. RouteNote's inbox is not connected until Luke signs it in. A song with no parsed email says not reported. */
+  function routeMailLine(src, release) {
+    if (!src || src.connected !== true) return "RouteNote email: not connected";
+    var mail = release && release.mail;
+    if (!mail || !mail.status) return "RouteNote email: not reported";
+    var bits = ["RouteNote email: " + mail.status];
+    if (mail.on) bits.push(day(mail.on));
+    if (mail.reason && mail.reason !== "not reported") bits.push(mail.reason);
+    else if (mail.status === "rejected") bits.push("reason not reported");
+    return bits.join(" · ");
+  }
+  /* What YouTube showed, as Laura recorded it. An empty list is none recorded, never a made-up claim. */
+  function contentClaimRows(claims) {
+    var list = !claims ? [] : (Array.isArray(claims) ? claims : (claims.items || []));
+    if (!list.length) return { reported: false, rows: [], empty: "No Content ID claim has been recorded." };
+    return { reported: true, empty: "", rows: list.map(function (c) {
+      return { claim: c.claim || "not reported", claimant: c.claimant ? c.claimant : "not reported", impact: c.impact ? c.impact : "not reported", date: c.date ? day(c.date) : "not reported" };
+    }) };
+  }
+  /* Phone Needs you: the mailbox sign-in, and a RouteNote rejection that needs Luke. */
+  function phoneWatchers(board) {
+    board = board || {};
+    var out = [], mail = board.mail;
+    if (!mail || mail.connected !== true) out.push({ kind: "connect", title: "RouteNote email: not connected", line: (mail && mail.steps) || "HQ cannot read RouteNote's inbox yet.", href: "#releases" });
+    ((board.waiting && board.waiting.luke) || []).forEach(function (m) {
+      if (!m || m.ask !== "routenote" || m.resolved) return;
+      out.push({ kind: "routenote", title: "RouteNote needs you", line: m.text || "", href: m.id ? "#messages/" + m.id : "#releases", id: m.id || "" });
+    });
+    return out;
   }
 
   function teamDots(workers) {
@@ -2027,7 +2129,7 @@
     slug: slug, workerLabel: workerLabel, sortWorkers: sortWorkers, workerView: workerView, dutyWhen: dutyWhen, workerCounts: workerCounts, seenLine: seenLine, connectorLine: connectorLine,
     novaMessage: novaMessage, liveFeed: liveFeed, spWhen: spWhen, waitLabel: waitLabel, needWords: needWords, reportParts: reportParts, siteCheckLine: siteCheckLine, composeNames: composeNames,
     threadRoot: threadRoot, answerTarget: answerTarget, questionLines: questionLines, questionsLeft: questionsLeft, stepButton: stepButton, formKey: formKey, storeLine: storeLine, storeHistory: storeHistory, capRateLine: capRateLine, capMissingLine: capMissingLine, dutyGapsLine: dutyGapsLine, incomeTotals: incomeTotals, approvalLines: approvalLines, approvalUndo: approvalUndo, warnTone: warnTone, warnGroups: warnGroups, resubmitAsk: resubmitAsk, relStatus: relStatus, relProgress: relProgress, stepGroups: stepGroups, upcomingAsks: upcomingAsks, staffAttention: staffAttention, staffHealth: staffHealth, curList: curList, cadenceWord: cadenceWord, accountLine: accountLine, sourceState: sourceState, payLine: payLine, accountsLine: accountsLine, receivedMonths: receivedMonths, releasePage: releasePage, monthRows: monthRows, mainSources: mainSources, sourceMonthLine: sourceMonthLine, proposalRows: proposalRows, proposalConfirm: proposalConfirm, profileBlocks: profileBlocks,
-    incomeEmpty: incomeEmpty, incomeProblems: incomeProblems,
+    incomeEmpty: incomeEmpty, incomeProblems: incomeProblems, expectedJourney: expectedJourney, expectedDue: expectedDue, expectedFlags: expectedFlags, expectedFlagKind: expectedFlagKind, missingLine: missingLine, learnedLine: learnedLine, routeLines: routeLines,
     /* replies that visibly land + the release pipeline (11 Nov 2026) */
     spStampOf: spStampOf, seenWords: seenWords, sentLine: sentLine, answeredList: answeredList, CLAUDE_ROUNDS: CLAUDE_ROUNDS,
     formGroups: formGroups, releaseDayNote: releaseDayNote, releaseWhen: releaseWhen, stepState: stepState, missingWords: missingWords, packLine: packLine, missingSentence: missingSentence,
@@ -2057,5 +2159,7 @@
     /* phone HQ (18 Nov 2026): Needs you, the release strip, the team dots, the week, money, the spend gauge */
     deskWhen: deskWhen, moneyHead: moneyHead, payFlow: payFlow, spendGauge: spendGauge, decisionCards: decisionCards,
     releaseFace: releaseFace, teamDots: teamDots, weekAhead: weekAhead, quietFeed: quietFeed, followerStrip: followerStrip,
-    mondayPick: mondayPick, lyricsPreview: lyricsPreview };
+    mondayPick: mondayPick, lyricsPreview: lyricsPreview,
+    /* L5 watchers (18 Nov 2026) */
+    routeMailLine: routeMailLine, contentClaimRows: contentClaimRows, phoneWatchers: phoneWatchers };
 });

@@ -12,7 +12,6 @@
    their creative and lifetime insights, at most once an hour (the hourly job), key in the Authorization header only.
    A rate limit pauses it for a day. Nothing here can create, change, start or pause an ad. */
 import { GRAPH_VERSION } from "./capi.mjs";
-import { SONGS } from "./songs.mjs";
 
 const DAY = 86400000;
 const n = (v) => (v == null || v === "" || !isFinite(Number(v)) ? 0 : Number(v));
@@ -89,11 +88,6 @@ const engagedOf = (x, comments) => n(x.likes) + n(x.comments != null ? x.comment
    lifetime / so far, best first, not the same age), tooFew, adsAt }.
    Nova, 17 Nov 2026: "rank every post at the same age … use the 1-day window", "our own comments count as
    engagement: leave them out", "add follows per view and profile visits", "saves and shares their own column". */
-const songName = (caption) => {
-  const c = String(caption || "").toLowerCase();
-  const hit = (SONGS || []).find((s) => s && s.title && c.includes(String(s.title).toLowerCase()));
-  return hit ? hit.title : "";
-};
 const sameMedia = (a, p) => {
   const m = String((a && a.media) || ""), id = String((p && p.id) || "");
   if (!m || !id) return false;
@@ -102,9 +96,19 @@ const sameMedia = (a, p) => {
 };
 const dayOf = (iso) => String(iso || "").slice(0, 10);
 const nextDay = (d) => { const t = Date.parse(d + "T12:00:00Z"); return isFinite(t) ? new Date(t + 86400000).toISOString().slice(0, 10) : ""; };
+const shortOf = (link) => { const m = /instagram\.com\/(?:reel|p|tv)\/([A-Za-z0-9_-]+)/i.exec(String(link || "")); return m ? m[1] : ""; };
+const adHits = (a, p) => {
+  if (sameMedia(a, p)) return true;
+  const sc = shortOf(p && p.link);
+  /* a real Instagram code is 11 characters; a 1-letter code matches every ad name that contains that letter */
+  if (!sc || sc.length < 8) return false;
+  const name = String(a.name || "").toLowerCase();
+  return String(a.media || "") === sc || name.includes(sc.toLowerCase());
+};
 export function rankPosts(posts, adDoc, o = {}) {
   const minViews = o.minViews || 1000, now = o.now || Date.now();
   const ads = (adDoc && adDoc.ads) || [], comments = o.comments || [], spend = o.spend || [];
+  const songs = o.songs && typeof o.songs === "object" ? o.songs : {};
   const out = [], older = [], tooFew = [];
   for (const p of posts || []) {
     const d1 = p.snaps && p.snaps.d1;
@@ -112,11 +116,12 @@ export function rankPosts(posts, adDoc, o = {}) {
     const window = d1 ? "1 day" : p.lifetime ? "lifetime" : "so far";
     const ownC = comments.filter((c) => c && c.own && c.post === p.id && (!d1 || Date.parse(c.at) <= d1.at)).length;
     const views = n(base.views) || n(base.reach);
+    if (!(views > 0)) continue; /* 0 views never rank and never wait (18 Nov 2026) */
     const rawComments = base.comments != null ? n(base.comments) : d1 ? 0 : n(p.comments);
     const nums = { likes: base.likes != null ? n(base.likes) : d1 ? 0 : n(p.likes), comments: Math.max(0, rawComments - ownC), saves: n(base.saves), shares: n(base.shares) };
     const engaged = nums.likes + nums.comments + nums.saves + nums.shares;
     const follows = base.follows != null ? n(base.follows) : null, visits = base.profile_visits != null ? n(base.profile_visits) : null;
-    const mine = ads.filter((a) => sameMedia(a, p));
+    const mine = ads.filter((a) => adHits(a, p));
     let paid = null, before = null;
     if (mine.length) {
       const s = { spend: 0, impressions: 0, reach: 0, likes: 0, comments: 0, saves: 0, shares: 0 };
@@ -135,30 +140,41 @@ export function rankPosts(posts, adDoc, o = {}) {
     }
     const row = { id: p.id, at: p.at, caption: p.caption || "", type: p.type || "post", link: p.link || "", window, views, engaged, rate: views ? engaged / views : null,
       ...nums, ownComments: ownC, deep: views ? (nums.saves + nums.shares) / views : null,
-      follows, followRate: follows != null && views ? follows / views : null, profileVisits: visits, song: songName(p.caption),
+      follows, followRate: follows != null && views ? follows / views : null, profileVisits: visits,
+      song: songs[p.id] || songs[shortOf(p.link)] || "",
       under_1000: views < 1000, boosted: !!paid, paid, before };
     const young = now - Date.parse(p.at) < 36 * 3600000;
     const old = isFinite(Date.parse(p.at)) && now - Date.parse(p.at) > 21 * 86400000;
-    if (views < minViews || (!d1 && young)) tooFew.push(row);
+    /* old posts are a reference, never "waiting" (18 Nov 2026) */
+    if (!old && (views < minViews || (!d1 && young))) tooFew.push(row);
     else if (d1 && !old) out.push(row);
     else older.push(row);
   }
-  /* a Meta spend row the day of the post or the next day, when no ad creative matched (18 Nov 2026) */
+  /* a Meta spend row the day of the post or the next day, when no ad creative matched (18 Nov 2026).
+     Prefer the post published the day before the spend when exactly one fits: an ad often starts the next day. */
   const claimed = new Set();
-  for (const row of out.concat(older, tooFew)) {
-    if (row.paid) continue;
-    const day = dayOf(row.at), nxt = nextDay(day);
-    const hits = spend.filter((s) => s && (s.date === day || s.date === nxt) && /meta|facebook|instagram/i.test(s.platform || "Meta") && Number(s.amount) > 0 && !claimed.has(s));
-    const postsThatDay = out.concat(older, tooFew).filter((r) => !r.paid && (dayOf(r.at) === day || nextDay(dayOf(r.at)) === (hits[0] && hits[0].date)));
-    if (hits.length === 1 && postsThatDay.length === 1 && postsThatDay[0] === row) {
-      const s = hits[0];
-      claimed.add(s);
-      row.boosted = true;
-      row.paid = { spend: Number(s.amount), currency: s.currency || "USD", impressions: 0, reach: 0, likes: 0, comments: 0, saves: 0, shares: 0, ads: 1, status: "", engaged: 0, rate: null, costPerEng: null, spendOnly: true };
-      row.under_10 = Number(s.amount) < 10;
-    }
+  const pool = out.concat(older, tooFew);
+  for (const s of spend) {
+    if (!s || claimed.has(s) || !(Number(s.amount) > 0) || !/meta|facebook|instagram/i.test(s.platform || "Meta")) continue;
+    const candidates = pool.filter((r) => !r.paid && (dayOf(r.at) === s.date || nextDay(dayOf(r.at)) === s.date));
+    const dayAfter = candidates.filter((r) => nextDay(dayOf(r.at)) === s.date);
+    const pick = dayAfter.length === 1 ? dayAfter[0] : (candidates.length === 1 ? candidates[0] : null);
+    if (!pick) continue;
+    claimed.add(s);
+    pick.boosted = true;
+    pick.paid = { spend: Number(s.amount), currency: s.currency || "USD", impressions: 0, reach: 0, likes: 0, comments: 0, saves: 0, shares: 0, ads: 1, status: "", engaged: 0, rate: null, costPerEng: null, spendOnly: true };
+    pick.under_10 = Number(s.amount) < 10;
   }
   for (const row of out.concat(older)) if (row.paid && row.paid.spend < 10) row.under_10 = true;
+  const adsRead = !!(adDoc && (Array.isArray(adDoc.ads) || adDoc.at));
+  const anyJoin = (posts || []).some((p) => ads.some((a) => adHits(a, p)));
+  for (const row of pool) {
+    if (row.paid) { row.boost = "boosted"; continue; }
+    const age = now - Date.parse(row.at);
+    const oldPost = isFinite(age) && age > 21 * 86400000;
+    row.boost = (!adsRead || !ads.length || !anyJoin || oldPost) ? "unknown" : "not";
+    row.boosted = false;
+  }
   const best = (a, b) => b.rate - a.rate || b.views - a.views;
   out.sort(best); older.sort(best);
   const gap = out.length >= 2 ? (out[0].rate - out[1].rate) * 100 : null;
@@ -171,14 +187,15 @@ export function rankLine(r) {
   let s = `“${r.caption || "(no caption)"}” · ${r.type} · ${String(r.at).slice(0, 10)} · ${r.window}: ${pct(r.rate)} engaged (${fmt(r.engaged)} of ${fmt(r.views)} views)` +
     ` · saves + shares ${pct(r.deep)}` + (r.follows != null ? ` · ${fmt(r.follows)} follows (${pct(r.followRate)})` : "") + (r.profileVisits != null ? ` · ${fmt(r.profileVisits)} profile visits` : "") +
     (r.ownComments ? ` · ${r.ownComments} of our own comments left out` : "");
-  if (r.paid) {
+  if (r.boost === "unknown") s += " · boost unknown";
+  else if (r.paid) {
     const c = r.paid.currency || "";
     s += ` · boosted ${c} ${r.paid.spend.toFixed(2)}${r.paid.status ? ` (${r.paid.status})` : ""}: ` +
       (r.paid.spendOnly ? "engagements not on this spend row" : `${fmt(r.paid.engaged)} engagements from the ad`) +
       (r.paid.costPerEng != null ? `, ${c} ${r.paid.costPerEng.toFixed(3)} each` : "");
   } else s += " · not boosted";
   if (r.before) s += ` · before the ad (${r.before.mark}): ${pct(r.before.rate)} of ${fmt(r.before.views)} views`;
-  if (r.song) s += ` · song ${r.song}`;
+  s += r.song ? ` · song ${r.song}` : " · song not linked";
   if (r.under_1000) s += " · under 1,000 views";
   if (r.under_10) s += " · under USD 10";
   return s;

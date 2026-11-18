@@ -51,7 +51,13 @@ test("releasePage: the ad plan is Luke's notes; a pre-HQ song needs no files or 
   const pre = L.releasePage(await view({ kind: "Self-release", prehq: "Yes" }), TODAY, { fields: S.packFieldsOut() });
   assert.equal(pre.checklist.find((c) => c.key === "files").ok, true);
   assert.equal(pre.checklist.find((c) => c.key === "files").text, "Files and details: not needed (released before HQ)");
-  assert.ok(!pre.checklist.some((c) => c.key === "lyrics"));
+  /* 18 Nov 2026: a pre-HQ song still has a lyrics step. Only the RouteNote files are not needed. */
+  assert.ok(pre.checklist.some((c) => c.key === "lyrics"));
+  const pf = Object.fromEntries(pre.fields.map((x) => [x.key, x]));
+  assert.equal(pf.wav.state, "not needed");
+  assert.notEqual(pf.spotifyTrack.state, "not needed");
+  assert.notEqual(pf.video.state, "not needed");
+  assert.notEqual(pf.musixmatch.state, "not needed");
 });
 
 test("releasePage: after the release, its numbers", async () => {
