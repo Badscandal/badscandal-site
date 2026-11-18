@@ -943,6 +943,14 @@
         '<button class="copybtn" type="button" data-rel="no" data-id="' + esc(v.id) + '"' + (busy ? " disabled" : "") + ">Cancel</button></div></div>"
         : '<div class="mopts">' + (m.options || []).map(function (o, i) { return '<button class="copybtn" type="button" data-rel="resubmit" data-id="' + esc(v.id) + '" data-i="' + i + '"' + dis + ">" + esc(o) + "</button>"; }).join("") + "</div>") + "</div>";
   }
+  /* L7: the pitch line on an Upcoming card (not pitched / pitched with the day / missed) and any editorial playlists */
+  function pitchHtml(v) {
+    var p = v && v.pitch;
+    if (!p || (!p.line && !(p.editorial || []).length)) return "";
+    var eds = (p.editorial || []).map(function (e) { return e.name + (e.date ? " (" + L.day(e.date) + ")" : ""); });
+    return '<p class="rpitch' + (p.status === "missed" ? " bad" : "") + '">' + esc(p.line || "") +
+      (eds.length ? "<span>Editorial: " + esc(eds.join(" · ")) + "</span>" : "") + "</p>";
+  }
   /* Coming up: a song sent to the team (the overhaul, 15 Nov 2026). The card itself: its day, whose it is, a
      progress bar and ONE status line (the most urgent problem, else the next step); Drop's "ready to resubmit?"
      stays in sight because it waits on Luke. Everything else (the warnings, the distributor, every step, the
@@ -964,6 +972,7 @@
       (ui.rel.note[v.id] ? '<p class="rdone" role="status">' + esc(ui.rel.note[v.id]) + "</p>" : "") +
       (pr.total ? '<div class="rprog"><div class="rbar" role="progressbar" aria-valuemin="0" aria-valuemax="' + pr.total + '" aria-valuenow="' + pr.done + '" aria-label="' + esc(pr.text) + '"><i style="width:' + pr.pct + '%"></i></div><span>' + esc(pr.text) + "</span></div>" : "") +
       '<p class="rstat' + (st.bad ? " bad" : "") + '">' + esc(st.text) + (st.more ? ' <span class="rmore">+' + st.more + " more</span>" : "") + "</p>" +
+      pitchHtml(v) +
       resubmitHtml(v) + preflightHtml(v) +
       '<details class="rfold" data-fold="card:' + esc(v.id) + '"' + (ui.rel.fold["card:" + v.id] ? " open" : "") + "><summary>Steps and details</summary>" +
       (warn.length > 1 ? '<ul class="rwarn" aria-label="Warnings">' + warn.map(function (w) { return "<li>" + esc(w) + "</li>"; }).join("") + "</ul>" : "") +
@@ -1046,7 +1055,15 @@
               : '<li class="' + (x.late ? "late" : "") + '"><a href="#releases/' + esc(safe(x.id)) + '">' + esc(L.day(x.date)) + " · <b>" + esc(x.owner) + "</b> · " + esc(x.label) + " · " + esc(x.title) + (x.late ? " · late" : "") + "</a></li>";
           }).join("") + "</ul>" : '<p class="empty2">Nothing due.</p>') + "</details>";
       }).join("") + "</section>";
-    el.innerHTML = '<div class="plangrid">' + nextHtml + calHtml + "</div>" + sixHtml + timeHtml;
+    var slots = L.pitchBlock(board.pitchSlots || []);
+    var pitchSec = '<section class="tile six-weeks" aria-labelledby="pitchTitle"><h3 class="lblh" id="pitchTitle">Spotify pitches</h3>' +
+      '<p class="secsub">One pitch in two weeks. Spotify needs it at least 7 days before the release. The warning starts two weeks out, while there is still time. HQ only records what Atlas saw. It never pitches.</p>' +
+      (slots.length ? slots.map(function (s) {
+        return '<div class="pslot"><p><b>' + esc(s.title) + "</b>" + (s.when ? " · out " + esc(s.when) : "") + "</p><p>" + esc(s.line) + "</p>" +
+          (s.editorial.length ? "<p>Editorial: " + esc(s.editorial.join(" · ")) + "</p>" : "") +
+          (s.also ? '<p class="rnote">' + esc(s.also) + "</p>" : "") + "</div>";
+      }).join("") : '<p class="empty2">No upcoming or recent song on the pitch list.</p>') + "</section>";
+    el.innerHTML = '<div class="plangrid">' + nextHtml + calHtml + "</div>" + sixHtml + pitchSec + timeHtml;
   }
   /* -> true when the desk drew the tab (js/hq.js draws the sheet's list when it didn't) */
   /* the release page (17 Nov 2026): the whole release in one view, on top of Upcoming */

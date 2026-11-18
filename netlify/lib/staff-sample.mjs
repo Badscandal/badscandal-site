@@ -87,6 +87,7 @@ export function sampleReleases(now = Date.now()) {
       isrc: "SAMPLE0000001", upc: "0000000000001", storeStatus: "live", spotifyTrack: "https://open.spotify.com/track/sample", video: "https://example.com/sample/touchme-video", page: "https://badscandal.com/touchme" },
     steps: steps(tmDate, tmSent, Object.fromEntries(S.RELEASE_STEPS.map((st) => [st.key, { status: "done", at: iso(-12 - st.days), by: st.owner }]))),
     storeLog: [{ status: "approved", on: d(-30), at: iso(-30), by: "Drop" }, { status: "live", on: tmDate, at: iso(-12), by: "Drop" }],
+    editorial: [{ name: "Sample Dance Mix", date: d(-8), by: "Atlas", at: iso(-8) }],
     approvals: { pitch: { by: "Luke", at: iso(-25), text: "(sample) A made-up pitch for the sample only." }, lyrics: { by: "Luke", via: "Alfred", at: iso(-20), text: "(sample) Made-up words for the sample only.\nNothing here is a real lyric.", words: "(sample) yes, final" } },
     log: [L(-40, "Luke", "Luke sent it to the team for " + S.dayWords(tmDate)), L(-12, "Webmaster", "Webmaster: Release day: Spotify link on the song page and the home card — done")] };
   return [surv, mdsb, sb, tm];

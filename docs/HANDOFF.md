@@ -1,8 +1,8 @@
 # Handoff: where HQ is and what's next (read this first)
 
-**Last updated:** 17 Nov 2026, night São Paulo, by Cursor (cloud session), after PR #61.
-**main:** every PR up to #61 is live. **Tests:** 568 pass on Node 24 and Node 22, none cancelled.
-**Connector:** 38 tools. `preflight` gained asset options (L8); Atlas, Laura and Webmaster were told to refresh their tool list.
+**Last updated:** 18 Nov 2026, by Cursor (cloud session). L7 is in a branch, not on main.
+**main:** every PR up to #61 is live. **Tests on main:** 568 pass on Node 24 and Node 22, none cancelled.
+**Connector on main:** 38 tools. `preflight` gained asset options (L8); Atlas, Laura and Webmaster were told to refresh their tool list.
 
 > **The rule (Luke, 17 Nov 2026):** every time anything is pushed to `main` for HQ, the same push updates THIS
 > file (and `docs/STATUS.md`). If Luke's computer crashes or a session ends mid-way, the next agent starts from
@@ -31,9 +31,9 @@ site + Luke's private dashboard /hq + the bots' connector /mcp).
 
 ## Where it stands (17 Nov 2026, night)
 
-**Where we left off:** L8 (the asset checker) is live on main (PR #61, commit `1013f31`, about 20:52 São Paulo),
-on Luke's word. Nothing else is in flight. Luke is comparing Claude Code headless runs with Cursor cloud agents
-tonight. A new session of either kind starts from this file.
+**Where we left off:** L7 (the pitch tracker) is built on branch `cursor/pitch-tracker-feb7` and is waiting for
+Luke's "deploy". It is not on main. L8 (the asset checker) is live (PR #61, commit `1013f31`). A new session
+starts from this file: the branch is the work in flight.
 
 **HQ** (`badscandal.com/hq`, also inside the HQ apps on Luke's iPhone and Mac) has: Today, Songs, Ads, Pages
 (one tile per song page since #59), Growth & Fans (with the Instagram reader), Upcoming (the release pipeline),
@@ -56,7 +56,7 @@ artist growth bot that all we will need is content and $".
 
 ## In flight (branches not merged)
 
-- Nothing in flight. L8 shipped on main as PR #61 (`1013f31`).
+- **`cursor/pitch-tracker-feb7` (L7, preview PR, waiting for Luke's "deploy"):** each upcoming and recent song shows not pitched, pitched with the day, or missed. The deadline is 7 days before release; a warning shows from 14 days out, while there is still time. The two-week pitch slots stay on Upcoming. Atlas records a pitch and an editorial playlist with `pitch_log`. HQ never pitches. Tests 574 on Node 24 and 22. On merge: the connector has 39 tools, so every bot refreshes the tool list. Atlas is the one who uses `pitch_log`.
 
 ## Waiting on someone
 
@@ -84,8 +84,7 @@ artist growth bot that all we will need is content and $".
 
 Offer these three, in this order:
 
-1. **L7 pitch tracker:** each song's pitch status, editorial adds, the two-week pitch slot. The one-pitch rule
-   is already live. See docs/HQ-ROADMAP.md.
+1. **L7 pitch tracker:** built, on `cursor/pitch-tracker-feb7`, waiting for "deploy". Not live yet.
 2. **Profiles (L12):** an idea. One place in HQ for the profile photo and the banner on every official platform.
    Needs Luke's go before any build. Do not start it before he says go.
 3. **L3 fan inbox, part 1:** song-name questions and repeat fans (builds on "Needs a reply"). Agree the slice

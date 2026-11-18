@@ -233,7 +233,7 @@ test("warnings: each sentence, most urgent first", () => {
   assert.deepEqual(noSplit, ["A label release with no split recorded: write down who owns what (us and Sample Records)"]);
   /* order: blocked before late before missing */
   const many = warn(made("2026-11-25", "2026-11-01", { pack: FULL, set: { approved: { status: "blocked", note: "cover" }, upload: { due: "2026-11-10" }, spotify: { status: "done" }, pitch: { due: "2026-11-14" } } }));
-  assert.deepEqual(many.map((w) => w.split(" ")[0]), ["Approved", "Uploaded", "Mood,"]);
+  assert.deepEqual(many.map((w) => w.split(" ")[0]), ["Approved", "Uploaded", "Still", "Mood,"], "18 Nov 2026: still time to pitch is a warning while the song is 7 to 14 days out");
   assert.deepEqual(warn({ ...made("2026-11-25", "2026-11-01"), status: "draft" }), [], "a draft has no warnings");
 });
 
