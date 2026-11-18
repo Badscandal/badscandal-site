@@ -41,7 +41,8 @@ test("navPad(): the space under a page = the bar's height from the bottom of the
 });
 test("the page's bottom space follows the bar (CSS var set by hq-shell.js)", () => {
   const html = src("hq.html"), shell = src("js/hq-shell.js");
-  assert.match(html, /main\{padding-bottom:max\(calc\(112px \+ env\(safe-area-inset-bottom\)\),var\(--navpad,0px\)\)\}/);
+  /* 18 Nov 2026: 112px still let the floating bar cover the last card, so the floor is 156px */
+  assert.match(html, /main\{padding-bottom:max\(calc\(156px \+ env\(safe-area-inset-bottom\)\),var\(--navpad,0px\)\)\}/);
   assert.match(shell, /--navpad/);
   assert.match(shell, /L\.navPad\(/);
 });

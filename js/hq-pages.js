@@ -150,7 +150,7 @@
     fetch("/api/admin/exclude", { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ on: on }) })
       .then(function (r) {
         $("meBtn").disabled = false;
-        if (r.status === 401) return HQ.showLogin("");
+        if (r.status === 401) return HQ.authFail({ s: 401, j: {}, u: "/api/admin/exclude" });
         if (!r.ok) return;
         try { if (on) localStorage.setItem("bs_nostat", "1"); else localStorage.removeItem("bs_nostat"); } catch (e) {}
         data.excluded = on;

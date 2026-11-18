@@ -88,7 +88,10 @@
      "Friday" or "15/11") is shown as written: it used to read "Invalid Date" (A1, 17 Nov 2026) */
   function day(d) {
     if (!d) return "";
-    var s = String(d).trim(), m = /^(\d{4})-(\d{2})-(\d{2})(?:$|[ T])/.exec(s);
+    var s = String(d).trim();
+    /* a clock that failed used to print the words "Invalid Date" on a task card (18 Nov 2026) */
+    if (/^invalid date$/i.test(s)) return "not reported";
+    var m = /^(\d{4})-(\d{2})-(\d{2})(?:$|[ T])/.exec(s);
     var t = m ? new Date(m[1] + "-" + m[2] + "-" + m[3] + "T12:00:00Z") : null;
     if (!t || isNaN(t) || t.toISOString().slice(0, 10) !== m[1] + "-" + m[2] + "-" + m[3]) return s;
     return t.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" });
@@ -408,6 +411,7 @@
     if (!d) return "";
     if (d.status === "done") return "done";
     if (d.status === "blocked") return "blocked";
+    if (d.due && /^invalid date$/i.test(String(d.due))) return "not reported";
     if (d.late) return "late" + (d.due ? " · due " + d.due : "");
     if (d.working) return "working" + (d.due ? " · due " + d.due : "");
     return d.due ? "due " + d.due : "to do";
@@ -441,7 +445,8 @@
     var lines = ["Nova, please look at " + w.name + (w.role ? " (" + w.role + ")" : "") + ".", "State: " + workerLabel(w.state)];
     var bad = (w.duties || []).filter(function (d) { return d.status === "blocked" || d.late; });
     bad.forEach(function (d) { lines.push("Duty: " + d.task + " (" + dutyWhen(d) + ")"); if (d.blocker) lines.push("Blocker: " + d.blocker); });
-    if (!bad.some(function (d) { return d.blocker; }) && w.blockers) lines.push("Known blocker: " + w.blockers);
+    if (!bad.some(function (d) { return d.blocker; }) && w.blockers && !w.blockersStale) lines.push("Known blocker: " + w.blockers);
+    else if (w.blockers && w.blockersStale) lines.push("old, still true? " + w.blockers);
     if (w.card && w.card.needs) lines.push("Needs: " + w.card.needs);
     /* a late or blocked release step makes a card late / blocked too (11 Nov 2026): say which */
     (w.releaseSteps || []).filter(function (s) { return s.status === "blocked" || s.late; }).forEach(function (s) {
@@ -468,9 +473,17 @@
   /* ---- Messages ---- */
   /* "09:15" today, "Mon 9 Nov, 09:15" before (sp = "YYYY-MM-DD HH:MM", São Paulo) */
   function spWhen(sp, today) {
-    var s = String(sp || ""), hm = s.slice(11, 16);
-    if (!/^\d{4}-\d{2}-\d{2}/.test(s)) return "";
-    return s.slice(0, 10) === today ? hm : day(s) + (hm ? ", " + hm : "");
+    var s = String(sp || "").trim();
+    if (!s || /^invalid date$/i.test(s)) return "";
+    /* an ISO instant (the T) used to be sliced, so the clock was UTC. Convert it to São Paulo first. */
+    if (/T\d{2}:\d{2}/.test(s) || /[zZ]$/.test(s) || !/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}/.test(s)) {
+      var conv = spStampOf(s);
+      if (conv) s = conv;
+      else if (!/^\d{4}-\d{2}-\d{2}/.test(s)) return s;
+    }
+    var m = /^(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2})/.exec(s);
+    if (!m) return day(s) || s;
+    return m[1] === today ? m[2] : day(m[1]) + ", " + m[2];
   }
   /* the small label on a message: who it waits on, or how it ended. null = it never asked for anything */
   function waitLabel(m) {
@@ -811,7 +824,28 @@
      replied". So: the item leaves "Waiting on you" at once, a line says where it went and when, and
      "You answered" shows whether the bot has looked at the desk since. */
   /* an ISO time or ms -> "YYYY-MM-DD HH:MM" in São Paulo (UTC-3, no summer time since 2019) */
-  function spStampOf(at) { var v = t(at); return v == null ? "" : new Date(v - 3 * 3600000).toISOString().slice(0, 16).replace("T", " "); }
+  /* an ISO instant -> São Paulo. A stamp that is ALREADY "YYYY-MM-DD HH:MM" in São Paulo is left as it is:
+     shifting it again made desk messages show the wrong hour (18 Nov 2026). */
+  function spStampOf(at) {
+    if (typeof at === "string") { var s = at.trim(); if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}/.test(s)) return s.slice(0, 16); }
+    var v = t(at);
+    if (v == null) return "";
+    try {
+      var g = {};
+      new Intl.DateTimeFormat("en-GB", { timeZone: "America/Sao_Paulo", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).formatToParts(new Date(v)).forEach(function (p) { if (p.type !== "literal") g[p.type] = p.value; });
+      var hh = g.hour === "24" ? "00" : g.hour;
+      if (g.year && g.month && g.day && hh && g.minute) return g.year + "-" + g.month + "-" + g.day + " " + hh + ":" + g.minute;
+    } catch (e) {}
+    return new Date(v - 3 * 3600000).toISOString().slice(0, 16).replace("T", " ");
+  }
+  /* one clock for a desk time: São Paulo when we can read it, otherwise "not reported" */
+  function deskWhen(at, today) {
+    var s = String(at == null ? "" : at).trim();
+    if (!s || /^invalid date$/i.test(s)) return "not reported";
+    var sp = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}/.test(s) ? s.slice(0, 16) : spStampOf(at);
+    if (!sp) return "not reported";
+    return spWhen(sp, today) || "not reported";
+  }
   var CLAUDE_ROUNDS = "Claude reads the desk at 09:40, 15:40 and 21:40.";
   /* the small mark on a message: "Read by Nova 17:10" / "Not read yet" (v2, 11 Nov 2026: READ, from the
      desk's read markers, which only the tools that hand a bot its messages write; no longer "the bot used
@@ -900,7 +934,11 @@
     }
     if (st.waiting && st.status !== "done" && st.status !== "blocked") return { text: st.waitingText || "waiting", bad: false, done: false, waiting: true };
     /* 18 Nov 2026: a block that is only waiting (on a date, on Luke, or on a decision he made) is not red */
-    if (st.status === "blocked" && (st.waiting || blockWaitNote(st.label, st.note))) return { text: st.waitingText || "waiting on you", bad: false, done: false, waiting: true };
+    if (st.status === "blocked" && (st.waiting || blockWaitNote(st.label, st.note))) {
+      var note = String(st.note || "").replace(/^\s*waiting:?\s*/i, "");
+      var text = st.waitingText || (st.waiting ? "waiting on you" : "waiting" + (note ? ": " + note : ""));
+      return { text: text, bad: false, done: false, waiting: true };
+    }
     var n = typeof st.dueIn === "number" ? st.dueIn : isDay(st.due) && isDay(today) ? dayDiff(today, st.due) : null;
     if (st.status === "done") {
       /* done_on (batch 3): the real day, when the bot said it was earlier than when it marked it */
@@ -957,6 +995,7 @@
     if (/\b(reject|rejected|fail|failed|error|denied|routenote|cover)\b/i.test(note)) return false;
     if (/^Ads made with Luke/i.test(label) && /\b(luke|no solo)\b/i.test(note)) return true;
     if (/\b(luke|you)\b/i.test(note) && /\b(need|needs|waiting|none provided|not yet|no solo)\b/i.test(note)) return true;
+    if (/\b(wait|waiting|waits|until|not until|starts on|once the song)\b/i.test(note) && /\b(release day|song is out|musixmatch|spotify for artists)\b/i.test(note)) return true;
     return false;
   }
   function warnTone(text, v) {
@@ -1500,8 +1539,9 @@
     });
     (w && w.releaseSteps || []).forEach(function (st) {
       var ss = stepState(st, today);
-      if (st.status === "blocked") blocked.push({ what: st.label, why: (st.title ? st.title + " · " : "") + "blocked" + (st.note ? ": " + st.note : "") });
-      else if (ss.bad && !ss.waiting) late.push({ what: st.label, why: (st.title ? st.title + " · " : "") + ss.text });
+      if (ss.waiting) return;
+      if (st.status === "blocked") blocked.push({ what: st.label, why: (st.title ? st.title + " · " : "") + ss.text });
+      else if (ss.bad) late.push({ what: st.label, why: (st.title ? st.title + " · " : "") + ss.text });
     });
     var out = blocked.concat(late);
     if (!out.length && w && w.state === "blocked" && w.last && w.last.status === "blocked") out.push({ what: "Said it is blocked", why: w.last.message || "" });
@@ -1715,6 +1755,76 @@
     return { ym: ym, title: MONTHS[mo - 1] + " " + y, prev: prev, next: next, weeks: weeks };
   }
 
+  /* ---------- Per-song profit (L4, 18 Nov 2026) ----------
+     Money in is royalties recorded for that song (per store). Ad spend counts only when the row
+     names the song. A payment counts for a song only when it names the song. Anything else is
+     "not linked to a song". Currencies are never added. A single figure across currencies is an
+     estimate at each month's average rate, and only when every rate is there. */
+  function songPLList(o) {
+    var keys = Object.keys(o || {}).filter(function (c) { return o[c] != null && isFinite(Number(o[c])); }).sort();
+    return keys.length ? keys.map(function (c) { return money(Number(o[c]), c); }).join(" + ") : "";
+  }
+  function songPLView(pl) {
+    if (!pl || !pl.songs) return null;
+    var songs = pl.songs.map(function (s) {
+      var moneyIn = songPLList(s.in) || "nothing recorded";
+      var adSpend = s.out ? (songPLList(s.out) || "nothing recorded") : "not linked to a song";
+      var result;
+      if (!s.out) result = "No result: ad spend is not linked to a song.";
+      else if (!songPLList(s.in)) result = "Ad spend only: " + songPLList(s.out) + ". No royalties recorded for this song.";
+      else if (s.nets && Object.keys(s.nets).length === 1) result = songPLList(s.nets);
+      else if (s.estimate && !s.estimate.missing && s.estimate.eur != null) result = songPLList(s.in) + " in, " + songPLList(s.out) + " out. About " + money(s.estimate.eur, "EUR") + " (an estimate at each month's average rate).";
+      else result = songPLList(s.in) + " in, " + songPLList(s.out) + " out. No estimate: a rate is missing.";
+      var note = "";
+      if (s.inFrom === "payments") note = "From payments that name this song.";
+      if (s.landed && songPLList(s.landed)) note = "Landed payments for this song are not added (" + songPLList(s.landed) + "): they may be the same money as the royalties.";
+      return {
+        song: s.song, date: s.date || "", dateLine: s.date ? day(s.date) : "No release date recorded",
+        moneyIn: moneyIn, adSpend: adSpend, result: result,
+        stores: (s.stores || []).map(function (st) { return (st.store ? st.store : "Store not named") + " · " + songPLList(st.amounts); }),
+        ads: (s.platforms || []).map(function (p) { return (p.platform || "Ad") + " · " + songPLList(p.amounts); }),
+        note: note,
+      };
+    });
+    var u = pl.unlinked || {}, notes = [];
+    var named = songs.some(function (s) { return s.adSpend !== "not linked to a song"; });
+    if (named && songPLList(u.spend && u.spend.amounts)) notes.push("Ad spend that names a song is on that song. This is the rest. They are not added together.");
+    if (pl.notReceived) notes.push(pl.notReceived === 1 ? "1 royalty payment is not received yet, so it is not counted." : pl.notReceived + " royalty payments are not received yet, so they are not counted.");
+    if (pl.holding) notes.push(pl.holding === 1 ? "1 royalty payment is still in Wise or PayPal, so it is not counted until it reaches Revolut." : pl.holding + " royalty payments are still in Wise or PayPal, so they are not counted until they reach Revolut.");
+    return {
+      how: "Money in is the royalties recorded for that song, per store. Ad spend counts only when it names the song. A payment counts for a song only when it names the song. Anything else is not linked to a song. Currencies stay separate. A single figure across currencies is an estimate at each month's average rate.",
+      songs: songs,
+      unlinked: {
+        label: "not linked to a song",
+        royalties: songPLList(u.royalties && u.royalties.amounts),
+        royaltyStores: ((u.royalties && u.royalties.stores) || []).map(function (st) { return (st.store || "Store not named") + " · " + songPLList(st.amounts); }),
+        payments: songPLList(u.payments && u.payments.amounts),
+        spend: songPLList(u.spend && u.spend.amounts),
+        spendPlatforms: ((u.spend && u.spend.platforms) || []).map(function (p) { return (p.platform || "Ad") + " · " + songPLList(p.amounts); }),
+        note: notes.join(" "),
+      },
+    };
+  }
+  function songPLEsc(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); }
+  function songPLHtml(v) {
+    if (!v) return "";
+    var kv = function (a, b) { return '<div class="kv"><span>' + songPLEsc(a) + "</span><b>" + songPLEsc(b) + "</b></div>"; };
+    var fold = function (lines) { return lines.length ? '<details><summary>Details</summary>' + lines.map(function (line) { return '<p class="plrow">' + songPLEsc(line) + "</p>"; }).join("") + "</details>" : ""; };
+    var songs = v.songs.map(function (s) {
+      return '<article class="tile pl"><div class="pltop"><h3>' + songPLEsc(s.song) + '</h3><span class="when">' + songPLEsc(s.dateLine) + "</span></div>" +
+        kv("Money in", s.moneyIn) + kv("Ad spend", s.adSpend) +
+        '<p class="plres">' + songPLEsc(s.result) + "</p>" +
+        (s.note ? '<p class="plnote">' + songPLEsc(s.note) + "</p>" : "") + fold(s.stores.concat(s.ads)) + "</article>";
+    }).join("");
+    var u = v.unlinked, rows = "";
+    if (u.royalties) rows += kv("Royalties", u.royalties);
+    if (u.payments) rows += kv("Payments", u.payments);
+    if (u.spend) rows += kv("Ad spend", u.spend);
+    return songs + '<article class="tile pl"><div class="pltop"><h3>Not linked to a song</h3></div>' +
+      (rows || '<p class="plnote">Nothing is waiting here.</p>') +
+      (u.note ? '<p class="plnote">' + songPLEsc(u.note) + "</p>" : "") + fold((u.royaltyStores || []).concat(u.spendPlatforms || [])) + "</article>";
+  }
+
   /* ---------- "Search or Ask" (the HQ redesign, 12 Nov 2026) ----------
      One bar (⌘K, or the magnifier) that jumps anywhere. cmdIndex builds the list from what the page has
      already loaded (o.board = the staff board, o.songs = [{name, id}] as Songs draws them); cmdResults
@@ -1772,6 +1882,204 @@
     return scored.slice(0, max).map(function (y) { return y.x; });
   }
 
+
+  /* ================= Phone HQ (18 Nov 2026) =================
+     Every number below is taken from data the page already has. A missing one is "not reported"
+     or an empty list. Nothing here writes, pauses an ad, or invents an amount. */
+
+  /* Received this month is Revolut-landed only (the desk already leaves Wise/PayPal and moved
+     money out of `received`). Payable and waiting stay on their own lines and are never added in. */
+  function moneyHead(inc) {
+    return { received: curList(inc && inc.received), payable: curList(inc && inc.payable), waiting: curList(inc && inc.holding) };
+  }
+  function walletName(a) { return /paypal/i.test(String(a || "")) ? "PayPal" : /wise/i.test(String(a || "")) ? "Wise" : ""; }
+  function revolutName(a) { return /revolut/i.test(String(a || "")); }
+  /* statement, then the Wise/PayPal payer, then landed at Revolut. A step we cannot see is missing (red). */
+  function payFlow(e, entries) {
+    e = e || {}; entries = entries || [];
+    var byId = {};
+    entries.forEach(function (x) { if (x && x.id) byId[x.id] = x; });
+    var miss = function (key, label) { return { key: key, label: label, date: "", text: "missing", missing: true }; };
+    var hit = function (key, label, date, extra) {
+      return { key: key, label: label, date: date || "", text: (date ? day(date) : "date not reported") + (extra ? " · " + extra : ""), missing: !date };
+    };
+    var statement;
+    if (e.statement) statement = hit("statement", "Statement", e.statement, e.payer || "");
+    else if (e.paidBy && byId[e.paidBy]) statement = hit("statement", "Statement", byId[e.paidBy].statement || byId[e.paidBy].date, byId[e.paidBy].payer || "");
+    else if (/statement only|pending|payable/i.test(String(e.status || ""))) statement = hit("statement", "Statement", e.date, e.payer || "");
+    else {
+      var back = entries.filter(function (x) { return x && x.paidBy && x.paidBy === e.id; })[0];
+      statement = back ? hit("statement", "Statement", back.statement || back.date, back.payer || "") : miss("statement", "Statement");
+    }
+    var payer, carried = entries.filter(function (x) { return x && e.id && x.movedTo === e.id; })[0];
+    if (walletName(e.account)) payer = hit("payer", walletName(e.account), e.date, e.payer || "");
+    else if (carried && walletName(carried.account)) payer = hit("payer", walletName(carried.account), carried.date, carried.payer || "");
+    else payer = miss("payer", "Wise / PayPal");
+    var landed;
+    if (revolutName(e.account) && e.status === "received" && !e.movedTo) landed = hit("landed", "Landed at Revolut", e.date, "");
+    else if (e.movedTo && byId[e.movedTo] && revolutName(byId[e.movedTo].account)) landed = hit("landed", "Landed at Revolut", byId[e.movedTo].date, "");
+    else landed = miss("landed", "Landed at Revolut");
+    return [statement, payer, landed];
+  }
+
+  /* "Google Fri 14 Nov: signed out" (the cap's notRead lines) -> "Google 14-16 Nov, signed out" */
+  var GAP_MON = { Jan: 1, Feb: 2, Mar: 3, Apr: 4, May: 5, Jun: 6, Jul: 7, Aug: 8, Sep: 9, Oct: 10, Nov: 11, Dec: 12 };
+  function gapNotes(lines) {
+    var rows = [];
+    (lines || []).forEach(function (line) {
+      var m = /^(.*?)\s+(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)\s+(\d{1,2})\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)(?::\s*(.*))?$/.exec(String(line || "").trim());
+      if (m && GAP_MON[m[3]]) rows.push({ platform: m[1], day: Number(m[2]), month: m[3], why: (m[4] || "").trim() || "not reported" });
+    });
+    rows.sort(function (a, b) { return a.platform < b.platform ? -1 : a.platform > b.platform ? 1 : a.month < b.month ? -1 : a.month > b.month ? 1 : a.day - b.day; });
+    var out = [], cur = null;
+    rows.forEach(function (r) {
+      if (cur && cur.platform === r.platform && cur.why === r.why && cur.month === r.month && r.day === cur.to + 1) cur.to = r.day;
+      else { if (cur) out.push(cur); cur = { platform: r.platform, month: r.month, from: r.day, to: r.day, why: r.why }; }
+    });
+    if (cur) out.push(cur);
+    return out.map(function (g) { return g.platform + " " + (g.from === g.to ? g.from : g.from + "-" + g.to) + " " + g.month + ", " + g.why; });
+  }
+  /* the month's ad spend against the cap. Display only. Grey gaps are days that were not read, not money. */
+  function spendGauge(cap) {
+    var blank = { reported: false, label: "not reported", spent: null, amount: 1000, warn: 750, stop: 900, currency: "USD", parts: [], gaps: [] };
+    if (!cap || cap.spent == null || !isFinite(Number(cap.spent))) return blank;
+    var cur = cap.currency || "USD", amount = Number(cap.amount) || 1000, parts = [];
+    Object.keys(cap.byPlatform || {}).sort().forEach(function (name) {
+      var n = (cap.byPlatform[name] || {})[cur];
+      if (n == null || !isFinite(Number(n))) return;
+      parts.push({ name: name, amount: Number(n) });
+    });
+    var gaps = gapNotes(cap.notRead || []);
+    return { reported: true, spent: Number(cap.spent), amount: amount, warn: Number(cap.warn) || 750, stop: Number(cap.stop) || 900, currency: cur,
+      parts: parts, gaps: gaps, label: money(cap.spent, cur, true) + " of " + money(amount, cur, true) };
+  }
+
+  /* a decision waiting on Luke: the recommended option is Yes, the other is No. Later is only an option
+     when the message actually offers it (a local snooze is the page's, and sends nothing). */
+  function decisionCards(list) {
+    return (list || []).filter(function (m) {
+      return m && !m.resolved && m.to === "Luke" && m.needs === "decision" && (m.options || []).length;
+    }).map(function (m) {
+      var i = recommendedOption(m), yes = i >= 0 ? m.options[i] : m.options[0];
+      var rest = m.options.filter(function (o) { return o !== yes; });
+      var later = rest.filter(function (o) { return /^later$/i.test(String(o)); })[0] || "";
+      var no = rest.filter(function (o) { return o !== later; })[0] || "";
+      return { id: m.id, from: m.from || "", line: String(m.text || "").split("\n")[0].slice(0, 160),
+        yes: yes, no: no, later: later, song: (m.approval && m.approval.title) || (m.proposal && m.proposal.title) || "",
+        lyrics: !!(m.approval && m.approval.what === "lyrics"), releaseId: (m.approval && m.approval.id) || "",
+        recommended: i >= 0 ? m.options[i] : "" };
+    });
+  }
+  /* lyrics, one line per row, the way a streaming page stacks them. Empty when the pack has none yet. */
+  function lyricsPreview(text) {
+    var s = String(text || "").replace(/\r\n/g, "\n").trim();
+    if (!s) return { lines: [], empty: true };
+    return { lines: s.split("\n").map(function (l) { return l.trim(); }), empty: false };
+  }
+
+  function stepTone(s) {
+    if (!s || s.status === "skipped") return "skip";
+    if (s.status === "done") return "done";
+    if (s.status === "blocked" || s.late) return "bad";
+    return "wait";
+  }
+  /* the face of one release: cover is supplied by the page (a song that has one). pre-HQ hides missing-field warnings. */
+  function releaseFace(v, today, extra) {
+    extra = extra || {};
+    if (!v) return null;
+    var pre = !!(v.pack && v.pack.prehq === "Yes"), pr = relProgress(v), next = v.next || null;
+    var when = v.released && v.daysToGo != null && v.daysToGo >= -6 ? "Out now" : releaseWhen(v.date, today, v.status === "draft");
+    var bits = [];
+    var store = storeLine(v.store);
+    if (store) bits.push(store.replace(/^At the distributor:\s*/i, "at distributor: "));
+    if (v.pack && v.pack.upc) bits.push("UPC " + v.pack.upc);
+    if (v.pack && v.pack.isrc) bits.push("ISRC " + v.pack.isrc);
+    var wg = warnGroups(v);
+    return { id: v.id, title: v.title || "", when: when, prehq: pre, progress: pr,
+      dots: (v.steps || []).filter(function (s) { return s && s.status !== "skipped"; }).map(stepTone),
+      next: next ? { label: next.label || "", owner: next.owner === "Luke" ? "You" : (next.owner || ""), when: stepState(next, today).text } : null,
+      distributor: bits.join(" · "), warnings: pre ? [] : (wg.bad || []),
+      cover: extra.cover || "", taps: extra.taps == null ? null : extra.taps, people: extra.people == null ? null : extra.people, spend: extra.spend || "" };
+  }
+
+  function teamDots(workers) {
+    return (workers || []).map(function (w) {
+      var tone = w.state === "blocked" || w.state === "late" ? "bad" : (w.state === "done" || w.state === "idle" || w.state === "paused") ? "grey" : "on";
+      return { name: w.name, slug: slug(w.name), tone: tone, label: workerLabel(w.state) };
+    });
+  }
+  function plusDays(d, n) { var x = new Date(d + "T12:00:00Z"); x.setUTCDate(x.getUTCDate() + n); return x.toISOString().slice(0, 10); }
+  /* the next 7 days: release days, the home-card switch, and Monday's ad check. */
+  function weekAhead(o) {
+    o = o || {};
+    var today = o.today;
+    if (!isDay(today)) return [];
+    var end = plusDays(today, 7), items = [];
+    (o.releases || []).forEach(function (r) {
+      if (r && isDay(r.date) && r.date >= today && r.date < end && r.status !== "cancelled")
+        items.push({ date: r.date, kind: "release", title: (r.title || "Song") + " comes out", href: "#releases/" + (r.id || ""), id: r.id || "" });
+    });
+    var card = o.homeCard || {}, now = card.now || {}, due = card.due || {};
+    if (due.title && now.slug && due.slug && now.slug !== due.slug && isDay(now.date)) {
+      var switchDay = plusDays(now.date, 7);
+      if (isDay(due.date) && due.date > today && due.date < switchDay) switchDay = due.date;
+      if (isDay(switchDay) && switchDay >= today && switchDay < end)
+        items.push({ date: switchDay, kind: "card", title: "Home card switches to " + due.title, href: "#songs", id: due.slug || "" });
+    }
+    for (var i = 0; i < 7; i++) { var d = plusDays(today, i); if (new Date(d + "T12:00:00Z").getUTCDay() === 1) items.push({ date: d, kind: "ads", title: "Ad check", href: "#ads", id: "" }); }
+    var kindOrder = { release: 0, card: 1, ads: 2 };
+    items.sort(function (a, b) {
+      if (a.date !== b.date) return a.date < b.date ? -1 : 1;
+      var ka = kindOrder[a.kind], kb = kindOrder[b.kind];
+      return (ka == null ? 9 : ka) - (kb == null ? 9 : kb);
+    });
+    return items;
+  }
+  /* quiet mode: one line per bot, the latest, with the older lines behind it */
+  function quietFeed(feed) {
+    var order = [], by = {};
+    (feed || []).forEach(function (u) {
+      if (!u || !u.bot) return;
+      if (!by[u.bot]) { by[u.bot] = []; order.push(u.bot); }
+      by[u.bot].push(u);
+    });
+    return order.map(function (b) { return { bot: b, latest: by[b][0], older: by[b].slice(1) }; });
+  }
+  var STRIP = ["TikTok", "Instagram", "YouTube", "Spotify"];
+  function followerStrip(growth) {
+    return STRIP.map(function (name) {
+      var g = (growth || []).filter(function (x) { return String(x.platform || "").toLowerCase() === name.toLowerCase(); })[0];
+      if (!g || g.followers == null || !isFinite(Number(g.followers))) return { platform: name, followers: null, day: null, series: [], reported: false };
+      return { platform: name, followers: Number(g.followers), day: g.day == null || !isFinite(Number(g.day)) ? null : Number(g.day), series: Array.isArray(g.series) ? g.series : [], reported: true };
+    });
+  }
+  /* Monday's pick and the runner-up, from the ranking the page already has. Yes/No exist only when a
+     decision is actually waiting, and they are that message's own options. */
+  function mondayPick(ranking, decision, songs) {
+    var ranked = (ranking && ranking.ranked) || [];
+    if (!ranked.length) return null;
+    var one = function (r) {
+      if (!r) return null;
+      var parts = rankParts(r), song = "", cover = "";
+      (songs || []).some(function (s) {
+        if (s && s.title && String(r.caption || "").toLowerCase().indexOf(String(s.title).toLowerCase()) >= 0) { song = s.title; cover = s.cover || ""; return true; }
+        return false;
+      });
+      if (!song) song = String(r.caption || "").split("\n")[0].slice(0, 80) || "not reported";
+      var cost = r.paid && r.paid.costPerEng != null && isFinite(Number(r.paid.costPerEng)) ? ((r.paid.currency ? r.paid.currency + " " : "") + Number(r.paid.costPerEng).toFixed(3)) : "not reported";
+      return { song: song, cover: cover, rate: parts.rate, deep: parts.deep, cost: cost, link: r.link || "" };
+    };
+    var yes = "", no = "", id = "";
+    if (decision && decision.id && (decision.options || []).length && !decision.resolved) {
+      id = decision.id;
+      var i = recommendedOption(decision);
+      yes = i >= 0 ? decision.options[i] : decision.options[0];
+      no = (decision.options || []).filter(function (o) { return o !== yes; })[0] || "";
+    }
+    return { pick: one(ranked[0]), runner: one(ranked[1]), decisionId: id, yes: yes, no: no };
+  }
+
+
   return { rankParts: rankParts, songTile: songTile, igStatusLine: igStatusLine, igPostNumbers: igPostNumbers, fanKindWord: fanKindWord, fanFlagWord: fanFlagWord, FAN_INTRO: FAN_INTRO, FAN_EMPTY: FAN_EMPTY, FAN_ASK: FAN_ASK, FAN_BACK: FAN_BACK, artistLines: artistLines, closedLine: closedLine, preflightLine: preflightLine, sixWeeks: sixWeeks, pitchBlock: pitchBlock, recommendLines: recommendLines, recommendedOption: recommendedOption, releaseTrouble: releaseTrouble, navPad: navPad, signoutWords: signoutWords, growthWhen: growthWhen, ago: ago, spMs: spMs, releaseWords: releaseWords, releaseDetail: releaseDetail, healthRows: healthRows, healthState: healthState, median: median, change: change, money: money, attention: attention, briefing: briefing,
     snapshot: snapshot, changesSince: changesSince, tiles: tiles, summaryText: summaryText, shortStep: shortStep, day: day,
     slug: slug, workerLabel: workerLabel, sortWorkers: sortWorkers, workerView: workerView, dutyWhen: dutyWhen, workerCounts: workerCounts, seenLine: seenLine, connectorLine: connectorLine,
@@ -1800,5 +2108,12 @@
     /* Team, simpler (13 Nov 2026) */
     teamGroups: teamGroups, teamCounts: teamCounts, botProblems: botProblems, botNext: botNext,
     /* planning releases (14 Nov 2026) */
-    PLAN_RULE: PLAN_RULE, PLAN_TIMELINE: PLAN_TIMELINE, suggestDates: suggestDates, planAdvice: planAdvice, calendarMonth: calendarMonth };
+    PLAN_RULE: PLAN_RULE, PLAN_TIMELINE: PLAN_TIMELINE, suggestDates: suggestDates, planAdvice: planAdvice, calendarMonth: calendarMonth,
+    fmt: fmt,
+    /* per-song profit (L4, 18 Nov 2026) */
+    songPLView: songPLView, songPLHtml: songPLHtml,
+    /* phone HQ (18 Nov 2026): Needs you, the release strip, the team dots, the week, money, the spend gauge */
+    deskWhen: deskWhen, moneyHead: moneyHead, payFlow: payFlow, spendGauge: spendGauge, decisionCards: decisionCards,
+    releaseFace: releaseFace, teamDots: teamDots, weekAhead: weekAhead, quietFeed: quietFeed, followerStrip: followerStrip,
+    mondayPick: mondayPick, lyricsPreview: lyricsPreview };
 });

@@ -63,9 +63,13 @@
       td.appendChild(v); td.setAttribute("data-l", head[c] || "");
     }
   }
-  function getJSON(url) {
+  function getJSON(url, tried) {
     return fetch(url, { credentials: "same-origin", cache: "no-store" })
-      .then(function (r) { return r.json().catch(function () { return {}; }).then(function (j) { return { s: r.status, j: j, u: url }; }); });
+      .then(function (r) {
+        /* one 401 is retried once (18 Nov 2026): a phone sometimes drops the cookie on a single call */
+        if (r.status === 401 && !tried) return new Promise(function (ok) { setTimeout(ok, 600); }).then(function () { return getJSON(url, 1); });
+        return r.json().catch(function () { return {}; }).then(function (j) { return { s: r.status, j: j, u: url }; });
+      });
   }
 
   /* the page's only writes (js/hq-staff.js): same cookie, our own origin; answers like getJSON */
@@ -187,10 +191,21 @@
       .then(function () { return fetch("/api/admin/logout", { method: "POST", credentials: "same-origin" }).catch(function () {}); })
       .then(function () { forget(); showLogin(""); });
   });
-  /* any 401 / 503 from any of the three answers lands here */
+  /* any 401 / 503 from any of the three answers lands here.
+     One endpoint saying "not logged in" is not a sign-out (18 Nov 2026: phones were dropped after a
+     few minutes when a single answer 401'd). getJSON already retries that call once. Two different
+     answers, or the same one twice in a refresh, is a real sign-out. The password stays in the form. */
+  var denied = {};
   function authFail(res) {
-    if (res.s === 401) { if (!$("shell").hidden) noteSignout("401", res.u); showLogin(""); return true; }
-    if (res.s === 503 && /ADMIN_KEY/.test(res.j.error || "")) { showLogin("The password isn't set on Netlify yet (ADMIN_KEY)."); return true; }
+    if (res.s === 401) {
+      var path = String(res.u || "").split("?")[0];
+      denied[path] = (denied[path] || 0) + 1;
+      if (Object.keys(denied).length < 2 && denied[path] < 2) return false;
+      if (!$("shell").hidden) noteSignout("401", res.u);
+      showLogin("");
+      return true;
+    }
+    if (res.s === 503 && /ADMIN_KEY/.test((res.j && res.j.error) || "")) { showLogin("The password isn't set on Netlify yet (ADMIN_KEY)."); return true; }
     return false;
   }
 
@@ -209,10 +224,17 @@
     refresh();
     clearInterval(timer);
     timer = setInterval(function () { if (!document.hidden) refresh(); }, EVERY);
+    /* while the page is open, touch the login cookie so a phone does not drop it mid-task.
+       Still the same HttpOnly cookie: nothing readable is stored here. */
+    setInterval(function () {
+      if (document.hidden || $("shell").hidden) return;
+      getJSON("/api/admin/session").then(function (r) { if (r && r.s === 401) authFail(r); }, function () {});
+    }, 2 * 60 * 1000);
   }
   /* every 5 minutes while the page is on screen; coming back after longer than that refreshes at once */
   document.addEventListener("visibilitychange", function () { if (!document.hidden && started && Date.now() - lastRefresh > EVERY) refresh(); });
   function refresh() {
+    denied = {};
     var startedAt = lastRefresh = Date.now();
     /* the board may be the only answer that came back: Today still says what it knows */
     var after = function () {
@@ -410,11 +432,13 @@
     $("siteCheck").hidden = !chk;
     if (chk) { $("siteCheck").textContent = chk + " ›"; $("siteCheck").setAttribute("href", "#messages/" + String(board.report.id || "").replace(/[^a-z0-9]/gi, "")); }
     var att = L.attention({ sheet: sheet, ov: ov, board: board, bank: window.HQStaff ? window.HQStaff.bank() : null }), br = L.briefing({ sheet: sheet, ov: ov, attention: att }), ti = L.tiles({ sheet: sheet, ov: ov });
-    $("brief").innerHTML = br.map(function (x) { return "<p>" + esc(x) + "</p>"; }).join("");
+    var lead = br.slice(0, 1), rest = br.slice(1);
+    $("brief").innerHTML = lead.map(function (x) { return "<p>" + esc(x) + "</p>"; }).join("") +
+      (rest.length ? '<details class="fold"><summary>The rest of the note</summary>' + rest.map(function (x) { return "<p>" + esc(x) + "</p>"; }).join("") + "</details>" : "");
     $("attnCard").classList.toggle("has", att.length > 0);
-    $("attnList").innerHTML = att.length ? att.map(function (a) {
-      return '<li><a href="' + esc(a.href) + '"' + (a.href === "#health" ? " data-health" : "") + ">" + esc(a.text) + "</a></li>";
-    }).join("") : '<li class="calm">Nothing needs attention.</li>';
+    var item = function (a) { return '<li><a href="' + esc(a.href) + '"' + (a.href === "#health" ? " data-health" : "") + ">" + esc(a.text) + "</a></li>"; };
+    var top = att.slice(0, 4), moreAtt = att.slice(4);
+    $("attnList").innerHTML = att.length ? top.map(item).join("") + (moreAtt.length ? '<li class="foldli"><details class="fold"><summary>' + moreAtt.length + " more</summary><ul class=\"attn-list\">" + moreAtt.map(item).join("") + "</ul></details></li>" : "") : '<li class="calm">Nothing needs attention.</li>';
     $("tilesRange").textContent = ov ? "· " + (ov.range === "today" ? "today" : ov.range === "custom" ? ov.from.slice(5).replace("-", "/") + " to " + ov.to.slice(5).replace("-", "/") : "last " + ov.days + " days") + " for ads and taps" : "";
     $("tiles").innerHTML = ti.map(function (x) {
       var arrow = x.change.dir === "up" ? "▲ " : x.change.dir === "down" ? "▼ " : "";
@@ -496,6 +520,8 @@
     if (ov && ov.spend && ov.spend.connected && !ov.spend.error) ov.spend.songs.forEach(function (s) { spendBy[adKey(s.title)] = s; });
     var cur = ov && ov.spend ? ov.spend.currency : "";
     var rangeTxt = !ov ? "" : ov.range === "today" ? "today" : ov.range === "custom" ? ov.days + " days" : "last " + ov.days + " days";
+    var plBy = {};
+    if (sheet && sheet.songPL) L.songPLView(sheet.songPL).songs.forEach(function (x) { plBy[adKey(x.song)] = x; });
     /* A8 (17 Nov 2026, Atlas): the artist's Spotify monthly listeners and Brazil's share, with their trend */
     var al = L.artistLines(sheet && sheet.artist);
     $("artistCard").innerHTML = al ? '<div class="tile"><div class="row"><h3>Spotify monthly listeners</h3><span class="lbl">the artist, all songs</span></div><div class="big num">' + esc(al.big) + '</div><div class="d">' + esc(al.sub) + "</div>" + spark(sheet.artist.series) + "</div>" : "";
@@ -516,17 +542,19 @@
         var dw = HQLib.dealWords(deal), rdate = (s && s.released) || (p && p.date) || "";
         out += '<p class="sdeal' + (dw.known ? "" : " no") + '">' + esc(dw.text) + (dw.known ? "" : ' <button class="linkbtn" type="button" data-adddeal="' + esc(dw.id) + '" data-title="' + esc(name) + '" data-date="' + esc(String(rdate).slice(0, 10)) + '">Add its details</button>') + "</p>";
       }
-      if (s) out += '<div class="big num">' + fmt(s.streams) + " <small>streams · " + esc(day(s.lastDay)) + "</small></div>" +
-        '<div class="d">' + signed(s.dayChange) + " vs the day before · " + fmt(s.week) + " in 7 days" + (s.prevWeek != null ? " (" + fmt(s.prevWeek) + " the 7 before)" : "") + "</div>" + spark(s.series) +
+      if (s) out += '<div class="big num">' + fmt(s.streams) + " <small>streams · " + esc(day(s.lastDay)) + "</small></div>";
+      var more = "";
+      if (s) more += '<div class="d">' + signed(s.dayChange) + " vs the day before · " + fmt(s.week) + " in 7 days" + (s.prevWeek != null ? " (" + fmt(s.prevWeek) + " the 7 before)" : "") + "</div>" + spark(s.series) +
         '<div class="d">' + fmt(s.listeners) + " listeners · " + fmt(s.saves) + " saves · " + fmt(s.adds) + " playlist adds" + (s.stale > 3 ? ' · <b style="color:var(--paper)">not logged for ' + s.stale + " days</b>" : "") + "</div>";
-      else out += '<p class="d" style="margin:8px 0">' + (broken("Songs") ? "The Songs tab can't be read." : sheet ? "No Spotify rows in the sheet yet." : "") + "</p>";
-      if (!p && ov) out += '<div class="kv" style="margin-top:8px"><span>Our page</span><b>no song page for this one</b></div>';
-      else out += '<div class="kv" style="margin-top:8px"><span>Our page · ' + esc(rangeTxt || "…") + "</span><b>" + (p ? fmt(p.visits) + " visits · " + fmt(p.people) + " people" : "–") + "</b></div>" +
+      else more += '<p class="d" style="margin:8px 0">' + (broken("Songs") ? "The Songs tab can't be read." : sheet ? "No Spotify rows in the sheet yet." : "") + "</p>";
+      if (!p && ov) more += '<div class="kv" style="margin-top:8px"><span>Our page</span><b>no song page for this one</b></div>';
+      else more += '<div class="kv" style="margin-top:8px"><span>Our page · ' + esc(rangeTxt || "…") + "</span><b>" + (p ? fmt(p.visits) + " visits · " + fmt(p.people) + " people" : "–") + "</b></div>" +
         '<div class="kv"><span>Real Spotify taps</span><b>' + (p ? fmt(p.taps) : "–") + "</b></div>" +
         '<div class="kv"><span>Meta spend · per tap</span><b>' + (sp ? esc(money(sp.spend, cur)) + " · " + esc(money(sp.cpt, cur)) : ov && ov.spend && !ov.spend.connected ? "not connected" : "–") + "</b></div>";
-      out += '<div class="kv"><span>Royalties so far</span><b>' + (s ? esc(amounts(s.royalties)) : "–") + "</b></div>" +
+      more += '<div class="kv"><span>Royalties so far</span><b>' + (s ? esc(amounts(s.royalties)) : "–") + "</b></div>" +
+        (plBy[k] ? '<div class="kv"><span>Ad spend for this song</span><b>' + esc(plBy[k].adSpend) + "</b></div>" : "") +
         (rw ? '<div class="kv"><span>' + esc(rw.label) + "</span><b>" + esc(rw.line) + "</b></div>" : "");
-      return out + "</div>";
+      return out + '<details class="fold"><summary>Numbers</summary>' + more + "</details></div>";
     }).join("");
   }
 
@@ -688,7 +716,7 @@
     /* our own accounts (Nova keeps the list with the instagram tool; Luke sees it here) */
     if (st.connected) h += '<details class="tile" style="margin:12px 0"><summary>Our own accounts (' + (ig.own || []).length + "): their comments don\u2019t count</summary>" +
       '<p class="d">' + esc((ig.own || []).map(function (x) { return "@" + x; }).join(", ")) + '</p><p class="d muted">Nova keeps this list (the connected account is always on it). Ask Nova to add or remove one.</p>' +
-      ((ig.ownLog || []).length ? '<ul class="igcomments">' + ig.ownLog.slice(0, 10).map(function (x) { return "<li>" + esc(day(new Date(x.at).toISOString().slice(0, 10)) + " · " + x.by + " " + (x.action === "add" ? "added" : "removed") + " @" + x.handle) + ' <span class="lbl">' + esc(x.reason) + "</span></li>"; }).join("") + "</ul>" : "") + "</details>";
+      ((ig.ownLog || []).length ? '<ul class="igcomments">' + ig.ownLog.slice(0, 10).map(function (x) { return "<li>" + esc(L.deskWhen(x.at, sheet && sheet.today) + " · " + x.by + " " + (x.action === "add" ? "added" : "removed") + " @" + x.handle) + ' <span class="lbl">' + esc(x.reason) + "</span></li>"; }).join("") + "</ul>" : "") + "</details>";
     if ((ig.posts || []).length) h += '<div class="igposts">' + ig.posts.slice(0, 9).map(function (p) {
       return '<div class="tile igpost"><div class="row"><h3>' + link(p.link, p.caption || "(no caption)") + '</h3><span class="lbl">' + esc((p.type || "post") + " · " + day(p.at.slice(0, 10))) + '</span></div><div class="d">' + esc(L.igPostNumbers(p) || "No numbers yet") + "</div></div>";
     }).join("") + "</div>";
@@ -763,6 +791,8 @@
   /* month by month: just the month and what was received (16 Nov 2026, Luke) */
   function drawMoney() {
     var incomeBad = broken("Income"), rows = HQLib.monthRows(sheet.money.months);
+    var box = $("songPL");
+    if (box) box.innerHTML = sheet.songPL ? L.songPLHtml(L.songPLView(sheet.songPL)) : "";
     setTable("moneyTable", rows.length ? "<tr><th>Month</th><th class='r'>Received</th></tr>" + rows.map(function (r) {
       return "<tr><td><b>" + esc(r.label) + "</b></td><td class='r'>" + (incomeBad ? "can't be read" : esc(r.amount)) + "</td></tr>";
     }).join("") : '<tr><td class="empty">' + (incomeBad ? "See the note above." : "No income rows yet.") + "</td></tr>");
@@ -817,12 +847,27 @@
     drawFeed(live.ready ? live.feed : null, sheet.today);
   }
   /* the live log (Team). feed: [{at "YYYY-MM-DD HH:MM" São Paulo, bot, status, message, link}], null = there is none yet */
+  function feedWhen(u, today) {
+    var raw = u && (u.at || u.sp) || "";
+    if (!raw || /^invalid date$/i.test(String(raw))) return "not reported";
+    return L.deskWhen(raw, today);
+  }
+  function feedLi(u, today) {
+    var st = /^(done|working|blocked|error|info)$/.test(u.status) ? u.status : "info";
+    return '<li class="' + st + (st === "done" ? " quiet-done" : "") + '"><span class="t">' + esc(feedWhen(u, today)) + '</span><span class="m"><b>' + esc(u.bot) + "</b> " +
+      (u.link ? link(u.link, u.message) : esc(u.message)) + (st === "info" ? "" : '<span class="s">' + esc(st) + "</span>") + "</span></li>";
+  }
   function drawFeed(feed, today) {
-    $("liveFeed").innerHTML = !feed ? '<li><span class="t">–</span><span class="m">No live log yet.</span></li>' : feed.length ? feed.slice(0, 20).map(function (u) {
-      var st = /^(done|working|blocked|error|info)$/.test(u.status) ? u.status : "info";
-      return '<li class="' + st + '"><span class="t">' + esc(u.at.slice(0, 10) === today ? u.at.slice(11) : day(u.at).replace(/^\w+,? /, "")) + '</span><span class="m"><b>' + esc(u.bot) + "</b> " +
-        (u.link ? link(u.link, u.message) : esc(u.message)) + (st === "info" ? "" : '<span class="s">' + esc(st) + "</span>") + "</span></li>";
-    }).join("") : '<li><span class="t">–</span><span class="m">Nothing logged yet.</span></li>';
+    if (!feed) { $("liveFeed").innerHTML = '<li><span class="t">–</span><span class="m">No live log yet.</span></li>'; return; }
+    if (!feed.length) { $("liveFeed").innerHTML = '<li><span class="t">–</span><span class="m">Nothing logged yet.</span></li>'; return; }
+    if (document.body.classList.contains("quiet")) {
+      $("liveFeed").innerHTML = L.quietFeed(feed).slice(0, 20).map(function (g) {
+        var more = g.older.length ? '<details class="feedmore"><summary>' + g.older.length + " earlier</summary><ul>" + g.older.map(function (u) { return feedLi(u, today); }).join("") + "</ul></details>" : "";
+        return feedLi(g.latest, today).replace("</li>", more + "</li>");
+      }).join("");
+      return;
+    }
+    $("liveFeed").innerHTML = feed.slice(0, 20).map(function (u) { return feedLi(u, today); }).join("");
   }
 
   /* ---------- the release panel: what's missing, then what's done ---------- */
@@ -880,7 +925,8 @@
       return out;
     },
     /* the staff desk answered (or was cleared): Today's attention, the site-check line and Data health read it */
-    boardChanged: function () { if (sheet || ov) { drawBriefing(); drawSongs(); } drawDataHealth(); drawSongTiles(); if (!staffBoard()) drawLive(); } };
+    boardChanged: function () { if (sheet || ov) { drawBriefing(); drawSongs(); } drawDataHealth(); drawSongTiles(); if (!staffBoard()) drawLive(); },
+    overview: function () { return ov; }, instagram: function () { return ig; } };
   /* hq-pages.js is loaded with defer right after this file: start once both are in */
   document.addEventListener("DOMContentLoaded", start);
 })();

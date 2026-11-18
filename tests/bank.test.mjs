@@ -280,7 +280,7 @@ test("bank refresh: only booked credits; first run 90 days back; the 7-day overl
   for (const never of ["AIBK", "987.65", "Dinner", "INV 0042", "t-pend", "t-refund", "t-out-1"]) assert.ok(!kept.includes(never), never + " must not be on the desk");
   const inc = await S.incomeState(desk, NOW);
   assert.deepEqual([inc.received, inc.pending, inc.unsortedCount], [{ EUR: 100 }, {}, 1]);
-  assert.ok(inc.problems.includes("1 payment in Revolut that nobody has sorted yet"));
+  assert.match(inc.problems.join(" "), /Payments nobody has sorted: 2026-11 · 2026-11-05 · Made-up Friend · EUR 25 \(id /); /* 18 Nov 2026: the month and the payment are named */
   const rev = inc.accounts.find((a) => a.id === "revolut");
   assert.deepEqual([rev.verdict, rev.checked], ["ok", { day: "2026-11-12", by: "HQ", new: 2 }], "the dashboard shows Revolut checked today");
   const sync = await doc(bank, "sync.json");

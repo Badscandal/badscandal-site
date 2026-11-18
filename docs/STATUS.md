@@ -1,14 +1,17 @@
 # HQ status (update on every deploy)
 
-**Last updated:** 18 Nov 2026, by Cursor. L3 is on main (PR #66). L1 and L9 are in flight (not live). Start with `docs/HANDOFF.md`.
-**Tests:** 590 on main, all passing on Node 24 and Node 22. **Connector:** 40 tools (no new tool). The `instagram` tool returns the fan inbox: Steve, Kevin and Forge refresh if they have not since #66.
+**Last updated:** 18 Nov 2026, by Cursor. Main is through PR #70. L1 and L9 are in flight as PR #71 (not live). Start with `docs/HANDOFF.md`.
+**Tests:** 611 on main, all passing on Node 24 and Node 22. **Connector:** 40 tools (no new tool). Options changed in #69, so every bot refreshes the tool list.
 No money amounts, payer names or account numbers in this file: the repo is public.
 
 ## Live (newest first)
 
 | When | PR | What |
 |------|----|------|
-| 18 Nov | #66 | L3 part 1: fan inbox. Song-name questions, where to listen, and repeat fans, from comments already stored. "Needs your reply" is Luke's. No extra Instagram call. HQ never replies. Part 2 (a country, a ready reply) is not built. |
+| 18 Nov | #70 | Phone HQ. Needs you opens first. Money shows what landed in Revolut on its own line. Payable, and money still in Wise or PayPal, are smaller and never added in. |
+| 18 Nov | #69 | Connector bug fixes from the bots' read-only test. Still 40 tools. Ads untouched. Stored amounts untouched: a Wise or PayPal row already counted at Revolut is "moved to Revolut" and is not counted again. Ranking floor is 1,000 views, and a boost shows its spend, engagements, cost per engagement and the numbers from before the ad. `read_guide` matches the live desk. Card digits, account digits and raw ad-account ids are hidden in tool output. |
+| 18 Nov | #67 | L4: per-song profit. Money › Per song, and one line on each Songs card. Royalties by store next to ad spend that names the song, and the release date. Anything without a song says "not linked to a song" and is not added in. No new tool. |
+| 18 Nov | #66 | L3 fan inbox, part 1. Growth & Fans shows comments asking the song's name or where to listen, and people who comment on more than one post. "Needs your reply" is for Luke. HQ never replies. No extra Instagram call. The two accounts Luke named are never shown. |
 | 18 Nov | #65 | Release cards: a sent Spotify pitch is not under Your approvals (it shows on the pitch line). Take it back only next to a real approval, and it names it. Red is only a failure. A step waiting on a date, on Luke, or on a decision he made stays calm and is not a warning. "Sent N days before release" is amber. |
 | 18 Nov | #64 | L12: Profiles. One section for the profile photo and the banner on every official platform: the current image and the day it changed, the size rule (or "Rule not set"), a new image waiting for "Yes, correct", then the owner uploads it by hand. Atlas (the music stores), Laura (YouTube), Steve (Instagram and Facebook), Kevin (TikTok). X has no owner yet. The `profiles` tool. HQ never logs in and never changes a platform. |
 | 18 Nov | #63 | L7: pitch tracker. Each upcoming and recent song shows not pitched, pitched with the day, or missed. Warns from 14 days out (Spotify needs the pitch 7 days before release). Two-week pitch slots on Upcoming. Atlas records the day and editorial playlists with `pitch_log`. HQ never pitches. |
@@ -51,9 +54,10 @@ No money amounts, payer names or account numbers in this file: the repo is publi
 
 ## Next up
 
-- L12, the release-card fix (#65) and L3 part 1 (#66) are on main. In flight, not live: L1 and L9 (expected money, and what each payout route cost). L3 part 2 is not built: a fan's country, and a ready reply he approves. A later Profiles slice (reading an image from a platform) still needs his go, and HQ would still not log in.
+- The phone HQ (#70) and the connector bug fixes (#69) are on main. In flight, not live: PR #71, L1 and L9 (expected money, and what each payout route cost), on that Money screen. L3 part 2 is not built: a fan's country, and a ready reply he approves. HQ would still never send it. A later Profiles slice (reading an image from a platform) still needs his go, and HQ would still not log in.
+- Still for Luke, not in #69: the public stream line ("as of September 2026"), where "Plugin store" sits on the home page, and checking pack genre and language against RouteNote's list.
 - Still needs Luke: B2 YouTube sign-in, the on-hold decisions H1–H4, and L11 (who "Luka" is). B1 and B5 are not needed; B4 Instagram is connected.
-- The rest of Later (L4, L5, L10) waits. Start any of it on his word.
+- The rest of Later (L5, L10) waits. L4 is live. Start any of it on his word.
 
 ## Known gaps / watch
 

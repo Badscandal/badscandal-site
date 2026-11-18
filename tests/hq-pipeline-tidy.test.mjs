@@ -140,7 +140,7 @@ test("Forge's ads wait for the release day (made with Luke, 16 Nov 2026) and for
 });
 
 test("the bots' instructions, the roster and the tool say it the new way", () => {
-  assert.match(INSTRUCTIONS, /The artist name is badscandal, all lowercase, everywhere/);
+  assert.match(INSTRUCTIONS, /The artist name is badscandal, one word, everywhere/); /* 18 Nov 2026: case is not a rule */
   assert.match(INSTRUCTIONS, /Forge and Webmaster: every ad links to the song's own page, badscandal\.com\/<song>, which carries the Meta pixel/);
   assert.match(INSTRUCTIONS, /Verse: the lyrics go on Musixmatch only once the song is out and shows there/);
   assert.doesNotMatch(INSTRUCTIONS, /post the teaser|release_step due/);

@@ -283,6 +283,11 @@ export default async (req, context) => {
   if (!(await verifySession(readCookie(req.headers.get("cookie"), COOKIE), secret))) {
     return json(401, { error: "Not logged in" });
   }
+  /* the open page touches this every couple of minutes so the cookie slides forward another 30 days */
+  if (route === "session" && req.method === "GET") {
+    const fresh = await makeSession(secret);
+    return json(200, { ok: true }, { "Set-Cookie": sessionCookie(fresh) });
+  }
   if (route === "exclude" && req.method === "POST") {
     const origin = req.headers.get("origin");
     if (origin && origin !== url.origin) return json(403, { error: "Wrong origin" });
