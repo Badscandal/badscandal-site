@@ -1,8 +1,8 @@
 # Handoff: where HQ is and what's next (read this first)
 
-**Last updated:** 18 Nov 2026, by Cursor. L3 fan inbox part 1 is on this branch, not merged.
+**Last updated:** 18 Nov 2026, by Cursor. L3 fan inbox part 1 is on this branch, not merged. PR #65 is live on main.
 **main:** every PR up to #65 is live. **This branch:** 590 tests pass on Node 24 and Node 22, none cancelled.
-**Connector:** 40 tools. No new tool. The `instagram` tool now also returns the fan inbox, so Steve, Kevin and Forge should refresh when this is live (Nova too: she has every tool).
+**Connector:** 40 tools. No new tool. The `instagram` tool now also returns the fan inbox, so Steve, Kevin and Forge should refresh when this is live (Nova too: she has every tool). `profiles` (L12) is still the newest tool: every bot refreshes if they have not since #64.
 
 > **The rule (Luke, 17 Nov 2026):** every time anything is pushed to `main` for HQ, the same push updates THIS
 > file (and `docs/STATUS.md`). If Luke's computer crashes or a session ends mid-way, the next agent starts from
@@ -31,7 +31,7 @@ site + Luke's private dashboard /hq + the bots' connector /mcp).
 
 ## Where it stands (18 Nov 2026)
 
-**Where we left off:** L3 fan inbox, part 1, is written on `cursor/l3-fan-inbox-b12c` and is not on main. It uses the Instagram comments HQ already stores. Growth & Fans shows people asking the song's name or where to listen, and people who comment on more than one post. "Needs your reply" is for Luke. HQ never replies, likes, hides or deletes a comment, and it makes no extra Instagram call. Part 2 is not built. Main already has L12 (PR #64) and the release-card warning fix (PR #65, `f1cf96c`).
+**Where we left off:** L3 fan inbox, part 1, is written on `cursor/l3-fan-inbox-b12c` (PR #66) and is not on main. It uses the Instagram comments HQ already stores. Growth & Fans shows people asking the song's name or where to listen, and people who comment on more than one post. "Needs your reply" is for Luke. HQ never replies, likes, hides or deletes a comment, and it makes no extra Instagram call. Part 2 is not built. Main already has L12 (PR #64) and the release-card fix (PR #65, `f1cf96c`): a sent Spotify pitch is not an approval, and red on a release card is only a real failure.
 
 **HQ** (`badscandal.com/hq`, also inside the HQ apps on Luke's iPhone and Mac) has: Today, Songs, Ads, Pages
 (one tile per song page since #59), Growth & Fans (with the Instagram reader), Profiles (since #64), Upcoming (the release pipeline),
@@ -39,7 +39,7 @@ Money (Revolut is the main account), Team, Messages. The bots (Nova, Alfred, Led
 Atlas, Drop, Verse, Webmaster, Forge) work through the connector `/mcp`.
 
 **Done (17–18 Nov):** the bots' roadmap Batch A (A1–A8) and B3; B4 Instagram; L6 song page tiles; L2 ("What engages
-best"); L8, the asset checker; L7, the pitch tracker (18 Nov, PR #63); L12, Profiles (18 Nov, PR #64); the release-card warning fix (18 Nov, PR #65). B1 and B5 were dropped by Luke.
+best"); L8, the asset checker; L7, the pitch tracker (PR #63); L12, Profiles (PR #64); the release-card fix (PR #65). B1 and B5 were dropped by Luke.
 
 **L12, live:** HQ › Profiles lists the profile photo and the banner on every official platform. The current image and the day it changed, the size rule (or "Rule not set"), a new image waiting for "Yes, correct", and the owner who uploads it by hand after that. The `profiles` tool. HQ never logs in and never changes a platform. No Meta or Instagram calls. `/hq` answered 200 and `/mcp` answered 401 right after the merge.
 
