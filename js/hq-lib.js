@@ -752,13 +752,21 @@
       if (st.status === "skipped") return;
       check.push({ key: "step:" + st.key, ok: st.status === "done", text: st.label + " (" + st.owner + "): " + stepState(st, today).text });
     });
-    if (!pre) { var lyr = approvalLines(v).filter(function (x) { return x.key === "lyrics"; })[0]; check.push({ key: "lyrics", ok: !!(lyr && lyr.ok), text: lyr ? lyr.text : "Final lyrics: not approved yet" }); }
+    var lyr = approvalLines(v).filter(function (x) { return x.key === "lyrics"; })[0]; check.push({ key: "lyrics", ok: !!(lyr && lyr.ok), text: lyr ? lyr.text : "Final lyrics: not approved yet" });
     check.push({ key: "adplan", ok: has(pack.adplan), text: has(pack.adplan) ? "Ad plan: written" : "Ad plan: not written yet (your notes on the ads you set up)" });
     var okN = check.filter(function (c) { return c.ok; }).length;
+    var routeNot = { kind: 1, label: 1, split: 1, distributor: 1, deal: 1, wav: 1, artwork: 1, folder: 1, language: 1, explicit: 1, genre: 1, subgenre: 1, version: 1, writers: 1, producers: 1, featuring: 1, primary: 1, copyright: 1 };
+    var fromStep = { video: "video", page: "page", spotifyTrack: "live" };
     var fields = (o.fields || []).filter(function (f) { return f.key !== "prehq" && f.key !== "adplan"; }).map(function (f) {
       var val = f.key === "lyrics" && !has(pack.lyrics) && v.lyricsChars ? v.lyricsChars + " characters" : pack[f.key];
+      var doneOn = "";
+      if (!has(val) && fromStep[f.key]) {
+        var st = ((v && v.steps) || []).filter(function (s) { return s.key === fromStep[f.key] && s.status === "done" && s.link; })[0];
+        if (st) { val = st.link; doneOn = st.doneOn || ""; }
+      }
       var miss = ((v && v.missing) || []).filter(function (m) { return m.key === f.key; })[0];
-      return { key: f.key, label: f.short || f.label, group: f.group, value: has(val) ? String(val) : "", state: has(val) ? "filled" : pre ? "not needed" : miss ? (miss.required ? "missing" : "needed later") : "optional" };
+      var state = has(val) ? "filled" : pre && routeNot[f.key] ? "not needed" : miss ? (miss.required ? "missing" : "needed later") : "optional";
+      return { key: f.key, label: f.short || f.label, group: f.group, value: has(val) ? String(val) : "", state: state, ...(doneOn ? { done_on: doneOn } : {}) };
     });
     var results = [];
     if (v && v.released && o.song && o.song.week != null) results.push(fmt(o.song.week) + " Spotify streams in the last 7 days" + (o.song.prevWeek != null ? " (" + fmt(o.song.prevWeek) + " the 7 before)" : ""));
