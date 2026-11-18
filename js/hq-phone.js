@@ -84,13 +84,30 @@
         (w.line.length > 160 ? '<button class="linkbtn" type="button" data-expand>More</button>' : "") +
         (w.href ? '<a class="linkbtn" href="' + esc(w.href) + '">Open</a>' : "") + "</article>";
     });
-    if (!cards.length && !watchers.length) h += '<p class="dnone">Nothing is waiting on you.</p>';
+    var health = L.accountHealthHome ? L.accountHealthHome(board && board.accountHealth) : { dots: [], needs: [] };
+    (health.needs || []).forEach(function (n) {
+      h += '<article class="dcard" data-health="' + esc(n.id) + '"><p class="dfrom">' + esc(n.title) + '</p><p class="dline' + (n.line.length > 160 ? " clamp" : "") + '">' + esc(n.line) + "</p>" +
+        (n.line.length > 160 ? '<button class="linkbtn" type="button" data-expand>More</button>' : "") +
+        (n.next ? '<p class="drec">' + esc(n.next) + "</p>" : "") + '<a class="linkbtn" href="' + esc(n.href || "#growth") + '">Open</a></article>';
+    });
+    if (!cards.length && !watchers.length && !(health.needs || []).length) h += '<p class="dnone">Nothing is waiting on you.</p>';
+    h += healthDots(health);
     h += stripHtml(sheet, ov);
     h += mondayHtml(board);
     el.innerHTML = h;
     var ads = $("adsGauge");
     if (ads) ads.innerHTML = gaugeHtml(L.spendGauge(sheet && sheet.money && sheet.money.cap));
     cards.forEach(function (c) { if (c.lyrics && c.releaseId) loadLyrics(c); });
+  }
+
+  function healthDots(health) {
+    var dots = (health && health.dots) || [];
+    if (!dots.length && !(health && health.connection && health.connection.state === "watch")) return "";
+    var row = dots.map(function (d) {
+      return '<a class="adot ' + esc(d.state) + '" href="#growth"><i></i><span>' + esc(d.label) + "</span></a>";
+    }).join("");
+    var note = health.connection && health.connection.state === "watch" ? '<p class="dnone">' + esc(health.connection.line) + "</p>" : "";
+    return '<div class="adots" role="list">' + row + "</div>" + note;
   }
 
   function stripHtml(sheet, ov) {
