@@ -13,9 +13,9 @@ test("my_day says how many tools the desk has and the list's version; a new opti
   const md = await call(memoryDesk(), "my_day", { bot: "Ledger" });
   assert.equal(md.connector.tools, TOOLS.length, "the shared connector lists every tool");
   assert.match(md.connector.version, /^[0-9a-f]{8}$/);
-  /* 18 Nov 2026: the reconnect sentence is said once, on reconnect, not also on connector.status and connector.check */
-  assert.match(md.reconnect, /reconnect needed/);
-  assert.equal(JSON.stringify(md).split("reconnect needed").length - 1, 1);
+  /* 18 Nov 2026 night test: a version-only difference is not a reconnect, and the sentence is absent when reconnect_needed is false */
+  assert.equal(md.connector.reconnect_needed, false);
+  assert.equal(JSON.stringify(md).split("reconnect needed").length - 1, 0);
   const v1 = toolsVersion(TOOLS);
   const more = TOOLS.map((t) => (t.name === "fix_payment" ? { ...t, inputSchema: { ...t.inputSchema, properties: { ...t.inputSchema.properties, made_up: { type: "string" } } } } : t));
   assert.notEqual(toolsVersion(more), v1, "an added option is a new version");

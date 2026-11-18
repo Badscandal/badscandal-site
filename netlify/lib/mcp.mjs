@@ -11,9 +11,17 @@
    Pure: handle() takes the parsed pieces and returns { status, body | null }, tested in
    tests/mcp.test.mjs. Auth happens BEFORE this (netlify/functions/staff.mjs). */
 
+import { toolsVersion } from "./staff-tools.mjs";
+
 export const LEGACY = ["2025-11-25", "2025-06-18", "2025-03-26", "2024-11-05"];
 export const MODERN = "2026-07-28";
 export const SERVER = { name: "badscandal-hq", title: "badscandal HQ", version: "1.0.0" };
+/* protocol version stays 1.0.0. The tool list's fingerprint is extra, so a bot sees it on connect
+   (18 Nov 2026 night test). A version-only change is not a reconnect. */
+function serverInfo(deps) {
+  const tools = (deps && deps.tools) || [];
+  return { ...SERVER, tools: tools.length, toolsVersion: (deps && deps.toolsVersion) || toolsVersion(tools) };
+}
 const META_VERSION = "io.modelcontextprotocol/protocolVersion";
 
 const err = (id, code, message, data) => ({ jsonrpc: "2.0", id: id === undefined ? null : id, error: data === undefined ? { code, message } : { code, message, data } });
@@ -62,9 +70,9 @@ export async function handle(msg, headers, deps) {
     const hm = headerText(headers["mcp-method"]);
     if (hm && hm !== method) return { status: 400, body: err(id, -32020, "The Mcp-Method header and the body disagree") };
     const done = (r) => ({ status: 200, body: ok(id, { resultType: "complete", ...r }) });
-    const info = { [`io.modelcontextprotocol/serverInfo`]: SERVER };
+    const info = { [`io.modelcontextprotocol/serverInfo`]: serverInfo(deps) };
     if (method === "server/discover") return done({ supportedVersions: [MODERN], capabilities: { tools: {} }, instructions: deps.instructions, ttlMs: 300000, cacheScope: "private", _meta: info });
-    if (method === "tools/list") return done({ tools: toolList(deps.tools), ttlMs: 300000, cacheScope: "private" });
+    if (method === "tools/list") return done({ tools: toolList(deps.tools), toolsVersion: serverInfo(deps).toolsVersion, ttlMs: 300000, cacheScope: "private" });
     if (method === "tools/call") {
       const hn = headerText(headers["mcp-name"]);
       if (hn && hn !== params.name) return { status: 400, body: err(id, -32020, "The Mcp-Name header and the body disagree") };
@@ -85,10 +93,10 @@ export async function handle(msg, headers, deps) {
   if (method !== "initialize" && hv && !LEGACY.includes(hv) && hv !== MODERN) return { status: 400, body: err(id, -32600, "Unsupported MCP-Protocol-Version: " + hv) };
   if (method === "initialize") {
     const asked = String(params.protocolVersion || "");
-    return { status: 200, body: ok(id, { protocolVersion: LEGACY.includes(asked) ? asked : LEGACY[0], capabilities: { tools: { listChanged: false } }, serverInfo: SERVER, instructions: deps.instructions }) };
+    return { status: 200, body: ok(id, { protocolVersion: LEGACY.includes(asked) ? asked : LEGACY[0], capabilities: { tools: { listChanged: false } }, serverInfo: serverInfo(deps), instructions: deps.instructions }) };
   }
   if (method === "ping") return { status: 200, body: ok(id, {}) };
-  if (method === "tools/list") return { status: 200, body: ok(id, { tools: toolList(deps.tools) }) };
+  if (method === "tools/list") return { status: 200, body: ok(id, { tools: toolList(deps.tools), toolsVersion: serverInfo(deps).toolsVersion }) };
   if (method === "tools/call") {
     const r = await callTool(params, deps);
     return { status: 200, body: r.error ? err(id, r.error.code, r.error.message) : ok(id, r.result) };

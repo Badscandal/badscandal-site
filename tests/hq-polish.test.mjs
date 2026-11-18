@@ -20,7 +20,7 @@ test("my_day names the live tool count, and says reconnect needed when the bot's
   assert.equal(day.connector.tools, TOOLS.length);
   assert.equal(day.connector.reconnect_needed, false);
   assert.match(day.reconnect, new RegExp("The desk has " + TOOLS.length + " tools"));
-  assert.match(day.reconnect, /reconnect needed/);
+  assert.equal(day.reconnect.includes("reconnect needed"), false, "a matching count is not a reconnect (18 Nov 2026 night test)");
   const old = await call(d, "my_day", { bot: "Steve", tools_seen: 12, list_version: "00000000" });
   assert.equal(old.connector.reconnect_needed, true);
   assert.match(old.reconnect, /^reconnect needed:/);

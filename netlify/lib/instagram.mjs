@@ -372,7 +372,8 @@ export function fanInbox(comments, now) {
     const kind = askKind(c.text);
     /* an unanswered question stays until one of our accounts replies (18 Nov 2026) */
     if (!kind || (c.answered && !recentEnough(c, now))) continue;
-    questions.push({ id: c.id, at: c.at, user: redactHandles(c.user), text: redactHandles(c.text), post: c.post || "", postCaption: redactHandles(c.postCaption || ""), link: c.link || "", kind, needsReply: !c.answered });
+    questions.push({ id: c.id, at: c.at, user: redactHandles(c.user), text: redactHandles(c.text), post: c.post || "", postCaption: redactHandles(c.postCaption || ""), link: c.link || "", kind, needsReply: !c.answered,
+      ...(c.answered ? { repliedBy: (c.repliedBy || []).map((u) => redactHandles(u)), repliedAt: c.repliedAt || "" } : {}) });
   }
   questions.sort((a, b) => (a.needsReply === b.needsReply ? 0 : a.needsReply ? -1 : 1) || (a.at < b.at ? 1 : a.at > b.at ? -1 : 0));
   const by = new Map();

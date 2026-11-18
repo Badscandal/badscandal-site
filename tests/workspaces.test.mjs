@@ -35,7 +35,7 @@ test("the switch, the farm note and Add genre are on the page", () => {
   assert.match(read("js/hq-workspaces.js"), /not set up/);
   assert.match(read("js/hq-workspaces.js"), /class="dhead"/);
   assert.match(read("js/hq-workspaces.js"), /data-wschoice/);
-  assert.equal(TOOLS.length, 44, "no new tool here: licence is a release_step value; the four profile image tools are separate");
+  assert.equal(TOOLS.length, 47, "account_health, needs_you, song_pl (18 Nov 2026 night test) + profile_jobs, profile_master, profile_rework, profile_uploaded (PR #87)");
   const step = tool("release_step");
   assert.ok(step.inputSchema.properties.step.enum.includes("licence"));
   assert.ok(step.inputSchema.properties.step.enum.includes("upload"));

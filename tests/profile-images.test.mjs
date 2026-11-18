@@ -157,7 +157,7 @@ test("a job open more than a day asks Luke once", async () => {
 });
 
 test("the new tools are on the connector for the owners, and the page buttons set their own colours", () => {
-  assert.equal(TOOLS.length, 44);
+  assert.equal(TOOLS.length, 47); /* profile image tools plus account_health, needs_you, song_pl (18 Nov 2026 night test) */
   for (const name of ["profile_jobs", "profile_master", "profile_rework", "profile_uploaded"]) {
     assert.ok(TOOLS.some((t) => t.name === name), name);
     assert.ok(toolsFor("Atlas", R).some((t) => t.name === name), name);
