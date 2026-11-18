@@ -1,8 +1,8 @@
 # Handoff: where HQ is and what's next (read this first)
 
-**Last updated:** 18 Nov 2026, by Cursor, after PR #64 was merged.
-**main:** every PR up to #64 is live. **Tests:** 582 pass on Node 24 and Node 22, none cancelled.
-**Connector:** 40 tools. `profiles` is new (L12), so every bot must refresh the tool list. Atlas, Laura, Steve, Kevin and Nova are the ones who use it.
+**Last updated:** 18 Nov 2026, by Cursor, after PR #65 was merged.
+**main:** every PR up to #65 is live. **Tests:** 584 pass on Node 24 and Node 22, none cancelled.
+**Connector:** 40 tools. No new tool in #65. `profiles` (L12) is still the newest tool: every bot refreshes if they have not since #64.
 
 > **The rule (Luke, 17 Nov 2026):** every time anything is pushed to `main` for HQ, the same push updates THIS
 > file (and `docs/STATUS.md`). If Luke's computer crashes or a session ends mid-way, the next agent starts from
@@ -31,7 +31,7 @@ site + Luke's private dashboard /hq + the bots' connector /mcp).
 
 ## Where it stands (18 Nov 2026)
 
-**Where we left off:** L12 (Profiles) is live on main (PR #64, commit `a6f67a7`). A small fix is in flight on `cursor/pitch-take-back-feb7` (PR #65): a sent pitch is not an approval, and red on a release card is only a real failure. Not on main yet.
+**Where we left off:** PR #65 is live on main (commit `f1cf96c`). A sent Spotify pitch is not an approval, and red on a release card is only a real failure. Nothing else is in flight. L12 (Profiles) is live (PR #64).
 
 **HQ** (`badscandal.com/hq`, also inside the HQ apps on Luke's iPhone and Mac) has: Today, Songs, Ads, Pages
 (one tile per song page since #59), Growth & Fans (with the Instagram reader), Profiles (since #64), Upcoming (the release pipeline),
@@ -39,7 +39,7 @@ Money (Revolut is the main account), Team, Messages. The bots (Nova, Alfred, Led
 Atlas, Drop, Verse, Webmaster, Forge) work through the connector `/mcp`.
 
 **Done (17–18 Nov):** the bots' roadmap Batch A (A1–A8) and B3; B4 Instagram; L6 song page tiles; L2 ("What engages
-best"); L8, the asset checker; L7, the pitch tracker (18 Nov, PR #63); L12, Profiles (18 Nov, PR #64). B1 and B5 were dropped by Luke.
+best"); L8, the asset checker; L7, the pitch tracker (PR #63); L12, Profiles (PR #64); the release-card fix (PR #65). B1 and B5 were dropped by Luke.
 
 **L12, live:** HQ › Profiles lists the profile photo and the banner on every official platform. The current image and the day it changed, the size rule (or "Rule not set"), a new image waiting for "Yes, correct", and the owner who uploads it by hand after that. The `profiles` tool. HQ never logs in and never changes a platform. No Meta or Instagram calls. `/hq` answered 200 and `/mcp` answered 401 right after the merge.
 
@@ -54,7 +54,7 @@ artist growth bot that all we will need is content and $".
 
 ## In flight (branches not merged)
 
-- **`cursor/pitch-take-back-feb7` (PR #65, waiting for Nova to merge):** updated onto main after L12. A sent Spotify pitch is not under Your approvals, and Take it back only sits next to a real approval and names it. Red on a release card is only a failure: a step waiting on a date, on Luke, or on a decision he made stays calm, and "Sent N days before release" is amber. Tests 584 on Node 24 and 22.
+- Nothing in flight. PR #65 shipped on main (`f1cf96c`).
 
 ## Waiting on someone
 
