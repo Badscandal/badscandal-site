@@ -43,7 +43,7 @@ No money amounts, payer names or account numbers in this file: the repo is publi
 
 ## Next up
 
-- L7 pitch tracker is in a PR (not live): pitch status on Upcoming and Today, a warning from 14 days out, the two-week slots, and `pitch_log` for Atlas. HQ never pitches. The branch's tests are 574 on Node 24 and 22.
+- L7 pitch tracker is in PR #63 (not live): pitch status on Upcoming and Today, a warning from 14 days out, the two-week slots, and `pitch_log` for Atlas. HQ never pitches. The branch's tests are 574 on Node 24 and 22.
 - L8 is live. After L7, only on Luke's word: L12 Profiles (an idea; needs his go), L3 fan inbox part 1.
 - Still needs Luke: B2 YouTube sign-in, the on-hold decisions H1–H4, and L11 (who "Luka" is). B1 and B5 are not needed; B4 Instagram is connected.
 - The rest of Later (L1, L4, L5, L9, L10) waits. Start any of it on his word.

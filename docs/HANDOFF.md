@@ -56,7 +56,7 @@ artist growth bot that all we will need is content and $".
 
 ## In flight (branches not merged)
 
-- **`cursor/pitch-tracker-feb7` (L7, preview PR, waiting for Luke's "deploy"):** each upcoming and recent song shows not pitched, pitched with the day, or missed. The deadline is 7 days before release; a warning shows from 14 days out, while there is still time. The two-week pitch slots stay on Upcoming. Atlas records a pitch and an editorial playlist with `pitch_log`. HQ never pitches. Tests 574 on Node 24 and 22. On merge: the connector has 39 tools, so every bot refreshes the tool list. Atlas is the one who uses `pitch_log`.
+- **`cursor/pitch-tracker-feb7` (L7, PR #63, waiting for Luke's "deploy"):** each upcoming and recent song shows not pitched, pitched with the day, or missed. The deadline is 7 days before release; a warning shows from 14 days out, while there is still time. The two-week pitch slots stay on Upcoming. Atlas records a pitch and an editorial playlist with `pitch_log`. HQ never pitches. Tests 574 on Node 24 and 22. On merge: the connector has 39 tools, so every bot refreshes the tool list. Atlas is the one who uses `pitch_log`.
 
 ## Waiting on someone
 
