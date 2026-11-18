@@ -705,7 +705,37 @@
   function proposalConfirm(m, option) {
     var p = (m && m.proposal) || {};
     if (String(option).toLowerCase() !== "yes, correct") return "Answer “" + option + "”? Nothing changes, and " + m.from + " will see it.";
+    if (p.action === "profile") return "Say yes to this " + (p.title || "image") + "? " + (p.owner || "Luke") + " uploads it by hand after that. HQ does not change the platform.";
     return (p.action === "add" ? "Add " + p.title + " to the releases" : "Make these changes to " + p.title) + (p.send ? " and send it to the team" : "") + ", as " + m.from + " proposed?";
+  }
+  /* L12 (18 Nov 2026): the Profiles section. view = board.profiles from profilesView. */
+  function profileBlocks(view) {
+    var note = (view && view.note) || "HQ never logs in and never changes a platform.";
+    var platforms = ((view && view.platforms) || []).map(function (p) {
+      var owner = p.owner || "";
+      return {
+        id: p.id || "", platform: p.platform || "",
+        ownerLine: owner ? owner + " uploads this" : "No owner yet. Luke uploads this himself.",
+        slots: (p.slots || []).map(function (s) {
+          var cur = s.current && s.current.link ? s.current : null;
+          var wait = s.waiting && s.waiting.link ? s.waiting : null;
+          var ok = s.approved && s.approved.link ? s.approved : null;
+          return {
+            id: s.id || "", kind: s.kind || "", rule: s.rule || "Rule not set",
+            currentLine: cur ? "Changed " + day(cur.changed) + (cur.by ? " · " + cur.by : "") : "Not recorded yet",
+            currentLink: cur ? cur.link : "",
+            waitingLine: wait ? "New image waiting for your “Yes, correct”." : "",
+            waitingLink: wait ? wait.link : "",
+            waitingHref: wait && wait.id ? "#messages/" + wait.id : "",
+            approvedLine: ok ? "You said yes. " + (owner ? owner + " uploads it by hand." : "Luke uploads it himself.") + " HQ does not change the platform." : "",
+            approvedLink: ok ? ok.link : ""
+          };
+        })
+      };
+    });
+    var waiting = 0;
+    platforms.forEach(function (p) { p.slots.forEach(function (s) { if (s.waitingLine) waiting++; }); });
+    return { note: note, waiting: waiting, platforms: platforms };
   }
   function payLine(p) { return p ? day(p.date) + " · " + money(p.amount, p.currency) + " · " + p.status : "none logged yet"; }
   /* a source paid into several accounts (round 2, Luke: "hq should show the second routenote account"):
@@ -1627,6 +1657,7 @@
      beats one inside, and nothing typed shows what waits on Luke first. */
   var CMD_TABS = [["today", "Today", "home briefing start"], ["songs", "Songs", "spotify streams tracks"], ["ads", "Ads", "meta cap spend cost tap"],
     ["pages", "Pages", "visits page counter people"], ["growth", "Growth & Fans", "followers instagram tiktok fans"], ["growth/fans", "Fans", "fans forming comments dms"],
+    ["profiles", "Profiles", "profile photo banner header cover"],
     ["releases", "Upcoming", "releases pipeline new song"], ["money", "Money", "income revolut payments royalties"], ["team", "Team", "bots duties staff"],
     ["messages", "Messages", "inbox questions board"]];
   function cmdNorm(v) { var s = String(v == null ? "" : v); try { s = s.normalize("NFD").replace(/[\u0300-\u036f]/g, ""); } catch (e) {} return s.toLowerCase().replace(/\s+/g, " ").trim(); }
@@ -1680,7 +1711,7 @@
     snapshot: snapshot, changesSince: changesSince, tiles: tiles, summaryText: summaryText, shortStep: shortStep, day: day,
     slug: slug, workerLabel: workerLabel, sortWorkers: sortWorkers, workerView: workerView, dutyWhen: dutyWhen, workerCounts: workerCounts, seenLine: seenLine, connectorLine: connectorLine,
     novaMessage: novaMessage, liveFeed: liveFeed, spWhen: spWhen, waitLabel: waitLabel, needWords: needWords, reportParts: reportParts, siteCheckLine: siteCheckLine, composeNames: composeNames,
-    threadRoot: threadRoot, answerTarget: answerTarget, questionLines: questionLines, questionsLeft: questionsLeft, stepButton: stepButton, formKey: formKey, storeLine: storeLine, storeHistory: storeHistory, capRateLine: capRateLine, capMissingLine: capMissingLine, dutyGapsLine: dutyGapsLine, incomeTotals: incomeTotals, approvalLines: approvalLines, approvalUndo: approvalUndo, warnTone: warnTone, warnGroups: warnGroups, resubmitAsk: resubmitAsk, relStatus: relStatus, relProgress: relProgress, stepGroups: stepGroups, upcomingAsks: upcomingAsks, staffAttention: staffAttention, staffHealth: staffHealth, curList: curList, cadenceWord: cadenceWord, accountLine: accountLine, sourceState: sourceState, payLine: payLine, accountsLine: accountsLine, receivedMonths: receivedMonths, releasePage: releasePage, monthRows: monthRows, mainSources: mainSources, sourceMonthLine: sourceMonthLine, proposalRows: proposalRows, proposalConfirm: proposalConfirm,
+    threadRoot: threadRoot, answerTarget: answerTarget, questionLines: questionLines, questionsLeft: questionsLeft, stepButton: stepButton, formKey: formKey, storeLine: storeLine, storeHistory: storeHistory, capRateLine: capRateLine, capMissingLine: capMissingLine, dutyGapsLine: dutyGapsLine, incomeTotals: incomeTotals, approvalLines: approvalLines, approvalUndo: approvalUndo, warnTone: warnTone, warnGroups: warnGroups, resubmitAsk: resubmitAsk, relStatus: relStatus, relProgress: relProgress, stepGroups: stepGroups, upcomingAsks: upcomingAsks, staffAttention: staffAttention, staffHealth: staffHealth, curList: curList, cadenceWord: cadenceWord, accountLine: accountLine, sourceState: sourceState, payLine: payLine, accountsLine: accountsLine, receivedMonths: receivedMonths, releasePage: releasePage, monthRows: monthRows, mainSources: mainSources, sourceMonthLine: sourceMonthLine, proposalRows: proposalRows, proposalConfirm: proposalConfirm, profileBlocks: profileBlocks,
     incomeEmpty: incomeEmpty, incomeProblems: incomeProblems,
     /* replies that visibly land + the release pipeline (11 Nov 2026) */
     spStampOf: spStampOf, seenWords: seenWords, sentLine: sentLine, answeredList: answeredList, CLAUDE_ROUNDS: CLAUDE_ROUNDS,

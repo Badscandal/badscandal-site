@@ -62,18 +62,19 @@ and Claude's assessment the same morning. Luke said "perfect" to the order below
 | L9 | Exchange-rate cost per payout route | Ledger | todo |
 | L10 | Auto end screens and pinned comments linking badscandal.com/<song> | Laura | todo (needs YouTube write access) |
 | L11 | A split ledger for Luke's and "Luka's" shares | Ledger | needs Luke (who is "Luka"? Lilian's 50%?) |
+| L12 | **Profiles**: one place in HQ for the profile photo, and the banner, header, cover or wallpaper, on every official badscandal platform that has one | Luke | live (PR #64): HQ › Profiles. Current image and the day it changed; the size rule (L8 kinds, plus published profile and banner sizes; Instagram, TikTok and Deezer say "Rule not set"); a new image waits for "Yes, correct"; then the owner uploads it by hand. Atlas (DSPs), Laura (YouTube), Steve (Instagram and Facebook), Kevin (TikTok). X has no owner. The `profiles` tool. HQ never logs in and never changes a platform. No Meta or Instagram calls. |
 
-## Ideas (need Luke's go before any build)
+## Ideas
 
-Luke, 17 Nov 2026, night. Not part of the ranked list above. Nothing here is built, and nothing starts until he says go.
+Luke, 17 Nov 2026, night. L12's first version is live (PR #64, in Later above). The login notes under it stay, for a later version that might read an image. Nothing in that version, or this one, logs in to Meta.
 
-| # | What | Asked by | Status |
-|---|------|----------|--------|
-| L12 | **Profiles**: one place in HQ for the profile photo, and the banner, header, cover or wallpaper, on every official badscandal platform that has one | Luke | idea, needs Luke's go |
+**First version (live).** One Profiles section. It records what is already live and asks Luke before a new image. After "Yes, correct" the owner bot uploads it by hand and then records the new link and the day. HQ does not log in and does not change any platform.
 
-Platforms: Facebook Page, Instagram, YouTube, Spotify, Apple Music, TikTok, X, SoundCloud, Deezer, Amazon Music, and any other that has one.
+Platforms: Facebook Page, Instagram, YouTube, Spotify, Apple Music, TikTok, X, SoundCloud, Deezer, Amazon Music.
 
-For each platform: the current image and the date it changed; the size rule (reuse the L8 `preflight` asset kinds, and add a kind when that platform isn't covered); a new image waiting for Luke's "Yes, correct"; the bot who uploads it after that yes. Atlas uploads for the DSPs (Spotify, Apple Music, SoundCloud, Deezer, Amazon Music). Laura uploads for YouTube. Steve uploads for Instagram and Facebook. Kevin uploads for TikTok. X has no owner yet.
+Size rules that are set come from the platform's own help: Spotify avatar and header, YouTube profile photo and banner, Apple Music artist image, X profile photo and header, SoundCloud profile image and header, Facebook Page profile photo and cover, Amazon Music profile image and background. Instagram, TikTok and Deezer say "Rule not set" (TikTok's only published minimum is 20 px, which is not a useful rule; Instagram and Deezer publish no size). No other size was invented.
+
+Not in this version: reading or changing an image through any platform's API. The notes below are only what a later version could read, and what still needs Luke's own login. No bot logs in to Meta. No password goes in the repo.
 
 What can be read, and what needs Luke's own login (checked 17 Nov 2026 against the official pages). No bot logs in to Meta. No password goes in the repo.
 
@@ -85,7 +86,9 @@ What can be read, and what needs Luke's own login (checked 17 Nov 2026 against t
 - **SoundCloud.** Their help says the profile image and the header are uploaded on the website.
 - **Deezer.** The profile photo is changed in Deezer for Creators.
 - **Amazon Music.** The profile image and the background are changed in Amazon Music for Artists.
-- **TikTok and X.** Treat the change as Luke's login until that platform's current official docs are checked.
+- **TikTok and X.** TikTok's help only says a photo must be at least 20 x 20, so the first version says "Rule not set" and Kevin uploads it by hand after yes. X's profile photo and header have published sizes (in the checker). X has no owner yet, so Luke uploads those himself.
+
+The bullets above are about what an API can do. The first version does not call any of them. The owners in the L12 row upload by hand after Luke says yes.
 
 ## Not HQ's
 
