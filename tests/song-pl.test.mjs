@@ -107,19 +107,23 @@ test("payments count for a song only when they name it, and are not added on top
   assert.match(v.unlinked.note, /Wise or PayPal/);
 });
 
-test("mixed currencies estimate at each month's rate, and a missing rate is not invented", () => {
+test("mixed currencies stay separate unless a rate was recorded, and a month average is not used", () => {
   const base = {
     royalties: [{ month: "2026-11", song: "Slow Burn", store: "Spotify", amount: 10, currency: "EUR" }],
     spend: [{ date: "2026-11-08", platform: "Meta", spend: 12, currency: "USD", song: "Slow Burn" }],
     releases: [{ song: "Slow Burn", date: "2026-12-04" }],
   };
+  /* 18 Nov 2026: the month's average rate is not a rate for this song. No combined figure. */
   const got = L.songPLView(songProfit({ ...base, fx: FX }));
-  assert.match(got.songs[0].result, /About/);
-  assert.match(got.songs[0].result, /estimate at each month's average rate/);
-  assert.equal(songProfit({ ...base, fx: FX }).songs[0].estimate.eur, 0, "12 USD at 1.20 is 10 EUR");
+  assert.match(got.songs[0].result, /No estimate: a rate is missing/);
+  assert.doesNotMatch(got.songs[0].result, /About/);
+  assert.equal(songProfit({ ...base, fx: FX }).songs[0].estimate, null);
+  const rated = songProfit({ ...base, spend: [{ date: "2026-11-08", platform: "Meta", spend: 12, currency: "USD", song: "Slow Burn", rate: { value: 1.2, source: "Revolut exchange row" } }] });
+  assert.equal(rated.songs[0].estimate.eur, 0);
+  assert.equal(rated.songs[0].estimate.source, "Revolut exchange row");
   const missing = L.songPLView(songProfit({ ...base, fx: {} }));
   assert.match(missing.songs[0].result, /No estimate: a rate is missing/);
-  assert.equal(songProfit({ ...base, fx: {} }).songs[0].estimate.eur, null);
+  assert.equal(songProfit({ ...base, fx: {} }).songs[0].estimate, null);
 });
 
 test("an explicit zero of spend is that song's spend; a song with no money still shows its date", () => {

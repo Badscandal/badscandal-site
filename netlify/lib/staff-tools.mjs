@@ -281,9 +281,9 @@ export const TOOLS = [
     inputSchema: obj({ bot: BOT, month: str("YYYY-MM (default: this month).") }, ["bot"]) },
   /* 16 Nov 2026 (Ledger): every payment, with its id */
   { name: "payments", title: "Every payment of a month, with its id", readOnly: true,
-    description: "LEDGER and SHEET (Nova too): every payment on the desk for ONE month, newest first, each with its id (for sort_payment and fix_payment), date, payer, amount, currency, status, category, source, account and who added it, HQ's Revolut rows included. Filter with account (\"Revolut\"), source (its name or id: payments tied to it or whose payer matches it), payer (words in the name) and status. limit 1 to 200 (100); total says how many there are, and more says what was left out.",
+    description: "LEDGER and SHEET (Nova too): every payment on the desk for ONE month, newest first, each with its id (for sort_payment and fix_payment), date, payer, amount, currency, status, category, source, account and who added it, HQ's Revolut rows included. received is the counted total (Revolut only, the same figure as income_status and month_check). counted is a read-only export of those rows (landing date, account, statement, payable, received, evidence, split, ledger month and landing month). changed_since returns only rows touched since that time. Filter with account (\"Revolut\"), source (its name or id: payments tied to it or whose payer matches it), payer (words in the name) and status. status received means counted in Revolut. limit 1 to 200 (100); total says how many there are, and more says what was left out. HQ never writes to the Google Sheet.",
     inputSchema: obj({ bot: BOT, month: str("YYYY-MM (default: this month)."), account: str("Optional: Revolut, Wise, PayPal..."), source: str("Optional: a source's name or id."),
-      payer: str("Optional: words in the payer's name."), status: str("Optional: received | pending | payable | statement only | transfer | unsorted"), limit: { type: "integer", description: "1 to 200 (default 100)." } }, ["bot"]) },
+      payer: str("Optional: words in the payer's name."), status: str("Optional: received | pending | payable | statement only | transfer | unsorted | settled"), changed_since: str("Optional. A time, for example 2026-11-01T00:00:00Z. Only payments touched since then."), limit: { type: "integer", description: "1 to 200 (default 100)." } }, ["bot"]) },
   { name: "income_status", title: "Income so far and what is missing", readOnly: true,
     description: "For a month or an account, or every payment with its id, use payments. This month's income as logged (received and pending, per currency, never mixed), the newest payments, every known source of income with when it last paid, which accounts were checked today, and the list of problems (not checked, overdue, blocked, a payer nobody has named). Also expected_money (each statement, its due day, and short, late or missing) and payout_routes (what the exchange and the fees cost, from amounts already recorded; not enough data when a rate would have to be guessed). Do not guess a rate or an amount. Use it before the daily check and before reporting to Luke.",
     inputSchema: obj({ bot: BOT }, ["bot"]) },
@@ -783,24 +783,27 @@ export async function callTool(tool, args, ctx) {
         waiting_in_wise_or_paypal: c.waiting.map((e) => line(e) + " · when it reaches Revolut, link it"),
         own_transfers_to_check: c.ownTransfers.map((e) => line(e) + " · " + S.transferWords(e)),
         ...(c.statementLater && c.statementLater.length ? { statement_landed_later: c.statementLater.map((e) => `statement ${(e.statement || e.date || "").slice(0, 7)}, landed ${e.date}: counts in ${(e.date || "").slice(0, 7)}`) } : {}),
-        ...(c.suggestions && c.suggestions.length ? { possible_revolut_matches: c.suggestions.map((s) => { const w = c.waiting.find((x) => x.id === s.id) || {}; return `${S.hidePrivate(w.payer)} ${w.currency} ${w.amount} may match ${s.matches.map((m) => `${m.date} ${m.currency} ${m.amount} (id ${m.id})`).join(" or ")}`; }) } : {}),
+        ...(c.suggestions && c.suggestions.length ? { possible_revolut_matches: c.suggestions.map((s) => { const rows = (s.ids || [s.id]).map((id) => c.waiting.find((x) => x.id === id)).filter(Boolean); const who = rows.map((w) => `${S.hidePrivate(w.payer)} ${w.currency} ${w.amount} (id ${w.id})`).join(" + "); return `${who} may match ${s.matches.map((m) => `${m.date} ${m.currency} ${m.amount} (id ${m.id})`).join(" or ")}. ${s.confirm || "Confirm with one link_transfer call. Nothing is linked until you do."}`; }) } : {}),
         verdict: c.ready ? `${label} is right: received ${money(c.received)} (Revolut).` : `${label} is not right yet: ${c.toSort.length} to sort, ${c.waiting.length} waiting in Wise or PayPal.`,
         /* A7 (17 Nov 2026): a closed month says so, with every change since (old -> new) */
         ...(await S.monthCloseView(store, now, c.month).then((v) => v ? { closed: { line: S.closeLine(v), evidence: v.evidence, changes_since: S.closeChangeLines(v.changes) } }
           : c.ready && c.month < today.slice(0, 7) ? { close_it: "It is ready: close it with close_month (add evidence links: the statements or the sheet)." } : {})) };
     }
     case "payments": {
-      const r = await S.listPayments(store, now, { month: args.month, account: args.account, source: args.source, payer: args.payer, status: args.status, limit: args.limit });
-      return { month: r.month, total: r.total, payments: r.payments.map((e) => { const o = S.payOut(e, r.month); return { id: e.id, statement_month: o.statement_month, landed_month: o.landed_month, counts_in: o.counts_in, date: o.date, payer: o.payer, amount: e.amount, currency: e.currency, status: o.status,
-        category: e.category, source: e.source || "", account: e.account, added_by: e.by, counted: o.counted, ...(e.song ? { song: e.song } : {}), ...(e.store ? { store: e.store } : {}), ...(o.counts_note ? { counts_note: o.counts_note } : {}), ...(o.note ? { note: o.note } : {}), ...(o.paid_by ? { paid_by: o.paid_by } : {}), ...(o.moved_to ? { moved_to: o.moved_to } : {}) }; }),
+      const r = await S.listPayments(store, now, { month: args.month, account: args.account, source: args.source, payer: args.payer, status: args.status, limit: args.limit, changed_since: args.changed_since });
+      return { month: r.month, total: r.total, received: cur(r.received), received_note: r.received_note, writes_to_sheet: false,
+        counted: r.counted, payments: r.payments.map((e) => { const o = S.payOut(e, r.month); return { id: e.id, statement_month: o.statement_month, landed_month: o.landed_month, counts_in: o.counts_in, date: o.date, payer: o.payer, amount: e.amount, currency: e.currency, status: o.status,
+        category: e.category, source: e.source || "", account: o.account, added_by: e.by, counted: o.counted, ...(e.song ? { song: e.song } : {}), ...(e.store ? { store: e.store } : {}), ...(o.counts_note ? { counts_note: o.counts_note } : {}), ...(o.note ? { note: o.note } : {}), ...(o.paid_by ? { paid_by: o.paid_by } : {}), ...(o.moved_to ? { moved_to: o.moved_to } : {}) }; }),
         ...(r.total > r.payments.length ? { more: `${r.total - r.payments.length} more: narrow it (account, source, payer, status) or raise limit` } : {}) };
     }
     case "income_status": {
       const i = await S.incomeState(store, now);
       const hqAns = ctx.hq ? await ctx.hq().catch(() => null) : null;
       const per_song = await perSongAnswer(store, now, hqAns);
-      const line = (s) => ({ name: s.name, id: s.id, category: s.category, lands_in: s.lands, expected: s.cadence, owner: s.owner, state: s.verdict, why: s.why,
-        last_payment: s.last ? `${s.last.date} ${s.last.currency} ${s.last.amount.toFixed(2)} (${s.last.status})` : "none logged", this_month: cur(s.monthTotal), ...(s.needsLuke ? { needs_luke: s.needsLuke } : {}),
+      const sourceName = (s) => (/tipalti/i.test(s.name) && /create|e-?check/i.test(s.name) ? "Create Music" : s.name);
+      const line = (s) => ({ name: sourceName(s), id: s.id, category: s.category, lands_in: s.lands || "", expected: s.cadence, owner: s.owner, state: s.verdict, why: s.why,
+        last_payment: s.last ? `${s.last.date} ${s.last.currency} ${s.last.amount.toFixed(2)} (${s.last.status})` : "none logged",
+        this_month: Object.keys(s.monthTotal || {}).length ? cur(s.monthTotal) : (Object.keys(s.monthWaiting || {}).length ? `${cur(s.monthWaiting)} in Wise or PayPal, not received` : "nothing logged"), ...(s.needsLuke ? { needs_luke: s.needsLuke } : {}),
         /* round 2: each account of a source paid into several (RouteNote's two) */
         ...(s.byAccount ? { by_account: s.byAccount.map((a) => `${a.account}: ` + (a.last ? `${a.last.date} ${a.last.currency} ${a.last.amount.toFixed(2)} (${a.last.status})` : "none logged")) } : {}) });
       return { month: i.month, received_this_month: cur(i.received), pending_this_month: cur(i.pendingOnly), payments_logged_this_month: i.count,
@@ -817,7 +820,7 @@ export async function callTool(tool, args, ctx) {
         sources: i.sources.map(line), problems: i.problems,
         /* what you submitted yourself, with the id and month fix_payment needs */
         your_payments: i.entries.filter((e) => e.by === me).slice(0, 15).map((e) => ({ id: e.id, month: (e.statement || e.date).slice(0, 7), line: `${e.date} · ${e.payer} · ${e.currency} ${e.amount.toFixed(2)} · ${e.status} · ${e.account} · ${e.category}` })),
-        newest_payments: i.entries.slice(0, 15).map((e) => `${e.date} · ${e.payer} · ${e.currency} ${e.amount.toFixed(2)} · ${e.status} · ${e.account} · by ${e.by} (id ${e.id})`),
+        newest_payments: i.entries.slice(0, 15).map((e) => { const o = S.payOut(e); return `${o.date} · ${o.payer} · ${e.currency} ${e.amount.toFixed(2)} · ${o.status} · ${o.account} · by ${e.by} (id ${e.id})`; }),
         ...(i.count > 15 ? { more_payments: `${i.count - 15} more this month: use payments (month ${i.month}) to see every one, with its id` } : {}),
         /* in the account, not yet said what they are: counted as nothing until sorted (tool sort_payment) */
         unsorted: i.unsorted.map((e) => ({ id: e.id, month: e.date.slice(0, 7), line: `${e.date} · ${e.payer} · ${e.currency} ${e.amount.toFixed(2)} · ${e.account}`,
@@ -825,7 +828,7 @@ export async function callTool(tool, args, ctx) {
         /* L1 + L9 (18 Nov 2026). Amounts already on the desk only. A missing rate is "not enough data", never a guess. */
         expected_money: { summary: i.expected.summary.text, late: i.expected.summary.late, short: i.expected.summary.short, missing: i.expected.summary.missing,
           rows: i.expected.rows.slice(0, 30).map((r) => ({ id: r.id, source: r.source || r.payer, amount: `${r.currency} ${Number(r.amount).toFixed(2)}`, due: r.due || "not known yet", due_from: r.dueNote || "not known yet",
-            flags: r.flags.length ? r.flags : (r.open ? ["waiting"] : ["landed"]), ...(r.shortBy ? { short_by: `${r.shortBy.currency} ${r.shortBy.amount.toFixed(2)}` } : {}),
+            status: r.status, flags: r.flags.length ? r.flags : (r.open ? ["waiting"] : ["landed"]), ...(r.shortBy ? { short_by: `${r.shortBy.currency} ${r.shortBy.amount.toFixed(2)}${r.shortReason === "unexplained" ? " short, unexplained" : ""}` } : {}),
             statement: r.statement.date, payable: r.payable || r.payableState, paid: r.paid ? r.paid.date : (r.missingLink ? "the payment isn't in the months read" : "not there yet"),
             landed: r.landed ? r.landed.date : "not there yet", days: r.days })),
           missing_sources: i.expected.missing.map((m) => ({ source: m.source, due: m.due, why: m.why })),
@@ -978,9 +981,11 @@ export async function callTool(tool, args, ctx) {
          connector has 28"): the live list goes first, and wins where they differ */
       const live = `The connector has ${TOOLS.length} tools right now: ${TOOLS.map((t) => t.name).join(", ")}. Where the guide below says otherwise, this line and the tools' own descriptions are right.`;
       const money = "Money counts once, when it lands in Revolut. A Wise or PayPal row that has moved there shows as moved to Revolut and is not counted again. paid_by is who paid it out. link_transfer ties a Revolut credit to the Wise or PayPal rows it carried. month_check says what is still to sort. close_month locks a finished month.";
+      const moneyMore = "paid_by marks the payment that settled a statement, and that statement then shows as settled, not still payable. Moved to Revolut means the row is not counted again. expected_money lists each statement (Expected) and whether it is short, late or missing. payout_routes shows Exchange and fees from amounts already recorded. A gap with no source is short, unexplained, never a fee. A conversion keeps its rate and where that rate came from; otherwise it says not enough data. close_month runs only when month_check says the month is ready and an evidence link (https) is attached. A split with no rule Luke confirmed says rule pending. HQ never writes to the Google Sheet.";
       let text = g.text || BUILT_IN_GUIDE;
       text = text.replace(/eighteen tools/gi, `${TOOLS.length} tools`);
       if (!/counts once/i.test(text)) text += "\n\n" + money;
+      if (!/expected_money/i.test(text)) text += "\n\n" + moneyMore;
       return g.text ? `${live}\n\nSTAFF GUIDE (updated ${g.at ? g.at.slice(0, 10) : "?"})\n\n${text}` : `${live}\n\n${text}`;
     }
   }

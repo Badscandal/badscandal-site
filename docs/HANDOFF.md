@@ -1,7 +1,7 @@
 # Handoff: where HQ is and what's next (read this first)
 
-**Last updated:** 18 Nov 2026, by Cursor. Main is through PR #71. L5 (watchers) is in flight on `cursor/hq-l5-watchers-5846` (not merged).
-**main:** every PR up to #71 is live. **Tests on this branch:** 642 pass on Node 24 and Node 22, none cancelled.
+**Last updated:** 18 Nov 2026, by Cursor. Main is through PR #75 (round 2) and PR #73 (L5 watchers). This branch is the money-links work, not merged.
+**main:** every PR up to #75 is live. **Tests on this branch:** 665 pass on Node 24 and Node 22, none cancelled.
 **Connector:** 40 tools. No new tool. `log_growth` gained `claim`, `claimant` and `impact` on this branch, so Laura, Steve, Atlas, Kevin and Nova refresh the tool list when it is deployed. Options also changed in #69.
 
 > **The rule (Luke, 17 Nov 2026):** every time anything is pushed to `main` for HQ, the same push updates THIS
@@ -31,7 +31,7 @@ site + Luke's private dashboard /hq + the bots' connector /mcp).
 
 ## Where it stands (18 Nov 2026)
 
-**Where we left off:** L1 (expected money) and L9 (what a payout route cost) are on main (PR #71). The phone HQ is on main (PR #70). Money shows what landed in Revolut on its own line. Payable, and money still in Wise or PayPal, are smaller and never added in. The connector bug fixes (PR #69) are live. L5 (watchers) is the branch above and is not live yet. RouteNote email is not connected. L4 (PR #67), L3 part 1 (PR #66), L12 (PR #64) and the release-card fix (PR #65) are live.
+**Where we left off:** L1 (expected money) and L9 (what a payout route cost) are on main (PR #71). The phone HQ is on main (PR #70). Money shows what landed in Revolut on its own line. Payable, and money still in Wise or PayPal, are smaller and never added in. The connector bug fixes (PR #69) are live. L5 (watchers, PR #73) and the round-2 fixes (PR #75) are on main. RouteNote email is not connected. L4 (PR #67), L3 part 1 (PR #66), L12 (PR #64) and the release-card fix (PR #65) are live.
 
 **HQ** (`badscandal.com/hq`, also inside the HQ apps on Luke's iPhone and Mac) has: Today, Songs, Ads, Pages
 (one tile per song page since #59), Growth & Fans (with the Instagram reader), Profiles (since #64), Upcoming (the release pipeline),
@@ -62,7 +62,9 @@ artist growth bot that all we will need is content and $".
 
 ## In flight (branches not merged)
 
-- **HQ round 2** (`cursor/hq-round2-bugs-9690`, not merged): Pre-HQ packs mark only the RouteNote fields not needed; the release-day link, the video and the lyrics stay live. A Canvas step skipped for no link comes back when the link is added. `my_day` schedule lines stay whole, drop a done step and a past date, and the Monday line is the current one. Old notes to everyone drop off. A lyrics blocker clears when the lyrics are in or waiting on "Yes, correct", and that answer refreshes the step note. Signed-out lines name the platform, and a sign-in task follows the live list. Instagram: 0-view rows and old posts are not waiting; under 10 ranked says not settled; a read within 20 minutes reuses the last one and does not spend a call; a post says "song not linked" until Steve, Forge or Nova records the song. Preflight flags do not fail the check. `song_pages` fetches each page and reports the status and the time. Still 40 tools. `log_growth` keeps the Content ID claim fields from L5, and the instagram tool keeps `post` and `song`. The bots refresh.
+- **Money links** (`cursor/hq-money-link-fixes-bf45`, not merged): one counting rule (received means Revolut) for payments, month_check, income_status and the briefings. A route sums every link. A gap with no source is short, unexplained, never a fee. A rate is kept only when Revolut recorded it. `close_month` needs month_check ready and an https evidence link. No new tool. HQ does not write the Google Sheet and does not decide a ledger month.
+- **HQ round 2** (PR #75, on main): Pre-HQ packs mark only the RouteNote fields not needed; the release-day link, the video and the lyrics stay live. A Canvas step skipped for no link comes back when the link is added. `my_day` schedule lines stay whole, drop a done step and a past date, and the Monday line is the current one. Old notes to everyone drop off. A lyrics blocker clears when the lyrics are in or waiting on "Yes, correct", and that answer refreshes the step note. Signed-out lines name the platform, and a sign-in task follows the live list. Instagram: 0-view rows and old posts are not waiting; under 10 ranked says not settled; a read within 20 minutes reuses the last one and does not spend a call; a post says "song not linked" until Steve, Forge or Nova records the song. Preflight flags do not fail the check. `song_pages` fetches each page and reports the status and the time. Still 40 tools. `log_growth` keeps the Content ID claim fields from L5, and the instagram tool keeps `post` and `song`. The bots refresh.
+- **L1 + L9** (PR #71, on main): Expected money and what a payout route cost. Still 40 tools. `luke_briefing` is unchanged.
 
 ## Waiting on someone
 
