@@ -1,13 +1,15 @@
 # HQ status (update on every deploy)
 
-**Last updated:** 18 Nov 2026, by Cursor. Main is through PR #80 (the phone look). Automation phase 1 (#79) and account health (#77) are live with it. Start with `docs/HANDOFF.md`.
-**Tests:** 710 on this branch, all passing on Node 24 and Node 22. **Connector:** 40 tools (no new tool). The phone look changes no option. Automation changed options on `my_day`, `send_message` and `post_update`, so every bot refreshes. `log_growth` account-health fields are live from #77. Claim fields are on main from #73. The instagram tool's `post` and `song` are on main from #75.
+**Last updated:** 18 Nov 2026, by Cursor. Main is through PR #84 (HQ workspaces). The blank-screen fix (#83), the phone look (#80), automation phase 1 (#79) and account health (#77) are live with it. Start with `docs/HANDOFF.md`.
+**Tests:** 716, all passing on Node 24 and Node 22. **Connector:** 40 tools (no new tool). Workspaces added `workspace` on `log_growth`, `record_spend`, `submit_income`, `releases`, `release_step` and on an action card, and `licence` on `release_step` for a Label cover only, so every bot refreshes. The phone look changes no option. Automation changed options on `my_day`, `send_message` and `post_update`. `log_growth` account-health fields are live from #77. Claim fields are on main from #73. The instagram tool's `post` and `song` are on main from #75.
 No money amounts, payer names or account numbers in this file: the repo is public.
 
 ## Live (newest first)
 
 | When | PR | What |
 |------|----|------|
+| 18 Nov | #84 | HQ workspaces. A switch for BADSCANDAL, Social Farm and Label. The last choice is remembered on the device. Farm pages and Label covers, spend and payouts stay off the official numbers and the USD 1,000 cap. Needs you cards work inside Farm and Label and do not show on the BADSCANDAL list. Label is covers only, starting with UK garage. A Label cover's steps are licence, then upload, then pitch. Drop's upload stays blocked until the licence is licensed. Only the Licence bot or Nova can mark that step. HQ does not take payment. Official releases have no licence step. Still 40 tools. `hq-workspaces.js` shares the content hash and is in the precache. |
+| 18 Nov | #83 | Blank-screen fix. One content hash on every HQ script. The service worker gives up after 8 seconds and still takes control. A page that never paints shows Try again and Reset app. Cache name `bs-hq-v7`. |
 | 18 Nov | #80 | Phone look. One received total per currency. The home keeps the Needs you header, one-tap Yes / No / Edit cards, quiet hours, Waiting on others, and the account-health dots. A missing number says not reported. Still 40 tools. No option changed. |
 | 18 Nov | #79 | Automation phase 1. One-tap cards, Waiting on others, scheduled site, cap, release-day and month checks, and the Monday draft. Desk push stays empty until Luke pastes an address. Still 40 tools. `my_day`, `send_message` and `post_update` gained options, so every bot refreshes. |
 | 18 Nov | #77 | Account health. One green / watch / red per official account, from numbers already on the desk. A red item goes on Needs you. The daily job (10:30 São Paulo) messages the owning bot only when it changes. Still 40 tools. `log_growth` records the check. HQ does not call Meta or Instagram for this. |
@@ -57,11 +59,11 @@ No money amounts, payer names or account numbers in this file: the repo is publi
 
 ## In flight
 
-- HQ home screen blank on a bad connection, branch `cursor/hq-sw-consistent-cache-31c2`. Not merged and not live. HQ scripts, including `hq-look.js`, share one content hash. The service worker gives up after 8 seconds. A page that never paints shows Try again and Reset app.
+- None.
 
 ## Next up
 
-- The phone look (#80), automation phase 1 (#79), account health (#77), the money-counting rule (#76), the round-2 fixes (#75), L5 watchers (#73), L1/L9 (#71), the first phone HQ (#70) and the connector bug fixes (#69) are on main. L3 part 2 is not built: a fan's country, and a ready reply he approves. HQ would still never send it. A later Profiles slice (reading an image from a platform) still needs his go, and HQ would still not log in.
+- Workspaces (#84), the blank-screen fix (#83), the phone look (#80), automation phase 1 (#79), account health (#77), the money-counting rule (#76), the round-2 fixes (#75), L5 watchers (#73), L1/L9 (#71), the first phone HQ (#70) and the connector bug fixes (#69) are on main. L3 part 2 is not built: a fan's country, and a ready reply he approves. HQ would still never send it. A later Profiles slice (reading an image from a platform) still needs his go, and HQ would still not log in.
 - Still for Luke, not in #69: the public stream line ("as of September 2026"), where "Plugin store" sits on the home page, and checking pack genre and language against RouteNote's list.
 - Still needs Luke: B2 YouTube sign-in, the on-hold decisions H1–H4, and L11 (who "Luka" is). B1 and B5 are not needed; B4 Instagram is connected.
 - L10 still waits (it needs YouTube write access). L4 is live. Start any of it on his word.
