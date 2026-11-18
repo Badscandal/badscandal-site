@@ -47,7 +47,7 @@ No money amounts, payer names or account numbers in this file: the repo is publi
 
 ## In flight
 
-- L1 (expected money) and L9 (exchange and fees per payout route), for Ledger and Sheet. Not merged. No new tool. Money in HQ gains Expected, and Exchange and fees. A missing rate says "not enough data".
+- L1 (expected money) and L9 (exchange and fees per payout route), PR #71, for Ledger and Sheet. Not merged. No new tool. Money in HQ gains Expected, and Exchange and fees. A missing rate says "not enough data". Preview: https://deploy-preview-71--profound-haupia-db7ffa.netlify.app/hq?sample=1
 
 ## Next up
 

@@ -1,6 +1,6 @@
 # Handoff: where HQ is and what's next (read this first)
 
-**Last updated:** 18 Nov 2026, by Cursor. L3 fan inbox part 1 is on main (PR #66). L1 and L9 are in flight on `cursor/expected-money-routes-cbcf` (not merged).
+**Last updated:** 18 Nov 2026, by Cursor. L3 fan inbox part 1 is on main (PR #66). L1 and L9 are in flight as PR #71 (not merged).
 **main:** every PR up to #66 is live. **Tests on main:** 590 pass on Node 24 and Node 22, none cancelled.
 **Connector:** 40 tools. No new tool in #66, and none on the L1/L9 branch. The `instagram` tool now also returns the fan inbox, so Steve, Kevin and Forge should refresh if they have not since #66 (Nova too: she has every tool). `profiles` (L12) is still the newest tool name.
 
@@ -31,7 +31,7 @@ site + Luke's private dashboard /hq + the bots' connector /mcp).
 
 ## Where it stands (18 Nov 2026)
 
-**Where we left off:** L3 fan inbox, part 1, is on main (PR #66, `dab08d2`). Growth & Fans shows people asking the song's name or where to listen, and people who comment on more than one post. "Needs your reply" is for Luke. HQ never replies. Part 2 is not built. L1 (expected money) and L9 (what a payout route cost) are built on `cursor/expected-money-routes-cbcf` and are not live yet. L12 (PR #64) and the release-card fix (PR #65) are live.
+**Where we left off:** L3 fan inbox, part 1, is on main (PR #66, `dab08d2`). Growth & Fans shows people asking the song's name or where to listen, and people who comment on more than one post. "Needs your reply" is for Luke. HQ never replies. Part 2 is not built. L1 (expected money) and L9 (what a payout route cost) are PR #71 and are not live yet. L12 (PR #64) and the release-card fix (PR #65) are live.
 
 **HQ** (`badscandal.com/hq`, also inside the HQ apps on Luke's iPhone and Mac) has: Today, Songs, Ads, Pages
 (one tile per song page since #59), Growth & Fans (with the Instagram reader), Profiles (since #64), Upcoming (the release pipeline),
@@ -54,7 +54,7 @@ artist growth bot that all we will need is content and $".
 
 ## In flight (branches not merged)
 
-- **L1 + L9** (`cursor/expected-money-routes-cbcf`, not merged): Expected money and the exchange-and-fee cost of each payout route, for Ledger and Sheet. No new tool (still 40). `income_status` gains `expected_money` and `payout_routes`. `my_day` for Ledger and Sheet gains the same summaries. `luke_briefing` is unchanged. A route with two currencies says "not enough data". HQ does not move money and does not guess a rate. Ledger and Sheet do not need a new tool refresh: no tool was added and no option was added.
+- **L1 + L9** (PR #71, `cursor/expected-money-routes-cbcf`, not merged): Expected money and the exchange-and-fee cost of each payout route, for Ledger and Sheet. No new tool (still 40). `income_status` gains `expected_money` and `payout_routes`. `my_day` for Ledger and Sheet gains the same summaries. `luke_briefing` is unchanged. A route with two currencies says "not enough data". HQ does not move money and does not guess a rate. Ledger and Sheet do not need to refresh: no tool was added and no option was added. Preview: https://deploy-preview-71--profound-haupia-db7ffa.netlify.app/hq?sample=1
 
 ## Waiting on someone
 
