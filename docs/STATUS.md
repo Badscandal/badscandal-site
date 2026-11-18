@@ -2,9 +2,9 @@
 
 **Full picture:** [docs/HQ-FULL-HANDOFF.md](HQ-FULL-HANDOFF.md). It supersedes the "through PR #84 / 40 tools / 716 tests" lines below. Main is through PR #89 (47 tools, `bs-hq-v8`, 745 tests).
 
-**Main is through PR #90 (18 Nov 2026).** 47 tools, 765 tests on Node 24 and 22, `bs-hq-v9`.
+**Main is through PR #93 (18 Nov 2026).** 47 tools, 767 tests on Node 24 and 22, `bs-hq-v9`. Instagram health follows engagement per view. Boosted Reels stay in.
 
-**Last updated:** 18 Nov 2026, by Cursor. Main is through PR #84 (HQ workspaces). The blank-screen fix (#83), the phone look (#80), automation phase 1 (#79) and account health (#77) are live with it. Start with `docs/HANDOFF.md`.
+**Last updated:** 18 Nov 2026. Main is through PR #93. Start with `docs/HANDOFF.md`.
 **Tests:** 716, all passing on Node 24 and Node 22. **Connector:** 40 tools (no new tool). Workspaces added `workspace` on `log_growth`, `record_spend`, `submit_income`, `releases`, `release_step` and on an action card, and `licence` on `release_step` for a Label cover only, so every bot refreshes. The phone look changes no option. Automation changed options on `my_day`, `send_message` and `post_update`. `log_growth` account-health fields are live from #77. Claim fields are on main from #73. The instagram tool's `post` and `song` are on main from #75.
 No money amounts, payer names or account numbers in this file: the repo is public.
 
@@ -12,6 +12,8 @@ No money amounts, payer names or account numbers in this file: the repo is publi
 
 | When | PR | What |
 |------|----|------|
+| 18 Nov | #93 | Instagram account health follows engagement per view, (likes + comments + saves + shares) / views, against this account's own 30-day median. Boosted Reels stay in. Views stay in the headline as context. Missing engagement counts are a watch, and those view totals are not judged. Still 47 tools. No phone change, so the cache stays `bs-hq-v9`. Nothing is sent. No ads are changed. |
+| 18 Nov | #92 | Instagram view totals at about 35% of the median are a dip, not "in line". That version left boosted posts out. Superseded for Instagram by #93. TikTok, YouTube and Spotify still use the view comparison. |
 | 18 Nov | #90 | Handoff fixes. One "waiting on you" list: the phone's "N need you", Today's line, the app badge, push alerts and the `needs_you` tool say the same number (messages, Spotify questions, Yes/No/Edit cards, red accounts). Alerts are "to check". Read-only tools no longer write or message. The read marker never marks a message the bot was not given. Spotify health says tracks. `netlify.toml` names `song-geo.js`. CI on Node 22 and 24. Upcoming and Money tidied from Luke's screenshots (no raw timestamps, spaced buttons, no ids on his page). Needs you: no platform stat blocks (on Growth & Fans now), no RouteNote email card, post pictures on the Monday pick. Still 47 tools. Cache `bs-hq-v9`. |
 | 18 Nov | #84 | HQ workspaces. A switch for BADSCANDAL, Social Farm and Label. The last choice is remembered on the device. Farm pages and Label covers, spend and payouts stay off the official numbers and the USD 1,000 cap. Needs you cards work inside Farm and Label and do not show on the BADSCANDAL list. Label is covers only, starting with UK garage. A Label cover's steps are licence, then upload, then pitch. Drop's upload stays blocked until the licence is licensed. Only the Licence bot or Nova can mark that step. HQ does not take payment. Official releases have no licence step. Still 40 tools. `hq-workspaces.js` shares the content hash and is in the precache. |
 | 18 Nov | #83 | Blank-screen fix. One content hash on every HQ script. The service worker gives up after 8 seconds and still takes control. A page that never paints shows Try again and Reset app. Cache name `bs-hq-v7`. |
