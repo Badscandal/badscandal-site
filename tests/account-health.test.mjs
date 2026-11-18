@@ -56,83 +56,101 @@ test("the last 3 posts under 30% of the account's own median is a possible suppr
   assert.match(sig(few, "reach").text, /Not enough data/);
 });
 
+function snap(views, rate) {
+  const s = { views };
+  if (rate != null) {
+    s.likes = Math.round(views * rate);
+    s.comments = 0;
+    s.saves = 0;
+    s.shares = 0;
+  }
+  return s;
+}
 function reels(rows) {
   return rows.map((r) => {
     const post = { id: r.id, at: day(r.n) + "T12:00:00Z", snaps: {} };
-    if (r.d1 != null) post.snaps.d1 = { views: r.d1 };
-    if (r.latest != null) post.latest = { views: r.latest };
-    if (r.d1 == null && r.latest == null) post.snaps.d1 = { views: r.views };
+    if (r.d1 != null) post.snaps.d1 = typeof r.d1 === "object" ? r.d1 : snap(r.d1, r.rate);
+    if (r.latest != null) post.latest = typeof r.latest === "object" ? r.latest : snap(r.latest, r.latestRate != null ? r.latestRate : r.rate);
+    if (r.d1 == null && r.latest == null) post.snaps.d1 = snap(r.views, r.rate);
     return post;
   });
 }
-const NO_ADS = { at: NOW, ads: [] };
-const ad = (media, spend) => ({ id: "ad-" + media, media, spend, impressions: spend * 100, reach: spend * 80 });
+const TODAY_VIEWS = [
+  { id: "a", n: 1, views: 2496 }, { id: "b", n: 2, views: 2888 }, { id: "c", n: 3, views: 2765 },
+  { id: "d", n: 5, views: 7860 }, { id: "e", n: 7, views: 7860 }, { id: "f", n: 9, views: 7860 }, { id: "g", n: 12, views: 7860 },
+];
 
-test("last 3 views at about 35% of the median are a dip, not in line and not a suppression", () => {
-  /* the live headline: 2,496, 2,888, 2,765 against a 30-day median of 7,860. Each is about 35%, which is over the 30% line. */
-  const rows = [[1, 2496], [2, 2888], [3, 2765], [5, 7860], [7, 7860], [9, 7860], [12, 7860]];
-  const known = acc({ igPosts: reels(rows.map(([n, views], i) => ({ id: "o" + i, n, views }))), igAds: NO_ADS }, "instagram");
-  const reach = sig(known, "reach");
-  assert.equal(reach.level, "watch");
-  assert.match(reach.text, /2,496, 2,888, 2,765/);
-  assert.match(reach.text, /30-day median 7,860/);
-  assert.match(reach.text, /not under the 30%/);
-  assert.match(reach.text, /dip/);
-  assert.doesNotMatch(reach.text, /in line/);
-  assert.doesNotMatch(reach.text, /Possible suppression/);
-  assert.notEqual(known.state, "green");
-
-  const close = [[1, 7600], [2, 8000], [3, 7900], [5, 7860], [7, 7860], [9, 7860], [12, 7860]];
-  const fine = acc({ igPosts: reels(close.map(([n, views], i) => ({ id: "n" + i, n, views }))), igAds: NO_ADS }, "instagram");
-  assert.equal(sig(fine, "reach").level, "ok");
-  assert.match(sig(fine, "reach").text, /in line/);
-  assert.match(sig(fine, "reach").text, /70%/);
+test("today's view numbers are judged by engagement per view, and a boosted reel stays in", () => {
+  /* 2,496, 2,888, 2,765 against a view median of 7,860 is about 35%. The same 8% engagement on every
+     post, including two high-view boosted reels, is in line. The view drop is context, not the verdict. */
+  const held = TODAY_VIEWS.map((r) => ({ ...r, rate: 0.08 })).concat([
+    { id: "b285", n: 4, views: 285000, rate: 0.08 }, { id: "b273", n: 6, views: 273000, rate: 0.08 },
+  ]);
+  const fine = acc({ igPosts: reels(held) }, "instagram");
+  const ok = sig(fine, "reach");
+  assert.equal(ok.level, "ok");
+  assert.match(ok.text, /engagement per view/);
+  assert.match(ok.text, /in line/);
+  assert.match(ok.text, /70%/);
+  assert.match(ok.text, /2,496, 2,888, 2,765/);
+  assert.match(ok.text, /30-day view median/);
+  assert.doesNotMatch(ok.text, /left out|paid reach|can't judge|dip|Possible suppression/);
   assert.equal(fine.state, "green");
-});
 
-test("a paid-inflated median is not a content dip, and totals with no ad list are not called in line", () => {
-  const organic = [1, 2, 3, 5, 7, 9, 12].map((n, i) => ({ id: "org" + i, n, views: 8000 + i * 50 }));
-  const boosted = [{ id: "b285", n: 4, views: 285000 }, { id: "b273", n: 6, views: 273000 }];
-  const igAds = { at: NOW, ads: [ad("b285", 300), ad("b273", 280)] };
-  const judged = acc({ igPosts: reels(organic.concat(boosted)), igAds }, "instagram");
-  const reach = sig(judged, "reach");
-  assert.equal(reach.level, "ok");
-  assert.match(reach.text, /in line/);
-  assert.match(reach.text, /Boosted posts are left out/);
-  assert.doesNotMatch(reach.text, /285,000|273,000|Possible suppression/);
-  assert.equal(judged.state, "green");
-
-  /* the three newest had less spend; they are still boosted, so they are left out too */
-  const light = [
-    { id: "r8", n: 1, views: 8371 }, { id: "r10", n: 2, views: 10900 }, { id: "r24", n: 3, views: 24300 },
-    { id: "b285", n: 8, views: 285000 }, { id: "b273", n: 10, views: 273000 },
+  /* the four boosted reels pull the view median up to 190,000. They stay in. Engagement on the recent
+     posts is still at least 70% of the engagement median, so the account stays green. */
+  const mixed = [
+    { id: "a", n: 1, views: 2496, rate: 0.08 }, { id: "b", n: 2, views: 2888, rate: 0.08 }, { id: "c", n: 3, views: 2765, rate: 0.08 },
+    { id: "d", n: 5, views: 7860, rate: 0.08 }, { id: "e", n: 7, views: 7860, rate: 0.08 },
+    { id: "b285", n: 8, views: 285000, rate: 0.02 }, { id: "b273", n: 10, views: 273000, rate: 0.02 },
+    { id: "b200", n: 14, views: 200000, rate: 0.02 }, { id: "b180", n: 16, views: 180000, rate: 0.02 },
   ];
-  const spent = acc({ igPosts: reels(light), igAds: { at: NOW, ads: [ad("r8", 20), ad("r10", 15), ad("r24", 40), ad("b285", 300), ad("b273", 280)] } }, "instagram");
-  const left = sig(spent, "reach");
-  assert.equal(left.level, "watch");
-  assert.match(left.text, /left out/);
-  assert.match(left.text, /not called a dip/);
-  assert.doesNotMatch(left.text, /in line|Possible suppression/);
-  assert.notEqual(spent.state, "green");
+  const kept = sig(acc({ igPosts: reels(mixed) }, "instagram"), "reach");
+  assert.equal(kept.level, "ok");
+  assert.match(kept.text, /in line/);
+  assert.match(kept.text, /30-day view median 190,000/);
+  assert.doesNotMatch(kept.text, /left out|paid reach/);
 
-  const blind = acc({ igPosts: reels([[1, 2496], [2, 2888], [3, 2765], [5, 7860], [7, 7860], [9, 7860], [12, 7860]].map(([n, views], i) => ({ id: "u" + i, n, views }))) }, "instagram");
-  const unk = sig(blind, "reach");
-  assert.equal(unk.level, "watch");
-  assert.match(unk.text, /can't judge organic/);
-  assert.match(unk.text, /paid reach/);
-  assert.doesNotMatch(unk.text, /in line|Possible suppression|2,496/);
-  assert.notEqual(blind.state, "green");
+  /* the same views, with engagement at about 35% of the engagement median: a dip, not green, not red */
+  const dip = acc({ igPosts: reels(TODAY_VIEWS.map((r, i) => ({ ...r, rate: i < 3 ? 0.028 : 0.08 }))) }, "instagram");
+  const watch = sig(dip, "reach");
+  assert.equal(watch.level, "watch");
+  assert.match(watch.text, /engagement per view/);
+  assert.match(watch.text, /2\.8%/);
+  assert.match(watch.text, /8\.0%/);
+  assert.match(watch.text, /2,496, 2,888, 2,765/);
+  assert.match(watch.text, /30-day view median 7,860/);
+  assert.match(watch.text, /not under the 30%/);
+  assert.match(watch.text, /dip/);
+  assert.doesNotMatch(watch.text, /in line/);
+  assert.doesNotMatch(watch.text, /Possible suppression/);
+  assert.notEqual(dip.state, "green");
+
+  const red = acc({ igPosts: reels(TODAY_VIEWS.map((r, i) => ({ ...r, rate: i < 3 ? 0.02 : 0.08 }))) }, "instagram");
+  assert.equal(sig(red, "reach").level, "red");
+  assert.match(sig(red, "reach").text, /Engagement per view/);
+  assert.match(sig(red, "reach").text, /under 30%/);
+  assert.match(sig(red, "reach").text, /Possible suppression/);
+
+  /* views only, no likes, comments, saves or shares: not judged, and not the old paid-reach line */
+  const missing = acc({ igPosts: reels(TODAY_VIEWS) }, "instagram");
+  const none = sig(missing, "reach");
+  assert.equal(none.level, "watch");
+  assert.match(none.text, /Engagement per view isn't stored/);
+  assert.match(none.text, /aren't judged/);
+  assert.doesNotMatch(none.text, /paid reach|can't judge organic|in line|Possible suppression|2,496/);
+  assert.notEqual(missing.state, "green");
 });
 
-test("a 1-day snapshot is not compared with the latest total, which is what the Instagram grid shows", () => {
+test("a 1-day engagement snapshot is not compared with the latest total", () => {
   const posts = [
-    { id: "a", n: 1, d1: 2496, latest: 8371 },
-    { id: "b", n: 2, d1: 2888, latest: 10900 },
-    { id: "c", n: 3, d1: 2765, latest: 24300 },
-    ...[5, 7, 9, 11, 13, 15].map((n, i) => ({ id: "old" + i, n, latest: 8000 })),
+    { id: "a", n: 1, d1: 2496, latest: 8371, rate: 0.02, latestRate: 0.08 },
+    { id: "b", n: 2, d1: 2888, latest: 10900, rate: 0.02, latestRate: 0.08 },
+    { id: "c", n: 3, d1: 2765, latest: 24300, rate: 0.02, latestRate: 0.08 },
+    ...[5, 7, 9, 11, 13, 15].map((n, i) => ({ id: "old" + i, n, latest: 8000, latestRate: 0.08 })),
   ];
-  const reach = sig(acc({ igPosts: reels(posts), igAds: NO_ADS }, "instagram"), "reach");
-  assert.match(reach.text, /latest stored views/);
+  const reach = sig(acc({ igPosts: reels(posts) }, "instagram"), "reach");
+  assert.match(reach.text, /latest stored engagement per view/);
   assert.match(reach.text, /8,371/);
   assert.doesNotMatch(reach.text, /2,496/);
   assert.equal(reach.level, "ok");

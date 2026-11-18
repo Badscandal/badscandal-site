@@ -2,7 +2,6 @@
    stored or a bot recorded. It never calls Meta or Instagram, never sends anything off the desk,
    and never deletes, appeals or posts. A missing number stays "not enough data". */
 import * as S from "./staff.mjs";
-import { adMatchesPost } from "./postrank.mjs";
 
 export const HEALTH_SCHEDULE = "30 13 * * *"; /* 10:30 São Paulo, after the morning numbers */
 const CHECKS_KEY = "health/checks.json";
@@ -211,14 +210,14 @@ const TRACKS = { one: "track", many: "tracks", Many: "Tracks" };
    is at least 70% of that median (the same "near" bar the follower check uses). 35% is neither. */
 const SUPPRESS = 0.3;
 const NEAR = 0.7;
-const AGE_ORDER = ["1 day|views", "1 week|views", "latest|views", "recorded|views", "1 day|reach", "1 week|reach", "latest|reach", "recorded|reach"];
+const AGE_ORDER = ["1 day|engage", "1 week|engage", "latest|engage", "1 day|views", "1 week|views", "latest|views", "recorded|views", "1 day|reach", "1 week|reach", "latest|reach", "recorded|reach"];
 function dedupeNewest(list) {
   const byAt = new Map();
   for (const p of list) byAt.set(p.at || p.day, p);
   return [...byAt.values()].sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0));
 }
-/* One age and one metric. A 1-day view is not comparable with a latest total, and the Instagram grid
-   shows the latest total. Prefer 1-day views when 7 posts have them; otherwise the next age that does. */
+/* One age and one metric. A 1-day number is not comparable with a latest total. Instagram prefers
+   engagement per view at 1 day when 7 posts have it; otherwise the next age that does. */
 function bestUniform(points) {
   const groups = new Map();
   for (const p of points) {
@@ -237,6 +236,12 @@ function bestUniform(points) {
 }
 function seriesNote(series) {
   const age = series[0].age || "recorded", metric = series[0].metric || "views";
+  if (metric === "engage") {
+    if (age === "1 day") return "engagement per view at 1 day";
+    if (age === "1 week") return "engagement per view at 1 week";
+    if (age === "latest") return "latest stored engagement per view";
+    return "engagement per view";
+  }
   if (age === "recorded") return metric === "views" ? "views" : "views or reach";
   if (metric === "views" && age === "1 day") return "views at 1 day";
   if (metric === "views" && age === "1 week") return "views at 1 week";
@@ -244,60 +249,71 @@ function seriesNote(series) {
   if (metric === "reach" && age === "latest") return "latest stored reach";
   return `${metric} at ${age}`;
 }
-function leaveBoosted(signal, excluded) {
-  if (!excluded) return signal;
-  return { ...signal, text: signal.text + " Boosted posts are left out of both the recent posts and the median, because their views include paid reach." };
+/* one decimal, same shape as the Monday ranking (8.0%) */
+const pct = (r) => (Math.round(Number(r) * 1000) / 10).toFixed(1) + "%";
+function viewContext(last3, older, today) {
+  if (!last3.every((p) => num(p.views) != null)) return "";
+  const inWin = (list, days) => list.filter((p) => daysBetween(p.day, today) <= days);
+  const med = (list) => (list.length >= 4 ? median(list.map((p) => p.views)) : null);
+  const med30 = med(inWin(older, 30)), med14 = med(inWin(older, 14));
+  return `; views ${last3.map((p) => fmt(p.views)).join(", ")}` +
+    (med30 != null ? `; 30-day view median ${fmt(Math.round(med30))}` : "") +
+    (med14 != null ? `; 14-day view median ${fmt(Math.round(med14))}` : "");
 }
 function reachSignal(points, today, source, u = POSTS, opt = {}) {
+  const rate = !!(opt && opt.rate);
   const usable = (points || []).filter((p) => p && isDay(p.day) && num(p.value) != null && daysBetween(p.day, today) >= 0 && daysBetween(p.day, today) <= 30);
-  /* Instagram totals include ads. With no stored ad list we cannot tell a content dip from a spend dip,
-     so we do not call the totals in line and we do not call a drop suppression. */
-  if (opt.paid === "unknown") {
-    if (!dedupeNewest(usable).length) return gap("reach", `this account has 0 ${u.many} with a view or reach number in 30 days. A run of weak ${u.many} needs at least 7 at one age (3 recent, and 4 older to take a median from).`, source);
-    return sig("reach", "watch", "Views include paid reach; can't judge organic. A drop in these totals is not a dip.", source, "");
+  const series = bestUniform(usable);
+  /* Instagram is judged on engagement per view, which stays fair when a Reel was boosted.
+     Views are context only. With no likes, comments, saves and shares, the view total is not judged. */
+  if (rate && opt.sawPosts && series.length < 7) {
+    return sig("reach", "watch", `Engagement per view isn't stored on enough posts (${series.length} at one age in 30 days; this needs 7, 3 recent and 4 older). View totals aren't judged.`, source, "");
   }
-  let pool = usable, excluded = 0;
-  if (opt.paid === "known") {
-    const before = new Set(usable.map((p) => p.at || p.day));
-    pool = usable.filter((p) => !p.boosted);
-    const after = new Set(pool.map((p) => p.at || p.day));
-    excluded = [...before].filter((id) => !after.has(id)).length;
-  }
-  const series = bestUniform(pool);
-  if (series.length < 7) {
-    if (excluded) return sig("reach", "watch", `Boosted posts are left out of both the recent posts and the median, because their views include paid reach. That leaves ${series.length} ${series.length === 1 ? u.one : u.many} with no ad at one age in 30 days. Organic reach needs at least 7 (3 recent, and 4 older). This is not called a dip.`, source, "");
-    return gap("reach", `this account has ${series.length} ${series.length === 1 ? u.one : u.many} with a view or reach number at one age in 30 days. A run of weak ${u.many} needs at least 7 at one age (3 recent, and 4 older to take a median from).`, source);
-  }
+  if (series.length < 7) return gap("reach", `this account has ${series.length} ${series.length === 1 ? u.one : u.many} with a view or reach number at one age in 30 days. A run of weak ${u.many} needs at least 7 at one age (3 recent, and 4 older to take a median from).`, source);
   const note = seriesNote(series);
+  const show = (n) => rate ? pct(n) : fmt(n);
   const last3 = series.slice(0, 3);
   const older = series.slice(3);
   const inWin = (list, days) => list.filter((p) => daysBetween(p.day, today) <= days);
   const med = (list) => (list.length >= 4 ? median(list.map((p) => p.value)) : null);
   const med14 = med(inWin(older, 14)), med30 = med(inWin(older, 30));
-  if (med14 == null && med30 == null) return leaveBoosted(gap("reach", `the older ${u.many} are not enough for a 14-day or a 30-day median (4 older ${u.many} in the window).`, source), excluded);
+  if (med14 == null && med30 == null) return gap("reach", `the older ${u.many} are not enough for a 14-day or a 30-day median (4 older ${u.many} in the window).`, source);
   const under = (m) => m != null && last3.every((p) => p.value < SUPPRESS * m);
   const primary = med30 != null ? med30 : med14;
   const window = med30 != null ? "30-day" : "14-day";
-  const nums = `last 3 ${note}: ${last3.map((p) => fmt(p.value)).join(", ")}` +
-    (med30 != null ? `; 30-day median ${fmt(Math.round(med30))}` : "") +
-    (med14 != null ? `; 14-day median ${fmt(Math.round(med14))}` : "");
+  const nums = `last 3 ${note}: ${last3.map((p) => show(p.value)).join(", ")}` +
+    (med30 != null ? `; 30-day median ${show(med30)}` : "") +
+    (med14 != null ? `; 14-day median ${show(med14)}` : "") +
+    (rate ? viewContext(last3, older, today) : "");
   const at = last3[0].at || last3[0].day;
-  const finish = (level, text) => leaveBoosted(sig("reach", level, text, source, at), excluded);
+  const finish = (level, text) => sig("reach", level, text, source, at);
   if (under(med30) || (med30 == null && under(med14))) {
-    return finish("red", `The last 3 ${u.many} are each under 30% of this account's own ${window} median (${nums}). Possible suppression.`);
+    return finish("red", rate
+      ? `Engagement per view for each of the last 3 ${u.many} is under 30% of this account's own ${window} median (${nums}). Possible suppression.`
+      : `The last 3 ${u.many} are each under 30% of this account's own ${window} median (${nums}). Possible suppression.`);
   }
   if (med14 != null && med30 != null && under(med14)) {
-    return finish("watch", `The last 3 ${u.many} are under 30% of the 14-day median, and not under the 30-day median (${nums}). One short dip, not a 30-day drop.`);
+    return finish("watch", rate
+      ? `Engagement per view for the last 3 ${u.many} is under 30% of the 14-day median, and not under the 30-day median (${nums}). One short dip, not a 30-day drop.`
+      : `The last 3 ${u.many} are under 30% of the 14-day median, and not under the 30-day median (${nums}). One short dip, not a 30-day drop.`);
   }
   const weak = series.filter((p) => p.value < SUPPRESS * primary);
   const newestWeak = series[0].value < SUPPRESS * primary;
-  if (newestWeak && weak.length === 1) return finish("watch", `One recent ${u.one} is under 30% of the ${window} median (${fmt(series[0].value)} against ${fmt(Math.round(primary))}). The ${u.many} before it are not. That is one ${u.one}, not a run.`);
-  if (newestWeak && weak.length === 2) return finish("watch", `Two recent ${u.many} are under 30% of the ${window} median (${nums}). Not three in a row.`);
+  if (newestWeak && weak.length === 1) return finish("watch", rate
+    ? `One recent ${u.one}'s engagement per view is under 30% of the ${window} median (${show(series[0].value)} against ${show(primary)}). The ${u.many} before it are not. That is one ${u.one}, not a run.`
+    : `One recent ${u.one} is under 30% of the ${window} median (${fmt(series[0].value)} against ${fmt(Math.round(primary))}). The ${u.many} before it are not. That is one ${u.one}, not a run.`);
+  if (newestWeak && weak.length === 2) return finish("watch", rate
+    ? `Two recent ${u.many}' engagement per view is under 30% of the ${window} median (${nums}). Not three in a row.`
+    : `Two recent ${u.many} are under 30% of the ${window} median (${nums}). Not three in a row.`);
   const near = (m) => m == null || last3.every((p) => p.value >= NEAR * m);
   if (!near(primary) || !near(med14) || !near(med30)) {
-    return finish("watch", `The last 3 ${u.many} are below this account's own median, and not under the 30% line (${nums}). That is a dip, not a suppression flag.`);
+    return finish("watch", rate
+      ? `Engagement per view is below this account's own median, and not under the 30% line (${nums}). That is a dip, not a suppression flag.`
+      : `The last 3 ${u.many} are below this account's own median, and not under the 30% line (${nums}). That is a dip, not a suppression flag.`);
   }
-  return finish("ok", `Recent ${u.many} are in line with this account's own median (each of the last 3 is at least 70% of it; ${nums}).`);
+  return finish("ok", rate
+    ? `Engagement per view is in line with this account's own median (each of the last 3 is at least 70% of it; ${nums}).`
+    : `Recent ${u.many} are in line with this account's own median (each of the last 3 is at least 70% of it; ${nums}).`);
 }
 
 function shareSignal(rows, today) {
@@ -449,35 +465,37 @@ function events(checks, platform, kind, today, days) {
   return (checks || []).filter((c) => c && c.type === "event" && c.kind === kind && c.platform === platform && isDay(c.date) && daysBetween(c.date, today) >= 0 && daysBetween(c.date, today) <= days);
 }
 
-/* Media insights `views` and `reach` are totals, and for a boosted Reel they include ads (they are the
-   grid number, not an organic number). The stored ad list can say WHICH post was boosted. It cannot
-   split one post's views into organic and paid: ad impressions are a different count, and reach overlaps.
-   A post with any ad spend is left out of both sides. A missing ad list means we cannot judge. */
-function adsKnown(adDoc) {
-  return !!(adDoc && (adDoc.at || Array.isArray(adDoc.ads)));
+/* Instagram media views include ads on a boosted Reel, and the stored ad list cannot split them.
+   Engagement per view is (likes + comments + saves + shares) / views, the same ratio as the Monday
+   ranking. A ratio is fair to a boosted Reel and an unboosted one, so boosted posts stay in.
+   A snap with none of the four counts has no engagement: its view total is not judged. */
+function engagedOf(snap) {
+  if (!snap) return null;
+  const likes = num(snap.likes), comments = num(snap.comments), saves = num(snap.saves), shares = num(snap.shares);
+  if (likes == null && comments == null && saves == null && shares == null) return null;
+  return (likes || 0) + (comments || 0) + (saves || 0) + (shares || 0);
 }
-function postBoosted(post, adDoc) {
-  if (!adsKnown(adDoc)) return null;
-  return (adDoc.ads || []).some((a) => a && adMatchesPost(a, post) && num(a.spend) > 0);
-}
-function igSeries(posts, adDoc) {
+function igSeries(posts) {
   const out = [];
+  let postsSeen = 0;
   for (const p of posts || []) {
     if (!p || !p.at) continue;
     const day = String(p.at).slice(0, 10);
     if (!isDay(day)) continue;
-    const boosted = postBoosted(p, adDoc);
+    postsSeen++;
     const snaps = p.snaps || {};
     const add = (snap, age) => {
       if (!snap) return;
-      const views = num(snap.views), reach = num(snap.reach);
-      if (views == null && reach == null) return;
-      out.push({ at: p.at, day, value: views != null ? views : reach, metric: views != null ? "views" : "reach", age, boosted });
+      const views = num(snap.views);
+      const engaged = engagedOf(snap);
+      if (!(views > 0) || engaged == null) return;
+      out.push({ at: p.at, day, value: engaged / views, views, metric: "engage", age });
     };
     add(snaps.d1, "1 day");
     add(snaps.d7, "1 week");
     add(p.latest, "latest");
   }
+  out.postsSeen = postsSeen;
   return out;
 }
 function recordedSeries(checks, platform) {
@@ -538,7 +556,6 @@ export function evaluate(input) {
   const growth = input && input.growth || [];
   const checks = input && input.checks || [];
   const igPosts = input && input.igUnread ? null : (input && input.igPosts || []);
-  const igAds = input && input.igAds;
   const claims = input && input.claims || [];
   const builds = input && input.builds || [];
   const accounts = ACCOUNTS.map((a) => {
@@ -554,11 +571,11 @@ export function evaluate(input) {
       else if ((builds || []).some((b) => b && b.state === "live")) signals.push(sig("builds", "ok", "The latest song-page record on the desk is live.", "song page builds already on the desk", ""));
     } else {
       const g = growthRows(growth, id);
-      const reachPts = id === "instagram" && igPosts == null ? [] : id === "instagram" ? igSeries(igPosts, igAds) : recordedSeries(checks, id);
+      const igPoints = id === "instagram" && igPosts != null ? igSeries(igPosts) : [];
+      const reachPts = id === "instagram" ? igPoints : recordedSeries(checks, id);
       const reachSource = id === "instagram" ? (input && input.igUnread ? "Instagram posts could not be read from the store just now" : "Instagram reads HQ already stored") : id === "spotify" ? "tracks Atlas recorded" : "posts the bot recorded";
-      const paid = id !== "instagram" ? undefined : adsKnown(igAds) ? "known" : "unknown";
       if (id === "instagram" && input && input.igUnread) signals.push(gap("reach", "the stored Instagram posts could not be read just now. Nothing was fetched from Instagram.", reachSource));
-      else signals.push(reachSignal(reachPts, today, reachSource, id === "spotify" ? TRACKS : POSTS, { paid }));
+      else signals.push(reachSignal(reachPts, today, reachSource, id === "spotify" ? TRACKS : POSTS, id === "instagram" ? { rate: true, sawPosts: igPoints.postsSeen > 0 } : undefined));
       signals.push(shareSignal(shareRows(checks, id, id === "instagram" ? igPosts : []), today));
       signals.push(followerSignal(g.map((r) => ({ date: r.date, change: r.change, views: r.views, followers: r.followers })), today));
       signals.push(visibilitySignal(latestReading(checks, id, "visible"), today));
@@ -633,18 +650,16 @@ export async function deliverHealth(store, now, roster, report, prev) {
 export async function loadReport({ store, ig, now, claims, builds, igUnread }) {
   const growth = await S.listGrowth(store, now, 3);
   const checks = await listChecks(store);
-  let igPosts = [], igAds = null, igState = null, unread = !!igUnread;
+  let igPosts = [], igState = null, unread = !!igUnread;
   if (ig && !unread) {
     try {
       const v = await ig.get("posts.json", { type: "json" });
       igPosts = Array.isArray(v) ? v : [];
     } catch { unread = true; igPosts = []; }
-    /* already stored by the hourly ad read; no call to Meta or Instagram */
-    if (!unread) try { igAds = await ig.get("adposts.json", { type: "json" }); } catch { igAds = null; }
     try { igState = await ig.get("state.json", { type: "json" }); } catch { igState = null; }
   }
   const claimItems = Array.isArray(claims) ? claims : (claims && claims.items) || [];
-  return evaluate({ now, growth, checks, igPosts, igAds, igUnread: unread, igState, claims: claimItems, builds: builds || [] });
+  return evaluate({ now, growth, checks, igPosts, igUnread: unread, igState, claims: claimItems, builds: builds || [] });
 }
 
 export async function runAccountHealth({ desk, ig, now, roster, builds }) {
@@ -662,7 +677,10 @@ export function sampleReport(now) {
   const today = S.spDay(now);
   const day = (n) => addDays(today, -n);
   const igPosts = [];
-  for (let i = 0; i < 8; i++) igPosts.push({ id: "s" + i, at: day(2 + i * 2) + "T12:00:00Z", snaps: { d1: { views: 2000 + i * 100, reach: 1500 } } });
+  for (let i = 0; i < 8; i++) {
+    const views = 2000 + i * 100;
+    igPosts.push({ id: "s" + i, at: day(2 + i * 2) + "T12:00:00Z", snaps: { d1: { views, reach: 1500, likes: Math.round(views * 0.06), comments: Math.round(views * 0.01), saves: Math.round(views * 0.005), shares: Math.round(views * 0.005) } } });
+  }
   const posts = (base, last) => last.map((views, i) => ({ at: day(i + 1), views })).concat([4, 5, 6, 7, 8, 9].map((n) => ({ at: day(n + 3), views: base })));
   const growth = [];
   for (let i = 0; i < 10; i++) {
@@ -677,6 +695,6 @@ export function sampleReport(now) {
     { type: "reading", platform: "youtube", date: day(1), by: "Laura", at: day(1), posts: posts(4000, [500, 4200, 4100]) },
     { type: "reading", platform: "site", date: day(0), by: "Webmaster", at: day(0), site_ok: "yes" },
   ];
-  /* an empty stored ad list: these made-up posts were not boosted, so the organic check can call them in line */
-  return evaluate({ now, growth, checks, igPosts, igAds: { at: now, ads: [] }, igState: { lastOkAt: now - 3600000, errorKind: "", pausedUntil: now + DAY_MS }, claims: [], builds: [{ what: "new page: Sample Song", state: "live" }] });
+  /* the made-up Instagram posts share one engagement rate, so the sample stays green */
+  return evaluate({ now, growth, checks, igPosts, igState: { lastOkAt: now - 3600000, errorKind: "", pausedUntil: now + DAY_MS }, claims: [], builds: [{ what: "new page: Sample Song", state: "live" }] });
 }
