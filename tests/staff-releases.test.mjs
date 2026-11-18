@@ -41,12 +41,12 @@ test("releases: the pack is one list; every field has a group, the steps have ow
 test("releases: steps are dated back from the release day; a late send is compressed to today and flagged tight", () => {
   const roomy = S.scheduleSteps("2026-12-11", TODAY);
   assert.equal(roomy.tight, false);
-  assert.deepEqual(roomy.steps.map((s) => s.due), ["2026-11-20", "2026-11-25", "2026-11-26", "2026-11-27", "2026-12-18", "2026-12-04", "2026-12-04", "2026-12-13", "2026-12-11", "2026-12-18"]);
+  assert.deepEqual(roomy.steps.map((s) => s.due), ["2026-11-20", "2026-11-25", "2026-11-28", "2026-11-27", "2026-12-18", "2026-12-04", "2026-12-04", "2026-12-13", "2026-12-11", "2026-12-18"]); /* 18 Nov 2026: Spotify upcoming is approval + 3 days */
   assert.ok(roomy.steps.filter((s) => s.key !== "canvas").every((s) => s.status === "todo" && s.note === "" && s.at === null));
   assert.equal(roomy.steps.find((s) => s.key === "canvas").status, "skipped", "no Canvas link: the Canvas step does not apply (17 Nov 2026)");
   const late = S.scheduleSteps("2026-11-27", TODAY); /* 15 days away */
   assert.equal(late.tight, true);
-  assert.deepEqual(late.steps.slice(0, 4).map((s) => s.due), [TODAY, TODAY, TODAY, "2026-11-13"], "upload, approval and Spotify for Artists were due before today: due today, never born late");
+  assert.deepEqual(late.steps.slice(0, 4).map((s) => s.due), [TODAY, TODAY, "2026-11-15", "2026-11-13"], "upload and approval were due before today; Spotify upcoming is 3 days after approval"); /* 18 Nov 2026 */
   assert.equal(S.releaseView({ id: "x", title: "X", date: "2026-11-27", status: "scheduled", steps: late.steps, pack: {} }, TODAY).counts.late, 0);
 });
 
@@ -231,9 +231,10 @@ test("releases: the board carries the releases, the pack fields, the steps, and 
   assert.equal(w.Drop.state, "blocked", "a blocked release step makes the bot blocked");
   /* 16 Nov 2026: Atlas's Spotify for Artists step waits while RouteNote (Drop, blocked) hasn't approved the song: never late */
   assert.equal(w.Atlas.state, "done");
-  assert.deepEqual(w.Atlas.releaseSteps.map((s) => [s.id, s.key, s.status, s.late, s.waiting]), [["medaseubody", "spotify", "todo", false, true], ["medaseubody", "pitch", "todo", false, true], ["slowburn", "pitch", "todo", false, false]]);
+  /* 18 Nov 2026: the pitch's day is before Spotify upcoming (approval + 3), so it sorts first; both still wait */
+  assert.deepEqual(w.Atlas.releaseSteps.map((s) => [s.id, s.key, s.status, s.late, s.waiting]), [["medaseubody", "pitch", "todo", false, true], ["medaseubody", "spotify", "todo", false, true], ["slowburn", "pitch", "todo", false, false]]);
   assert.deepEqual(Object.keys(w.Atlas.releaseSteps[0]).sort(), ["due", "dueIn", "id", "key", "label", "late", "note", "status", "title", "waiting", "waitingFor", "waitingText"]);
-  assert.equal(w.Atlas.releaseSteps[0].waitingText, "waiting: RouteNote has not approved it yet");
+  assert.equal(w.Atlas.releaseSteps.find((s) => s.key === "spotify").waitingText, "waiting: RouteNote has not approved it yet");
   assert.deepEqual(w.Webmaster.releaseSteps.map((s) => s.key + ":" + s.id), ["page:medaseubody", "live:medaseubody", "page:slowburn", "live:slowburn"], "soonest first; the released song's steps are all done");
   assert.deepEqual(w.Drop.releaseSteps.map((s) => s.key + ":" + s.id), ["approved:medaseubody"], "the label delivers Slow Burn: its upload and approval are not Drop's");
   assert.deepEqual(w.Steve.releaseSteps, [], "no teaser steps (15 Nov 2026)");

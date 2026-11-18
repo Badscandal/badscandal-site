@@ -96,7 +96,9 @@ test("Spotify for Artists waits while RouteNote has not approved the song", asyn
   await S.setStep(d, NOW, R, { by: "Drop", id: r.id, step: "upload", status: "done" });
   await S.setStep(d, NOW, R, { by: "Drop", id: r.id, step: "approved", status: "done" });
   v = S.releaseView(await rel(d, r.id), TODAY);
-  assert.equal(v.steps.find((s) => s.key === "spotify").waiting, false);
+  /* 18 Nov 2026: once RouteNote has approved, the step waits on Spotify until approval + 3 days */
+  assert.equal(v.steps.find((s) => s.key === "spotify").waiting, true);
+  assert.match(v.steps.find((s) => s.key === "spotify").waitingText, /waiting on Spotify/);
   /* a label release (RouteNote skipped) never waits on RouteNote */
   const lab = await sent(d, "Slow Fade", "2026-12-25", { ...PACK, kind: "With a label", label: "Sample Records", split: "50/50" });
   assert.equal(S.releaseView(await rel(d, lab.id), TODAY).steps.find((s) => s.key === "spotify").waiting, false);
@@ -133,8 +135,9 @@ test("a pitch sent without an approval on the desk reads as sent, not 'not appro
   const r = await sent(d, "Night Drive", "2026-12-11");
   await d.setJSON("releases.json", (await S.listReleases(d)).map((x) => (x.id === r.id ? { ...x, steps: x.steps.map((s) => (s.key === "pitch" ? { ...s, status: "done", by: "Atlas", doneOn: "2026-11-14" } : s)) } : x)));
   const pack = await call(d, "release_pack", { bot: "Atlas", song: "Night Drive" });
-  assert.deepEqual([pack.approvals.pitch.approved, pack.approvals.pitch.sent], [false, true]);
-  assert.match(pack.approvals.pitch.state, /^sent Sat 14 Nov by Atlas; no approval was recorded on the desk/);
+  /* 18 Nov 2026: a done step with no approval record is not an ask */
+  assert.deepEqual([pack.approvals.pitch.approved, pack.approvals.pitch.sent], [null, true]);
+  assert.match(pack.approvals.pitch.state, /done, approval not needed \(sent Sat 14 Nov by Atlas; no approval was recorded on the desk/);
   const v = S.releaseView(await rel(d, r.id), TODAY);
   /* 18 Nov 2026, Luke: a pitch Atlas sent is not his approval, so it is not a row. The pitch line says it. */
   assert.ok(!L.approvalLines(v).some((x) => x.key === "pitch"));
@@ -220,8 +223,10 @@ test("short briefing: each sign-in once (by account), a 'signed in again' is no 
   const lines = ["Google Ads 111-111-1111 needs Luke to sign in (made up)", "Google Ads 111-111-1111: signed out again, sign in please", "TikTok Ads is signed in again"];
   for (const [i, m] of lines.entries()) await S.postUpdate(d, NOW - (10 - i) * MIN, R, { bot: "Forge", status: "blocked", message: m });
   const sb = await call(d, "luke_short_briefing", { bot: "Alfred" });
-  const google = sb.needs_luke_sign_in.filter((x) => /111-111-1111/.test(x));
+  /* 18 Nov 2026: the account number is hidden in the tool's answer */
+  const google = sb.needs_luke_sign_in.filter((x) => /Google Ads \[account\]/.test(x));
   assert.equal(google.length, 1, JSON.stringify(sb.needs_luke_sign_in));
+  assert.ok(!sb.needs_luke_sign_in.some((x) => /111-111-1111/.test(x)));
   assert.ok(!sb.needs_luke_sign_in.some((x) => /signed in again/i.test(x)));
 });
 

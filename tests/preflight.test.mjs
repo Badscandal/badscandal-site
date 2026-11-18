@@ -1,5 +1,5 @@
 /* A6 (17 Nov 2026, Forge, Drop, Verse): pre-flight checks before anything reaches the stores or the ads.
-   - the artist name exactly "badscandal" (all lowercase; "Basdcandal", "Bad Scandal", "BADSCANDAL" are flagged)
+   - the artist name "badscandal", one word (18 Nov 2026: capitalisation is a note, not a failure; "Basdcandal" and "Bad Scandal" are still flagged)
    - the song page and every ad link = https://badscandal.com/<the song> (never Feature.fm or a store link)
    - the master is a WAV, the artwork a JPG or PNG; a cover upload says when it isn't square or is under 3000 px
    Shown on the release (releaseView().preflight, the card, the releases / release_pack tools) and checkable on
@@ -23,8 +23,10 @@ test("artistProblems: only exactly 'badscandal' passes", () => {
   assert.deepEqual(S.artistProblems("badscandal feat. Someone Made Up"), []);
   assert.match(S.artistProblems("Basdcandal")[0], /“Basdcandal” looks like a misspelling: the stores need “badscandal”/);
   assert.match(S.artistProblems("Bad Scandal & Friend")[0], /“Bad Scandal”.*“badscandal”/);
-  assert.match(S.artistProblems("BADSCANDAL")[0], /“BADSCANDAL”: write it “badscandal”, all lowercase/);
-  assert.match(S.artistProblems("℗ 2026 Badscandal")[0], /all lowercase/);
+  /* 18 Nov 2026: case is not a problem */
+  assert.deepEqual(S.artistProblems("BADSCANDAL"), []);
+  assert.deepEqual(S.artistProblems("℗ 2026 Badscandal"), []);
+  assert.match(S.artistNotes("BADSCANDAL")[0], /capitalisation does not matter/);
   assert.deepEqual(S.artistProblems("Sandal Records, Bad Company"), [], "other words that merely look close are left alone");
   assert.deepEqual(S.artistProblems(""), []);
 });
@@ -45,7 +47,7 @@ test("preflightOf: the release's own checks", () => {
   const p = S.preflightOf(r);
   const by = (f) => p.filter((x) => x.field === f).map((x) => x.text);
   assert.equal(by("primary").length, 1);
-  assert.match(by("copyright")[0], /lowercase/);
+  assert.equal(by("copyright").length, 0, "18 Nov 2026: BADSCANDAL in the copyright line is not a failure");
   assert.match(by("wav")[0], /master must be a WAV.*not an \.mp3/);
   assert.match(by("artwork")[0], /JPG or PNG, 3000 x 3000.*\.webp/);
   assert.match(by("page")[0], /Feature\.fm/);
@@ -64,7 +66,9 @@ test("the preflight tool: a song, a text, a link", async () => {
   assert.equal(b.ok, false);
   assert.equal(b.problems.length, 1);
   const c = await call(d, "preflight", { bot: "Forge", link: `https://badscandal.com/${slug}?utm_source=meta` });
-  assert.deepEqual(c, { ok: true, problems: [], note: c.note });
+  assert.equal(c.ok, true);
+  assert.deepEqual(c.problems, []);
+  assert.ok((c.checked || []).some((x) => /badscandal\.com/.test(x)));
   assert.match(String((await call(d, "preflight", { bot: "Forge" })).error), /Give song, text, link or asset/); /* + asset (L8, 17 Nov 2026) */
   assert.ok(toolsFor("Forge", R).some((t) => t.name === "preflight") && toolsFor("Drop", R).some((t) => t.name === "preflight") && toolsFor("Verse", R).some((t) => t.name === "preflight") && toolsFor("Webmaster", R).some((t) => t.name === "preflight"));
   assert.ok(!toolsFor("Kevin", R).some((t) => t.name === "preflight"));

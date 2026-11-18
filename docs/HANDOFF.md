@@ -58,7 +58,8 @@ artist growth bot that all we will need is content and $".
 
 ## In flight (branches not merged)
 
-- Nothing in flight. L4 shipped on main as PR #67 (`52a8c42`).
+- L4 shipped on main as PR #67 (`52a8c42`).
+- `cursor/connector-bugfix-8104`: connector bug fixes from the bots' read-only test (items 1–33). Not merged. Ads are untouched. Money amounts and records are untouched; only how rows are counted and labelled.
 
 ## Waiting on someone
 
