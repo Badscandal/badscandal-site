@@ -1,6 +1,8 @@
 # Handoff: where HQ is and what's next (read this first)
 
-**Full picture:** [docs/HQ-FULL-HANDOFF.md](HQ-FULL-HANDOFF.md) (18 Nov 2026). It was checked against the code at `9e447e2` (PR #88). If this file disagrees with it, the full file wins. Main is through PR #88: 47 connector tools, service worker `bs-hq-v8`, 745 tests. The paragraphs below still describe the state at PR #84 in places. They are kept as the running log.
+**Full picture:** [docs/HQ-FULL-HANDOFF.md](HQ-FULL-HANDOFF.md) (18 Nov 2026). It was checked against the code at `9e447e2` (PR #88). If this file disagrees with it, the full file wins. Main is through PR #89: 47 connector tools, service worker `bs-hq-v8`, 745 tests. The paragraphs below still describe the state at PR #84 in places. They are kept as the running log.
+
+**18 Nov 2026, Claude (branch `claude/laughing-babbage-0jjpdu`, NOT merged, waits for Luke's "deploy"):** the handoff's suspected bugs are fixed and tested. One Needs you count (phone line = `needs_you` total; alerts are "to check"); read-only tools no longer write or message (`profile_jobs`, `song_pages`; `instagram` is no longer labelled read-only); the read marker moves only past what was handed over; Spotify health says tracks, not posts; `netlify.toml` names `song-geo.js`. Still 47 tools, no option renamed. 756 tests on Node 24 and 22. Cache `bs-hq-v9`. Details: "Fixed after the handoff" at the end of section 9 of HQ-FULL-HANDOFF.md.
 
 **Last updated:** 18 Nov 2026, by Cursor. HQ workspaces v1 is live (PR #84).
 **main:** through PR #84. Social Farm and Label are on /hq. The blank-screen fix (#83), the phone look (#80), one-tap cards (#79) and account health (#77) are live with it. **Tests:** 716 pass on Node 24 and Node 22, none cancelled.
@@ -63,6 +65,8 @@ ads" (every Meta/Instagram read is read-only, small, and stops by itself on a bl
 artist growth bot that all we will need is content and $".
 
 ## In flight (branches not merged)
+
+- **Handoff fixes** (branch `claude/laughing-babbage-0jjpdu`, PR open, NOT merged). The 11 suspected bugs in HQ-FULL-HANDOFF.md section 9. After a deploy: Nova refreshes the tool list once (the `needs_you` and `instagram` descriptions changed; same 47 names).
 
 - **Night test, 18 Nov** (PR #88, on main, `9e447e2`). 29 connector fixes, including RouteNote mail from luke@badscandal.com with admin@badscandal.com in CC, plus the three read-only tools. With PR #87's four profile tools the connector is 47. `luke_briefing` unchanged. The detail, including the two "need you" lines, is in docs/HQ-FULL-HANDOFF.md.
 - **Profile masters** (PR #87, on main). Luke uploads one profile photo and one banner on Profiles. A fitting shape is resized on the page. A shape that does not fit is not cropped: Atlas, Laura and Kevin extend it with `profile_jobs`, `profile_master`, `profile_rework` and `profile_uploaded`. Problems open a Needs you card. Instagram is Luke's. Deezer, TikTok and Instagram have size rules. TIDAL is on the list. Secondary buttons set their own colours. Cache `bs-hq-v8`.

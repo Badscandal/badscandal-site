@@ -87,7 +87,7 @@ Sheet IMPORTDATA  --?key---->  GET /api/feed/meta-daily.csv , meta-ads.csv
 
 Preview URL shape, from `docs/WORKING-WITH-LUKE.md`: `https://deploy-preview-<PR>--profound-haupia-db7ffa.netlify.app/hq`. `?sample=1` shows made-up numbers after login and does not open a real store.
 
-**Storage.** Five Blob stores (see section 5):
+**Storage.** Six Blob stores (see section 5):
 
 | Store | Consistency in code | Holds |
 |---|---|---|
@@ -1395,6 +1395,23 @@ The comment says `touchme-geo.js`. The file is `song-geo.js`. Behaviour follows 
 - L3 part 2 and L10 are not built.
 - The public home still has the stream line Luke called out (“as of September 2026”) and the Plugin store placement. Those were left for him on purpose. They are not HQ bugs.
 - `tests/mcp.test.mjs` still has comments from when the tool count was 20. The assertion is 47. The comment can mislead a search.
+
+### Fixed after the handoff (18 Nov 2026, branch `claude/laughing-babbage-0jjpdu`, not merged until Luke says deploy)
+
+Tests for every fix are in `tests/handoff-fixes.test.mjs`. 756 pass on Node 24 and Node 22.
+
+| # | Bug | Fix |
+|---|---|---|
+| 1 | Two different “need you” lines | ONE count, `needsCount()` in `netlify/lib/action-cards.mjs`: decisions waiting on Luke (lyrics and pitch approvals too) + his open Yes/No/Edit cards (held ones too) + red accounts. The board sends it as `needs`; the phone pulse uses it (`HQLook.needTotal()` is the same rule when offline). Alerts are now “to check”, never “at risk” or “need you” (pulse and the desktop briefing). The card stack's own line says only the money at risk. `needs_you` returns `total` and `line` (the phone's number), the `decisions`, and red accounts; `open` still counts the cards only. A snoozed card still counts and the phone says so. The unused `lyricsCard()` was removed. Farm and Label keep their own header. |
+| 2 | Spotify health said “posts” | The reach line says tracks for Spotify (“tracks Atlas recorded”). TikTok and YouTube still say posts. |
+| 3, 4 | Short docs and #88's message behind the tree | HANDOFF.md and STATUS.md point here. #88's commit message can't be changed: the tree is right (47 tools). |
+| 5 | `profile_jobs` messaged Luke | It only lists now and is marked read-only. The hourly job (`pushhourly.mjs`) and the board ask Luke about a job stuck over a day, once. |
+| 6 | Read-only tools that wrote | A test calls every read-only tool and checks the desk is unchanged apart from the caller's own markers. `song_pages` reads the build reports without saving them or messaging (the hourly job still does both). `instagram` is no longer labelled read-only (post+song and our-accounts writes, and a fresh read can use a Meta call). `my_day`, `read_messages` and Alfred's `luke_briefing` still move only the caller's own read marker. |
+| 7 | `read_messages` marked unread messages read | The marker moves only past what the answer handed over: `read/<name>.json` is `{at, also}` (ids handed over after `at`). A read that returns 20 of 25 says `still_unread` and the other 5 stay unread. `unread: true` hands over the oldest first, so a backlog is read to the end. `luke_briefing`'s output did not change. |
+| 8 | RouteNote mail can't be read | Not a code bug: it needs Luke to sign the inbox in, read-only. Nothing invented meanwhile. |
+| 9 | `netlify.toml` named `touchme-geo.js` | It names `song-geo.js`, and a test checks every file the toml names exists. |
+| 10 | Stale PRs | #72, #74, #78, #81, #82 and #86 closed with a note (their content is on main). |
+| 11 | Smaller things | The four clocks and the two “card” files are explained above. Also corrected here: the Blob store table lists six stores, not five. |
 
 ---
 

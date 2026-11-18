@@ -1,6 +1,8 @@
 # HQ status (update on every deploy)
 
-**Full picture:** [docs/HQ-FULL-HANDOFF.md](HQ-FULL-HANDOFF.md). It supersedes the "through PR #84 / 40 tools / 716 tests" lines below. Main at `9e447e2` is through PR #88 (47 tools, `bs-hq-v8`, 745 tests).
+**Full picture:** [docs/HQ-FULL-HANDOFF.md](HQ-FULL-HANDOFF.md). It supersedes the "through PR #84 / 40 tools / 716 tests" lines below. Main is through PR #89 (47 tools, `bs-hq-v8`, 745 tests).
+
+**Not live yet (18 Nov 2026, branch `claude/laughing-babbage-0jjpdu`):** the handoff bug fixes. One Needs you count, read-only tools that stay read-only, the read marker, Spotify "tracks", the netlify.toml comment. 47 tools, 756 tests, `bs-hq-v9`. Live only on Luke's "deploy".
 
 **Last updated:** 18 Nov 2026, by Cursor. Main is through PR #84 (HQ workspaces). The blank-screen fix (#83), the phone look (#80), automation phase 1 (#79) and account health (#77) are live with it. Start with `docs/HANDOFF.md`.
 **Tests:** 716, all passing on Node 24 and Node 22. **Connector:** 40 tools (no new tool). Workspaces added `workspace` on `log_growth`, `record_spend`, `submit_income`, `releases`, `release_step` and on an action card, and `licence` on `release_step` for a Label cover only, so every bot refreshes. The phone look changes no option. Automation changed options on `my_day`, `send_message` and `post_update`. `log_growth` account-health fields are live from #77. Claim fields are on main from #73. The instagram tool's `post` and `song` are on main from #75.

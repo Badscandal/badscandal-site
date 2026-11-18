@@ -1240,7 +1240,7 @@ write the sheets and shouldn't). Nothing here can touch ads, posts, sheets or mo
   `read_guide` · then `releases`, `release_pack`, `release_step`, `release_fill`, `spotify_upcoming` (the
   release pipeline section), `sort_payment` (the Revolut section), `task_update` and `record_luke_answer`
   (14 Nov 2026, below). Descriptions are written for bots that follow instructions literally.
-  `tests/mcp.test.mjs` asserts the count (20) in five places.
+  `tests/mcp.test.mjs` asserts the count (47 since 18 Nov 2026) in several places.
 * **Guard rails in `staff.mjs`:** names only from the roster; every text cleaned and cut; links only
   `https://`; `secretIn()` refuses passwords, login codes, API keys, private keys, IBANs and card numbers
   (it must NOT refuse ISRCs, UPCs, 15-digit ad account ids or "token: expired": tested); an amount that
