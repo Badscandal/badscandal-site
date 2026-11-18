@@ -2,12 +2,58 @@
    only ever sees /hq and what /hq loads: it never touches the rest of badscandal.com.
    It keeps a copy of the PAGE and its SCRIPTS so the home-screen app opens without signal. It never
    keeps the numbers (/api/* always goes to the network; the page shows this device's last good copy
-   "as of <time>" when offline). Network first: a new version is used as soon as there is signal. */
-var CACHE = "bs-hq-v5"; /* v2 (11 Nov 2026): js/hq-staff.js; v3: js/hq-app.js; v4: js/hq-cmd.js; v5 (18 Nov 2026): js/hq-phone.js */
-var SHELL = ["/hq", "/js/hq-lib.js", "/js/hq.js", "/js/hq-staff.js", "/js/hq-phone.js", "/js/hq-pages.js", "/js/hq-shell.js", "/js/hq-app.js", "/js/hq-cmd.js", "/js/crt.js", "/hq.webmanifest", "/assets/hq-icon-192-v1.png"];
+   "as of <time>" when offline). Network first, then the cached copy of that same url.
+   An airline network can hang, so each fetch gives up after 8s and uses the cached copy.
+   Script urls carry ?v= (one content hash of the HQ scripts). The cache key is the full url, so a
+   new page can never be paired with an older script, and a failed fetch falls back to one version. */
+var CACHE = "bs-hq-v6"; /* v2 staff; v3 app; v4 search; v5 phone; v6 (18 Nov 2026) versioned urls */
+var V = "54dc995bd982";
+var SHELL = ["/hq",
+  "/js/crt.js?v=" + V,
+  "/js/hq-lib.js?v=" + V,
+  "/js/hq.js?v=" + V,
+  "/js/hq-staff.js?v=" + V,
+  "/js/hq-phone.js?v=" + V,
+  "/js/hq-shell.js?v=" + V,
+  "/js/hq-app.js?v=" + V,
+  "/js/hq-cmd.js?v=" + V,
+  "/js/hq-pages.js?v=" + V,
+  "/hq.webmanifest",
+  "/assets/hq-icon-192-v1.png"];
+var FETCH_MS = 8000;
 
+function fetchWithTimeout(req) {
+  return new Promise(function (resolve, reject) {
+    var ctrl = typeof AbortController === "function" ? new AbortController() : null;
+    var settled = false;
+    var timer = setTimeout(function () {
+      if (settled) return;
+      settled = true;
+      try { if (ctrl) ctrl.abort(); } catch (e) {}
+      reject(new Error("timeout"));
+    }, FETCH_MS);
+    fetch(req, ctrl ? { signal: ctrl.signal } : undefined).then(function (res) {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve(res);
+    }, function (err) {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      reject(err);
+    });
+  });
+}
 self.addEventListener("install", function (e) {
-  e.waitUntil(caches.open(CACHE).then(function (c) { return c.addAll(SHELL); }).catch(function () {}).then(function () { return self.skipWaiting(); }));
+  /* A hang must not keep the previous worker (the one that mixed versions) in control. */
+  e.waitUntil(caches.open(CACHE).then(function (c) {
+    return Promise.all(SHELL.map(function (path) {
+      return fetchWithTimeout(path).then(function (res) {
+        if (res && res.ok && res.type === "basic") return c.put(path, res);
+      }).catch(function () {});
+    }));
+  }).then(function () { return self.skipWaiting(); }));
 });
 self.addEventListener("activate", function (e) {
   e.waitUntil(caches.keys().then(function (keys) {
@@ -18,9 +64,9 @@ self.addEventListener("fetch", function (e) {
   var req = e.request, url = new URL(req.url);
   if (req.method !== "GET" || url.origin !== location.origin) return;
   if (url.pathname.indexOf("/api/") === 0) return; /* never the numbers */
-  var key = req.mode === "navigate" ? "/hq" : url.pathname;
+  var key = req.mode === "navigate" ? "/hq" : url.pathname + url.search;
   if (req.mode !== "navigate" && SHELL.indexOf(key) < 0) return;
-  e.respondWith(fetch(req).then(function (res) {
+  e.respondWith(fetchWithTimeout(req).then(function (res) {
     /* only a real page: never keep an error or a redirect over the good copy */
     if (res.ok && res.type === "basic") { var copy = res.clone(); caches.open(CACHE).then(function (c) { c.put(key, copy); }); }
     return res;

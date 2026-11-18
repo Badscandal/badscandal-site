@@ -62,6 +62,7 @@ artist growth bot that all we will need is content and $".
 
 ## In flight (branches not merged)
 
+- **HQ home screen blank on a bad connection** (`cursor/hq-sw-consistent-cache-31c2`, not merged): HQ scripts share one content hash, the service worker caches that full url and gives up after 8 seconds, and a page that never paints shows Try again and Reset app. Not live.
 - **HQ round 2** (`cursor/hq-round2-bugs-9690`, not merged): Pre-HQ packs mark only the RouteNote fields not needed; the release-day link, the video and the lyrics stay live. A Canvas step skipped for no link comes back when the link is added. `my_day` schedule lines stay whole, drop a done step and a past date, and the Monday line is the current one. Old notes to everyone drop off. A lyrics blocker clears when the lyrics are in or waiting on "Yes, correct", and that answer refreshes the step note. Signed-out lines name the platform, and a sign-in task follows the live list. Instagram: 0-view rows and old posts are not waiting; under 10 ranked says not settled; a read within 20 minutes reuses the last one and does not spend a call; a post says "song not linked" until Steve, Forge or Nova records the song. Preflight flags do not fail the check. `song_pages` fetches each page and reports the status and the time. Still 40 tools. `log_growth` keeps the Content ID claim fields from L5, and the instagram tool keeps `post` and `song`. The bots refresh.
 
 ## Waiting on someone
