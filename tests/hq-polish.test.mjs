@@ -68,7 +68,9 @@ test("income_problems names each unsorted payment by id and date", async () => {
   const d = memoryDesk();
   const a = await S.submitIncome(d, NOW, S.DEFAULT_ROSTER, { bot: "HQ", payer: "Made-up Friend", amount: 12, currency: "EUR", account: "Revolut", date: "2026-11-09", status: "unsorted", reference: "tx-polish" });
   const inc = await S.incomeState(d, NOW);
-  assert.ok(inc.problems.includes("1 payment in Revolut that nobody has sorted yet"), "the short line stays, so Alfred's briefing does not change");
+  /* 18 Nov 2026: PR #69 names the unsorted payment in the problem line itself (id, day, amount).
+     The older one-line count is gone. my_day still adds "id (date)" on that line for Ledger. */
+  assert.ok(inc.problems.some((p) => /nobody has sorted/.test(p) && p.includes(a.entry.id)), "the problem line names the payment");
   const day = await call(d, "my_day", { bot: "Ledger" });
   assert.match(day.income_problems.join("\n"), new RegExp(a.entry.id + " \\(2026-11-09\\)"));
 });

@@ -280,7 +280,7 @@ test("staff: an 'unsorted' payment (seen in the bank, not yet said what it is) i
   let i = await S.incomeState(d, NOW);
   assert.deepEqual([i.received, i.pending, i.byCategory], [{ EUR: 100 }, {}, { "Label deals": { EUR: 100 } }], "unsorted counts in neither received nor pending");
   assert.deepEqual(i.unsorted.map((e) => e.reference), ["tx-b", "tx-a"], "newest first"); assert.equal(i.unsortedCount, 2);
-  assert.ok(i.problems.includes("2 payments in Revolut that nobody has sorted yet"));
+  assert.match(i.problems.join(" "), /Payments nobody has sorted: 2026-11 · 2026-11-10 · Unknown Co · EUR 15/); /* 18 Nov 2026 */
   assert.ok(!i.unknown.includes("Made-up Friend"), "an unsorted payer is not also listed as a new payer");
   /* the same payment again as unsorted changes nothing; a later decided submit of it may sort it */
   assert.equal((await S.submitIncome(d, NOW + 3, R, { ...base, date: "2026-11-09", amount: 40, status: "unsorted", reference: "tx-a" })).updated, false);
@@ -341,7 +341,7 @@ test("staff: an unsorted payment stays in 'To sort' for a year (not four months)
   const dec = (await S.submitIncome(d, NOW, R, { ...hq, date: "2025-12-20", amount: 20, reference: "tx-dec" })).entry;
   let i = await S.incomeState(d, NOW);
   assert.deepEqual([i.unsortedCount, i.unsorted.map((e) => e.id)], [2, [july.id, dec.id]]);
-  assert.ok(i.problems.includes("2 payments in Revolut that nobody has sorted yet"));
+  assert.equal((i.problems.join(" ").match(/\(id /g) || []).length, 2); /* 18 Nov 2026 */
   assert.ok(i.problems.includes('1 unsorted payment from Dec 2025 drops off "To sort" when this month ends: sort it before then'));
   assert.deepEqual([i.received, i.entries.length], [{}, 0], "the older months are read for 'To sort' only");
   /* sort_payment without a month finds it too */

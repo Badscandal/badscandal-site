@@ -36,7 +36,7 @@ const INSTRUCTION_LINES = [
   /* A7 (17 Nov 2026): the locked month close */
   ["Ledger Sheet", "Ledger and Sheet: once month_check says last month is ready, close it with close_month and add the evidence links (the statements, the sheet). After that, any change in that month shows as a change since closing: say why in fix_payment's reason."],
   /* A6 (17 Nov 2026): pre-flight checks */
-  ["Forge Drop Verse Webmaster", "Before anything goes to the stores or into an ad, run preflight: the artist name is exactly badscandal (all lowercase, one word), ads and links go to https://badscandal.com/<song>, the master is a WAV, the artwork a JPG or PNG 3000 x 3000. Fix what it lists first."],
+  ["Forge Drop Verse Webmaster", "Before anything goes to the stores or into an ad, run preflight: the artist name is badscandal, one word (capitalisation does not matter), the primary artist is Badscandal and matches Spotify artist 29kaubgb6Esvwu0idVndGy, ads and links go to https://badscandal.com/<song>, the master is a WAV, the artwork a JPG or PNG 3000 x 3000. Fix what it lists first."],
   ["Atlas Laura Webmaster", "Before you upload a Spotify Canvas, a Spotify header image, a YouTube banner or a cover, run preflight with asset (canvas, spotify_header, youtube_banner or cover) and the file's width, height, seconds, format and size_mb: it checks them against that platform's rule. Fix what it lists first."],
   /* L12 (18 Nov 2026): profile photos and banners. HQ never logs in. */
   ["Atlas Laura Steve Kevin", "Profiles: HQ's Profiles section lists the profile photo and the banner on every official platform. Record the image that is live with profiles (action record: platform, image, the https link, changed = the day it last changed, YYYY-MM-DD). To put a new image up, propose it (action propose; give width, height, format and size_mb when that image has a size rule). Luke is asked \"Yes, correct\". Only after he says yes do you upload it yourself, by hand, and then record it. HQ never logs in and never changes a platform. X has no owner yet: Luke uploads that one himself. Instagram, TikTok and Deezer say \"Rule not set\": propose the link, and do not invent a size."],
@@ -77,7 +77,7 @@ const INSTRUCTION_LINES = [
   ["Nova", "Nova: reset today's duty rows at 07:00 São Paulo, before Ledger's 07:30 run, so every bot finds its row."],
   ["Alfred", "Alfred: for a short message use luke_short_briefing (the cap, income, the top 3 decisions by deadline, every sign-in Luke has to do); luke_briefing is the full one."],
   /* the pipeline, 15 Nov 2026 (Luke) */
-  [null, "The artist name is badscandal, all lowercase, everywhere: store details, featuring, copyright lines, captions, messages. Never Badscandal or BADSCANDAL."],
+  [null, "The artist name is badscandal, one word, everywhere: store details, featuring, copyright lines, captions, messages. Capitalisation does not matter."],
   ["Forge Webmaster", "Forge and Webmaster: every ad links to the song's own page, badscandal.com/<song>, which carries the Meta pixel (HQ's Pages shows who clicked and what it cost); never straight to Spotify."],
   /* 16 Nov 2026 (Luke, also sent to Nova) */
   ["Forge", "Forge: you never make or launch ads on your own. A song's ads are made WITH Luke after it is out (he oversees them, often several sets, with Claude working in his browser); your release step \"Ads made with Luke, after the release\" waits for the release day. Later you may copy those ads for other posts, only with videos Luke gives you. A lyric video is never used for ads: it is only for YouTube."],
@@ -105,7 +105,9 @@ export function toolsVersion(tools) {
 export function connectorStatus(tools, args) {
   const version = toolsVersion(tools), n = tools.length;
   const seenRaw = args && args.tools_seen;
-  const ver = args && args.list_version != null ? String(args.list_version).trim() : "";
+  const listVer = args && args.list_version != null ? String(args.list_version).trim() : "";
+  const toolsVer = args && args.tools_version != null ? String(args.tools_version).trim() : "";
+  const ver = listVer || toolsVer;
   const reportedCount = !(seenRaw == null || seenRaw === "");
   const seen = reportedCount ? Number(seenRaw) : null;
   const countBad = reportedCount && seen !== n;
@@ -120,10 +122,11 @@ export function connectorStatus(tools, args) {
 
 export const TOOLS = [
   { name: "my_day", title: "My day", readOnly: true,
-    description: "START HERE, every run. Returns who you are on the team, today's duties and their deadlines (São Paulo time), your open tasks, messages waiting on you, your open questions to Luke and how long each has waited (questions_to_luke), every new message for you since your last read (messages_for_you: Luke's answers to you included), new notes for the whole team, and the rules. The first lines are the live tool count and version: pass tools_seen (how many tools your app lists). If that number or list_version is not the desk's, the answer says reconnect needed. Read it before doing anything else.",
+    description: "START HERE, every run. Returns who you are on the team, today's duties and their deadlines (São Paulo time), your open tasks, messages waiting on you, your open questions to Luke and how long each has waited (questions_to_luke), every new message for you since your last read (messages_for_you: Luke's answers to you included), new notes for the whole team, and the rules. The first lines are the live tool count and version: pass tools_seen (how many tools your app lists) and tools_version or list_version (the version your app last loaded). If that number or version is not the desk's, the answer says reconnect needed. Read it before doing anything else.",
     inputSchema: obj({ bot: BOT,
       tools_seen: { type: "integer", description: "How many tools your app lists right now. If this is not the desk's count, the answer says reconnect needed." },
-      list_version: str("Optional. The version from your last my_day. If it is not the desk's version, the answer says reconnect needed.") }, ["bot"]) },
+      list_version: str("Optional. The version from your last my_day. If it is not the desk's version, the answer says reconnect needed."),
+      tools_version: str("Optional. The version your app last loaded. Same check as list_version: if it is not the current one, the answer says reconnect needed.") }, ["bot"]) },
   { name: "post_update", title: "Post an update", idempotent: false,
     description: "Add one line to the live log Luke sees on the dashboard. Call it when you START a duty (status working), when you FINISH it (status done, with the number you logged), when you are STUCK (status blocked, say exactly what is needed and from whom) or when something FAILED (status error). One line, plain words, no secrets. Finishing a duty here also marks it done on the dashboard.",
     inputSchema: obj({ bot: BOT,
@@ -239,15 +242,17 @@ export const TOOLS = [
   { name: "record_spend", title: "Record a day's ad spend",
     description: "FORGE (Nova may do it for him): ONE platform's spend for ONE day, exactly as the ad account shows it, in the account's own currency (never converted). 0 for a day with no ads. If you could not read it, send not_read with why (for example \"signed out\") instead of an amount: the dashboard lists it as missing and marks the month's total estimated. Sending the same day again with a new amount corrects it. The answer is the month so far against the USD 1,000 cap, worked out on the site with the team's fixed monthly rate: use that figure, never your own sum. song: only when this amount is for one song. Leave it out for the account total. Never guess a song from the campaign name, and never record the same money both ways.",
     inputSchema: obj({ bot: BOT, platform: str("Meta | Google | TikTok", { enum: S.SPEND_PLATFORMS }), account: str("The ad account's name as shown."),
-      date: str("The day, YYYY-MM-DD."), amount: { type: "number", description: "The day's spend as shown, for example 12.40. 0 for no ads." },
+      date: str("The day, YYYY-MM-DD. Or use days for several days in one call."), amount: { type: "number", description: "The day's spend as shown, for example 12.40. 0 for no ads." },
       currency: str("The account's three-letter currency: USD, EUR..."), not_read: str("Only when you could not read the amount: why, in a few words."),
-      song: str("Optional. The song this amount is for. Leave it out when it is the account total: HQ then says not linked to a song.") }, ["bot", "platform", "date"]) },
+      song: str("Optional. The song this amount is for. Leave it out when it is the account total: HQ then says not linked to a song."),
+      days: { type: "array", description: "Optional. Several days in one call: each {date, amount, currency, song} or {date, not_read}.", items: { type: "object", properties: { date: { type: "string" }, amount: { type: "number" }, currency: { type: "string" }, not_read: { type: "string" }, song: { type: "string" } } } } }, ["bot", "platform"]) },
   { name: "log_growth", title: "Log a day's growth or song numbers",
     description: "STEVE, ATLAS, KEVIN, LAURA: ONE call per platform (Growth: followers, views, the best post) or per song (Songs: Spotify streams, listeners, saves, playlist adds) for ONE day, numbers exactly as shown. The change in followers is worked out for you. Anything you could not read: leave it out and name it in gaps with why (TikTok views come a day late; Instagram has no daily views on the web): your duty is marked done, with gaps, never blocked. Sending the same numbers again does nothing; a later call for the same day fills in what was missing. Put your duty id (D-...) in duty if you have more than one duty today.",
     inputSchema: obj({ bot: BOT, date: str("The day the numbers are for, YYYY-MM-DD."),
       platform: str("For Growth: TikTok, Instagram, YouTube..."), account: str("For Growth: the account handle."),
-      followers: str("Followers as shown, for example 1240 or 1,240."), views: str("Views as shown."),
-      channel_views: str("YouTube: the Official Artist Channel's views as shown (17 Nov 2026)."), shorts_views: str("Shorts or Reels views as shown."), monthly_listeners: str("Platform Spotify (Atlas): the artist's monthly listeners as shown in Spotify for Artists (17 Nov 2026)."), brazil_listeners: str("Platform Spotify: the monthly listeners in Brazil, as shown (Audience, Location)."), best_post: str("Optional. The day's best post, in a few words."), best_post_link: str("Optional. Its https link."),
+      followers: str("Followers as shown, for example 1240 or 1,240. YouTube: use subscribers (followers is accepted too)."), subscribers: str("YouTube: subscribers as shown. Stored as the follower number."), views: str("Views for the day (or the newest day shown). Not the channel's lifetime total."),
+      views_date: str("The day those views are for, YYYY-MM-DD, when they arrive a day late (TikTok)."),
+      channel_views: str("YouTube: the channel's lifetime views (the Official Artist Channel total), not the day's views."), shorts_views: str("Shorts or Reels views as shown."), watch_hours: str("YouTube: watch hours as shown."), monthly_listeners: str("Platform Spotify (Atlas): the artist's monthly listeners as shown in Spotify for Artists (17 Nov 2026)."), brazil_listeners: str("Platform Spotify: the monthly listeners in Brazil, as shown (Audience, Location)."), best_post: str("Optional. The day's best post, in a few words."), best_post_link: str("Optional. Its https link."),
       song: str("For Songs: the song's title."), streams: str("Spotify streams for that day."), listeners: str("Spotify listeners."), saves: str("Saves."), playlist_adds: str("Playlist adds."),
       gaps: { type: "object", description: 'What could not be read, and why: {"views": "TikTok shows them a day late"}.', additionalProperties: { type: "string" } },
       duty: str('Optional. Your duty id from my_day (it starts with "D-").') }, ["bot", "date"]) },
@@ -286,7 +291,7 @@ export const TOOLS = [
   { name: "set_my_card", title: "Say what I am working on", idempotent: true,
     description: "Update your card on the dashboard's Team page. working_on is optional: leave it out to keep what you last said, so you can clear only a blocker (blockers \"\"). needs is what you need and from whom. A blocker not said again for 48 hours is shown as old and drops off the headline: send it again if it still stands.",
     inputSchema: obj({ bot: BOT, working_on: str("Optional. What you are working on now, plain words (400 characters at most). Leave it out to keep the last one. \"\" clears it."), needs: str("Optional. What you need and from whom. Empty if nothing. Say it again each day it still stands: after 2 days without a new card it stops showing as an ask."),
-      blockers: str('Optional. Your known blockers as they are NOW (300 characters at most). "" (empty) = nothing stands in your way any more: it clears the blocker. Leave it out to keep the last one. You can send blockers on their own, with no working_on.') }, ["bot"]) },
+      blockers: str('Optional. Your known blockers as they are NOW (300 characters at most). "" (empty) = nothing stands in your way any more: it clears the blocker written in your profile (my_day: your_known_blockers). Leave it out to keep the last one. You can send blockers on their own, with no working_on.') }, ["bot"]) },
   { name: "releases", title: "Releases and my steps", readOnly: true,
     description: "Every release Luke has sent to the team that is coming up or came out in the last 14 days: the song, its release day, how many days to go, where it is at, its warnings, whose release it is (self-release or with a label), what is still missing from its pack, and YOUR steps for it with their due dates and state (to do, working, late, blocked, done, waiting, skipped). waiting = it can't start yet (the pitch waits until the song shows in Spotify for Artists); skipped = it does not apply (the label delivers it). Call it when my_day lists release steps for you, or when Nova asks about a release.",
     inputSchema: obj({ bot: BOT }, ["bot"]) },
@@ -326,7 +331,9 @@ export const TOOLS = [
       title: str("kind new: the song's title exactly as in the stores."),
       date: str("kind new: the release day, YYYY-MM-DD."),
       cover: str("kind new: an https link to the cover picture (square JPG or PNG, 1000 pixels or more)."),
-      track: str("kind track: https://open.spotify.com/track/<id>, nothing after the id."),
+      artists: str("kind new, optional: the artist line when it is not badscandal alone, for example \"Badscandal & Someone\"."),
+      track: str("kind track: https://open.spotify.com/track/<id>. A ?si= on the end is removed."),
+      isrc: str("kind track, optional: the track's ISRC. If it does not match the pack, the answer says so."),
       why: str("Optional: where this comes from, in one line.") }, ["bot", "kind", "slug"]) },
   /* 16 Nov 2026 (Luke: "let's do webmasters 3 fixes") */
   { name: "song_pages", title: "What happened to each song-page request, and the home card", readOnly: true,
@@ -356,7 +363,8 @@ export const TOOLS = [
     inputSchema: obj({ bot: BOT,
       releases: { type: "array", maxItems: 20, description: "Everything Spotify for Artists lists under upcoming releases right now. [] when nothing is listed.",
         items: { type: "object", properties: { title: str("The title exactly as Spotify for Artists shows it."), date: str("Its release date, YYYY-MM-DD."),
-          shown_as: str("Optional. The artist line and the label or distributor text, exactly as shown.") }, required: ["title", "date"], additionalProperties: false } },
+          shown_as: str("Optional. The artist line and the label or distributor text, exactly as shown."),
+          copy_uri: str("Optional. The song's https copy link, if Spotify for Artists shows one.") }, required: ["title", "date"], additionalProperties: false } },
       note: str("Optional. One line, for example \"two songs are on another artist's profile\".") }, ["bot", "releases"]) },
   { name: "pitch_log", title: "Record a Spotify pitch or an editorial playlist", idempotent: true,
     description: "ATLAS (Nova may record it for him). HQ never pitches a song and never changes anything on Spotify: you send the pitch yourself in Spotify for Artists, then record it here. pitched_on = the day you sent the pitch (YYYY-MM-DD). That marks \"Spotify pitch sent\" done on that day. A song the one-pitch rule skipped (another song is pitched in the same two weeks) cannot be recorded as pitched. playlist + added_on = an editorial playlist you saw the song on in Spotify for Artists, once the song is out: the playlist's name exactly as shown, and the day it was added. Log each NEW editorial playlist the day you see it. The same song, playlist and day again changes nothing. Example: song \"Night Drive\", pitched_on \"2026-11-27\". Example: song \"Night Drive\", playlist \"Dance Rising\", added_on \"2026-12-12\".",
@@ -371,7 +379,9 @@ export const TOOLS = [
       platform: str("Facebook, Instagram, YouTube, Spotify, Apple Music, TikTok, X, SoundCloud, Deezer or Amazon Music."),
       image: str("Which image: profile, photo, header, banner, cover, background, or the id (spotify-header). Leave it out when the platform has only one."),
       link: str("The https link to the image. For record, the one that is live. For propose, the new one."),
-      changed: str("With record: the day that live image last changed, YYYY-MM-DD."),
+      changed: str("With record: the day that live image last changed, YYYY-MM-DD, or \"unknown\"."),
+      changed_on: str("Same as changed."),
+      platform_filter: str("With list: only this platform. \"Facebook\" and \"Facebook Page\" are the same."),
       width: { type: "number", description: "With propose, when the image has a size rule: width in px." },
       height: { type: "number", description: "With propose, when the image has a size rule: height in px." },
       format: str("With propose, when the image has a size rule: jpg, png, gif or whatever the file is."),
@@ -456,8 +466,9 @@ const stepOut = (s, pack) => ({ step: s.key, label: s.label, owner: s.owner, due
 /* "Sat 14 Nov 12:01" (São Paulo) */
 const stampWords = (iso) => { const t = S.spStamp(Date.parse(iso)); return `${S.dayWords(t.slice(0, 10))} ${t.slice(11, 16)}`; };
 const approvalOut = (ap, what) => {
+  if (ap && ap.skipped) return { approved: null, state: "skipped: approval not needed" };
   if (!ap) return { approved: false, state: `not approved yet: ask Luke with send_message and approval (what: ${what})` };
-  if (ap.sentOnly) return { approved: false, sent: true, state: `sent ${S.dayWords(ap.on) || "already"}${ap.by ? ` by ${ap.by}` : ""}; no approval was recorded on the desk (nothing to do: it is done)` };
+  if (ap.sentOnly) return { approved: null, sent: true, state: `done, approval not needed (sent ${S.dayWords(ap.on) || "already"}${ap.by ? ` by ${ap.by}` : ""}; no approval was recorded on the desk)` };
   const by = "Luke" + (ap.via ? ` (via ${ap.via})` : "");
   if (what === "lyrics" && ap.current === false) return { approved: false, state: `approved by ${by} on ${stampWords(ap.at)}, but the lyrics changed since: ask Luke again`, by };
   return { approved: true, by, on: stampWords(ap.at), ...(what === "pitch" ? { text: ap.text } : { matches_the_pack: true }), ...(ap.words ? { luke_said: ap.words } : {}) };
@@ -531,6 +542,7 @@ export async function callTool(tool, args, ctx) {
       const r = await S.sendMessage(store, now, roster, { from: me, to: args.to, text: args.text, needs: args.needs, re: args.reply_to, options: args.options, questions: args.questions, about: args.about, answers: args.answers, approval: args.approval, recommend: args.recommend, recommend_option: args.recommend_option });
       const left = r.parent && Array.isArray(r.parent.questions) ? r.parent.questions.filter((q) => !q.answer).length : 0;
       return { sent: true, id: r.message.id, to: r.message.to, needs: r.message.needs, ...(r.parent && r.parent.resolved ? { answered: r.parent.id } : {}), ...(left ? { still_open: `${left} question${left === 1 ? "" : "s"} of that message still need${left === 1 ? "s" : ""} an answer` } : {}),
+        ...(r.lyricsPending ? { lyrics_pending: r.lyricsPending.note || "These look like lyrics. They are not in the pack yet." } : {}),
         note: r.message.to === "Luke" ? "Luke sees this on the dashboard and in Alfred's next message. It is not sent to his phone straight away." : "Saved on the board." };
     }
     case "instagram": {
@@ -541,25 +553,48 @@ export async function callTool(tool, args, ctx) {
         if (!IG.OWN_EDITORS.includes(me)) throw new S.StaffError("Only Nova changes the list of our own accounts. Read it with our_accounts list; to change it, ask Nova (send_message).");
         try { changed = await IG.editOwn(ctx.ig(), now, { by: me, action: oa, handle: args.handle, reason: args.reason }); } catch (e) { throw new S.StaffError(e.message); }
       } else if (oa && oa !== "list") throw new S.StaffError("our_accounts is list, add or remove.");
-      const v = await IG.igView(ctx.ig(), now);
-      const ourAccounts = { handles: v.own.map((h) => "@" + h), note: "Comments from these accounts never count: not in the ranking, the fans' list or needs_reply. The connected account is always on it. Only Nova changes it.",
+      let spend = [];
+      try { spend = (await S.listSpend(store, now) || []).filter((r) => /meta|facebook|instagram/i.test(r.platform || "")); } catch {}
+      const v = await IG.igView(ctx.ig(), now, { spend });
+      const ourAccounts = { handles: v.own.map((h) => "@" + h), count: v.own.length, note: "Comments from these accounts never count: not in the ranking, the fans' list or needs_reply. The connected account is always on it. Only Nova changes it.",
         changes: (v.ownLog || []).map((x) => ({ on: S.spStamp(x.at), by: x.by, what: `${x.action} @${x.handle}`, reason: x.reason })) };
-      if (oa) return { our_accounts: ourAccounts, ...(changed ? { done: `${changed.change.action === "add" ? "Added" : "Removed"} @${changed.change.handle}.` } : {}) };
+      const hour = new Date(now).toISOString().slice(0, 13);
+      let used = 0;
+      if (oa !== "list") {
+        try {
+          const ig = ctx.ig();
+          const prev = typeof ig.get === "function" ? await ig.get("tool-calls.json") : null;
+          used = prev && prev.hour === hour ? Number(prev.n) || 0 : 0;
+          used += 1;
+          if (typeof ig.setJSON === "function") await ig.setJSON("tool-calls.json", { hour, n: used });
+        } catch { used += 1; }
+      }
+      const calls_left = Math.max(0, 3 - used);
+      if (oa === "list") return { our_accounts: ourAccounts, calls_left, note: "Listing our accounts does not use a call. The numbers are below only when you ask for the ranking." };
       const st = v.status;
+      const lineOf = (c) => `${c.at.slice(0, 16).replace("T", " ")} · ${c.user}: ${c.text} (on “${c.postCaption}”)` + (c.id ? ` · comment ${c.id}` : "") + (c.link ? ` · ${c.link}` : "");
+      const flags = [];
+      if (v.ranking.notSettled) flags.push("not settled yet: fewer than 10 ranked posts");
+      if (v.ranking.needSix) flags.push("need 6+ ranked to compare top 3 vs bottom 3");
+      if (v.ranking.noClearWinner) flags.push("no clear winner: the top two are within 1 point");
       return { connected: st.connected, ...(st.connected ? { account: "@" + st.username } : { how: "Luke connects it once in HQ (Growth & Fans › Connect Instagram)." }),
-        ...(st.lastError ? { problem: st.lastError } : {}), followers: st.followers, last_read: st.lastOkAt ? S.spStamp(st.lastOkAt) : "never",
-        posts: v.posts.map(IG.postLine), new_comments: v.comments.slice(0, 20).map((c) => `${c.at.slice(0, 16).replace("T", " ")} · ${c.user}: ${c.text} (on “${c.postCaption}”)`),
+        ...(st.picture ? { profile_picture: st.picture } : {}),
+        ...(st.lastError ? { problem: st.lastError } : {}), followers: st.followers, last_read: st.lastOkAt ? S.spStamp(st.lastOkAt) : "never", calls_left,
+        posts: v.posts.map(IG.postLine), new_comments: v.comments.slice(0, 20).map(lineOf),
         top_countries: v.countries.map((c) => `${c.country} ${c.count}`),
-        ranking: { how: "Every post at the SAME age: its numbers at 1 day. Best first by engagement per view = (likes + comments + saves + shares) / views; our own accounts' comments are left out. Also saves + shares per view (real interest), follows per view and profile visits (followers are the weekly goal). 'boosted' = the ad's own spend and engagements and the cost per engagement; 'before the ad' = the post's numbers before its first ad started. 'older' = posts HQ only has lifetime numbers for: not the same age, use them as a reference only. Posts under " + v.ranking.minViews + " views or younger than a day and a half aren't ranked yet. With fewer than 10 ranked posts the order is not settled: say so.",
+        ranking: { how: "Every recent post at the SAME age: its numbers at 1 day. Best first by engagement per view. Posts older than 3 weeks are in older, even when a 1-day number exists. A boost is the ad's spend, its engagements and the cost per engagement, or HQ's recorded Meta spend the day of the post or the next day. 'before the ad' is the post's numbers before that spend. Posts under 1,000 views are not ranked. Follows per view and profile visits are on the line when Instagram sent them.",
           ranked: v.ranking.ranked.length, best: v.ranking.ranked.slice(0, 5).map(rankLine), worst: v.ranking.ranked.length > 5 ? v.ranking.ranked.slice(-3).reverse().map(rankLine) : [],
-          older: v.ranking.older.slice(0, 10).map(rankLine), not_ranked_yet: v.ranking.tooFew, ads_read: v.ranking.adsAt ? S.spStamp(v.ranking.adsAt) : "not yet (the ads are read hourly with Meta's read-only key)" },
-        needs_reply: v.needsReply.map((c) => `${c.at.slice(0, 16).replace("T", " ")} · ${c.user}: ${c.text} (on “${c.postCaption}”)`),
+          older: v.ranking.older.map(rankLine), waiting: v.ranking.tooFew.map(rankLine), not_ranked_yet: v.ranking.tooFew.length,
+          ...(flags.length ? { flags } : {}),
+          ads_read: v.ranking.adsAt ? S.spStamp(v.ranking.adsAt) : "not yet (the ads are read hourly with Meta's read-only key)" },
+        needs_reply: v.needsReply.map(lineOf),
         needs_reply_note: "Questions from fans nobody of ours has answered. Replying goes outside the team: Luke decides and replies. Put them in your update for Luke; never reply yourself.",
         fan_inbox: { note: "People asking the song's name or where to listen, and people who commented on more than one post. needs_reply true is for Luke: put it in your update for him. Never reply, like, hide or delete a comment.",
-          questions: (v.fanInbox ? v.fanInbox.questions : []).map((q) => ({ needs_reply: q.needsReply, kind: q.kind === "listen" ? "where to listen" : "song name", when: String(q.at || "").slice(0, 16).replace("T", " "), user: q.user, text: q.text, on: q.postCaption })),
+          questions: (v.fanInbox ? v.fanInbox.questions : []).map((q) => ({ needs_reply: q.needsReply, kind: q.kind === "listen" ? "where to listen" : "song name", when: String(q.at || "").slice(0, 16).replace("T", " "), user: q.user, text: q.text, on: q.postCaption, ...(q.id ? { comment: q.id } : {}), ...(q.link ? { link: q.link } : {}) })),
           repeat_fans: (v.fanInbox ? v.fanInbox.repeats : []).map((r) => ({ needs_reply: r.needsReply, user: r.user, posts: r.posts, comments: r.comments, latest: r.lastText, on: r.postCaption })) },
-        own_accounts: v.own.map((h) => "@" + h),
-        note: "Read-only. Don't open Instagram in a browser for these numbers. Never change, start, pause or create ads." };
+        own_accounts: v.own.map((h) => "@" + h), ...(oa ? { our_accounts: ourAccounts } : {}),
+        ...(changed ? { done: `${changed.change.action === "add" ? "Added" : "Removed"} @${changed.change.handle}.` } : {}),
+        note: "Read-only. 3 reads an hour. Don't open Instagram in a browser for these numbers. Never change, start, pause or create ads." };
     }
     case "close_month": {
       const r = await S.closeMonth(store, now, roster, { by: me, month: args.month, evidence: args.evidence });
@@ -579,11 +614,20 @@ export async function callTool(tool, args, ctx) {
         rule = S.ASSETS[kind].rule;
         for (const t of found) problems.push(`${S.ASSETS[kind].label}: ${t.replace(new RegExp("^" + S.ASSETS[kind].label + " "), "")}`);
       }
+      const notes = [], checked = [];
       let own = "";
-      if (has("song")) { const r = S.findRelease(await S.listReleases(store), args.song, { drafts: true }); own = r.id; for (const x of S.preflightOf(r)) problems.push(x.text); }
-      if (has("text")) for (const t of S.artistProblems(args.text)) problems.push(`Text: ${t}`);
-      if (has("link")) { const pr = S.adLinkProblem(args.link, "", own); if (pr) problems.push(`Link: ${pr}`); }
-      return { ok: problems.length === 0, problems, ...(rule ? { rule } : {}), note: problems.length ? "Fix these before it goes out (release_fill for your own fields; tell Luke for his)." : "Nothing to fix." };
+      if (has("song")) {
+        const r = S.findRelease(await S.listReleases(store), args.song, { drafts: true }); own = r.id;
+        for (const x of S.preflightOf(r)) (x.warn ? notes : problems).push(x.text);
+        for (const t of S.artistNotes([r.pack && r.pack.primary, r.pack && r.pack.featuring, r.pack && r.pack.copyright, r.pack && r.pack.spotifyArtist].filter(Boolean).join("\n"))) notes.push(t);
+        checked.push("artist name is one word (capitalisation does not matter)", "primary artist is Badscandal and matches Spotify artist 29kaubgb6Esvwu0idVndGy");
+        if (r.pack && r.pack.wav) checked.push(/\.wav(\?|$)/i.test(r.pack.wav) ? "master link ends in .wav" : "master link was checked: it does not end in .wav");
+        checked.push("artwork rule is a JPG or PNG, 3000 x 3000 (pass width and height on asset cover to check a file)");
+      }
+      if (has("asset")) { for (const t of S.assetNotes(String(args.asset).trim().toLowerCase(), { width: args.width, height: args.height, seconds: args.seconds, format: args.format, mb: args.size_mb }) || []) notes.push(t); checked.push("platform size and format"); }
+      if (has("text")) { for (const t of S.artistProblems(args.text)) problems.push(`Text: ${t}`); for (const t of S.artistNotes(args.text)) notes.push(t); checked.push("the text"); }
+      if (has("link")) { const pr = S.adLinkProblem(args.link, "", own); if (pr) problems.push(`Link: ${pr}`); checked.push(pr ? "the link" : "the link points at badscandal.com/<song>"); }
+      return { ok: problems.length === 0, problems, ...(notes.length ? { notes } : {}), ...(checked.length ? { checked } : {}), ...(rule ? { rule } : {}), note: problems.length ? "Fix these before it goes out (release_fill for your own fields; tell Luke for his)." : "Nothing to fix." };
     }
     case "recommend": {
       const p = await S.recommendMessage(store, now, roster, { by: me, id: args.message_id, option: args.option, why: args.why });
@@ -622,7 +666,7 @@ export async function callTool(tool, args, ctx) {
         return { you: me, anything_new: fresh.length > 0, count: fresh.length, last_read: readSince ? S.spStamp(Date.parse(readSince)) : "never", waiting_on_you: S.waitingOn(all, me).length };
       }
       const show = args.unread === true ? "unread" : args.show || "mine", n = Math.min(50, Math.max(1, Number(args.limit) || 20));
-      let pick = show === "unread" ? forMe(readSince) : show === "all" ? all : show === "open" ? all.filter(S.isOpen) : all.filter((m) => m.to === me || m.to === "all" || m.from === me);
+      let pick = show === "unread" ? forMe(readSince) : show === "all" ? all : show === "open" ? all.filter((m) => S.isOpen(m) && (m.to === me || m.from === me)) : all.filter((m) => m.to === me || m.to === "all" || m.from === me);
       pick = S.filterMessages(pick, roster, args);
       return { you: me, showing: show, waiting_on_you: S.waitingOn(all, me).map(short), messages: pick.slice(0, n).map(short), ...(pick.length > n ? { more: `${pick.length - n} more match: narrow it or raise limit (50 at most).` } : {}) };
     }
@@ -652,20 +696,25 @@ export async function callTool(tool, args, ctx) {
         main: !!src.main, ...(src.dueDay ? { due_day: src.dueDay } : {}), shown_on: "badscandal.com/hq, Money" };
     }
     case "record_spend": {
-      const r = await S.recordSpend(store, now, roster, { by: me, platform: args.platform, account: args.account, date: args.date, amount: args.amount, currency: args.currency, not_read: args.not_read, song: args.song });
-      const e = r.entry;
+      const days = Array.isArray(args.days) && args.days.length ? args.days : [{ date: args.date, amount: args.amount, currency: args.currency, not_read: args.not_read, song: args.song }];
+      const saved = [];
+      let r = null;
+      for (const d of days) {
+        r = await S.recordSpend(store, now, roster, { by: me, platform: args.platform, account: args.account, date: d.date, amount: d.amount, currency: d.currency || args.currency, not_read: d.not_read, song: d.song || args.song });
+        saved.push(r.entry);
+      }
       /* the month so far as the site works it out (the team's fixed rate), read AFTER this row was saved */
       const hq = ctx.hq ? await ctx.hq().catch(() => null) : null;
       const cap = hq && hq.money ? hq.money.cap : null;
-      return { saved: r.added || r.updated, ...(r.duplicate ? { duplicate: true } : {}), ...(r.updated ? { updated: true } : {}),
-        recorded: `${e.platform} ${e.date}: ` + (e.amount != null ? `${e.currency} ${e.amount.toFixed(2)}` : `not read (${e.notRead})`),
+      return { saved: saved.some((x) => x), days: saved.length, ...(r.duplicate ? { duplicate: true } : {}), ...(r.updated ? { updated: true } : {}),
+        recorded: saved.map((x) => `${x.platform} ${x.date}: ` + (x.amount != null ? `${x.currency} ${x.amount.toFixed(2)}` : `not read (${x.notRead})`)).join("; "),
         month_to_date: cap ? { spent: `${cap.currency} ${cap.spent.toFixed(2)}`, cap: `${cap.currency} ${cap.amount}`, left: `${cap.currency} ${cap.left.toFixed(2)}`, status: cap.status,
           rate: cap.rateUsed ? `${cap.rateUsed.value} USD per EUR (${cap.rateUsed.from})` : "no conversion needed", not_read: cap.notRead || [], estimated: !!cap.estimated }
           : "not read just now: the team's sheet could not be read" };
     }
     case "log_growth": {
       const prev = me !== "Claude" && args.platform && ctx.hq ? await ctx.hq().then((h) => { const g = h && h.growth ? h.growth.find((p) => String(p.platform).toLowerCase() === String(args.platform).trim().toLowerCase()) : null; return g && g.lastDay ? { date: g.lastDay, followers: g.followers } : null; }).catch(() => null) : null;
-      const r = await S.logGrowth(store, now, roster, { by: me, date: args.date, platform: args.platform, account: args.account, followers: args.followers, views: args.views, channel_views: args.channel_views, shorts_views: args.shorts_views, monthly_listeners: args.monthly_listeners, brazil_listeners: args.brazil_listeners, best_post: args.best_post, best_post_link: args.best_post_link,
+      const r = await S.logGrowth(store, now, roster, { by: me, date: args.date, platform: args.platform, account: args.account, followers: args.followers, subscribers: args.subscribers, views: args.views, views_date: args.views_date, channel_views: args.channel_views, shorts_views: args.shorts_views, watch_hours: args.watch_hours, monthly_listeners: args.monthly_listeners, brazil_listeners: args.brazil_listeners, best_post: args.best_post, best_post_link: args.best_post_link,
         song: args.song, streams: args.streams, listeners: args.listeners, saves: args.saves, playlist_adds: args.playlist_adds, gaps: args.gaps, duty: args.duty, prev });
       const fixedWords = r.corrected && r.corrected.length ? r.corrected.map((c) => `${c.date}: ${c.from == null ? "none" : (c.from >= 0 ? "+" : "") + c.from} -> ${(c.to >= 0 ? "+" : "") + c.to}`) : null;
       if (r.duplicate) return { saved: false, duplicate: true, ...(fixedWords ? { changes_fixed: fixedWords } : {}),
@@ -679,17 +728,21 @@ export async function callTool(tool, args, ctx) {
     }
     case "link_transfer": {
       const r = await S.linkTransfer(store, now, roster, { by: me, revolut_id: args.revolut_id, month: args.month, from: args.from, note: args.note });
-      return { saved: true, linked: r.linked, counted: `${r.entry.currency} ${Number(r.entry.amount).toFixed(2)}`, source: r.entry.source || "", category: r.entry.category, note: r.entry.note };
+      return { saved: true, linked: r.linked, counted: `${r.entry.currency} ${Number(r.entry.amount).toFixed(2)}`, source: r.entry.source || "", category: r.entry.category, note: r.entry.note,
+        ...(r.remainder != null ? { remainder: r.remainder } : {}), ...(r.remainder_note ? { remainder_note: r.remainder_note } : {}), ...(r.sources ? { sources: r.sources } : {}) };
     }
     case "month_check": {
       const c = await S.monthCheck(store, now, { month: args.month });
       const money = (o) => Object.keys(o).sort().map((k) => `${k} ${Number(o[k]).toFixed(2)}`).join(" + ") || "nothing";
-      const line = (e) => `${e.date} · ${e.payer} · ${e.currency} ${Number(e.amount).toFixed(2)} · ${e.account} (id ${e.id})`;
+      const line = (e) => `${(e.date || "").slice(0, 7)} · ${e.date} · ${S.hidePrivate(e.payer)} · ${e.currency} ${Number(e.amount).toFixed(2)} · ${e.account} (id ${e.id})`;
       const label = new Date(c.month + "-15T12:00:00Z").toLocaleDateString("en-GB", { month: "long", year: "numeric", timeZone: "UTC" });
       return { month: c.month, ready: c.ready, received: money(c.received),
+        counts_in: "the month the money landed in Revolut",
         to_sort: c.toSort.map((e) => line(e) + (c.fromOwn(e) ? ` · from your own ${c.fromOwn(e).name}: link it with link_transfer` : " · sort it, or ask Luke")),
         waiting_in_wise_or_paypal: c.waiting.map((e) => line(e) + " · when it reaches Revolut, link it"),
-        own_transfers_to_check: c.ownTransfers.map((e) => line(e) + " · if it came from PayPal or Wise, link it with link_transfer"),
+        own_transfers_to_check: c.ownTransfers.map((e) => line(e) + " · " + S.transferWords(e)),
+        ...(c.statementLater && c.statementLater.length ? { statement_landed_later: c.statementLater.map((e) => `statement ${(e.statement || e.date || "").slice(0, 7)}, landed ${e.date}: counts in ${(e.date || "").slice(0, 7)}`) } : {}),
+        ...(c.suggestions && c.suggestions.length ? { possible_revolut_matches: c.suggestions.map((s) => { const w = c.waiting.find((x) => x.id === s.id) || {}; return `${S.hidePrivate(w.payer)} ${w.currency} ${w.amount} may match ${s.matches.map((m) => `${m.date} ${m.currency} ${m.amount} (id ${m.id})`).join(" or ")}`; }) } : {}),
         verdict: c.ready ? `${label} is right: received ${money(c.received)} (Revolut).` : `${label} is not right yet: ${c.toSort.length} to sort, ${c.waiting.length} waiting in Wise or PayPal.`,
         /* A7 (17 Nov 2026): a closed month says so, with every change since (old -> new) */
         ...(await S.monthCloseView(store, now, c.month).then((v) => v ? { closed: { line: S.closeLine(v), evidence: v.evidence, changes_since: S.closeChangeLines(v.changes) } }
@@ -697,8 +750,8 @@ export async function callTool(tool, args, ctx) {
     }
     case "payments": {
       const r = await S.listPayments(store, now, { month: args.month, account: args.account, source: args.source, payer: args.payer, status: args.status, limit: args.limit });
-      return { month: r.month, total: r.total, payments: r.payments.map((e) => ({ id: e.id, month: r.month, date: e.date, payer: e.payer, amount: e.amount, currency: e.currency, status: e.status,
-        category: e.category, source: e.source || "", account: e.account, added_by: e.by, ...(e.song ? { song: e.song } : {}), ...(e.store ? { store: e.store } : {}), ...(e.note ? { note: e.note } : {}), ...(e.paidBy ? { paid_by: e.paidBy } : {}) })),
+      return { month: r.month, total: r.total, payments: r.payments.map((e) => { const o = S.payOut(e, r.month); return { id: e.id, statement_month: o.statement_month, landed_month: o.landed_month, counts_in: o.counts_in, date: o.date, payer: o.payer, amount: e.amount, currency: e.currency, status: o.status,
+        category: e.category, source: e.source || "", account: e.account, added_by: e.by, counted: o.counted, ...(e.song ? { song: e.song } : {}), ...(e.store ? { store: e.store } : {}), ...(o.counts_note ? { counts_note: o.counts_note } : {}), ...(o.note ? { note: o.note } : {}), ...(o.paid_by ? { paid_by: o.paid_by } : {}), ...(o.moved_to ? { moved_to: o.moved_to } : {}) }; }),
         ...(r.total > r.payments.length ? { more: `${r.total - r.payments.length} more: narrow it (account, source, payer, status) or raise limit` } : {}) };
     }
     case "income_status": {
@@ -712,10 +765,10 @@ export async function callTool(tool, args, ctx) {
       return { month: i.month, received_this_month: cur(i.received), pending_this_month: cur(i.pendingOnly), payments_logged_this_month: i.count,
         /* round 3 (16 Nov 2026, Luke: "we should never put pending income only what is received") */
         not_income_yet: "pending, payable and statement-only money is listed apart and never added to income: only received money is income",
-        received_this_year: cur(i.receivedYear),
+        received_this_year: cur(i.receivedYear), received_this_year_note: i.receivedYearNote,
         /* 17 Nov 2026: money in Wise / PayPal is seen, not counted, until it reaches Revolut (link_transfer) */
         in_wise_or_paypal_not_counted: cur(i.holding),
-        waiting_in_wise_or_paypal: (i.holdingList || []).map((e) => ({ id: e.id, month: e.date.slice(0, 7), line: `${e.date} · ${e.payer} · ${e.currency} ${e.amount.toFixed(2)} · ${e.account}` })),
+        waiting_in_wise_or_paypal: (i.holdingList || []).map((e) => ({ id: e.id, month: e.date.slice(0, 7), line: `${e.date} · ${S.hidePrivate(e.payer)} · ${e.currency} ${e.amount.toFixed(2)} · ${e.account}` })),
         duplicates: i.duplicates.map((x) => `${x.date} · ${x.currency} ${Number(x.amount).toFixed(2)} · "${x.also}" is the same payment as "${x.kept}" (id ${x.id}): counted once`),
         /* batch 4: the music's own money (no salary), what is owed and ready to pay out, statements under the payout line */
         royalties_only_this_month: cur(i.royaltiesOnly), payable_this_month: cur(i.payable), statement_only_this_month: cur(i.statementOnly),
@@ -762,8 +815,13 @@ export async function callTool(tool, args, ctx) {
       const v = S.releaseView(r, today, { sightings }), pack = r.pack || {};
       return { song: v.title, id: v.id, status: v.status === "cancelled" ? "cancelled: do not work on it" : v.status === "draft" ? "draft (not sent to the team yet)" : v.alreadyOut ? "already out (recorded for its deal: no steps)" : v.released ? "released" : "coming",
         release_day: when(v.date), days_to_go: v.daysToGo, where: v.where, deal: dealOut(v.deal), warnings: v.warnings,
-        pack: S.PACK_FIELDS.map((f) => ({ field: f.key, label: f.label, value: pack[f.key] || "", ...(pack[f.key] ? {} : { state: S.requiredNow(f, pack) ? "missing (required)" : f.neededBy ? `missing (needed for "${S.RELEASE_STEPS.find((x) => x.key === f.neededBy).label}")` : "not filled yet" }),
-          filled_by: f.fill.length ? f.fill.join(" or ") + " (or Luke)" : "Luke" })),
+        pack: S.PACK_FIELDS.map((f) => {
+          const preHq = pack.prehq === "Yes", pitchSkipped = (r.steps || []).some((s) => s.key === "pitch" && s.status === "skipped");
+          const shown = f.key === "distributor" && !pack.distributor ? (S.distributorOf(pack) || "") : (pack[f.key] || "");
+          const skipNeed = preHq || (pitchSkipped && f.neededBy === "pitch");
+          const state = shown ? "" : skipNeed ? "not needed" : S.requiredNow(f, pack) ? "missing (required)" : f.neededBy ? `missing (needed for "${S.RELEASE_STEPS.find((x) => x.key === f.neededBy).label}")` : "not filled yet";
+          return { field: f.key, label: f.label, value: shown, ...(state ? { state } : {}), filled_by: f.fill.length ? f.fill.join(" or ") + " (or Luke)" : "Luke" };
+        }),
         missing: v.missing.map(missingOut), steps: v.steps.map((s) => stepOut(s, pack)),
         pitch: pitchOut(v.pitch),
         approvals: { pitch: approvalOut(v.approvals.pitch, "pitch"), lyrics: approvalOut(v.approvals.lyrics, "lyrics") },
@@ -793,7 +851,7 @@ export async function callTool(tool, args, ctx) {
     case "profiles": {
       const action = String(args.action || "list").trim().toLowerCase();
       if (action === "list" || !args.action) {
-        const view = S.profilesView(await S.getProfiles(store), await S.listMessages(store, now));
+        const view = S.profilesView(await S.getProfiles(store), await S.listMessages(store, now), args.platform || args.platform_filter);
         return { note: view.note + " You upload a new image by hand only after Luke says yes, then record it.",
           profiles: view.platforms.map((p) => ({ platform: p.platform, owner: p.owner ? `${p.owner} uploads this` : "no owner yet: Luke uploads this himself",
             images: p.slots.map((s) => ({ id: s.id, kind: s.kind, rule: s.rule,
@@ -802,7 +860,7 @@ export async function callTool(tool, args, ctx) {
               said_yes: s.approved ? { link: s.approved.link, upload: `${p.owner || "Luke"} uploads it by hand. HQ does not change the platform.` } : null })) })),
           shown_on: "badscandal.com/hq, Profiles" };
       }
-      if (action === "record") return S.recordProfile(store, now, roster, { by: me, platform: args.platform, image: args.image, link: args.link, changed: args.changed });
+      if (action === "record") return S.recordProfile(store, now, roster, { by: me, platform: args.platform, image: args.image, link: args.link, changed: args.changed || args.changed_on });
       if (action === "propose") {
         const r = await S.proposeProfile(store, now, roster, { by: me, platform: args.platform, image: args.image, link: args.link, width: args.width, height: args.height, format: args.format, size_mb: args.size_mb, why: args.why });
         const who = r.slot.owner || "Luke";
@@ -834,7 +892,7 @@ export async function callTool(tool, args, ctx) {
       try { await S.checkSongBuilds(store, now, roster); } catch {}
       const list = await S.songPages(store, now);
       const card = S.homeCardNow(), rule = homeCardSong(SONGS, S.spDay(now));
-      return { requests: list, home_card: { now: card.title ? `${card.title} (${card.mode})` : "nothing", should_show: rule ? rule.title : "nothing", why: rule ? rule.why : "no song pages yet",
+      return { requests: list, pages: S.liveSongPages().map((p) => ({ ...p, live: "from the song list (a live 200 check is not run from here)" })), home_card: { now: card.title ? `${card.title} (${card.mode})` : "nothing", should_show: rule ? rule.title : "nothing", why: rule ? rule.why : "no song pages yet",
         ...(rule && rule.slug !== card.slug ? { to_do: `Ask Luke with song_page kind card, slug ${rule.slug}` } : { to_do: "nothing: the card shows the right song" }) } };
     }
     case "upload_cover": {
@@ -842,8 +900,8 @@ export async function callTool(tool, args, ctx) {
       return { saved: true, link: r.link, width: r.width, height: r.height, ...(r.warnings && r.warnings.length ? { warnings: r.warnings } : {}), note: "Use this link as cover in song_page. It is public: it goes on the song page anyway." };
     }
     case "song_page": {
-      const r = await S.proposeSongPage(store, now, roster, { by: me, kind: args.kind, slug: args.slug, title: args.title, date: args.date, cover: args.cover, track: args.track, why: args.why });
-      return { asked: true, id: r.message.id, question: r.message.text, note: "Nothing is built yet. Luke answers Yes, correct or No; on his yes GitHub builds it (about 2 minutes) and you get a message on the desk." };
+      const r = await S.proposeSongPage(store, now, roster, { by: me, kind: args.kind, slug: args.slug, title: args.title, date: args.date, cover: args.cover, artists: args.artists, track: args.track, isrc: args.isrc, why: args.why });
+      return { asked: true, id: r.message.id, question: r.message.text, ...(r.proposal && r.proposal.isrc_warning ? { warning: r.proposal.isrc_warning } : {}), ...(r.proposal && r.proposal.stripped_si ? { note_link: "Removed ?si= from the Spotify link." } : {}), note: "Nothing is built yet. Luke answers Yes, correct or No; on his yes GitHub builds it (about 2 minutes) and you get a message on the desk." };
     }
     case "propose_release": {
       const r = await S.proposeRelease(store, now, roster, { by: me, song: args.song, title: args.title, date: args.date, pack: args.pack, send: args.send, why: args.why });
@@ -861,7 +919,11 @@ export async function callTool(tool, args, ctx) {
       /* the guide is written by hand and can fall behind the connector (Sheet, 16 Nov 2026: "says 18 tools, the
          connector has 28"): the live list goes first, and wins where they differ */
       const live = `The connector has ${TOOLS.length} tools right now: ${TOOLS.map((t) => t.name).join(", ")}. Where the guide below says otherwise, this line and the tools' own descriptions are right.`;
-      return g.text ? `${live}\n\nSTAFF GUIDE (updated ${g.at ? g.at.slice(0, 10) : "?"})\n\n${g.text}` : `${live}\n\n${BUILT_IN_GUIDE}`;
+      const money = "Money counts once, when it lands in Revolut. A Wise or PayPal row that has moved there shows as moved to Revolut and is not counted again. paid_by is who paid it out. link_transfer ties a Revolut credit to the Wise or PayPal rows it carried. month_check says what is still to sort. close_month locks a finished month.";
+      let text = g.text || BUILT_IN_GUIDE;
+      text = text.replace(/eighteen tools/gi, `${TOOLS.length} tools`);
+      if (!/counts once/i.test(text)) text += "\n\n" + money;
+      return g.text ? `${live}\n\nSTAFF GUIDE (updated ${g.at ? g.at.slice(0, 10) : "?"})\n\n${text}` : `${live}\n\n${text}`;
     }
   }
 
@@ -906,27 +968,38 @@ export async function callTool(tool, args, ctx) {
         unknown_in_spotify: b.sightings.items.filter((x) => x.state === "unknown").map((x) => `${x.title}, ${x.dateWords}`),
         ...(sheetNote ? { note: sheetNote } : {}) };
       const w = b.staff.find((x) => x.name === me);
-      const since = now - 36 * 3600000;
+      const since = now - 4 * 86400000;
       const rs = w.releaseSteps.map((s) => ({ song: s.title, step: s.key, label: s.label, due: when(s.due), state: stepState(s), ...(s.note ? { note: s.note } : {}), ...(s.link ? { link: s.link } : {}),
         ...(s.spotifyTrack ? { spotify_track: s.spotifyTrack } : {}), ...((s.waiting || S.blockIsWait(s)) ? { waiting_for: s.waiting ? waitFor(s) : (s.note || "the note on this step") } : {}), ...(s.key === "spotify" ? { how: SPOT_HOW } : {}) }));
       /* the soonest step the bot can work on now; a waiting one (including a block that is only a wait) is not today's job */
       const firstRs = w.releaseSteps.find((s) => !s.waiting && !S.blockIsWait(s));
-      const notes = desk.messages.filter((m) => m.to === "all" && Date.parse(m.at) > since).slice(0, 5);
+      const notes = desk.messages.filter((m) => m.to === "all" && !m.resolved && Date.parse(m.at) > since).slice(0, 5);
       /* the spotify step is done by the daily report, never by release_step (11 Nov 2026, review) */
       const spotNext = firstRs && firstRs.key === "spotify";
+      const nextRel = rel.find((v) => v.date && v.date >= today);
+      const realWhen = (line) => { const m = /(\d+)\s+days?\s+before(?: a release)?/i.exec(String(line || "")); if (!m || !nextRel) return line; const d = new Date(Date.parse(nextRel.date + "T12:00:00Z") - Number(m[1]) * 86400000).toISOString().slice(0, 10); return String(line).replace(m[0], S.dayWords(d)); };
+      const revolutLive = ((desk.income && desk.income.entries) || []).some((e) => /revolut/i.test(e.account || ""));
+      let igConnected = false;
+      try { if (ctx.ig) { const st = await ctx.ig().get("state.json"); igConnected = !!(st && (st.lastOkAt || st.username)); } } catch {}
       const dutyTask = (task) => (me === "Atlas" && /monthly listeners in note|salvation/i.test(task || "")
         ? "Log yesterday's Spotify numbers for every released song, plus monthly listeners and Brazil listeners in their own fields (monthly_listeners and brazil_listeners). There is no Salvation card."
-        : task);
-      return { reconnect: conn.status, connector: conn, you: me, role: w.role, why_you_are_needed: w.why, today, now_sao_paulo: b.now,
+        : S.freshDuty(task));
+      const shownBlocker = S.freshBlocker(w.blockers, { igConnected, revolutLive });
+      const asks = desk.messages.filter((m) => m.from === me && m.to === "Luke" && S.isOpen(m)).slice(0, 8);
+      const signedOut = [];
+      for (const person of b.staff) for (const bit of [person.blockers, person.card && person.card.needs]) if (bit && /sign-?in|signed out|log in/i.test(bit)) signedOut.push(S.hidePrivate(`${person.name}: ${bit}`));
+      return { reconnect: conn.status, connector: conn, you: me, role: w.role, why_you_are_needed: S.freshWhy(me, w.why), today, now_sao_paulo: b.now,
         ...(me === "Atlas" ? { numbers_how: "Monthly listeners and Brazil listeners go in log_growth as monthly_listeners and brazil_listeners. They are not a note, and there is no Salvation card." } : {}),
-        daily_duty: w.duty, usual_time: w.time, schedule: w.schedule,
-        duties_today: w.duties.map((d) => ({ id: d.id, task: dutyTask(d.task), due: d.due || "today", status: d.late ? "late" : d.status, ...(d.blocker ? { blocker: d.blocker } : {}) })),
-        open_tasks: w.tasks.map((t) => ({ id: t.id, task: t.task, deadline: /^invalid date$/i.test(String(t.deadline || "")) ? "" : t.deadline, status: t.late ? "late" : t.status, ...(t.blocker ? { blocker: t.blocker } : {}), ...(t.note ? { your_note: t.note } : {}) })),
+        daily_duty: S.freshDuty(w.duty), usual_time: w.time, schedule: (w.schedule || []).map((s) => typeof s === "string" ? realWhen(s) : { ...s, time: realWhen(s.time), what: realWhen(s.what) }),
+        duties_today: w.duties.filter((d) => !S.staleTask(d)).map((d) => ({ id: d.id, task: dutyTask(d.task), due: d.due || "today", status: d.late ? "late" : d.status, ...(d.blocker ? { blocker: S.freshBlocker(d.blocker, { igConnected, revolutLive }) } : {}) })),
+        open_tasks: w.tasks.filter((t) => !S.staleTask(t)).map((t) => ({ id: t.id, task: dutyTask(t.task), deadline: /^invalid date$/i.test(String(t.deadline || "")) ? "" : t.deadline, status: t.late ? "late" : t.status, ...(t.blocker ? { blocker: t.blocker } : {}), ...(t.note ? { your_note: t.note } : {}) })),
         questions_to_luke: questions(me),
+        ...(asks.length ? { open_questions: asks.map((m) => ({ id: m.id, waiting: `${Math.max(0, Math.floor((now - Date.parse(m.at)) / 3600000))} h`, text: S.hidePrivate(m.text).slice(0, 140) })) } : {}),
+        ...(signedOut.length ? { signed_out_accounts: signedOut.slice(0, 6) } : {}),
         waiting_on_you: w.waiting, notes_for_everyone: notes.map(short), ...forYou(w.waiting.map((m) => m.id).concat(notes.map((m) => m.id))),
         your_last_update: w.last ? `${w.last.at} ${w.last.status}: ${w.last.message}` : "none yet",
-        ...(w.blockers && !w.blockersStale ? { your_known_blockers: w.blockers, your_known_blockers_how: 'If this no longer stands in your way, clear it: set_my_card with blockers "" (empty). working_on can be left out. If it changed, send the new words in blockers.' } : {}),
-        ...(w.blockers && w.blockersStale ? { your_known_blockers_old: "old, still true? " + w.blockers, your_known_blockers_how: 'This blocker is more than 48 hours old, so it is off the headline. If it still stands, send it again with set_my_card (blockers). If it does not, send blockers "".' } : {}),
+        ...(shownBlocker && !w.blockersStale ? { your_known_blockers: shownBlocker, your_known_blockers_how: 'If this no longer stands in your way, clear it: set_my_card with blockers "" (empty). working_on can be left out. If it changed, send the new words in blockers.' } : {}),
+        ...(shownBlocker && w.blockersStale ? { your_known_blockers_old: "old, still true? " + shownBlocker, your_known_blockers_how: 'This blocker is more than 48 hours old, so it is off the headline. If it still stands, send it again with set_my_card (blockers). If it does not, send blockers "".' } : {}),
         ...(/^(ledger|sheet|nova|alfred)$/i.test(me) ? { income_problems: incomeProblems(b.income) } : {}),
         release_steps: rs, rules: RULES,
         next: (spotNext ? `Report what Spotify for Artists shows as upcoming with spotify_upcoming: the first report that lists ${firstRs.title} marks "${firstRs.label}" done (due ${when(firstRs.due)}${firstRs.late ? ", LATE" : ""}). Do not mark it with release_step.${rs.length > 1 ? ` You have ${rs.length} open release steps in all: see release_steps.` : ""} `
@@ -963,7 +1036,7 @@ export async function callTool(tool, args, ctx) {
           ...(hq ? {} : { source: "the desk only: the sheet's Releases tab was not read, so an earlier release there can't be ruled out" }) } : hq ? "none planned" : "not read",
         unknown_in_spotify: b.sightings.items.filter((x) => x.state === "unknown").map((x) => `${x.title}, ${x.dateWords}`),
         ...(me === "Alfred" ? forYou([]) : {}), /* Alfred's call marks his messages read: they are handed to him here */
-        income_this_month: { received: cur(b.income.received), pending: cur(b.income.pending), problems: b.income.problems },
+        income_this_month: { received: cur(b.income.received), pending: cur(b.income.pendingOnly), payable: cur(b.income.payable), problems: b.income.problems },
         duties_not_done: hq ? quiet : "not read",
         how_to_report: "One message, 8 lines at most. Numbers exactly as given here, with their currency. \"not read\" is said as not read, never as 0. Decisions: say the question and the options.", ...(sheetNote ? { note: sheetNote } : {}) };
     }
@@ -1004,7 +1077,7 @@ export async function callTool(tool, args, ctx) {
         if (!t || !SIGN_IN.test(t) || (DONE_IN.test(t) && !STILL.test(t))) return;
         const k = keyOf(who, t);
         if (seenKeys.has(k) || signIns.includes(line)) return;
-        seenKeys.add(k); signIns.push(line);
+        seenKeys.add(k); signIns.push(S.hidePrivate(line));
       };
       for (const w of b.staff) {
         add(w.name, w.blockers);

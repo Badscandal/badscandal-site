@@ -1,17 +1,18 @@
 # HQ status (update on every deploy)
 
-**Last updated:** 18 Nov 2026, by Cursor (main after PR #67). Start with `docs/HANDOFF.md`.
-**Tests:** 600, all passing on Node 24 and Node 22. **Connector:** 40 tools (no new tool in #67). `income_status` includes `per_song`. Ledger, Sheet, Forge and Nova refresh.
+**Last updated:** 18 Nov 2026, by Cursor (main after PR #69). Start with `docs/HANDOFF.md`.
+**Tests:** 611, all passing on Node 24 and Node 22. **Connector:** 40 tools (no new tool in #69). Options changed, so every bot refreshes the tool list.
 No money amounts, payer names or account numbers in this file: the repo is public.
 
 ## In review (not live)
 
-Phone HQ on `cursor/hq-phone-needs-you-048c`. Needs you opens first. Money shows received (Revolut) apart from payable and Wise/PayPal. The ad gauge is display only. The desk answers from the unmerged polish (PR #68) are in this branch: reconnect line, optional working_on, stale blockers, questions to Luke, unsorted payment ids, a waiting step is not blocked. 616 tests on Node 24 and Node 22, including the per-song profit that landed on main. Not live until Luke says deploy.
+Phone HQ on `cursor/hq-phone-needs-you-048c`. Needs you opens first. Money shows received (Revolut) apart from payable and Wise/PayPal. The ad gauge is display only. The desk answers from the unmerged polish (PR #68) are in this branch: reconnect line, optional working_on, stale blockers, questions to Luke, unsorted payment ids, a waiting step is not blocked. Includes main through the connector bug fixes (PR #69). 627 tests on Node 24 and Node 22. Not live until Luke says deploy.
 
 ## Live (newest first)
 
 | When | PR | What |
 |------|----|------|
+| 18 Nov | #69 | Connector bug fixes from the bots' read-only test. Still 40 tools. Ads untouched. Stored amounts untouched: a Wise or PayPal row already counted at Revolut is "moved to Revolut" and is not counted again. Ranking floor is 1,000 views, and a boost shows its spend, engagements, cost per engagement and the numbers from before the ad. `read_guide` matches the live desk. Card digits, account digits and raw ad-account ids are hidden in tool output. |
 | 18 Nov | #67 | L4: per-song profit. Money › Per song, and one line on each Songs card. Royalties by store next to ad spend that names the song, and the release date. Anything without a song says "not linked to a song" and is not added in. No new tool. |
 | 18 Nov | #66 | L3 fan inbox, part 1. Growth & Fans shows comments asking the song's name or where to listen, and people who comment on more than one post. "Needs your reply" is for Luke. HQ never replies. No extra Instagram call. The two accounts Luke named are never shown. |
 | 18 Nov | #65 | Release cards: a sent Spotify pitch is not under Your approvals (it shows on the pitch line). Take it back only next to a real approval, and it names it. Red is only a failure. A step waiting on a date, on Luke, or on a decision he made stays calm and is not a warning. "Sent N days before release" is amber. |
@@ -52,7 +53,8 @@ Phone HQ on `cursor/hq-phone-needs-you-048c`. Needs you opens first. Money shows
 
 ## Next up
 
-- L4 is live (PR #67). Next, only on Luke's word: L3 part 2 (a fan's country, and a ready reply he approves). HQ would still never send it. A later Profiles slice (reading an image from a platform) still needs his go, and HQ would still not log in.
+- The connector bug fixes are live (PR #69). Next, only on Luke's word: L3 part 2 (a fan's country, and a ready reply he approves). HQ would still never send it. A later Profiles slice (reading an image from a platform) still needs his go, and HQ would still not log in.
+- Still for Luke, not in #69: the public stream line ("as of September 2026"), where "Plugin store" sits on the home page, and checking pack genre and language against RouteNote's list.
 - Still needs Luke: B2 YouTube sign-in, the on-hold decisions H1–H4, and L11 (who "Luka" is). B1 and B5 are not needed; B4 Instagram is connected.
 - The rest of Later (L1, L5, L9, L10) waits. Start any of it on his word.
 

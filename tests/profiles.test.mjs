@@ -41,7 +41,7 @@ test("every official platform is listed, with its owner and only the images it h
   assert.equal(slot(view, "TikTok", "tiktok-photo").rule, "Rule not set");
   assert.equal(slot(view, "Deezer", "deezer-photo").rule, "Rule not set");
   assert.match(slot(view, "Spotify", "spotify-header").rule, /2660 x 1140/);
-  assert.match(slot(view, "YouTube", "youtube-banner").rule, /2048 x 1152/);
+  assert.match(slot(view, "YouTube", "youtube-banner").rule, /2560 x 1440/); /* 18 Nov 2026: recommended, not a minimum */
   assert.equal(slot(view, "Spotify", "spotify-header").current, null);
   assert.match(view.note, /never logs in/i);
 });

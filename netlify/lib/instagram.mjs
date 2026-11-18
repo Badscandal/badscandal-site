@@ -199,7 +199,7 @@ export async function syncInstagram({ store, now, fetchImpl = fetch, logGrowth =
   try {
     try { if (await renewIfDue(store, key, now, fetchImpl)) out.renewed = true; } catch (e) { if (STOP.includes(e.kind)) throw e; }
     const self = key.route === "fb" ? key.igId : "me";
-    const me = await igGet(self, { fields: key.route === "fb" ? "username,followers_count,media_count" : "user_id,username,followers_count,media_count" }, key, fetchImpl);
+    const me = await igGet(self, { fields: key.route === "fb" ? "username,followers_count,media_count,profile_picture_url" : "user_id,username,followers_count,media_count,profile_picture_url" }, key, fetchImpl);
     out.username = me.username || key.username; out.followers = num(me.followers_count);
     const media = await igGet(`${self}/media`, { fields: "id,caption,media_type,media_product_type,timestamp,permalink,like_count,comments_count", limit: "25" }, key, fetchImpl);
     const posts = await readDoc(store, "posts.json", []);
@@ -264,7 +264,7 @@ export async function syncInstagram({ store, now, fetchImpl = fetch, logGrowth =
     }
     if (key.auth && key.auth !== "none") await store.setJSON("key.json", key);
     if (logGrowth && out.followers != null) { try { await logGrowth({ platform: "Instagram", account: "@" + (out.username || ""), followers: String(out.followers) }); } catch {} }
-    Object.assign(state, { lastOkAt: now, lastError: "", errorKind: "", username: out.username, followers: out.followers });
+    Object.assign(state, { lastOkAt: now, lastError: "", errorKind: "", username: out.username, followers: out.followers, ...(me.profile_picture_url ? { picture: String(me.profile_picture_url) } : {}) });
   } catch (e) {
     Object.assign(state, { lastError: e.message || SAY.down, errorKind: e.kind || "other" });
     if (e.kind === "limit") state.pausedUntil = now + DAY;
@@ -318,7 +318,7 @@ export function ownHandles(username, ownDoc) {
 }
 /* comments that need a reply (Nova: a fan asked if they can use the music): a question, not ours, nobody of ours
    answered it, the last 14 days. Replying goes outside the team, so it's Luke's. */
-const ASKS = /\?|\b(can i|could i|may i|use your|use this|what song|song name|which song|where can|when (is|does)|link|nome da m[uú]sica|qual ([ée] )?a m[uú]sica|posso usar|onde|quando sai)\b/i;
+const ASKS = /\?|\b(can i|could i|may i|would it be|is it okay|okay to|use (your|this|it)|what song|song name|which song|where can|when (is|does)|link|nome da m[uú]sica|qual ([ée] )?a m[uú]sica|posso usar|onde|quando sai)\b/i;
 export function needsReply(comments, now) {
   return (comments || []).filter((c) => !c.own && !c.hidden && !isHiddenHandle(c.user) && !c.answered && ASKS.test(c.text || "") && now - Date.parse(c.at || "") <= 14 * DAY).slice(0, 10)
     .map((c) => ({ id: c.id, at: c.at, user: c.user, text: c.text, postCaption: c.postCaption, link: c.link }));
@@ -364,11 +364,11 @@ export function fanInbox(comments, now) {
 export async function igStatus(store, now) {
   const key = await readDoc(store, "key.json", null), state = await readDoc(store, "state.json", {});
   const daysLeft = key && key.expiresAt ? Math.max(0, Math.floor((key.expiresAt - now) / DAY)) : null;
-  return { connected: !!(key && key.token), username: (key && key.username) || state.username || "", followers: state.followers ?? null, lastRunAt: state.lastRunAt || null, lastOkAt: state.lastOkAt || null,
+  return { connected: !!(key && key.token), username: (key && key.username) || state.username || "", followers: state.followers ?? null, picture: state.picture || "", lastRunAt: state.lastRunAt || null, lastOkAt: state.lastOkAt || null,
     lastError: state.lastError || "", errorKind: state.errorKind || "", stopped: !!state.stopped, pausedUntil: state.pausedUntil && state.pausedUntil > now ? state.pausedUntil : null, daysLeft, renews: !(key && key.route === "fb"), route: (key && key.route) || "ig",
     ...(key && key.route === "fb" ? { keyType: key.keyType || "page", expiresAt: key.expiresAt || null } : {}), ...(key && key.page ? { page: key.page } : {}) };
 }
-export async function igView(store, now) {
+export async function igView(store, now, o = {}) {
   const [status, posts, comments, countries, adDoc, ownDoc] = await Promise.all([igStatus(store, now), readDoc(store, "posts.json", []), readDoc(store, "comments.json", []), readDoc(store, "countries.json", null), readDoc(store, "adposts.json", null), readDoc(store, "own.json", null)]);
   const ownAll = ownHandles(status.username, ownDoc);
   const marked = comments.map((c) => ({ ...c, hidden: isHiddenHandle(c.user), own: ownAll.includes(parseHandle(c.user)), answered: (c.repliedBy || []).some((u) => ownAll.includes(parseHandle(u))) }));
@@ -376,14 +376,15 @@ export async function igView(store, now) {
   const shown = marked.filter((c) => !c.hidden).map((c) => ({ ...c, user: redactHandles(c.user), text: redactHandles(c.text), postCaption: redactHandles(c.postCaption || ""),
     repliedBy: (c.repliedBy || []).filter((u) => !isHiddenHandle(u)).map((u) => redactHandles(u)) }));
   /* L2: which posts engage best, with the ads that boosted them (postrank.mjs); our own comments don't count */
-  const ranking = rankPosts(posts, adDoc, { now, comments: marked });
+  const ranking = rankPosts(posts, adDoc, { now, comments: marked, spend: o.spend || [] });
   const ownLog = (((ownDoc && ownDoc.log) || []).slice().reverse()).filter((x) => !isHiddenHandle(x.handle)).slice(0, 20)
     .map((x) => ({ ...x, reason: redactHandles(x.reason || "") }));
   return { status: isHiddenHandle(status.username) ? { ...status, username: "" } : status,
-    posts: posts.slice(0, 12).map((p) => ({ ...p, caption: redactHandles(p.caption || "") })),
+    posts: posts.slice(0, 30).map((p) => ({ ...p, caption: redactHandles(p.caption || "") })),
     comments: shown.filter((c) => !c.own).slice(0, 40), countries: countries ? countries.list : [], own: ownAll.filter((h) => !isHiddenHandle(h)),
     ownLog, needsReply: needsReply(shown, now), fanInbox: fanInbox(shown, now),
-    ranking: { ranked: ranking.ranked.slice(0, 15), older: ranking.older.slice(0, 15), tooFew: ranking.tooFew.length, adsAt: ranking.adsAt, minViews: ranking.minViews } };
+    ranking: { ranked: ranking.ranked, older: ranking.older, tooFew: ranking.tooFew, adsAt: ranking.adsAt, minViews: ranking.minViews,
+      noClearWinner: ranking.noClearWinner, notSettled: ranking.notSettled, needSix: ranking.needSix } };
 }
 /* one post in plain words, for the bots: "Fri 14 Nov · Reel · “caption” · a day: 1,240 views, 880 reach, …" */
 const n0 = (v) => (v == null ? "?" : Number(v).toLocaleString("en-US"));
