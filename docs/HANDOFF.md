@@ -54,7 +54,7 @@ artist growth bot that all we will need is content and $".
 
 ## In flight (branches not merged)
 
-- **`cursor/l3-fan-inbox-b12c`:** L3 fan inbox, part 1. Not merged. Song-name questions, where to listen, and repeat fans, from comments already stored. "Needs your reply" goes to Luke. Two accounts he named are filtered in code (`HIDDEN_HANDLES`) and never shown. No new tool (still 40). When this is live, Steve, Kevin and Forge refresh the tool list so the instagram description matches.
+- **`cursor/l3-fan-inbox-b12c` (PR #66):** L3 fan inbox, part 1. Not merged. Song-name questions, where to listen, and repeat fans, from comments already stored. "Needs your reply" goes to Luke. Two accounts he named are filtered in code (`HIDDEN_HANDLES`) and never shown. No new tool (still 40). When this is live, Steve, Kevin and Forge refresh the tool list so the instagram description matches. Preview: https://deploy-preview-66--profound-haupia-db7ffa.netlify.app/hq?sample=1#growth
 
 ## Waiting on someone
 

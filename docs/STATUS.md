@@ -46,7 +46,7 @@ No money amounts, payer names or account numbers in this file: the repo is publi
 
 ## Next up
 
-- L12 and the release-card warning fix (PR #65) are live. In flight, not live: L3 fan inbox part 1 (song-name questions, where to listen, repeat fans; "Needs your reply" is Luke's; no extra Instagram call). Part 2 is not built: a fan's country, and a ready reply he approves. A later Profiles slice (reading an image from a platform) still needs his go, and HQ would still not log in.
+- L12 and the release-card warning fix (PR #65) are live. In flight, not live: PR #66, L3 fan inbox part 1 (song-name questions, where to listen, repeat fans; "Needs your reply" is Luke's; no extra Instagram call). Part 2 is not built: a fan's country, and a ready reply he approves. A later Profiles slice (reading an image from a platform) still needs his go, and HQ would still not log in.
 - Still needs Luke: B2 YouTube sign-in, the on-hold decisions H1–H4, and L11 (who "Luka" is). B1 and B5 are not needed; B4 Instagram is connected.
 - The rest of Later (L1, L4, L5, L9, L10) waits. Start any of it on his word.
 
