@@ -2775,9 +2775,22 @@ export async function getSeen(store, roster) {
    reply has been read"): read/<name>.json is written ONLY by the tools that hand a reader its messages
    (my_day, read_messages, and luke_briefing for Alfred). seen/<name>.json stays "last used the desk":
    a bot that only posts an update has used the desk, not read its messages. */
-export async function touchRead(store, now, name) {
-  try { await store.setJSON(`read/${low(name).replace(/[^a-z0-9]/g, "")}.json`, { at: new Date(now).toISOString() }); } catch {}
+export async function touchRead(store, now, name, also = []) {
+  const ids = [...new Set(also)].filter((x) => typeof x === "string").slice(-200);
+  try { await store.setJSON(`read/${low(name).replace(/[^a-z0-9]/g, "")}.json`, { at: new Date(now).toISOString(), ...(ids.length ? { also: ids } : {}) }); } catch {}
 }
+/* the whole marker: {at, also} (also = ids newer than at that were handed over too; 18 Nov 2026, a read
+   that handed over 20 of 25 must not mark the other 5) or null */
+export async function readState(store, name) {
+  try {
+    const { data } = await readDoc(store, `read/${low(name).replace(/[^a-z0-9]/g, "")}.json`, null);
+    return data && data.at ? { at: data.at, also: Array.isArray(data.also) ? data.also : [] } : null;
+  } catch { return null; }
+}
+const sinceAt = (since) => (since && typeof since === "object" ? since.at : since) || null;
+const sinceAlso = (since) => new Set(since && typeof since === "object" && Array.isArray(since.also) ? since.also : []);
+/* was message m handed to a reader whose marker is r ({at, also}) */
+export const wasRead = (r, m) => !!(r && r.at && m && (r.at > m.at || (Array.isArray(r.also) && r.also.includes(m.id))));
 /* when this reader last took its messages (null = never); read BEFORE touchRead moves it */
 export async function lastRead(store, name) {
   try { const { data } = await readDoc(store, `read/${low(name).replace(/[^a-z0-9]/g, "")}.json`, null); return data && data.at ? data.at : null; } catch { return null; }
@@ -2788,7 +2801,8 @@ export async function lastRead(store, name) {
    first. more = how many older ones did not fit (read_messages has them). */
 export function messagesFor(messages, name, since, max = 30) {
   const mine = new Set(messages.filter((m) => m.from === name).map((m) => m.id));
-  const all = messages.filter((m) => m.from !== name && (!since || m.at > since) && (m.to === name || m.to === "all" || m.about === name || (!!m.re && mine.has(m.re))))
+  const at = sinceAt(since), also = sinceAlso(since);
+  const all = messages.filter((m) => m.from !== name && (!at || m.at > at) && !also.has(m.id) && (m.to === name || m.to === "all" || m.about === name || (!!m.re && mine.has(m.re))))
     .sort((a, b) => (a.at < b.at ? 1 : -1));
   return { list: all.slice(0, max).reverse(), more: Math.max(0, all.length - max) };
 }
@@ -3910,12 +3924,13 @@ export function liveSongPages() {
     build: "https://github.com/Badscandal/badscandal-site/actions/workflows/song-page.yml",
     checked: ["title", "cover", s.spotifyTrack ? "button opens the track" : "button follows the artist"] }));
 }
-export async function songPages(store, now) {
+export async function songPages(store, now, peek = {}) {
   const list = (await listMessages(store, now, 2)).filter((m) => m.proposal && ["page", "track", "card"].includes(m.proposal.action));
   const card = homeCardPublished();
   const live = (p) => (p.action === "page" ? SONGS.some((x) => x.slug === p.slug) : p.action === "track" ? SONGS.some((x) => x.slug === p.slug && x.spotifyTrack === p.track) : card.slug === p.slug);
   return list.sort((a, b) => (a.at < b.at ? 1 : -1)).map((m) => {
-    const p = m.proposal, r = m.proposalResult;
+    const p = m.proposal, r0 = m.proposalResult;
+    const r = r0 && !r0.build && peek && peek[m.id] ? { ...r0, build: peek[m.id] } : r0;
     let state;
     if (isOpen(m)) state = "waiting on Luke";
     else if (!r && m.resolved && low(m.resolved.note) !== PROPOSE_YES) state = "Luke said no";
@@ -3936,17 +3951,27 @@ export async function songPages(store, now) {
      worked, but other tests failed after it went live -> ONE message from HQ to Claude (they never block a page).
    The report is claimed in the same write that keeps it, so two checks at once tell once. Run by song_pages and
    the hourly job. Returns the reports read this time. */
-export async function checkSongBuilds(store, now, roster) {
+async function pendingBuilds(store, now) {
   if (!songReports) return [];
   const pending = (await listMessages(store, now, 2)).filter((m) => m.proposal && ["page", "track", "card"].includes(m.proposal.action) &&
     m.proposalResult && m.proposalResult.done && !m.proposalResult.build && now - Date.parse(m.proposalResult.at) < 3 * 86400000);
-  const found = [];
-  await Promise.all(pending.map(async (m) => {
+  const out = await Promise.all(pending.map(async (m) => {
     let rep = null;
     try { rep = await songReports(m.id); } catch { rep = null; }
-    if (!rep || rep.msg !== m.id) return;
+    if (!rep || rep.msg !== m.id) return null;
     const build = { ok: !!rep.ok, ...(rep.ok ? {} : { step: clean(rep.step, 40), reason: clean(rep.reason, 300) }), ...(rep.others ? { others: clean(rep.others, 400) } : {}),
       run: /^https:\/\/github\.com\//.test(rep.run || "") ? rep.run : "", at: new Date(now).toISOString() };
+    return { m, build };
+  }));
+  return out.filter(Boolean);
+}
+/* the same reports, read and NOT kept or told (song_pages is read-only): {<message id>: build} */
+export async function peekSongBuilds(store, now) {
+  return Object.fromEntries((await pendingBuilds(store, now)).map((x) => [x.m.id, x.build]));
+}
+export async function checkSongBuilds(store, now, roster) {
+  const found = [];
+  await Promise.all((await pendingBuilds(store, now)).map(async ({ m, build }) => {
     let claimed = false;
     try {
       await mutate(store, msgKey(monthOfId(m.id)), [], (list) => {
@@ -5020,18 +5045,18 @@ export async function loadDesk(store, now) {
 /* Has the person a message was sent to READ it? (V6, 11 Nov 2026: from the read markers, read/<name>,
    which only the tools that hand over messages write.) null for "all", Luke and HQ: one person's
    reading can't be told for them (a note to all carries readCount() instead). */
-export function seenBy(read, to, at) {
+export function seenBy(read, to, at, id) {
   if (!to || to === "all" || to === "Luke" || to === "HQ") return { seen: null, seenAt: null };
   const s = read && read[to];
-  return s && s.at > at ? { seen: true, seenAt: s.at } : { seen: false, seenAt: null };
+  return wasRead(s, { at, id }) ? { seen: true, seenAt: s.at } : { seen: false, seenAt: null };
 }
 /* a note to everyone: "Read by 7 of 12" = the bots on the roster (not its sender) that read it since */
 export function readCount(read, roster, m) {
   const names = botNames(roster).filter((n) => n !== m.from);
-  const by = names.filter((n) => read && read[n] && read[n].at > m.at);
+  const by = names.filter((n) => read && wasRead(read[n], m));
   return { by: by.length, of: names.length, names: by };
 }
-const readMark = (read, roster, m) => ({ ...seenBy(read, m.to, m.at), ...(m.to === "all" ? { read: readCount(read, roster, m) } : {}) });
+const readMark = (read, roster, m) => ({ ...seenBy(read, m.to, m.at, m.id), ...(m.to === "all" ? { read: readCount(read, roster, m) } : {}) });
 /* the last 10 things Luke answered (a reply) or settled (an option, "mark as done") in 48 hours, newest
    first, each with whether its sender has READ it since */
 export function answeredByLuke(messages, seen, now) {
