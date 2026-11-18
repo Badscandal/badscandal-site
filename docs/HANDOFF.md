@@ -1,8 +1,8 @@
 # Handoff: where HQ is and what's next (read this first)
 
-**Last updated:** 18 Nov 2026, by Cursor, after PR #69 was merged.
-**main:** every PR up to #69 is live. **Tests:** 611 pass on Node 24 and Node 22, none cancelled.
-**Connector:** 40 tools. No new tool in #69. Options on existing tools changed, so every bot refreshes the tool list.
+**Last updated:** 18 Nov 2026, by Cursor, after PR #70 was merged.
+**main:** every PR up to #70 is live. **Tests:** 627 pass on Node 24 and Node 22, none cancelled.
+**Connector:** 40 tools. No new tool. Options on existing tools changed, so every bot refreshes the tool list.
 
 > **The rule (Luke, 17 Nov 2026):** every time anything is pushed to `main` for HQ, the same push updates THIS
 > file (and `docs/STATUS.md`). If Luke's computer crashes or a session ends mid-way, the next agent starts from
@@ -31,7 +31,7 @@ site + Luke's private dashboard /hq + the bots' connector /mcp).
 
 ## Where it stands (18 Nov 2026)
 
-**Where we left off:** the connector bug fixes from the bots' read-only test are live on main (PR #69, commit `dde345c`). Nothing else is in flight. L4 per-song profit (PR #67), L3 fan inbox part 1 (PR #66), L12 (Profiles, PR #64) and the release-card fix (PR #65) are live.
+**Where we left off:** the phone HQ is live on main (PR #70, commit `e5e731d`). Needs you opens first. Quiet mode is on. Money shows what landed in Revolut apart from payable and from Wise/PayPal. The ad gauge only displays the cap. The connector bug fixes (PR #69, `dde345c`), L4 per-song profit (PR #67), L3 fan inbox part 1 (PR #66), L12 (Profiles, PR #64) and the release-card fix (PR #65) are live.
 
 **HQ** (`badscandal.com/hq`, also inside the HQ apps on Luke's iPhone and Mac) has: Today, Songs, Ads, Pages
 (one tile per song page since #59), Growth & Fans (with the Instagram reader), Profiles (since #64), Upcoming (the release pipeline),
@@ -60,11 +60,11 @@ artist growth bot that all we will need is content and $".
 
 ## In flight (branches not merged)
 
-- `cursor/hq-phone-needs-you-048c`: phone HQ (Needs you first, release and team strips, quiet mode, money lines, ad gauge) plus the desk answers from PR #68 (tool-list reconnect line, optional working_on, stale blockers, questions to Luke, unsorted payment ids, a waiting step is not blocked). Includes main through the connector bug fixes (PR #69). 627 tests, Node 24 and Node 22. Not live. PR #68 can close in favour of this branch.
+- Nothing in flight. The phone HQ shipped on main as PR #70 (`e5e731d`). PR #68 can close.
 
 ## Waiting on someone
 
-- **Nova (after this phone HQ is deployed):** tell every bot to refresh. Still 40 tools. `my_day` says "reconnect needed" when `tools_seen` is not 40 (or when `tools_version` / `list_version` is not the live one). `set_my_card` can clear a blocker without `working_on`. A blocker not restated for 48 hours shows as "old, still true?". `questions_to_luke` lists each open question and how long it has waited. Ledger, Sheet, Nova and Alfred: `income_problems` names unsorted payments by id and date. Atlas: if a duty still says "monthly listeners in note" or mentions a Salvation card, change that row. Those numbers are `monthly_listeners` and `brazil_listeners` on `log_growth`.
+- **Nova (after #70, live):** tell every bot to refresh. Still 40 tools. `my_day` says "reconnect needed" when `tools_seen` is not 40 (or when `tools_version` / `list_version` is not the live one). `set_my_card` can clear a blocker without `working_on`. A blocker not restated for 48 hours shows as "old, still true?". `questions_to_luke` lists each open question and how long it has waited. Ledger, Sheet, Nova and Alfred: `income_problems` names unsorted payments by id and date. Atlas: if a duty still says "monthly listeners in note" or mentions a Salvation card, change that row. Those numbers are `monthly_listeners` and `brazil_listeners` on `log_growth`.
 - **Nova (after #69, live):** tell every bot to refresh the tool list (still 40 tools; the options changed). Ranking uses 1,000 views. A boost shows its spend, its engagements, the cost per engagement, and the numbers from before the ad. Money counts once, at Revolut: a Wise or PayPal row already counted there says "moved to Revolut" and is not counted again. A reply from Luke that looks like lyrics stays pending for the pack until he says yes. `read_guide` is the current one.
 - **Nova (after #67, live):** tell Ledger, Sheet, Forge and Nova to refresh the tool list (still 40 tools) if they have not since #67. `income_status` now includes `per_song`. Ledger and Sheet: name the song, and the store when they know it, on a royalty payment only when that payment is for that one song. If it covers more than one, leave the song out. Never guess. Forge: name the song on `record_spend` only when that amount is for one song. Leave it out for an account total. Never guess a song from a campaign name, and never record the same money both ways.
 - **Nova (after #66):** tell Steve, Kevin and Forge to refresh the tool list (still 40 tools) if they have not since #66. The instagram tool now includes the fan inbox: song-name questions, where to listen, and repeat fans. `needs_reply` true is for Luke. They never reply, like, hide or delete a comment.
