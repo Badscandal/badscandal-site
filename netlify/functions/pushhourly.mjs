@@ -11,6 +11,8 @@
       one Meta row a day on the desk by HQ (S.recordMetaSpend), from 07:00 São Paulo; no key: nothing.
    6. the Instagram reader (B4, 17 Nov 2026): followers to the desk, post numbers at 6 h / 1 day / 1 week, comments
       every 3 hours, countries daily; renews its own key weekly. Not connected: nothing.
+   7. L5 watchers: Verse's release-day note (once, São Paulo). RouteNote mail only when a mailbox is connected,
+      which it is not: the job does not invent a status and does not email anyone.
    Logic: netlify/lib/push.mjs. No key or no device: it does nothing. */
 import { getStore } from "@netlify/blobs";
 import { morning, sweep } from "../lib/push.mjs";
@@ -77,6 +79,20 @@ export default async () => {
     }
   } catch (e) {
     console.error("instagram read failed", e?.name || "Error");
+  }
+  try {
+    const roster = (await desk()).roster || S.DEFAULT_ROSTER;
+    const notes = await S.verseReleaseDay(store, now, roster);
+    const sent = notes.filter((x) => x.sent).length;
+    if (sent) console.log(`verse release day: ${sent} note${sent === 1 ? "" : "s"}`);
+    const mail = S.routeNoteMailSource();
+    if (mail.connected && mail.messages.length) {
+      const applied = await S.applyRouteNoteMail(store, now, roster, mail.messages);
+      const n = applied.filter((x) => x.applied).length;
+      if (n) console.log(`routenote mail: ${n} applied`);
+    }
+  } catch (e) {
+    console.error("watchers failed", e?.name || "Error");
   }
   try {
     S.useSongReports((id) => readSongReport(id));

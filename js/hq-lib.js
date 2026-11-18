@@ -754,13 +754,21 @@
       if (st.status === "skipped") return;
       check.push({ key: "step:" + st.key, ok: st.status === "done", text: st.label + " (" + st.owner + "): " + stepState(st, today).text });
     });
-    if (!pre) { var lyr = approvalLines(v).filter(function (x) { return x.key === "lyrics"; })[0]; check.push({ key: "lyrics", ok: !!(lyr && lyr.ok), text: lyr ? lyr.text : "Final lyrics: not approved yet" }); }
+    var lyr = approvalLines(v).filter(function (x) { return x.key === "lyrics"; })[0]; check.push({ key: "lyrics", ok: !!(lyr && lyr.ok), text: lyr ? lyr.text : "Final lyrics: not approved yet" });
     check.push({ key: "adplan", ok: has(pack.adplan), text: has(pack.adplan) ? "Ad plan: written" : "Ad plan: not written yet (your notes on the ads you set up)" });
     var okN = check.filter(function (c) { return c.ok; }).length;
+    var routeNot = { kind: 1, label: 1, split: 1, distributor: 1, deal: 1, wav: 1, artwork: 1, folder: 1, language: 1, explicit: 1, genre: 1, subgenre: 1, version: 1, writers: 1, producers: 1, featuring: 1, primary: 1, copyright: 1 };
+    var fromStep = { video: "video", page: "page", spotifyTrack: "live" };
     var fields = (o.fields || []).filter(function (f) { return f.key !== "prehq" && f.key !== "adplan"; }).map(function (f) {
       var val = f.key === "lyrics" && !has(pack.lyrics) && v.lyricsChars ? v.lyricsChars + " characters" : pack[f.key];
+      var doneOn = "";
+      if (!has(val) && fromStep[f.key]) {
+        var st = ((v && v.steps) || []).filter(function (s) { return s.key === fromStep[f.key] && s.status === "done" && s.link; })[0];
+        if (st) { val = st.link; doneOn = st.doneOn || ""; }
+      }
       var miss = ((v && v.missing) || []).filter(function (m) { return m.key === f.key; })[0];
-      return { key: f.key, label: f.short || f.label, group: f.group, value: has(val) ? String(val) : "", state: has(val) ? "filled" : pre ? "not needed" : miss ? (miss.required ? "missing" : "needed later") : "optional" };
+      var state = has(val) ? "filled" : pre && routeNot[f.key] ? "not needed" : miss ? (miss.required ? "missing" : "needed later") : "optional";
+      return { key: f.key, label: f.short || f.label, group: f.group, value: has(val) ? String(val) : "", state: state, ...(doneOn ? { done_on: doneOn } : {}) };
     });
     var results = [];
     if (v && v.released && o.song && o.song.week != null) results.push(fmt(o.song.week) + " Spotify streams in the last 7 days" + (o.song.prevWeek != null ? " (" + fmt(o.song.prevWeek) + " the 7 before)" : ""));
@@ -2003,7 +2011,39 @@
       dots: (v.steps || []).filter(function (s) { return s && s.status !== "skipped"; }).map(stepTone),
       next: next ? { label: next.label || "", owner: next.owner === "Luke" ? "You" : (next.owner || ""), when: stepState(next, today).text } : null,
       distributor: bits.join(" · "), warnings: pre ? [] : (wg.bad || []),
+      mailLine: routeMailLine(extra.mail, v),
       cover: extra.cover || "", taps: extra.taps == null ? null : extra.taps, people: extra.people == null ? null : extra.people, spend: extra.spend || "" };
+  }
+
+  /* L5. RouteNote's inbox is not connected until Luke signs it in. A song with no parsed email says not reported. */
+  function routeMailLine(src, release) {
+    if (!src || src.connected !== true) return "RouteNote email: not connected";
+    var mail = release && release.mail;
+    if (!mail || !mail.status) return "RouteNote email: not reported";
+    var bits = ["RouteNote email: " + mail.status];
+    if (mail.on) bits.push(day(mail.on));
+    if (mail.reason && mail.reason !== "not reported") bits.push(mail.reason);
+    else if (mail.status === "rejected") bits.push("reason not reported");
+    return bits.join(" · ");
+  }
+  /* What YouTube showed, as Laura recorded it. An empty list is none recorded, never a made-up claim. */
+  function contentClaimRows(claims) {
+    var list = !claims ? [] : (Array.isArray(claims) ? claims : (claims.items || []));
+    if (!list.length) return { reported: false, rows: [], empty: "No Content ID claim has been recorded." };
+    return { reported: true, empty: "", rows: list.map(function (c) {
+      return { claim: c.claim || "not reported", claimant: c.claimant ? c.claimant : "not reported", impact: c.impact ? c.impact : "not reported", date: c.date ? day(c.date) : "not reported" };
+    }) };
+  }
+  /* Phone Needs you: the mailbox sign-in, and a RouteNote rejection that needs Luke. */
+  function phoneWatchers(board) {
+    board = board || {};
+    var out = [], mail = board.mail;
+    if (!mail || mail.connected !== true) out.push({ kind: "connect", title: "RouteNote email: not connected", line: (mail && mail.steps) || "HQ cannot read RouteNote's inbox yet.", href: "#releases" });
+    ((board.waiting && board.waiting.luke) || []).forEach(function (m) {
+      if (!m || m.ask !== "routenote" || m.resolved) return;
+      out.push({ kind: "routenote", title: "RouteNote needs you", line: m.text || "", href: m.id ? "#messages/" + m.id : "#releases", id: m.id || "" });
+    });
+    return out;
   }
 
   function teamDots(workers) {
@@ -2119,5 +2159,7 @@
     /* phone HQ (18 Nov 2026): Needs you, the release strip, the team dots, the week, money, the spend gauge */
     deskWhen: deskWhen, moneyHead: moneyHead, payFlow: payFlow, spendGauge: spendGauge, decisionCards: decisionCards,
     releaseFace: releaseFace, teamDots: teamDots, weekAhead: weekAhead, quietFeed: quietFeed, followerStrip: followerStrip,
-    mondayPick: mondayPick, lyricsPreview: lyricsPreview };
+    mondayPick: mondayPick, lyricsPreview: lyricsPreview,
+    /* L5 watchers (18 Nov 2026) */
+    routeMailLine: routeMailLine, contentClaimRows: contentClaimRows, phoneWatchers: phoneWatchers };
 });

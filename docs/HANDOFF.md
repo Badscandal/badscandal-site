@@ -1,8 +1,8 @@
 # Handoff: where HQ is and what's next (read this first)
 
-**Last updated:** 18 Nov 2026, by Cursor. Main is through PR #70. L1 and L9 are in flight as PR #71 (not merged).
-**main:** every PR up to #70 is live. **Tests on main:** 611 pass on Node 24 and Node 22, none cancelled.
-**Connector:** 40 tools. No new tool in #69, #70, or on the L1/L9 branch. Options changed in #69, so every bot refreshes the tool list.
+**Last updated:** 18 Nov 2026, by Cursor. Main is through PR #75 (round 2) and PR #73 (L5 watchers). This branch is the money-links work, not merged.
+**main:** every PR up to #75 is live. **Tests on this branch:** 665 pass on Node 24 and Node 22, none cancelled.
+**Connector:** 40 tools. No new tool. `log_growth` gained `claim`, `claimant` and `impact` on this branch, so Laura, Steve, Atlas, Kevin and Nova refresh the tool list when it is deployed. Options also changed in #69.
 
 > **The rule (Luke, 17 Nov 2026):** every time anything is pushed to `main` for HQ, the same push updates THIS
 > file (and `docs/STATUS.md`). If Luke's computer crashes or a session ends mid-way, the next agent starts from
@@ -31,7 +31,7 @@ site + Luke's private dashboard /hq + the bots' connector /mcp).
 
 ## Where it stands (18 Nov 2026)
 
-**Where we left off:** the phone HQ is on main (PR #70). Money shows what landed in Revolut on its own line. Payable, and money still in Wise or PayPal, are smaller and never added in. The connector bug fixes (PR #69) are live. L1 (expected money) and L9 (what a payout route cost) are PR #71 and are not live yet. L4 (PR #67), L3 part 1 (PR #66), L12 (PR #64) and the release-card fix (PR #65) are live.
+**Where we left off:** L1 (expected money) and L9 (what a payout route cost) are on main (PR #71). The phone HQ is on main (PR #70). Money shows what landed in Revolut on its own line. Payable, and money still in Wise or PayPal, are smaller and never added in. The connector bug fixes (PR #69) are live. L5 (watchers, PR #73) and the round-2 fixes (PR #75) are on main. RouteNote email is not connected. L4 (PR #67), L3 part 1 (PR #66), L12 (PR #64) and the release-card fix (PR #65) are live.
 
 **HQ** (`badscandal.com/hq`, also inside the HQ apps on Luke's iPhone and Mac) has: Today, Songs, Ads, Pages
 (one tile per song page since #59), Growth & Fans (with the Instagram reader), Profiles (since #64), Upcoming (the release pipeline),
@@ -54,14 +54,17 @@ A Canvas at 1080×1920, mp4, 6 seconds passed. A Canvas at 1920×1080, .mov, 12 
 1500×500, 9 MB were each caught on all three problems. Preflight for the song "Love You" passed. Atlas, Laura
 and Webmaster were told to refresh their HQ tool list.
 
+**L5, live (PR #73):** RouteNote's moderation mail, Verse's release-day note, and Laura's Content ID claims. Still 40 tools. `log_growth` records a claim (`claim`, `claimant`, `impact`, `date`). RouteNote email says **not connected**. The site has no mailbox. The Google key only reads the sheet. Meta, Instagram, Revolut and the desk keys are not a mailbox. Luke has to sign the site into that inbox, read-only (Gmail readonly, or a forward into a mailbox the site is allowed to read). Until then the card says "RouteNote email: not connected", Drop's own store status still shows, and HQ does not invent a moderation result and does not email anyone. On a release day (São Paulo) Verse gets one desk note to submit the approved lyrics on Musixmatch when the song shows there. A song not on Musixmatch yet is not a block. The same day does not send a second note. Growth & Fans shows only claims Laura recorded. A blank is "not reported". An empty list says none has been recorded. `luke_briefing` is unchanged.
+
 **Luke's priorities, in his words:** "our prime goal is not to get our account restricted or disabled, we need
 ads" (every Meta/Instagram read is read-only, small, and stops by itself on a block). The aim: "an autonomous
 artist growth bot that all we will need is content and $".
 
 ## In flight (branches not merged)
 
-- **L1 + L9** (PR #71, on main): Expected money and what a payout route cost. Still 40 tools. `luke_briefing` is unchanged.
 - **Money links** (`cursor/hq-money-link-fixes-bf45`, not merged): one counting rule (received means Revolut) for payments, month_check, income_status and the briefings. A route sums every link. A gap with no source is short, unexplained, never a fee. A rate is kept only when Revolut recorded it. `close_month` needs month_check ready and an https evidence link. No new tool. HQ does not write the Google Sheet and does not decide a ledger month.
+- **HQ round 2** (PR #75, on main): Pre-HQ packs mark only the RouteNote fields not needed; the release-day link, the video and the lyrics stay live. A Canvas step skipped for no link comes back when the link is added. `my_day` schedule lines stay whole, drop a done step and a past date, and the Monday line is the current one. Old notes to everyone drop off. A lyrics blocker clears when the lyrics are in or waiting on "Yes, correct", and that answer refreshes the step note. Signed-out lines name the platform, and a sign-in task follows the live list. Instagram: 0-view rows and old posts are not waiting; under 10 ranked says not settled; a read within 20 minutes reuses the last one and does not spend a call; a post says "song not linked" until Steve, Forge or Nova records the song. Preflight flags do not fail the check. `song_pages` fetches each page and reports the status and the time. Still 40 tools. `log_growth` keeps the Content ID claim fields from L5, and the instagram tool keeps `post` and `song`. The bots refresh.
+- **L1 + L9** (PR #71, on main): Expected money and what a payout route cost. Still 40 tools. `luke_briefing` is unchanged.
 
 ## Waiting on someone
 
@@ -105,7 +108,7 @@ Later, if he asks:
 2. **After a week of Instagram data:** check the ranking with Luke against what he sees in the app; the floor is
    1,000 views (PR #69). Tune the 1-day window if needed.
 3. **B2 YouTube Analytics** (one Google sign-in from Luke), so Laura's numbers come in by themselves.
-4. **The rest of Later** (L5, L10): see docs/HQ-ROADMAP.md. L4 is live. L1 and L9 are the in-flight branch above.
+4. **L10** (auto end screens and pinned comments) still needs YouTube write access. L5 is the in-flight branch above. L1 and L9 are live (PR #71). L4 is live.
 5. **H1–H4** stay on hold until Luke decides (they would touch ads, posting or fans' data).
 
 ## How to check your work

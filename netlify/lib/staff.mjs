@@ -139,11 +139,39 @@ export function freshBlocker(text, o = {}) {
   if (!t) return "";
   if (o.igConnected && /instagram/i.test(t) && /log\s*in|sign[\s-]*in|browser|locked/i.test(t)) return "";
   if (o.revolutLive && /revolut can'?t be read|revolut (is )?not connected/i.test(t)) return "";
+  /* 18 Nov 2026: a lyrics blocker clears once that song's lyrics are in the pack or waiting on Luke's yes */
+  if (/lyric/i.test(t)) {
+    const ready = [...(o.lyricsReady || []), ...(o.lyricsPending || [])];
+    if (ready.some((title) => mentionsSong(t, title))) return "";
+  }
   return t;
+}
+/* a sign-in task follows the live signed-out list (18 Nov 2026). TikTok signed in means the TikTok line goes. */
+export function signInOpen(task, signedOutText) {
+  const text = `${(task && task.task) || ""} ${(task && task.note) || ""} ${(task && task.blocker) || ""}`;
+  if (!/sign-?in|signed out|log in/i.test(text)) return true;
+  const names = ["tiktok", "meta", "facebook", "instagram", "google", "youtube", "spotify"];
+  const named = names.filter((p) => new RegExp("\\b" + p + "\\b", "i").test(text));
+  if (!named.length) return false;
+  return named.some((p) => new RegExp(p, "i").test(String(signedOutText || "")));
+}
+/* the duty's song and the blocker's song must be the same one (18 Nov 2026) */
+export function blockerForDuty(task, blocker, titles) {
+  const b = String(blocker || "").trim();
+  if (!b) return "";
+  const named = (titles || []).filter((title) => mentionsSong(task, title));
+  const inBlock = (titles || []).filter((title) => mentionsSong(b, title));
+  if (named.length && inBlock.length && !inBlock.some((t) => named.some((n) => songKey(n) === songKey(t)))) return "";
+  return b;
+}
+export function mentionsSong(text, title) {
+  const k = songKey(title);
+  return k.length >= 4 && songKey(text).includes(k);
 }
 export function staleTask(task) {
   const t = `${(task && task.id) || ""} ${(task && task.task) || ""}`;
-  return /tiktok ads sign-?in/i.test(t);
+  /* 18 Nov 2026: "Forge's TikTok Ads sign-in" is not always stale. signInOpen checks the live list. */
+  return /^done\b/i.test((task && task.task) || "") || /done 11 Nov/i.test(t);
 }
 /* last-four card digits, a single mask character, a top-up reference and ad-account ids never leave a
    tool answer (18 Nov 2026, Sheet). The stored row is not rewritten. */
@@ -467,8 +495,12 @@ export async function sendMessage(store, now, roster, a) {
   const proposal = a.proposal && typeof a.proposal === "object" && to === "Luke" ? a.proposal : null;
   if (proposal) needs = "decision";
   const opts = approval ? APPROVE_OPTIONS.slice() : proposal ? PROPOSE_OPTIONS.slice() : options;
-  /* release + ask: set only by the desk itself (store_status's "ready to resubmit"), never by a tool argument */
-  const tag = a.ask === "resubmit" && a.release ? { release: clean(a.release, 60), ask: "resubmit" } : {};
+  /* release + ask: set only by the desk itself (store_status's "ready to resubmit", or a RouteNote
+     email HQ has read), never by a tool argument. mailId is how a watcher sends the same note once. */
+  const tag = {};
+  if (a.ask === "resubmit" && a.release) { tag.release = clean(a.release, 60); tag.ask = "resubmit"; }
+  if (from === "HQ" && a.ask === "routenote") { tag.ask = "routenote"; if (a.release) tag.release = clean(a.release, 60); }
+  if (from === "HQ" && a.mailId) tag.mailId = clean(a.mailId, 80);
   /* the asker's own recommendation (A3, 17 Nov 2026): which option and why, on a message that needs Luke */
   let recs = null;
   if ((a.recommend != null && String(a.recommend).trim()) || (a.recommend_option != null && String(a.recommend_option).trim())) {
@@ -724,10 +756,10 @@ export function preflightOf(r) {
   const pack = (r && r.pack) || {}, out = [];
   const short = (k) => (FIELD[k] ? FIELD[k].short : k);
   for (const k of ARTIST_FIELDS) for (const t of artistProblems(pack[k])) out.push({ field: k, text: `${short(k)}: ${t}` });
-  /* Primary artist is Badscandal and matches the Spotify artist. Featured is flagged, never moved (18 Nov 2026).
-     An empty Primary is fine until another artist is named: the field is optional. */
+  /* Primary artist is Badscandal and matches the Spotify artist. Featured is a flag, never a failure
+     and never moved (18 Nov 2026). An empty Primary is not a pass: the tool says it could not be checked. */
   const primary = String(pack.primary || ""), feat = String(pack.featuring || "");
-  if (/badscandal/i.test(feat) && !/badscandal/i.test(primary)) out.push({ field: "primary", text: "Primary artist: Badscandal is under Featured, not Primary. Flagged only: move it if the release says Badscandal is the primary artist." });
+  if (/badscandal/i.test(feat) && !/badscandal/i.test(primary)) out.push({ field: "primary", warn: true, text: "Primary artist: Badscandal is under Featured, not Primary. Flagged only: move it if the release says Badscandal is the primary artist." });
   else if (filled(primary) && !/badscandal/i.test(primary) && !artistProblems(primary).length) out.push({ field: "primary", text: `Primary artist should be Badscandal (Spotify artist ${SPOTIFY_ARTIST_ID}).` });
   const blob = [primary, feat, pack.spotifyArtist, pack.artist].filter(Boolean).join(" ");
   if (/open\.spotify\.com\/artist\//i.test(blob) && !blob.includes(SPOTIFY_ARTIST_ID)) out.push({ field: "primary", text: `The artist link is not Spotify artist ${SPOTIFY_ARTIST_ID}.` });
@@ -735,7 +767,7 @@ export function preflightOf(r) {
   if (["mp3", "m4a", "aac", "ogg", "opus"].includes(wext)) out.push({ field: "wav", text: `${short("wav")}: the master must be a WAV (the stores' quality), not an .${wext}.` });
   const aext = filled(pack.artwork) ? extOf(pack.artwork) : "";
   if (["webp", "gif", "heic", "bmp", "tif", "tiff", "svg"].includes(aext)) out.push({ field: "artwork", text: `${short("artwork")}: must be a JPG or PNG, 3000 x 3000, not a .${aext}.` });
-  if (filled(pack.wav) && pack.wav === pack.artwork && pack.artwork === pack.folder) out.push({ field: "wav", warn: true, text: "Master WAV, artwork and folder are the same link. That is one folder, not the three files." });
+  if (filled(pack.wav) && pack.wav === pack.artwork && pack.artwork === pack.folder) out.push({ field: "wav", warn: true, text: "Flagged only: Master WAV, artwork and folder are the same link. That is one folder, not the three files." });
   /* L8: a Canvas link whose file type is known and isn't one Spotify takes (a link with no file type says nothing) */
   const cext = filled(pack.canvas) ? extOf(pack.canvas) : "";
   if (cext) for (const t of assetProblems("canvas", { format: cext })) out.push({ field: "canvas", text: `${short("canvas")}: ${t.replace(/^Spotify Canvas must/, "must")}` });
@@ -764,8 +796,8 @@ export const ASSETS = {
     rule: "Spotify Canvas: an MP4 (or a JPG), 9:16 portrait, 720 to 1080 px tall, 3 to 8 seconds. House rule, stricter than Spotify: no text, logos or links." },
   spotify_header: { label: "Spotify header", formats: ["jpg", "jpeg", "png", "gif"], ratio: null, min: [2660, 1140], mb: 20,
     rule: "Spotify for Artists header image: a JPG, PNG or GIF, at least 2660 x 1140, 20 MB at most. No text, advertising or busy backgrounds. Faces stay in the middle (it is cropped on phones)." },
-  youtube_banner: { label: "YouTube banner", formats: ["jpg", "jpeg", "png"], ratio: 16 / 9, ratioWords: "16:9", recommended: [2560, 1440], mb: 6,
-    rule: "YouTube channel banner: a JPG or PNG, 16:9. 2560 x 1440 is recommended, not a minimum. Keep text inside the safe area, about 1546 x 423, with no borders. 6 MB at most." },
+  youtube_banner: { label: "YouTube banner", formats: ["jpg", "jpeg", "png"], ratio: 16 / 9, ratioWords: "16:9", min: [2048, 1152], recommended: [2560, 1440], mb: 6,
+    rule: "YouTube channel banner: a JPG or PNG, 16:9, min 2048x1152, 2560x1440 recommended. Keep text inside the safe area, about 1546 x 423, with no borders. 6 MB at most." },
   /* L12 (18 Nov 2026): profile photos and banners whose platforms publish a size. A platform with no
      published size is not given a kind here: the Profiles list says "Rule not set" instead. */
   spotify_avatar: { label: "Spotify profile photo", formats: ["jpg", "jpeg", "png", "gif"], min: [750, 750], mb: 20,
@@ -824,6 +856,7 @@ export function assetNotes(kind, o = {}) {
   if (!a || !a.recommended) return [];
   const w = o.width == null || o.width === "" ? null : Number(o.width), h = o.height == null || o.height === "" ? null : Number(o.height);
   if (w == null || h == null || !(w < a.recommended[0] || h < a.recommended[1])) return [];
+  if (a.min) return [`${w} x ${h} meets the minimum (${a.min[0]} x ${a.min[1]}). ${a.recommended[0]} x ${a.recommended[1]} is recommended.`];
   return [`${w} x ${h}: ${a.recommended[0]} x ${a.recommended[1]} is recommended, not a minimum.`];
 }
 
@@ -2695,6 +2728,117 @@ export const PACK_FIELDS = [
 /* null prototype (11 Nov 2026): "constructor", "toString" or "__proto__" sent as a pack key must be an
    unknown field, not something every plain object already has */
 const FIELD = Object.assign(Object.create(null), Object.fromEntries(PACK_FIELDS.map((f) => [f.key, f])));
+/* a pre-HQ song already went to RouteNote. Those fields are "not needed". The release-day link,
+   the video and the lyrics stay live (18 Nov 2026). */
+export const PREHQ_NOT_NEEDED = new Set(["kind", "label", "split", "distributor", "deal", "wav", "artwork", "folder", "language", "explicit", "genre", "subgenre", "version", "writers", "producers", "featuring", "primary", "copyright"]);
+const STEP_LINK = { video: "video", page: "page", spotifyTrack: "live" };
+export function packFieldView(f, pack, steps, o = {}) {
+  const preHq = pack.prehq === "Yes";
+  const pitchSkipped = (steps || []).some((s) => s.key === "pitch" && s.status === "skipped");
+  let shown = f.key === "distributor" && !pack.distributor ? (distributorOf(pack) || "") : (pack[f.key] || "");
+  let doneOn = "";
+  const from = STEP_LINK[f.key];
+  if (from) {
+    const st = (steps || []).find((s) => s.key === from && s.status === "done" && s.link);
+    /* the stored pack is left as Luke wrote it; an empty field shows the done step's link, and the day it was done */
+    if (st && (!shown || shown === st.link)) { if (!shown) shown = st.link; doneOn = st.doneOn || ""; }
+  }
+  if (f.key === "notes" && shown && /pending moderation/i.test(shown)) {
+    const st = String(o.storeStatus || "");
+    if (st && !/pending|moderation|uploaded/i.test(st)) shown = String(shown).replace(/pending moderation/ig, st);
+  }
+  const routeSkip = preHq && PREHQ_NOT_NEEDED.has(f.key);
+  const pitchSkip = pitchSkipped && f.neededBy === "pitch";
+  const state = shown ? "" : routeSkip || pitchSkip ? "not needed" : requiredNow(f, pack) ? "missing (required)" : f.neededBy ? `missing (needed for "${(STEP[f.neededBy] || {}).label || f.neededBy}")` : "not filled yet";
+  return { field: f.key, label: f.label, value: shown, ...(state ? { state } : {}), ...(doneOn ? { done_on: doneOn } : {}), filled_by: f.fill.length ? f.fill.join(" or ") + " (or Luke)" : "Luke" };
+}
+/* my_day schedule: never cut mid-word, never a past date, never a step that is already done (18 Nov 2026) */
+export const MONDAY_SCHEDULE = "Steve and Kevin say WHY the top 3 beat the bottom 3 in one update at 10:00. Nova then sends Luke one recommendation on where the ad money goes next.";
+const MONTH_NUM = { jan: "01", feb: "02", mar: "03", apr: "04", may: "05", jun: "06", jul: "07", aug: "08", sep: "09", oct: "10", nov: "11", dec: "12" };
+function dateMentioned(line, today) {
+  const m = /\b(\d{1,2})\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\b/i.exec(String(line || ""));
+  if (!m || !/^\d{4}-\d{2}-\d{2}$/.test(String(today || ""))) return "";
+  const iso = `${today.slice(0, 4)}-${MONTH_NUM[m[2].toLowerCase()]}-${String(m[1]).padStart(2, "0")}`;
+  return Number.isNaN(Date.parse(iso + "T12:00:00Z")) ? "" : iso;
+}
+function realWhenComplete(line, nextDate) {
+  if (!nextDate) return String(line || "");
+  return String(line || "").replace(/(\d+)\s+days?\s+before a release\b/gi, (_, n) => dayWords(addDays(nextDate, -Number(n))) || _);
+}
+function stepKeyOf(text) {
+  const w = String(text || "").toLowerCase();
+  if (/song page|page live/.test(w)) return "page";
+  if (/spotify pitch|send the spotify pitch/.test(w)) return "pitch";
+  if (/video scheduled/.test(w)) return "video";
+  if (/upload to routenote/.test(w)) return "upload";
+  if (/musixmatch|lyrics live/.test(w)) return "lyrics";
+  if (/spotify link/.test(w)) return "live";
+  return "";
+}
+function stepIsDone(releases, key, today) {
+  if (!key) return false;
+  const live = (releases || []).filter((r) => r && r.date && r.status !== "cancelled" && r.status !== "draft");
+  const upcoming = live.filter((r) => r.date >= today).sort((a, b) => (a.date < b.date ? -1 : 1));
+  const next = (upcoming.length ? upcoming : live)[0];
+  if (!next) return false;
+  const st = (next.steps || []).find((s) => s.key === key);
+  return !!(st && (st.status === "done" || st.status === "skipped"));
+}
+export function scheduleForMyDay(bot, schedule, o = {}) {
+  const today = o.today || "";
+  const defaults = ((DEFAULT_ROSTER.find((b) => b.name === bot) || {}).schedule) || [];
+  const out = [];
+  for (const item of schedule || []) {
+    let time = String((item && item.time) || ""), what = String((item && item.what) || "");
+    const blob = `${time} ${what}`;
+    if (/what engages best|holds on ti|add them/i.test(blob)) { out.push({ time: "Monday 10:00", what: MONDAY_SCHEDULE }); continue; }
+    for (const d of defaults) {
+      if (what && d.what.toLowerCase().startsWith(what.toLowerCase()) && what.length >= 4 && what.length < d.what.length) what = d.what;
+      if (time && d.time.toLowerCase().startsWith(time.toLowerCase()) && /[a-z]$/i.test(time) && time.length < d.time.length) time = d.time;
+    }
+    if (/\ba rel(?!ease\b)/i.test(time) || /\ba rel(?!ease\b)/i.test(what)) {
+      const d = defaults.find((x) => /before a release/i.test(x.time)) || defaults.find((x) => stepKeyOf(x.what));
+      if (d) { if (/\ba rel/i.test(time) || time.length < 8) time = d.time; if (/\ba rel/i.test(what) || what.length < 8) what = d.what; }
+    }
+    time = realWhenComplete(time, o.nextDate || "");
+    const key = stepKeyOf(`${time} ${what}`);
+    if (stepIsDone(o.releases, key, today)) continue;
+    const when = dateMentioned(time, today) || dateMentioned(what, today);
+    if (/^done\b/i.test(what) && o.duty && o.duty.status && o.duty.status !== "done") {
+      what = o.duty.status === "blocked" && o.duty.blocker ? `blocked: ${o.duty.blocker}` : (o.duty.status || what);
+      time = "today";
+    }
+    if (when && when < today) {
+      if (!what || /\ba rel/i.test(what)) continue;
+      out.push({ time: "late", what: clipWords(what, 240) });
+      continue;
+    }
+    out.push({ time: clipWords(time, 120), what: clipWords(what, 240) });
+  }
+  return out;
+}
+/* a note to everyone leaves my_day once it is handled, superseded, or older than two days with a newer state */
+export function noteStillCurrent(m, o = {}) {
+  if (!m || m.to !== "all" || m.resolved) return false;
+  const at = Date.parse(m.at || "");
+  if (!isFinite(at)) return false;
+  const age = (o.now || 0) - at;
+  const text = m.text || "";
+  const rel = (o.releases || []).find((r) => mentionsSong(text, r.title));
+  if (rel && rel.pack && rel.pack.prehq === "Yes" && /missing|master|artwork|language|wav/i.test(text)) return false;
+  if (rel && /pending moderation/i.test(text)) {
+    const log = rel.storeLog || (rel.store && rel.store.history) || [];
+    const st = (rel.store && rel.store.status) || (log.length ? log[0].status : "");
+    if (st && !/pending|moderation|uploaded/i.test(st)) return false;
+  }
+  if (age > 2 * 86400000 && rel) {
+    const updated = Date.parse(rel.updatedAt || "") || 0;
+    const log = rel.storeLog || (rel.store && rel.store.history) || [];
+    const newerLog = log.some((e) => Date.parse(e.at || "") > at || (e.on && String(m.at || "").slice(0, 10) && e.on > String(m.at).slice(0, 10)));
+    if (updated > at || newerLog || (rel.pack && rel.pack.prehq === "Yes")) return false;
+  }
+  return age <= 4 * 86400000;
+}
 /* days = how many days before the release day the step is due. after = a step that must be done (or
    skipped) first: until then this one is WAITING, never late (11 Nov 2026, Luke: "it says spotify pitch
    sent [late] but it didn't get sent because the song hasn't shown in spotify for artists yet"). */
@@ -2882,6 +3026,11 @@ function pitchRule(list, today, at = null) {
   return changed;
 }
 const NEEDS_NOTE = "No Spotify Canvas link in the pack (Luke adds one if there is a Canvas)";
+/* a step skipped only because its link was missing comes back when the link is added (18 Nov 2026) */
+function canvasSkipNote(note) {
+  const n = String(note || "");
+  return n === NEEDS_NOTE || /no .{0,80}link|because no link/i.test(n);
+}
 export function scheduleSteps(date, today, o = {}) {
   if (o.alreadyOut) return { steps: RELEASE_STEPS.map((s) => ({ key: s.key, label: s.label, owner: s.owner, due: null, status: "skipped", note: OUT_NOTE, link: "", at: null, by: null })), tight: false };
   const steps = RELEASE_STEPS.map((s) => {
@@ -3130,7 +3279,12 @@ export function releaseView(r, today, o = {}) {
     const ap = raw.find((x) => x.key === "approved");
     const spotWait = !w && s.key === "spotify" && !finished(s) && isDay(s.due) && today < s.due && ap && ap.status === "done";
     const waiting = !!w || spotWait;
-    return { ...s, late: !finished(s) && !waiting && !!s.due && s.due < today, dueIn: s.due ? daysBetween(today, s.due) : null, waiting,
+    let note = s.note || "";
+    if (s.key === "lyrics" && /none provided/i.test(note)) {
+      if (filled(pack.lyrics)) note = "Luke's lyrics are in the pack.";
+      else if (o.lyricsPending) note = "Lyrics are with Luke: a proposal is waiting for Yes, correct.";
+    }
+    return { ...s, note, late: !finished(s) && !waiting && !!s.due && s.due < today, dueIn: s.due ? daysBetween(today, s.due) : null, waiting,
       ...(w ? { waitingFor: w.key, waitingText: waitWords(w, s) } : spotWait ? { waitingFor: "spotify-window", waitingText: "waiting on Spotify" } : {}),
       ...(skipped ? { skipped: true } : {}), ...(STEP[s.key] && STEP[s.key].after ? { after: STEP[s.key].after } : {}) };
   });
@@ -3176,6 +3330,9 @@ export function releaseView(r, today, o = {}) {
        whether the pack's lyrics are still the ones he approved) */
     store: storeOf(r),
     approvals: approvalsOf(r),
+    /* L5: the latest RouteNote email HQ has read for this song, and Verse's release-day note */
+    mail: r.mail && r.mail.status ? { status: r.mail.status, on: r.mail.on || "", reason: r.mail.reason || "", id: r.mail.id || "", needsLuke: !!r.mail.needsLuke, source: "email" } : null,
+    verseDuty: r.verseDay ? { on: r.verseDay, text: "Verse was asked to submit the lyrics" } : null,
     log: (r.log || []).slice().reverse() };
   v.pitch = pitchOf(v, today, editorialOf(r)); /* L7: not pitched / pitched with the day / missed */
   v.warnings = releaseWarnings(v, o.sightings || null, today);
@@ -3201,7 +3358,7 @@ export function whereWords(v, today) {
   if (v.status === "cancelled") return "Cancelled";
   if (v.status === "draft") {
     const req = v.missing.filter((m) => m.required);
-    if (v.pack && v.pack.prehq === "Yes") return "Released through the distributor before HQ: no pack needed · ready to send";
+    if (v.pack && v.pack.prehq === "Yes") return "Released before HQ: the RouteNote files are not needed. The release-day link, the video and the lyrics still are.";
     if (v.date && v.date < today) return `Release day ${dayWords(v.date)} has passed: sending records it as already out, with no steps` + (req.length ? ` · still missing: ${joinWords(req.map((m) => m.short))}` : "");
     return "In the pipeline: " + filledLine + (req.length ? ` · still missing: ${joinWords(req.map((m) => m.short))}` : " · ready to send");
   }
@@ -3658,6 +3815,31 @@ export async function coverResponse(store, name) {
   return new Response(Buffer.from(doc.b64, "base64"), { status: 200, headers: { "content-type": doc.type, "cache-control": "public, max-age=31536000, immutable", "x-content-type-options": "nosniff", "content-security-policy": "default-src 'none'" } });
 }
 
+/* Luke said yes to lyrics: the step note stops saying none were provided, and a card blocker waiting on them clears */
+async function settleLyricsYes(store, now, id, title) {
+  const at = new Date(now).toISOString();
+  await mutate(store, REL_KEY, [], (list) => {
+    const r = list.find((x) => x.id === id);
+    if (!r) return { skip: true, value: null };
+    const st = (r.steps || []).find((s) => s.key === "lyrics");
+    if (st && /none provided/i.test(st.note || "")) {
+      st.note = "Luke said yes to the lyrics.";
+      if (st.status === "blocked") st.status = "todo";
+      st.at = at;
+    }
+    return { value: r };
+  });
+  await mutate(store, "cards.json", {}, (doc) => {
+    const d = doc && typeof doc === "object" && !Array.isArray(doc) ? doc : {};
+    let changed = false;
+    for (const k of Object.keys(d)) {
+      const c = d[k];
+      if (!c || !c.blockers || !/lyric/i.test(c.blockers) || !mentionsSong(c.blockers, title)) continue;
+      c.blockers = ""; c.blockersAt = at; changed = true;
+    }
+    return changed ? { replace: d, value: true } : { skip: true, value: false };
+  });
+}
 /* Luke said "Yes, correct": apply it in his name. Returns {done, text} or {done:false, error}; never throws
    (the answer is already saved and the question closed). The bot that asked is told either way. */
 async function applyProposal(store, now, roster, parent, via) {
@@ -3679,7 +3861,7 @@ async function applyProposal(store, now, roster, parent, via) {
       const r = await saveRelease(store, now, roster, { by: "Luke", title: p.title, date: p.date || "", pack: p.pack || {}, from: said });
       let sent = "";
       if (p.send) { const s = await sendRelease(store, now, roster, { by: "Luke", id: r.id, anyway: true }); sent = s.alreadyOut ? " It was recorded as already out." : " It went to the team: every bot has its steps."; }
-      if (filled((p.pack || {}).lyrics)) await approveRelease(store, now, roster, { by: "Luke", via, id: r.id, what: "lyrics", msg: parent.id, words: `said yes to ${asker}'s lyrics` });
+      if (filled((p.pack || {}).lyrics)) { await approveRelease(store, now, roster, { by: "Luke", via, id: r.id, what: "lyrics", msg: parent.id, words: `said yes to ${asker}'s lyrics` }); await settleLyricsYes(store, now, r.id, r.title); }
       out = { done: true, id: r.id, text: `${r.title} is on the desk${r.status === "draft" && !p.send ? " as a draft in the pipeline" : ""}.${sent}` + (filled((p.pack || {}).lyrics) ? " The lyrics are recorded as approved by Luke." : "") };
     } else {
       const cur = (await listReleases(store)).find((x) => x.id === p.id);
@@ -3698,7 +3880,7 @@ async function applyProposal(store, now, roster, parent, via) {
       await mutate(store, REL_KEY, [], (list) => { const r = list.find((x) => x.id === p.id); if (!r) return { skip: true, value: null }; logIt(r, at, "Luke", `Luke said yes to ${asker}'s changes` + (via ? ` (via ${via})` : "")); return { value: r }; });
       /* the lyrics he said yes to ARE the final lyrics (16 Nov 2026, Verse: the pack had 5x "fode" while Luke approved 4x) */
       const lyr = "lyrics" in (p.pack || {}) && filled(p.pack.lyrics);
-      if (lyr) await approveRelease(store, now, roster, { by: "Luke", via, id: p.id, what: "lyrics", msg: parent.id, words: `said yes to ${asker}'s lyrics` });
+      if (lyr) { await approveRelease(store, now, roster, { by: "Luke", via, id: p.id, what: "lyrics", msg: parent.id, words: `said yes to ${asker}'s lyrics` }); await settleLyricsYes(store, now, p.id, p.newTitle || cur.title); }
       out = { done: true, id: p.id, text: `${p.newTitle || cur.title}: the changes are made${p.date && scheduled ? " (every open step moved with the new day, and the team is told)" : ""}${p.send ? "; it went to the team" : ""}.` + (lyr ? " The lyrics are recorded as approved by Luke." : "") };
     }
   } catch (e) { out = { done: false, error: e && e.message ? e.message : "it could not be applied" }; }
@@ -3761,7 +3943,7 @@ export async function saveRelease(store, now, roster, a) {
       for (const st of r.steps || []) {
         const need = STEP[st.key] && STEP[st.key].needs;
         if (!need || !changed.includes(need)) continue;
-        if (filled(r.pack[need]) && st.status === "skipped" && st.note === NEEDS_NOTE) { st.status = "todo"; st.note = ""; if (isDay(r.date)) { const want = addDays(r.date, -STEP[st.key].days); st.due = want < today ? today : want; } }
+        if (filled(r.pack[need]) && st.status === "skipped" && canvasSkipNote(st.note)) { st.status = "todo"; st.note = ""; if (isDay(r.date)) { const want = addDays(r.date, -STEP[st.key].days); st.due = want < today ? today : want; } }
         else if (!filled(r.pack[need]) && st.status === "todo") { st.status = "skipped"; st.note = NEEDS_NOTE; }
       }
       if (changed.length) changes.push(`changed ${joinWords(changed.map((k) => FIELD[k].short))}`);
@@ -3949,6 +4131,12 @@ export async function fillRelease(store, now, roster, a) {
     if (key === "storeStatus") storeEntry(r, { status: value, on: spDay(now), at, by });
     r.pack[key] = value; r.updatedAt = at;
     logIt(r, at, by, `${by} ${had ? "changed" : "filled"} ${f.short}`);
+    const today = spDay(now);
+    for (const st of r.steps || []) {
+      const need = STEP[st.key] && STEP[st.key].needs;
+      if (need !== key) continue;
+      if (filled(r.pack[need]) && st.status === "skipped" && canvasSkipNote(st.note)) { st.status = "todo"; st.note = ""; if (isDay(r.date)) { const want = addDays(r.date, -STEP[st.key].days); st.due = want < today ? today : want; } }
+    }
     return { value: r };
   });
 }
@@ -4417,10 +4605,179 @@ function cardNow(card, today) {
   if (out.blockers && bday && daysBetween(bday, today) >= 4) { out.oldBlockers = out.blockers; out.blockers = ""; }
   return out;
 }
+/* ---------- L5 watchers (18 Nov 2026) ----------
+   RouteNote mail, Verse's release-day note, and Content ID claims. Nothing here sends email, changes an
+   ad, or invents a status. The mailbox is not connected: the Google key only reads the sheet. */
+
+const CLAIMS_KEY = "claims.json";
+const MAIL_PHRASES = [
+  ["action required", "rejected"], ["action needed", "rejected"], ["needs action", "rejected"],
+  ["has been rejected", "rejected"], ["was rejected", "rejected"], ["release rejected", "rejected"], ["not approved", "rejected"],
+  ["pending moderation", "in moderation"], ["under review", "in moderation"], ["pending review", "in moderation"],
+  ["in review", "in moderation"], ["in moderation", "in moderation"],
+  ["has been approved", "approved"], ["release approved", "approved"],
+  ["is now live", "live"], ["now live", "live"], ["is live", "live"],
+  ["has been delivered", "delivered"], ["delivered to", "delivered"],
+  ["has been uploaded", "uploaded"], ["resubmitted", "resubmitted"],
+];
+
+/* HQ cannot read RouteNote's inbox with any key the site already has. The answer never copies a secret
+   it was handed: there is nothing to connect until Luke signs a mailbox in. */
+export function routeNoteMailSource() {
+  return {
+    connected: false,
+    line: "not connected",
+    messages: [],
+    steps: "RouteNote sends its moderation mail to the address on the RouteNote account. HQ cannot read that inbox. The Google key on Netlify only reads the sheet. Meta, Instagram, Revolut and the desk keys are not a mailbox. Luke has to sign the site into that inbox, read-only (Gmail readonly, or a forward into a mailbox the site is allowed to read). Nothing is connected until that sign-in exists. Until then the card says RouteNote email: not connected. Drop's own store status still shows. HQ does not invent a moderation result and does not email anyone.",
+  };
+}
+
+const mailFold = (s) => String(s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+const mailStatusOf = (text) => {
+  const h = mailFold(text);
+  const hit = MAIL_PHRASES.map(([p, status]) => [mailFold(p), status]).sort((a, b) => b[0].length - a[0].length).find(([p]) => (" " + h + " ").includes(" " + p + " "));
+  return hit ? hit[1] : "";
+};
+const mailReason = (body, title) => {
+  let t = String(body || "");
+  const phrases = MAIL_PHRASES.map(([p]) => p).slice().sort((a, b) => b.length - a.length);
+  for (const p of phrases) t = t.replace(new RegExp("\\b" + p.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "\\b", "gi"), " ");
+  const name = String(title || "").trim();
+  if (name.length >= 3) t = t.replace(new RegExp("\\b" + name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "\\b", "gi"), " ");
+  t = t.replace(/\b(your release|this release|the release|routenote)\b/gi, " ");
+  t = t.replace(/[^A-Za-z0-9 .,'-]+/g, " ").replace(/\s+/g, " ").trim().replace(/^[\s.:;-]+/, "").replace(/[\s.:;-]+$/, "").trim();
+  return t.length >= 8 ? t.slice(0, 240) : "";
+};
+const mailSong = (hay, releases) => {
+  const h = " " + mailFold(hay) + " ";
+  const hits = (releases || []).filter((r) => r && r.status !== "cancelled" && mailFold(r.title).length >= 3 && h.includes(" " + mailFold(r.title) + " "));
+  hits.sort((a, b) => mailFold(b.title).length - mailFold(a.title).length);
+  return hits[0] || null;
+};
+const isRouteNoteMail = (m) => /routenote/i.test(`${m && m.from || ""} ${m && m.subject || ""} ${m && m.body || ""}`);
+
+/* One email, read. No song and no status are invented. A body that looks like a password is skipped whole. */
+export function parseRouteNoteMail(messages, releases) {
+  return (Array.isArray(messages) ? messages : []).map((m) => {
+    const id = clean(m && m.id, 80);
+    const blob = `${m && m.from || ""}\n${m && m.subject || ""}\n${m && m.body || ""}`;
+    if (secretIn(blob)) return { id, skipped: "secret" };
+    if (!isRouteNoteMail(m)) return { id, skipped: "not routenote" };
+    const hit = mailSong(`${m.subject || ""} ${m.body || ""}`, releases);
+    const status = mailStatusOf(`${m.subject || ""} ${m.body || ""}`);
+    const on = isDay(String(m.date || "").slice(0, 10)) ? String(m.date).slice(0, 10) : "";
+    const reason = mailReason(m.body, hit ? hit.title : "");
+    return { id, status, on, reason, song: hit ? hit.id : "", title: hit ? hit.title : "", needsLuke: status === "rejected" };
+  });
+}
+
+async function mailIds(store, now) {
+  return new Set((await listMessages(store, now, 4)).map((m) => m.mailId).filter(Boolean));
+}
+
+/* Apply emails the caller already has. Production passes none until a mailbox is signed in.
+   A note goes to Drop. Luke is told only when the email is a rejection. The same email is one note. */
+export async function applyRouteNoteMail(store, now, roster, messages) {
+  const releases = await listReleases(store);
+  const parsed = parseRouteNoteMail(messages, releases);
+  const seen = await mailIds(store, now);
+  const out = [];
+  for (const p of parsed) {
+    if (p.skipped) { out.push({ id: p.id, skipped: p.skipped }); continue; }
+    const dropId = p.id, lukeId = p.id + "#luke";
+    const dropExists = seen.has(dropId), lukeExists = seen.has(lukeId);
+    let wrote = false;
+    if (p.song && p.status) {
+      wrote = await mutate(store, REL_KEY, [], (list) => {
+        const r = list.find((x) => x.id === p.song);
+        if (!r) return { skip: true, value: false };
+        const log = Array.isArray(r.mailLog) ? r.mailLog : [];
+        if (log.includes(p.id)) return { skip: true, value: false };
+        storeEntry(r, { status: p.status, on: p.on || spDay(now), reason: p.reason, by: "HQ", at: new Date(now).toISOString() });
+        r.mail = { status: p.status, on: p.on || spDay(now), reason: p.reason, id: p.id, needsLuke: p.needsLuke };
+        r.mailLog = log.concat(p.id).slice(-40);
+        logIt(r, new Date(now).toISOString(), "HQ", `RouteNote email: ${p.status}`);
+        return { value: true };
+      });
+    }
+    const title = p.title || "a release";
+    const said = p.reason ? `RouteNote said: "${p.reason}".` : "RouteNote did not give a reason (not reported).";
+    let text;
+    if (p.song && p.status === "rejected") text = `RouteNote email: ${title} is rejected. ${said} Drafted fix: change what RouteNote named, then ask Luke with store_status ready_to_resubmit. HQ did not email anyone.`;
+    else if (p.song && p.status) text = `RouteNote email: ${title} is ${p.status}. The release card shows it. HQ did not email anyone.`;
+    else if (p.song) text = `RouteNote email: ${title} has no status HQ recognises (not reported). The release card was not changed. HQ did not email anyone.`;
+    else text = `RouteNote email could not match a release.` + (p.status ? ` It says ${p.status}. ${said}` : " The status is not reported.") + " HQ did not email anyone.";
+    if (!dropExists) {
+      await sendMessage(store, now, roster, { from: "HQ", to: "Drop", text, needs: "action", mailId: dropId, ...(p.song ? { release: p.song } : {}) });
+      seen.add(dropId);
+    }
+    if (p.needsLuke && !lukeExists) {
+      const luke = p.song
+        ? `RouteNote email: ${title} is rejected. ${said} Drop has the drafted fix. HQ did not email anyone.`
+        : `RouteNote email could not match a release, and it looks rejected. ${said} HQ did not change a card and did not email anyone.`;
+      await sendMessage(store, now, roster, { from: "HQ", to: "Luke", text: luke, needs: "action", ask: "routenote", about: "Drop", mailId: lukeId, ...(p.song ? { release: p.song } : {}) });
+      seen.add(lukeId);
+    }
+    out.push({ id: p.id, applied: !!(p.song && p.status && !dropExists), already: dropExists, status: p.status || "", song: p.title || "", wrote: !!wrote });
+  }
+  return out;
+}
+
+/* On the release day in São Paulo, one desk note to Verse. The day before and the day after do nothing.
+   The pack's lyrics are not copied into the note. A second run the same day does nothing. */
+export async function verseReleaseDay(store, now, roster) {
+  const today = spDay(now);
+  const seen = await mailIds(store, now);
+  const out = [];
+  for (const r of await listReleases(store)) {
+    if (!r || r.status !== "scheduled" || r.date !== today || r.alreadyOut) continue;
+    const step = (r.steps || []).find((s) => s.key === "lyrics");
+    if (!step || step.status === "skipped" || step.status === "done") continue;
+    const mailId = `verse:${r.id}:${today}`;
+    if (r.verseDay === today || seen.has(mailId)) {
+      if (r.verseDay !== today) await mutate(store, REL_KEY, [], (list) => { const x = list.find((y) => y.id === r.id); if (!x) return { skip: true, value: false }; x.verseDay = today; return { value: true }; });
+      out.push({ id: r.id, already: true });
+      continue;
+    }
+    await sendMessage(store, now, roster, { from: "HQ", to: "Verse", needs: "action", mailId, release: r.id,
+      text: `Today's duty: ${r.title} comes out today (${dayWords(r.date)}). Submit the approved lyrics on Musixmatch when the song shows there. A song not on Musixmatch yet is not a block. Only Luke's approved text goes up.` });
+    await mutate(store, REL_KEY, [], (list) => { const x = list.find((y) => y.id === r.id); if (!x) return { skip: true, value: false }; x.verseDay = today; return { value: true }; });
+    seen.add(mailId);
+    out.push({ id: r.id, sent: true });
+  }
+  return out;
+}
+
+/* Content ID claims. Laura records what YouTube showed. A blank claimant or impact stays blank: the page
+   says not reported. The same claim, claimant and day is stored once. */
+export async function recordContentClaim(store, now, roster, a) {
+  const by = whoIs(a.by, roster, { people: true });
+  if (!["Laura", "Nova", "Claude", "Luke"].includes(by)) fail("Content ID claims are Laura's to record (Nova may record one for her). Nothing was saved.", "not_allowed");
+  const claim = clean(a.claim, 200);
+  if (claim.length < 2) fail("claim is the claim YouTube showed, in a few words. Nothing was saved.");
+  const date = clean(a.date, 10);
+  if (!isDay(date)) fail("date is the day YouTube showed the claim, YYYY-MM-DD. Nothing was saved.");
+  if (date > spDay(now)) fail("That day is still in the future. Nothing was saved.");
+  const claimant = a.claimant != null && String(a.claimant).trim() ? clean(a.claimant, 120) : "";
+  const impact = a.impact != null && String(a.impact).trim() ? clean(a.impact, 240) : "";
+  noSecrets(claim, claimant, impact);
+  const key = `${songKey(claim)}|${songKey(claimant)}|${date}`;
+  return mutate(store, CLAIMS_KEY, { items: [] }, (doc) => {
+    const items = doc && Array.isArray(doc.items) ? doc.items : [];
+    if (!doc || typeof doc !== "object" || Array.isArray(doc)) return { replace: { items }, value: { saved: false, duplicate: false } };
+    const prev = items.find((x) => x && x.key === key);
+    if (prev) return { skip: true, value: { saved: false, duplicate: true, item: prev } };
+    const item = { key, claim, claimant, impact, date, by, at: new Date(now).toISOString() };
+    doc.items = [item, ...items].slice(0, 80);
+    return { value: { saved: true, duplicate: false, item } };
+  });
+}
+
 export async function loadDesk(store, now) {
   const [roster, updates, messages, cardsDoc, config, releases, sightings] = await Promise.all([getRoster(store), listUpdates(store, now, 3), listMessages(store, now, 2), readDoc(store, "cards.json", {}), getConfig(store), listReleases(store), getSightings(store)]);
-  const [seen, read, income, closesDoc, profiles] = await Promise.all([getSeen(store, roster), getRead(store, roster), incomeState(store, now), readDoc(store, "closes.json", []), getProfiles(store)]);
-  return { roster, updates, messages, cards: cardsDoc.data || {}, seen, read, income, config, releases, sightings, closes: Array.isArray(closesDoc.data) ? closesDoc.data : [], profiles };
+  const [seen, read, income, closesDoc, profiles, claimsDoc] = await Promise.all([getSeen(store, roster), getRead(store, roster), incomeState(store, now), readDoc(store, "closes.json", []), getProfiles(store), readDoc(store, CLAIMS_KEY, { items: [] })]);
+  const claims = claimsDoc.data && Array.isArray(claimsDoc.data.items) ? { items: claimsDoc.data.items } : { items: [] };
+  return { roster, updates, messages, cards: cardsDoc.data || {}, seen, read, income, config, releases, sightings, closes: Array.isArray(closesDoc.data) ? closesDoc.data : [], profiles, claims };
 }
 
 /* Has the person a message was sent to READ it? (V6, 11 Nov 2026: from the read markers, read/<name>,
@@ -4527,6 +4884,9 @@ export function board(desk, now, hq) {
     waiting: { luke: waitingOn(desk.messages, "Luke"), claude: waitingOn(desk.messages, "Claude"), bots: desk.messages.filter((m) => isOpen(m) && !PEOPLE.includes(m.to)).length },
     income: desk.income,
     closes: desk.closes || [], /* A7, 17 Nov 2026: the closed months (closes.json) */
+    /* L5: RouteNote's inbox is not connected until Luke signs it in. Claims are only what Laura recorded. */
+    mail: routeNoteMailSource(),
+    claims: desk.claims && Array.isArray(desk.claims.items) ? { items: desk.claims.items.slice(0, 80) } : { items: [] },
     connector: { botsOn: desk.config.botsOn, changedAt: desk.config.changedAt, lastUsed: lastSeen ? { bot: lastSeen[0], at: lastSeen[1].at, tool: lastSeen[1].tool } : null,
       connected: staff.filter((w) => w.connected).length, total: staff.length, claudeSeen: desk.seen.Claude ? desk.seen.Claude.at : null },
     report: desk.messages.find((m) => m.from === "HQ" && m.kind === "report") || null,
