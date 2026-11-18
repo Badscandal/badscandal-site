@@ -1,13 +1,14 @@
 # HQ status (update on every deploy)
 
-**Last updated:** 18 Nov 2026, by Cursor (L3 fan inbox part 1, not merged; main includes PR #65). Start with `docs/HANDOFF.md`.
-**Tests:** 590, all passing on Node 24 and Node 22. **Connector:** 40 tools (no new tool). The `instagram` tool now returns the fan inbox: Steve, Kevin and Forge refresh when this is live. Nova has every tool, so she refreshes too.
+**Last updated:** 18 Nov 2026, by Cursor (main after PR #66). Start with `docs/HANDOFF.md`.
+**Tests:** 590, all passing on Node 24 and Node 22. **Connector:** 40 tools (no new tool). The `instagram` tool now returns the fan inbox: Steve, Kevin and Forge refresh. Nova has every tool, so she refreshes too.
 No money amounts, payer names or account numbers in this file: the repo is public.
 
 ## Live (newest first)
 
 | When | PR | What |
 |------|----|------|
+| 18 Nov | #66 | L3 fan inbox, part 1. Growth & Fans shows comments asking the song's name or where to listen, and people who comment on more than one post. "Needs your reply" is for Luke. HQ never replies. No extra Instagram call. The two accounts Luke named are never shown. |
 | 18 Nov | #65 | Release cards: a sent Spotify pitch is not under Your approvals (it shows on the pitch line). Take it back only next to a real approval, and it names it. Red is only a failure. A step waiting on a date, on Luke, or on a decision he made stays calm and is not a warning. "Sent N days before release" is amber. |
 | 18 Nov | #64 | L12: Profiles. One section for the profile photo and the banner on every official platform: the current image and the day it changed, the size rule (or "Rule not set"), a new image waiting for "Yes, correct", then the owner uploads it by hand. Atlas (the music stores), Laura (YouTube), Steve (Instagram and Facebook), Kevin (TikTok). X has no owner yet. The `profiles` tool. HQ never logs in and never changes a platform. |
 | 18 Nov | #63 | L7: pitch tracker. Each upcoming and recent song shows not pitched, pitched with the day, or missed. Warns from 14 days out (Spotify needs the pitch 7 days before release). Two-week pitch slots on Upcoming. Atlas records the day and editorial playlists with `pitch_log`. HQ never pitches. |
@@ -46,7 +47,7 @@ No money amounts, payer names or account numbers in this file: the repo is publi
 
 ## Next up
 
-- L12 and the release-card fix (#65) are live. In flight, not live: PR #66, L3 fan inbox part 1 (song-name questions, where to listen, repeat fans; "Needs your reply" is Luke's; no extra Instagram call). Part 2 is not built: a fan's country, and a ready reply he approves. A later Profiles slice (reading an image from a platform) still needs his go, and HQ would still not log in.
+- L3 fan inbox part 1 is live (PR #66). Next, only on Luke's word: part 2 (a fan's country, and a ready reply he approves). HQ would still never send it. A later Profiles slice (reading an image from a platform) still needs his go, and HQ would still not log in.
 - Still needs Luke: B2 YouTube sign-in, the on-hold decisions H1–H4, and L11 (who "Luka" is). B1 and B5 are not needed; B4 Instagram is connected.
 - The rest of Later (L1, L4, L5, L9, L10) waits. Start any of it on his word.
 

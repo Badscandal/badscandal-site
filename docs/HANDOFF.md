@@ -1,8 +1,8 @@
 # Handoff: where HQ is and what's next (read this first)
 
-**Last updated:** 18 Nov 2026, by Cursor. L3 fan inbox part 1 is on this branch, not merged. PR #65 is live on main.
-**main:** every PR up to #65 is live. **This branch:** 590 tests pass on Node 24 and Node 22, none cancelled.
-**Connector:** 40 tools. No new tool. The `instagram` tool now also returns the fan inbox, so Steve, Kevin and Forge should refresh when this is live (Nova too: she has every tool). `profiles` (L12) is still the newest tool: every bot refreshes if they have not since #64.
+**Last updated:** 18 Nov 2026, by Cursor, after PR #66 was merged.
+**main:** every PR up to #66 is live. **Tests:** 590 pass on Node 24 and Node 22, none cancelled.
+**Connector:** 40 tools. No new tool. The `instagram` tool now returns the fan inbox, so Steve, Kevin and Forge must refresh (Nova too: she has every tool).
 
 > **The rule (Luke, 17 Nov 2026):** every time anything is pushed to `main` for HQ, the same push updates THIS
 > file (and `docs/STATUS.md`). If Luke's computer crashes or a session ends mid-way, the next agent starts from
@@ -31,7 +31,7 @@ site + Luke's private dashboard /hq + the bots' connector /mcp).
 
 ## Where it stands (18 Nov 2026)
 
-**Where we left off:** L3 fan inbox, part 1, is written on `cursor/l3-fan-inbox-b12c` (PR #66) and is not on main. It uses the Instagram comments HQ already stores. Growth & Fans shows people asking the song's name or where to listen, and people who comment on more than one post. "Needs your reply" is for Luke. HQ never replies, likes, hides or deletes a comment, and it makes no extra Instagram call. Part 2 is not built. Main already has L12 (PR #64) and the release-card fix (PR #65, `f1cf96c`): a sent Spotify pitch is not an approval, and red on a release card is only a real failure.
+**Where we left off:** L3 fan inbox, part 1, is live on main (PR #66, commit `dab08d2`). Nothing else is in flight. L12 (Profiles, PR #64) and the release-card fix (PR #65) are live.
 
 **HQ** (`badscandal.com/hq`, also inside the HQ apps on Luke's iPhone and Mac) has: Today, Songs, Ads, Pages
 (one tile per song page since #59), Growth & Fans (with the Instagram reader), Profiles (since #64), Upcoming (the release pipeline),
@@ -39,7 +39,9 @@ Money (Revolut is the main account), Team, Messages. The bots (Nova, Alfred, Led
 Atlas, Drop, Verse, Webmaster, Forge) work through the connector `/mcp`.
 
 **Done (17–18 Nov):** the bots' roadmap Batch A (A1–A8) and B3; B4 Instagram; L6 song page tiles; L2 ("What engages
-best"); L8, the asset checker; L7, the pitch tracker (PR #63); L12, Profiles (PR #64); the release-card fix (PR #65). B1 and B5 were dropped by Luke.
+best"); L8, the asset checker; L7, the pitch tracker (PR #63); L12, Profiles (PR #64); the release-card fix (PR #65); L3 fan inbox part 1 (PR #66). B1 and B5 were dropped by Luke.
+
+**L3 part 1, live:** Growth & Fans shows comments asking the song's name or where to listen, and people who comment on more than one post. "Needs your reply" is for Luke. HQ never replies, likes, hides or deletes a comment, and it makes no extra Instagram call. The two accounts Luke named are never shown. Part 2 (a fan's country, and a ready reply he approves) is not built.
 
 **L12, live:** HQ › Profiles lists the profile photo and the banner on every official platform. The current image and the day it changed, the size rule (or "Rule not set"), a new image waiting for "Yes, correct", and the owner who uploads it by hand after that. The `profiles` tool. HQ never logs in and never changes a platform. No Meta or Instagram calls. `/hq` answered 200 and `/mcp` answered 401 right after the merge.
 
@@ -54,11 +56,12 @@ artist growth bot that all we will need is content and $".
 
 ## In flight (branches not merged)
 
-- **`cursor/l3-fan-inbox-b12c` (PR #66):** L3 fan inbox, part 1. Not merged. Song-name questions, where to listen, and repeat fans, from comments already stored. "Needs your reply" goes to Luke. Two accounts he named are filtered in code (`HIDDEN_HANDLES`) and never shown. No new tool (still 40). When this is live, Steve, Kevin and Forge refresh the tool list so the instagram description matches. Preview: https://deploy-preview-66--profound-haupia-db7ffa.netlify.app/hq?sample=1#growth
+- Nothing in flight. L3 fan inbox part 1 shipped on main as PR #66 (`dab08d2`).
 
 ## Waiting on someone
 
-- **Nova (after #64):** tell every bot to refresh the tool list (40 tools). Atlas, Laura, Steve and Kevin: `profiles` records the image that is live (the link and the day it changed) and proposes a new one. Luke says "Yes, correct", then that bot uploads it by hand and records it. HQ never logs in. X has no owner yet: Luke uploads that one himself. Instagram, TikTok and Deezer say "Rule not set".
+- **Nova (after #66):** tell Steve, Kevin and Forge to refresh the tool list (still 40 tools). The instagram tool now includes the fan inbox: song-name questions, where to listen, and repeat fans. `needs_reply` true is for Luke. They never reply, like, hide or delete a comment.
+- **Nova (after #64):** Atlas, Laura, Steve and Kevin: `profiles` records the image that is live (the link and the day it changed) and proposes a new one. Luke says "Yes, correct", then that bot uploads it by hand and records it. HQ never logs in. X has no owner yet: Luke uploads that one himself. Instagram, TikTok and Deezer say "Rule not set".
 - **Nova (after #63, still open):** Atlas: after he sends a Spotify pitch, record the day with `pitch_log` (`pitched_on`). When he sees the song on a new editorial playlist in Spotify for Artists, record it the same day (`playlist`, `added_on`). HQ never pitches. A song the one-pitch rule skipped is not pitched.
 - **Nova (after #60, still open):** other own accounts still go on the desk with the instagram tool (`our_accounts: "add"`, a handle and a reason). The two accounts named for the fan inbox are already filtered in code and never shown. Add the Monday routine to the
   bots' duties with `roster_card` (Steve and Kevin: why the top 3 beat the bottom 3; Forge: one decision for Luke
