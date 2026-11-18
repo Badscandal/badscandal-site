@@ -1398,7 +1398,7 @@ The comment says `touchme-geo.js`. The file is `song-geo.js`. Behaviour follows 
 
 ### Fixed after the handoff (18 Nov 2026, branch `claude/laughing-babbage-0jjpdu`, not merged until Luke says deploy)
 
-Tests for every fix are in `tests/handoff-fixes.test.mjs` (and one in `tests/push.test.mjs`). 761 pass on Node 24 and Node 22.
+Tests for every fix are in `tests/handoff-fixes.test.mjs` (and one in `tests/push.test.mjs`). 763 pass on Node 24 and Node 22.
 
 | # | Bug | Fix |
 |---|---|---|
@@ -1411,6 +1411,7 @@ Tests for every fix are in `tests/handoff-fixes.test.mjs` (and one in `tests/pus
 | 8 | RouteNote mail can't be read | Not a code bug: it needs Luke to sign the inbox in, read-only. Nothing invented meanwhile. |
 | 9 | `netlify.toml` named `touchme-geo.js` | It names `song-geo.js`, and a test checks every file the toml names exists. |
 | 10 | Stale PRs | #72, #74, #78, #81, #82 and #86 closed with a note (their content is on main). |
+| 12 | Luke's screenshots, 18 Nov | Upcoming: the release rows' list showed raw timestamps glued to the label ("Uploaded2026-11-16T22:15…") and "Ready to send" for songs already sent: now "Uploaded ✓ / Mon 16 Nov", notes on their own line, "Files and details: nothing missing"; the row dots light up (CSS used `.done`, rows used `.on`) and have a one-line key. Cards: "RouteNote email: not connected" said once above the list, not on every card; no empty line when a song has no page numbers; the two buttons share a row and the two text links (Cancel in red) sit on their own row with room; the step "Approved by RouteNote (nothing waiting)" is now "Approved by RouteNote" (old releases renamed quietly); the one-pitch skip reads "Pitch: not this time. … has the pitch for these two weeks…". Money: no empty GBP card, "On the way: nothing", and "To look at" no longer shows the bots' id list. Team: "1 earlier" sits under the update. Checked in Chromium at 390 px, dark: no raw timestamps, "Invalid Date", "undefined" or "NaN" on any tab. |
 | 11 | Smaller things | The four clocks and the two “card” files are explained above. The Blob store table lists six stores, not five. `tests/mcp.test.mjs`'s bank test seeds its own roster (no longer order-dependent). GitHub Actions runs the tests on Node 22 AND 24. `needs_you` masks private digits like `my_day`. |
 
 ---
