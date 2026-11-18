@@ -465,8 +465,12 @@ export async function sendMessage(store, now, roster, a) {
   const proposal = a.proposal && typeof a.proposal === "object" && to === "Luke" ? a.proposal : null;
   if (proposal) needs = "decision";
   const opts = approval ? APPROVE_OPTIONS.slice() : proposal ? PROPOSE_OPTIONS.slice() : options;
-  /* release + ask: set only by the desk itself (store_status's "ready to resubmit"), never by a tool argument */
-  const tag = a.ask === "resubmit" && a.release ? { release: clean(a.release, 60), ask: "resubmit" } : {};
+  /* release + ask: set only by the desk itself (store_status's "ready to resubmit", or a RouteNote
+     email HQ has read), never by a tool argument. mailId is how a watcher sends the same note once. */
+  const tag = {};
+  if (a.ask === "resubmit" && a.release) { tag.release = clean(a.release, 60); tag.ask = "resubmit"; }
+  if (from === "HQ" && a.ask === "routenote") { tag.ask = "routenote"; if (a.release) tag.release = clean(a.release, 60); }
+  if (from === "HQ" && a.mailId) tag.mailId = clean(a.mailId, 80);
   /* the asker's own recommendation (A3, 17 Nov 2026): which option and why, on a message that needs Luke */
   let recs = null;
   if ((a.recommend != null && String(a.recommend).trim()) || (a.recommend_option != null && String(a.recommend_option).trim())) {
@@ -3026,6 +3030,9 @@ export function releaseView(r, today, o = {}) {
        whether the pack's lyrics are still the ones he approved) */
     store: storeOf(r),
     approvals: approvalsOf(r),
+    /* L5: the latest RouteNote email HQ has read for this song, and Verse's release-day note */
+    mail: r.mail && r.mail.status ? { status: r.mail.status, on: r.mail.on || "", reason: r.mail.reason || "", id: r.mail.id || "", needsLuke: !!r.mail.needsLuke, source: "email" } : null,
+    verseDuty: r.verseDay ? { on: r.verseDay, text: "Verse was asked to submit the lyrics" } : null,
     log: (r.log || []).slice().reverse() };
   v.pitch = pitchOf(v, today, editorialOf(r)); /* L7: not pitched / pitched with the day / missed */
   v.warnings = releaseWarnings(v, o.sightings || null, today);
@@ -4267,10 +4274,179 @@ function cardNow(card, today) {
   if (out.blockers && bday && daysBetween(bday, today) >= 4) { out.oldBlockers = out.blockers; out.blockers = ""; }
   return out;
 }
+/* ---------- L5 watchers (18 Nov 2026) ----------
+   RouteNote mail, Verse's release-day note, and Content ID claims. Nothing here sends email, changes an
+   ad, or invents a status. The mailbox is not connected: the Google key only reads the sheet. */
+
+const CLAIMS_KEY = "claims.json";
+const MAIL_PHRASES = [
+  ["action required", "rejected"], ["action needed", "rejected"], ["needs action", "rejected"],
+  ["has been rejected", "rejected"], ["was rejected", "rejected"], ["release rejected", "rejected"], ["not approved", "rejected"],
+  ["pending moderation", "in moderation"], ["under review", "in moderation"], ["pending review", "in moderation"],
+  ["in review", "in moderation"], ["in moderation", "in moderation"],
+  ["has been approved", "approved"], ["release approved", "approved"],
+  ["is now live", "live"], ["now live", "live"], ["is live", "live"],
+  ["has been delivered", "delivered"], ["delivered to", "delivered"],
+  ["has been uploaded", "uploaded"], ["resubmitted", "resubmitted"],
+];
+
+/* HQ cannot read RouteNote's inbox with any key the site already has. The answer never copies a secret
+   it was handed: there is nothing to connect until Luke signs a mailbox in. */
+export function routeNoteMailSource() {
+  return {
+    connected: false,
+    line: "not connected",
+    messages: [],
+    steps: "RouteNote sends its moderation mail to the address on the RouteNote account. HQ cannot read that inbox. The Google key on Netlify only reads the sheet. Meta, Instagram, Revolut and the desk keys are not a mailbox. Luke has to sign the site into that inbox, read-only (Gmail readonly, or a forward into a mailbox the site is allowed to read). Nothing is connected until that sign-in exists. Until then the card says RouteNote email: not connected. Drop's own store status still shows. HQ does not invent a moderation result and does not email anyone.",
+  };
+}
+
+const mailFold = (s) => String(s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+const mailStatusOf = (text) => {
+  const h = mailFold(text);
+  const hit = MAIL_PHRASES.map(([p, status]) => [mailFold(p), status]).sort((a, b) => b[0].length - a[0].length).find(([p]) => (" " + h + " ").includes(" " + p + " "));
+  return hit ? hit[1] : "";
+};
+const mailReason = (body, title) => {
+  let t = String(body || "");
+  const phrases = MAIL_PHRASES.map(([p]) => p).slice().sort((a, b) => b.length - a.length);
+  for (const p of phrases) t = t.replace(new RegExp("\\b" + p.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "\\b", "gi"), " ");
+  const name = String(title || "").trim();
+  if (name.length >= 3) t = t.replace(new RegExp("\\b" + name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "\\b", "gi"), " ");
+  t = t.replace(/\b(your release|this release|the release|routenote)\b/gi, " ");
+  t = t.replace(/[^A-Za-z0-9 .,'-]+/g, " ").replace(/\s+/g, " ").trim().replace(/^[\s.:;-]+/, "").replace(/[\s.:;-]+$/, "").trim();
+  return t.length >= 8 ? t.slice(0, 240) : "";
+};
+const mailSong = (hay, releases) => {
+  const h = " " + mailFold(hay) + " ";
+  const hits = (releases || []).filter((r) => r && r.status !== "cancelled" && mailFold(r.title).length >= 3 && h.includes(" " + mailFold(r.title) + " "));
+  hits.sort((a, b) => mailFold(b.title).length - mailFold(a.title).length);
+  return hits[0] || null;
+};
+const isRouteNoteMail = (m) => /routenote/i.test(`${m && m.from || ""} ${m && m.subject || ""} ${m && m.body || ""}`);
+
+/* One email, read. No song and no status are invented. A body that looks like a password is skipped whole. */
+export function parseRouteNoteMail(messages, releases) {
+  return (Array.isArray(messages) ? messages : []).map((m) => {
+    const id = clean(m && m.id, 80);
+    const blob = `${m && m.from || ""}\n${m && m.subject || ""}\n${m && m.body || ""}`;
+    if (secretIn(blob)) return { id, skipped: "secret" };
+    if (!isRouteNoteMail(m)) return { id, skipped: "not routenote" };
+    const hit = mailSong(`${m.subject || ""} ${m.body || ""}`, releases);
+    const status = mailStatusOf(`${m.subject || ""} ${m.body || ""}`);
+    const on = isDay(String(m.date || "").slice(0, 10)) ? String(m.date).slice(0, 10) : "";
+    const reason = mailReason(m.body, hit ? hit.title : "");
+    return { id, status, on, reason, song: hit ? hit.id : "", title: hit ? hit.title : "", needsLuke: status === "rejected" };
+  });
+}
+
+async function mailIds(store, now) {
+  return new Set((await listMessages(store, now, 4)).map((m) => m.mailId).filter(Boolean));
+}
+
+/* Apply emails the caller already has. Production passes none until a mailbox is signed in.
+   A note goes to Drop. Luke is told only when the email is a rejection. The same email is one note. */
+export async function applyRouteNoteMail(store, now, roster, messages) {
+  const releases = await listReleases(store);
+  const parsed = parseRouteNoteMail(messages, releases);
+  const seen = await mailIds(store, now);
+  const out = [];
+  for (const p of parsed) {
+    if (p.skipped) { out.push({ id: p.id, skipped: p.skipped }); continue; }
+    const dropId = p.id, lukeId = p.id + "#luke";
+    const dropExists = seen.has(dropId), lukeExists = seen.has(lukeId);
+    let wrote = false;
+    if (p.song && p.status) {
+      wrote = await mutate(store, REL_KEY, [], (list) => {
+        const r = list.find((x) => x.id === p.song);
+        if (!r) return { skip: true, value: false };
+        const log = Array.isArray(r.mailLog) ? r.mailLog : [];
+        if (log.includes(p.id)) return { skip: true, value: false };
+        storeEntry(r, { status: p.status, on: p.on || spDay(now), reason: p.reason, by: "HQ", at: new Date(now).toISOString() });
+        r.mail = { status: p.status, on: p.on || spDay(now), reason: p.reason, id: p.id, needsLuke: p.needsLuke };
+        r.mailLog = log.concat(p.id).slice(-40);
+        logIt(r, new Date(now).toISOString(), "HQ", `RouteNote email: ${p.status}`);
+        return { value: true };
+      });
+    }
+    const title = p.title || "a release";
+    const said = p.reason ? `RouteNote said: "${p.reason}".` : "RouteNote did not give a reason (not reported).";
+    let text;
+    if (p.song && p.status === "rejected") text = `RouteNote email: ${title} is rejected. ${said} Drafted fix: change what RouteNote named, then ask Luke with store_status ready_to_resubmit. HQ did not email anyone.`;
+    else if (p.song && p.status) text = `RouteNote email: ${title} is ${p.status}. The release card shows it. HQ did not email anyone.`;
+    else if (p.song) text = `RouteNote email: ${title} has no status HQ recognises (not reported). The release card was not changed. HQ did not email anyone.`;
+    else text = `RouteNote email could not match a release.` + (p.status ? ` It says ${p.status}. ${said}` : " The status is not reported.") + " HQ did not email anyone.";
+    if (!dropExists) {
+      await sendMessage(store, now, roster, { from: "HQ", to: "Drop", text, needs: "action", mailId: dropId, ...(p.song ? { release: p.song } : {}) });
+      seen.add(dropId);
+    }
+    if (p.needsLuke && !lukeExists) {
+      const luke = p.song
+        ? `RouteNote email: ${title} is rejected. ${said} Drop has the drafted fix. HQ did not email anyone.`
+        : `RouteNote email could not match a release, and it looks rejected. ${said} HQ did not change a card and did not email anyone.`;
+      await sendMessage(store, now, roster, { from: "HQ", to: "Luke", text: luke, needs: "action", ask: "routenote", about: "Drop", mailId: lukeId, ...(p.song ? { release: p.song } : {}) });
+      seen.add(lukeId);
+    }
+    out.push({ id: p.id, applied: !!(p.song && p.status && !dropExists), already: dropExists, status: p.status || "", song: p.title || "", wrote: !!wrote });
+  }
+  return out;
+}
+
+/* On the release day in São Paulo, one desk note to Verse. The day before and the day after do nothing.
+   The pack's lyrics are not copied into the note. A second run the same day does nothing. */
+export async function verseReleaseDay(store, now, roster) {
+  const today = spDay(now);
+  const seen = await mailIds(store, now);
+  const out = [];
+  for (const r of await listReleases(store)) {
+    if (!r || r.status !== "scheduled" || r.date !== today || r.alreadyOut) continue;
+    const step = (r.steps || []).find((s) => s.key === "lyrics");
+    if (!step || step.status === "skipped" || step.status === "done") continue;
+    const mailId = `verse:${r.id}:${today}`;
+    if (r.verseDay === today || seen.has(mailId)) {
+      if (r.verseDay !== today) await mutate(store, REL_KEY, [], (list) => { const x = list.find((y) => y.id === r.id); if (!x) return { skip: true, value: false }; x.verseDay = today; return { value: true }; });
+      out.push({ id: r.id, already: true });
+      continue;
+    }
+    await sendMessage(store, now, roster, { from: "HQ", to: "Verse", needs: "action", mailId, release: r.id,
+      text: `Today's duty: ${r.title} comes out today (${dayWords(r.date)}). Submit the approved lyrics on Musixmatch when the song shows there. A song not on Musixmatch yet is not a block. Only Luke's approved text goes up.` });
+    await mutate(store, REL_KEY, [], (list) => { const x = list.find((y) => y.id === r.id); if (!x) return { skip: true, value: false }; x.verseDay = today; return { value: true }; });
+    seen.add(mailId);
+    out.push({ id: r.id, sent: true });
+  }
+  return out;
+}
+
+/* Content ID claims. Laura records what YouTube showed. A blank claimant or impact stays blank: the page
+   says not reported. The same claim, claimant and day is stored once. */
+export async function recordContentClaim(store, now, roster, a) {
+  const by = whoIs(a.by, roster, { people: true });
+  if (!["Laura", "Nova", "Claude", "Luke"].includes(by)) fail("Content ID claims are Laura's to record (Nova may record one for her). Nothing was saved.", "not_allowed");
+  const claim = clean(a.claim, 200);
+  if (claim.length < 2) fail("claim is the claim YouTube showed, in a few words. Nothing was saved.");
+  const date = clean(a.date, 10);
+  if (!isDay(date)) fail("date is the day YouTube showed the claim, YYYY-MM-DD. Nothing was saved.");
+  if (date > spDay(now)) fail("That day is still in the future. Nothing was saved.");
+  const claimant = a.claimant != null && String(a.claimant).trim() ? clean(a.claimant, 120) : "";
+  const impact = a.impact != null && String(a.impact).trim() ? clean(a.impact, 240) : "";
+  noSecrets(claim, claimant, impact);
+  const key = `${songKey(claim)}|${songKey(claimant)}|${date}`;
+  return mutate(store, CLAIMS_KEY, { items: [] }, (doc) => {
+    const items = doc && Array.isArray(doc.items) ? doc.items : [];
+    if (!doc || typeof doc !== "object" || Array.isArray(doc)) return { replace: { items }, value: { saved: false, duplicate: false } };
+    const prev = items.find((x) => x && x.key === key);
+    if (prev) return { skip: true, value: { saved: false, duplicate: true, item: prev } };
+    const item = { key, claim, claimant, impact, date, by, at: new Date(now).toISOString() };
+    doc.items = [item, ...items].slice(0, 80);
+    return { value: { saved: true, duplicate: false, item } };
+  });
+}
+
 export async function loadDesk(store, now) {
   const [roster, updates, messages, cardsDoc, config, releases, sightings] = await Promise.all([getRoster(store), listUpdates(store, now, 3), listMessages(store, now, 2), readDoc(store, "cards.json", {}), getConfig(store), listReleases(store), getSightings(store)]);
-  const [seen, read, income, closesDoc, profiles] = await Promise.all([getSeen(store, roster), getRead(store, roster), incomeState(store, now), readDoc(store, "closes.json", []), getProfiles(store)]);
-  return { roster, updates, messages, cards: cardsDoc.data || {}, seen, read, income, config, releases, sightings, closes: Array.isArray(closesDoc.data) ? closesDoc.data : [], profiles };
+  const [seen, read, income, closesDoc, profiles, claimsDoc] = await Promise.all([getSeen(store, roster), getRead(store, roster), incomeState(store, now), readDoc(store, "closes.json", []), getProfiles(store), readDoc(store, CLAIMS_KEY, { items: [] })]);
+  const claims = claimsDoc.data && Array.isArray(claimsDoc.data.items) ? { items: claimsDoc.data.items } : { items: [] };
+  return { roster, updates, messages, cards: cardsDoc.data || {}, seen, read, income, config, releases, sightings, closes: Array.isArray(closesDoc.data) ? closesDoc.data : [], profiles, claims };
 }
 
 /* Has the person a message was sent to READ it? (V6, 11 Nov 2026: from the read markers, read/<name>,
@@ -4377,6 +4553,9 @@ export function board(desk, now, hq) {
     waiting: { luke: waitingOn(desk.messages, "Luke"), claude: waitingOn(desk.messages, "Claude"), bots: desk.messages.filter((m) => isOpen(m) && !PEOPLE.includes(m.to)).length },
     income: desk.income,
     closes: desk.closes || [], /* A7, 17 Nov 2026: the closed months (closes.json) */
+    /* L5: RouteNote's inbox is not connected until Luke signs it in. Claims are only what Laura recorded. */
+    mail: routeNoteMailSource(),
+    claims: desk.claims && Array.isArray(desk.claims.items) ? { items: desk.claims.items.slice(0, 80) } : { items: [] },
     connector: { botsOn: desk.config.botsOn, changedAt: desk.config.changedAt, lastUsed: lastSeen ? { bot: lastSeen[0], at: lastSeen[1].at, tool: lastSeen[1].tool } : null,
       connected: staff.filter((w) => w.connected).length, total: staff.length, claudeSeen: desk.seen.Claude ? desk.seen.Claude.at : null },
     report: desk.messages.find((m) => m.from === "HQ" && m.kind === "report") || null,

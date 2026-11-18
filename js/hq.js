@@ -658,6 +658,24 @@
   function loadInstagram() {
     return getJSON("/api/hq/instagram" + (sample ? "?sample=1" : "")).then(function (res) { if (res.s === 200) ig = res.j; drawInstagram(); }, function () { drawInstagram(); });
   }
+  /* L5: Content ID claims Laura recorded. Empty means none recorded, never a guessed claim. */
+  function drawClaims() {
+    var box = $("claimsBox"); if (!box || !window.HQLib || !HQLib.contentClaimRows) return;
+    var b = window.HQStaff && HQStaff.board ? HQStaff.board() : null;
+    var view = HQLib.contentClaimRows(b && b.claims);
+    var h = '<div class="tile"><h3>Content ID claims</h3><p class="sub">Recorded by Laura from YouTube. A blank is not reported. HQ never invents a claim.</p>';
+    if (!view.rows.length) h += '<p class="d">' + esc(view.empty) + "</p>";
+    else {
+      h += "<ul>";
+      view.rows.forEach(function (r) {
+        h += "<li><b>" + esc(r.claim) + "</b> · " + esc(r.claimant) + " · " + esc(r.impact) + " · " + esc(r.date) + "</li>";
+      });
+      h += "</ul>";
+    }
+    box.innerHTML = h + "</div>";
+  }
+  document.addEventListener("hq:refreshed", drawClaims);
+
   function drawInstagram() {
     var box = $("igBox"); if (!box) return;
     if (!ig) { box.innerHTML = ""; return; }
