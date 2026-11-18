@@ -14,7 +14,7 @@ const hrefs = (list) => list.map((x) => x.href || "action:" + x.action);
 
 test("cmdIndex: every tab, the actions, songs, bots, releases and what waits on Luke", () => {
   const tabs = items.filter((x) => x.kind === "tab");
-  assert.deepEqual(tabs.map((x) => x.href), ["#today", "#songs", "#ads", "#pages", "#growth", "#growth/fans", "#releases", "#money", "#team", "#messages"]);
+  assert.deepEqual(tabs.map((x) => x.href), ["#today", "#songs", "#ads", "#pages", "#growth", "#growth/fans", "#profiles", "#releases", "#money", "#team", "#messages"]); /* + Profiles, L12, 18 Nov 2026 */
   assert.deepEqual(tabs.slice(4, 6).map((x) => x.label), ["Growth & Fans", "Fans"], "Fans is a section of Growth & Fans, still found by its name");
   assert.equal(tabs.find((x) => x.href === "#releases").label, "Upcoming");
   const acts = items.filter((x) => x.kind === "action");
@@ -34,14 +34,14 @@ test("cmdIndex: every tab, the actions, songs, bots, releases and what waits on 
   assert.ok(msg[0].label.length <= 80);
   assert.equal(new Set(hrefs(items)).size, items.length, "no doubles");
   /* nothing loaded yet: the tabs and actions are still there */
-  assert.equal(L.cmdIndex({}).length, 14);
+  assert.equal(L.cmdIndex({}).length, 15); /* + the Profiles tab, L12, 18 Nov 2026 */
 });
 
 test("cmdResults: nothing typed = what waits on you first, then the tabs", () => {
   const r = L.cmdResults(items, "");
   assert.equal(r.length, 8);
-  assert.deepEqual(r.slice(0, 5).map((x) => x.kind), ["message", "message", "message", "message", "message"], "five wait on Luke in the sample (Verse's numbered questions since 14 Nov 2026; Drop's ready-to-resubmit, batch 3; Nova's proposal, 16 Nov 2026)");
-  assert.equal(r[5].href, "#today");
+  assert.deepEqual(r.slice(0, 6).map((x) => x.kind), ["message", "message", "message", "message", "message", "message"], "six wait on Luke in the sample (the five from before, plus Laura's profile image, L12, 18 Nov 2026)");
+  assert.equal(r[6].href, "#today");
 });
 
 test("cmdResults: starts-with beats contains, accents and capitals don't matter, nothing found = nothing", () => {

@@ -89,7 +89,7 @@
     draw();
   }
   function draw() {
-    drawWorkers(); drawMessages(); drawIncome(); drawBadges(); drawReleases();
+    drawWorkers(); drawMessages(); drawIncome(); drawBadges(); drawReleases(); drawProfiles();
     /* New release waiting for the desk; Save and Send wake up when it lands (only then: a refresh must not
        redraw the buttons under Luke's finger) */
     pendingNew(); if (ui.form && ui.form.footFor !== footKey()) drawFoot();
@@ -260,7 +260,7 @@
       (m.approval.text ? '<blockquote class="mpitch">' + esc(m.approval.text) + "</blockquote>" : '<p class="mabout">The lyrics as they are in Files and details (Upcoming › ' + esc(m.approval.title) + " › See the files and details).</p>") + "</div>" : "";
     /* 16 Nov 2026: a bot's proposal lists every change, from and to; nothing changes before "Yes, correct" */
     var pr = L.proposalRows(m);
-    if (pr.length) ap += '<div class="mappr"><p class="mq">' + esc(m.proposal.action === "add" ? "The new song" : "What changes on " + m.proposal.title) + '</p><dl class="mprop">' +
+    if (pr.length) ap += '<div class="mappr"><p class="mq">' + esc(m.proposal.action === "add" ? "The new song" : m.proposal.action === "profile" ? "The new image" : "What changes on " + m.proposal.title) + '</p><dl class="mprop">' +
       pr.map(function (r) { return "<dt>" + esc(r.label) + "</dt><dd>" + (r.from ? '<s>' + esc(r.from) + "</s> → " : "") + esc(r.to) + "</dd>"; }).join("") + "</dl>" +
       (m.proposal.send ? '<p class="mabout">Then it goes to the team: every bot gets its steps.</p>' : "") + "</div>";
     var tag = m.approval ? " · approval" : m.proposal ? " · is this correct?" : m.ask === "resubmit" ? " · ready to resubmit" : "";
@@ -1559,6 +1559,29 @@
       if (fullOf(relById[id])) { openForm(id); return; }
       loadFull(id).then(function (f) { if (f) openForm(id); });
     }, 80);
+  }
+
+  /* L12: one card per platform. The sentences come from HQLib.profileBlocks. Links only when https. */
+  function shortUrl(u) {
+    var s = String(u || "").replace(/^https:\/\//, "");
+    return s.length > 72 ? s.slice(0, 69) + "…" : s;
+  }
+  function drawProfiles() {
+    var el = $("profList");
+    if (!el) return;
+    if (!board || !board.profiles) { el.innerHTML = problem ? '<p class="empty2">' + esc(problem) + "</p>" : '<div class="ph big"></div>'; return; }
+    var b = L.profileBlocks(board.profiles);
+    if ($("profNote")) $("profNote").textContent = b.note;
+    el.innerHTML = b.platforms.map(function (p) {
+      return '<article class="t-card" id="profiles-' + esc(p.id) + '"><h3 class="t-lbl">' + esc(p.platform) + '</h3><p class="secsub">' + esc(p.ownerLine) + "</p>" +
+        p.slots.map(function (s) {
+          var href = /^#messages\/[A-Za-z0-9]+$/.test(s.waitingHref) ? s.waitingHref : "";
+          return '<div class="profslot"><p><b>' + esc(s.kind) + "</b></p><p class=\"profrule\">" + esc(s.rule) + "</p>" +
+            (s.currentLink ? "<p>Current image: " + outLink(s.currentLink, shortUrl(s.currentLink)) + "</p><p class=\"secsub\">" + esc(s.currentLine) + "</p>" : '<p class="secsub">' + esc(s.currentLine) + "</p>") +
+            (s.waitingLine ? '<p class="attn">' + esc(s.waitingLine) + (s.waitingLink ? " " + outLink(s.waitingLink, shortUrl(s.waitingLink)) : "") + (href ? ' <a href="' + esc(href) + '">Answer on Messages</a>' : "") + "</p>" : "") +
+            (s.approvedLine ? "<p>" + esc(s.approvedLine) + (s.approvedLink ? " " + outLink(s.approvedLink, shortUrl(s.approvedLink)) : "") + "</p>" : "") + "</div>";
+        }).join("") + "</article>";
+    }).join("");
   }
 
   window.HQStaff = { reload: reload, clear: clear, drawWorkers: drawWorkers, drawReleases: drawReleases, addDetails: addDetails, board: function () { return board; }, problem: function () { return problem; },

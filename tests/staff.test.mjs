@@ -140,7 +140,7 @@ test("staff: the board and the site's own check say what is wrong in plain lines
   assert.equal(b.staff.length, S.DEFAULT_ROSTER.length);
   const st = Object.fromEntries(b.staff.map((w) => [w.name, w.state]));
   assert.equal(st.Kevin, "blocked"); assert.equal(st.Steve, "done"); assert.equal(st.Laura, "late");
-  assert.equal(b.waiting.luke.length, 5); assert.equal(b.connector.botsOn, true); assert.equal(b.report.from, "HQ");
+  assert.equal(b.waiting.luke.length, 6); /* + Laura's profile image, L12, 18 Nov 2026 */ assert.equal(b.connector.botsOn, true); assert.equal(b.report.from, "HQ");
   assert.ok(b.staff.find((w) => w.name === "Kevin").waiting.length === 0 && b.staff.find((w) => w.name === "Nova").waiting.length === 1);
   const desk = sampleDesk(NOW);
   const r = S.checkReport({ desk, hq: null, hqState: { connected: true, error: "A tab is missing in the sheet" }, now: NOW });

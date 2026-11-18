@@ -1,7 +1,7 @@
 # HQ status (update on every deploy)
 
-**Last updated:** 18 Nov 2026, by Cursor (main after PR #63). Start with `docs/HANDOFF.md`.
-**Tests:** 574, all passing on Node 24 and Node 22. **Connector:** 39 tools (`pitch_log` is new; every bot refreshes the tool list. Atlas uses it).
+**Last updated:** 18 Nov 2026, by Cursor. L12 (Profiles) is in a branch, not on main yet. Start with `docs/HANDOFF.md`.
+**Tests on main:** 574, all passing on Node 24 and Node 22. **Connector on main:** 39 tools (`pitch_log` is new; every bot refreshes the tool list. Atlas uses it).
 No money amounts, payer names or account numbers in this file: the repo is public.
 
 ## Live (newest first)
@@ -44,7 +44,7 @@ No money amounts, payer names or account numbers in this file: the repo is publi
 
 ## Next up
 
-- L7 is live. Next, only on Luke's word: L12 Profiles (an idea; needs his go), L3 fan inbox part 1.
+- L7 is live. L12 Profiles is in PR #64 (not live): one Profiles section, the `profiles` tool, Luke's "Yes, correct", then the owner uploads by hand. HQ does not log in. Next, only on Luke's word: L3 fan inbox part 1.
 - Still needs Luke: B2 YouTube sign-in, the on-hold decisions H1–H4, and L11 (who "Luka" is). B1 and B5 are not needed; B4 Instagram is connected.
 - The rest of Later (L1, L4, L5, L9, L10) waits. Start any of it on his word.
 

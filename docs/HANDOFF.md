@@ -1,8 +1,8 @@
 # Handoff: where HQ is and what's next (read this first)
 
-**Last updated:** 18 Nov 2026, by Cursor, after PR #63 was merged.
-**main:** every PR up to #63 is live. **Tests:** 574 pass on Node 24 and Node 22, none cancelled.
-**Connector:** 39 tools. `pitch_log` is new (L7), so every bot must refresh the tool list. Atlas is the one who uses it.
+**Last updated:** 18 Nov 2026, by Cursor. L12 (Profiles) is in a branch, not on main.
+**main:** every PR up to #63 is live. **Tests on main:** 574 pass on Node 24 and Node 22, none cancelled.
+**Connector on main:** 39 tools. `pitch_log` is new (L7), so every bot must refresh the tool list. Atlas is the one who uses it.
 
 > **The rule (Luke, 17 Nov 2026):** every time anything is pushed to `main` for HQ, the same push updates THIS
 > file (and `docs/STATUS.md`). If Luke's computer crashes or a session ends mid-way, the next agent starts from
@@ -53,7 +53,7 @@ artist growth bot that all we will need is content and $".
 
 ## In flight (branches not merged)
 
-- Nothing in flight. L7 shipped on main as PR #63 (`e842b88`).
+- **`cursor/hq-profiles-9009` (L12, PR #64, waiting for Luke's "deploy"):** HQ › Profiles lists the profile photo and the banner on every official platform. For each: the current image and the day it changed, the size rule (or "Rule not set"), a new image waiting for "Yes, correct", and the owner who uploads it by hand after that. The `profiles` tool (list, record, propose) is for Atlas, Laura, Steve and Kevin. X has no owner yet. HQ never logs in and never changes a platform. No Meta or Instagram calls. 582 tests pass on Node 24 and Node 22. On merge: STATUS row, roadmap L12 -> live, and tell Atlas, Laura, Steve, Kevin and Nova to refresh the tool list (40 tools).
 
 ## Waiting on someone
 
@@ -83,8 +83,7 @@ artist growth bot that all we will need is content and $".
 
 Offer these, in this order:
 
-1. **Profiles (L12):** an idea. One place in HQ for the profile photo and the banner on every official platform.
-   Needs Luke's go before any build. Do not start it before he says go.
+1. **Profiles (L12):** in flight on `cursor/hq-profiles-9009`. Do not start a second version until Luke says deploy, or asks for the next slice (reading an image, still with no login from HQ).
 2. **L3 fan inbox, part 1:** song-name questions and repeat fans (builds on "Needs a reply"). Agree the slice
    with him before building the rest of L3 (a ready reply he approves).
 

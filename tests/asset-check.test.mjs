@@ -16,7 +16,8 @@ const R = S.DEFAULT_ROSTER;
 const call = (d, name, args) => callTool(TOOLS.find((t) => t.name === name), args, { store: d, now: NOW, role: "bot", hq: async () => null }).catch((e) => ({ error: e.message }));
 
 test("every asset kind has a rule in words", () => {
-  assert.deepEqual(Object.keys(S.ASSETS), ["cover", "canvas", "spotify_header", "youtube_banner"]);
+  /* L12 (18 Nov 2026) added profile and banner kinds after these four. The first four stay in this order. */
+  assert.deepEqual(Object.keys(S.ASSETS).slice(0, 4), ["cover", "canvas", "spotify_header", "youtube_banner"]);
   for (const a of Object.values(S.ASSETS)) assert.ok(a.label && a.rule && a.formats.length);
 });
 
@@ -50,7 +51,7 @@ test("banners: Spotify header and YouTube banner", () => {
 
 test("nothing known = nothing flagged; an unknown kind is refused in words", () => {
   assert.deepEqual(S.assetProblems("canvas", {}), []);
-  assert.throws(() => S.assetProblems("poster", {}), /cover, canvas, spotify_header or youtube_banner/);
+  assert.throws(() => S.assetProblems("poster", {}), /asset must be one of: cover, canvas/); /* L12 (18 Nov 2026): the sentence lists every kind */
 });
 
 test("the release card flags a Canvas link that isn't an MP4 or JPG", () => {
