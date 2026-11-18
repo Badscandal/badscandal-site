@@ -1,13 +1,14 @@
 # HQ status (update on every deploy)
 
-**Last updated:** 18 Nov 2026, by Cursor. L7 is in a branch, not live. Start with `docs/HANDOFF.md`.
-**Tests:** 568, all passing on Node 24 and Node 22. **Connector:** 38 tools (`preflight` gained asset options on L8; Atlas, Laura and Webmaster were told to refresh their tool list).
+**Last updated:** 18 Nov 2026, by Cursor (main after PR #63). Start with `docs/HANDOFF.md`.
+**Tests:** 574, all passing on Node 24 and Node 22. **Connector:** 39 tools (`pitch_log` is new; every bot refreshes the tool list. Atlas uses it).
 No money amounts, payer names or account numbers in this file: the repo is public.
 
 ## Live (newest first)
 
 | When | PR | What |
 |------|----|------|
+| 18 Nov | #63 | L7: pitch tracker. Each upcoming and recent song shows not pitched, pitched with the day, or missed. Warns from 14 days out (Spotify needs the pitch 7 days before release). Two-week pitch slots on Upcoming. Atlas records the day and editorial playlists with `pitch_log`. HQ never pitches. |
 | 17 Nov | #61 | L8: asset checker. `preflight` checks a cover, Spotify Canvas, Spotify header or YouTube banner against that platform's rule; a Canvas link that isn't MP4 or JPG shows on the release card. Atlas and Laura have the tool. |
 | 17 Nov | #55 | B4: the Instagram reader (read-only): key pasted once in HQ (Growth & Fans › Connect Instagram), renewed weekly; followers to the desk, post numbers at 6 h / 1 day / 1 week, comments, countries; `instagram` tool for Steve and Kevin. B1 and B5 marked not needed (Luke). |
 | 17 Nov | #56 | B4: the Facebook-login route (Meta blocks linking the Instagram-login app to the business portfolio): HQ takes a Facebook key and keeps only the Page's key, which doesn't run out. Safety brake: a Meta rate limit pauses Instagram reads for a day; a block, restriction or refused key stops them until a new key is pasted. A normal hour is at most 3 read calls. |
@@ -43,8 +44,7 @@ No money amounts, payer names or account numbers in this file: the repo is publi
 
 ## Next up
 
-- L7 pitch tracker is in PR #63 (not live): pitch status on Upcoming and Today, a warning from 14 days out, the two-week slots, and `pitch_log` for Atlas. HQ never pitches. The branch's tests are 574 on Node 24 and 22.
-- L8 is live. After L7, only on Luke's word: L12 Profiles (an idea; needs his go), L3 fan inbox part 1.
+- L7 is live. Next, only on Luke's word: L12 Profiles (an idea; needs his go), L3 fan inbox part 1.
 - Still needs Luke: B2 YouTube sign-in, the on-hold decisions H1–H4, and L11 (who "Luka" is). B1 and B5 are not needed; B4 Instagram is connected.
 - The rest of Later (L1, L4, L5, L9, L10) waits. Start any of it on his word.
 
