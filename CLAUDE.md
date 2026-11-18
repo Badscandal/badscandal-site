@@ -2509,3 +2509,7 @@ The suspected bugs in `docs/HQ-FULL-HANDOFF.md` section 9, fixed. Tests: `tests/
 * **Read marker:** `read/<name>.json` = `{at, also, readAt}`. `callTool` → `settleRead` moves it only past what the
   answer handed over; `read_messages` says `still_unread`; `unread: true` hands over the oldest first.
 * Spotify account health says tracks. `netlify.toml` names `song-geo.js` (tested). CI runs Node 22 and 24.
+* Luke's screenshots, same day: Upcoming rows say dates in words (`HQLook.stampDay`), buttons spaced (`.racts-card`), the
+  step is "Approved by RouteNote" (old ones renamed quietly in `healOne`); Money hides the bots' id list (`incomeProblems`);
+  Needs you has no platform blocks (Growth cards carry the health dot + 7-day views) and no RouteNote email card
+  (`phoneWatchers`); Instagram posts keep `thumb` from the same `/media` read, the Monday pick falls back to the song cover.
