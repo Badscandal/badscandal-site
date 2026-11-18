@@ -1465,6 +1465,25 @@ body.quiet .botrow.is-done.pin{display:block}
 .rsteps .linkbtn,.rsteps .copybtn,.racts .linkbtn,.racts2 .linkbtn,.macts .copybtn,.macts .linkbtn{min-height:44px;min-width:44px;padding:10px 14px;box-sizing:border-box}
 .bl{white-space:normal}
 #sinceCard > summary{width:100%}
+/* workspaces (18 Nov 2026): a switch under the header. Farm and Label replace the tabs; BADSCANDAL does not. */
+.hdr{flex-wrap:wrap}
+.wsswitch{flex:1 0 100%;display:flex;gap:8px;padding:2px 0 4px}
+.wsswitch button{flex:1;min-height:44px;padding:8px 10px;border-radius:999px;border:.5px solid var(--glass-line);background:transparent;color:var(--uv);font:600 15px/1.2 var(--sans, sans-serif);cursor:pointer}
+.wsswitch button[aria-selected="true"]{background:var(--accent);color:var(--accent-ink);border-color:transparent}
+body.ws-on .nav{display:none}
+#workspace{padding:16px var(--pad, 12px) 32px}
+#workspace h2{font-size:22px;margin:0 0 8px}
+#workspace h3{font-size:18px;margin:16px 0 8px}
+#workspace p,#workspace li{font-size:15px;line-height:1.4}
+#workspace .wsnote{color:var(--uv)}
+#workspace label{display:block;margin:0 0 10px;font-size:15px}
+#workspace input,#workspace select,#workspace textarea{display:block;font-size:16px;min-height:44px;width:100%;box-sizing:border-box;margin:4px 0 0;padding:8px 12px;border-radius:12px;border:.5px solid var(--glass-line);background:var(--ink-5);color:var(--paper)}
+#workspace button.wsgo{min-height:44px;padding:8px 14px;border-radius:12px;border:0;background:var(--accent);color:var(--accent-ink);font:600 15px var(--sans, sans-serif);cursor:pointer}
+#workspace .wscard{background:var(--glass);border:.5px solid var(--glass-line);border-radius:var(--r-in);padding:14px;margin:0 0 12px}
+#workspace .wssteps{display:grid;gap:8px}
+#workspace .wsstep{padding:12px;border-radius:12px;background:var(--glass-2)}
+#workspace .blocked{color:var(--red)}
+@media(min-width:900px){#workspace .wscols{display:grid;grid-template-columns:1fr 1fr;gap:12px}}
 </style>
 </head>
 <body>
@@ -1492,6 +1511,11 @@ body.quiet .botrow.is-done.pin{display:block}
     <button class="iconbtn hbtn" id="healthBtn" type="button" aria-label="Data health" aria-haspopup="dialog" aria-expanded="false"><span class="hdot" id="hDot"></span></button>
     <button class="iconbtn" id="quietBtn" type="button" aria-pressed="true">Quiet on</button>
     <button class="iconbtn" id="refresh" type="button" aria-label="Refresh the numbers"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11.5A8 8 0 1 0 17.7 17.3"/><path d="M20.5 5v6.5H14"/></svg></button>
+  </div>
+  <div class="wsswitch" id="wsSwitch" role="tablist" aria-label="Workspace">
+    <button type="button" role="tab" data-ws="badscandal" aria-selected="true">BADSCANDAL</button>
+    <button type="button" role="tab" data-ws="farm">Social Farm</button>
+    <button type="button" role="tab" data-ws="label">Label</button>
   </div>
 </header>
 <div class="rangecustom" id="rangeCustom" hidden><label class="sr" for="rFrom">From</label><input type="date" id="rFrom"><label class="sr" for="rTo">To</label><input type="date" id="rTo"></div>
@@ -1764,6 +1788,10 @@ body.quiet .botrow.is-done.pin{display:block}
       </div>
     </div>
   </section>
+<section class="card" id="workspace" hidden>
+  <p class="wsnote" id="farmNote" hidden>Farm accounts are kept separate from the official BADSCANDAL accounts and ad accounts.</p>
+  <div id="wsBody"></div>
+</section>
 </main>
 </div>
 <script src="js/crt.js" defer></script>
@@ -1772,6 +1800,7 @@ body.quiet .botrow.is-done.pin{display:block}
 <script src="js/hq-staff.js" defer></script>
 <script src="js/hq-phone.js" defer></script>
 <script src="js/hq-shell.js" defer></script>
+<script src="js/hq-workspaces.js" defer></script>
 <script src="js/hq-app.js" defer></script>
 <script src="js/hq-cmd.js" defer></script>
 <script src="js/hq-pages.js" defer></script>

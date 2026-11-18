@@ -1,8 +1,8 @@
 # Handoff: where HQ is and what's next (read this first)
 
-**Last updated:** 18 Nov 2026, by Cursor. Main is through PR #75 (round 2) and PR #73 (L5 watchers). This branch is the money-links work, not merged.
-**main:** every PR up to #75 is live. **Tests on this branch:** 665 pass on Node 24 and Node 22, none cancelled.
-**Connector:** 40 tools. No new tool. `log_growth` gained `claim`, `claimant` and `impact` on this branch, so Laura, Steve, Atlas, Kevin and Nova refresh the tool list when it is deployed. Options also changed in #69.
+**Last updated:** 18 Nov 2026, by Cursor. Main is through PR #76. This branch is HQ workspaces v1 (BADSCANDAL / Social Farm / Label), not merged.
+**main:** every PR up to #76 is live. **Tests on this branch:** 670 pass on Node 24 and Node 22, none cancelled.
+**Connector:** 40 tools. No new tool. `release_step` accepts `licence` for a Label cover only. `log_growth`, `record_spend` and `submit_income` take `workspace` so Farm and Label never write the official rows. The bots refresh when this is deployed.
 
 > **The rule (Luke, 17 Nov 2026):** every time anything is pushed to `main` for HQ, the same push updates THIS
 > file (and `docs/STATUS.md`). If Luke's computer crashes or a session ends mid-way, the next agent starts from
@@ -62,6 +62,7 @@ artist growth bot that all we will need is content and $".
 
 ## In flight (branches not merged)
 
+- **HQ workspaces v1** (`cursor/hq-workspaces-v1-3e9a`, not merged): a switch for BADSCANDAL (unchanged), Social Farm and Label. Farm pages and Label covers, spend and payouts stay off the official numbers and the USD 1,000 cap. Label is covers only. The genre list starts with UK garage and Luke can add genres. Each genre has a playlist placeholder, status "not set up". A Label cover's steps are licence (owner_bot Licence, before upload), then upload, then pitch. Drop's upload shows blocked until the licence is licensed. Only the Licence bot or Nova can mark the licence step. HQ does not take payment. Official releases have no licence step. Still 40 tools. `release_step` accepts `licence` for Label only, so the bots refresh.
 - **Money links** (`cursor/hq-money-link-fixes-bf45`, not merged): one counting rule (received means Revolut) for payments, month_check, income_status and the briefings. A route sums every link. A gap with no source is short, unexplained, never a fee. A rate is kept only when Revolut recorded it. `close_month` needs month_check ready and an https evidence link. No new tool. HQ does not write the Google Sheet and does not decide a ledger month.
 - **HQ round 2** (PR #75, on main): Pre-HQ packs mark only the RouteNote fields not needed; the release-day link, the video and the lyrics stay live. A Canvas step skipped for no link comes back when the link is added. `my_day` schedule lines stay whole, drop a done step and a past date, and the Monday line is the current one. Old notes to everyone drop off. A lyrics blocker clears when the lyrics are in or waiting on "Yes, correct", and that answer refreshes the step note. Signed-out lines name the platform, and a sign-in task follows the live list. Instagram: 0-view rows and old posts are not waiting; under 10 ranked says not settled; a read within 20 minutes reuses the last one and does not spend a call; a post says "song not linked" until Steve, Forge or Nova records the song. Preflight flags do not fail the check. `song_pages` fetches each page and reports the status and the time. Still 40 tools. `log_growth` keeps the Content ID claim fields from L5, and the instagram tool keeps `post` and `song`. The bots refresh.
 - **L1 + L9** (PR #71, on main): Expected money and what a payout route cost. Still 40 tools. `luke_briefing` is unchanged.

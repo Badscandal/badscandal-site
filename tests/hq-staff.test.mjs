@@ -227,8 +227,8 @@ test("the page: Messages is the tenth tab, the new script is kept offline, and n
   assert.match(shell, /MORE = \[[^\]]*"messages"\]/);
   assert.doesNotMatch(shell, /scrollBy\(/, "the deep link is one plain jump");
   assert.doesNotMatch(page, /scroll-behavior:\s*smooth/);
-  /* 18 Nov 2026: the phone screen's script joined the offline list, so the cache name moved to v5 */
-  assert.match(sw, /var CACHE = "bs-hq-v5"/); assert.match(sw, /"\/js\/hq-phone\.js"/); assert.match(sw, /"\/js\/hq-cmd\.js"/); assert.match(sw, /"\/js\/hq-staff\.js"/); assert.match(sw, /"\/js\/hq-app\.js"/);
+  /* 18 Nov 2026: the phone screen joined at v5; the workspace switcher joined at v6 */
+  assert.match(sw, /var CACHE = "bs-hq-v6"/); assert.match(sw, /"\/js\/hq-phone\.js"/); assert.match(sw, /"\/js\/hq-workspaces\.js"/); assert.match(sw, /"\/js\/hq-cmd\.js"/); assert.match(sw, /"\/js\/hq-staff\.js"/); assert.match(sw, /"\/js\/hq-app\.js"/);
   for (const [name, src] of [["hq-staff.js", staff], ["hq.js", readFileSync(new URL("../js/hq.js", import.meta.url), "utf8")]]) assert.doesNotMatch(src, /\b(confirm|alert|prompt)\s*\(/, name + ": questions are asked on the page, never in a browser dialog");
   assert.doesNotMatch(staff, /innerHTML\s*=\s*[^;]*\b(m|th|r|w|e|s|a)\.(text|message|payer|note|name|task|blocker)\b(?![^;]*esc\()/, "board text is escaped");
   /* Luke's words: the visible text of the new parts never says MCP, token, endpoint or API */

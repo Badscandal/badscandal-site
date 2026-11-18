@@ -30,7 +30,9 @@
     if (sub && (tries || 0) < 20) setTimeout(function () { focusSub(tab, sub, (tries || 0) + 1); }, 300);
   }
   function show(tab) {
-    TABS.forEach(function (t) { var v = $(t); if (v) v.hidden = t !== tab; });
+    var wsOn = document.body.classList.contains("ws-on");
+    TABS.forEach(function (t) { var v = $(t); if (v) v.hidden = wsOn || t !== tab; });
+    var ws = $("workspace"); if (ws) ws.hidden = !wsOn;
     [].forEach.call(document.querySelectorAll("[data-tab]"), function (a) {
       if (a.getAttribute("data-tab") === tab) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current");
     });
@@ -118,6 +120,7 @@
     window.HQ.refresh().then(function () { b.classList.remove("spin"); }, function () { b.classList.remove("spin"); });
   });
 
+  window.HQShell = { show: show };
   route();
 
   /* Installable on the home screen (hq.webmanifest) and opens without signal: hq-sw.js keeps a copy
