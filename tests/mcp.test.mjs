@@ -23,7 +23,7 @@ const rpc = (method, params, id = 1) => ({ jsonrpc: "2.0", id, method, ...(param
 
 test("mcp: the tools are short, described and flat, so any client can list them", () => {
   const list = toolList(TOOLS);
-  assert.equal(list.length, 47, "account_health, needs_you, song_pl (18 Nov 2026 night test), profile_jobs, profile_master, profile_rework, profile_uploaded (PR #87), profiles (L12, 18 Nov 2026), pitch_log (L7, 18 Nov 2026), instagram (B4, 17 Nov 2026), close_month (A7, 17 Nov 2026), preflight (A6, 17 Nov 2026), recommend (A3, 17 Nov 2026: Luke's decisions inbox), roster_card, link_transfer and month_check (17 Nov 2026), payments (Ledger, 16 Nov 2026), song_pages and upload_cover (Webmaster, 16 Nov 2026), song_page and propose_release (16 Nov 2026), luke_short_briefing (batch 5), twelve, the four release tools, spotify_upcoming (11 Nov 2026), sort_payment (the bank reader), task_update and record_luke_answer (14 Nov 2026), store_status (batch 3), fix_payment, income_source, record_spend and log_growth (batch 4)");
+  assert.equal(list.length, 48, "account_health, needs_you, song_pl (18 Nov 2026 night test), profile_jobs, profile_master, profile_rework, profile_uploaded (PR #87), profiles (L12, 18 Nov 2026), pitch_log (L7, 18 Nov 2026), instagram (B4, 17 Nov 2026), close_month (A7, 17 Nov 2026), preflight (A6, 17 Nov 2026), recommend (A3, 17 Nov 2026: Luke's decisions inbox), roster_card, link_transfer and month_check (17 Nov 2026), payments (Ledger, 16 Nov 2026), song_pages and upload_cover (Webmaster, 16 Nov 2026), song_page and propose_release (16 Nov 2026), luke_short_briefing (batch 5), twelve, the four release tools, spotify_upcoming (11 Nov 2026), sort_payment (the bank reader), task_update and record_luke_answer (14 Nov 2026), store_status (batch 3), fix_payment, income_source, record_spend and log_growth (batch 4)");
   for (const t of list) {
     assert.match(t.name, /^[a-z][a-z_]{2,30}$/, t.name);
     assert.ok(t.title && t.description.length > 60, t.name + " needs a real description");
@@ -33,7 +33,7 @@ test("mcp: the tools are short, described and flat, so any client can list them"
     assert.ok(!JSON.stringify(t.inputSchema).includes("$ref"));
     assert.equal(t.annotations.destructiveHint, false);
   }
-  assert.equal(new Set(list.map((t) => t.name)).size, 47); /* account_health, needs_you, song_pl (18 Nov 2026 night test) + profile_jobs, profile_master, profile_rework, profile_uploaded (PR #87) */
+  assert.equal(new Set(list.map((t) => t.name)).size, 48); /* account_health, needs_you, song_pl (18 Nov 2026 night test) + profile_jobs, profile_master, profile_rework, profile_uploaded (PR #87) */
   assert.equal(list.find((t) => t.name === "my_day").annotations.readOnlyHint, true);
   assert.equal(list.find((t) => t.name === "post_update").annotations.readOnlyHint, false);
 });
@@ -46,7 +46,7 @@ test("mcp legacy: initialize, the 202 for notifications, ping, tools/list, tools
   assert.deepEqual(await handle({ jsonrpc: "2.0", method: "notifications/initialized" }, {}, deps), { status: 202, body: null });
   assert.deepEqual((await handle(rpc("ping"), {}, deps)).body, { jsonrpc: "2.0", id: 1, result: {} });
   const list = await handle(rpc("tools/list", {}, "abc"), { "mcp-protocol-version": "2025-06-18" }, deps);
-  assert.equal(list.body.id, "abc"); assert.equal(list.body.result.tools.length, 47); /* account_health, needs_you, song_pl (18 Nov 2026 night test) + profile_jobs, profile_master, profile_rework, profile_uploaded (PR #87) */ assert.equal(list.body.result.resultType, undefined);
+  assert.equal(list.body.id, "abc"); assert.equal(list.body.result.tools.length, 48); /* account_health, needs_you, song_pl (18 Nov 2026 night test) + profile_jobs, profile_master, profile_rework, profile_uploaded (PR #87) */ assert.equal(list.body.result.resultType, undefined);
   const call = await handle(rpc("tools/call", { name: "my_day", arguments: { bot: "Nova" } }), {}, deps);
   assert.equal(call.body.result.isError, false); assert.deepEqual(JSON.parse(call.body.result.content[0].text), { tool: "my_day", args: { bot: "Nova" } }); assert.equal(call.body.result.structuredContent, undefined, "one copy, not two (14 Nov 2026)");
   assert.equal(call.body.result.content[0].type, "text"); assert.match(call.body.result.content[0].text, /"my_day"/);
@@ -66,7 +66,7 @@ test("mcp 2026-07-28: no handshake; discover; version and header checks; resultT
   assert.equal(disc.status, 200); assert.deepEqual(disc.body.result.supportedVersions, [MODERN]); assert.equal(disc.body.result.resultType, "complete");
   assert.equal(disc.body.result._meta["io.modelcontextprotocol/serverInfo"].name, "badscandal-hq");
   const list = await handle(rpc("tools/list", meta), { "mcp-protocol-version": MODERN }, deps);
-  assert.deepEqual([list.body.result.resultType, list.body.result.cacheScope, list.body.result.tools.length], ["complete", "private", 47]); /* account_health, needs_you, song_pl (18 Nov 2026 night test) + profile_jobs, profile_master, profile_rework, profile_uploaded (PR #87) */
+  assert.deepEqual([list.body.result.resultType, list.body.result.cacheScope, list.body.result.tools.length], ["complete", "private", 48]); /* account_health, needs_you, song_pl (18 Nov 2026 night test) + profile_jobs, profile_master, profile_rework, profile_uploaded (PR #87) */
   const call = await handle(rpc("tools/call", { ...meta, name: "my_day", arguments: { bot: "Nova" } }), { "mcp-protocol-version": MODERN, "mcp-method": "tools/call", "mcp-name": "=?base64?" + btoa("my_day") + "?=" }, deps);
   assert.equal(call.body.result.resultType, "complete"); assert.equal(call.body.result.isError, false);
   const badV = await handle(rpc("tools/list", { _meta: { "io.modelcontextprotocol/protocolVersion": "2030-01-01" } }), {}, deps);
@@ -130,7 +130,7 @@ test("connector: a bot's whole day, end to end (the sheet isn't connected in thi
   assert.match((await tool("resolve_message", { bot: "Atlas", id: ask.id })).content[0].text, /waiting on Ledger, not on you/, "a bot can't close what isn't its own");
   assert.equal((await tool("set_my_card", { bot: "Atlas", working_on: "Backfilling Touch Me" })).data.saved, true);
   const team = (await tool("team_board", { bot: "Nova" })).data;
-  assert.equal(team.team.length, 12); assert.equal(team.duties, "not read"); assert.equal(team.waiting_on_luke.length, 1);
+  assert.equal(team.team.length, 13); assert.equal(team.duties, "not read"); assert.equal(team.waiting_on_luke.length, 1);
   assert.equal(team.team.find((w) => w.name === "Ledger").last_update.includes("working: Checking Wise"), true); assert.equal(team.team.find((w) => w.name === "Atlas").working_on, "Backfilling Touch Me");
   assert.match(team.team.find((w) => w.name === "Ledger").last_used_the_desk, /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/, "São Paulo time, not UTC"); assert.equal(team.team.find((w) => w.name === "Verse").last_used_the_desk, "never");
   const brief = (await tool("luke_briefing", { bot: "Alfred" })).data;
@@ -147,7 +147,7 @@ test("staff api: Luke's login reads the board, writes and settles; he can switch
   assert.equal((await api("board")).status, 401); assert.deepEqual(await (await api("board")).json(), { error: "Not logged in" });
   assert.equal((await api("board", { headers: { authorization: "Bearer " + ENV.STAFF_BOT_KEY } })).status, 403, "the bots' key opens the connector only");
   const b = await (await api("board", { headers: { cookie } })).json();
-  assert.equal(b.staff.length, 12); assert.equal(b.waiting.luke.length, 1); assert.equal(b.income.count, 1); assert.equal(b.connector.lastUsed.bot.length > 0, true); assert.deepEqual(b.keys, { bots: true, claude: true });
+  assert.equal(b.staff.length, 13); assert.equal(b.waiting.luke.length, 1); assert.equal(b.income.count, 1); assert.equal(b.connector.lastUsed.bot.length > 0, true); assert.deepEqual(b.keys, { bots: true, claude: true });
   assert.equal(b.hqRead, false);
   const send = (body, headers = {}) => api("message", { method: "POST", headers: { cookie, "content-type": "application/json", ...headers }, body: JSON.stringify(body) });
   assert.equal((await send({ to: "Nova", text: "Yes to Survivors." }, { origin: "https://evil.example" })).status, 403);
@@ -172,7 +172,7 @@ test("staff api: the sample is made up, needs the login, and never opens the rea
   assert.equal((await api("board?sample=1")).status, 401);
   globalThis.__asked.length = 0;
   const s = await (await api("board?sample=1", { headers: { cookie } })).json();
-  assert.equal(s.sample, true); assert.equal(s.staff.length, 12); assert.equal(s.waiting.luke.length, 6); /* + a profile image waiting for yes, L12, 18 Nov 2026 */ assert.ok(s.income.sources.length >= 3);
+  assert.equal(s.sample, true); assert.equal(s.staff.length, 13); assert.equal(s.waiting.luke.length, 6); /* + a profile image waiting for yes, L12, 18 Nov 2026 */ assert.ok(s.income.sources.length >= 3);
   assert.deepEqual(globalThis.__asked, [], "no store was opened");
   assert.equal((await (await api("message?sample=1", { method: "POST", headers: { cookie }, body: JSON.stringify({ to: "Nova", text: "hello" }) })).json()).sample, true);
   assert.deepEqual(globalThis.__asked, []);
@@ -435,7 +435,7 @@ test("send_message still succeeds when the push sweep throws (the HQ apps, 12 No
     console.error = logged;
     for (const k of ["APNS_KEY", "APNS_KEY_ID", "APNS_TEAM_ID"]) delete ENV[k];
   }
-  assert.equal((await (await post(rpc("tools/list"), "Bearer " + ENV.STAFF_BOT_KEY)).json()).result.tools.length, 47); /* account_health, needs_you, song_pl (18 Nov 2026 night test) + profile_jobs, profile_master, profile_rework, profile_uploaded (PR #87) */
+  assert.equal((await (await post(rpc("tools/list"), "Bearer " + ENV.STAFF_BOT_KEY)).json()).result.tools.length, 48); /* account_health, needs_you, song_pl (18 Nov 2026 night test) + profile_jobs, profile_master, profile_rework, profile_uploaded (PR #87) */
 });
 
 /* Webmaster's covers (16 Nov 2026): uploaded through the connector, served publicly at /api/staff/cover/<id>.<ext>

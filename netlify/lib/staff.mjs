@@ -90,6 +90,11 @@ export const DEFAULT_ROSTER = [
   { name: "Forge", role: "Ads", duty: "Logs ad spend, checks the cap before any launch", time: "09:30",
     why: "Keeps ad spend inside USD 1,000 a month: logs what Meta, Google and TikTok spent and checks the cap before anything launches.",
     schedule: [{ time: "09:30", what: "Yesterday's Meta, Google and TikTok spend (record_spend)" }, { time: "Monday", what: "Compare the month's Meta total with Ads Manager" }, { time: "before any launch", what: "Month to date + planned budgets must stay under the cap" }, { time: "at USD 900", what: "Switch every ad off (never delete) and confirm" }], writes: "The Ads Tracker's daily log" },
+  { name: "Licence", role: "Cover licensing", duty: "Gets the mechanical licence for each Label cover, then saves it with the song and the assets", time: "09:25",
+    why: "A Label cover cannot go to RouteNote until the mechanical licence is in hand. Licence gets it through Easy Song Licensing after the release pack is ready and before Drop's upload, and reports to Nova only.",
+    schedule: [{ time: "09:25", what: "Read the Label queue. For each cover whose pack is ready, get the mechanical licence through Easy Song Licensing. Do not pay, and do not mark it licensed, until Luke has said yes for that song." },
+      { time: "when a licence is done", what: "Save the licence, the song and the assets to Google Drive, then mark it with licence_queue and the proof link." }],
+    writes: "The Label licence step and the Drive proof link. Reports to Nova only." },
 ];
 
 /* ---------- small helpers ---------- */
@@ -332,7 +337,11 @@ export async function getRoster(store) {
   const list = Array.isArray(data) && data.length ? data : DEFAULT_ROSTER;
   const edits = ed.data && typeof ed.data === "object" && !Array.isArray(ed.data) ? ed.data : {};
   /* Nova's fixes to a job card (roster_card, 17 Nov 2026) go on top of the seed: a re-seed never wipes them */
-  return list.filter((b) => b && b.name).map((b) => { const name = clean(b.name, 40), e = edits[low(name)]; if (!e) return { ...b, name }; const { by, at, ...f } = e; return { ...b, ...f, name, editedBy: by, editedAt: at }; });
+  const named = list.filter((b) => b && b.name).map((b) => { const name = clean(b.name, 40), e = edits[low(name)]; if (!e) return { ...b, name }; const { by, at, ...f } = e; return { ...b, ...f, name, editedBy: by, editedAt: at }; });
+  /* A seed loaded before Licence existed must still know the name, or the connector rejects the bot. */
+  if (named.some((b) => low(b.name) === "licence")) return named;
+  const built = DEFAULT_ROSTER.find((b) => low(b.name) === "licence");
+  return built ? named.concat([{ ...built }]) : named;
 }
 /* roster_card (17 Nov 2026, Nova: Drop's card still listed royalties, Forge's times were old, and the private seed
    is not on this Mac): Nova (or Claude, Luke) fixes a bot's duty, why, usual time, schedule or role on the desk */
@@ -484,6 +493,7 @@ const msgKey = (month) => `msg/${month}.json`;
 export async function sendMessage(store, now, roster, a) {
   const from = whoIs(a.from, roster, { people: true });
   const to = low(a.to) === "all" || low(a.to) === "everyone" || low(a.to) === "team" ? "all" : whoIs(a.to, roster, { people: true });
+  if (from === "Licence" && to !== "Nova") fail("Licence reports to Nova only. Put Nova in to. Nothing was sent.", "not_allowed");
   const text = cleanText(a.text, 1500);
   if (text.length < 2) fail("text is empty");
   if (from !== "HQ") noSecrets(text); /* the site's own report is scrubbed line by line in checkReport() */

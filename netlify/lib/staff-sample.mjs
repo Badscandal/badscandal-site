@@ -166,7 +166,7 @@ export function sampleDesk(now = Date.now()) {
   seen.Claude = { at: new Date(ago(130)).toISOString(), tool: "send_message" };
   /* read markers (V6): the same six read their messages when they last came (my_day); so Luke's answer
      to Atlas reads "Read by Atlas", his reply to Drop "Not read yet", and Claude's note to everyone
-     "Read by 6 of 12" */
+     "Read by 6 of 13" */
   const read = Object.fromEntries(Object.entries(seen).filter(([n]) => n !== "Claude").map(([n, v]) => [n, { at: v.at }]));
   return { roster: ROSTER, updates, messages, cards: { atlas: { workingOn: "Backfilling Touch Me's daily rows to release day", needs: "", at: new Date(ago(200)).toISOString() }, kevin: { workingOn: "TikTok banner", needs: "Luke's phone code for TikTok", at: new Date(ago(400)).toISOString() } },
     seen, income: S.incomeReport(entries, checks, SOURCES.map((s) => ({ match: [], category: "Other", currency: "", lands: "", how: "", blocker: "", needsLuke: "", ...s })), today), config: { botsOn: true, changedAt: null },

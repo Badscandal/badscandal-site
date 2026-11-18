@@ -1,7 +1,7 @@
 /* HQ workspaces (18 Nov 2026): Social Farm and Label, kept off the BADSCANDAL numbers.
    Farm pages and posts, and Label covers, spend, streams and payouts, live under ws/ only.
    Nothing here writes grow/, spend/, inc/ or releases.json, and nothing here pays anyone.
-   Official releases never gain a licence step. Label covers do: licence, then upload, then pitch. */
+   Official releases never gain a licence step. Label covers do: pack, then licence, then upload, then pitch. */
 import * as C from "./action-cards.mjs";
 import * as S from "./staff.mjs";
 
@@ -11,8 +11,9 @@ export const FARM_PLATFORMS = ["TikTok", "Instagram", "YouTube"];
 export const FARM_STATUS = ["active", "paused", "restricted", "banned"];
 export const LICENCE_STATUS = ["todo", "ordered_waiting_luke", "paid", "licensed", "flagged"];
 export const LICENCE_FIELDS = ["esl_order_number", "licence_pdf_url", "drive_folder_url", "original_title", "original_writers", "original_publisher", "status", "flag_reason"];
-/* licence sits in front of upload. Official RELEASE_STEPS is not this list. */
+/* pack, then licence, then Drop's upload, then Atlas's pitch. Official RELEASE_STEPS is not this list. */
 export const LABEL_STEPS = [
+  { key: "pack", label: "Release pack ready", owner: "Nova", owner_bot: "Nova", days: 35 },
   { key: "licence", label: "Mechanical licence (Easy Song Licensing)", owner: "Licence", owner_bot: "Licence", days: 28 },
   { key: "upload", label: "Upload to RouteNote with the assets and the licence", owner: "Drop", owner_bot: "Drop", days: 21 },
   { key: "pitch", label: "Spotify pitch, once Spotify for Artists access exists for the alias", owner: "Atlas", owner_bot: "Atlas", days: 14 },
@@ -31,6 +32,8 @@ const SPEND_WHO = ["Forge", "Nova", "Claude", "Luke"];
 const PAY_WHO = ["Ledger", "Sheet", "Nova", "Claude", "Luke"];
 const STREAM_WHO = ["Atlas", "Nova", "Claude", "Luke"];
 const UPLOAD_WHO = ["Drop", "Nova", "Claude", "Luke"];
+const PACK_WHO = ["Nova", "Claude", "Luke"];
+const YES_WHO = ["Luke", "Claude", "Nova"];
 const PITCH_WHO = ["Atlas", "Nova", "Claude", "Luke"];
 const GENRE_WHO = ["Luke", "Claude", "Nova"];
 const PAY_ARGS = ["amount", "price", "pay", "card", "iban", "cvv", "payment"];
@@ -91,7 +94,11 @@ function playlistPlaceholder(genreId) {
   return { genreId, name: "", url: "", owner_bot: "", status: "not set up" };
 }
 function emptyLicence() {
-  return { esl_order_number: "", licence_pdf_url: "", drive_folder_url: "", original_title: "", original_writers: "", original_publisher: "", status: "todo", flag_reason: "" };
+  return { esl_order_number: "", licence_pdf_url: "", drive_folder_url: "", original_title: "", original_writers: "", original_publisher: "", status: "todo", flag_reason: "", proof_link: "", luke_yes: null };
+}
+function licenceShown(lic) {
+  const licensed = lic && lic.status === "licensed";
+  return { shown: licensed ? "licensed" : "waiting on licence", proof_link: licensed ? (lic.proof_link || lic.licence_pdf_url || "") : "" };
 }
 
 /* ---------- farm (tracking only: no logins, no posting, no fake engagement) ---------- */
@@ -262,26 +269,34 @@ function applyLicence(lic, a) {
       if (!next.licence_pdf_url) missing.push("licence_pdf_url");
       if (!next.drive_folder_url) missing.push("drive_folder_url");
       if (!next.original_title) missing.push("original_title");
+      if (!next.proof_link && next.licence_pdf_url) next.proof_link = next.licence_pdf_url;
+      if (!next.proof_link) missing.push("a proof link");
       if (missing.length) fail(`The licence is not licensed yet. Still missing: ${missing.join(", ")}. Nothing was saved.`);
+      if (!next.luke_yes || !next.luke_yes.words) fail("Luke has not said yes to this cover. Nothing was saved. HQ does not take payment.");
     }
     next.status = status;
   }
   return next;
 }
+async function findLabel(store, song) {
+  const official = await S.listReleases(store);
+  const hit = official.find((r) => r && (r.id === song || S.sameSong(r.title, song)));
+  const labelRows = await readList(store, KEY.releases);
+  const known = labelRows.find((r) => r.status !== "cancelled" && (r.id === song || S.sameSong(r.title, song)));
+  if (!known && hit) fail("Badscandal releases have no licence step. Label covers use workspace \"label\".");
+  if (!known) fail(`No Label cover called "${S.clean(song, 80)}". Start it on the Label workspace first.`);
+  return known;
+}
 export async function markLabelStep(store, now, a) {
   noPayment(a);
   const step = low(a.step);
   if (step === "licence" && a.by !== "Licence" && a.by !== "Nova") fail("Only the Licence bot or Nova can mark the licence step. HQ does not take payment.", "not_allowed");
+  if (step === "pack") allow(a.by, PACK_WHO, "mark the release pack");
   if (step === "upload") allow(a.by, UPLOAD_WHO, "mark the upload");
   if (step === "pitch") allow(a.by, PITCH_WHO, "mark the pitch");
   if (!LABEL_STEPS.some((s) => s.key === step)) fail(`"${S.clean(a.step, 40)}" is not a Label step. The steps are: ${LABEL_STEPS.map((s) => s.key).join(", ")}.`);
   const today = S.spDay(now);
-  const official = await S.listReleases(store);
-  const hit = official.find((r) => r && (r.id === a.song || S.sameSong(r.title, a.song)));
-  const labelRows = await readList(store, KEY.releases);
-  const known = labelRows.find((r) => r.status !== "cancelled" && (r.id === a.song || S.sameSong(r.title, a.song)));
-  if (!known && hit) fail("Badscandal releases have no licence step. Label covers use workspace \"label\".");
-  if (!known) fail(`No Label cover called "${S.clean(a.song, 80)}". Start it on the Label workspace first.`);
+  const known = await findLabel(store, a.song);
   if (a.s4a === true) {
     allow(a.by, PITCH_WHO, "record Spotify for Artists access");
     await S.mutate(store, KEY.aliases, [], (list) => {
@@ -303,9 +318,14 @@ export async function markLabelStep(store, now, a) {
     if (!st) fail("That step is not on this cover. Nothing was saved.");
     if (step === "licence") {
       r.licence = applyLicence(r.licence || emptyLicence(), a);
+      if (r.licence.status === "licensed") {
+        const pack = (r.steps || []).find((s) => s.key === "pack");
+        if (pack && pack.status !== "done") fail("The release pack is not ready yet. Nothing was saved.");
+      }
       st.status = r.licence.status;
       st.by = a.by; st.at = new Date(now).toISOString();
-      if (r.licence.licence_pdf_url) st.link = r.licence.licence_pdf_url;
+      const proof = r.licence.proof_link || r.licence.licence_pdf_url;
+      if (proof) st.link = proof;
     } else {
       const status = low(a.status);
       if (!["todo", "working", "done", "blocked"].includes(status)) fail("status must be one of: todo, working, done, blocked.");
@@ -320,6 +340,67 @@ export async function markLabelStep(store, now, a) {
   });
   return releaseCard(await findRelease(store, saved.id), await readList(store, KEY.aliases), today);
 }
+/* Luke's per-song yes. The Licence bot cannot record it. Nova may, with Luke's exact words. */
+export async function recordLicenceYes(store, now, a) {
+  noPayment(a);
+  if (!YES_WHO.includes(a.by)) fail("Only Luke says yes to a licence. Nova can record his exact words. The Licence bot cannot. Nothing was saved.", "not_allowed");
+  const words = text(a.words || a.luke_said, 400, "Luke's words");
+  if (words.length < 2) fail("Luke's exact words are required. Nothing was saved.");
+  const known = await findLabel(store, a.song);
+  const today = S.spDay(now);
+  await S.mutate(store, KEY.releases, [], (list) => {
+    const r = list.find((x) => x.id === known.id);
+    if (!r || r.status === "cancelled") fail("That cover was cancelled. Nothing was saved.");
+    r.licence = { ...emptyLicence(), ...(r.licence || {}), luke_yes: { by: a.by, at: new Date(now).toISOString(), words } };
+    return { value: r };
+  });
+  return releaseCard(await findRelease(store, known.id), await readList(store, KEY.aliases), today);
+}
+/* Read: covers whose pack is ready and whose licence is not done. Mark: proof link, after Luke's yes. */
+export async function licenceQueue(store, now) {
+  const today = S.spDay(now);
+  const [rows, aliases] = await Promise.all([readList(store, KEY.releases), readList(store, KEY.aliases)]);
+  const queue = [];
+  const licensed = [];
+  for (const r of rows) {
+    if (!r || r.status === "cancelled") continue;
+    const card = presentRelease(r, aliases, today);
+    const lic = card.licence || emptyLicence();
+    if (lic.status === "licensed") {
+      licensed.push({ song: card.title, id: card.id, status: "licensed", proof_link: lic.proof_link || lic.licence_pdf_url || "" });
+      continue;
+    }
+    const pack = (card.steps || []).find((s) => s.key === "pack");
+    if (!pack || pack.status !== "done") continue;
+    queue.push({ song: card.title, id: card.id, status: "waiting on licence", luke_yes: !!(lic.luke_yes && lic.luke_yes.words), proof_link: "" });
+  }
+  return { queue, licensed, note: "Covers whose release pack is ready and whose licence is not done. You report to Nova only. Do not pay. Do not mark one licensed until Luke has said yes for that song. Then call this again with song and proof_link." };
+}
+export async function markLicenceDone(store, now, a) {
+  noPayment(a);
+  if (a.by !== "Licence" && a.by !== "Nova") fail("Only the Licence bot or Nova can mark the licence step. HQ does not take payment.", "not_allowed");
+  const proof = linkOf(a.proof_link || a.link, "Proof link");
+  if (!proof) fail("A proof link that starts with https:// is required. Nothing was saved.");
+  const known = await findLabel(store, a.song);
+  const today = S.spDay(now);
+  await S.mutate(store, KEY.releases, [], (list) => {
+    const r = list.find((x) => x.id === known.id);
+    if (!r || r.status === "cancelled") fail("That cover was cancelled. Nothing was saved.");
+    const pack = (r.steps || []).find((s) => s.key === "pack");
+    if (pack && pack.status !== "done") fail("The release pack is not ready yet. Nothing was saved.");
+    const lic = { ...emptyLicence(), ...(r.licence || {}) };
+    if (!lic.luke_yes || !lic.luke_yes.words) fail("Luke has not said yes to this cover. Nothing was saved. HQ does not take payment.");
+    lic.status = "licensed";
+    lic.proof_link = proof;
+    if (!lic.licence_pdf_url) lic.licence_pdf_url = proof;
+    r.licence = lic;
+    const st = (r.steps || []).find((s) => s.key === "licence");
+    if (st) { st.status = "licensed"; st.link = proof; st.by = a.by; st.at = new Date(now).toISOString(); }
+    return { value: r };
+  });
+  const card = releaseCard(await findRelease(store, known.id), await readList(store, KEY.aliases), today);
+  return { saved: true, workspace: "label", song: card.title, step: "licence", status: "licensed", shown: "licensed", proof_link: proof, upload: card.uploadBlocked ? "blocked" : "open", payment: "HQ did not take or send any payment.", owner_bot: "Licence" };
+}
 async function findRelease(store, id) {
   return (await readList(store, KEY.releases)).find((r) => r.id === id);
 }
@@ -328,7 +409,10 @@ export function presentRelease(r, aliases, today) {
   const lic = { ...emptyLicence(), ...(r.licence || {}) };
   const done = licenceDone(lic);
   const steps = (r.steps || []).map((s) => {
-    if (s.key === "licence") return { ...s, owner_bot: "Licence", status: lic.status, ...lic, note: lic.status === "flagged" ? lic.flag_reason : (s.note || "") };
+    if (s.key === "licence") {
+      const face = licenceShown(lic);
+      return { ...s, ...lic, owner_bot: "Licence", status: lic.status, shown: face.shown, proof_link: face.proof_link, note: lic.status === "flagged" ? lic.flag_reason : (s.note || "") };
+    }
     if (s.key === "upload" && !done) return { ...s, status: "blocked", blocked: true, note: "Blocked until the licence is licensed. The Licence bot marks it. HQ does not take payment." };
     if (s.key === "pitch" && !(alias && alias.s4a) && s.status !== "done") return { ...s, waiting: true, late: false, note: "no S4A access yet" };
     return { ...s };
@@ -452,14 +536,14 @@ export async function view(store, now, which) {
     }
   }
   return { ok: true, workspace: "label", needs, auto: await C.workspaceNeeds(store, now, "label"), numbers: { genres: blocks.length, releases: releases.filter((r) => r.status !== "cancelled").length },
-    team: [{ name: "Licence", role: "Easy Song licence and the Drive folder. Not on the BADSCANDAL roster yet." }, { name: "Drop", role: "RouteNote upload, after the licence is licensed" }, { name: "Atlas", role: "Pitch, once the alias has Spotify for Artists" }, { name: "Forge", role: "Label ad spend, off the BADSCANDAL cap" }, { name: "Ledger", role: "Label payouts, when a statement arrives" }],
+    team: [{ name: "Licence", role: "On the BADSCANDAL roster. Easy Song Licensing after the pack is ready, then the Drive folder. Reports to Nova only." }, { name: "Nova", role: "Release pack, then records Luke's yes for each cover" }, { name: "Drop", role: "RouteNote upload, after the licence is licensed" }, { name: "Atlas", role: "Pitch, once the alias has Spotify for Artists" }, { name: "Forge", role: "Label ad spend, off the BADSCANDAL cap" }, { name: "Ledger", role: "Label payouts, when a statement arrives" }],
     genres: blocks, research: research.slice(0, 20),
     payments: "HQ does not take or send payment." };
 }
 export async function labelList(store, now) {
   const v = await view(store, now, "label");
   return { workspace: "label", note: "Label covers only. Not BADSCANDAL releases. HQ does not take payment.",
-    releases: v.genres.flatMap((g) => g.releases.map((r) => ({ genre: g.name, song: r.title, id: r.id, kind: "cover", steps: r.steps.map((s) => ({ key: s.key, label: s.label, owner_bot: s.owner_bot, status: s.status, ...(s.note ? { note: s.note } : {}) })) }))) };
+    releases: v.genres.flatMap((g) => g.releases.map((r) => ({ genre: g.name, song: r.title, id: r.id, kind: "cover", steps: r.steps.map((s) => ({ key: s.key, label: s.label, owner_bot: s.owner_bot, status: s.key === "licence" ? s.shown : s.status, ...(s.key === "licence" && s.proof_link ? { proof_link: s.proof_link } : {}), ...(s.note ? { note: s.note } : {}) })) }))) };
 }
 export function sampleWorkspace(which, now) {
   const ws = low(which);
@@ -473,9 +557,9 @@ export function sampleWorkspace(which, now) {
     rollups: { viewsPerSong: [{ song: "Northwind", views: 1200 }], bestTypes: [{ type: "clip", views: 1200 }], bestAccounts: [{ handle: "northwind.wav", platform: "TikTok", views: 1200 }], soundUse: [{ song: "Northwind", posts: 1 }] },
     recording: "This only records a page that already exists. HQ does not create accounts, log in, post, or invent engagement." };
   const lic = emptyLicence();
-  const steps = stepsFor("2026-12-18", "2026-11-18").map((s) => s.key === "upload" ? { ...s, status: "blocked", blocked: true, note: "Blocked until the licence is licensed. The Licence bot marks it. HQ does not take payment." } : s.key === "licence" ? { ...s, ...lic } : s.key === "pitch" ? { ...s, note: "no S4A access yet" } : s);
+  const steps = stepsFor("2026-12-18", "2026-11-18").map((s) => s.key === "upload" ? { ...s, status: "blocked", blocked: true, note: "Blocked until the licence is licensed. The Licence bot marks it. HQ does not take payment." } : s.key === "licence" ? { ...s, ...lic, ...licenceShown(lic) } : s.key === "pitch" ? { ...s, note: "no S4A access yet" } : s);
   return { ok: true, sample: true, workspace: "label", needs: [{ id: "ukgarage", text: "UK garage: the main alias has no name yet." }], auto: C.workspaceNeedsFrom([farmCard, labelCard], false, now, "label"), numbers: { genres: 1, releases: 1 },
-    team: [{ name: "Licence", role: "Easy Song licence and the Drive folder. Not on the BADSCANDAL roster yet." }],
+    team: [{ name: "Licence", role: "On the BADSCANDAL roster. Easy Song Licensing after the pack is ready, then the Drive folder. Reports to Nova only." }],
     payments: "HQ does not take or send payment.", research: [],
     genres: [{ id: "ukgarage", name: "UK garage", status: "active", aliases: [clone(SEED_ALIAS)], playlist: playlistPlaceholder("ukgarage"),
       releases: [{ id: "ukgarage-northwindcover", title: "Northwind Cover", date: "2026-12-18", kind: "cover", steps, licence: lic, uploadBlocked: true, assets: { audio: "", artwork: "", canvas: "" } }],

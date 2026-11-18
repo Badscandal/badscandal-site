@@ -15,14 +15,14 @@ test("teamGroups: stuck = blocked or late; haven't checked in = quiet; the rest 
   const g = L.teamGroups(views);
   /* Atlas is on track since 16 Nov 2026: his Spotify for Artists step waits while RouteNote (Drop, blocked) hasn't approved the song */
   assert.deepEqual(g.stuck.map((w) => w.name), ["Drop", "Kevin", "Laura"]);
-  assert.deepEqual(g.quiet.map((w) => w.name), ["Alfred", "Sheet", "Verse", "Webmaster"]);
+  assert.deepEqual(g.quiet.map((w) => w.name), ["Alfred", "Licence", "Sheet", "Verse", "Webmaster"]);
   assert.deepEqual(g.onTrack.map((w) => w.name), ["Forge", "Atlas", "Ledger", "Steve", "Nova"]);
   assert.equal(g.stuck.length + g.quiet.length + g.onTrack.length, views.length, "every bot once");
   assert.deepEqual(L.teamGroups([]), { stuck: [], quiet: [], onTrack: [] });
 });
 
 test("teamCounts: the three numbers on top", () => {
-  assert.deepEqual(L.teamCounts(views), { stuck: 3, quiet: 4, onTrack: 5, total: 12 });
+  assert.deepEqual(L.teamCounts(views), { stuck: 3, quiet: 5, onTrack: 5, total: 13 });
 });
 
 test("botProblems: only what is wrong, in words, blocked before late; nothing for a bot on track", () => {
