@@ -216,6 +216,7 @@ test("account_health reads what the board reads (the stored Instagram copy too),
   await ig.setJSON("posts.json", []);
   const tool = await call(d, "account_health", { bot: "Nova" }, { ctx: { ig: () => ig } });
   assert.ok(asked.includes("posts.json"), "the tool opened the stored Instagram posts");
+  assert.ok(asked.includes("adposts.json"), "the same read opens the stored ad list, and does not call Meta");
   const board = await loadReport({ store: d, ig, now: NOW, claims: { items: [] }, builds: [] });
   assert.deepEqual(tool.accounts.map((a) => [a.id, a.state]), board.accounts.map((a) => [a.id, a.state]));
 });
