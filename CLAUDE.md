@@ -2486,7 +2486,7 @@ For Ledger and Sheet, on the phone Money screen (PR #70): received stays the Rev
 - **L9.** `S.routeCosts`. A route is a source, via Wise or PayPal when that payment is what `link_transfer` or `paid_by` ties, into Revolut. The fee is sent minus landed, and only when both amounts are already on the desk in the same currency. Sent is the statement when one is tied, otherwise the Wise or PayPal amount. A different currency, or a missing payment, is "not enough data". No rate is stored or guessed. Money that landed for more than was sent is said as that, not as a negative fee.
 - **Where it shows.** Money › Expected and Money › Exchange and fees (`HQLib.expectedJourney`, `expectedDue`, `expectedFlags`, `missingLine`, `learnedLine`, `routeLines`), under the received / payable / waiting lines. One "Expected money: …" line in Today's needs-attention, from the page only. `income_status` returns `expected_money` and `payout_routes` next to `per_song`. `my_day` for Ledger and Sheet returns the two summaries. Tests: `tests/expected-money.test.mjs`. The sample (made-up) has one same-currency fee, one currency change, and one missing source.
 
-## Watchers (18 Nov 2026, L5)
+## Watchers (18 Nov 2026, L5, live in PR #73)
 
 Read-only. Nothing sends email, changes an ad, or writes to Instagram or Meta. No new connector tool (still 40). `log_growth` gains optional `claim`, `claimant` and `impact`, so its tool-list version changes: Laura, Steve, Atlas, Kevin and Nova refresh. `luke_briefing` is unchanged.
 

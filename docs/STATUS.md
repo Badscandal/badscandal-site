@@ -1,13 +1,14 @@
 # HQ status (update on every deploy)
 
-**Last updated:** 18 Nov 2026, by Cursor. Main is through PR #71. L5 (watchers) is in flight, not live. Start with `docs/HANDOFF.md`.
-**Tests:** 642 on this branch, all passing on Node 24 and Node 22. **Connector:** 40 tools (no new tool). `log_growth` gained claim fields on the L5 branch, so Laura, Steve, Atlas, Kevin and Nova refresh when it is deployed. Options also changed in #69.
+**Last updated:** 18 Nov 2026, by Cursor. Main is through PR #73. L5 (watchers) is live. Start with `docs/HANDOFF.md`.
+**Tests:** 642, all passing on Node 24 and Node 22. **Connector:** 40 tools (no new tool). `log_growth` gained claim fields in #73, so Laura, Steve, Atlas, Kevin and Nova refresh. Options also changed in #69.
 No money amounts, payer names or account numbers in this file: the repo is public.
 
 ## Live (newest first)
 
 | When | PR | What |
 |------|----|------|
+| 18 Nov | #73 | L5 watchers. RouteNote email says not connected until Luke signs that inbox in, read-only. Verse gets one desk note on the release day (São Paulo). Content ID claims are only what Laura records with `log_growth`. No new tool. HQ does not email anyone. |
 | 18 Nov | #71 | L1 and L9. Expected money, and what each payout route cost. A statement is the expected row. A fee is shown only when sent and landed are already the same currency. A currency change says "not enough data". No new tool. |
 | 18 Nov | #70 | Phone HQ. Needs you opens first. Money shows what landed in Revolut on its own line. Payable, and money still in Wise or PayPal, are smaller and never added in. |
 | 18 Nov | #69 | Connector bug fixes from the bots' read-only test. Still 40 tools. Ads untouched. Stored amounts untouched: a Wise or PayPal row already counted at Revolut is "moved to Revolut" and is not counted again. Ranking floor is 1,000 views, and a boost shows its spend, engagements, cost per engagement and the numbers from before the ad. `read_guide` matches the live desk. Card digits, account digits and raw ad-account ids are hidden in tool output. |
@@ -51,14 +52,14 @@ No money amounts, payer names or account numbers in this file: the repo is publi
 
 ## In flight
 
-- L5 (watchers), PR #73, branch `cursor/hq-l5-watchers-5846`. Not merged. Preview: https://deploy-preview-73--profound-haupia-db7ffa.netlify.app/hq?sample=1. No new tool. RouteNote email is not connected: Luke has to sign the site into that inbox, read-only, before a moderation result can show. Until then the card says "not connected". Verse gets one desk note on the release day (São Paulo). Content ID claims are only what Laura records with `log_growth`. HQ does not email anyone and does not invent a number.
+- Nothing in flight.
 
 ## Next up
 
-- The phone HQ (#70), the connector bug fixes (#69), and L1/L9 (#71) are on main. In flight, not live: L5 (watchers). L3 part 2 is not built: a fan's country, and a ready reply he approves. HQ would still never send it. A later Profiles slice (reading an image from a platform) still needs his go, and HQ would still not log in.
+- L5 (#73), the phone HQ (#70), the connector bug fixes (#69), and L1/L9 (#71) are on main. RouteNote email is live as "not connected" until Luke signs that inbox in, read-only. L3 part 2 is not built: a fan's country, and a ready reply he approves. HQ would still never send it. A later Profiles slice (reading an image from a platform) still needs his go, and HQ would still not log in.
 - Still for Luke, not in #69: the public stream line ("as of September 2026"), where "Plugin store" sits on the home page, and checking pack genre and language against RouteNote's list.
 - Still needs Luke: B2 YouTube sign-in, the on-hold decisions H1–H4, and L11 (who "Luka" is). B1 and B5 are not needed; B4 Instagram is connected.
-- L10 still waits (it needs YouTube write access). L5 is the in-flight branch. L4 is live. Start any of it on his word.
+- L10 still waits (it needs YouTube write access). L5 is live. L4 is live. Start any of it on his word.
 
 ## Known gaps / watch
 
