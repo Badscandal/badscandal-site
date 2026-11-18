@@ -122,7 +122,8 @@ export function connectorStatus(tools, args) {
   const status = old
     ? `reconnect needed: your tool list is old (${yours}; the desk has ${n} tools, version ${version}). Refresh the connector, then call my_day again.`
     : `The desk has ${n} tools, version ${version}. If your app does not list exactly ${n} tools, reconnect needed: refresh the tool list before you work.`;
-  return { tools: n, version, reconnect_needed: old, status, check: status };
+  /* the sentence is said once, on my_day.reconnect. status and check are not copies of it (18 Nov 2026). */
+  return { tools: n, version, reconnect_needed: old, status };
 }
 
 export const TOOLS = [
@@ -186,7 +187,9 @@ export const TOOLS = [
     inputSchema: obj({ bot: BOT,
       our_accounts: str("Optional. The list of OUR OWN accounts, whose comments never count (left out of the ranking, the fans' list and needs_reply). list = show it with its changes (anyone). add = leave a handle's comments out (team, family, friends, bots, spam); remove = count that handle's comments again. Only Nova changes it, always with handle and a short reason.", { enum: ["list", "add", "remove"] }),
       handle: str('With add or remove: the Instagram handle, like "@name".'),
-      reason: str("With add or remove: a short reason (who it is and why), kept in the log with the date.") }, ["bot"]) },
+      reason: str("With add or remove: a short reason (who it is and why), kept in the log with the date."),
+      post: str("With song: the post id or the shortcode from its link. Steve, Forge or Nova sets which song this post is. Never guess it from the caption."),
+      song: str("With post: the song's name, as it is on the release. Empty clears the link.") }, ["bot"]) },
   { name: "task_update", title: "Update or close one of my tasks", idempotent: true,
     description: 'Update ONE of YOUR OWN open tasks from my_day (open_tasks: the ids start with "T-"). status done = the task is really finished (say in note what was done, with the date or the link); blocked = you cannot go on (say in note exactly what is needed and from whom); working = you started it; todo = it is no longer blocked. The dashboard shows your word over the sheet\'s row straight away: done takes it off the open list, and a blocker you clear disappears. Never another bot\'s task (Nova may update anyone\'s). Daily duties (ids starting with "D-") are NOT tasks: finish or block those with post_update.',
     inputSchema: obj({ bot: BOT, task: str('The task id from my_day, for example "T-27".'),
@@ -291,9 +294,9 @@ export const TOOLS = [
     inputSchema: obj({ bot: BOT, month: str("YYYY-MM (default: this month).") }, ["bot"]) },
   /* 16 Nov 2026 (Ledger): every payment, with its id */
   { name: "payments", title: "Every payment of a month, with its id", readOnly: true,
-    description: "LEDGER and SHEET (Nova too): every payment on the desk for ONE month, newest first, each with its id (for sort_payment and fix_payment), date, payer, amount, currency, status, category, source, account and who added it, HQ's Revolut rows included. Filter with account (\"Revolut\"), source (its name or id: payments tied to it or whose payer matches it), payer (words in the name) and status. limit 1 to 200 (100); total says how many there are, and more says what was left out.",
+    description: "LEDGER and SHEET (Nova too): every payment on the desk for ONE month, newest first, each with its id (for sort_payment and fix_payment), date, payer, amount, currency, status, category, source, account and who added it, HQ's Revolut rows included. received is the counted total (Revolut only, the same figure as income_status and month_check). counted is a read-only export of those rows (landing date, account, statement, payable, received, evidence, split, ledger month and landing month). changed_since returns only rows touched since that time. Filter with account (\"Revolut\"), source (its name or id: payments tied to it or whose payer matches it), payer (words in the name) and status. status received means counted in Revolut. limit 1 to 200 (100); total says how many there are, and more says what was left out. HQ never writes to the Google Sheet.",
     inputSchema: obj({ bot: BOT, month: str("YYYY-MM (default: this month)."), account: str("Optional: Revolut, Wise, PayPal..."), source: str("Optional: a source's name or id."),
-      payer: str("Optional: words in the payer's name."), status: str("Optional: received | pending | payable | statement only | transfer | unsorted"), limit: { type: "integer", description: "1 to 200 (default 100)." } }, ["bot"]) },
+      payer: str("Optional: words in the payer's name."), status: str("Optional: received | pending | payable | statement only | transfer | unsorted | settled"), changed_since: str("Optional. A time, for example 2026-11-01T00:00:00Z. Only payments touched since then."), limit: { type: "integer", description: "1 to 200 (default 100)." } }, ["bot"]) },
   { name: "income_status", title: "Income so far and what is missing", readOnly: true,
     description: "For a month or an account, or every payment with its id, use payments. This month's income as logged (received and pending, per currency, never mixed), the newest payments, every known source of income with when it last paid, which accounts were checked today, and the list of problems (not checked, overdue, blocked, a payer nobody has named). Also expected_money (each statement, its due day, and short, late or missing) and payout_routes (what the exchange and the fees cost, from amounts already recorded; not enough data when a rate would have to be guessed). Do not guess a rate or an amount. Use it before the daily check and before reporting to Luke.",
     inputSchema: obj({ bot: BOT }, ["bot"]) },
@@ -567,6 +570,23 @@ export async function callTool(tool, args, ctx) {
     case "instagram": {
       if (!ctx.ig) throw new S.StaffError("The Instagram reader isn't available here. Tell Claude.");
       const oa = args.our_accounts ? String(args.our_accounts) : "";
+      const ig = ctx.ig();
+      const hour = new Date(now).toISOString().slice(0, 13);
+      const callsLeft = async (spend) => {
+        let used = 0;
+        try {
+          const prev = typeof ig.get === "function" ? await ig.get("tool-calls.json") : null;
+          used = prev && prev.hour === hour ? Number(prev.n) || 0 : 0;
+          if (spend) { used += 1; if (typeof ig.setJSON === "function") await ig.setJSON("tool-calls.json", { hour, n: used }); }
+        } catch { if (spend) used += 1; }
+        return Math.max(0, 3 - used);
+      };
+      if (args.post != null && String(args.post).trim()) {
+        if (!["Steve", "Forge", "Nova"].includes(me)) throw new S.StaffError("Steve, Forge or Nova sets which song a post is. Nothing was saved.");
+        let saved;
+        try { saved = await IG.setPostSong(ig, now, { by: me, post: args.post, song: args.song }); } catch (e) { throw new S.StaffError(e.message); }
+        return { saved: true, post: saved.post, song: saved.song || "song not linked", state: saved.state, calls_left: await callsLeft(false), note: "Saved on the desk. This did not use a call. The next ranking shows it. Never guess a song from the caption." };
+      }
       let changed = null;
       if (oa === "add" || oa === "remove") {
         if (!IG.OWN_EDITORS.includes(me)) throw new S.StaffError("Only Nova changes the list of our own accounts. Read it with our_accounts list; to change it, ask Nova (send_message).");
@@ -574,46 +594,44 @@ export async function callTool(tool, args, ctx) {
       } else if (oa && oa !== "list") throw new S.StaffError("our_accounts is list, add or remove.");
       let spend = [];
       try { spend = (await S.listSpend(store, now) || []).filter((r) => /meta|facebook|instagram/i.test(r.platform || "")); } catch {}
-      const v = await IG.igView(ctx.ig(), now, { spend });
+      const fresh = oa === "add" || oa === "remove" || oa === "list";
+      if (!fresh) {
+        const cached = await IG.readToolCache(ig, now);
+        if (cached && cached.body) return { ...cached.body, calls_left: await callsLeft(false), cached: `This is the read from ${S.spStamp(cached.at)}. It did not use a call.` };
+      }
+      const v = await IG.igView(ig, now, { spend });
       const ourAccounts = { handles: v.own.map((h) => "@" + h), count: v.own.length, note: "Comments from these accounts never count: not in the ranking, the fans' list or needs_reply. The connected account is always on it. Only Nova changes it.",
         changes: (v.ownLog || []).map((x) => ({ on: S.spStamp(x.at), by: x.by, what: `${x.action} @${x.handle}`, reason: x.reason })) };
-      const hour = new Date(now).toISOString().slice(0, 13);
-      let used = 0;
-      if (oa !== "list") {
-        try {
-          const ig = ctx.ig();
-          const prev = typeof ig.get === "function" ? await ig.get("tool-calls.json") : null;
-          used = prev && prev.hour === hour ? Number(prev.n) || 0 : 0;
-          used += 1;
-          if (typeof ig.setJSON === "function") await ig.setJSON("tool-calls.json", { hour, n: used });
-        } catch { used += 1; }
-      }
-      const calls_left = Math.max(0, 3 - used);
+      const calls_left = await callsLeft(oa !== "list");
       if (oa === "list") return { our_accounts: ourAccounts, calls_left, note: "Listing our accounts does not use a call. The numbers are below only when you ask for the ranking." };
       const st = v.status;
       const lineOf = (c) => `${c.at.slice(0, 16).replace("T", " ")} · ${c.user}: ${c.text} (on “${c.postCaption}”)` + (c.id ? ` · comment ${c.id}` : "") + (c.link ? ` · ${c.link}` : "");
       const flags = [];
-      if (v.ranking.notSettled) flags.push("not settled yet: fewer than 10 ranked posts");
+      if (v.ranking.notSettled) flags.push("under 10 ranked = not settled");
       if (v.ranking.needSix) flags.push("need 6+ ranked to compare top 3 vs bottom 3");
       if (v.ranking.noClearWinner) flags.push("no clear winner: the top two are within 1 point");
-      return { connected: st.connected, ...(st.connected ? { account: "@" + st.username } : { how: "Luke connects it once in HQ (Growth & Fans › Connect Instagram)." }),
+      const answer = { connected: st.connected, ...(st.connected ? { account: "@" + st.username } : { how: "Luke connects it once in HQ (Growth & Fans › Connect Instagram)." }),
         ...(st.picture ? { profile_picture: st.picture } : {}),
         ...(st.lastError ? { problem: st.lastError } : {}), followers: st.followers, last_read: st.lastOkAt ? S.spStamp(st.lastOkAt) : "never", calls_left,
         posts: v.posts.map(IG.postLine), new_comments: v.comments.slice(0, 20).map(lineOf),
         top_countries: v.countries.map((c) => `${c.country} ${c.count}`),
         ranking: { how: "Every recent post at the SAME age: its numbers at 1 day. Best first by engagement per view. Posts older than 3 weeks are in older, even when a 1-day number exists. A boost is the ad's spend, its engagements and the cost per engagement, or HQ's recorded Meta spend the day of the post or the next day. 'before the ad' is the post's numbers before that spend. Posts under 1,000 views are not ranked. Follows per view and profile visits are on the line when Instagram sent them.",
-          ranked: v.ranking.ranked.length, best: v.ranking.ranked.slice(0, 5).map(rankLine), worst: v.ranking.ranked.length > 5 ? v.ranking.ranked.slice(-3).reverse().map(rankLine) : [],
+          ranked: v.ranking.ranked.length, not_settled: !!v.ranking.notSettled, best: v.ranking.ranked.slice(0, 5).map(rankLine),
+          worst: v.ranking.ranked.length > 5 ? v.ranking.ranked.slice(-3).reverse().map(rankLine) : [],
+          worst_why: v.ranking.ranked.length > 5 ? "" : (v.ranking.notSettled ? "not settled: fewer than 10 ranked posts, so there is no bottom 3 yet" : "fewer than 6 ranked posts, so there is no bottom 3 yet"),
           older: v.ranking.older.map(rankLine), waiting: v.ranking.tooFew.map(rankLine), not_ranked_yet: v.ranking.tooFew.length,
           ...(flags.length ? { flags } : {}),
           ads_read: v.ranking.adsAt ? S.spStamp(v.ranking.adsAt) : "not yet (the ads are read hourly with Meta's read-only key)" },
         needs_reply: v.needsReply.map(lineOf),
         needs_reply_note: "Questions from fans nobody of ours has answered. Replying goes outside the team: Luke decides and replies. Put them in your update for Luke; never reply yourself.",
         fan_inbox: { note: "People asking the song's name or where to listen, and people who commented on more than one post. needs_reply true is for Luke: put it in your update for him. Never reply, like, hide or delete a comment.",
-          questions: (v.fanInbox ? v.fanInbox.questions : []).map((q) => ({ needs_reply: q.needsReply, kind: q.kind === "listen" ? "where to listen" : "song name", when: String(q.at || "").slice(0, 16).replace("T", " "), user: q.user, text: q.text, on: q.postCaption, ...(q.id ? { comment: q.id } : {}), ...(q.link ? { link: q.link } : {}) })),
+          questions: (v.fanInbox ? v.fanInbox.questions : []).map((q) => ({ needs_reply: q.needsReply, kind: q.kind === "listen" ? "where to listen" : q.kind === "use" ? "using the music" : "song name", when: String(q.at || "").slice(0, 16).replace("T", " "), user: q.user, text: q.text, on: q.postCaption, ...(q.id ? { comment: q.id } : {}), ...(q.link ? { link: q.link } : {}) })),
           repeat_fans: (v.fanInbox ? v.fanInbox.repeats : []).map((r) => ({ needs_reply: r.needsReply, user: r.user, posts: r.posts, comments: r.comments, latest: r.lastText, on: r.postCaption })) },
         own_accounts: v.own.map((h) => "@" + h), ...(oa ? { our_accounts: ourAccounts } : {}),
         ...(changed ? { done: `${changed.change.action === "add" ? "Added" : "Removed"} @${changed.change.handle}.` } : {}),
-        note: "Read-only. 3 reads an hour. Don't open Instagram in a browser for these numbers. Never change, start, pause or create ads." };
+        note: "Read-only. 3 reads an hour. A read from the last 20 minutes is reused and does not use a call. Don't open Instagram in a browser for these numbers. Never change, start, pause or create ads." };
+      if (!oa && !changed) { try { await IG.writeToolCache(ig, now, answer); } catch { /* the answer still goes out */ } }
+      return answer;
     }
     case "close_month": {
       const r = await S.closeMonth(store, now, roster, { by: me, month: args.month, evidence: args.evidence });
@@ -633,20 +651,30 @@ export async function callTool(tool, args, ctx) {
         rule = S.ASSETS[kind].rule;
         for (const t of found) problems.push(`${S.ASSETS[kind].label}: ${t.replace(new RegExp("^" + S.ASSETS[kind].label + " "), "")}`);
       }
-      const notes = [], checked = [];
+      const notes = [], checked = [], flags = [], couldnt = [];
       let own = "";
       if (has("song")) {
         const r = S.findRelease(await S.listReleases(store), args.song, { drafts: true }); own = r.id;
-        for (const x of S.preflightOf(r)) (x.warn ? notes : problems).push(x.text);
-        for (const t of S.artistNotes([r.pack && r.pack.primary, r.pack && r.pack.featuring, r.pack && r.pack.copyright, r.pack && r.pack.spotifyArtist].filter(Boolean).join("\n"))) notes.push(t);
-        checked.push("artist name is one word (capitalisation does not matter)", "primary artist is Badscandal and matches Spotify artist 29kaubgb6Esvwu0idVndGy");
-        if (r.pack && r.pack.wav) checked.push(/\.wav(\?|$)/i.test(r.pack.wav) ? "master link ends in .wav" : "master link was checked: it does not end in .wav");
+        if (r.pack && r.pack.prehq === "Yes") {
+          return { ok: true, song: r.title, skipped: "skipped: pre-HQ song", note: "skipped: pre-HQ song", problems: [], flags: [], checked: ["skipped: pre-HQ song"], couldnt_check: [], notes: [] };
+        }
+        for (const x of S.preflightOf(r)) (x.warn ? flags : problems).push(x.text);
+        const seenNote = new Set();
+        for (const t of S.artistNotes([r.pack && r.pack.primary, r.pack && r.pack.featuring, r.pack && r.pack.copyright, r.pack && r.pack.spotifyArtist].filter(Boolean).join("\n"))) if (!seenNote.has(t)) { seenNote.add(t); notes.push(t); }
+        checked.push("artist name is one word");
+        const primary = String((r.pack && r.pack.primary) || "").trim();
+        if (primary && !S.artistProblems(primary).length && /^badscandal$/i.test(primary)) checked.push("primary artist is Badscandal and matches Spotify artist 29kaubgb6Esvwu0idVndGy");
+        else if (!primary) couldnt.push("Primary artists is empty, so it was not checked against the Spotify artist");
+        const wav = r.pack && r.pack.wav;
+        if (!wav) couldnt.push("Master WAV is empty, so the file type could not be checked");
+        else if (/\.wav(\?|$)/i.test(wav)) checked.push("master link ends in .wav");
+        else if (!/\.(mp3|m4a|aac|ogg|opus)(\?|$)/i.test(wav)) couldnt.push("Master WAV could not be checked: the link has no file type (it may be a folder)");
         checked.push("artwork rule is a JPG or PNG, 3000 x 3000 (pass width and height on asset cover to check a file)");
       }
       if (has("asset")) { for (const t of S.assetNotes(String(args.asset).trim().toLowerCase(), { width: args.width, height: args.height, seconds: args.seconds, format: args.format, mb: args.size_mb }) || []) notes.push(t); checked.push("platform size and format"); }
       if (has("text")) { for (const t of S.artistProblems(args.text)) problems.push(`Text: ${t}`); for (const t of S.artistNotes(args.text)) notes.push(t); checked.push("the text"); }
       if (has("link")) { const pr = S.adLinkProblem(args.link, "", own); if (pr) problems.push(`Link: ${pr}`); checked.push(pr ? "the link" : "the link points at badscandal.com/<song>"); }
-      return { ok: problems.length === 0, problems, ...(notes.length ? { notes } : {}), ...(checked.length ? { checked } : {}), ...(rule ? { rule } : {}), note: problems.length ? "Fix these before it goes out (release_fill for your own fields; tell Luke for his)." : "Nothing to fix." };
+      return { ok: problems.length === 0, problems, ...(flags.length ? { flags } : {}), ...(notes.length ? { notes } : {}), ...(checked.length ? { checked } : {}), ...(couldnt.length ? { couldnt_check: couldnt } : {}), ...(rule ? { rule } : {}), note: problems.length ? "Fix these before it goes out (release_fill for your own fields; tell Luke for his)." : flags.length ? "Flagged only: nothing is blocking it." : "Nothing to fix." };
     }
     case "recommend": {
       const p = await S.recommendMessage(store, now, roster, { by: me, id: args.message_id, option: args.option, why: args.why });
@@ -782,24 +810,27 @@ export async function callTool(tool, args, ctx) {
         waiting_in_wise_or_paypal: c.waiting.map((e) => line(e) + " · when it reaches Revolut, link it"),
         own_transfers_to_check: c.ownTransfers.map((e) => line(e) + " · " + S.transferWords(e)),
         ...(c.statementLater && c.statementLater.length ? { statement_landed_later: c.statementLater.map((e) => `statement ${(e.statement || e.date || "").slice(0, 7)}, landed ${e.date}: counts in ${(e.date || "").slice(0, 7)}`) } : {}),
-        ...(c.suggestions && c.suggestions.length ? { possible_revolut_matches: c.suggestions.map((s) => { const w = c.waiting.find((x) => x.id === s.id) || {}; return `${S.hidePrivate(w.payer)} ${w.currency} ${w.amount} may match ${s.matches.map((m) => `${m.date} ${m.currency} ${m.amount} (id ${m.id})`).join(" or ")}`; }) } : {}),
+        ...(c.suggestions && c.suggestions.length ? { possible_revolut_matches: c.suggestions.map((s) => { const rows = (s.ids || [s.id]).map((id) => c.waiting.find((x) => x.id === id)).filter(Boolean); const who = rows.map((w) => `${S.hidePrivate(w.payer)} ${w.currency} ${w.amount} (id ${w.id})`).join(" + "); return `${who} may match ${s.matches.map((m) => `${m.date} ${m.currency} ${m.amount} (id ${m.id})`).join(" or ")}. ${s.confirm || "Confirm with one link_transfer call. Nothing is linked until you do."}`; }) } : {}),
         verdict: c.ready ? `${label} is right: received ${money(c.received)} (Revolut).` : `${label} is not right yet: ${c.toSort.length} to sort, ${c.waiting.length} waiting in Wise or PayPal.`,
         /* A7 (17 Nov 2026): a closed month says so, with every change since (old -> new) */
         ...(await S.monthCloseView(store, now, c.month).then((v) => v ? { closed: { line: S.closeLine(v), evidence: v.evidence, changes_since: S.closeChangeLines(v.changes) } }
           : c.ready && c.month < today.slice(0, 7) ? { close_it: "It is ready: close it with close_month (add evidence links: the statements or the sheet)." } : {})) };
     }
     case "payments": {
-      const r = await S.listPayments(store, now, { month: args.month, account: args.account, source: args.source, payer: args.payer, status: args.status, limit: args.limit });
-      return { month: r.month, total: r.total, payments: r.payments.map((e) => { const o = S.payOut(e, r.month); return { id: e.id, statement_month: o.statement_month, landed_month: o.landed_month, counts_in: o.counts_in, date: o.date, payer: o.payer, amount: e.amount, currency: e.currency, status: o.status,
-        category: e.category, source: e.source || "", account: e.account, added_by: e.by, counted: o.counted, ...(e.song ? { song: e.song } : {}), ...(e.store ? { store: e.store } : {}), ...(o.counts_note ? { counts_note: o.counts_note } : {}), ...(o.note ? { note: o.note } : {}), ...(o.paid_by ? { paid_by: o.paid_by } : {}), ...(o.moved_to ? { moved_to: o.moved_to } : {}) }; }),
+      const r = await S.listPayments(store, now, { month: args.month, account: args.account, source: args.source, payer: args.payer, status: args.status, limit: args.limit, changed_since: args.changed_since });
+      return { month: r.month, total: r.total, received: cur(r.received), received_note: r.received_note, writes_to_sheet: false,
+        counted: r.counted, payments: r.payments.map((e) => { const o = S.payOut(e, r.month); return { id: e.id, statement_month: o.statement_month, landed_month: o.landed_month, counts_in: o.counts_in, date: o.date, payer: o.payer, amount: e.amount, currency: e.currency, status: o.status,
+        category: e.category, source: e.source || "", account: o.account, added_by: e.by, counted: o.counted, ...(e.song ? { song: e.song } : {}), ...(e.store ? { store: e.store } : {}), ...(o.counts_note ? { counts_note: o.counts_note } : {}), ...(o.note ? { note: o.note } : {}), ...(o.paid_by ? { paid_by: o.paid_by } : {}), ...(o.moved_to ? { moved_to: o.moved_to } : {}) }; }),
         ...(r.total > r.payments.length ? { more: `${r.total - r.payments.length} more: narrow it (account, source, payer, status) or raise limit` } : {}) };
     }
     case "income_status": {
       const i = await S.incomeState(store, now);
       const hqAns = ctx.hq ? await ctx.hq().catch(() => null) : null;
       const per_song = await perSongAnswer(store, now, hqAns);
-      const line = (s) => ({ name: s.name, id: s.id, category: s.category, lands_in: s.lands, expected: s.cadence, owner: s.owner, state: s.verdict, why: s.why,
-        last_payment: s.last ? `${s.last.date} ${s.last.currency} ${s.last.amount.toFixed(2)} (${s.last.status})` : "none logged", this_month: cur(s.monthTotal), ...(s.needsLuke ? { needs_luke: s.needsLuke } : {}),
+      const sourceName = (s) => (/tipalti/i.test(s.name) && /create|e-?check/i.test(s.name) ? "Create Music" : s.name);
+      const line = (s) => ({ name: sourceName(s), id: s.id, category: s.category, lands_in: s.lands || "", expected: s.cadence, owner: s.owner, state: s.verdict, why: s.why,
+        last_payment: s.last ? `${s.last.date} ${s.last.currency} ${s.last.amount.toFixed(2)} (${s.last.status})` : "none logged",
+        this_month: Object.keys(s.monthTotal || {}).length ? cur(s.monthTotal) : (Object.keys(s.monthWaiting || {}).length ? `${cur(s.monthWaiting)} in Wise or PayPal, not received` : "nothing logged"), ...(s.needsLuke ? { needs_luke: s.needsLuke } : {}),
         /* round 2: each account of a source paid into several (RouteNote's two) */
         ...(s.byAccount ? { by_account: s.byAccount.map((a) => `${a.account}: ` + (a.last ? `${a.last.date} ${a.last.currency} ${a.last.amount.toFixed(2)} (${a.last.status})` : "none logged")) } : {}) });
       return { month: i.month, received_this_month: cur(i.received), pending_this_month: cur(i.pendingOnly), payments_logged_this_month: i.count,
@@ -816,7 +847,7 @@ export async function callTool(tool, args, ctx) {
         sources: i.sources.map(line), problems: i.problems,
         /* what you submitted yourself, with the id and month fix_payment needs */
         your_payments: i.entries.filter((e) => e.by === me).slice(0, 15).map((e) => ({ id: e.id, month: (e.statement || e.date).slice(0, 7), line: `${e.date} · ${e.payer} · ${e.currency} ${e.amount.toFixed(2)} · ${e.status} · ${e.account} · ${e.category}` })),
-        newest_payments: i.entries.slice(0, 15).map((e) => `${e.date} · ${e.payer} · ${e.currency} ${e.amount.toFixed(2)} · ${e.status} · ${e.account} · by ${e.by} (id ${e.id})`),
+        newest_payments: i.entries.slice(0, 15).map((e) => { const o = S.payOut(e); return `${o.date} · ${o.payer} · ${e.currency} ${e.amount.toFixed(2)} · ${o.status} · ${o.account} · by ${e.by} (id ${e.id})`; }),
         ...(i.count > 15 ? { more_payments: `${i.count - 15} more this month: use payments (month ${i.month}) to see every one, with its id` } : {}),
         /* in the account, not yet said what they are: counted as nothing until sorted (tool sort_payment) */
         unsorted: i.unsorted.map((e) => ({ id: e.id, month: e.date.slice(0, 7), line: `${e.date} · ${e.payer} · ${e.currency} ${e.amount.toFixed(2)} · ${e.account}`,
@@ -824,7 +855,7 @@ export async function callTool(tool, args, ctx) {
         /* L1 + L9 (18 Nov 2026). Amounts already on the desk only. A missing rate is "not enough data", never a guess. */
         expected_money: { summary: i.expected.summary.text, late: i.expected.summary.late, short: i.expected.summary.short, missing: i.expected.summary.missing,
           rows: i.expected.rows.slice(0, 30).map((r) => ({ id: r.id, source: r.source || r.payer, amount: `${r.currency} ${Number(r.amount).toFixed(2)}`, due: r.due || "not known yet", due_from: r.dueNote || "not known yet",
-            flags: r.flags.length ? r.flags : (r.open ? ["waiting"] : ["landed"]), ...(r.shortBy ? { short_by: `${r.shortBy.currency} ${r.shortBy.amount.toFixed(2)}` } : {}),
+            status: r.status, flags: r.flags.length ? r.flags : (r.open ? ["waiting"] : ["landed"]), ...(r.shortBy ? { short_by: `${r.shortBy.currency} ${r.shortBy.amount.toFixed(2)}${r.shortReason === "unexplained" ? " short, unexplained" : ""}` } : {}),
             statement: r.statement.date, payable: r.payable || r.payableState, paid: r.paid ? r.paid.date : (r.missingLink ? "the payment isn't in the months read" : "not there yet"),
             landed: r.landed ? r.landed.date : "not there yet", days: r.days })),
           missing_sources: i.expected.missing.map((m) => ({ source: m.source, due: m.due, why: m.why })),
@@ -862,16 +893,12 @@ export async function callTool(tool, args, ctx) {
     case "release_pack": {
       const [raw, sightings] = await Promise.all([S.listReleases(store), S.getSightings(store)]);
       const r = S.findRelease(raw, args.song, { drafts: me === "Claude" });
-      const v = S.releaseView(r, today, { sightings }), pack = r.pack || {};
+      const msgs = await S.listMessages(store, now);
+      const lyricsPending = msgs.some((m) => m.proposal && !m.resolved && m.needs === "decision" && (m.proposal.id === r.id || m.proposal.title === r.title) && m.proposal.pack && String(m.proposal.pack.lyrics || "").trim());
+      const v = S.releaseView(r, today, { sightings, lyricsPending }), pack = r.pack || {};
       return { song: v.title, id: v.id, status: v.status === "cancelled" ? "cancelled: do not work on it" : v.status === "draft" ? "draft (not sent to the team yet)" : v.alreadyOut ? "already out (recorded for its deal: no steps)" : v.released ? "released" : "coming",
         release_day: when(v.date), days_to_go: v.daysToGo, where: v.where, deal: dealOut(v.deal), warnings: v.warnings,
-        pack: S.PACK_FIELDS.map((f) => {
-          const preHq = pack.prehq === "Yes", pitchSkipped = (r.steps || []).some((s) => s.key === "pitch" && s.status === "skipped");
-          const shown = f.key === "distributor" && !pack.distributor ? (S.distributorOf(pack) || "") : (pack[f.key] || "");
-          const skipNeed = preHq || (pitchSkipped && f.neededBy === "pitch");
-          const state = shown ? "" : skipNeed ? "not needed" : S.requiredNow(f, pack) ? "missing (required)" : f.neededBy ? `missing (needed for "${S.RELEASE_STEPS.find((x) => x.key === f.neededBy).label}")` : "not filled yet";
-          return { field: f.key, label: f.label, value: shown, ...(state ? { state } : {}), filled_by: f.fill.length ? f.fill.join(" or ") + " (or Luke)" : "Luke" };
-        }),
+        pack: S.PACK_FIELDS.map((f) => S.packFieldView(f, pack, r.steps, { storeStatus: v.store && v.store.status })),
         missing: v.missing.map(missingOut), steps: v.steps.map((s) => stepOut(s, pack)),
         pitch: pitchOut(v.pitch),
         approvals: { pitch: approvalOut(v.approvals.pitch, "pitch"), lyrics: approvalOut(v.approvals.lyrics, "lyrics") },
@@ -942,7 +969,18 @@ export async function callTool(tool, args, ctx) {
       try { await S.checkSongBuilds(store, now, roster); } catch {}
       const list = await S.songPages(store, now);
       const card = S.homeCardNow(), rule = homeCardSong(SONGS, S.spDay(now));
-      return { requests: list, pages: S.liveSongPages().map((p) => ({ ...p, live: "from the song list (a live 200 check is not run from here)" })), home_card: { now: card.title ? `${card.title} (${card.mode})` : "nothing", should_show: rule ? rule.title : "nothing", why: rule ? rule.why : "no song pages yet",
+      const fetchFn = ctx.fetch || globalThis.fetch;
+      const checkedAt = new Date(now).toISOString();
+      const live = await Promise.all(SONGS.map(async (s) => {
+        const url = `https://badscandal.com/${s.slug}`;
+        if (typeof fetchFn !== "function") return { slug: s.slug, status: null, note: "couldn't check" };
+        try {
+          const res = await fetchFn(url, { method: "GET", redirect: "follow", signal: AbortSignal.timeout ? AbortSignal.timeout(6000) : undefined });
+          return { slug: s.slug, status: res.status, ok: res.status === 200, checked_at: checkedAt };
+        } catch { return { slug: s.slug, status: null, checked_at: checkedAt, note: "couldn't check" }; }
+      }));
+      const bySlug = Object.fromEntries(live.map((x) => [x.slug, x]));
+      return { requests: list, pages: S.liveSongPages().map((p) => { const c = bySlug[p.slug] || {}; const words = c.note === "couldn't check" || c.status == null ? `couldn't check (${c.checked_at || checkedAt})` : c.ok ? `200 at ${c.checked_at}` : `${c.status} at ${c.checked_at}`; return { ...p, live: words, status: c.status ?? null, checked_at: c.checked_at || checkedAt }; }), home_card: { now: card.title ? `${card.title} (${card.mode})` : "nothing", should_show: rule ? rule.title : "nothing", why: rule ? rule.why : "no song pages yet",
         ...(rule && rule.slug !== card.slug ? { to_do: `Ask Luke with song_page kind card, slug ${rule.slug}` } : { to_do: "nothing: the card shows the right song" }) } };
     }
     case "upload_cover": {
@@ -970,9 +1008,11 @@ export async function callTool(tool, args, ctx) {
          connector has 28"): the live list goes first, and wins where they differ */
       const live = `The connector has ${TOOLS.length} tools right now: ${TOOLS.map((t) => t.name).join(", ")}. Where the guide below says otherwise, this line and the tools' own descriptions are right.`;
       const money = "Money counts once, when it lands in Revolut. A Wise or PayPal row that has moved there shows as moved to Revolut and is not counted again. paid_by is who paid it out. link_transfer ties a Revolut credit to the Wise or PayPal rows it carried. month_check says what is still to sort. close_month locks a finished month.";
+      const moneyMore = "paid_by marks the payment that settled a statement, and that statement then shows as settled, not still payable. Moved to Revolut means the row is not counted again. expected_money lists each statement (Expected) and whether it is short, late or missing. payout_routes shows Exchange and fees from amounts already recorded. A gap with no source is short, unexplained, never a fee. A conversion keeps its rate and where that rate came from; otherwise it says not enough data. close_month runs only when month_check says the month is ready and an evidence link (https) is attached. A split with no rule Luke confirmed says rule pending. HQ never writes to the Google Sheet.";
       let text = g.text || BUILT_IN_GUIDE;
       text = text.replace(/eighteen tools/gi, `${TOOLS.length} tools`);
       if (!/counts once/i.test(text)) text += "\n\n" + money;
+      if (!/expected_money/i.test(text)) text += "\n\n" + moneyMore;
       return g.text ? `${live}\n\nSTAFF GUIDE (updated ${g.at ? g.at.slice(0, 10) : "?"})\n\n${text}` : `${live}\n\n${text}`;
     }
   }
@@ -1013,36 +1053,53 @@ export async function callTool(tool, args, ctx) {
       });
       const questions = (from) => desk.messages.filter((m) => S.isOpen(m) && m.to === "Luke" && m.from === from).map((m) => ({
         id: m.id, needs: m.needs, waiting: S.waitedFor(now - Date.parse(m.at)), since: m.sp, text: m.text.length > 180 ? m.text.slice(0, 179) + "…" : m.text }));
-      if (me === "Claude") return { reconnect: conn.status, connector: conn, you: "Claude", today, now: b.now, waiting_on_you: b.waiting.claude.map(short), questions_to_luke: questions("Claude"), ...forYou(b.waiting.claude.map((m) => m.id)), waiting_on_luke: b.waiting.luke.map(short),
+      if (me === "Claude") return { reconnect: conn.status, connector: { tools: conn.tools, version: conn.version, reconnect_needed: conn.reconnect_needed }, you: "Claude", today, now: b.now, waiting_on_you: b.waiting.claude.map(short), questions_to_luke: questions("Claude"), ...forYou(b.waiting.claude.map((m) => m.id)), waiting_on_luke: b.waiting.luke.map(short),
         releases: rel.filter((v) => S.releaseActive(v) || v.status === "draft").map((v) => `${v.title}: ${v.status === "draft" ? "draft" : v.released ? "released" : "coming"}, ${when(v.date)}, ${v.counts.done} of ${v.counts.total} steps done` + (v.counts.late ? `, ${v.counts.late} late` : "") + (v.counts.blocked ? `, ${v.counts.blocked} blocked` : "") + (v.missing.length ? `; missing: ${v.missing.map((m) => m.short).join(", ")}` : "")),
         unknown_in_spotify: b.sightings.items.filter((x) => x.state === "unknown").map((x) => `${x.title}, ${x.dateWords}`),
         ...(sheetNote ? { note: sheetNote } : {}) };
       const w = b.staff.find((x) => x.name === me);
-      const since = now - 4 * 86400000;
       const rs = w.releaseSteps.map((s) => ({ song: s.title, step: s.key, label: s.label, due: when(s.due), state: stepState(s), ...(s.note ? { note: s.note } : {}), ...(s.link ? { link: s.link } : {}),
         ...(s.spotifyTrack ? { spotify_track: s.spotifyTrack } : {}), ...((s.waiting || S.blockIsWait(s)) ? { waiting_for: s.waiting ? waitFor(s) : (s.note || "the note on this step") } : {}), ...(s.key === "spotify" ? { how: SPOT_HOW } : {}) }));
       /* the soonest step the bot can work on now; a waiting one (including a block that is only a wait) is not today's job */
       const firstRs = w.releaseSteps.find((s) => !s.waiting && !S.blockIsWait(s));
-      const notes = desk.messages.filter((m) => m.to === "all" && !m.resolved && Date.parse(m.at) > since).slice(0, 5);
+      const lyricsReady = rel.filter((v) => v.pack && v.pack.lyrics).map((v) => v.title);
+      const lyricsPending = desk.messages.filter((m) => m.proposal && !m.resolved && m.needs === "decision" && m.proposal.pack && String(m.proposal.pack.lyrics || "").trim()).map((m) => m.proposal.title);
+      const lyricOpt = { lyricsReady, lyricsPending };
+      const titles = rel.map((v) => v.title);
+      const notes = desk.messages.filter((m) => S.noteStillCurrent(m, { now, releases: rel })).slice(0, 5);
       /* the spotify step is done by the daily report, never by release_step (11 Nov 2026, review) */
       const spotNext = firstRs && firstRs.key === "spotify";
       const nextRel = rel.find((v) => v.date && v.date >= today);
-      const realWhen = (line) => { const m = /(\d+)\s+days?\s+before(?: a release)?/i.exec(String(line || "")); if (!m || !nextRel) return line; const d = new Date(Date.parse(nextRel.date + "T12:00:00Z") - Number(m[1]) * 86400000).toISOString().slice(0, 10); return String(line).replace(m[0], S.dayWords(d)); };
       const revolutLive = ((desk.income && desk.income.entries) || []).some((e) => /revolut/i.test(e.account || ""));
       let igConnected = false;
       try { if (ctx.ig) { const st = await ctx.ig().get("state.json"); igConnected = !!(st && (st.lastOkAt || st.username)); } } catch {}
+      const knownDuty = INSTRUCTION_LINES.filter(([who]) => who && who.split(" ").includes(me)).map(([, text]) => text);
+      const full = (S.DEFAULT_ROSTER.find((b) => b.name === me) || {}).duty || "";
+      const uncut = (duty) => {
+        const d = S.freshDuty(duty);
+        for (const line of [full, ...knownDuty]) if (line.length > d.length + 5 && line.startsWith(d) && /[A-Za-z]$/.test(d)) return line;
+        return d;
+      };
       const dutyTask = (task) => (me === "Atlas" && /monthly listeners in note|salvation/i.test(task || "")
         ? "Log yesterday's Spotify numbers for every released song, plus monthly listeners and Brazil listeners in their own fields (monthly_listeners and brazil_listeners). There is no Salvation card."
-        : S.freshDuty(task));
-      const shownBlocker = S.freshBlocker(w.blockers, { igConnected, revolutLive });
+        : uncut(task));
+      const clearBlock = (text) => S.blockerForDuty("", S.freshBlocker(text, { igConnected, revolutLive, ...lyricOpt }), titles);
+      const shownBlocker = clearBlock(w.blockers);
       const asks = desk.messages.filter((m) => m.from === me && m.to === "Luke" && S.isOpen(m)).slice(0, 8);
-      const signedOut = [];
-      for (const person of b.staff) for (const bit of [person.blockers, person.card && person.card.needs]) if (bit && /sign-?in|signed out|log in/i.test(bit)) signedOut.push(S.hidePrivate(`${person.name}: ${bit}`));
-      return { reconnect: conn.status, connector: conn, you: me, role: w.role, why_you_are_needed: S.freshWhy(me, w.why), today, now_sao_paulo: b.now,
+      const signedRaw = [];
+      for (const person of b.staff) for (const bit of [person.blockers, person.card && person.card.needs]) if (bit && /sign-?in|signed out|log in/i.test(bit)) signedRaw.push(`${person.name}: ${bit}`);
+      const signOutLine = (line) => line.replace(/\b\d{3}-\d{3}-\d{4}\b/g, "").replace(/(?:\*{2,}|x{2,}|•{2,}|·{2,})\s*\d{2,4}/gi, "").replace(/\[account\]/g, "an account").replace(/\s{2,}/g, " ").trim();
+      const signedOut = signedRaw.map(signOutLine);
+      const duties = w.duties.filter((d) => !S.staleTask(d)).map((d) => {
+        const blocker = S.blockerForDuty(d.task, S.freshBlocker(d.blocker, { igConnected, revolutLive, ...lyricOpt }), titles);
+        const status = d.late ? "late" : (d.status === "blocked" && !blocker ? "todo" : d.status);
+        return { id: d.id, task: dutyTask(d.task), due: d.due || "today", status, ...(blocker ? { blocker } : {}) };
+      });
+      return { reconnect: conn.status, connector: { tools: conn.tools, version: conn.version, reconnect_needed: conn.reconnect_needed }, you: me, role: w.role, why_you_are_needed: S.freshWhy(me, w.why), today, now_sao_paulo: b.now,
         ...(me === "Atlas" ? { numbers_how: "Monthly listeners and Brazil listeners go in log_growth as monthly_listeners and brazil_listeners. They are not a note, and there is no Salvation card." } : {}),
-        daily_duty: S.freshDuty(w.duty), usual_time: w.time, schedule: (w.schedule || []).map((s) => typeof s === "string" ? realWhen(s) : { ...s, time: realWhen(s.time), what: realWhen(s.what) }),
-        duties_today: w.duties.filter((d) => !S.staleTask(d)).map((d) => ({ id: d.id, task: dutyTask(d.task), due: d.due || "today", status: d.late ? "late" : d.status, ...(d.blocker ? { blocker: S.freshBlocker(d.blocker, { igConnected, revolutLive }) } : {}) })),
-        open_tasks: w.tasks.filter((t) => !S.staleTask(t)).map((t) => ({ id: t.id, task: dutyTask(t.task), deadline: /^invalid date$/i.test(String(t.deadline || "")) ? "" : t.deadline, status: t.late ? "late" : t.status, ...(t.blocker ? { blocker: t.blocker } : {}), ...(t.note ? { your_note: t.note } : {}) })),
+        daily_duty: uncut(w.duty), usual_time: w.time, schedule: S.scheduleForMyDay(me, w.schedule, { today, releases: rel, nextDate: nextRel && nextRel.date, duty: duties[0] }),
+        duties_today: duties,
+        open_tasks: w.tasks.filter((t) => !S.staleTask(t) && S.signInOpen(t, signedRaw.join(" "))).map((t) => ({ id: t.id, task: dutyTask(t.task), deadline: /^invalid date$/i.test(String(t.deadline || "")) ? "" : t.deadline, status: t.late ? "late" : t.status, ...(t.blocker ? { blocker: t.blocker } : {}), ...(t.note ? { your_note: t.note } : {}) })),
         questions_to_luke: questions(me),
         ...(asks.length ? { open_questions: asks.map((m) => ({ id: m.id, waiting: `${Math.max(0, Math.floor((now - Date.parse(m.at)) / 3600000))} h`, text: S.hidePrivate(m.text).slice(0, 140) })) } : {}),
         ...(signedOut.length ? { signed_out_accounts: signedOut.slice(0, 6) } : {}),

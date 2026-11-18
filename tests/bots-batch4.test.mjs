@@ -197,7 +197,8 @@ test("income_source: the owning bot says where the money lands (several accounts
 /* ---------- 6 + 7 + 8. a payment fixed; statement only and payable; royalties without salary ---------- */
 test("fix_payment: the bot that submitted it (or a sorter) fixes it, with the reason kept", async () => {
   const d = memoryDesk();
-  const sub = await S.submitIncome(d, NOW, R, { bot: "Ledger", date: "2026-11-10", payer: "Sample Music Group", amount: "473.07", currency: "USD", status: "transfer", account: "PayPal" });
+  /* 18 Nov 2026: received means Revolut, so the fixed payment lands there and the total still counts it */
+  const sub = await S.submitIncome(d, NOW, R, { bot: "Ledger", date: "2026-11-10", payer: "Sample Music Group", amount: "473.07", currency: "USD", status: "transfer", account: "Revolut" });
   const r = await call(d, "fix_payment", { bot: "Ledger", id: sub.entry.id, month: "2026-11", status: "received", category: "Label deals", reason: "It is royalties from the label, not a transfer" });
   assert.deepEqual([r.saved, r.fixed], [true, ["status", "category"]]);
   const e = (await S.incomeState(d, NOW)).entries.find((x) => x.id === sub.entry.id);
@@ -218,7 +219,8 @@ test("fix_payment: the bot that submitted it (or a sorter) fixes it, with the re
 test("statement only and payable: owed money is payable, a statement below the payout line counts nowhere yet; royalties leave out salary", async () => {
   assert.deepEqual(S.INCOME_STATUS.slice(0, 5), ["received", "pending", "transfer", "statement only", "payable"]);
   const d = memoryDesk();
-  const add = (payer, amount, status, category = "Self-releases") => S.submitIncome(d, NOW, R, { bot: "Ledger", date: "2026-11-10", payer, amount, currency: "USD", status, account: status === "received" ? "Wise" : "Statement only", category });
+  /* 18 Nov 2026: a received row counts only in Revolut. Wise no longer stands in for received. */
+  const add = (payer, amount, status, category = "Self-releases") => S.submitIncome(d, NOW, R, { bot: "Ledger", date: "2026-11-10", payer, amount, currency: "USD", status, account: status === "received" ? "Revolut" : "Statement only", category });
   await add("Sample Distro", "1507.31", "payable");
   await add("Sample Publisher", "31.07", "statement only", "Publishing");
   await add("Sample Label", "200", "received", "Label deals");
@@ -231,7 +233,7 @@ test("statement only and payable: owed money is payable, a statement below the p
   assert.equal(st.payable_this_month, "USD 1507.31");
   assert.equal(st.statement_only_this_month, "USD 31.07");
   /* the statement's money arriving later turns it received, like a pending one */
-  await S.submitIncome(d, NOW + DAY, R, { bot: "Ledger", date: "2026-11-15", payer: "Sample Distro", amount: "1507.31", currency: "USD", status: "received", account: "Wise", category: "Self-releases" });
+  await S.submitIncome(d, NOW + DAY, R, { bot: "Ledger", date: "2026-11-15", payer: "Sample Distro", amount: "1507.31", currency: "USD", status: "received", account: "Revolut", category: "Self-releases" });
   const i2 = await S.incomeState(d, NOW + DAY);
   assert.deepEqual([i2.payable, i2.received], [{}, { USD: 2707.31 }]);
   /* 16 Nov 2026 (Luke): "never put pending income only what is received" */

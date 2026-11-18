@@ -568,7 +568,7 @@ export function songProfit({ royalties = [], payments = [], spend = [], releases
   for (const r of royalties || []) {
     const a = rowAmt(r && r.amount);
     if (a == null) continue;
-    const item = { store: norm(r.store), amount: a, currency: (r.currency || "?").toUpperCase(), month: monthOf(r.month) };
+    const item = { store: norm(r.store), amount: a, currency: (r.currency || "?").toUpperCase(), month: monthOf(r.month), ...(r.rate && r.rate.source ? { rate: r.rate } : {}) };
     const s = slot(r.song, false);
     (s ? s.roy : unRoy).push(item);
   }
@@ -585,7 +585,7 @@ export function songProfit({ royalties = [], payments = [], spend = [], releases
     const a = rowAmt(raw);
     const date = norm(r.date).slice(0, 10);
     if (a == null || !DAY.test(date)) continue; /* a campaign name is never a song, even when it matches one */
-    const item = { platform: norm(r.platform) || "?", amount: a, currency: (r.currency || "?").toUpperCase(), month: date.slice(0, 7) };
+    const item = { platform: norm(r.platform) || "?", amount: a, currency: (r.currency || "?").toUpperCase(), month: date.slice(0, 7), ...(r.rate && r.rate.source ? { rate: r.rate } : {}) };
     const s = slot(r.song, false);
     (s ? s.sp : unSpend).push(item);
   }
@@ -602,11 +602,16 @@ export function songProfit({ royalties = [], payments = [], spend = [], releases
     }
     return list.map((g) => ({ [field]: g.name, amounts: g.amounts }));
   };
+  /* 18 Nov 2026: a month's average rate is not a rate for this song. A combined figure exists only when
+     every row carries a rate that was recorded, and where it came from. */
+  const recorded = (r) => (r && r.rate && r.rate.source && Number(r.rate.value) > 0 ? r.rate : null);
   const estimateOf = (inRows, outRows) => {
-    let inn = 0, out = 0, missing = false;
-    for (const r of inRows) { const v = r.month ? convert(r.amount, r.currency, "EUR", fx[r.month]) : null; if (v == null) missing = true; else inn += v; }
-    for (const r of outRows) { const v = r.month ? convert(r.amount, r.currency, "EUR", fx[r.month]) : null; if (v == null) missing = true; else out += v; }
-    return missing ? { eur: null, missing: true } : { eur: round(inn - out), missing: false };
+    const rows = inRows.concat(outRows);
+    if (!rows.length || rows.some((r) => r.currency !== "EUR" && !recorded(r))) return null;
+    let inn = 0, out = 0, source = "";
+    for (const r of inRows) { const rate = recorded(r); inn += r.currency === "EUR" ? r.amount : r.amount / rate.value; source = source || (rate && rate.source); }
+    for (const r of outRows) { const rate = recorded(r); out += r.currency === "EUR" ? r.amount : r.amount / rate.value; source = source || (rate && rate.source); }
+    return { eur: round(inn - out), missing: false, recorded: true, source: source || "recorded" };
   };
   const list = [...songs.values()].map((s) => {
     const recorded = sumRows(s.roy), landed = sumRows(s.pay);

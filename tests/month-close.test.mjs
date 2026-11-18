@@ -47,7 +47,9 @@ test("close_month: only a finished, ready month; a snapshot, the total and evide
 });
 test("after closing, changes in that month are listed old -> new, with who and why", async () => {
   const { d, b } = await desk();
-  await call(d, "close_month", { bot: "Ledger", month: "2026-11" });
+  /* 18 Nov 2026: a ready month still needs an evidence link */
+  assert.match(String((await call(d, "close_month", { bot: "Ledger", month: "2026-11" })).error), /evidence link/);
+  await call(d, "close_month", { bot: "Ledger", month: "2026-11", evidence: ["https://example.com/nov.pdf"] });
   await S.fixIncome(d, NOW + 60000, R, { by: "Ledger", id: b.id, month: "2026-11", amount: "65.00", reason: "the bank's amount was 65" });
   await S.submitIncome(d, NOW + 120000, R, { bot: "Ledger", date: "2026-11-28", payer: "Late Arrival", amount: "10.00", currency: "EUR", status: "received", category: "Other", account: "Revolut", reference: "ref-c" });
   const v = await S.monthCloseView(d, NOW + 180000, "2026-11");
@@ -84,7 +86,7 @@ test("who gets the tool; the route; the page line", () => {
 });
 test("the board carries the closes (one small index doc)", async () => {
   const { d } = await desk();
-  await call(d, "close_month", { bot: "Ledger", month: "2026-11" });
+  await call(d, "close_month", { bot: "Ledger", month: "2026-11", evidence: ["https://example.com/nov.pdf"] }); /* 18 Nov 2026: evidence is required */
   const desk2 = await S.loadDesk(d, NOW);
   assert.deepEqual(desk2.closes.map((c) => [c.month, c.by]), [["2026-11", "Ledger"]]);
 });

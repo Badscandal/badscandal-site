@@ -139,18 +139,48 @@ export function freshBlocker(text, o = {}) {
   if (!t) return "";
   if (o.igConnected && /instagram/i.test(t) && /log\s*in|sign[\s-]*in|browser|locked/i.test(t)) return "";
   if (o.revolutLive && /revolut can'?t be read|revolut (is )?not connected/i.test(t)) return "";
+  /* 18 Nov 2026: a lyrics blocker clears once that song's lyrics are in the pack or waiting on Luke's yes */
+  if (/lyric/i.test(t)) {
+    const ready = [...(o.lyricsReady || []), ...(o.lyricsPending || [])];
+    if (ready.some((title) => mentionsSong(t, title))) return "";
+  }
   return t;
+}
+/* a sign-in task follows the live signed-out list (18 Nov 2026). TikTok signed in means the TikTok line goes. */
+export function signInOpen(task, signedOutText) {
+  const text = `${(task && task.task) || ""} ${(task && task.note) || ""} ${(task && task.blocker) || ""}`;
+  if (!/sign-?in|signed out|log in/i.test(text)) return true;
+  const names = ["tiktok", "meta", "facebook", "instagram", "google", "youtube", "spotify"];
+  const named = names.filter((p) => new RegExp("\\b" + p + "\\b", "i").test(text));
+  if (!named.length) return false;
+  return named.some((p) => new RegExp(p, "i").test(String(signedOutText || "")));
+}
+/* the duty's song and the blocker's song must be the same one (18 Nov 2026) */
+export function blockerForDuty(task, blocker, titles) {
+  const b = String(blocker || "").trim();
+  if (!b) return "";
+  const named = (titles || []).filter((title) => mentionsSong(task, title));
+  const inBlock = (titles || []).filter((title) => mentionsSong(b, title));
+  if (named.length && inBlock.length && !inBlock.some((t) => named.some((n) => songKey(n) === songKey(t)))) return "";
+  return b;
+}
+export function mentionsSong(text, title) {
+  const k = songKey(title);
+  return k.length >= 4 && songKey(text).includes(k);
 }
 export function staleTask(task) {
   const t = `${(task && task.id) || ""} ${(task && task.task) || ""}`;
-  return /tiktok ads sign-?in/i.test(t);
+  /* 18 Nov 2026: "Forge's TikTok Ads sign-in" is not always stale. signInOpen checks the live list. */
+  return /^done\b/i.test((task && task.task) || "") || /done 11 Nov/i.test(t);
 }
-/* last-four card digits and ad-account ids never leave a tool answer (18 Nov 2026) */
+/* last-four card digits, a single mask character, a top-up reference and ad-account ids never leave a
+   tool answer (18 Nov 2026, Sheet). The stored row is not rewritten. */
 export function hidePrivate(s) {
   return String(s == null ? "" : s)
     .replace(/\b\d{3}-\d{3}-\d{4}\b/g, "[account]")
-    .replace(/(?:\*{2,}|x{2,}|•{2,}|·{2,})\s*\d{2,4}/gi, "[hidden]")
-    .replace(/\b(?:ending|ends in|last four|card|acct|account)\s*(?:in|with|no\.?|#|:)?\s*\d{4}\b/gi, "[hidden]");
+    .replace(/(?:\*{1,}|x{2,}|•{1,}|·{1,})\s*\d{2,4}/gi, "[hidden]")
+    .replace(/\b(?:ending|ends in|last four|card|acct|account)\s*(?:in|with|no\.?|#|:)?\s*\d{4}\b/gi, "[hidden]")
+    .replace(/\b(top-?up(?:\s+(?:reference|ref|id))?)\s*[:#]?\s*[A-Za-z0-9-]{4,}\b/gi, "$1 [hidden]");
 }
 export const httpsLink = (v) => { const s = clean(v, 400); return /^https:\/\/[^\s"'<>]+$/.test(s) ? s : ""; };
 
@@ -726,10 +756,10 @@ export function preflightOf(r) {
   const pack = (r && r.pack) || {}, out = [];
   const short = (k) => (FIELD[k] ? FIELD[k].short : k);
   for (const k of ARTIST_FIELDS) for (const t of artistProblems(pack[k])) out.push({ field: k, text: `${short(k)}: ${t}` });
-  /* Primary artist is Badscandal and matches the Spotify artist. Featured is flagged, never moved (18 Nov 2026).
-     An empty Primary is fine until another artist is named: the field is optional. */
+  /* Primary artist is Badscandal and matches the Spotify artist. Featured is a flag, never a failure
+     and never moved (18 Nov 2026). An empty Primary is not a pass: the tool says it could not be checked. */
   const primary = String(pack.primary || ""), feat = String(pack.featuring || "");
-  if (/badscandal/i.test(feat) && !/badscandal/i.test(primary)) out.push({ field: "primary", text: "Primary artist: Badscandal is under Featured, not Primary. Flagged only: move it if the release says Badscandal is the primary artist." });
+  if (/badscandal/i.test(feat) && !/badscandal/i.test(primary)) out.push({ field: "primary", warn: true, text: "Primary artist: Badscandal is under Featured, not Primary. Flagged only: move it if the release says Badscandal is the primary artist." });
   else if (filled(primary) && !/badscandal/i.test(primary) && !artistProblems(primary).length) out.push({ field: "primary", text: `Primary artist should be Badscandal (Spotify artist ${SPOTIFY_ARTIST_ID}).` });
   const blob = [primary, feat, pack.spotifyArtist, pack.artist].filter(Boolean).join(" ");
   if (/open\.spotify\.com\/artist\//i.test(blob) && !blob.includes(SPOTIFY_ARTIST_ID)) out.push({ field: "primary", text: `The artist link is not Spotify artist ${SPOTIFY_ARTIST_ID}.` });
@@ -737,7 +767,7 @@ export function preflightOf(r) {
   if (["mp3", "m4a", "aac", "ogg", "opus"].includes(wext)) out.push({ field: "wav", text: `${short("wav")}: the master must be a WAV (the stores' quality), not an .${wext}.` });
   const aext = filled(pack.artwork) ? extOf(pack.artwork) : "";
   if (["webp", "gif", "heic", "bmp", "tif", "tiff", "svg"].includes(aext)) out.push({ field: "artwork", text: `${short("artwork")}: must be a JPG or PNG, 3000 x 3000, not a .${aext}.` });
-  if (filled(pack.wav) && pack.wav === pack.artwork && pack.artwork === pack.folder) out.push({ field: "wav", warn: true, text: "Master WAV, artwork and folder are the same link. That is one folder, not the three files." });
+  if (filled(pack.wav) && pack.wav === pack.artwork && pack.artwork === pack.folder) out.push({ field: "wav", warn: true, text: "Flagged only: Master WAV, artwork and folder are the same link. That is one folder, not the three files." });
   /* L8: a Canvas link whose file type is known and isn't one Spotify takes (a link with no file type says nothing) */
   const cext = filled(pack.canvas) ? extOf(pack.canvas) : "";
   if (cext) for (const t of assetProblems("canvas", { format: cext })) out.push({ field: "canvas", text: `${short("canvas")}: ${t.replace(/^Spotify Canvas must/, "must")}` });
@@ -766,8 +796,8 @@ export const ASSETS = {
     rule: "Spotify Canvas: an MP4 (or a JPG), 9:16 portrait, 720 to 1080 px tall, 3 to 8 seconds. House rule, stricter than Spotify: no text, logos or links." },
   spotify_header: { label: "Spotify header", formats: ["jpg", "jpeg", "png", "gif"], ratio: null, min: [2660, 1140], mb: 20,
     rule: "Spotify for Artists header image: a JPG, PNG or GIF, at least 2660 x 1140, 20 MB at most. No text, advertising or busy backgrounds. Faces stay in the middle (it is cropped on phones)." },
-  youtube_banner: { label: "YouTube banner", formats: ["jpg", "jpeg", "png"], ratio: 16 / 9, ratioWords: "16:9", recommended: [2560, 1440], mb: 6,
-    rule: "YouTube channel banner: a JPG or PNG, 16:9. 2560 x 1440 is recommended, not a minimum. Keep text inside the safe area, about 1546 x 423, with no borders. 6 MB at most." },
+  youtube_banner: { label: "YouTube banner", formats: ["jpg", "jpeg", "png"], ratio: 16 / 9, ratioWords: "16:9", min: [2048, 1152], recommended: [2560, 1440], mb: 6,
+    rule: "YouTube channel banner: a JPG or PNG, 16:9, min 2048x1152, 2560x1440 recommended. Keep text inside the safe area, about 1546 x 423, with no borders. 6 MB at most." },
   /* L12 (18 Nov 2026): profile photos and banners whose platforms publish a size. A platform with no
      published size is not given a kind here: the Profiles list says "Rule not set" instead. */
   spotify_avatar: { label: "Spotify profile photo", formats: ["jpg", "jpeg", "png", "gif"], min: [750, 750], mb: 20,
@@ -826,6 +856,7 @@ export function assetNotes(kind, o = {}) {
   if (!a || !a.recommended) return [];
   const w = o.width == null || o.width === "" ? null : Number(o.width), h = o.height == null || o.height === "" ? null : Number(o.height);
   if (w == null || h == null || !(w < a.recommended[0] || h < a.recommended[1])) return [];
+  if (a.min) return [`${w} x ${h} meets the minimum (${a.min[0]} x ${a.min[1]}). ${a.recommended[0]} x ${a.recommended[1]} is recommended.`];
   return [`${w} x ${h}: ${a.recommended[0]} x ${a.recommended[1]} is recommended, not a minimum.`];
 }
 
@@ -1461,7 +1492,12 @@ export async function getSources(store) {
     if (!e) return s;
     const { by, at, created, name, ...f } = e;
     const out = { ...s, ...f, editedBy: by, editedAt: at };
-    if (Array.isArray(f.accounts) && f.accounts.length) out.lands = f.accounts.join(" + ");
+    /* 18 Nov 2026: lands is this source's own accounts. Another source's name is not an account. */
+    if (Array.isArray(f.accounts) && f.accounts.length) {
+      const others = seed.concat(made).filter((x) => x.kind !== "account" && x.id !== s.id);
+      const own = f.accounts.filter((a) => !others.some((p) => srcMatches(p, a)));
+      out.lands = (own.length ? own : f.accounts).join(" + ");
+    }
     return out;
   });
 }
@@ -1532,16 +1568,35 @@ export async function monthCheck(store, now, a = {}) {
   const list = pool.filter((e) => e.date.slice(0, 7) === month);
   const statementLater = raw.map(landed).filter((e) => e.statement && e.date.slice(0, 7) !== month);
   const received = {};
-  for (const e of list) if (e.status === "received" && !e.movedTo && !isHold(e) && !(e.paidBy && OWED.includes(e.status))) received[e.currency] = round((received[e.currency] || 0) + e.amount);
+  for (const e of list) if (countsAsReceived(e)) received[e.currency] = round((received[e.currency] || 0) + e.amount);
   const fromOwn = (e) => own.find((s) => srcMatches(s, e.payer));
   const toSort = list.filter((e) => e.status === "unsorted");
-  const waiting = list.filter(isHold);
+  const waiting = list.filter((e) => isHold(e) || (e.status === "received" && !e.movedTo && !countsAsReceived(e) && !STATEMENT.test(e.account)));
   const ownTransfers = list.filter((e) => e.status === "transfer" && isMainAccount(e.account) && !(e.from && e.from.length) && e.by === "HQ" && !(e.history || []).length);
-  const revolut = pool.filter((e) => isMainAccount(e.account) && !(e.from && e.from.length));
-  const suggestions = waiting.map((w) => {
-    const hits = revolut.filter((e) => e.currency === w.currency && Math.abs(Number(e.amount) - Number(w.amount)) < 0.02 && e.id !== w.id);
-    return { id: w.id, matches: hits.slice(0, 3).map((e) => ({ id: e.id, date: e.date, amount: e.amount, currency: e.currency })) };
-  }).filter((x) => x.matches.length);
+  const revolut = pool.filter((e) => isMainAccount(e.account) && !(e.from && e.from.length) && e.status !== "transfer");
+  const nearDay = (a, b) => !isDay(a) || !isDay(b) || Math.abs(daysBetween(a, b)) <= 2;
+  const suggestions = [];
+  const seenSug = new Set();
+  const pushSug = (ids, hit) => {
+    const key = ids.slice().sort().join("+") + ">" + hit.id;
+    if (seenSug.has(key)) return;
+    seenSug.add(key);
+    suggestions.push({ id: ids[0], ids, matches: [{ id: hit.id, date: hit.date, amount: hit.amount, currency: hit.currency }],
+      confirm: "Confirm with one link_transfer call. Nothing is linked until you do." });
+  };
+  for (const rev of revolut) {
+    const cands = waiting.filter((w) => w.currency === rev.currency && nearDay(w.date, rev.date) && w.id !== rev.id).slice(0, 8);
+    for (const w of cands) if (Math.abs(Number(w.amount) - Number(rev.amount)) < 0.02) pushSug([w.id], rev);
+    const pick = (start, need, acc) => {
+      if (acc.length === need) {
+        const sum = acc.reduce((n, w) => n + Number(w.amount), 0);
+        if (Math.abs(sum - Number(rev.amount)) < 0.02) pushSug(acc.map((w) => w.id), rev);
+        return;
+      }
+      for (let i = start; i < cands.length; i++) pick(i + 1, need, acc.concat(cands[i]));
+    };
+    for (let n = 2; n <= Math.min(4, cands.length); n++) pick(0, n, []);
+  }
   return { month, received, toSort, waiting, ownTransfers, fromOwn, statementLater, suggestions, ready: !toSort.length && !waiting.length };
 }
 /* ---------- the locked month close (A7, 17 Nov 2026, Ledger, Sheet) ----------
@@ -1574,6 +1629,8 @@ export async function closeMonth(store, now, roster, a) {
   if (was) return { already: true, close: was };
   const c = await monthCheck(store, now, { month });
   if (!c.ready) fail(`${month} isn't ready to close: ${c.toSort.length} to sort, ${c.waiting.length} waiting in Wise or PayPal. Run month_check and sort them first.`);
+  /* 18 Nov 2026 (Sheet): a ready month still needs an evidence link. */
+  if (!ev.length) fail("Add an evidence link (https) before closing the month.");
   const rows = (await monthRows(store, month)).map(snapRow).sort((x, y) => (x.date < y.date ? -1 : x.date > y.date ? 1 : x.id < y.id ? -1 : 1));
   const doc = { month, at: new Date(now).toISOString(), by, received: c.received, count: rows.length, rows, evidence: ev };
   let first = false;
@@ -1638,19 +1695,29 @@ const payRank = (e) => (e.status === "received" && (e.source || (e.from && e.fro
 export function isShadow(e, list) {
   return (list || []).some((x) => shadowPair(x, e) && (payRank(x) < payRank(e) || (payRank(x) === payRank(e) && (x.at || "") < (e.at || ""))));
 }
-/* what a payment looks like in a tool: labels only, the stored row is not rewritten */
+/* what a payment looks like in a tool: labels only, the stored row is not rewritten.
+   18 Nov 2026: received means it landed in Revolut. Wise and PayPal say where they sit. A settled statement
+   says settled. Both months are shown; which month the money belongs to is not decided here. */
+export function displayPayer(e) {
+  const blob = `${e && e.payer} ${e && e.source} ${e && e.note}`;
+  if (/tipalti/i.test(blob) && /create|e-?check/i.test(blob)) return "Create Music";
+  return hidePrivate(e && e.payer);
+}
 export function payOut(e, month) {
   const paid = e.paidBy || e.paid_by || "";
   const landed = isDay(e.arrived) ? e.arrived : e.date;
   const statement = e.statement && isDay(e.statement) ? e.statement : e.date;
-  let status = e.movedTo ? "moved to Revolut" : (paid && OWED.includes(e.status) ? "settled" : e.status);
-  let payer = hidePrivate(e.payer);
-  if (/tipalti/i.test(payer) && /create/i.test(String(e.source || "") + " " + String(e.note || ""))) payer = "Create";
+  const counted = countsAsReceived(e);
+  let status = e.status;
+  if (e.movedTo) status = "moved to Revolut";
+  else if (paid && (OWED.includes(e.status) || e.status === "pending")) status = "settled";
+  else if (e.status === "received" && !counted && !STATEMENT.test(e.account || "")) status = `in ${e.account}, not received`;
+  const payer = displayPayer(e);
   return { id: e.id, month: month || (landed || e.date || "").slice(0, 7), date: landed, statement_month: String(statement).slice(0, 7),
-    landed_month: String(landed).slice(0, 7), counts_in: e.movedTo || !isMainAccount(e.account) ? "" : String(landed).slice(0, 7),
-    counts_note: e.movedTo ? "Moved to Revolut: not counted. The Revolut row is the one that counts." : "Counts in the month it landed in Revolut.",
-    payer, amount: e.amount, currency: e.currency, status, category: e.category, source: e.source || "", account: e.account, added_by: e.by,
-    ...(e.note ? { note: hidePrivate(e.note) } : {}), ...(paid ? { paid_by: paid } : {}), ...(e.movedTo ? { moved_to: e.movedTo, counted: false } : {}) };
+    landed_month: String(landed).slice(0, 7), counts_in: counted ? String(landed).slice(0, 7) : "",
+    counts_note: e.movedTo ? "Moved to Revolut: not counted. The Revolut row is the one that counts." : counted ? "Counts in the month it landed in Revolut." : "Not counted. Received means it landed in Revolut.",
+    payer, amount: e.amount, currency: e.currency, status, category: e.category, source: e.source || "", account: hidePrivate(e.account), added_by: e.by, counted,
+    ...(e.note ? { note: hidePrivate(e.note) } : {}), ...(paid ? { paid_by: paid } : {}), ...(e.movedTo ? { moved_to: e.movedTo } : {}) };
 }
 export function transferWords(e) {
   const t = low(`${e && e.payer} ${e && e.note}`);
@@ -1676,12 +1743,29 @@ export async function listPayments(store, now, a = {}) {
     list = list.filter((e) => low(e.source) === src.id || (!e.source && srcMatches(src, e.payer)));
   }
   if (a.payer != null && String(a.payer).trim()) { const words = low(a.payer).split(/\s+/).filter(Boolean); list = list.filter((e) => words.every((w) => low(e.payer).includes(w))); }
+  const monthRows = list.slice();
   if (a.status != null && String(a.status).trim()) {
     const st = low(a.status);
-    list = list.filter((e) => st === "moved to revolut" ? !!e.movedTo : !e.movedTo && e.status === st);
+    /* 18 Nov 2026: status received means counted in Revolut, the same rows income_status adds up */
+    list = list.filter((e) => st === "moved to revolut" ? !!e.movedTo : st === "received" ? countsAsReceived(e) : st === "settled" ? !!(e.paidBy && (OWED.includes(e.status) || e.status === "pending")) : !e.movedTo && e.status === st);
+  }
+  if (a.changed_since != null && String(a.changed_since).trim()) {
+    const since = Date.parse(String(a.changed_since));
+    if (Number.isNaN(since)) fail("changed_since must be a time, for example 2026-11-01T00:00:00Z.");
+    list = list.filter((e) => Date.parse(e.updatedAt || e.at || 0) >= since);
   }
   list.sort((x, y) => (x.date < y.date ? 1 : x.date > y.date ? -1 : (x.at || "") < (y.at || "") ? 1 : -1));
-  return { month, total: list.length, payments: list.slice(0, limit) };
+  const received = {};
+  for (const e of monthRows) if (countsAsReceived(e)) received[e.currency] = round((received[e.currency] || 0) + e.amount);
+  const evidenceOf = (e) => { const m = String(`${e.note || ""} ${e.reference || ""}`).match(/https:\/\/[^\s"'<>]+/); return m ? m[0] : ""; };
+  const counted = list.filter(countsAsReceived).map((e) => {
+    const o = payOut(e, month);
+    return { id: e.id, landing_date: o.date, account: o.account, statement: e.statement && isDay(e.statement) ? e.statement : "", payable: e.status === "payable" ? (e.date || "") : "", received: "received",
+      evidence: evidenceOf(e), split: Array.isArray(e.from) ? e.from.slice() : [], ledger_month: o.statement_month, landed_month: o.landed_month };
+  });
+  return { month, total: list.length, payments: list.slice(0, limit), received, counted,
+    received_note: "Revolut only. The same total as income_status and month_check. Statement month and landing month are both shown; which month a payment belongs to is Ledger's to say.",
+    writes_to_sheet: false };
 }
 /* After a full Revolut read (16 Nov 2026, Ledger: Revolut still said "blocked" / "not connected" after the site had
    read it): the Revolut account source is active again with no blocker or ask, and so is a payer source that was
@@ -1790,6 +1874,11 @@ const DUE_DAYS = { daily: 2, monthly: 45, quarterly: 110 };
    logged in another of Luke's own accounts (Wise, PayPal: the account sources) is HOLDING: seen, counted nowhere,
    until link_transfer ties it to the Revolut credit that carried it (movedTo). */
 export const isMainAccount = (acc) => /revolut/i.test(String(acc || ""));
+/* 18 Nov 2026: the one counting rule. Received means it landed in Revolut. Wise, PayPal and a settled
+   statement are not counted. payments, month_check, income_status and the briefings all use this. */
+export function countsAsReceived(e) {
+  return !!e && e.status === "received" && !e.movedTo && isMainAccount(e.account) && !STATEMENT.test(e.account || "") && !(e.paidBy && OWED.includes(e.status));
+}
 
 /* ---------- Expected money (L1) and what a payout route cost (L9), 18 Nov 2026 ----------
    Built on the records already on the desk. A statement (statement only / payable / pending, or one
@@ -1811,10 +1900,19 @@ const onOrAfter = (from, dayNum) => { const inM = clampDay(from.slice(0, 7), day
 const spanDays = (a, b) => { if (!a || !b || !DAY.test(a) || !DAY.test(b)) return null; const n = daysBetween(a, b); return n < 0 ? null : n; };
 const normPay = (e) => { if (!e || typeof e !== "object") return null; return e.arrived && e.arrived !== e.date ? { ...e, statement: e.statement || e.date, date: e.arrived } : { ...e }; };
 const wasStatement = (e) => !!(e && (OWED.includes(e.status) || e.paidBy || e.statement || (e.history || []).some((h) => OWED.includes(h.from) || OWED.includes(h.to))));
+/* Longest match, not the first. "Sample Distro one" must not be swallowed by "Sample Distro" (18 Nov 2026). */
 const payerSource = (e, sources) => {
   if (!e) return null;
-  if (e.source) { const s = (sources || []).find((x) => x.kind !== "account" && x.id === e.source); if (s) return s; }
-  return (sources || []).find((x) => x.kind !== "account" && srcMatches(x, e.payer)) || null;
+  const payers = (sources || []).filter((x) => x.kind !== "account");
+  if (e.source) { const s = payers.find((x) => x.id === e.source); if (s) return s; }
+  let best = null, n = 0;
+  const blob = low(e.payer || "");
+  for (const s of payers) {
+    for (const k of [s.name, s.id, ...(s.match || [])].map((x) => low(x)).filter((k) => k && k.length >= 3)) {
+      if (blob.includes(k) && k.length > n) { best = s; n = k.length; }
+    }
+  }
+  return best;
 };
 const histDay = (h) => { if (!h || !h.at) return null; const t = Date.parse(h.at); if (Number.isNaN(t)) return null; const d = spDay(t); return DAY.test(d) ? d : null; };
 function payableOf(e, statementDate) {
@@ -1844,22 +1942,30 @@ const routeSourceName = (occ, sources) => {
   return names.join(" + ") || "Unknown payer";
 };
 function priceRoute(occ) {
-  const rev = occ.rev;
-  if (!rev || rev.amount == null || !rev.currency) return { incomplete: true };
-  const known = occ.froms.filter(Boolean);
-  if (occ.froms.length && known.length !== occ.froms.length) return { incomplete: true };
-  const landed = { currency: rev.currency, amount: rev.amount };
-  const sumCur = (list) => {
-    const by = {};
-    for (const f of list) { if (f.amount == null || !f.currency) return null; by[f.currency] = round((by[f.currency] || 0) + f.amount); }
-    return Object.keys(by).sort().map((c) => ({ currency: c, amount: by[c] }));
-  };
-  const sent = occ.stmt && occ.stmt.amount != null && occ.stmt.currency ? [{ currency: occ.stmt.currency, amount: occ.stmt.amount }] : sumCur(known);
-  if (!sent || !sent.length) return { incomplete: true };
-  if (sent.length === 1 && sent[0].currency === landed.currency) return { incomplete: false, mixed: false, fee: round(sent[0].amount - landed.amount), currency: landed.currency, sent, landed };
-  const hop = known.length ? sumCur(known) : null;
-  if (hop && hop.length === 1 && hop[0].currency === landed.currency) return { incomplete: false, mixed: true, fee: round(hop[0].amount - landed.amount), currency: landed.currency, sent, landed };
-  return { incomplete: false, mixed: true, fee: null, currency: "", sent, landed };
+  const revs = (occ.revs && occ.revs.length ? occ.revs : occ.rev ? [occ.rev] : []).filter((r) => r && r.amount != null && r.currency);
+  if (!revs.length) return { incomplete: true };
+  const known = (occ.froms || []).filter((f) => f && f.amount != null && f.currency);
+  if ((occ.froms || []).some((f) => !f)) return { incomplete: true };
+  const stmts = (occ.stmts && occ.stmts.length ? occ.stmts : occ.stmt ? [occ.stmt] : []).filter((s) => s && s.amount != null && s.currency && !known.some((f) => f.id === s.id));
+  const sumBy = (list) => { const by = {}; for (const f of list) by[f.currency] = round((by[f.currency] || 0) + Number(f.amount)); return by; };
+  const linkBy = sumBy(known), revBy = sumBy(revs), revCur = Object.keys(revBy);
+  if (revCur.length !== 1) return { incomplete: true };
+  const cur = revCur[0];
+  let landedAmt = revBy[cur];
+  const linkSame = linkBy[cur];
+  /* a credit that only stored one of several links: the links are the transfer, so they are all counted */
+  if (known.length > 1 && linkSame != null && landedAmt + 0.02 < linkSame && known.some((f) => f.currency === cur && Math.abs(Number(f.amount) - landedAmt) < 0.02)) landedAmt = linkSame;
+  const stmtAmt = round(stmts.filter((s) => s.currency === cur).reduce((n, s) => n + Number(s.amount), 0));
+  const sentAmt = stmtAmt > 0 ? stmtAmt : (linkSame != null ? linkSame : null);
+  const sentParts = stmtAmt > 0 ? [{ currency: cur, amount: stmtAmt }] : Object.keys(linkBy).sort().map((c) => ({ currency: c, amount: linkBy[c] }));
+  if (!sentParts.length || sentAmt == null && sentParts.length === 1 && sentParts[0].currency !== cur) return sentParts.length ? { incomplete: false, mixed: true, fee: null, currency: "", sent: sentParts, landed: { currency: cur, amount: round(landedAmt) } } : { incomplete: true };
+  const landed = { currency: cur, amount: round(landedAmt) };
+  if (sentParts.length === 1 && sentParts[0].currency === cur) {
+    const sent = round(sentAmt != null ? sentAmt : sentParts[0].amount);
+    if (landed.amount > sent + 0.02) return { incomplete: false, mixed: false, checkLink: true, fee: null, currency: cur, sent: [{ currency: cur, amount: sent }], landed };
+    return { incomplete: false, mixed: false, fee: round(sent - landed.amount), currency: cur, sent: [{ currency: cur, amount: sent }], landed };
+  }
+  return { incomplete: false, mixed: true, fee: null, currency: "", sent: sentParts, landed };
 }
 function learnDay(list) {
   if (!list || list.length < LEARN_DAY_MIN) return { day: null, payments: list ? list.length : 0, enough: false, why: "not enough payments yet" };
@@ -1873,18 +1979,43 @@ function learnLag(list) {
   if (s[s.length - 1] - s[0] > LEARN_LAG_SPREAD) return null;
   return { days: medianInt(list), payments: list.length };
 }
+const EXCHANGE_ROW = /exchanged?\s+(?:to|from)\s+[a-z]{3}\b/i;
+/* A rate only when Revolut itself recorded the exchange. One row, within a day, or there is no rate. */
+function exchangeRate(occ, pool) {
+  const rev = occ.rev;
+  if (!rev || !isDay(rev.date)) return null;
+  const hits = (pool || []).filter((e) => e && e.status === "transfer" && isMainAccount(e.account) && EXCHANGE_ROW.test(`${e.payer || ""} ${e.note || ""}`) && isDay(e.date) && Math.abs(daysBetween(e.date, rev.date)) <= 1);
+  if (hits.length !== 1) return null;
+  const row = hits[0];
+  const foreign = (occ.froms || []).find((f) => f && f.currency && f.currency !== row.currency && f.amount);
+  if (!foreign) return null;
+  const value = round(Number(row.amount) / Number(foreign.amount));
+  if (!value) return null;
+  return { value, from: foreign.currency, to: row.currency, source: "Revolut exchange row", at: row.date, id: row.id };
+}
+function splitWord(occ, sources, rules) {
+  const ids = new Set();
+  for (const e of [occ.stmt, ...(occ.froms || []), occ.rev]) { const s = payerSource(e, sources); if (s) ids.add(s.id); }
+  if (ids.size < 2) return "";
+  const ok = (id) => (rules || []).some((r) => r && (r.source === id || r.sourceId === id) && r.confirmed_by && (r.date || r.confirmed));
+  return [...ids].every(ok) ? "confirmed" : "rule pending";
+}
 /* What each payout route cost, from amounts already on the desk. routes: [{ name, source, via, payouts,
    fees, feePayouts, extra, extraPayouts, noFee, mixed, mixedExamples, incomplete }] */
-export function routeCosts(entries, sources) {
+export function routeCosts(entries, sources, rules) {
   const pool = []; const seen = new Set();
   for (const raw of entries || []) { const e = normPay(raw); if (!e || !e.id || seen.has(e.id)) continue; seen.add(e.id); pool.push(e); }
   const byId = new Map(pool.map((e) => [e.id, e]));
   const occs = []; const seenRev = new Set();
-  const push = (rev, froms, stmt) => { if (!rev || seenRev.has(rev.id)) { const o = occs.find((x) => rev && x.rev.id === rev.id); if (o && stmt && !o.stmt) o.stmt = stmt; return; } seenRev.add(rev.id); occs.push({ rev, froms, stmt, via: viaOf(froms) }); };
+  const push = (rev, froms, stmt) => {
+    if (!rev || seenRev.has(rev.id)) { const o = occs.find((x) => rev && x.rev.id === rev.id); if (o && stmt && !o.stmt) o.stmt = stmt; if (o) for (const f of froms) if (f && !o.froms.some((x) => x && x.id === f.id)) o.froms.push(f); return; }
+    seenRev.add(rev.id); occs.push({ rev, revs: [rev], froms: froms.slice(), stmt, stmts: stmt ? [stmt] : [], via: viaOf(froms) });
+  };
   for (const rev of pool) {
     if (!isMainAccount(rev.account) || !Array.isArray(rev.from) || !rev.from.length) continue;
     const froms = rev.from.map((id) => byId.get(id) || null);
-    const ids = new Set(rev.from);
+    for (const e of pool) if (e.movedTo === rev.id && !rev.from.includes(e.id)) froms.push(e);
+    const ids = new Set(froms.filter(Boolean).map((f) => f.id).concat(rev.from));
     const linked = pool.find((e) => wasStatement(e) && e.paidBy && (ids.has(e.paidBy) || e.paidBy === rev.id) && !ids.has(e.id));
     push(rev, froms, linked || froms.find((f) => f && wasStatement(f)) || null);
   }
@@ -1902,36 +2033,50 @@ export function routeCosts(entries, sources) {
   }
   const groups = new Map();
   for (const occ of occs) {
+    occ.via = viaOf(occ.froms);
     const source = routeSourceName(occ, sources), via = occ.via, key = source + "|" + via.join("+");
-    const g = groups.get(key) || { name: via.length ? `${source} via ${via.join(" and ")} into Revolut` : `${source} into Revolut`, source, via, payouts: 0, fees: {}, feePayouts: 0, extra: {}, extraPayouts: 0, noFee: 0, mixed: 0, mixedExamples: [], incomplete: 0 };
+    const g = groups.get(key) || { name: via.length ? `${source} via ${via.join(" and ")} into Revolut` : `${source} into Revolut`, source, via, payouts: 0, fees: {}, feePayouts: 0, extra: {}, extraPayouts: 0, noFee: 0, mixed: 0, mixedExamples: [], incomplete: 0, checkLink: 0 };
     g.payouts++;
+    const named = !!(payerSource(occ.stmt, sources) || (occ.froms || []).some((f) => payerSource(f, sources)) || payerSource(occ.rev, sources));
     const p = priceRoute(occ);
     if (p.incomplete) g.incomplete++;
     else {
-      if (p.mixed) { g.mixed++; if (g.mixedExamples.length < 3) g.mixedExamples.push({ sent: p.sent, landed: p.landed }); }
-      if (p.fee > 0) { g.fees[p.currency] = round((g.fees[p.currency] || 0) + p.fee); g.feePayouts++; }
-      else if (p.fee < 0) { g.extra[p.currency] = round((g.extra[p.currency] || 0) + (-p.fee)); g.extraPayouts++; }
+      if (p.mixed) {
+        g.mixed++;
+        if (g.mixedExamples.length < 3) g.mixedExamples.push({ sent: p.sent, landed: p.landed });
+        const rate = exchangeRate(occ, pool);
+        if (rate && !g.rate) g.rate = rate;
+      }
+      /* a fee needs a named source AND a hop that explains it. Anything else is not a fee. */
+      if (p.checkLink) g.checkLink++;
+      else if (p.fee > 0 && named && via.length) { g.fees[p.currency] = round((g.fees[p.currency] || 0) + p.fee); g.feePayouts++; }
       else if (p.fee === 0) g.noFee++;
     }
+    const word = splitWord(occ, sources, rules);
+    if (word === "rule pending") g.split = "rule pending";
+    else if (word === "confirmed" && g.split !== "rule pending") g.split = "confirmed";
     groups.set(key, g);
   }
   return [...groups.values()].sort((a, b) => (a.name < b.name ? -1 : 1));
 }
 const moneyBits = (o) => Object.keys(o || {}).sort().map((c) => `${c} ${Number(o[c]).toFixed(2)}`);
 const sentBits = (parts) => (parts || []).map((p) => `${p.currency} ${Number(p.amount).toFixed(2)}`).join(" + ");
-/* One sentence for the bots. Same-currency gaps are fees. A currency change is "not enough data". */
+/* One sentence for the bots. A same-currency gap with a source and a hop is a fee. A gap with no
+   source is not a fee. Landed above sent is a check, not a negative fee. A currency change keeps a
+   rate only when Revolut recorded one. */
 export function routeCostText(r) {
   if (!r || !r.payouts) return "Not enough data.";
   const bits = [];
   const fees = moneyBits(r.fees);
   if (fees.length) bits.push(`Fees: ${fees.join(" + ")} on ${r.feePayouts} payout${r.feePayouts === 1 ? "" : "s"}`);
-  const extra = moneyBits(r.extra);
-  if (extra.length) bits.push(`Landed ${extra.join(" + ")} more than was sent. No fee to show`);
-  if (r.noFee && !fees.length && !extra.length && !r.mixed) bits.push("No fee on the amounts recorded");
+  if (r.checkLink) bits.push("Check link");
+  if (r.noFee && !fees.length && !r.checkLink && !r.mixed) bits.push("No fee on the amounts recorded");
   if (r.mixed) {
     for (const m of r.mixedExamples || []) bits.push(`${sentBits(m.sent)} sent, ${m.landed.currency} ${Number(m.landed.amount).toFixed(2)} landed`);
-    bits.push("Exchange: not enough data");
+    if (r.rate && r.rate.source) bits.push(`Rate ${Number(r.rate.value)} ${r.rate.from} to ${r.rate.to}, from ${r.rate.source}`);
+    else bits.push("Exchange: not enough data");
   }
+  if (r.split === "rule pending") bits.push("Split: rule pending");
   if (!bits.length) bits.push("Not enough data");
   return bits.join(". ") + ".";
 }
@@ -1941,7 +2086,7 @@ export function routeSummary(routes) {
   return `${routes.length} payout route${routes.length === 1 ? "" : "s"}` + (thin ? `, ${thin} with not enough data for the exchange` : "") + ". Read payout_routes in income_status. Do not guess a rate.";
 }
 /* expected: { rows, missing, learned, summary }. Every figure comes from a recorded amount or date. */
-export function moneyExpectations(entries, sources, today) {
+export function moneyExpectations(entries, sources, today, rules) {
   const all = []; const seen = new Set();
   for (const raw of entries || []) { const e = normPay(raw); if (!e || !e.id || seen.has(e.id)) continue; seen.add(e.id); all.push(e); }
   /* a shadow copy of the same credit (PR #69) is not a second statement or a second route */
@@ -1950,15 +2095,19 @@ export function moneyExpectations(entries, sources, today) {
   const arrivals = new Map(), lagLists = new Map();
   const journeys = [];
   for (const e of pool) {
-    if (e.status === "received" && !e.from && DAY.test(e.date || "")) {
+    /* the pay day is learned from Revolut landings only, and not from another source's account (18 Nov 2026) */
+    if (e.status === "received" && isMainAccount(e.account) && DAY.test(e.date || "")) {
       const s = payerSource(e, sources);
-      if (s) { const a = arrivals.get(s.id) || []; a.push(Number(e.date.slice(8, 10))); arrivals.set(s.id, a); }
+      const other = Array.isArray(e.from) && e.from.some((id) => { const f = byId.get(id); const o = payerSource(f, sources); return o && s && o.id !== s.id; });
+      if (s && !other) { const a = arrivals.get(s.id) || []; a.push(Number(e.date.slice(8, 10))); arrivals.set(s.id, a); }
     }
     if (!wasStatement(e)) continue;
     const statementDate = DAY.test(e.statement || "") ? e.statement : (DAY.test(e.date || "") ? e.date : "");
     if (!statementDate) continue;
     const end = moneyEnd(e, byId);
-    journeys.push({ e, statementDate, payable: payableOf(e, statementDate), ...end });
+    let payable = payableOf(e, statementDate);
+    if ((end.landed || end.paid) && payable.state === "not_yet") payable = { state: "not_recorded", date: null };
+    journeys.push({ e, statementDate, payable, ...end });
     if (end.landed && DAY.test(end.landed.date)) {
       const gap = daysBetween(statementDate, end.landed.date);
       const s = payerSource(e, sources);
@@ -1992,7 +2141,10 @@ export function moneyExpectations(entries, sources, today) {
     /* short only when a different recorded amount, in the same currency, is below the statement */
     const other = j.landed && j.landed.currency === e.currency ? j.landed : (j.paid && j.paid.currency === e.currency && j.paid.amount !== e.amount ? j.paid : null);
     const gap = other ? round(e.amount - other.amount) : 0;
-    const shortBy = gap > 0 ? { amount: gap, currency: e.currency } : null;
+    const viaHop = !!(j.paid && j.paid.account && !isMainAccount(j.paid.account) && !STATEMENT.test(j.paid.account) && j.landed);
+    /* the route already shows this gap as a fee, so it is not also short (18 Nov 2026) */
+    const feeGap = gap > 0 && !!src && viaHop;
+    const shortBy = gap > 0 && !feeGap ? { amount: gap, currency: e.currency } : null;
     const flags = [];
     if (!j.landed && due && due < today) flags.push("late");
     if (shortBy) flags.push("short");
@@ -2000,7 +2152,8 @@ export function moneyExpectations(entries, sources, today) {
     if (j.landed && !shortBy && age != null && age > RECENT_LANDED) continue;
     const payableDate = j.payable.state === "date" ? j.payable.date : null;
     rows.push({
-      id: e.id, payer: e.payer, source: src ? src.name : "", sourceId: src ? src.id : "", amount: e.amount, currency: e.currency, status: e.status,
+      id: e.id, payer: hidePrivate(e.payer), source: src ? src.name : "", sourceId: src ? src.id : "", amount: e.amount, currency: e.currency, status: j.landed ? "received" : e.status,
+      ...(shortBy && (!src || !viaHop) ? { shortReason: "unexplained" } : {}),
       due, dueFrom, dueNote, flags, shortBy, open: !j.landed, missingLink: j.missingLink,
       statement: { date: j.statementDate, amount: e.amount, currency: e.currency },
       payable: payableDate, payableState: j.payable.state,
@@ -2038,14 +2191,14 @@ export function moneyExpectations(entries, sources, today) {
   if (summary.short) parts.push(`${summary.short} short`);
   if (summary.missing) parts.push(`${summary.missing} missing`);
   summary.text = parts.length ? parts.join(", ") : "nothing to flag";
-  return { expected: { rows: shown, missing, learned, summary }, routes: routeCosts(pool, sources) };
+  return { expected: { rows: shown, missing, learned, summary }, routes: routeCosts(pool, sources, rules) };
 }
 
 export function holdingOf(sources) {
   const own = (sources || []).filter((s) => s.kind === "account" && !isMainAccount(s.name));
   return (e) => !!e && e.status === "received" && !e.movedTo && !isMainAccount(e.account) && own.some((s) => srcMatches(s, e.account));
 }
-export function incomeReport(entries, checks, sources, today, older = []) {
+export function incomeReport(entries, checks, sources, today, older = [], rules = []) {
   const isHold = holdingOf(sources);
   const month = today.slice(0, 7);
   const add = (o, cur, a) => { o[cur] = round((o[cur] || 0) + a); };
@@ -2061,31 +2214,54 @@ export function incomeReport(entries, checks, sources, today, older = []) {
     if (e.date.slice(0, 7) !== month || e.status === "transfer" || e.status === "unsorted") continue;
     if (e.paidBy && OWED.includes(e.status)) continue; /* a statement settled by a received payment counts nowhere */
     if (e.movedTo) continue; /* moved on to Revolut: the Revolut payment is the one that counts */
-    if (isHold(e)) { add(holding, e.currency, e.amount); continue; } /* still in Wise / PayPal: seen, not counted */
+    if (e.status === "received" && !countsAsReceived(e)) { add(holding, e.currency, e.amount); continue; } /* still in Wise / PayPal: seen, not counted */
     /* batch 4: a statement under the payout line counts nowhere yet; payable is owed (with pending) */
     if (e.status === "statement only") { add(statementOnly, e.currency, e.amount); continue; }
     add(e.status === "pending" || e.status === "payable" ? pending : received, e.currency, e.amount);
     if (e.status === "payable") add(payable, e.currency, e.amount);
     if (e.status === "pending") add(pendingOnly, e.currency, e.amount); /* pending without the payable (round 3) */
-    if (e.status === "received") add(byCat[e.category] || (byCat[e.category] = {}), e.currency, e.amount);
+    if (countsAsReceived(e)) add(byCat[e.category] || (byCat[e.category] = {}), e.currency, e.amount);
     /* the music's own money (16 Nov 2026, Ledger: a production buyout is not a royalty): self-releases, label deals, publishing */
-    if (e.status === "received" && ROYALTY_CATS.includes(e.category)) add(royaltiesOnly, e.currency, e.amount);
+    if (countsAsReceived(e) && ROYALTY_CATS.includes(e.category)) add(royaltiesOnly, e.currency, e.amount);
   }
   const lastCheck = {};
   for (const c of checks) { const k = low(c.account); if (!lastCheck[k] || c.at > lastCheck[k].at) lastCheck[k] = c; }
+  const byIdAll = new Map(entries.map((e) => [e.id, e]));
+  const payLabel = (e) => e.movedTo ? "moved to Revolut" : (e.paidBy && (OWED.includes(e.status) || e.status === "pending") ? "settled" : (e.status === "received" && !countsAsReceived(e) ? `in ${e.account}, not received` : e.status));
+  /* a combined Revolut credit is split across the sources of its links. One source still sees the whole credit. */
+  const viewRows = (s) => {
+    if (s.kind === "account") return entries.filter((e) => low(e.account) === low(s.name) || srcMatches(s, e.account));
+    const out = [], seen = new Set();
+    const add = (row) => { if (row && row.id && !seen.has(row.id)) { seen.add(row.id); out.push(row); } };
+    for (const e of entries) {
+      if (isMainAccount(e.account) && Array.isArray(e.from) && e.from.length > 1) {
+        const links = e.from.map((id) => byIdAll.get(id)).filter(Boolean);
+        const owners = [...new Set(links.map((f) => { const p = payerSource(f, sources); return p && p.id; }).filter(Boolean))];
+        if (owners.length > 1) {
+          if (owners.includes(s.id)) for (const f of links) { const p = payerSource(f, sources); if (p && p.id === s.id && f.currency === e.currency) add({ ...e, id: e.id + ":" + f.id, amount: f.amount, currency: f.currency, payer: f.payer, source: s.id, status: "received" }); }
+          continue;
+        }
+      }
+      if (e.movedTo && byIdAll.has(e.movedTo)) continue;
+      const owner = e.source ? sources.find((x) => x.kind !== "account" && x.id === e.source) : payerSource(e, sources);
+      if (owner && owner.id === s.id) add(e);
+    }
+    return out;
+  };
   const list = sources.map((s) => {
     /* a payment tied to a source counts for that source only; the payer's name decides only when it is tied to none
        (17 Nov 2026: a payment tied to CREATE still showed under the payout service its payer is named after) */
-    const mine = entries.filter((e) => (s.kind === "account" ? low(e.account) === low(s.name) || srcMatches(s, e.account) : e.source ? low(e.source) === s.id : srcMatches(s, e.payer)));
+    const mine = viewRows(s);
     const last = mine.reduce((a, e) => (!a || e.date > a.date ? e : a), null);
     const chk = s.kind === "account" ? lastCheck[low(s.name)] || Object.values(lastCheck).find((c) => srcMatches(s, c.account)) || null : null;
     const lastLogged = mine.reduce((a, e) => (!a || e.at > a ? e.at : a), null); /* the last time anything was logged for it, as a São Paulo day */
     const lastLook = [lastLogged && spDay(Date.parse(lastLogged)), chk && chk.day].filter(Boolean).sort().pop() || null;
-    const monthTotal = {};
-    for (const e of mine) if (e.date.slice(0, 7) === month && e.status !== "transfer" && e.status !== "unsorted" && e.status !== "statement only" && !e.movedTo && !isHold(e) && !(e.paidBy && OWED.includes(e.status))) add(monthTotal, e.currency, e.amount);
+    const monthTotal = {}, monthWaiting = {};
+    for (const e of mine) if (e.date.slice(0, 7) === month && countsAsReceived(e)) add(monthTotal, e.currency, e.amount);
+    for (const e of mine) if (e.date.slice(0, 7) === month && e.status === "received" && !countsAsReceived(e) && !e.movedTo) add(monthWaiting, e.currency, e.amount);
     /* this month, received only (16 Nov 2026, Luke): received = green; a MONTHLY source past the day it usually
        pays by with nothing = late (red); otherwise waiting (not highlighted, as every month starts) */
-    const got = mine.filter((e) => e.status === "received" && e.date.slice(0, 7) === month && !e.movedTo && !isHold(e));
+    const got = mine.filter((e) => countsAsReceived(e) && e.date.slice(0, 7) === month);
     const gotAmt = {};
     for (const e of got) add(gotAmt, e.currency, e.amount);
     const dueDay = Number.isInteger(s.dueDay) ? s.dueDay : null;
@@ -2105,12 +2281,14 @@ export function incomeReport(entries, checks, sources, today, older = []) {
     if (accts.length) for (const e of mine) if (e.account && !STATEMENT.test(e.account) && !accts.some((a) => payerName(a) === payerName(e.account))) accts.push(e.account);
     const byAccount = accts.length > 1 ? accts.map((acc) => {
       const l = mine.filter((e) => payerName(e.account) === payerName(acc) && e.status !== "transfer" && e.status !== "unsorted").reduce((a, e) => (!a || e.date > a.date ? e : a), null);
-      return { account: acc, last: l ? { date: l.date, amount: l.amount, currency: l.currency, status: l.status } : null };
+      return { account: acc, last: l ? { date: l.date, amount: l.amount, currency: l.currency, status: payLabel(l) } : null };
     }) : null;
-    return { id: s.id, name: s.name, kind: s.kind, category: s.category, currency: s.currency, lands: s.lands, ...(s.accounts ? { accounts: s.accounts } : {}), ...(byAccount ? { byAccount } : {}), ...(s.editedBy ? { editedBy: s.editedBy, editedAt: s.editedAt } : {}),
+    const seenAcc = [...new Set(mine.map((e) => e.account).filter((a) => a && !STATEMENT.test(a)))];
+    const lands = s.lands || (s.kind !== "account" && seenAcc.length === 1 ? seenAcc[0] : "");
+    return { id: s.id, name: s.name, kind: s.kind, category: s.category, currency: s.currency, lands, ...(s.accounts ? { accounts: s.accounts } : {}), ...(byAccount ? { byAccount } : {}), ...(s.editedBy ? { editedBy: s.editedBy, editedAt: s.editedAt } : {}),
       cadence: s.cadence, owner: s.owner, how: s.how, state: s.state, ...(s.main ? { main: true } : {}), ...(thisMonth ? { thisMonth } : {}),
-      blocker: s.blocker, needsLuke: s.needsLuke, last: last ? { date: last.date, amount: last.amount, currency: last.currency, status: last.status } : null,
-      checked: chk ? { day: chk.day, by: chk.by, new: chk.new } : null, lastLook, monthTotal, verdict, why };
+      blocker: s.blocker, needsLuke: s.needsLuke, last: last ? { date: last.date, amount: last.amount, currency: last.currency, status: payLabel(last) } : null,
+      checked: chk ? { day: chk.day, by: chk.by, new: chk.new } : null, lastLook, monthTotal, monthWaiting, verdict, why };
   });
   /* payments whose payer matches no known source: a new source nobody has named yet */
   const payers = sources.filter((s) => s.kind !== "account");
@@ -2146,34 +2324,35 @@ export function incomeReport(entries, checks, sources, today, older = []) {
   /* this year, received only, per currency (round 3, Sheet: to check against the ledger), every month read */
   const receivedYear = {}, yr = today.slice(0, 4), seenY = [];
   for (const e of entries.concat((older || []).map((x) => (x.arrived && x.arrived !== x.date ? { ...x, date: x.arrived } : x)))) {
-    if (e.status !== "received" || e.movedTo || isHold(e) || e.date.slice(0, 4) !== yr || seenY.some((x) => samePayment(x, e))) continue;
+    if (!countsAsReceived(e) || e.date.slice(0, 4) !== yr || seenY.some((x) => samePayment(x, e))) continue;
     seenY.push(e); add(receivedYear, e.currency, e.amount);
   }
   /* received per month, every month read (12), each payment once: "this month and the ones before" */
   const receivedByMonth = {}, seenM = [];
   for (const e of entries.concat((older || []).map((x) => (x.arrived && x.arrived !== x.date ? { ...x, date: x.arrived } : x)))) {
-    if (e.status !== "received" || e.movedTo || isHold(e) || seenM.some((x) => samePayment(x, e))) continue;
+    if (!countsAsReceived(e) || seenM.some((x) => samePayment(x, e))) continue;
     seenM.push(e); add(receivedByMonth[e.date.slice(0, 7)] || (receivedByMonth[e.date.slice(0, 7)] = {}), e.currency, e.amount);
   }
   const duplicates = twice.map(([k, e]) => ({ kept: k.payer, also: e.payer, amount: e.amount, currency: e.currency, date: e.date, id: e.id }));
   const seenId = new Set(entries.map((e) => e && e.id));
-  const money = moneyExpectations(entries.concat((older || []).filter((e) => e && !seenId.has(e.id))), sources, today);
+  const money = moneyExpectations(entries.concat((older || []).filter((e) => e && !seenId.has(e.id))), sources, today, rules);
   return { month, received, pending, payable, statementOnly, royaltiesOnly, pendingOnly, receivedYear,
-    receivedYearNote: `Received money that landed in Revolut in ${yr}. Wise and PayPal are not in this total, and a row that has moved to Revolut is not counted again. GBP is in the total only when a Revolut row is in GBP.`,
+    receivedYearNote: `Revolut only. Received money that landed in Revolut in ${yr}. Wise and PayPal are not in this total, and a row that has moved to Revolut is not counted again. GBP is in the total only when a Revolut row is in GBP.`,
     receivedByMonth, duplicates, byCategory: byCat, count: entries.filter((e) => e.date.slice(0, 7) === month).length, unsorted: unsorted.slice(0, 40).map(withMatch), unsortedCount: unsorted.length,
     expected: money.expected, routes: money.routes,
     entries: [...entries].sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : a.at < b.at ? 1 : -1)).slice(0, 60).map((e) => (isHold(e) ? { ...e, holding: true } : e)),
-    holding, holdingList: entries.filter((e) => isHold(e) && e.date.slice(0, 7) === month).sort((a, b) => (a.date < b.date ? 1 : -1)),
+    holding, holdingList: entries.filter((e) => e.status === "received" && !countsAsReceived(e) && !e.movedTo && e.date.slice(0, 7) === month).sort((a, b) => (a.date < b.date ? 1 : -1)),
     accounts, sources: src, unknown, problems,
     lastEntryAt: entries.reduce((a, e) => (!a || e.at > a ? e.at : a), null) };
 }
 export async function incomeState(store, now) {
   /* this month and the three before for the totals, the sources and the list; a year for "To sort" */
   const today = spDay(now), months = monthsBack(today.slice(0, 7), UNSORTED_MONTHS);
-  const [inc, chk, sources] = await Promise.all([
-    Promise.all(months.map((k) => readDoc(store, incKey(k), []))), Promise.all(months.slice(0, 2).map((k) => readDoc(store, chkKey(k), []))), getSources(store)]);
+  const [inc, chk, sources, splits] = await Promise.all([
+    Promise.all(months.map((k) => readDoc(store, incKey(k), []))), Promise.all(months.slice(0, 2).map((k) => readDoc(store, chkKey(k), []))), getSources(store), readDoc(store, "splits.json", [])]);
   const flat = (docs) => docs.flatMap((d) => (Array.isArray(d.data) ? d.data : []));
-  return incomeReport(flat(inc.slice(0, 4)), flat(chk), sources, today, flat(inc.slice(4)));
+  const rules = (Array.isArray(splits.data) ? splits.data : []).filter((r) => r && r.confirmed_by && (r.date || r.confirmed));
+  return incomeReport(flat(inc.slice(0, 4)), flat(chk), sources, today, flat(inc.slice(4)), rules);
 }
 /* royalty payments across the year the desk keeps, for the per-song view (L4) */
 export async function listPLPayments(store, now) {
@@ -2549,6 +2728,117 @@ export const PACK_FIELDS = [
 /* null prototype (11 Nov 2026): "constructor", "toString" or "__proto__" sent as a pack key must be an
    unknown field, not something every plain object already has */
 const FIELD = Object.assign(Object.create(null), Object.fromEntries(PACK_FIELDS.map((f) => [f.key, f])));
+/* a pre-HQ song already went to RouteNote. Those fields are "not needed". The release-day link,
+   the video and the lyrics stay live (18 Nov 2026). */
+export const PREHQ_NOT_NEEDED = new Set(["kind", "label", "split", "distributor", "deal", "wav", "artwork", "folder", "language", "explicit", "genre", "subgenre", "version", "writers", "producers", "featuring", "primary", "copyright"]);
+const STEP_LINK = { video: "video", page: "page", spotifyTrack: "live" };
+export function packFieldView(f, pack, steps, o = {}) {
+  const preHq = pack.prehq === "Yes";
+  const pitchSkipped = (steps || []).some((s) => s.key === "pitch" && s.status === "skipped");
+  let shown = f.key === "distributor" && !pack.distributor ? (distributorOf(pack) || "") : (pack[f.key] || "");
+  let doneOn = "";
+  const from = STEP_LINK[f.key];
+  if (from) {
+    const st = (steps || []).find((s) => s.key === from && s.status === "done" && s.link);
+    /* the stored pack is left as Luke wrote it; an empty field shows the done step's link, and the day it was done */
+    if (st && (!shown || shown === st.link)) { if (!shown) shown = st.link; doneOn = st.doneOn || ""; }
+  }
+  if (f.key === "notes" && shown && /pending moderation/i.test(shown)) {
+    const st = String(o.storeStatus || "");
+    if (st && !/pending|moderation|uploaded/i.test(st)) shown = String(shown).replace(/pending moderation/ig, st);
+  }
+  const routeSkip = preHq && PREHQ_NOT_NEEDED.has(f.key);
+  const pitchSkip = pitchSkipped && f.neededBy === "pitch";
+  const state = shown ? "" : routeSkip || pitchSkip ? "not needed" : requiredNow(f, pack) ? "missing (required)" : f.neededBy ? `missing (needed for "${(STEP[f.neededBy] || {}).label || f.neededBy}")` : "not filled yet";
+  return { field: f.key, label: f.label, value: shown, ...(state ? { state } : {}), ...(doneOn ? { done_on: doneOn } : {}), filled_by: f.fill.length ? f.fill.join(" or ") + " (or Luke)" : "Luke" };
+}
+/* my_day schedule: never cut mid-word, never a past date, never a step that is already done (18 Nov 2026) */
+export const MONDAY_SCHEDULE = "Steve and Kevin say WHY the top 3 beat the bottom 3 in one update at 10:00. Nova then sends Luke one recommendation on where the ad money goes next.";
+const MONTH_NUM = { jan: "01", feb: "02", mar: "03", apr: "04", may: "05", jun: "06", jul: "07", aug: "08", sep: "09", oct: "10", nov: "11", dec: "12" };
+function dateMentioned(line, today) {
+  const m = /\b(\d{1,2})\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\b/i.exec(String(line || ""));
+  if (!m || !/^\d{4}-\d{2}-\d{2}$/.test(String(today || ""))) return "";
+  const iso = `${today.slice(0, 4)}-${MONTH_NUM[m[2].toLowerCase()]}-${String(m[1]).padStart(2, "0")}`;
+  return Number.isNaN(Date.parse(iso + "T12:00:00Z")) ? "" : iso;
+}
+function realWhenComplete(line, nextDate) {
+  if (!nextDate) return String(line || "");
+  return String(line || "").replace(/(\d+)\s+days?\s+before a release\b/gi, (_, n) => dayWords(addDays(nextDate, -Number(n))) || _);
+}
+function stepKeyOf(text) {
+  const w = String(text || "").toLowerCase();
+  if (/song page|page live/.test(w)) return "page";
+  if (/spotify pitch|send the spotify pitch/.test(w)) return "pitch";
+  if (/video scheduled/.test(w)) return "video";
+  if (/upload to routenote/.test(w)) return "upload";
+  if (/musixmatch|lyrics live/.test(w)) return "lyrics";
+  if (/spotify link/.test(w)) return "live";
+  return "";
+}
+function stepIsDone(releases, key, today) {
+  if (!key) return false;
+  const live = (releases || []).filter((r) => r && r.date && r.status !== "cancelled" && r.status !== "draft");
+  const upcoming = live.filter((r) => r.date >= today).sort((a, b) => (a.date < b.date ? -1 : 1));
+  const next = (upcoming.length ? upcoming : live)[0];
+  if (!next) return false;
+  const st = (next.steps || []).find((s) => s.key === key);
+  return !!(st && (st.status === "done" || st.status === "skipped"));
+}
+export function scheduleForMyDay(bot, schedule, o = {}) {
+  const today = o.today || "";
+  const defaults = ((DEFAULT_ROSTER.find((b) => b.name === bot) || {}).schedule) || [];
+  const out = [];
+  for (const item of schedule || []) {
+    let time = String((item && item.time) || ""), what = String((item && item.what) || "");
+    const blob = `${time} ${what}`;
+    if (/what engages best|holds on ti|add them/i.test(blob)) { out.push({ time: "Monday 10:00", what: MONDAY_SCHEDULE }); continue; }
+    for (const d of defaults) {
+      if (what && d.what.toLowerCase().startsWith(what.toLowerCase()) && what.length >= 4 && what.length < d.what.length) what = d.what;
+      if (time && d.time.toLowerCase().startsWith(time.toLowerCase()) && /[a-z]$/i.test(time) && time.length < d.time.length) time = d.time;
+    }
+    if (/\ba rel(?!ease\b)/i.test(time) || /\ba rel(?!ease\b)/i.test(what)) {
+      const d = defaults.find((x) => /before a release/i.test(x.time)) || defaults.find((x) => stepKeyOf(x.what));
+      if (d) { if (/\ba rel/i.test(time) || time.length < 8) time = d.time; if (/\ba rel/i.test(what) || what.length < 8) what = d.what; }
+    }
+    time = realWhenComplete(time, o.nextDate || "");
+    const key = stepKeyOf(`${time} ${what}`);
+    if (stepIsDone(o.releases, key, today)) continue;
+    const when = dateMentioned(time, today) || dateMentioned(what, today);
+    if (/^done\b/i.test(what) && o.duty && o.duty.status && o.duty.status !== "done") {
+      what = o.duty.status === "blocked" && o.duty.blocker ? `blocked: ${o.duty.blocker}` : (o.duty.status || what);
+      time = "today";
+    }
+    if (when && when < today) {
+      if (!what || /\ba rel/i.test(what)) continue;
+      out.push({ time: "late", what: clipWords(what, 240) });
+      continue;
+    }
+    out.push({ time: clipWords(time, 120), what: clipWords(what, 240) });
+  }
+  return out;
+}
+/* a note to everyone leaves my_day once it is handled, superseded, or older than two days with a newer state */
+export function noteStillCurrent(m, o = {}) {
+  if (!m || m.to !== "all" || m.resolved) return false;
+  const at = Date.parse(m.at || "");
+  if (!isFinite(at)) return false;
+  const age = (o.now || 0) - at;
+  const text = m.text || "";
+  const rel = (o.releases || []).find((r) => mentionsSong(text, r.title));
+  if (rel && rel.pack && rel.pack.prehq === "Yes" && /missing|master|artwork|language|wav/i.test(text)) return false;
+  if (rel && /pending moderation/i.test(text)) {
+    const log = rel.storeLog || (rel.store && rel.store.history) || [];
+    const st = (rel.store && rel.store.status) || (log.length ? log[0].status : "");
+    if (st && !/pending|moderation|uploaded/i.test(st)) return false;
+  }
+  if (age > 2 * 86400000 && rel) {
+    const updated = Date.parse(rel.updatedAt || "") || 0;
+    const log = rel.storeLog || (rel.store && rel.store.history) || [];
+    const newerLog = log.some((e) => Date.parse(e.at || "") > at || (e.on && String(m.at || "").slice(0, 10) && e.on > String(m.at).slice(0, 10)));
+    if (updated > at || newerLog || (rel.pack && rel.pack.prehq === "Yes")) return false;
+  }
+  return age <= 4 * 86400000;
+}
 /* days = how many days before the release day the step is due. after = a step that must be done (or
    skipped) first: until then this one is WAITING, never late (11 Nov 2026, Luke: "it says spotify pitch
    sent [late] but it didn't get sent because the song hasn't shown in spotify for artists yet"). */
@@ -2736,6 +3026,11 @@ function pitchRule(list, today, at = null) {
   return changed;
 }
 const NEEDS_NOTE = "No Spotify Canvas link in the pack (Luke adds one if there is a Canvas)";
+/* a step skipped only because its link was missing comes back when the link is added (18 Nov 2026) */
+function canvasSkipNote(note) {
+  const n = String(note || "");
+  return n === NEEDS_NOTE || /no .{0,80}link|because no link/i.test(n);
+}
 export function scheduleSteps(date, today, o = {}) {
   if (o.alreadyOut) return { steps: RELEASE_STEPS.map((s) => ({ key: s.key, label: s.label, owner: s.owner, due: null, status: "skipped", note: OUT_NOTE, link: "", at: null, by: null })), tight: false };
   const steps = RELEASE_STEPS.map((s) => {
@@ -2984,7 +3279,12 @@ export function releaseView(r, today, o = {}) {
     const ap = raw.find((x) => x.key === "approved");
     const spotWait = !w && s.key === "spotify" && !finished(s) && isDay(s.due) && today < s.due && ap && ap.status === "done";
     const waiting = !!w || spotWait;
-    return { ...s, late: !finished(s) && !waiting && !!s.due && s.due < today, dueIn: s.due ? daysBetween(today, s.due) : null, waiting,
+    let note = s.note || "";
+    if (s.key === "lyrics" && /none provided/i.test(note)) {
+      if (filled(pack.lyrics)) note = "Luke's lyrics are in the pack.";
+      else if (o.lyricsPending) note = "Lyrics are with Luke: a proposal is waiting for Yes, correct.";
+    }
+    return { ...s, note, late: !finished(s) && !waiting && !!s.due && s.due < today, dueIn: s.due ? daysBetween(today, s.due) : null, waiting,
       ...(w ? { waitingFor: w.key, waitingText: waitWords(w, s) } : spotWait ? { waitingFor: "spotify-window", waitingText: "waiting on Spotify" } : {}),
       ...(skipped ? { skipped: true } : {}), ...(STEP[s.key] && STEP[s.key].after ? { after: STEP[s.key].after } : {}) };
   });
@@ -3058,7 +3358,7 @@ export function whereWords(v, today) {
   if (v.status === "cancelled") return "Cancelled";
   if (v.status === "draft") {
     const req = v.missing.filter((m) => m.required);
-    if (v.pack && v.pack.prehq === "Yes") return "Released through the distributor before HQ: no pack needed · ready to send";
+    if (v.pack && v.pack.prehq === "Yes") return "Released before HQ: the RouteNote files are not needed. The release-day link, the video and the lyrics still are.";
     if (v.date && v.date < today) return `Release day ${dayWords(v.date)} has passed: sending records it as already out, with no steps` + (req.length ? ` · still missing: ${joinWords(req.map((m) => m.short))}` : "");
     return "In the pipeline: " + filledLine + (req.length ? ` · still missing: ${joinWords(req.map((m) => m.short))}` : " · ready to send");
   }
@@ -3515,6 +3815,31 @@ export async function coverResponse(store, name) {
   return new Response(Buffer.from(doc.b64, "base64"), { status: 200, headers: { "content-type": doc.type, "cache-control": "public, max-age=31536000, immutable", "x-content-type-options": "nosniff", "content-security-policy": "default-src 'none'" } });
 }
 
+/* Luke said yes to lyrics: the step note stops saying none were provided, and a card blocker waiting on them clears */
+async function settleLyricsYes(store, now, id, title) {
+  const at = new Date(now).toISOString();
+  await mutate(store, REL_KEY, [], (list) => {
+    const r = list.find((x) => x.id === id);
+    if (!r) return { skip: true, value: null };
+    const st = (r.steps || []).find((s) => s.key === "lyrics");
+    if (st && /none provided/i.test(st.note || "")) {
+      st.note = "Luke said yes to the lyrics.";
+      if (st.status === "blocked") st.status = "todo";
+      st.at = at;
+    }
+    return { value: r };
+  });
+  await mutate(store, "cards.json", {}, (doc) => {
+    const d = doc && typeof doc === "object" && !Array.isArray(doc) ? doc : {};
+    let changed = false;
+    for (const k of Object.keys(d)) {
+      const c = d[k];
+      if (!c || !c.blockers || !/lyric/i.test(c.blockers) || !mentionsSong(c.blockers, title)) continue;
+      c.blockers = ""; c.blockersAt = at; changed = true;
+    }
+    return changed ? { replace: d, value: true } : { skip: true, value: false };
+  });
+}
 /* Luke said "Yes, correct": apply it in his name. Returns {done, text} or {done:false, error}; never throws
    (the answer is already saved and the question closed). The bot that asked is told either way. */
 async function applyProposal(store, now, roster, parent, via) {
@@ -3536,7 +3861,7 @@ async function applyProposal(store, now, roster, parent, via) {
       const r = await saveRelease(store, now, roster, { by: "Luke", title: p.title, date: p.date || "", pack: p.pack || {}, from: said });
       let sent = "";
       if (p.send) { const s = await sendRelease(store, now, roster, { by: "Luke", id: r.id, anyway: true }); sent = s.alreadyOut ? " It was recorded as already out." : " It went to the team: every bot has its steps."; }
-      if (filled((p.pack || {}).lyrics)) await approveRelease(store, now, roster, { by: "Luke", via, id: r.id, what: "lyrics", msg: parent.id, words: `said yes to ${asker}'s lyrics` });
+      if (filled((p.pack || {}).lyrics)) { await approveRelease(store, now, roster, { by: "Luke", via, id: r.id, what: "lyrics", msg: parent.id, words: `said yes to ${asker}'s lyrics` }); await settleLyricsYes(store, now, r.id, r.title); }
       out = { done: true, id: r.id, text: `${r.title} is on the desk${r.status === "draft" && !p.send ? " as a draft in the pipeline" : ""}.${sent}` + (filled((p.pack || {}).lyrics) ? " The lyrics are recorded as approved by Luke." : "") };
     } else {
       const cur = (await listReleases(store)).find((x) => x.id === p.id);
@@ -3555,7 +3880,7 @@ async function applyProposal(store, now, roster, parent, via) {
       await mutate(store, REL_KEY, [], (list) => { const r = list.find((x) => x.id === p.id); if (!r) return { skip: true, value: null }; logIt(r, at, "Luke", `Luke said yes to ${asker}'s changes` + (via ? ` (via ${via})` : "")); return { value: r }; });
       /* the lyrics he said yes to ARE the final lyrics (16 Nov 2026, Verse: the pack had 5x "fode" while Luke approved 4x) */
       const lyr = "lyrics" in (p.pack || {}) && filled(p.pack.lyrics);
-      if (lyr) await approveRelease(store, now, roster, { by: "Luke", via, id: p.id, what: "lyrics", msg: parent.id, words: `said yes to ${asker}'s lyrics` });
+      if (lyr) { await approveRelease(store, now, roster, { by: "Luke", via, id: p.id, what: "lyrics", msg: parent.id, words: `said yes to ${asker}'s lyrics` }); await settleLyricsYes(store, now, p.id, p.newTitle || cur.title); }
       out = { done: true, id: p.id, text: `${p.newTitle || cur.title}: the changes are made${p.date && scheduled ? " (every open step moved with the new day, and the team is told)" : ""}${p.send ? "; it went to the team" : ""}.` + (lyr ? " The lyrics are recorded as approved by Luke." : "") };
     }
   } catch (e) { out = { done: false, error: e && e.message ? e.message : "it could not be applied" }; }
@@ -3618,7 +3943,7 @@ export async function saveRelease(store, now, roster, a) {
       for (const st of r.steps || []) {
         const need = STEP[st.key] && STEP[st.key].needs;
         if (!need || !changed.includes(need)) continue;
-        if (filled(r.pack[need]) && st.status === "skipped" && st.note === NEEDS_NOTE) { st.status = "todo"; st.note = ""; if (isDay(r.date)) { const want = addDays(r.date, -STEP[st.key].days); st.due = want < today ? today : want; } }
+        if (filled(r.pack[need]) && st.status === "skipped" && canvasSkipNote(st.note)) { st.status = "todo"; st.note = ""; if (isDay(r.date)) { const want = addDays(r.date, -STEP[st.key].days); st.due = want < today ? today : want; } }
         else if (!filled(r.pack[need]) && st.status === "todo") { st.status = "skipped"; st.note = NEEDS_NOTE; }
       }
       if (changed.length) changes.push(`changed ${joinWords(changed.map((k) => FIELD[k].short))}`);
@@ -3806,6 +4131,12 @@ export async function fillRelease(store, now, roster, a) {
     if (key === "storeStatus") storeEntry(r, { status: value, on: spDay(now), at, by });
     r.pack[key] = value; r.updatedAt = at;
     logIt(r, at, by, `${by} ${had ? "changed" : "filled"} ${f.short}`);
+    const today = spDay(now);
+    for (const st of r.steps || []) {
+      const need = STEP[st.key] && STEP[st.key].needs;
+      if (need !== key) continue;
+      if (filled(r.pack[need]) && st.status === "skipped" && canvasSkipNote(st.note)) { st.status = "todo"; st.note = ""; if (isDay(r.date)) { const want = addDays(r.date, -STEP[st.key].days); st.due = want < today ? today : want; } }
+    }
     return { value: r };
   });
 }

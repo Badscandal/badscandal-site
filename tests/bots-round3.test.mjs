@@ -172,7 +172,8 @@ test("lyrics Luke says yes to in a proposal are the approved lyrics", async () =
 /* ---------- received only (Luke) ---------- */
 test("money: only what is received is income; payable and pending are never added to it", async () => {
   const d = memoryDesk();
-  const sub = (o) => S.submitIncome(d, NOW, R, { bot: "Ledger", date: "2026-11-10", currency: "USD", category: "Self-releases", account: "PayPal", ...o });
+  /* 18 Nov 2026: the received payment lands in Revolut. PayPal is not income until it does. */
+  const sub = (o) => S.submitIncome(d, NOW, R, { bot: "Ledger", date: "2026-11-10", currency: "USD", category: "Self-releases", account: "Revolut", ...o });
   await sub({ payer: "Sample Distro", amount: "100", status: "received" });
   await sub({ payer: "Sample Collecting", amount: "200", status: "payable", account: "Statement only" });
   await sub({ payer: "Sample Label", amount: "300", status: "pending", account: "Statement only" });
