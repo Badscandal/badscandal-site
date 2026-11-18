@@ -1,8 +1,8 @@
 # Handoff: where HQ is and what's next (read this first)
 
-**Last updated:** 18 Nov 2026, by Cursor, after PR #64 was merged.
-**main:** every PR up to #64 is live. **Tests:** 582 pass on Node 24 and Node 22, none cancelled.
-**Connector:** 40 tools. `profiles` is new (L12), so every bot must refresh the tool list. Atlas, Laura, Steve, Kevin and Nova are the ones who use it.
+**Last updated:** 18 Nov 2026, by Cursor. L3 fan inbox part 1 is on this branch, not merged.
+**main:** every PR up to #65 is live. **This branch:** 590 tests pass on Node 24 and Node 22, none cancelled.
+**Connector:** 40 tools. No new tool. The `instagram` tool now also returns the fan inbox, so Steve, Kevin and Forge should refresh when this is live (Nova too: she has every tool).
 
 > **The rule (Luke, 17 Nov 2026):** every time anything is pushed to `main` for HQ, the same push updates THIS
 > file (and `docs/STATUS.md`). If Luke's computer crashes or a session ends mid-way, the next agent starts from
@@ -31,7 +31,7 @@ site + Luke's private dashboard /hq + the bots' connector /mcp).
 
 ## Where it stands (18 Nov 2026)
 
-**Where we left off:** L12 (Profiles) is live on main (PR #64, commit `a6f67a7`). A small fix is in flight on `cursor/pitch-take-back-feb7` (PR #65): a sent pitch is not an approval, and red on a release card is only a real failure. Not on main yet.
+**Where we left off:** L3 fan inbox, part 1, is written on `cursor/l3-fan-inbox-b12c` and is not on main. It uses the Instagram comments HQ already stores. Growth & Fans shows people asking the song's name or where to listen, and people who comment on more than one post. "Needs your reply" is for Luke. HQ never replies, likes, hides or deletes a comment, and it makes no extra Instagram call. Part 2 is not built. Main already has L12 (PR #64) and the release-card warning fix (PR #65, `f1cf96c`).
 
 **HQ** (`badscandal.com/hq`, also inside the HQ apps on Luke's iPhone and Mac) has: Today, Songs, Ads, Pages
 (one tile per song page since #59), Growth & Fans (with the Instagram reader), Profiles (since #64), Upcoming (the release pipeline),
@@ -39,7 +39,7 @@ Money (Revolut is the main account), Team, Messages. The bots (Nova, Alfred, Led
 Atlas, Drop, Verse, Webmaster, Forge) work through the connector `/mcp`.
 
 **Done (17–18 Nov):** the bots' roadmap Batch A (A1–A8) and B3; B4 Instagram; L6 song page tiles; L2 ("What engages
-best"); L8, the asset checker; L7, the pitch tracker (18 Nov, PR #63); L12, Profiles (18 Nov, PR #64). B1 and B5 were dropped by Luke.
+best"); L8, the asset checker; L7, the pitch tracker (18 Nov, PR #63); L12, Profiles (18 Nov, PR #64); the release-card warning fix (18 Nov, PR #65). B1 and B5 were dropped by Luke.
 
 **L12, live:** HQ › Profiles lists the profile photo and the banner on every official platform. The current image and the day it changed, the size rule (or "Rule not set"), a new image waiting for "Yes, correct", and the owner who uploads it by hand after that. The `profiles` tool. HQ never logs in and never changes a platform. No Meta or Instagram calls. `/hq` answered 200 and `/mcp` answered 401 right after the merge.
 
@@ -54,14 +54,13 @@ artist growth bot that all we will need is content and $".
 
 ## In flight (branches not merged)
 
-- **`cursor/pitch-take-back-feb7` (PR #65, waiting for Nova to merge):** updated onto main after L12. A sent Spotify pitch is not under Your approvals, and Take it back only sits next to a real approval and names it. Red on a release card is only a failure: a step waiting on a date, on Luke, or on a decision he made stays calm, and "Sent N days before release" is amber. Tests 584 on Node 24 and 22.
+- **`cursor/l3-fan-inbox-b12c`:** L3 fan inbox, part 1. Not merged. Song-name questions, where to listen, and repeat fans, from comments already stored. "Needs your reply" goes to Luke. Two accounts he named are filtered in code (`HIDDEN_HANDLES`) and never shown. No new tool (still 40). When this is live, Steve, Kevin and Forge refresh the tool list so the instagram description matches.
 
 ## Waiting on someone
 
 - **Nova (after #64):** tell every bot to refresh the tool list (40 tools). Atlas, Laura, Steve and Kevin: `profiles` records the image that is live (the link and the day it changed) and proposes a new one. Luke says "Yes, correct", then that bot uploads it by hand and records it. HQ never logs in. X has no owner yet: Luke uploads that one himself. Instagram, TikTok and Deezer say "Rule not set".
 - **Nova (after #63, still open):** Atlas: after he sends a Spotify pitch, record the day with `pitch_log` (`pitched_on`). When he sees the song on a new editorial playlist in Spotify for Artists, record it the same day (`playlist`, `added_on`). HQ never pitches. A song the one-pitch rule skipped is not pitched.
-- **Nova (after #60, still open):** add our own accounts with the instagram tool (`our_accounts: "add"`, the two handles Luke
-  named, each with a reason; they are NOT in the code because the repo is public). Add the Monday routine to the
+- **Nova (after #60, still open):** other own accounts still go on the desk with the instagram tool (`our_accounts: "add"`, a handle and a reason). The two accounts named for the fan inbox are already filtered in code and never shown. Add the Monday routine to the
   bots' duties with `roster_card` (Steve and Kevin: why the top 3 beat the bottom 3; Forge: one decision for Luke
   on where the ad money goes next).
 - **Luke:** if HQ shows "Meta key: expires around …" on the Instagram box, make a new key a few days before that
@@ -81,13 +80,13 @@ artist growth bot that all we will need is content and $".
 - **A4 / B3:** reminders and Meta's daily spend rows run hourly from 07:00 São Paulo.
 - **L7:** Atlas's first `pitch_log` (a pitch day, then an editorial playlist after a song is out). HQ only records what he saw.
 - **L12:** the first `profiles` record (what is live now) and the first new image Luke says yes to. HQ only stores the link. The bot uploads it.
+- **L3 part 1:** the fan inbox fills from comments already read (every 3 hours, on posts from the last 8 days). If it stays empty after a day of real comments, the phrases in `askKind` need a line fans actually write.
 
 ## What's next (start any of these only on Luke's word)
 
 Offer these, in this order:
 
-1. **L3 fan inbox, part 1:** song-name questions and repeat fans (builds on "Needs a reply"). Agree the slice
-   with him before building the rest of L3 (a ready reply he approves).
+1. **L3 fan inbox, part 2,** only if he asks: a fan's country, and a ready reply he approves. Part 1 does not draft a reply and HQ never sends one.
 
 Later, if he asks:
 

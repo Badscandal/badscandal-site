@@ -53,7 +53,7 @@ and Claude's assessment the same morning. Luke said "perfect" to the order below
 |---|------|----------|--------|
 | L1 | **Expected money** (#3): every statement → an expected row with due date; learn pay days; flag short/late/missing; statement → payable → paid → landed, days per step | Ledger, Sheet | todo (partly there: pending/payable, paid_by, main sources' due days) |
 | L2 | **Post log + hook tracker** (#4): every post with its hook, numbers at +6h/+24h/+7d, a "boosted" flag; weekly top 3 / bottom 3 hooks; a Brazil hook tester | Kevin, Steve | live (PR #60): posts ranked by engagement per view at the same age, with each boosting ad's spend and cost per engagement and the numbers before the ad; Monday why-analysis by Steve/Kevin, ad-money pick by Forge for Luke |
-| L3 | **Fan inbox** (#8): song-name questions and repeat fans, with country and a ready reply Luke approves | Kevin, Laura | todo |
+| L3 | **Fan inbox** (#8): song-name questions and repeat fans, with country and a ready reply Luke approves | Kevin, Laura | building: part 1 done on this branch (song name, where to listen, repeat fans, needs_reply for Luke, from comments already stored; no extra Instagram call; two named accounts never shown). Part 2 not built: country, and a ready reply he approves. HQ never replies. |
 | L4 | **Per-song P&L** (#10): royalties per song/store next to its ad spend and release date | Ledger | todo |
 | L5 | **Watchers** (#11): RouteNote status and moderation emails → store_status + a drafted fix; release-day trigger for Verse; Content ID claims panel | Drop, Verse, Laura | todo |
 | L6 | **Song page tile** (#15): live status, button state, visits, Spotify clicks, Pixel/CAPI health | Webmaster | live (PR #59) |

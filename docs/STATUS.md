@@ -1,13 +1,14 @@
 # HQ status (update on every deploy)
 
-**Last updated:** 18 Nov 2026, by Cursor (main after PR #64). Start with `docs/HANDOFF.md`.
-**Tests:** 582, all passing on Node 24 and Node 22. **Connector:** 40 tools (`profiles` is new; every bot refreshes the tool list. Atlas, Laura, Steve, Kevin and Nova use it).
+**Last updated:** 18 Nov 2026, by Cursor (L3 fan inbox part 1, not merged). Start with `docs/HANDOFF.md`.
+**Tests:** 590, all passing on Node 24 and Node 22. **Connector:** 40 tools (no new tool). The `instagram` tool now returns the fan inbox: Steve, Kevin and Forge refresh when this is live. Nova has every tool, so she refreshes too.
 No money amounts, payer names or account numbers in this file: the repo is public.
 
 ## Live (newest first)
 
 | When | PR | What |
 |------|----|------|
+| 18 Nov | #65 | Release cards: a sent pitch is not an approval. Red on a card is only a real failure. |
 | 18 Nov | #64 | L12: Profiles. One section for the profile photo and the banner on every official platform: the current image and the day it changed, the size rule (or "Rule not set"), a new image waiting for "Yes, correct", then the owner uploads it by hand. Atlas (the music stores), Laura (YouTube), Steve (Instagram and Facebook), Kevin (TikTok). X has no owner yet. The `profiles` tool. HQ never logs in and never changes a platform. |
 | 18 Nov | #63 | L7: pitch tracker. Each upcoming and recent song shows not pitched, pitched with the day, or missed. Warns from 14 days out (Spotify needs the pitch 7 days before release). Two-week pitch slots on Upcoming. Atlas records the day and editorial playlists with `pitch_log`. HQ never pitches. |
 | 17 Nov | #61 | L8: asset checker. `preflight` checks a cover, Spotify Canvas, Spotify header or YouTube banner against that platform's rule; a Canvas link that isn't MP4 or JPG shows on the release card. Atlas and Laura have the tool. |
@@ -45,7 +46,7 @@ No money amounts, payer names or account numbers in this file: the repo is publi
 
 ## Next up
 
-- L12 is live. In flight, not live: PR #65, the release-card fix (a sent pitch is not an approval; red only for a failure). Next, only on Luke's word: L3 fan inbox part 1. A later Profiles slice (reading an image from a platform) still needs his go, and HQ would still not log in.
+- L12 and the release-card warning fix (PR #65) are live. In flight, not live: L3 fan inbox part 1 (song-name questions, where to listen, repeat fans; "Needs your reply" is Luke's; no extra Instagram call). Part 2 is not built: a fan's country, and a ready reply he approves. A later Profiles slice (reading an image from a platform) still needs his go, and HQ would still not log in.
 - Still needs Luke: B2 YouTube sign-in, the on-hold decisions H1–H4, and L11 (who "Luka" is). B1 and B5 are not needed; B4 Instagram is connected.
 - The rest of Later (L1, L4, L5, L9, L10) waits. Start any of it on his word.
 

@@ -282,12 +282,20 @@ export async function syncInstagram({ store, now, fetchImpl = fetch, logGrowth =
    is NOT in the code, the repo is public). Changed through the instagram tool (our_accounts), shown in HQ. */
 export const HANDLE_RE = /^[a-z0-9._]{1,30}$/;
 export const OWN_EDITORS = ["Nova", "Claude"];
+/* L3 (18 Nov 2026): these two accounts are never shown, on HQ or to the bots. Do not remove this list.
+   Other "our accounts" stay on the desk (Nova adds them); they are not written here. */
+export const HIDDEN_HANDLES = ["liliancardos", "liliancardosomakeup"];
+export function isHiddenHandle(user) { return HIDDEN_HANDLES.includes(parseHandle(user)); }
+export function redactHandles(text) {
+  return String(text == null ? "" : text).replace(/@?liliancardosomakeup|@?liliancardos/gi, "someone");
+}
 const OWN_MAX = 40, OWN_LOG = 60;
 export function parseHandle(text) { return String(text || "").trim().replace(/^@/, "").toLowerCase(); }
 export async function editOwn(store, now, { by, action, handle, reason }) {
   const h = parseHandle(handle), why = String(reason || "").replace(/\s+/g, " ").trim().slice(0, 200);
   if (!["add", "remove"].includes(action)) throw new IgError("bad", "our_accounts is add, remove or list.");
   if (!HANDLE_RE.test(h)) throw new IgError("bad", `"${String(handle || "").slice(0, 40)}" isn't an Instagram handle: write it like @name.`);
+  if (isHiddenHandle(h)) throw new IgError("bad", "That account is never shown. Nothing changed.");
   if (why.length < 3) throw new IgError("bad", "Give a short reason (who it is: Luke's account, family, a friend, a bot, spam…).");
   const [doc, key, state] = await Promise.all([readDoc(store, "own.json", null), readDoc(store, "key.json", null), readDoc(store, "state.json", {})]);
   const handles = ((doc && doc.handles) || []).map(parseHandle).filter(Boolean), log = (doc && doc.log) || [];
@@ -312,8 +320,44 @@ export function ownHandles(username, ownDoc) {
    answered it, the last 14 days. Replying goes outside the team, so it's Luke's. */
 const ASKS = /\?|\b(can i|could i|may i|use your|use this|what song|song name|which song|where can|when (is|does)|link|nome da m[uú]sica|qual ([ée] )?a m[uú]sica|posso usar|onde|quando sai)\b/i;
 export function needsReply(comments, now) {
-  return (comments || []).filter((c) => !c.own && !c.answered && ASKS.test(c.text || "") && now - Date.parse(c.at || "") <= 14 * DAY).slice(0, 10)
+  return (comments || []).filter((c) => !c.own && !c.hidden && !isHiddenHandle(c.user) && !c.answered && ASKS.test(c.text || "") && now - Date.parse(c.at || "") <= 14 * DAY).slice(0, 10)
     .map((c) => ({ id: c.id, at: c.at, user: c.user, text: c.text, postCaption: c.postCaption, link: c.link }));
+}
+/* L3 part 1: song name or where to listen, and the same account on more than one post.
+   Built only from comments already stored. needsReply on a question means Luke still has to answer it. */
+const fold = (s) => String(s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+const SONG_ASK = /\b(what song|what'?s (the |this )?song|what is (the |this )?song|whats (the |this )?song|which song|song name|name of (the |this )?song|this song called|nome da musica|qual (e )?a musica|que musica|nome dessa( musica)?|nome da track|track name|what'?s this called|what is this called|whats this called|como se chama|como se llama|que cancion|nombre de (la |esta )?cancion)\b/;
+const LISTEN_ASK = /\b(where (can i |do i |to )?(listen|hear|stream|find)|on spotify|no spotify|spotify link|link (do |da |de )?(spotify|musica|la cancion)|apple music|where('s| is) (this|it|the song))\b|\bonde\b.{0,24}\b(ouvir|ouco|escuto|escutar|acho|encontrar)\b|\bdonde\b.{0,24}\b(escuchar|oir|encontrar)\b/;
+export function askKind(text) {
+  const t = fold(text);
+  if (SONG_ASK.test(t)) return "song";
+  if (LISTEN_ASK.test(t)) return "listen";
+  return "";
+}
+const recentEnough = (c, now) => { const age = now - Date.parse(c.at || ""); return isFinite(age) && age <= 14 * DAY; };
+export function fanInbox(comments, now) {
+  const list = (comments || []).filter((c) => c && !c.own && !c.hidden && !isHiddenHandle(c.user) && parseHandle(c.user));
+  const questions = [];
+  for (const c of list) {
+    const kind = askKind(c.text);
+    if (!kind || !recentEnough(c, now)) continue;
+    questions.push({ id: c.id, at: c.at, user: redactHandles(c.user), text: redactHandles(c.text), post: c.post || "", postCaption: redactHandles(c.postCaption || ""), link: c.link || "", kind, needsReply: !c.answered });
+  }
+  questions.sort((a, b) => (a.needsReply === b.needsReply ? 0 : a.needsReply ? -1 : 1) || (a.at < b.at ? 1 : a.at > b.at ? -1 : 0));
+  const by = new Map();
+  for (const c of list) {
+    const u = parseHandle(c.user);
+    let f = by.get(u);
+    if (!f) { f = { user: c.user, posts: new Set(), comments: 0, lastAt: "", lastText: "", postCaption: "", link: "", needsReply: false }; by.set(u, f); }
+    f.comments++;
+    if (c.post) f.posts.add(String(c.post));
+    if (!f.lastAt || String(c.at || "") > f.lastAt) { f.lastAt = c.at || ""; f.lastText = c.text || ""; f.postCaption = c.postCaption || ""; f.link = c.link || ""; f.user = c.user; }
+    if (askKind(c.text) && !c.answered && recentEnough(c, now)) f.needsReply = true;
+  }
+  const repeats = [...by.values()].filter((f) => f.posts.size >= 2).map((f) => ({
+    user: redactHandles(f.user), posts: f.posts.size, comments: f.comments, lastAt: f.lastAt, lastText: redactHandles(f.lastText), postCaption: redactHandles(f.postCaption), link: f.link || "", needsReply: f.needsReply,
+  })).sort((a, b) => (a.needsReply === b.needsReply ? 0 : a.needsReply ? -1 : 1) || b.posts - a.posts || (a.lastAt < b.lastAt ? 1 : a.lastAt > b.lastAt ? -1 : 0));
+  return { questions: questions.slice(0, 15), repeats: repeats.slice(0, 15) };
 }
 
 /* what HQ and the bots see: never the key */
@@ -326,13 +370,19 @@ export async function igStatus(store, now) {
 }
 export async function igView(store, now) {
   const [status, posts, comments, countries, adDoc, ownDoc] = await Promise.all([igStatus(store, now), readDoc(store, "posts.json", []), readDoc(store, "comments.json", []), readDoc(store, "countries.json", null), readDoc(store, "adposts.json", null), readDoc(store, "own.json", null)]);
-  const own = ownHandles(status.username, ownDoc);
-  const marked = comments.map((c) => ({ ...c, own: own.includes(String(c.user || "").toLowerCase()), answered: (c.repliedBy || []).some((u) => own.includes(u)) }));
+  const ownAll = ownHandles(status.username, ownDoc);
+  const marked = comments.map((c) => ({ ...c, hidden: isHiddenHandle(c.user), own: ownAll.includes(parseHandle(c.user)), answered: (c.repliedBy || []).some((u) => ownAll.includes(parseHandle(u))) }));
+  /* names that must never be shown are dropped here, including inside someone else's comment */
+  const shown = marked.filter((c) => !c.hidden).map((c) => ({ ...c, user: redactHandles(c.user), text: redactHandles(c.text), postCaption: redactHandles(c.postCaption || ""),
+    repliedBy: (c.repliedBy || []).filter((u) => !isHiddenHandle(u)).map((u) => redactHandles(u)) }));
   /* L2: which posts engage best, with the ads that boosted them (postrank.mjs); our own comments don't count */
   const ranking = rankPosts(posts, adDoc, { now, comments: marked });
-  return { status, posts: posts.slice(0, 12), comments: marked.filter((c) => !c.own).slice(0, 40), countries: countries ? countries.list : [], own,
-    ownLog: (((ownDoc && ownDoc.log) || []).slice().reverse()).slice(0, 20),
-    needsReply: needsReply(marked, now),
+  const ownLog = (((ownDoc && ownDoc.log) || []).slice().reverse()).filter((x) => !isHiddenHandle(x.handle)).slice(0, 20)
+    .map((x) => ({ ...x, reason: redactHandles(x.reason || "") }));
+  return { status: isHiddenHandle(status.username) ? { ...status, username: "" } : status,
+    posts: posts.slice(0, 12).map((p) => ({ ...p, caption: redactHandles(p.caption || "") })),
+    comments: shown.filter((c) => !c.own).slice(0, 40), countries: countries ? countries.list : [], own: ownAll.filter((h) => !isHiddenHandle(h)),
+    ownLog, needsReply: needsReply(shown, now), fanInbox: fanInbox(shown, now),
     ranking: { ranked: ranking.ranked.slice(0, 15), older: ranking.older.slice(0, 15), tooFew: ranking.tooFew.length, adsAt: ranking.adsAt, minViews: ranking.minViews } };
 }
 /* one post in plain words, for the bots: "Fri 14 Nov · Reel · “caption” · a day: 1,240 views, 880 reach, …" */
@@ -352,14 +402,20 @@ export function sampleView(now) {
       { id: "s2", at: iso(2.5 * DAY), type: "reels", caption: "Made-up studio clip", link: "https://www.instagram.com/", likes: 1400, comments: 11, snaps: { h6: { views: 1800, reach: 1200, likes: 90, saves: 20, shares: 8, at: now - 2.5 * DAY + 6 * 3600000 }, d1: { views: 3900, reach: 2700, likes: 130, comments: 6, saves: 44, shares: 19, follows: 21, profile_visits: 64, at: now - 1.5 * DAY } }, latest: { views: 41000, reach: 30000, likes: 1400, saves: 160, shares: 70 } },
       { id: "s3", at: iso(9 * DAY), type: "feed", caption: "Made-up cover reveal", link: "https://www.instagram.com/", likes: 210, comments: 15, snaps: { h6: { views: 1400, reach: 1000, likes: 120, saves: 25, shares: 6 }, d1: { views: 2600, reach: 1900, likes: 180, comments: 9, saves: 40, shares: 10, follows: 8, profile_visits: 30, at: now - 8 * DAY }, d7: { views: 4800, reach: 3300, likes: 205, saves: 61, shares: 17 } }, latest: { views: 4800, reach: 3300, likes: 205, saves: 61, shares: 17 } }],
     comments: [{ id: "k1", at: iso(2 * 3600000), user: "made_up_fan", text: "what song is this??", post: "s1", postCaption: "Made-up reel: the drop at 0:12", link: "https://www.instagram.com/" },
-      { id: "k2", at: iso(20 * 3600000), user: "another_made_up_fan", text: "need this on spotify 🔥", post: "s2", postCaption: "Made-up studio clip", link: "https://www.instagram.com/" }],
+      { id: "k2", at: iso(20 * 3600000), user: "another_made_up_fan", text: "need this on spotify", post: "s2", postCaption: "Made-up studio clip", link: "https://www.instagram.com/" },
+      { id: "k3", at: iso(5 * 3600000), user: "made_up_fan", text: "play it again", post: "s2", postCaption: "Made-up studio clip", link: "https://www.instagram.com/" },
+      { id: "k4", at: iso(8 * 3600000), user: "made_up_regular", text: "love this", post: "s1", postCaption: "Made-up reel: the drop at 0:12", link: "https://www.instagram.com/" },
+      { id: "k5", at: iso(9 * 3600000), user: "made_up_regular", text: "back again", post: "s3", postCaption: "Made-up cover reveal", link: "https://www.instagram.com/" },
+      { id: "k6", at: iso(6 * 3600000), user: "made_up_answered", text: "what song is this", post: "s1", postCaption: "Made-up reel: the drop at 0:12", link: "https://www.instagram.com/", answered: true },
+      { id: "kH", at: iso(3600000), user: "liliancardos", text: "hi from @liliancardosomakeup", post: "s1", postCaption: "Made-up reel: the drop at 0:12", link: "https://www.instagram.com/" }],
     countries: [{ country: "BR", count: 2380 }, { country: "IE", count: 610 }, { country: "PT", count: 290 }] };
   /* a made-up ad boosting the studio clip, started after its 6-hour numbers */
   const ads = { at: now - 600000, ads: [{ id: "sa1", name: "Made-up boost", media: "s2", status: "ACTIVE", created: iso(2 * DAY), spend: 120, currency: "USD", impressions: 36000, reach: 26000, likes: 1200, comments: 4, saves: 110, shares: 40 }] };
   v.own = ["sampleaccount", "made_up_partner"];
   v.ownLog = [{ at: now - 2 * DAY, by: "Nova", action: "add", handle: "made_up_partner", reason: "Made-up: Luke's own account" }];
-  v.comments = v.comments.map((c) => ({ ...c, own: false, answered: false }));
+  v.comments = v.comments.filter((c) => !isHiddenHandle(c.user)).map((c) => ({ ...c, own: false, answered: !!c.answered, user: redactHandles(c.user), text: redactHandles(c.text), postCaption: redactHandles(c.postCaption || "") }));
   v.needsReply = needsReply(v.comments, now);
+  v.fanInbox = fanInbox(v.comments, now);
   const r = rankPosts(v.posts, ads, { now, comments: v.comments });
   v.ranking = { ranked: r.ranked, older: r.older, tooFew: r.tooFew.length, adsAt: r.adsAt, minViews: r.minViews };
   return v;
