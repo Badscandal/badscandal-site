@@ -453,7 +453,7 @@
     return "main";
   }
 
-  function bestPost(ranking, songs) {
+  function bestPost(ranking, songs, L) {
     var ranked = (ranking && ranking.ranked) || [];
     var r = ranked.filter(function (p) { return p && num(p.views) != null && p.views >= 1000; })[0];
     if (!r) return { reported: false, line: "No post with 1,000 views yet." };
@@ -463,10 +463,16 @@
       if (title && String(r.caption || "").toLowerCase().indexOf(String(title).toLowerCase()) >= 0) { song = title; return true; }
       return false;
     });
+    if (!song && r.song) song = String(r.song);
     var when = String(r.at || "").slice(0, 10);
+    /* the day in words when the page's helpers are passed ("Wed 11 Nov"); the caption is a quote under the
+       title, never the title (19 Nov 2026: "Post · 2026-11-11" read badly) */
+    var whenText = when && L && L.day ? L.day(when) : when;
+    var cap = String(r.caption || "").split("\n")[0].trim();
     return {
       reported: true,
-      title: (song || "Post") + (when ? " · " + when : ""),
+      title: (song || (L ? "Instagram post" : "Post")) + (whenText ? " · " + whenText : ""),
+      caption: L && cap ? (cap.length > 90 ? cap.slice(0, 89).replace(/\s+\S*$/, "") + "…" : cap) : "",
       why: (num(r.rate) == null ? "Engagement not reported" : (Math.round(r.rate * 1000) / 10).toFixed(1) + "% engaged per view"),
       thumb: https(r.thumb || r.thumbnail || r.media || ""),
       link: https(r.link),

@@ -2,6 +2,8 @@
 
 **Full picture:** [docs/HQ-FULL-HANDOFF.md](HQ-FULL-HANDOFF.md). It supersedes the "through PR #84 / 40 tools / 716 tests" lines below. Main is through PR #89 (47 tools, `bs-hq-v8`, 745 tests).
 
+**Not live yet (19 Nov 2026, branch `claude/growth-tidy`):** Growth & Fans tidied from Luke's screenshots (no overlaps, jump row, folded lists, best post with its picture). Live only on Luke's "deploy".
+
 **Main is through PR #90 (18 Nov 2026).** 47 tools, 765 tests on Node 24 and 22, `bs-hq-v9`.
 
 **Last updated:** 18 Nov 2026, by Cursor. Main is through PR #84 (HQ workspaces). The blank-screen fix (#83), the phone look (#80), automation phase 1 (#79) and account health (#77) are live with it. Start with `docs/HANDOFF.md`.
