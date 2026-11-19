@@ -199,16 +199,17 @@
     return '<span class="' + (ch >= 0 ? "up" : "dn") + '">' + (ch >= 0 ? "+" : "") + ch.toFixed(0) + "%</span>" + vs;
   }
 
-  function spark(svg, values, color) {
-    if (!values || values.length < 2) { svg.innerHTML = ""; return; }
-    var w = 200, h = 34, mx = Math.max.apply(0, values), mn = Math.min.apply(0, values);
-    if (mx === mn) { mx = mn + 1; }
-    var pts = values.map(function (v, i) { return [i / (values.length - 1) * w, h - 3 - (v - mn) / (mx - mn) * (h - 8)]; });
-    var p = pts.map(function (q, i) { return (i ? "L" : "M") + q[0].toFixed(1) + " " + q[1].toFixed(1); }).join("");
-    svg.setAttribute("viewBox", "0 0 " + w + " " + h);
-    svg.setAttribute("preserveAspectRatio", "none");
-    svg.innerHTML = '<path d="' + p + " L" + w + " " + h + " L0 " + h + 'Z" fill="' + color + '" opacity=".12"/>' +
-      '<path d="' + p + '" fill="none" stroke="' + color + '" stroke-width="2" vector-effect="non-scaling-stroke" stroke-linejoin="round" stroke-linecap="round"/>';
+  function mountChart(id, values, opts) {
+    var el = $(id);
+    if (!el || !window.HQChart) return;
+    var hour = data.spark && data.spark.unit === "hour";
+    var rows = hour ? ((data.series && data.series.hour) || []) : ((data.series && data.series.day) || []);
+    var series = (values || []).map(function (v, i) {
+      var r = rows[i] || {};
+      if (hour) return { label: String(r.h == null ? i : r.h).padStart(2, "0") + ":00", v: v };
+      return { d: r.d || "", v: v };
+    });
+    el.innerHTML = HQChart.html(series, opts) || "";
   }
 
   function drawKpis() {
@@ -221,10 +222,10 @@
     $("dVisits").innerHTML = delta(k.visits, p.visits);
     $("dUnique").innerHTML = delta(k.unique, p.unique);
     $("dCtr").innerHTML = k.ctr == null || p.ctr == null ? "" : delta(k.ctr, p.ctr, true);
-    spark($("sTaps"), data.spark.taps, GREEN);
-    spark($("sVisits"), data.spark.visits, "#8A8A8A");
-    spark($("sUnique"), data.spark.unique || data.spark.visits, "#8A8A8A");
-    spark($("sCtr"), data.spark.ctr, "#B4B4B4");
+    mountChart("sTaps", data.spark.taps, { label: "Spotify taps", totals: true, tone: "spot" });
+    mountChart("sVisits", data.spark.visits, { label: "Visits", totals: true });
+    mountChart("sUnique", data.spark.unique || data.spark.visits, { label: "People", totals: true });
+    mountChart("sCtr", data.spark.ctr, { label: "Click-through", totals: false, format: "rate" });
   }
 
   function drawFunnel() {

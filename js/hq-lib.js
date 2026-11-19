@@ -314,23 +314,33 @@
       var taps = sumOf(function (x) { return x.taps; });
       if (ov.spend && ov.spend.connected && !ov.spend.error) {
         var sp = sumOf(function (x) { return x.spend; });
-        out.push({ key: "spend", label: "Ad spend", value: money(sp, cur), change: change(sp, ov.prev.spend), vs: vs, series: ser.map(function (x) { return x.spend; }) });
-        out.push({ key: "taps", label: "Real Spotify taps", value: fmt(taps), green: true, change: change(taps, ov.prev.taps), vs: vs, series: ser.map(function (x) { return x.taps; }) });
+        out.push({ key: "spend", label: "Ad spend", value: money(sp, cur), change: change(sp, ov.prev.spend), vs: vs, series: ser.map(function (x) { return { d: x.d, v: x.spend }; }) });
+        out.push({ key: "taps", label: "Real Spotify taps", value: fmt(taps), green: true, change: change(taps, ov.prev.taps), vs: vs, series: ser.map(function (x) { return { d: x.d, v: x.taps }; }) });
         out.push({ key: "cpt", label: "Cost per tap", value: taps ? money(sp / taps, cur) : "–", change: change(taps ? sp / taps : null, ov.prev.taps ? ov.prev.spend / ov.prev.taps : null), vs: vs,
-          series: ser.map(function (x) { return x.taps ? x.spend / x.taps : null; }) });
-      } else out.push({ key: "taps", label: "Real Spotify taps", value: fmt(taps), green: true, change: change(taps, ov.prev ? ov.prev.taps : null), vs: vs, series: ser.map(function (x) { return x.taps; }) });
+          series: ser.map(function (x) { return { d: x.d, v: x.taps ? x.spend / x.taps : null }; }) });
+      } else out.push({ key: "taps", label: "Real Spotify taps", value: fmt(taps), green: true, change: change(taps, ov.prev ? ov.prev.taps : null), vs: vs, series: ser.map(function (x) { return { d: x.d, v: x.taps }; }) });
     }
     if (sheet && (sheet.songs || []).length) {
-      var bydate = function (key) { var m = {}; sheet.songs.forEach(function (s) { (s[key] || []).forEach(function (p) { m[p.d] = (m[p.d] || 0) + p.v; }); }); return Object.keys(m).sort().slice(-14).map(function (d) { return m[d]; }); };
+      /* dated points, and a day nobody logged stays missing (the chart draws the gap; a null is never 0) */
+      var bydate = function (key) {
+        var m = {};
+        sheet.songs.forEach(function (s) {
+          (s[key] || []).forEach(function (p) {
+            if (!p || !p.d || p.v == null || !isFinite(Number(p.v))) return;
+            m[p.d] = (m[p.d] || 0) + Number(p.v);
+          });
+        });
+        return Object.keys(m).sort().slice(-14).map(function (d) { return { d: d, v: m[d] }; });
+      };
       var week = sheet.songs.reduce(function (n, s) { return n + (s.week || 0); }, 0);
       var prevWeek = sheet.songs.every(function (s) { return s.prevWeek != null; }) ? sheet.songs.reduce(function (n, s) { return n + s.prevWeek; }, 0) : null;
       out.push({ key: "streams", label: "Spotify streams, 7 days", value: fmt(week), change: change(week, prevWeek), vs: "vs the 7 days before", series: bydate("series") });
-      var ls = bydate("listenersSeries"), lnow = ls.length ? ls[ls.length - 1] : null, lthen = ls.length > 7 ? ls[ls.length - 8] : null;
+      var ls = bydate("listenersSeries"), lnow = ls.length ? ls[ls.length - 1].v : null, lthen = ls.length > 7 ? ls[ls.length - 8].v : null;
       out.push({ key: "listeners", label: "Spotify listeners", value: fmt(lnow), change: change(lnow, lthen), vs: "vs 7 days earlier", series: ls });
     }
     if (sheet) (sheet.growth || []).forEach(function (g) {
       out.push({ key: "f:" + g.platform, label: g.platform + " followers", value: fmt(g.followers), change: g.week == null ? { text: "–", dir: "flat" } : { text: (g.week > 0 ? "+" : g.week < 0 ? "−" : "") + fmt(Math.abs(g.week)), dir: g.week > 0 ? "up" : g.week < 0 ? "down" : "flat" },
-        vs: growthWhen(g), series: (g.series || []).slice(-14).map(function (p) { return p.v; }) });
+        vs: growthWhen(g), series: (g.series || []).slice(-14) });
     });
     return out;
   }

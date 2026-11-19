@@ -70,6 +70,7 @@ artist growth bot that all we will need is content and $".
 
 ## In flight (branches not merged)
 
+- **Interactive charts** (branch `cursor/hq-interactive-charts-6ce6`, not merged). Every line on /hq scrubs like Spotify for Artists: a guide, a dot and a dark pill with the day and the real number. A missing day stays a gap. Last period and this period show under a chart only when both windows are the same length and complete. Not live until Luke says deploy.
 - **Account health** (PR #92, on main). A view total at about 35% of the median is a dip, not "in line", and that version left boosted posts out.
 - **Engagement health** (branch `cursor/account-health-engagement-1188`, not merged). Instagram health follows engagement per view, (likes + comments + saves + shares) / views, and keeps boosted Reels in. Views stay as context. Not live until Luke says deploy.
 - **Handoff fixes** (PR #90) are on main. Nova refreshes the tool list once (the `needs_you`, `instagram`, `read_messages` and `log_growth` descriptions changed; same 47 names). A new Yes/No/Edit card or a red account now buzzes Luke's phone once (quiet hours and the 10-minute rule still apply).
