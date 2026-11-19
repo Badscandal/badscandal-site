@@ -15,9 +15,9 @@ const L = globalThis.HQLib;
 
 const ours = (title, views, likes) => ({ whose: "ours", platform: "Instagram", title, views, likes, comments: 10, saves: 10, shares: 10 });
 const ideas = [
-  { hook: "Open on the drop", text: "Northwind", format: "Reel", platform: "Instagram", why: "The first second holds." },
-  { hook: "One line, then the beat", text: "Stay for it", format: "short", platform: "TikTok", why: "Outliers start with one line." },
-  { hook: "Chorus, no intro", text: "Chorus first", format: "short", platform: "YouTube", why: "The chorus-first clip ranked higher." },
+  { hook: "Open on the drop", text: "Northwind", format: "Reel", platform: "Instagram", why: "The first second holds.", song: "Paper Moon" },
+  { hook: "One line, then the beat", text: "Stay for it", format: "short", platform: "TikTok", why: "Outliers start with one line.", song: "Paper Moon" },
+  { hook: "Chorus, no intro", text: "Chorus first", format: "short", platform: "YouTube", why: "The chorus-first clip ranked higher.", song: "Paper Moon" },
 ];
 
 test("Spark and Licence are roster names, and an unknown name is still refused", () => {

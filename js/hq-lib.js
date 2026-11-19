@@ -824,7 +824,7 @@
           var status = s.status === "ready" || s.status === "uploaded" || s.status === "rework" ? s.status : "waiting";
           return {
             id: s.id || "", kind: s.kind || "", rule: s.rule || "Rule not set",
-            currentLine: cur ? "Changed " + day(cur.changed) + (cur.by ? " · " + cur.by : "") : "Not recorded yet",
+            currentLine: !cur ? "Not recorded yet" : (s.status === "uploaded" || s.statusLine === "Live" ? "Live" : (cur.changed && day(cur.changed) && day(cur.changed) !== "unknown" && !/^unknown$/i.test(String(cur.changed)) ? "Changed " + day(cur.changed) + (cur.by ? " · " + cur.by : "") : "Recorded")),
             currentLink: cur ? cur.link : "",
             waitingLine: wait ? "New image waiting for your “Yes, correct”." : "",
             waitingLink: wait ? wait.link : "",
@@ -1697,7 +1697,14 @@
       var also = (s.also || []).map(function (a) {
         return a.title + (a.dateWords ? " (" + a.dateWords + ")" : "") + (a.editorial && a.editorial.length ? ": " + a.editorial.join(", ") : "");
       });
+      var pitched = !!(s.pitchedOn || (/pitched/i.test(s.line || "") && !/not pitched/i.test(s.line || "")));
+      var who = ((s.line || "").match(/by ([A-Za-z]+)/) || [])[1] || "";
+      var fromLine = ((s.line || "").match(/pitched\s+(?:[A-Za-z]+\s+)?(\d{1,2}\s+[A-Za-z]+)/i) || [])[1] || "";
+      var whenBit = s.pitchedOn ? String(day(s.pitchedOn) || "").replace(/^[A-Za-z]{3}\s/, "") : fromLine;
+      var sentence = pitched ? "Pitched " + (whenBit || "already") + (who ? " (" + who + ")" : "") + "." : "";
+      var skipped = also.map(function (a) { return String(a).split(":")[0].replace(/\s*\([^)]*\)\s*$/, "").trim(); }).filter(Boolean);
       return { title: s.title, when: s.dateWords || "", line: s.line || "", editorial: s.editorial || [],
+        sentence: sentence, skipped: skipped.length ? skipped.join(", ") + " not pitched, one pitch per two weeks." : "",
         also: also.length ? "Also in these two weeks, not pitched: " + also.join(", ") : "" };
     });
   }
@@ -1713,12 +1720,14 @@
     if (/^not (done|sent)/.test(st)) lines.push({ label: "Page", text: "The last change didn't go live: " + st.replace(/^not (done|sent):\s*/, ""), tone: "bad" });
     else if (/^waiting on Luke/.test(st)) lines.push({ label: "Page", text: "Live · a change is waiting on your yes", tone: "warn" });
     else if (/^(sent to GitHub|built by GitHub)/.test(st)) lines.push({ label: "Page", text: "Going live: " + st, tone: "" });
+    else if (!st && !(s.date)) lines.push({ label: "Page", text: "Not set up yet", tone: "" });
     else lines.push({ label: "Page", text: "Live", tone: "ok" });
     if (s.date && s.date > today) lines.push({ label: "Button", text: "Follow on Spotify, with the countdown to " + day(s.date), tone: "ok" });
     else if (s.track) lines.push({ label: "Button", text: "Listen on Spotify: goes to the track", tone: "ok" });
     else lines.push({ label: "Button", text: "Out since " + day(s.date) + ", but there's no Spotify track link yet: the button goes to the artist profile", tone: "bad" });
     var ppl = s.people || 0, taps = s.taps || 0;
-    lines.push({ label: "Visitors", text: ppl ? fmt(ppl) + (ppl === 1 ? " person" : " people") + " · " + fmt(taps) + " Spotify tap" + (taps === 1 ? "" : "s") + " (" + Math.round(taps / ppl * 100) + "%)" : "No visits in this range", tone: "" });
+    var live = lines[0] && lines[0].text === "Live";
+    lines.push({ label: "Visitors", text: ppl ? fmt(ppl) + (ppl === 1 ? " person" : " people") + " · " + fmt(taps) + " Spotify tap" + (taps === 1 ? "" : "s") + " (" + Math.round(taps / ppl * 100) + "%)" : (live ? "Live, no visits in this range yet" : "No visits in this range"), tone: "" });
     var h = s.health;
     if (h && h.errors) lines.push({ label: "Meta", text: "Meta refused " + h.errors + " of " + h.sends + " sends in this range" + (h.lastError ? " (last: " + h.lastError.detail + ", " + ago(now - h.lastError.ts) + ")" : ""), tone: "bad" });
     else if (h && h.sends) lines.push({ label: "Meta", text: "Receiving this page's events" + (h.lastOk ? " · last " + ago(now - h.lastOk) : ""), tone: "ok" });
@@ -1851,8 +1860,8 @@
     var u = pl.unlinked || {}, notes = [];
     var named = songs.some(function (s) { return s.adSpend !== "not linked to a song"; });
     if (named && songPLList(u.spend && u.spend.amounts)) notes.push("Ad spend that names a song is on that song. This is the rest. They are not added together.");
-    if (pl.notReceived) notes.push(pl.notReceived === 1 ? "1 royalty payment is not received yet, so it is not counted." : pl.notReceived + " royalty payments are not received yet, so they are not counted.");
-    if (pl.holding) notes.push(pl.holding === 1 ? "1 royalty payment is still in Wise or PayPal, so it is not counted until it reaches Revolut." : pl.holding + " royalty payments are still in Wise or PayPal, so they are not counted until they reach Revolut.");
+    var waitN = (pl.holding || 0) + (pl.notReceived || 0);
+    if (waitN) notes.push((waitN === 1 ? "1 payment is waiting" : waitN + " payments are waiting") + " (not received yet, or still in Wise or PayPal), so they are not counted until they reach Revolut.");
     return {
       how: "Money in is the royalties recorded for that song, per store. Ad spend counts only when it names the song. A payment counts for a song only when it names the song. Anything else is not linked to a song. Currencies stay separate. A single figure across currencies is shown only when a rate was recorded for that money, with where the rate came from.",
       songs: songs,
@@ -2347,6 +2356,31 @@
     return items;
   }
   /* quiet mode: one line per bot, the latest, with the older lines behind it */
+  function screenText(text, max) {
+    max = max || 280;
+    var drop = /\b(my_day|post_update|send_message|read_messages|release_step|release_pack|log_growth|read_growth|record_spend|licence_queue|content_ideas|spotify_upcoming|team_board|luke_short_briefing|needs_you|song_pl|tools_seen|list_version|tools_version|reconnect needed)\b/i;
+    var seen = {}, out = [];
+    String(text || "").split(/\n+/).forEach(function (line) {
+      var t = line.replace(/\b20\d{2}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?Z?\b/g, " ").replace(/\bT-\d+\b/g, " ").replace(drop, " ").replace(/\s+/g, " ").trim();
+      if (!t || seen[t.toLowerCase()]) return;
+      seen[t.toLowerCase()] = 1;
+      out.push(t);
+    });
+    var s = out.join(" ");
+    if (/revolut|paypal|wise|payment/i.test(s)) max = Math.min(max, 180);
+    if (s.length > max) s = s.slice(0, max).replace(/\s+\S*$/, "") + "…";
+    return s;
+  }
+  function pitchSentence(slots) {
+    var bits = [];
+    (slots || []).forEach(function (s) {
+      var block = pitchBlock([s])[0];
+      if (!block) return;
+      if (block.sentence) bits.push(block.sentence);
+      if (block.skipped) bits.push(block.skipped);
+    });
+    return bits.join(" ").replace(/\s+/g, " ").trim();
+  }
   function quietFeed(feed) {
     var order = [], by = {};
     (feed || []).forEach(function (u) {
@@ -2429,7 +2463,7 @@
     songPLView: songPLView, songPLHtml: songPLHtml,
     /* phone HQ (18 Nov 2026): Needs you, the release strip, the team dots, the week, money, the spend gauge */
     deskWhen: deskWhen, moneyHead: moneyHead, payFlow: payFlow, spendGauge: spendGauge, gapNotes: gapNotes, decisionCards: decisionCards,
-    releaseFace: releaseFace, teamDots: teamDots, weekAhead: weekAhead, quietFeed: quietFeed, followerStrip: followerStrip,
+    releaseFace: releaseFace, teamDots: teamDots, weekAhead: weekAhead, quietFeed: quietFeed, screenText: screenText, pitchSentence: pitchSentence, followerStrip: followerStrip,
     mondayPick: mondayPick, lyricsPreview: lyricsPreview,
     /* L5 watchers (18 Nov 2026) */
     routeMailLine: routeMailLine, contentClaimRows: contentClaimRows, contentIdeasCard: contentIdeasCard, phoneWatchers: phoneWatchers,

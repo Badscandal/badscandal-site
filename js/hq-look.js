@@ -349,7 +349,8 @@
     var prevSpend = num(o.prevSpend);
     var cpe = num(o.costPerEngagement);
     var visits = num(o.visits), prevVisits = num(o.prevVisits);
-    var vs = function (cur, prev) {
+    var vs = function (cur, prev, moneyLine) {
+      if (moneyLine && cur != null && !(Number(cur) > 0)) return "";
       if (cur == null || prev == null) return "vs last week: not reported";
       if (!prev) return cur ? "new since last week" : "same as last week";
       var p = (cur - prev) / prev * 100;
@@ -364,8 +365,8 @@
         missing: missing.map(function (n) { return n + " not read"; }),
         source: cap.fetched ? "Ad spend, read " + cap.fetched : "Ad spend"
       },
-      yesterday: { reported: ySpend != null, label: ySpend == null ? "not reported" : money(ySpend, (o.yesterday && o.yesterday.currency) || cap.currency || "USD", L), vs: vs(ySpend, prevSpend), source: "Yesterday's ad spend" },
-      engagement: { reported: cpe != null, label: cpe == null ? "not reported" : money(cpe, o.currency || cap.currency || "USD", L), vs: vs(cpe, num(o.prevCostPerEngagement)), source: "Cost per engagement" },
+      yesterday: { reported: ySpend != null, label: ySpend == null ? "not reported" : money(ySpend, (o.yesterday && o.yesterday.currency) || cap.currency || "USD", L), vs: vs(ySpend, prevSpend, true), source: "Yesterday's ad spend" },
+      engagement: { reported: cpe != null, label: cpe == null ? "not reported" : money(cpe, o.currency || cap.currency || "USD", L), vs: vs(cpe, num(o.prevCostPerEngagement), true), source: "Cost per engagement" },
       visits: { reported: visits != null, label: visits == null ? "not reported" : fmt(visits), vs: vs(visits, prevVisits), source: "Song-page visits" }
     };
   }

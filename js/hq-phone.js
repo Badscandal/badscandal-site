@@ -98,7 +98,8 @@
     var rows = items.map(function (it) {
       if (it.kind === "question" && wallets[it.id]) return '<li class="you-card">' + walletCard(wallets[it.id], it.id === openId) + "</li>";
       var reason = it.reason ? '<p class="why">' + esc(it.reason) + "</p>" : "";
-      return '<li class="tone-' + esc(it.tone || "") + '"><a href="' + esc(it.href || "#today") + '"><b>' + esc(it.id) + "</b> " + esc(it.title) + "</a>" + reason + "</li>";
+      var code = /^T-/i.test(String(it.id || "")) ? "" : it.id;
+      return '<li class="tone-' + esc(it.tone || "") + '"><a href="' + esc(it.href || "#today") + '">' + (code ? "<b>" + esc(code) + "</b> " : "") + esc(it.title) + "</a>" + reason + "</li>";
     }).join("");
     return '<section class="waitlane you" aria-label="Waiting on you"><h2>Waiting on you</h2><ul>' + rows + "</ul></section>";
   }

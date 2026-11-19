@@ -152,3 +152,36 @@ test("needs you includes a fan question stored on Instagram", async () => {
   assert.ok(n.items.some((x) => x.kind === "fan"));
   assert.ok(n.total >= 1);
 });
+
+test("a working-on line past its day is late, and a week later it is gone", () => {
+  const fresh = S.workers(R, { hq: null, updates: [], messages: [], cards: { nova: { at: "2026-11-19T12:00:00Z", workingOn: "Cover due 18 Nov" } }, seen: {}, today: "2026-11-19", nowHM: "12:00", releases: [] });
+  assert.match(fresh.find((w) => w.name === "Nova").card.workingOn, /^Late:/);
+  const old = S.workers(R, { hq: null, updates: [], messages: [], cards: { nova: { at: "2026-11-19T12:00:00Z", workingOn: "Cover due 2026-11-01" } }, seen: {}, today: "2026-11-19", nowHM: "12:00", releases: [] });
+  assert.equal(old.find((w) => w.name === "Nova").card.workingOn, "");
+});
+
+test("Luke's line drops tool names, reconnect notes and repeated lines", () => {
+  const line = S.lukeLine("reconnect needed: you see 12 tools\nmy_day is the start\nmy_day is the start\nThe cover is in");
+  assert.equal(/reconnect|my_day|tools_seen|T-\d/.test(line), false);
+  assert.match(line, /The cover is in/);
+  const one = S.lukeUpdates([{ bot: "Nova", message: "Filed the cover." }, { bot: "Nova", message: "older" }, { bot: "Atlas", message: "2026-11-19T10:00:00Z logged listeners" }]);
+  assert.equal(one.length, 2);
+  assert.equal(one[0], "Nova: Filed the cover.");
+  assert.equal(/T\d{2}:\d{2}/.test(one[1]), false);
+});
+
+test("a pitched song has no later deadline, and PayPal waiting counts as holding", async () => {
+  const d = memoryDesk();
+  await d.setJSON("inc/2026-11.json", [
+    { id: "p1", date: "2026-11-04", payer: "Sample", amount: 10, currency: "USD", status: "received", account: "PayPal", category: "Self-releases", by: "Ledger" },
+  ]);
+  const inc = await S.incomeState(d, NOW);
+  const pl = S.plPayments(inc.entries, []);
+  assert.equal(pl.holding, 1);
+  assert.equal(pl.counted.length, 0);
+});
+
+test("first seen is not taken from a date inside the claim id", () => {
+  assert.equal(S.claimFirstSeen({ key: "2026-11-01-sample", date: "2026-11-01", first_seen: "2026-11-01" }), "");
+  assert.equal(S.claimFirstSeen({ key: "sample", first_seen: "2026-11-17" }), "2026-11-17");
+});

@@ -1046,14 +1046,16 @@ function slotPicture(doc, slot) {
   const job = (Array.isArray(doc && doc.jobs) ? doc.jobs : []).find((j) => j && j.slot === slot.id && j.status === "open") || null;
   const rejAfter = (row) => rej && (!row || String(rej.at || "") >= String(row.at || ""));
   let status = "waiting", statusLine = "Waiting";
-  if (up && !rejAfter(up)) { status = "uploaded"; statusLine = "Uploaded by " + (up.by || spec.owner || "the owner"); }
+  if (up && !rejAfter(up)) { status = "uploaded"; statusLine = "Live"; }
   else if (ver && !rejAfter(ver)) { status = "ready"; statusLine = "Ready · " + ver.w + " x " + ver.h; }
   else if (rej) { status = "rework"; statusLine = "Needs rework · the platform rejected it"; }
   else if (plan.problem === "small") { status = "rework"; statusLine = "Needs rework · the master is too small"; }
   else if (job || plan.problem === "ratio") { status = "rework"; statusLine = "Needs rework"; }
   else if (plan.fit) { status = "waiting"; statusLine = "Waiting · the sized copy is not stored yet"; }
   const preview = ver && status === "ready" ? "/api/staff/profile-file/slot-" + slot.id : (master ? "/api/staff/profile-file/master-" + spec.group : "");
-  const sizeLine = spec.exact ? spec.exact[0] + " x " + spec.exact[1] + (spec.ratioWords ? " · " + spec.ratioWords : "") : spec.rule;
+  const px = spec.exact ? spec.exact[0] + " x " + spec.exact[1] : "";
+  const ratioBit = spec.ratioWords && spec.ratioWords !== px ? spec.ratioWords : "";
+  const sizeLine = px ? (ratioBit ? px + " · " + ratioBit : px) : spec.rule;
   return { status, statusLine, sizeLine, preview, circle: spec.circle, exact: spec.exact, fit: !!plan.fit, group: spec.group, detail: plan.reason || (rej ? rej.note : "") };
 }
 function profilePlatforms(q) {
@@ -1568,7 +1570,7 @@ export function plPayments(entries, sources) {
     if (e.status === "transfer" || e.status === "unsorted") continue;
     if (e.paidBy && OWED.includes(e.status)) continue;
     if (e.movedTo) continue;
-    if (isHold(e)) { holding++; continue; }
+    if (isHold(e) || (/paypal|wise/i.test(String(e.account || "")) && !/revolut/i.test(String(e.account || "")) && e.status === "received")) { holding++; continue; }
     if (e.status !== "received") { notReceived++; continue; }
     const month = String(e.date || "").slice(0, 7);
     counted.push({ month: /^\d{4}-\d{2}$/.test(month) ? month : "", song: e.song || "", store: e.store || "", amount: e.amount, currency: e.currency });
@@ -2970,6 +2972,8 @@ export async function logGrowth(store, now, roster, a) {
   if (typeof gin !== "object" || Array.isArray(gin)) fail('gaps must be {"views": "why it could not be read"}.');
   const gaps = {};
   for (const [k, v] of Object.entries(gin)) { const w = clean(v, 160); if (w) gaps[clean(k, 30)] = w; }
+  /* a 0 sent with a gap note was not a real count: leave it unreported */
+  for (const n of ["comments", "saves", "shares"]) if (gaps[n] && vals[n] === 0) delete vals[n];
   if (!Object.keys(vals).length && !Object.keys(extra).length) fail(`There are no numbers in this call. Send at least one of: ${names.join(", ")}.`);
   const account = clean(a.account, 60);
   noSecrets(platform, song, account, JSON.stringify(gaps), extra.best_post || "", extra.pattern || "", JSON.stringify(extra.fan_signals || ""));
@@ -3792,7 +3796,9 @@ export function pitchOf(v, today, editorial = null) {
   const status = done ? "pitched" : missed ? "missed" : "not pitched";
   const pitchedOn = done && pitch && pitch.status === "done" ? pitchedOnOf(pitch) : "";
   const who = done && pitch && pitch.status === "done" ? clean(pitch.by, 40) : "";
-  const by = deadline ? dayWords(deadline) : "";
+  /* a pitch that went out does not keep a later deadline on the card */
+  const due = done ? null : deadline;
+  const by = due ? dayWords(due) : "";
   let line;
   /* 18 Nov 2026, Luke: a pitch Atlas sent is not an approval. The card's pitch line says who sent it. */
   if (done) line = (pitchedOn ? `Pitch: pitched ${dayWords(pitchedOn)}` : "Pitch: pitched") + (who ? ` by ${who}` : "");
@@ -3801,7 +3807,7 @@ export function pitchOf(v, today, editorial = null) {
   else if (waiting) line = by ? `Pitch: not pitched yet. It waits until the song shows in Spotify for Artists. Deadline ${by}` : "Pitch: not pitched yet. It waits until the song shows in Spotify for Artists";
   else if (by && days != null && days >= PITCH_DEADLINE_DAYS && days <= PITCH_WARN_DAYS) line = `Pitch: not pitched. Still time: send it by ${by}`;
   else line = by ? `Pitch: not pitched. Deadline ${by}` : "Pitch: not pitched";
-  return { status, skipped: one, waiting, pitchedOn: pitchedOn || null, deadline, line, editorial: eds, ...(one && pitch.note ? { reason: pitch.note } : {}) };
+  return { status, skipped: one, waiting, pitchedOn: pitchedOn || null, deadline: due, line, editorial: eds, ...(one && pitch.note ? { reason: pitch.note } : {}) };
 }
 /* the two-week pitch slots: the song that holds the slot, then the songs the one-pitch rule left out.
    Upcoming songs and songs out in the last 28 days. */
@@ -3863,7 +3869,8 @@ export function releaseView(r, today, o = {}) {
       if ((filled(pack.lyrics) || desk === "pack") && (!note || /none provided|no lyrics|not provided/i.test(note))) note = "Luke's lyrics are in the pack.";
       else if ((desk === "luke" || o.lyricsPending) && (!note || /none provided|no lyrics|not provided/i.test(note))) note = "Lyrics are with Luke: a card is waiting for his answer.";
     }
-    return { ...s, note, late: !finished(s) && !waiting && !!s.due && s.due < today, dueIn: s.due ? daysBetween(today, s.due) : null, waiting,
+    const videoDone = s.key === "video" && s.status === "done" && !isDay(s.doneOn) ? (s.at ? spDay(Date.parse(s.at)) : (isDay(s.due) ? s.due : today)) : "";
+    return { ...s, note, ...(videoDone ? { doneOn: videoDone } : {}), late: !finished(s) && !waiting && !!s.due && s.due < today, dueIn: s.due ? daysBetween(today, s.due) : null, waiting,
       ...(w ? { waitingFor: w.key, waitingText: waitWords(w, s) } : (spotWait || platformWait) ? { waitingFor: "spotify-window", waitingText: "waiting on Spotify" } : {}),
       ...(skipped ? { skipped: true } : {}), ...(STEP[s.key] && STEP[s.key].after ? { after: STEP[s.key].after } : {}) };
   });
@@ -3911,7 +3918,7 @@ export function releaseView(r, today, o = {}) {
     approvals: approvalsOf(r),
     /* L5: the latest RouteNote email HQ has read for this song, and Verse's release-day note */
     mail: r.mail && r.mail.status ? { status: r.mail.status, on: r.mail.on || "", reason: r.mail.reason || "", id: r.mail.id || "", needsLuke: !!r.mail.needsLuke, source: "email" } : null,
-    verseDuty: r.verseDay ? { on: r.verseDay, text: "Verse was asked to submit the lyrics" } : null,
+    verseDuty: (r.verseDay || (date && daysBetween(today, date) >= 0 && daysBetween(today, date) <= 14)) ? { on: r.verseDay || date, text: "On Verse's list: every release within 14 days." } : null,
     log: (r.log || []).slice().reverse() };
   v.pitch = pitchOf(v, today, editorialOf(r)); /* L7: not pitched / pitched with the day / missed */
   v.warnings = releaseWarnings(v, o.sightings || null, today);
@@ -5160,7 +5167,12 @@ export function workers(roster, { hq, updates, messages, cards, seen, today, now
   return roster.map((b) => {
     const k = low(b.name);
     const mine = duties.find((d) => low(d.owner) === k);
-    const items = mine ? mine.items : [];
+    let items = mine ? mine.items : [];
+    /* Spark's daily ideas are a duty even when the sheet has no D- row yet */
+    if (b.name === "Spark" && !items.length) {
+      const late = !!(b.time && nowHM && nowHM > b.time && !updates.some((u) => low(u.bot) === k && u.sp.slice(0, 10) === today));
+      items = [{ id: "D-spark", task: b.duty || "Content ideas", due: b.time || "10:00", status: late ? "late" : "todo", late }];
+    }
     /* the shared live log keeps the newest 40 lines only: a bot's own last word is looked up in the desk's
        full list too (16 Nov 2026, Steve and Verse read "none yet" after a busy morning) */
     const last = updates.find((u) => low(u.bot) === k) || deskUpdates.find((u) => low(u.bot) === k) || null;
@@ -5192,6 +5204,15 @@ export function workers(roster, { hq, updates, messages, cards, seen, today, now
 
 /* a card's "needs" not said again for 2 days stops being an ask (14 Nov 2026, the bots: "needs Luke"
    text written once never cleared); it is kept as oldNeeds */
+function dueInLine(text, today) {
+  const iso = String(text || "").match(/\b(20\d{2}-\d{2}-\d{2})\b/);
+  if (iso && isDay(iso[1])) return iso[1];
+  const months = { jan: "01", feb: "02", mar: "03", apr: "04", may: "05", jun: "06", jul: "07", aug: "08", sep: "09", oct: "10", nov: "11", dec: "12" };
+  const m = String(text || "").match(/\b(\d{1,2})\s+(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)/i);
+  if (!m || !isDay(today)) return "";
+  const d = `${today.slice(0, 4)}-${months[m[2].toLowerCase()]}-${String(m[1]).padStart(2, "0")}`;
+  return isDay(d) ? d : "";
+}
 function cardNow(card, today) {
   if (!card) return null;
   const day = card.at ? spDay(Date.parse(card.at)) : null;
@@ -5200,6 +5221,14 @@ function cardNow(card, today) {
   /* needs drops after 2 days; a working-on line and a blocker drop after 4 unless refreshed (18 Nov 2026) */
   if (out.needs && age >= 2) { out.oldNeeds = out.needs; out.needs = ""; }
   if (out.workingOn && age >= 4) { out.oldWorkingOn = out.workingOn; out.workingOn = ""; }
+  if (out.workingOn) {
+    const due = dueInLine(out.workingOn, today);
+    if (due && due < today) {
+      const lateBy = daysBetween(due, today);
+      if (lateBy > 7) { out.oldWorkingOn = out.workingOn; out.workingOn = ""; }
+      else if (!/^late:/i.test(out.workingOn)) out.workingOn = "Late: " + out.workingOn;
+    }
+  }
   const bday = card.blockersAt ? spDay(Date.parse(card.blockersAt)) : day;
   if (out.blockers && bday && daysBetween(bday, today) >= 4) { out.oldBlockers = out.blockers; out.blockers = ""; }
   return out;
@@ -5509,6 +5538,14 @@ async function retargetClaimCases(store, items) {
   });
 }
 const nrClaim = (v) => (v != null && String(v).trim() !== "" ? v : "not reported");
+/* a date baked into the claim id is not the day the claim was first seen */
+export function claimFirstSeen(c) {
+  const idDay = (String(c && c.key || "").match(/(20\d{2}-\d{2}-\d{2})/) || [])[1] || "";
+  if (c && c.first_seen && c.first_seen !== idDay) return c.first_seen;
+  if (c && c.first_seen && !idDay) return c.first_seen;
+  if (c && !c.first_seen && c.date && c.date !== idDay) return c.date;
+  return "";
+}
 export async function readClaims(store, now) {
   const { data } = await readDoc(store, CLAIMS_KEY, { items: [], checked: {} });
   const raw = data && Array.isArray(data.items) ? data.items : [];
@@ -5529,7 +5566,7 @@ export async function readClaims(store, now) {
       video: nrClaim(c.video || c.video_id), claim_type: nrClaim(c.claim_type), status: nrClaim(c.status),
       reach_effect: nrClaim(c.reach_effect || c.impact), money_effect: nrClaim(c.money_effect),
       strike: nrClaim(c.strike), action: nrClaim(c.action), owner: nrClaim(c.owner),
-      first_seen: nrClaim(c.first_seen || c.date), last_checked: nrClaim(c.last_checked),
+      first_seen: nrClaim(claimFirstSeen(c)), last_checked: nrClaim(c.last_checked),
       date: c.date || "not reported", impact: nrClaim(c.impact),
     })),
     note: "Read only. A missing field is not reported, not zero. id is the claim id: pass it as claim_id to open_case to escalate that claim into a dispute. Laura marks the day with log_growth, claims_checked true. HQ never invents a claim.",
@@ -5805,11 +5842,39 @@ export async function readCases(store, now, a = {}) {
 }
 export function growthPlatformId(name) {
   const k = String(name || "").toLowerCase().replace(/[^a-z]/g, "");
-  if (k === "ig" || k === "instagram") return "instagram";
-  if (k === "tt" || k === "tiktok") return "tiktok";
-  if (k === "yt" || k === "youtube") return "youtube";
-  if (k === "spotify") return "spotify";
+  if (k === "ig" || k.includes("instagram")) return "instagram";
+  if (k === "tt" || k.includes("tiktok")) return "tiktok";
+  if (k === "yt" || k.includes("youtube")) return "youtube";
+  if (k.includes("spotify")) return "spotify";
   return k;
+}
+/* one plain sentence per bot, for Luke's screens. Tool names, reconnect lines and ISO stamps stay off it. */
+export function lukeLine(text) {
+  let t = String(text || "");
+  t = t.replace(/\b20\d{2}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?Z?\b/g, " ");
+  t = t.replace(/\bT-\d+\b/g, " ");
+  t = t.replace(/\b(my_day|post_update|send_message|read_messages|release_step|release_pack|release_fill|log_growth|read_growth|record_spend|licence_queue|content_ideas|spotify_upcoming|team_board|luke_short_briefing|luke_briefing|needs_you|song_pl|task_update|tools_seen|list_version|tools_version|reconnect needed)\b/gi, " ");
+  const seen = new Set();
+  const lines = [];
+  for (const line of t.split(/\n+/)) {
+    const s = line.replace(/\s+/g, " ").trim();
+    if (!s || seen.has(s.toLowerCase())) continue;
+    seen.add(s.toLowerCase());
+    lines.push(s);
+  }
+  let out = lines.join(" ");
+  if (/revolut|paypal|wise|payment/i.test(out) && out.length > 180) out = out.slice(0, 179).replace(/\s+\S*$/, "") + "…";
+  return out;
+}
+export function lukeUpdates(updates) {
+  const seen = new Set(), out = [];
+  for (const u of updates || []) {
+    if (!u || !u.bot || seen.has(low(u.bot))) continue;
+    seen.add(low(u.bot));
+    const msg = lukeLine(u.message) || "Update posted.";
+    out.push(`${u.bot}: ${msg}`);
+  }
+  return out;
 }
 const GROWTH_LABEL = { instagram: "Instagram", tiktok: "TikTok", youtube: "YouTube", spotify: "Spotify" };
 /* one growth row per platform per day. Two logs of YouTube on the same day are one line. */
@@ -5819,12 +5884,18 @@ export function growthOnce(rows) {
     if (!r || r.kind === "song" || !r.platform || !r.date) continue;
     const id = growthPlatformId(r.platform);
     const k = id + "|" + r.date;
-    if (seen.has(k)) continue;
+    const gaps = r.gaps && typeof r.gaps === "object" ? { ...r.gaps } : {};
+    for (const key of Object.keys(gaps)) if (r[key] != null && r[key] !== "") delete gaps[key];
+    if (seen.has(k)) {
+      const prev = seen.get(k);
+      for (const key of Object.keys(prev.gaps || {})) if (r[key] != null && r[key] !== "") delete prev.gaps[key];
+      continue;
+    }
     seen.set(k, {
       platform: GROWTH_LABEL[id] || r.platform, date: r.date,
       unit: id === "youtube" ? "subscribers" : "followers",
       followers: r.followers ?? null, views: r.views ?? null, views_date: r.views_date || "",
-      gaps: r.gaps && typeof r.gaps === "object" ? r.gaps : {},
+      gaps,
       channel_views: r.channel_views ?? null, channel_views_is: r.channel_views != null ? "lifetime total, not the day's views" : "",
     });
   }
@@ -5914,18 +5985,17 @@ export async function saveContentIdeas(store, now, a) {
   }
   const ours = ranked.filter((p) => p.whose === "ours").sort((x, y) => y.perView - x.perView);
   if (!ours.length) fail("Name the official posts you ranked, with views and likes, comments, saves and shares. Nothing was saved.");
-  if (ours.length >= 2) {
-    const rest = ours.slice(1);
-    const avg = rest.reduce((s, p) => s + p.perView, 0) / rest.length;
-    const winner = ours[0];
-    if (winner.perView > avg) {
-      const recipe = ideas.find((i) => i.platform === winner.platform) || ideas[0];
-      const nextSong = clean(a.next_song, 120);
-      if (!ideas.some((i) => i.auto && i.hook === recipe.hook && i.platform === recipe.platform)) {
-        ideas.push({ hook: recipe.hook, text: recipe.text, format: recipe.format, platform: recipe.platform, status: "idea", auto: true, ...(nextSong ? { song: nextSong } : {}), ...(recipe.market ? { market: recipe.market } : {}), ...(winner.link ? { source: winner.link } : {}), why: "Same recipe. That post's engagement per view beat the other official posts in this report." });
-      }
-    }
+  const seenHooks = new Set();
+  const unique = [];
+  for (const idea of ideas) {
+    const k = idea.hook.toLowerCase();
+    if (seenHooks.has(k) || !idea.song) continue;
+    seenHooks.add(k);
+    unique.push(idea);
   }
+  if (unique.length < 3) fail("Each idea needs its own hook and a song. Nothing was saved.");
+  ideas.length = 0;
+  ideas.push(...unique);
   const { whose, ...best } = ours[0];
   const compared = clean(a.compared, 400);
   const row = { at: new Date(now).toISOString(), by: a.by, day: spDay(now), best, ideas, compared, posts: ranked.slice(0, 12) };
@@ -6241,8 +6311,9 @@ export function checkReport({ desk, hq, hqState, now }) {
   /* 3. messages waiting */
   const age = (m) => Math.floor((now - Date.parse(m.at)) / 3600000);
   if (b.waiting.luke.length) problems.push(`${b.waiting.luke.length} waiting on Luke (oldest ${age(b.waiting.luke[0])} h): "${b.waiting.luke[0].text.slice(0, 90)}"`);
-  const stale = desk.messages.filter((m) => isOpen(m) && m.to !== "Luke" && age(m) >= 24);
-  for (const m of stale.slice(0, 5)) problems.push(`${m.to} has not answered ${m.from} for ${age(m)} h: "${m.text.slice(0, 70)}"`);
+  /* a question older than 3 days ages off the check; a day or two old is late, not still "waiting" */
+  const stale = desk.messages.filter((m) => isOpen(m) && m.to !== "Luke" && age(m) >= 24 && age(m) < 72);
+  for (const m of stale.slice(0, 5)) problems.push(`${m.to} is late answering ${m.from} (${age(m)} h): "${m.text.slice(0, 70)}"`);
   /* 4. the releases on the desk: late and blocked steps, and a pack field a step needs within 3 days */
   /* ONE line per release for its late steps (11 Nov 2026): four releases sent late made 31 lines and
      pushed the rest of the report past its cut */

@@ -39,10 +39,10 @@
   }
   function platId(name) {
     var k = String(name || "").toLowerCase().replace(/[^a-z]/g, "");
-    if (k === "ig" || k === "instagram") return "instagram";
-    if (k === "tt" || k === "tiktok") return "tiktok";
-    if (k === "yt" || k === "youtube") return "youtube";
-    if (k === "spotify") return "spotify";
+    if (k === "ig" || k.indexOf("instagram") >= 0) return "instagram";
+    if (k === "tt" || k.indexOf("tiktok") >= 0) return "tiktok";
+    if (k === "yt" || k.indexOf("youtube") >= 0) return "youtube";
+    if (k.indexOf("spotify") >= 0) return "spotify";
     return k || "";
   }
   var LABEL = { instagram: "Instagram", tiktok: "TikTok", youtube: "YouTube", spotify: "Spotify" };
@@ -123,21 +123,21 @@
     var id = platId(p && p.platform);
     var unit = unitOf(id);
     var gaps = p && Array.isArray(p.gapDays) ? p.gapDays : null;
-    var gapLine = gaps == null ? "Gap days: " + miss() : gaps.length ? "Gap days: " + esc(gaps.map(function (d) { return L.day ? L.day(d) : d; }).join(", ")) : "No gap in the logged days.";
+    var gapLine = gaps && gaps.length ? "Gap days: " + esc(gaps.map(function (d) { return L.day ? L.day(d) : d; }).join(", ")) : "";
     var late = row && row.views_date && row.date && row.views_date < row.date;
     var chart = g.HQChart && p && p.series ? g.HQChart.html(p.series, { label: labelOf(p.platform || id) + " " + unit, totals: false }) : "";
     return '<article class="tile ghead"><div class="row"><h3>' + esc(labelOf(p.platform || id)) + '</h3></div>' +
       '<p class="lbl">' + esc(unit === "subscribers" ? "Subscribers" : "Followers") + "</p>" +
       '<div class="big num">' + num(p.followers) + "</div>" +
       '<p class="d">Today ' + signed(p.day) + " · 7 days " + signed(p.d7 != null ? p.d7 : p.week) + (p.d28 != null ? " · 28 days " + signed(p.d28) : "") + "</p>" +
-      '<p class="d">' + gapLine + "</p>" + chart +
+      (gapLine ? '<p class="d">' + gapLine + "</p>" : "") + chart +
       (late ? '<p class="d">Views are for ' + dayOf(row.views_date) + ", a day late.</p>" : "") +
       "</article>";
   }
   function weekCard(posts, pattern) {
     var ranked = posts.map(function (p) { return { p: p, e: epv(p) }; }).filter(function (x) { return x.e != null; })
       .sort(function (a, b) { return b.e - a.e; });
-    var settled = ranked.length >= 6;
+    var settled = ranked.length >= 10;
     var top = ranked.slice(0, 3);
     var bottom = settled ? ranked.slice(-3).reverse() : [];
     function line(x) {
@@ -146,7 +146,7 @@
     }
     var h = '<section class="gsec"><h3>What worked this week</h3>';
     h += '<p class="sub">Engagement per view is (likes + comments + saves + shares) / views, at 24 hours. ' +
-      (settled ? "Top 3 and bottom 3 use that same list." : "Fewer than 6 posts have a full 24-hour count, so the order is not settled yet.") + "</p>";
+      (settled ? "Top 3 and bottom 3 use that same list." : "Fewer than 10 posts have a full 24-hour count, so the order is not settled yet.") + "</p>";
     h += "<p class=\"d\"><b>Pattern</b> · " + (pattern ? esc(pattern) : miss()) + "</p>";
     if (!top.length) h += "<p class=\"d\">Top 3: " + miss() + "</p><p class=\"d\">Bottom 3: " + miss() + "</p>";
     else {
@@ -190,8 +190,8 @@
     h += '<p class="d">+6h gate ' + (gate == null ? miss() : '<b class="gate-' + gate + '">' + (gate === "pass" ? "PASS" : "FAIL") + "</b>") + " · pass is avg watch at least 2.5s and follows/view at least 0.14%.</p>";
     h += "<p class=\"d\">Best of last 7 days " + (row && (row.best_post_link || row.best_post) ? linkOr(row.best_post_link, row.best_post || "link") : miss()) + "</p>";
     h += "<p class=\"d\">Views date " + (viewsDate ? dayOf(viewsDate) : miss()) + (late ? " · a day late." : "") + "</p>";
-    var gaps = row && row.gaps && typeof row.gaps === "object" ? Object.keys(row.gaps) : [];
-    h += "<p class=\"d\">Gaps " + (gaps.length ? esc(gaps.map(function (k) { return k + ": " + row.gaps[k]; }).join("; ")) : miss()) + "</p>";
+    var gaps = row && row.gaps && typeof row.gaps === "object" ? Object.keys(row.gaps).filter(function (k) { return row[k] == null || row[k] === ""; }) : [];
+    if (gaps.length) h += "<p class=\"d\">Gaps " + esc(gaps.map(function (k) { return k + ": " + row.gaps[k]; }).join("; ")) + "</p>";
     return h + "</section>";
   }
   function youtubeBlock(row, health, summary) {
@@ -407,12 +407,13 @@
   }
   function healthRow(health) {
     var h = '<section class="gsec"><h3>Accounts</h3><div class="trend-row">';
-    ["tiktok", "instagram"].forEach(function (id) {
+    ["tiktok", "instagram", "spotify"].forEach(function (id) {
       var acc = accountOf(health, id);
       var status = signal(acc, "status");
       var reach = signal(acc, "reach");
       h += '<article class="tile"><h3>' + esc(LABEL[id]) + "</h3>";
       h += "<p class=\"d\">Account status " + (status && status.level !== "gap" ? esc(status.text) : miss()) + "</p>";
+      if (id === "spotify") h += "<p class=\"d\">Last check " + (acc && acc.checked ? dayOf(acc.checked) : miss()) + "</p>";
       h += "<p class=\"d\">" + dot(reach && reach.level, "Engagement") + "</p></article>";
     });
     h += '<article class="tile"><h3>YouTube</h3><p class="d">Account status is under the YouTube block. Engagement is not used for YouTube.</p></article>';

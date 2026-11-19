@@ -186,7 +186,13 @@
     $("dCpt").textContent = HQ.money(sp.song.spend, sp.currency) + " spent · " + fmt(sp.song.taps) + " real taps";
   }
 
+  function noAdSpend() {
+    var sp = data && data.spend;
+    return !(sp && sp.connected && !sp.error && sp.song && Number(sp.song.spend) > 0);
+  }
+
   function delta(cur, prev, isRate) {
+    if (noAdSpend()) return "";
     if (cur == null || prev == null) return "";
     var vs = "<em> vs " + (data.range === "today" ? "yesterday by this time" : "previous " + (data.days === 1 ? "day" : data.days + " days")) + "</em>";
     if (isRate) {
@@ -324,7 +330,7 @@
   }
 
   function drawBreakdowns() {
-    breakdown($("bAd"), data.byAd, function (r) { return [adName(r), r.campaign ? r.campaign.toUpperCase() : r.kind === "untagged" ? "Meta's click id, no utm tags" : ""]; }, { best: true, max: 12 });
+    breakdown($("bAd"), data.byAd, function (r) { return [adName(r), r.campaign ? r.campaign.toUpperCase() : r.kind === "untagged" ? "No campaign name on the link" : ""]; }, { best: true, max: 12 });
     breakdown($("bGeo"), data.byCountry, function (r) { return [country(r.cc), r.city ? title(r.city) + (r.cities > 1 ? " +" + (r.cities - 1) : "") : ""]; }, { max: 10 });
     breakdown($("bApp"), data.byApp, function (r) { var a = APPS[r.k] || [title(r.k), ""]; return a; });
     breakdown($("bDev"), data.byDevice, function (r) { var a = DEVICES[r.k] || [title(r.k), ""]; return a; });

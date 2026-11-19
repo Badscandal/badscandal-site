@@ -348,6 +348,7 @@
     var rows = window.HQLib.healthRows(o);
     var st = window.HQLib.healthState(rows);
     $("hDot").className = "hdot " + st;
+    if ($("hWord")) $("hWord").textContent = st === "ok" ? "OK" : st === "bad" ? "Check" : "Partial";
     $("healthBtn").setAttribute("aria-label", "Data health: " + (st === "bad" ? "something needs attention" : st === "ok" ? "all fine" : "not everything read yet"));
     $("healthRows").innerHTML = rows.map(function (r) {
       return '<li class="' + r.state + '"><i class="' + r.state + '" aria-hidden="true"></i><b>' + esc(r.label) + "</b><span>" + esc(r.text) + "</span></li>";
@@ -825,7 +826,8 @@
     $("relDesk").innerHTML = ""; $("relPipe").innerHTML = "";
     $("relOut").innerHTML = ol ? '<p class="routline">' + esc(ol) + ' <a href="#songs">See Songs</a></p>' : "";
     $("relSpot").innerHTML = '<p class="empty2">This shows once the team\'s desk is read.</p>';
-    $("relList").innerHTML = broken("Releases") ? '<p class="empty">See the note above.</p>' : l.sheetOnly.length ? l.sheetOnly.map(sheetReleaseCard).join("") : '<p class="empty">Nothing coming in the sheet yet.</p>';
+    var deskHas = window.HQStaff && HQStaff.board && (HQStaff.board().releases || []).length;
+    $("relList").innerHTML = broken("Releases") ? '<p class="empty">See the note above.</p>' : l.sheetOnly.length ? l.sheetOnly.map(sheetReleaseCard).join("") : (deskHas ? "" : '<p class="empty">Nothing coming in the sheet yet.</p>');
   }
   function sheetReleaseCard(r) {
     var isOut = !!r.date && r.daysToGo <= 0;
@@ -910,20 +912,17 @@
   }
   function feedLi(u, today) {
     var st = /^(done|working|blocked|error|info)$/.test(u.status) ? u.status : "info";
+    var said = L.screenText ? L.screenText(u.message) : u.message;
     return '<li class="' + st + (st === "done" ? " quiet-done" : "") + '"><span class="t">' + esc(feedWhen(u, today)) + '</span><span class="m"><b>' + esc(u.bot) + "</b> " +
-      (u.link ? link(u.link, u.message) : esc(u.message)) + (st === "info" ? "" : '<span class="s">' + esc(st) + "</span>") + "</span></li>";
+      (u.link ? link(u.link, said) : esc(said)) + "</span></li>";
   }
   function drawFeed(feed, today) {
     if (!feed) { $("liveFeed").innerHTML = '<li><span class="t">–</span><span class="m">No live log yet.</span></li>'; return; }
     if (!feed.length) { $("liveFeed").innerHTML = '<li><span class="t">–</span><span class="m">Nothing logged yet.</span></li>'; return; }
-    if (document.body.classList.contains("quiet")) {
-      $("liveFeed").innerHTML = L.quietFeed(feed).slice(0, 20).map(function (g) {
-        var more = g.older.length ? '<details class="feedmore"><summary>' + g.older.length + " earlier</summary><ul>" + g.older.map(function (u) { return feedLi(u, today); }).join("") + "</ul></details>" : "";
-        return feedLi(g.latest, today).replace("</li>", more + "</li>");
-      }).join("");
-      return;
-    }
-    $("liveFeed").innerHTML = feed.slice(0, 20).map(function (u) { return feedLi(u, today); }).join("");
+    $("liveFeed").innerHTML = L.quietFeed(feed).slice(0, 20).map(function (g) {
+      var more = g.older.length ? '<details class="feedmore"><summary>' + g.older.length + " earlier</summary><ul>" + g.older.map(function (u) { return feedLi(u, today); }).join("") + "</ul></details>" : "";
+      return feedLi(g.latest, today).replace("</li>", more + "</li>");
+    }).join("");
   }
 
   /* ---------- the release panel: what's missing, then what's done ---------- */
