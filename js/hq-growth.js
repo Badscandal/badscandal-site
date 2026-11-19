@@ -225,11 +225,17 @@
   function samePost(a, b) {
     if (!a || !b) return false;
     var ida = String(a.id || ""), idb = String(b.id || "");
-    if (ida && idb) return ida === idb || (ida.length >= 8 && idb.length >= 8 && (ida.slice(-idb.length) === idb || idb.slice(-ida.length) === ida));
+    if (ida && idb && (ida === idb || (ida.length >= 8 && idb.length >= 8 && (ida.slice(-idb.length) === idb || idb.slice(-ida.length) === ida)))) return true;
     var la = normLink(a.link), lb = normLink(b.link);
     if (la && lb) return la === lb;
     var ta = titleKey(a.hook || a.caption || ""), tb = titleKey(b.hook || b.caption || "");
     return !!(ta && tb && ta === tb);
+  }
+  function spendOk(paid) {
+    if (!paid || paid.spend == null || paid.stale) return false;
+    if (paid.scope !== "ad" && paid.scope !== "post" && paid.scope !== "title") return false;
+    if (paid.started && paid.asOf && Number(paid.asOf) < Number(paid.started)) return false;
+    return true;
   }
   function engOf(p) {
     if (!p) return null;
@@ -267,28 +273,61 @@
     });
     return list;
   }
+  function loggedBoosts(rows, id) {
+    var out = [];
+    (rows || []).forEach(function (r) {
+      if (!r || platId(r.platform) !== id || !Array.isArray(r.boosts)) return;
+      r.boosts.forEach(function (b) {
+        if (!b || !b.link) return;
+        out.push({ platform: LABEL[id] || r.platform, hook: b.hook || r.best_post || "boost", link: b.link, date: r.date || "", boosted: true, spend: b.spend, currency: b.currency || "", status: b.status || "" });
+      });
+    });
+    return out;
+  }
+  function bestPostBoosts(rows, ranking) {
+    var out = [];
+    (rows || []).forEach(function (r) {
+      if (!r || platId(r.platform) !== "instagram" || (!r.best_post && !r.best_post_link)) return;
+      var seed = { platform: "Instagram", hook: r.best_post || "", link: r.best_post_link || "", date: r.date || "" };
+      var hit = rankHit(seed, ranking);
+      if (!hit || (!hit.boosted && !hit.paid && hit.boost !== "boosted")) return;
+      if (hit.engReported) { seed.likes = hit.likes; seed.comments = hit.comments; seed.saves = hit.saves; seed.shares = hit.shares; }
+      if (hit.follows != null) seed.follows = hit.follows;
+      out.push(seed);
+    });
+    return out;
+  }
   function boosted(rows, posts, ranking) {
     var h = '<section class="gsec" id="boostBox"><h3>Boosted</h3>';
     ["tiktok", "instagram", "youtube"].forEach(function (id) {
       var row = latestRow(rows, id);
       var paidPosts = boostedPosts(id, posts, ranking);
+      if (id === "instagram") bestPostBoosts(rows, ranking).forEach(function (p) {
+        if (!paidPosts.some(function (x) { return samePost(x, p); })) paidPosts.push(p);
+      });
+      loggedBoosts(rows, id).forEach(function (p) {
+        var have = paidPosts.filter(function (x) { return samePost(x, p); })[0];
+        if (!have) paidPosts.push(p);
+        else { if (have.spend == null && p.spend != null) have.spend = p.spend; if (!have.currency && p.currency) have.currency = p.currency; if (!have.status && p.status) have.status = p.status; }
+      });
       h += '<article class="tile"><h3>' + esc(LABEL[id]) + "</h3>";
       h += "<p class=\"d\">Paid views " + num(row && row.paid_views) + " · organic views " + num(row && row.organic_views) + "</p>";
       if (!paidPosts.length) h += "<p class=\"d\">Spend " + miss() + " · cost per engagement " + miss() + " · cost per follow " + miss() + "</p>";
       paidPosts.forEach(function (p) {
         var hit = rankHit(p, ranking);
         var paid = hit && hit.paid;
-        var spendNum = paid && paid.spend != null && !paid.stale && paid.scope !== "account" ? Number(paid.spend) : null;
+        var spendNum = spendOk(paid) ? Number(paid.spend) : null;
+        if (spendNum == null && p.spend != null && isFinite(Number(p.spend))) spendNum = Number(p.spend);
         if (spendNum != null && !isFinite(spendNum)) spendNum = null;
-        var asOf = spendNum != null && paid && paid.asOf && L.spStampOf ? L.spStampOf(paid.asOf) : "";
-        var cur = paid && paid.currency ? paid.currency + " " : "";
+        var asOf = spendNum != null && paid && paid.asOf && spendOk(paid) && L.spStampOf ? L.spStampOf(paid.asOf) : "";
+        var cur = (spendOk(paid) && paid && paid.currency ? paid.currency : p.currency) ? ((spendOk(paid) && paid && paid.currency) || p.currency) + " " : "";
         var eng = latestCount(p, posts, engOf);
         if (eng == null) eng = engOf(p);
         var fol = latestCount(p, posts, followsOf);
         if (fol == null) fol = followsOf(p);
         var costEng = spendNum != null && eng > 0 ? spendNum / eng : null;
         var costFol = spendNum != null && fol > 0 ? spendNum / fol : null;
-        var spendText = spendNum == null ? "spend not read since boost started" : cur + spendNum.toFixed(2) + (asOf ? " as of " + asOf : "");
+        var spendText = spendNum == null ? "spend not read since boost started" : cur + spendNum.toFixed(2) + (asOf ? " as of " + asOf : "") + (p.status ? " · " + p.status : "");
         h += "<p class=\"d\">" + linkOr(videoHref(p), p.hook || "post") + " · Spend " + esc(spendText) + "</p>";
         h += "<p class=\"d\">Cost per engagement " + (costEng == null ? miss() : esc(costEng.toFixed(2))) + " · cost per follow " + (costFol == null ? miss() : esc(costFol.toFixed(2))) + "</p>";
       });

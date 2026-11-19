@@ -1722,7 +1722,8 @@
       follows: r.follows != null ? fmt(r.follows) + " follows (" + p1(r.followRate) + " of views)" + (r.profileVisits != null ? " · " + fmt(r.profileVisits) + " profile visits" : "") : "",
       own: r.ownComments ? r.ownComments + " of our own comment" + (r.ownComments === 1 ? "" : "s") + " left out" : "",
       paid: "Not boosted", before: "" };
-    if (r.paid && r.paid.stale && r.paid.spend == null) out.paid = "spend not read since boost started";
+    var spendOk = r.paid && r.paid.spend != null && !r.paid.stale && (r.paid.scope === "ad" || r.paid.scope === "post" || r.paid.scope === "title") && !(r.paid.started && r.paid.asOf && Number(r.paid.asOf) < Number(r.paid.started));
+    if (r.paid && !spendOk) out.paid = "spend not read since boost started";
     else if (r.paid && r.paid.spend != null) {
       var c = r.paid.currency ? r.paid.currency + " " : "";
       var who = r.paid.spendOnly ? " engagements" : " engagements from the ad";

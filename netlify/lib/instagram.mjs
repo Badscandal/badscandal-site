@@ -338,13 +338,17 @@ export async function setPostSong(store, now, a) {
   return { post, song, state: song ? "linked" : "cleared" };
 }
 export const TOOL_CACHE_MS = 20 * 60 * 1000;
+/* 19 Nov 2026: a cached ranking from before a boost's own spend was required still says the account day total.
+   Those answers are not reused. */
+export const TOOL_CACHE_LOGIC = 2;
 export async function readToolCache(store, now) {
   const data = await readDoc(store, "tool-cache.json", null);
-  if (!data || !data.at || !data.body || now - Number(data.at) > TOOL_CACHE_MS || now - Number(data.at) < 0) return null;
+  if (!data || !data.at || !data.body || data.logic !== TOOL_CACHE_LOGIC || now - Number(data.at) > TOOL_CACHE_MS || now - Number(data.at) < 0) return null;
+  if (JSON.stringify(data.body).includes("engagements not on this spend row")) return null;
   return data;
 }
 export async function writeToolCache(store, now, body) {
-  if (typeof store.setJSON === "function") await store.setJSON("tool-cache.json", { at: now, body });
+  if (typeof store.setJSON === "function") await store.setJSON("tool-cache.json", { at: now, logic: TOOL_CACHE_LOGIC, body });
 }
 /* comments that need a reply (Nova: a fan asked if they can use the music): a question, not ours, nobody of ours
    answered it. It stays until one of our accounts replies (18 Nov 2026). Replying goes outside the team, so it's Luke's. */

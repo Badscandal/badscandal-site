@@ -223,6 +223,11 @@ test("a stale ad read is not the boost's spend, and a later row that names the p
   assert.equal(row.paid.spend, null);
   assert.match(P.rankLine(row), /spend not read since boost started/);
   assert.doesNotMatch(P.rankLine(row), /11\.11/);
+  const oldLine = { caption: "Stuck in traffic", type: "reels", at: "2026-11-18T12:00:00Z", window: "1 day", rate: 0.1, engaged: 20, views: 200, likes: 10, comments: 2, saves: 3, shares: 5, deep: 0.01, boost: "boosted", paid: { spend: 11.11, currency: "USD", spendOnly: true, engaged: 0, costPerEng: null } };
+  assert.match(P.rankLine(oldLine), /spend not read since boost started/);
+  assert.doesNotMatch(P.rankLine(oldLine), /11\.11/);
+  assert.doesNotMatch(P.rankLine(oldLine), /engagements not on this spend row/);
+  assert.equal(globalThis.HQLib.rankParts(oldLine).paid, "spend not read since boost started");
   assert.equal(stale.ranked.find((x) => x.id === "quiet").paid, null);
   const freshAds = { at: Date.parse("2026-11-18T21:00:00Z"), ads: [{ id: "ad1", media: "traffic", status: "ACTIVE", created: started, spend: 40, currency: "USD", impressions: 1000, likes: 8, comments: 1, saves: 1, shares: 0 }] };
   const fresh = P.rankPosts([one], freshAds, { now, spend: [account] });
@@ -247,4 +252,19 @@ test("a stale ad read is not the boost's spend, and a later row that names the p
   assert.equal(missing.ranked[0].paid.costPerEng, null);
   assert.match(P.rankLine(missing.ranked[0]), /not reported/);
   assert.doesNotMatch(P.rankLine(missing.ranked[0]), /USD 0/);
+});
+
+test("a cached ranking from before a boost's own spend is not reused", async () => {
+  const st = memStore();
+  const old = { ranking: { lines: ["“Stuck in traffic” · boosted USD 11.11: engagements not on this spend row"], ads_read: "2026-11-18 11:05" } };
+  await st.setJSON("tool-cache.json", { at: NOW, body: old });
+  assert.equal(await IG.readToolCache(st, NOW + 1000), null);
+  await st.setJSON("tool-cache.json", { at: NOW, logic: 1, body: { ok: true } });
+  assert.equal(await IG.readToolCache(st, NOW + 1000), null);
+  await IG.writeToolCache(st, NOW, { ok: true, ranking: { lines: ["spend not read since boost started"] } });
+  const kept = await IG.readToolCache(st, NOW + 1000);
+  assert.equal(kept.logic, IG.TOOL_CACHE_LOGIC);
+  assert.equal(kept.body.ok, true);
+  await st.setJSON("tool-cache.json", { at: NOW, logic: IG.TOOL_CACHE_LOGIC, body: old });
+  assert.equal(await IG.readToolCache(st, NOW + 1000), null);
 });
