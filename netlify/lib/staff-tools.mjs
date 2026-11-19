@@ -1411,8 +1411,9 @@ async function runTool(tool, args, ctx, read) {
     case "needs_you": {
       /* the ONE list (S.waitingOnLuke on needsDesk, 18 Nov 2026): the number on Luke's phone, Today's line and
          the app badge. Texts say who and what kind; the first line of a question is masked like my_day's. */
-      const [desk, board] = await Promise.all([needsDesk(store, now, { ig: ctx.ig ? ctx.ig() : null }), C.workspaceNeeds(store, now, "badscandal")]);
-      const count = C.needsCount(desk, today, now);
+      const [desk, board, hqAns] = await Promise.all([needsDesk(store, now, { ig: ctx.ig ? ctx.ig() : null }), C.workspaceNeeds(store, now, "badscandal"), ctx.hq ? ctx.hq().catch(() => null) : null]);
+      const cap = hqAns && hqAns.money && hqAns.money.cap;
+      const count = C.needsCount({ ...desk, notRead: cap && Array.isArray(cap.notRead) ? cap.notRead : [] }, today, now);
       const byId = Object.fromEntries((desk.messages || []).map((m) => [m.id, m]));
       return { read_only: true, wrote: false, total: count.total, line: count.line, by_kind: count.byKind, quiet_hours: !!board.quiet,
         waiting: count.items.map((x) => {
@@ -1691,9 +1692,11 @@ async function runTool(tool, args, ctx, read) {
         seenSign.add(key);
         plainSign.push(t);
       }
+      const need = C.needsCount({ ...desk, notRead: (cap && cap.notRead) || [] }, today, now);
       return { today, now_sao_paulo: b.now, ad_spend, income, decisions,
         ...(asks.length > 3 ? { more_decisions: `${asks.length - 3} more waiting on Luke: see the dashboard` } : {}),
         needs_luke_sign_in: plainSign.length ? plainSign : ["nothing"],
+        needs_you: need.total,
         how_to_report: "Short: four lines at most, numbers exactly as given, \"not read\" never as 0." };
     }
     case "profile_jobs": return P.listProfileJobs(store, now, roster, { by: me });
