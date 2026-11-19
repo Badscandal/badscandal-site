@@ -201,9 +201,12 @@
     var claim = (acc && acc.signals || []).filter(function (s) { return s && String(s.id).indexOf("claim") === 0 && s.level === "red"; });
     var href = videoHref(row || {});
     var h = '<section class="gsec" id="youtubeBox"><h3>YouTube</h3>';
-    h += '<p class="d">Subscribers ' + num(pick(summary && summary.followers, row && (row.subscribers != null ? row.subscribers : row.followers))) + " · gained " + signed(pick(summary && summary.day, row && row.change)) + "</p>";
-    h += '<p class="d">Views that day ' + num(pick(summary && summary.views, row && row.views)) + " · official channel " + num(pick(summary && summary.officialViews, row && row.official_views)) + " · other channels " + num(pick(summary && summary.otherViews, row && row.other_views)) + "</p>";
-    h += '<p class="d">Lifetime channel views ' + num(pick(summary && summary.channelViews, row && row.channel_views)) + " · Shorts views " + num(pick(summary && summary.shortsViews, row && row.shorts_views)) + " · watch hours " + hours(pick(row && row.watch_hours, summary && summary.watchHours)) + "</p>";
+    var asShown = function (n, field) { var s = row && row.shown && row.shown[field]; return s ? esc("~" + s) : num(n); };
+    var gained = pick(summary && summary.day, row && row.change);
+    var gainedText = gained == null || gained === "" ? miss() : ((row && row.change_approx) ? "~" : "") + signed(gained);
+    h += '<p class="d">Subscribers ' + asShown(pick(summary && summary.followers, row && (row.subscribers != null ? row.subscribers : row.followers)), "followers") + " · gained " + gainedText + "</p>";
+    h += '<p class="d">Views that day ' + asShown(pick(summary && summary.views, row && row.views), "views") + " · official channel " + asShown(pick(summary && summary.officialViews, row && row.official_views), "official_views") + " · other channels " + asShown(pick(summary && summary.otherViews, row && row.other_views), "other_views") + "</p>";
+    h += '<p class="d">Lifetime channel views ' + asShown(pick(summary && summary.channelViews, row && row.channel_views), "channel_views") + " · Shorts views " + asShown(pick(summary && summary.shortsViews, row && row.shorts_views), "shorts_views") + " · watch hours " + hours(pick(row && row.watch_hours, summary && summary.watchHours)) + "</p>";
     h += "<p class=\"d\">Top video " + (href || (row && row.best_post) ? linkOr(href, row.best_post || row.video_id || "video") : miss()) + "</p>";
     var tops = row && Array.isArray(row.top_videos) ? row.top_videos : [];
     if (!tops.length) h += "<p class=\"d\">Top 3 videos " + miss() + "</p>";

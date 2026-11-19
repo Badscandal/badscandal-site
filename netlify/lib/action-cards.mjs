@@ -460,7 +460,9 @@ export function othersLane({ cards, messages, releases, roster, now = Date.now()
     out.push(laneItem({ key: "c:" + c.id, who: c.waitingOn, name: c.waitingOn === "bot" ? c.owner : c.waitingOn, owner_bot: c.owner || "", text: c.preview || c.text, tone: "", ticket: c.ticket || "", days: daysWaiting(c.createdAt, now) }));
   }
   for (const m of messages || []) {
-    if (!m || !S.isOpen(m) || !bots.has(m.to)) continue;
+    /* a desk note between bots (Alfred's 10:00 spend line, a reply) is not a task. Only an open
+       action that a bot owns belongs here. */
+    if (!m || m.needs !== "action" || !S.isOpen(m) || !bots.has(m.to)) continue;
     const bad = /site check failed/i.test(m.text || "");
     out.push(laneItem({ key: "m:" + m.id, who: "bot", name: m.to, owner_bot: m.to, text: S.clean(`${m.from}: ${m.text}`, 180), tone: bad ? "bad" : "", href: "#messages/" + m.id, days: daysWaiting(m.at, now) }));
   }

@@ -93,6 +93,15 @@
         '<p class="ferr" data-aerr="' + esc(c.id) + '"></p></div></article>';
     }).join("");
   }
+  /* questions stay tappable; a task's reason is its own muted line, never glued to the title */
+  function youHtml(items, wallets, openId) {
+    var rows = items.map(function (it) {
+      if (it.kind === "question" && wallets[it.id]) return '<li class="you-card">' + walletCard(wallets[it.id], it.id === openId) + "</li>";
+      var reason = it.reason ? '<p class="why">' + esc(it.reason) + "</p>" : "";
+      return '<li class="tone-' + esc(it.tone || "") + '"><a href="' + esc(it.href || "#today") + '"><b>' + esc(it.id) + "</b> " + esc(it.title) + "</a>" + reason + "</li>";
+    }).join("");
+    return '<section class="waitlane you" aria-label="Waiting on you"><h2>Waiting on you</h2><ul>' + rows + "</ul></section>";
+  }
   function othersHtml(items) {
     if (!items || !items.length) return "";
     return '<section class="waitlane"><h2>Waiting on others</h2><ul>' + items.map(function (it) {
@@ -129,7 +138,6 @@
     var health = L.accountHealthHome ? L.accountHealthHome(board && board.accountHealth) : { dots: [], needs: [] };
     var risk = [];
     try { risk = L.attention({ sheet: sheet, ov: ov, board: board, bank: window.HQStaff && HQStaff.bank ? HQStaff.bank() : null }); } catch (e) { risk = []; }
-    var need = (stack.top ? [stack.top].concat(stack.rest) : []).concat((auto && auto.needsYou) || []).concat(health.needs || []);
     /* ONE count (18 Nov 2026): the server's board.needs.total, the same number the needs_you tool gives. A card
        snoozed on this phone still counts: it is still waiting on Luke. */
     var count = board && board.needs && typeof board.needs.total === "number" ? board.needs.total : V.needTotal({ messages: allWaiting, sightings: board && board.sightings, auto: auto, healthNeeds: health.needs }).total;
@@ -137,34 +145,34 @@
     var pulse = V.homePulse({ need: count, risk: risk });
     var ids = [stack.top].concat(stack.rest).filter(Boolean).map(function (c) { return c.id; });
     if (ids.indexOf(openId) < 0) openId = stack.top ? stack.top.id : "";
+    var today = (board && board.today) || (sheet && sheet.today) || "";
+    var you = V.waitingOnYou({ messages: waiting, tasks: tasks, disputes: board && board.disputes, today: today, releases: (board && board.releases) || [] });
+    var wallets = {};
+    [stack.top].concat(stack.rest).filter(Boolean).forEach(function (c) { wallets[c.id] = c; });
     var decision = "";
     /* the cards' own line says only the money at risk (the count is the pulse above, said once) */
     if (auto && auto.needsYou && auto.needsYou.length) decision += (auto.money ? '<p class="dhead">' + esc(auto.money) + "</p>" : "") + stackHtml(auto.needsYou, true);
     if (auto && auto.quiet && auto.held && auto.held.length) decision += '<p class="dnone">Quiet hours until 08:00. These wait.</p>' + stackHtml(auto.held, false);
-    if (!stack.caughtUp) {
-      decision += '<div class="wstack">' + [stack.top].concat(stack.rest).map(function (c) { return walletCard(c, c.id === openId); }).join("") + "</div>";
-      if (stack.rest.length) decision += '<p class="wcount">' + stack.rest.length + " more under this one</p>";
-    }
+    if (you.length) decision += youHtml(you, wallets, openId);
     (health.needs || []).forEach(function (n) {
       decision += '<article class="dcard" data-health="' + esc(n.id) + '"><p class="dfrom">' + esc(n.title) + '</p><p class="dline">' + esc(n.line) + "</p>" +
         (n.next ? '<p class="drec">' + esc(n.next) + "</p>" : "") + '<a class="linkbtn" href="' + esc(n.href || "#growth") + '">Open</a></article>';
     });
-    decision += alsoHtml(board, ids.concat(allWaiting.filter(function (m) { return m && snoozed(m.id); }).map(function (m) { return m.id; })));
+    decision += alsoHtml(board, ids.concat(you.map(function (it) { return it.id; })).concat(allWaiting.filter(function (m) { return m && snoozed(m.id); }).map(function (m) { return m.id; })));
     decision += healthDots(health);
     if (auto) decision += othersHtml(auto.waitingOnOthers);
     if (snoozedN) decision += '<p class="wcount">' + snoozedN + " snoozed on this phone (still counted above)</p>";
-    if (!count && !need.length && !snoozedN && !(auto && auto.held && auto.held.length)) decision += '<p class="dnone">Nothing is waiting on you.</p>';
-    if (stack.parked.length) decision += '<details class="look-more"><summary>Waiting on Luke (' + stack.parked.length + ")</summary><ul>" + stack.parked.map(function (t) {
-      return "<li><b>" + esc(t.id) + "</b> " + esc(t.title) + (t.note ? "<small>" + esc(t.note) + "</small>" : "") + "</li>";
-    }).join("") + "</ul></details>";
+    var heldN = auto && auto.held && auto.held.length;
+    var healthN = health.needs && health.needs.length;
+    var cardN = auto && auto.needsYou && auto.needsYou.length;
+    if (!you.length && !cardN && !heldN && !healthN && !snoozedN) decision += '<p class="dnone">Nothing is waiting on you.</p>';
     var covers = {};
     ((ov && ov.songs) || []).forEach(function (s) { if (s && s.title) covers[s.title] = s.cover || ""; });
-    var today = (board && board.today) || (sheet && sheet.today) || "";
     var hero = V.releaseHero((board && board.releases) || [], today, covers);
     var miles = V.milestones((sheet && sheet.songs) || []);
     /* the platform numbers live on Growth & Fans (18 Nov 2026, Luke: they cluttered Needs you) */
     var kpis = [];
-    var watchers = (L.phoneWatchers ? L.phoneWatchers(board) : []).filter(function (w) { return V.lukeSees(w.line) && V.lukeSees(w.title); });
+    var watchers = (L.phoneWatchers ? L.phoneWatchers(board) : []).filter(function (w) { return w.kind !== "dispute" && V.lukeSees(w.line) && V.lukeSees(w.title); });
     var h = V.homeHtml({ pulse: pulse, decision: decision, milestones: miles, hero: hero, kpis: kpis });
     watchers.forEach(function (w) {
       h += '<article class="dcard"><p class="dfrom">' + esc(w.title) + '</p><p class="dline">' + esc(w.line) + "</p>" +

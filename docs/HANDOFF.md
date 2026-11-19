@@ -74,7 +74,8 @@ artist growth bot that all we will need is content and $".
 
 ## In flight (branches not merged)
 
-- **Interactive charts** (branch `cursor/hq-interactive-charts-6ce6`, not merged). Every line on /hq scrubs like Spotify for Artists: a guide, a dot and a dark pill with the day and the real number. A missing day stays a gap. Last period and this period show under a chart only when both windows are the same length and complete. Not live until Luke says deploy.
+- **Dispute follow-up** (branch `cursor/hq-dispute-fixes-f1cf`, not merged). Standup lists include a case waiting on Luke. A rounded Studio figure such as 1.7k is stored as approximate. A claim keeps one id. Cases and song cards are coloured. Needs you is one list. A boost with no ad id is keyed on the post link. The opening bot can rename a song and replace its timeline with event dates. Not live until Luke says deploy.
+- **Interactive charts** (PR #102, on main, `84f32a3`). Every line on /hq scrubs like Spotify for Artists: a guide, a dot and a dark pill with the day and the real number. A missing day stays a gap. Last period and this period show under a chart only when both windows are the same length and complete. Cache `bs-hq-v12`.
 - **Log a boost** (PR #100, on main). Steve logs a boost on `log_growth` with the post link, the ad id, the amount that ad has spent, the currency and paused or active. The account's day total is not that boost.
 - **Boost from the best post** (PR #99, on main). A Reel logged only as the day's best post is a boost when the ranking or an ad names it. A ranking spend with no per-ad scope says "spend not read since boost started".
 - **Account health** (PR #92, on main). A view total at about 35% of the median is a dip, not "in line", and that version left boosted posts out.

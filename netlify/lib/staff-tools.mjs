@@ -302,7 +302,9 @@ export const TOOLS = [
     description: "STEVE, ATLAS, KEVIN, LAURA: ONE call per platform (Growth: followers, views, the best post) or per song (Songs: Spotify streams, listeners, saves, playlist adds) for ONE day, numbers exactly as shown. The change in followers is worked out for you. Anything you could not read: leave it out and name it in gaps with why (TikTok views come a day late; Instagram has no daily views on the web): your duty is marked done, with gaps, never blocked. Sending the same numbers again does nothing; a later call for the same day fills in what was missing. Put your duty id (D-...) in duty if you have more than one duty today. LAURA, a Content ID claim: send claim, and claimant and impact when YouTube showed them, with date. Leave a blank when it was not shown. Do not also send follower numbers on that call. Never guess a claim. Steve, Atlas and Kevin do not record claims. Account health, same tool: Steve, Kevin, Laura, Atlas and Webmaster can send account_status, visible, non_follower_share, recent_posts or site_ok without follower numbers. Atlas or Drop can send artificial_streams on Spotify. Atlas can send track_moved. A check on its own does not mark a growth duty done. Record only what the page showed. STEVE, a boost: send boosts. Each item is link (the post's https link), ad (that ad's id, not the ad account), spend (the amount that one ad has spent), currency (USD) and status (active or paused). Not the daily budget. Not the account's day total. Forge does not record this with record_spend. It is not added to the cap.",
     inputSchema: obj({ bot: BOT, date: str("The day the numbers are for, YYYY-MM-DD. For a Content ID claim: the day YouTube showed it."),
       platform: str("For Growth: TikTok, Instagram, YouTube..."), account: str("For Growth: the account handle."),
-      followers: str("Followers as shown, for example 1240 or 1,240. YouTube: use subscribers (followers is accepted too)."), subscribers: str("YouTube: subscribers as shown. Stored as the follower number."), views: str("Views for the day (or the newest day shown). Not the channel's lifetime total."),
+      followers: str("Followers as shown, for example 1240 or 1,240. YouTube: use subscribers (followers is accepted too). A rounded figure like 1.7k is stored as approximate."), subscribers: str("YouTube: subscribers as shown. Stored as the follower number. 1.7k is approximate."), views: str("Views as shown, including 1.7k or 3.8k. A k or m figure is approximate and shown with a tilde. Not the channel's lifetime total."),
+      change: str("Optional. The subscriber or follower change the page itself shows, like +1 or -2. When you send it, HQ keeps it instead of working one out."),
+      late_read: { type: "boolean", description: "Optional. true when this count is a live reading, not the closed day. The next day's worked-out change is then approximate." },
       views_date: str("The day those views are for, YYYY-MM-DD, when they arrive a day late (TikTok)."),
       channel_views: str("YouTube: the channel's lifetime views (the Official Artist Channel total), not the day's views. The page labels this Lifetime channel views."), shorts_views: str("Shorts or Reels views as shown."), watch_hours: str("YouTube: watch hours as shown. Decimals are kept (for example 56.6)."), monthly_listeners: str("Platform Spotify (Atlas): the artist's monthly listeners as shown in Spotify for Artists (17 Nov 2026)."), brazil_listeners: str("Platform Spotify: the monthly listeners in Brazil, as shown (Audience, Location)."), best_post: str("Optional. The day's best post, in a few words."), best_post_link: str("Optional. Its https link. YouTube may send video_id instead."),
       video_id: str("YouTube: the video id when there is no https link. Either this or best_post_link."),
@@ -314,7 +316,7 @@ export const TOOLS = [
       avg_watch: str("TikTok: average watch time at 1 day, in seconds, decimals allowed."),
       avg_watch_6h: str("TikTok: average watch time at +6h, in seconds. The +6h gate passes when this is at least 2.5 and follows_6h / views_6h is at least 0.14%."),
       posts: { type: "array", description: "Optional. The day's posts, one fixed window per column. Each: date, hook, views_24h, views_7d, likes, comments, saves, shares, follows, follows_6h, follows_48h, avg_watch, link or video_id, boosted true or false. Leave a number out when you could not read it. Do not send 0 for a number you did not see.", items: { type: "object" } },
-      boosts: { type: "array", description: "Steve. A post he boosted. Each: link (the post's https link), ad (that ad's id, not the ad account), spend (the amount that ad has spent), currency (USD), status (active or paused). Not the daily budget and not the account's day total.", items: { type: "object", properties: { link: { type: "string" }, ad: { type: "string" }, spend: { type: "number" }, currency: { type: "string" }, status: { type: "string" }, started: { type: "string" } } } },
+      boosts: { type: "array", description: "Steve. Each: link (https), ad (ad id, or blank or not shown; never the ad account), spend, currency, status (active, paused or deleted). No ad id keys on the post link. Not the day's account total.", items: { type: "object", properties: { link: { type: "string" }, ad: { type: "string" }, spend: { type: "number" }, currency: { type: "string" }, status: { type: "string" }, started: { type: "string" } } } },
       top_videos: { type: "array", description: "YouTube: the top 3 videos that day. Each: title, views, and link or video_id. 3 at most.", items: { type: "object" } },
       fan_signals: { type: "array", description: "TikTok (Kevin): fan signals, the same idea as the Instagram fan inbox. Each: handle, quote, link, about, engage. 8 at most. Leave one out when you did not see it.", items: { type: "object" } },
       pattern: str("Optional. One line on what worked, for the week card. Only what you actually saw."),
@@ -448,22 +450,28 @@ export const TOOLS = [
       entry: str("Optional. One short line for the timeline."),
       claim_id: str("Optional. The id from read_claims, when this case escalates that Content ID claim.") }, ["bot", "song", "platform", "type"]) },
   { name: "update_case", title: "Update a dispute case",
-    description: "Update ONE case you own (Nova may update any). id from read_cases. Set status (open, waiting on them, waiting on Luke, waiting on bot, resolved), waiting_on, next_check (YYYY-MM-DD), recommendation, proposal, or entry (one short timeline line). Put status waiting on Luke when he has to decide, with the recommendation and the proposal filled in. You cannot set his decision, and you cannot mark a case ignored: he does that on the dashboard. When he has decided, read_cases shows decision and the status is waiting on bot: do what he confirmed or wrote, then update the case.",
+    description: "Update ONE case you own (Nova may update any). id from read_cases. Set song, status (open, waiting on them, waiting on Luke, waiting on bot, solved - confirm, resolved), waiting_on, next_check (YYYY-MM-DD), recommendation, proposal, entry (one timeline line; entry_date is its YYYY-MM-DD), or timeline (replaces the whole timeline; only the bot who opened the case). Put status waiting on Luke when he has to decide. Put status solved - confirm when it is solved and he only has to confirm. You cannot set his decision, and you cannot mark a case ignored. Resolved or ignored clears next_check and waiting_on.",
     inputSchema: obj({ bot: BOT,
       id: str("The case id from read_cases."),
-      status: str("Optional. open | waiting on them | waiting on Luke | waiting on bot | resolved."),
-      waiting_on: str("Optional. Who or what you are waiting for. Empty clears it."),
-      next_check: str("Optional. The next day you will look, YYYY-MM-DD. Empty clears it."),
-      recommendation: str("Optional. One plain paragraph. Replaces the previous one."),
-      proposal: str("Optional. The reply or dispute text. Replaces the previous one."),
-      entry: str("Optional. One short line added to the timeline.") }, ["bot", "id"]) },
+      song: str("Optional. The song title, when the old one is wrong."),
+      status: str("Optional. open | waiting on them | waiting on Luke | waiting on bot | solved - confirm | resolved."),
+      waiting_on: str("Optional. Who you are waiting for. Empty clears it. Say Luke, not A human."),
+      next_check: str("Optional. YYYY-MM-DD. Empty clears it."),
+      recommendation: str("Optional. One paragraph. Replaces the previous one."),
+      proposal: str("Optional. The reply you want approved. Replaces the previous one."),
+      entry: str("Optional. One timeline line."),
+      entry_date: str("Optional. YYYY-MM-DD for entry. Shown instead of the save time."),
+      timeline: { type: "array", description: "Optional. Opening bot only. Replaces the timeline. Each: text, date (YYYY-MM-DD), by.", items: { type: "object", properties: { text: { type: "string" }, date: { type: "string" }, by: { type: "string" } } } } }, ["bot", "id"]) },
   { name: "read_cases", title: "Read dispute cases", readOnly: true,
     description: "The dispute cases on Songs. Filters: status, song, owner, needs_luke (true = only cases waiting on Luke). Each case includes the timeline, the recommendation, the proposal, and Luke's decision when he has made one (choice, text, at). You cannot set that decision. When status is waiting on bot, do what the decision says, then update_case. A claim_id is the Content ID claim this case came from.",
     inputSchema: obj({ bot: BOT,
       status: str("Optional. open | waiting on them | waiting on Luke | waiting on bot | resolved | ignored."),
       song: str("Optional. Only this song. The title. Accents and capitals do not matter."),
       owner: str("Optional. Only this bot's cases."),
-      needs_luke: { type: "boolean", description: "Optional. true = only cases whose status is waiting on Luke." } }, ["bot"]) },
+      needs_luke: { type: "boolean", description: "Optional. true = waiting on Luke, or solved and waiting for his confirm." } }, ["bot"]) },
+  { name: "delete_case", title: "Delete a TEST dispute case",
+    description: "Delete a case only when its platform is TEST, and only if you opened it. A real case cannot be deleted. Read the id with read_cases. Nothing else is removed.",
+    inputSchema: obj({ bot: BOT, id: str("The case id from read_cases.") }, ["bot", "id"]) },
   { name: "licence_queue", title: "Label licence queue",
     description: "For the Licence bot. With no song: the Label covers whose release pack is ready and whose licence is not done. Each one says waiting on licence. Licensed covers are listed separately with their proof link. To mark one licensed: pass song and proof_link (an https link to the licence saved with the song and the assets in Google Drive). Do this only after Luke has said yes for that song. Nova records that yes with luke_said (Luke's exact words) and the song; the Licence bot cannot record the yes. Never pass an amount, a card or a bank detail: HQ does not take payment. You report to Nova only.",
     inputSchema: obj({ bot: BOT,
@@ -1083,7 +1091,7 @@ async function runTool(tool, args, ctx, read) {
         const extra = hasAccountCheck(args) ? await checkOf() : {};
         const c = await S.recordContentClaim(store, now, roster, { by: me, date: args.date, claim: args.claim, claimant: args.claimant, impact: args.impact, song: args.song_claim || args.song, video: args.video, video_id: args.video_id, claim_type: args.claim_type, status: args.status, reach_effect: args.reach_effect, money_effect: args.money_effect, strike: args.strike, action: args.action, owner: args.owner });
         if (!c || !c.item) throw new S.StaffError("That claim was not saved. Try again.");
-        if (c.duplicate) return { saved: false, duplicate: true, note: "That claim was already recorded for that day. Nothing was added.", ...extra };
+        if (c.duplicate) return { saved: false, duplicate: true, note: "That claim is already recorded. Nothing was added. A later day only updates last checked.", ...extra };
         return { saved: true, duplicate: false, claim: c.item.claim, date: c.item.date, shown_on: "badscandal.com/hq, Rights", ...extra };
       }
       if ((args.claims_checked === true || args.claims_checked === "yes" || args.claims_checked === "true") && !hasNumbers) {
@@ -1104,7 +1112,7 @@ async function runTool(tool, args, ctx, read) {
       const prev = me !== "Claude" && args.platform && ctx.hq ? await ctx.hq().then((h) => { const g = h && h.growth ? h.growth.find((p) => String(p.platform).toLowerCase() === String(args.platform).trim().toLowerCase()) : null; return g && g.lastDay ? { date: g.lastDay, followers: g.followers } : null; }).catch(() => null) : null;
       const r = await S.logGrowth(store, now, roster, { by: me, date: args.date, platform: args.platform, account: args.account, followers: args.followers, subscribers: args.subscribers, views: args.views, views_date: args.views_date, channel_views: args.channel_views, shorts_views: args.shorts_views, watch_hours: args.watch_hours, monthly_listeners: args.monthly_listeners, brazil_listeners: args.brazil_listeners, best_post: args.best_post, best_post_link: args.best_post_link,
         video_id: args.video_id, official_views: args.official_views, other_views: args.other_views, views_6h: args.views_6h, follows_6h: args.follows_6h, follows_48h: args.follows_48h, avg_watch: args.avg_watch, avg_watch_6h: args.avg_watch_6h, posts: args.posts, boosts: args.boosts, top_videos: args.top_videos, fan_signals: args.fan_signals, pattern: args.pattern, ad_spend: args.ad_spend, ad_currency: args.ad_currency, paid_views: args.paid_views, organic_views: args.organic_views, ads_read_at: args.ads_read_at,
-        song: args.song, streams: args.streams, listeners: args.listeners, saves: args.saves, playlist_adds: args.playlist_adds, gaps: args.gaps, duty: args.duty, prev });
+        song: args.song, streams: args.streams, listeners: args.listeners, saves: args.saves, playlist_adds: args.playlist_adds, gaps: args.gaps, duty: args.duty, change: args.change, late_read: args.late_read, prev });
       const extra = hasAccountCheck(args) ? await checkOf() : {};
       const fixedWords = r.corrected && r.corrected.length ? r.corrected.map((c) => `${c.date}: ${c.from == null ? "none" : (c.from >= 0 ? "+" : "") + c.from} -> ${(c.to >= 0 ? "+" : "") + c.to}`) : null;
       if (r.duplicate) return { saved: false, duplicate: true, ...(fixedWords ? { changes_fixed: fixedWords } : {}),
@@ -1142,6 +1150,10 @@ async function runTool(tool, args, ctx, read) {
     }
     case "read_cases":
       return S.readCases(store, now, { status: args.status, song: args.song, owner: args.owner, needs_luke: args.needs_luke });
+    case "delete_case": {
+      const r = await S.deleteCase(store, now, roster, { ...args, by: me });
+      return { deleted: true, id: r.id, song: r.song, platform: r.platform, note: "The TEST case is gone." };
+    }
     case "income_check": {
       const c = await S.incomeCheck(store, now, roster, { ...args, bot: me });
       return { saved: true, account: c.account, day: c.day, new_payments: c.new, note: c.new > 0 ? "Now make sure each of those payments went through submit_income." : "Recorded as checked, nothing new." };
@@ -1490,7 +1502,7 @@ async function runTool(tool, args, ctx, read) {
         const link = S.httpsLink(m.link) || (Array.isArray(m.links) ? m.links.map((x) => S.httpsLink(x)).find(Boolean) : "");
         return { id: m.id, needs: m.needs, waiting: S.waitedFor(now - Date.parse(m.at)), since: m.sp, text: S.excerptText(S.hidePrivate(m.text), 160), ...(link ? { link } : {}) };
       });
-      if (me === "Claude") return { reconnect: conn.status, connector: { tools: conn.tools, version: conn.version, reconnect_needed: conn.reconnect_needed }, you: "Claude", today, now: b.now, waiting_on_you: b.waiting.claude.map(short), questions_to_luke: questions("Claude"), card_answers, ...(luke_tap ? { luke_tap } : {}), ...forYou(b.waiting.claude.map((m) => m.id)), waiting_on_luke: b.waiting.luke.map(short),
+      if (me === "Claude") return { reconnect: conn.status, connector: { tools: conn.tools, version: conn.version, reconnect_needed: conn.reconnect_needed }, you: "Claude", today, now: b.now, waiting_on_you: b.waiting.claude.map(short), questions_to_luke: questions("Claude"), card_answers, ...(luke_tap ? { luke_tap } : {}), ...forYou(b.waiting.claude.map((m) => m.id)), waiting_on_luke: b.waiting.luke.map(short).concat(S.disputeWaits(desk.disputes)),
         releases: rel.filter((v) => S.releaseActive(v) || v.status === "draft").map((v) => `${v.title}: ${v.status === "draft" ? "draft" : v.released ? "released" : "coming"}, ${when(v.date)}, ${v.counts.done} of ${v.counts.total} steps done` + (v.counts.late ? `, ${v.counts.late} late` : "") + (v.counts.blocked ? `, ${v.counts.blocked} blocked` : "") + (v.missing.length ? `; missing: ${v.missing.map((m) => m.short).join(", ")}` : "")),
         unknown_in_spotify: b.sightings.items.filter((x) => x.state === "unknown").map((x) => `${x.title}, ${x.dateWords}`),
         ...(sheetNote ? { note: sheetNote } : {}) };
@@ -1510,9 +1522,11 @@ async function runTool(tool, args, ctx, read) {
       const revolutLive = ((desk.income && desk.income.entries) || []).some((e) => /revolut/i.test(e.account || ""));
       let igConnected = false;
       try { if (ctx.ig) { const st = await ctx.ig().get("state.json"); igConnected = !!(st && (st.lastOkAt || st.username)); } } catch {}
-      const knownDuty = INSTRUCTION_LINES.filter(([who]) => who && who.split(" ").includes(me)).map(([, text]) => text);
+      const knownDuty = INSTRUCTION_LINES.map(([, text]) => text);
       const full = (S.DEFAULT_ROSTER.find((b) => b.name === me) || {}).duty || "";
-      const uncut = (duty) => S.fullDuty(duty, [full, ...knownDuty]);
+      const dutyPool = [full, ...knownDuty, ...S.DEFAULT_ROSTER.map((b) => b.duty || "")];
+      const uncut = (duty) => S.fullDuty(duty, dutyPool);
+      const dutyShown = S.dutyPair(w.duty, dutyPool);
       const dutyTask = (task) => (me === "Atlas" && /monthly listeners in note|salvation/i.test(task || "")
         ? "Log yesterday's Spotify numbers for every released song, plus monthly listeners and Brazil listeners in their own fields (monthly_listeners and brazil_listeners). There is no Salvation card."
         : uncut(task));
@@ -1535,12 +1549,12 @@ async function runTool(tool, args, ctx, read) {
         ...(sparkDay ? { reports_to: "Nova", content_ideas: sparkDay, posts: "Read only. Never post, comment, send a DM, or touch an ad." } : {}),
         ...(me === "Atlas" ? { numbers_how: "Monthly listeners and Brazil listeners go in log_growth as monthly_listeners and brazil_listeners. They are not a note, and there is no Salvation card." } : {}),
         ...(me === "Laura" ? { claims_page: "badscandal.com/hq#rights", claims_how: "Read claims with read_claims. Each claim has an id: escalate one into a dispute with open_case and that claim_id. The claim stays on Rights. When YouTube's Content ID page has been checked today, call log_growth with claims_checked true and no follower numbers. A missing field stays not reported." } : {}),
-        daily_duty: uncut(w.duty), usual_time: w.time, schedule: S.scheduleForMyDay(me, w.schedule, { today, releases: rel, nextDate: nextRel && nextRel.date, duty: duties[0] }),
+        daily_duty: dutyShown.text, daily_duty_full: dutyShown.full, usual_time: w.time, schedule: S.scheduleForMyDay(me, w.schedule, { today, releases: rel, nextDate: nextRel && nextRel.date, duty: duties[0] }),
         duties_today: duties,
         open_tasks: w.tasks.filter((t) => !S.staleTask(t) && S.signInOpen(t, signedRaw.join(" "))).map((t) => ({ id: t.id, task: dutyTask(t.task), deadline: /^invalid date$/i.test(String(t.deadline || "")) ? "" : t.deadline, status: t.late ? "late" : t.status, ...(t.blocker ? { blocker: t.blocker } : {}), ...(t.note ? { your_note: t.note } : {}) })),
         questions_to_luke: questions(me), card_answers, ...(luke_tap ? { luke_tap } : {}),
         ...(signedOut.length ? { signed_out_accounts: signedOut.slice(0, 6) } : {}),
-        waiting_on_you: w.waiting, notes_for_everyone: notes.map(short), ...forYou(w.waiting.map((m) => m.id).concat(notes.map((m) => m.id))),
+        waiting_on_you: w.waiting, waiting_on_luke: b.waiting.luke.map(short).concat(S.disputeWaits(desk.disputes)), notes_for_everyone: notes.map(short), ...forYou(w.waiting.map((m) => m.id).concat(notes.map((m) => m.id))),
         your_last_update: (() => {
           if (!w.last) return "none yet";
           let line = `${w.last.at} ${w.last.status}: ${w.last.message}${w.last.link ? " " + w.last.link : ""}`;
@@ -1569,7 +1583,7 @@ async function runTool(tool, args, ctx, read) {
     }
     case "team_board":
       return { today, now_sao_paulo: b.now, duties: hq ? { done: hq.team.duties.done, total: hq.team.duties.total, late: hq.team.duties.late, blocked: hq.team.duties.blocked } : "not read",
-        team: b.staff.map(worker), waiting_on_luke: b.waiting.luke.map(short), waiting_on_claude: b.waiting.claude.map(short), open_messages_for_bots: b.waiting.bots,
+        team: b.staff.map(worker), waiting_on_luke: b.waiting.luke.map(short).concat(S.disputeWaits(desk.disputes)), waiting_on_claude: b.waiting.claude.map(short), open_messages_for_bots: b.waiting.bots,
         latest_updates: dedupeGrowthUpdates(b.updates.slice(0, 20).map((u) => `${u.sp} ${u.bot} ${u.status}: ${u.message}${u.link ? " " + u.link : ""}`)),
         growth: S.growthOnce(await S.listGrowth(store, now, 2)),
         releases: rel.filter(S.releaseActive).map((v) => ({ song: v.title, date: when(v.date), done: `${v.counts.done} of ${v.counts.total}`, late: v.counts.late, blocked: v.counts.blocked,

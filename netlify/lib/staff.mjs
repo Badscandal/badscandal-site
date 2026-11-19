@@ -153,6 +153,16 @@ export function fullDuty(text, lines) {
   }
   return raw;
 }
+/* what my_day shows. The full restored line is always in `full`. A line still too long for the
+   short field is cut at a sentence, never mid-word (19 Nov 2026: "Luke upload"). */
+export function dutyPair(text, lines) {
+  const full = fullDuty(text, lines);
+  const max = 700;
+  if (!full || full.length <= max) return { text: full, full };
+  const slice = full.slice(0, max);
+  const end = Math.max(slice.lastIndexOf(". "), slice.lastIndexOf("! "), slice.lastIndexOf("? "));
+  return { text: (end >= 80 ? slice.slice(0, end + 1) : slice).trim(), full };
+}
 /* known stale duty lines, rewritten when they are shown. The sheet itself is not changed. */
 export function freshDuty(text) {
   let t = String(text || "");
@@ -421,7 +431,7 @@ export function setRoster(store, list) {
     seen.add(low(name));
     noSecrets(JSON.stringify(b));
     return {
-      name, role: clean(b.role, 60), why: cleanText(b.why, 400), duty: clipWords(b.duty, 400), time: /^\d{2}:\d{2}$/.test(b.time || "") ? b.time : "",
+      name, role: clean(b.role, 60), why: cleanText(b.why, 400), duty: cleanText(b.duty, 2000), time: /^\d{2}:\d{2}$/.test(b.time || "") ? b.time : "",
       schedule: (Array.isArray(b.schedule) ? b.schedule : []).slice(0, 12).map((s) => ({ time: clipWords(s && s.time, 80), what: clipWords(s && s.what, 240) })).filter((s) => s.what),
       writes: clean(b.writes, 200), access: clean(b.access, 300), blockers: clean(b.blockers, 300),
       state: ["active", "paused", "blocked"].includes(b.state) ? b.state : "active",
@@ -2662,10 +2672,19 @@ export const GROWERS = ["Steve", "Atlas", "Kevin", "Laura", "Nova", "Claude", "H
 const GROWTH_NUM = ["followers", "views", "channel_views", "shorts_views", "monthly_listeners", "brazil_listeners", "subscribers", "official_views", "other_views", "views_6h", "follows_6h", "follows_48h", "paid_views", "organic_views"], SONG_NUM = ["streams", "listeners", "saves", "playlist_adds"];
 const growKey = (month) => `grow/${month}.json`;
 /* a count: "1240" or "1,240" (never "about 1k", never a guess) */
-function countOf(v, name) {
+/* exact "1240" / "1,240", or a rounded Studio figure "1.7k" / "3.8m" (19 Nov 2026). A suffix is
+   approximate: the number is expanded so the change math still works, and `shown` keeps the form. */
+function parseCount(v, name) {
   const t = String(v).trim().replace(/\s/g, "");
-  if (!/^(\d{1,3}(,\d{3})+|\d+)$/.test(t)) fail(`${name} must be a number as shown (for example 1240 or 1,240), never an estimate. If you could not read it, leave it out and name it in gaps.`);
-  return Number(t.replace(/,/g, ""));
+  if (/^(\d{1,3}(,\d{3})+|\d+)$/.test(t)) return { n: Number(t.replace(/,/g, "")), approx: false, shown: "" };
+  const m = t.match(/^(\d+(?:\.\d+)?)([kKmM])$/);
+  if (!m) fail(`${name} must be a number as shown (for example 1240, 1,240 or 1.7k), never an estimate. If you could not read it, leave it out and name it in gaps.`);
+  const n = Math.round(Number(m[1]) * (/m/i.test(m[2]) ? 1000000 : 1000));
+  const shown = m[1].replace(/(\.\d*?)0+$/, "$1").replace(/\.$/, "") + m[2].toLowerCase();
+  return { n, approx: true, shown };
+}
+function countOf(v, name) {
+  return parseCount(v, name).n;
 }
 const fmtN = (n) => Number(n).toLocaleString("en-US");
 function decOf(v, name) {
@@ -2719,27 +2738,64 @@ function growthPosts(list) {
     return row;
   });
 }
-/* Steve logs a boost he can see in the ad tools. This is that one ad, not the account's day and not the cap. */
+/* Steve logs a boost he can see in the ad tools. This is that one ad, not the account's day and not the cap.
+   An Instagram-app boost often has no ad id: leave ad blank, or say "not shown". That boost is keyed on the post link. */
 const BOOST_STATUS = ["active", "paused", "deleted"];
+const AD_ACCOUNT_IDS = new Set(["230002830106369"]);
+function boostAdOf(raw, where) {
+  const t = clean(raw, 40);
+  if (!t || /^not shown$/i.test(t)) return "";
+  const bare = t.replace(/^act_/i, "");
+  if (AD_ACCOUNT_IDS.has(t) || AD_ACCOUNT_IDS.has(bare)) fail(`${where}: ad must be that ad's id, as shown. Not the ad account.`);
+  if (!/^[A-Za-z0-9]{4,40}$/.test(t)) fail(`${where}: ad must be that ad's id, as shown. Not the ad account. Leave it blank, or say not shown, when the page shows no ad id.`);
+  return t;
+}
+function boostKeyOf(b) {
+  return b && b.ad ? "ad:" + b.ad : "link:" + (b && b.link || "");
+}
+/* a later log updates the boost with the same ad, or the same post link when there is no ad id */
+function mergeGrowthBoosts(prev, next) {
+  const out = [];
+  const index = new Map();
+  const add = (b) => {
+    if (!b || !b.link) return;
+    const key = boostKeyOf(b);
+    const linkKey = "link:" + b.link;
+    const at = index.has(key) ? index.get(key) : (!b.ad && index.has(linkKey) ? index.get(linkKey) : -1);
+    if (at >= 0) {
+      const kept = out[at].ad && !b.ad ? out[at].ad : (b.ad || "");
+      out[at] = { ...out[at], ...b, ...(kept ? { ad: kept } : {}) };
+      if (!out[at].ad) delete out[at].ad;
+      return;
+    }
+    const row = { ...b };
+    if (!row.ad) delete row.ad;
+    index.set(boostKeyOf(row), out.length);
+    if (row.link) index.set("link:" + row.link, out.length);
+    out.push(row);
+  };
+  for (const b of prev || []) add(b);
+  for (const b of next || []) add(b);
+  return out.slice(0, 10);
+}
 function growthBoosts(list) {
   if (list == null) return null;
   if (!Array.isArray(list)) fail("boosts must be a list.");
-  if (!list.length) fail("boosts needs the post. Each one has link, ad, spend, currency and status.");
+  if (!list.length) fail("boosts needs the post. Each one has link, spend, currency and status. ad is the ad id, or blank or not shown.");
   if (list.length > 10) fail("boosts is 10 at most.");
-  return list.map((p, i) => {
+  return mergeGrowthBoosts([], list.map((p, i) => {
     if (!p || typeof p !== "object") fail(`boosts ${i + 1} must be an object.`);
     const where = `boosts ${i + 1}`;
     const link = httpsLink(clean(p.link, 400));
     if (!link) fail(`${where}: link must be the post's https link.`);
-    const ad = clean(p.ad || p.ad_id, 40);
-    if (!/^[A-Za-z0-9]{4,40}$/.test(ad)) fail(`${where}: ad must be that ad's id, as shown. Not the ad account.`);
+    const ad = boostAdOf(p.ad != null ? p.ad : p.ad_id, where);
     const status = clean(p.status, 20).toLowerCase();
     if (!BOOST_STATUS.includes(status)) fail(`${where}: status must be active, paused or deleted.`);
     const spend = amountOf(p.spend);
     if (spend == null || spend < 0) fail(`${where}: spend must be the amount that ad has spent, for example 12.40. Not the daily budget and not the account's day total.`);
     const currency = clean(p.currency, 3).toUpperCase();
     if (!/^[A-Z]{3}$/.test(currency)) fail(`${where}: currency must be the three-letter code, for example USD.`);
-    const row = { link, ad, spend, currency, status };
+    const row = { link, ...(ad ? { ad } : {}), spend, currency, status };
     const started = clean(p.started || p.boost_started, 40);
     if (started) {
       if (!/^\d{4}-\d{2}-\d{2}/.test(started)) fail(`${where}: started must be YYYY-MM-DD or YYYY-MM-DD HH:MM.`);
@@ -2747,7 +2803,7 @@ function growthBoosts(list) {
     }
     noSecrets(link, ad, status, started);
     return row;
-  });
+  }));
 }
 function topVideosOf(list) {
   if (list == null) return null;
@@ -2805,6 +2861,34 @@ export async function listGrowth(store, now, months = 2) {
   const docs = await Promise.all(keys.map((k) => readDoc(store, k, [])));
   return docs.flatMap((d) => (Array.isArray(d.data) ? d.data : []));
 }
+function noteShown(row, vals, approx, shown) {
+  for (const n of Object.keys(vals)) {
+    if (approx[n]) {
+      row.approx = { ...(row.approx || {}), [n]: true };
+      row.shown = { ...(row.shown || {}), [n]: shown[n] };
+    } else if (row.approx || row.shown) {
+      if (row.approx) delete row.approx[n];
+      if (row.shown) delete row.shown[n];
+    }
+  }
+  if (row.approx && !Object.keys(row.approx).length) delete row.approx;
+  if (row.shown && !Object.keys(row.shown).length) delete row.shown;
+}
+/* Studio's own change wins. Otherwise the difference, marked approximate when the previous count was a late live read. */
+function applyFollowerChange(row, o) {
+  if (o.lateRead) row.late_read = true;
+  if (o.studioChange != null) {
+    row.change = o.studioChange;
+    row.change_source = "studio";
+    row.change_approx = false;
+    return;
+  }
+  if (!o.followersTouched || row.followers == null || o.prevF == null) return;
+  if (row.change_source === "studio") return;
+  row.change = row.followers - o.prevF;
+  row.change_source = "computed";
+  row.change_approx = !!(o.earlier && o.earlier.late_read);
+}
 /* One call: the day's Growth (platform) or Songs (song) numbers. The change in followers is worked out
    against the last reading before that day (the desk's, or a.prev from the sheet when it is later); the
    same numbers again are skipped; a later call fills what was missing; the duty is marked done (with its
@@ -2819,8 +2903,19 @@ export async function logGrowth(store, now, roster, a) {
   if (!!platform === !!song) fail("Give platform OR song: platform for followers and views (Growth), song for its Spotify numbers (Songs).");
   const kind = song ? "song" : "growth", names = song ? SONG_NUM : GROWTH_NUM;
   if (!song && /youtube/i.test(platform) && a.subscribers != null && (a.followers == null || String(a.followers).trim() === "")) a.followers = a.subscribers;
-  const vals = {};
-  for (const n of names) if (a[n] != null && String(a[n]).trim() !== "") vals[n] = countOf(a[n], n);
+  const vals = {}, approx = {}, shown = {};
+  for (const n of names) if (a[n] != null && String(a[n]).trim() !== "") {
+    const c = parseCount(a[n], n);
+    vals[n] = c.n;
+    if (c.approx) { approx[n] = true; shown[n] = c.shown; }
+  }
+  let studioChange = null;
+  if (!song && a.change != null && String(a.change).trim() !== "") {
+    const t = String(a.change).trim().replace(/^\+/, "").replace(/,/g, "");
+    if (!/^-?\d+$/.test(t)) fail("change must be the change the page shows, like +1 or -2. Leave it out and HQ works it out.");
+    studioChange = Number(t);
+  }
+  const lateRead = a.late_read === true || /^(true|yes)$/i.test(String(a.late_read || "").trim());
   const extra = {};
   if (!song) {
     if (a.best_post != null && clean(a.best_post, 200)) extra.best_post = clean(a.best_post, 200);
@@ -2870,18 +2965,31 @@ export async function logGrowth(store, now, roster, a) {
     if (old) {
       const filled = [], replaced = [];
       for (const [k, v] of Object.entries({ ...vals, ...extra })) {
+        if (k === "boosts") {
+          const merged = mergeGrowthBoosts(old.boosts, v);
+          if (sameStored(old.boosts || [], merged)) continue;
+          if (old.boosts == null || old.boosts === "") { old.boosts = merged; filled.push(k); }
+          else { (old.was || (old.was = {}))[k] = old.boosts; old.boosts = merged; replaced.push(k); }
+          continue;
+        }
         if (old[k] == null || old[k] === "") { old[k] = v; filled.push(k); delete (old.gaps || {})[k]; }
         else if (!sameStored(old[k], v)) { (old.was || (old.was = {}))[k] = old[k]; old[k] = v; replaced.push(k); }
       }
       for (const [k, w] of Object.entries(gaps)) if (old[k] == null) (old.gaps || (old.gaps = {}))[k] = w;
-      if (!filled.length && !replaced.length) return { skip: true, value: { row: old, duplicate: true, filled, replaced } };
-      if (!song && (filled.includes("followers") || replaced.includes("followers"))) old.change = prevF != null ? old.followers - prevF : null;
+      const shownSame = Object.keys(approx).every((n) => old.shown && old.shown[n] === shown[n]);
+      const changeSame = studioChange == null || (old.change === studioChange && old.change_source === "studio");
+      const lateSame = !lateRead || old.late_read === true;
+      if (!filled.length && !replaced.length && shownSame && changeSame && lateSame) return { skip: true, value: { row: old, duplicate: true, filled, replaced } };
+      noteShown(old, vals, approx, shown);
+      if (!song) applyFollowerChange(old, { studioChange, prevF, earlier, lateRead, followersTouched: filled.includes("followers") || replaced.includes("followers") || studioChange != null });
       old.updatedAt = at; old.by = by;
       return { value: { row: old, duplicate: false, filled, replaced } };
     }
     if (list.length >= 2000) fail("This month's growth list is full. Tell Claude.", "limit");
     const row = { id: newId("g", now), key, kind, date, ...(song ? { song } : { platform, account }), ...Object.fromEntries(names.map((n) => [n, vals[n] ?? null])), ...extra,
-      ...(song ? {} : { change: vals.followers != null && prevF != null ? vals.followers - prevF : null }), gaps, by, at };
+      ...(song ? {} : { change: null }), gaps, by, at };
+    noteShown(row, vals, approx, shown);
+    if (!song) applyFollowerChange(row, { studioChange, prevF, earlier, lateRead, followersTouched: vals.followers != null });
     list.push(row);
     return { value: { row, duplicate: false, filled: [], replaced: [], added: true } };
   });
@@ -2890,7 +2998,11 @@ export async function logGrowth(store, now, roster, a) {
      day again corrects a change saved wrong before. */
   const corrected = song ? [] : await restitch(store, now, key);
   const mine = corrected.find((c) => c.date === date);
-  if (mine && res.row) res.row.change = mine.to;
+  if (mine && res.row && res.row.change_source !== "studio") {
+    res.row.change = mine.to;
+    res.row.change_approx = !!mine.approx;
+    res.row.change_source = "computed";
+  }
   if (res.duplicate) return corrected.length ? { ...res, corrected } : res;
   /* HQ's own rows (the Instagram reader) mark no duty: the bot whose duty it is still says it did it */
   if (by === "HQ") return { ...res, duty: null, ...(corrected.length ? { corrected } : {}) };
@@ -2899,9 +3011,10 @@ export async function logGrowth(store, now, roster, a) {
   const r = res.row, words = [];
   const yt = !song && /youtube/i.test(platform);
   const unit = yt ? "subscribers" : "followers";
-  if (!song && r.followers != null && (res.added || res.filled.includes("followers") || res.replaced.includes("followers") || res.filled.includes("subscribers") || res.replaced.includes("subscribers"))) words.push(`${fmtN(r.followers)} ${unit}` + (r.change != null ? ` (${r.change >= 0 ? "+" : ""}${fmtN(r.change)})` : ""));
+  const asShown = (row, n) => (row.shown && row.shown[n] ? "~" + row.shown[n] : fmtN(row[n]));
+  if (!song && r.followers != null && (res.added || res.filled.includes("followers") || res.replaced.includes("followers") || res.filled.includes("subscribers") || res.replaced.includes("subscribers") || studioChange != null)) words.push(`${asShown(r, "followers")} ${unit}` + (r.change != null ? ` (${r.change_approx ? "~" : ""}${r.change >= 0 ? "+" : ""}${fmtN(r.change)})` : ""));
   const label = { channel_views: "lifetime channel views", official_views: "official channel views that day", other_views: "other channel views that day", shorts_views: "Shorts views", views: "views that day", views_6h: "views at 6h", follows_6h: "follows at 6h", follows_48h: "follows at 48h", paid_views: "paid views", organic_views: "organic views", monthly_listeners: "monthly listeners", brazil_listeners: "Brazil listeners" };
-  for (const n of names) if (n !== "followers" && n !== "subscribers" && r[n] != null && (res.added || res.filled.includes(n) || res.replaced.includes(n))) words.push(`${label[n] || n.replace(/_/g, " ")} ${fmtN(r[n])}`);
+  for (const n of names) if (n !== "followers" && n !== "subscribers" && r[n] != null && (res.added || res.filled.includes(n) || res.replaced.includes(n))) words.push(`${label[n] || n.replace(/_/g, " ")} ${asShown(r, n)}`);
   if (r.watch_hours != null && (res.added || res.filled.includes("watch_hours") || res.replaced.includes("watch_hours"))) words.push(`watch hours ${r.watch_hours}`);
   const gapText = Object.entries(r.gaps || {}).map(([k, w]) => `${k}: ${w}`).join("; ");
   const msg = `${song || platform} ${shortDay(date)}: ${words.join(", ") || "numbers filled in"}` + (res.added ? "" : " (filled in)");
@@ -2918,7 +3031,13 @@ async function restitch(store, now, key) {
   let prev = null;
   for (const x of rows) {
     if (x.followers == null) continue;
-    if (prev) { const want = x.followers - prev.followers; if (x.change !== want) fix[x.id] = { date: x.date, from: x.change ?? null, to: want }; }
+    /* a change Studio itself showed is kept; a worked-out change against a late live read is approximate */
+    if (x.change_source === "studio") { prev = x; continue; }
+    if (prev) {
+      const want = x.followers - prev.followers;
+      const approx = !!prev.late_read;
+      if (x.change !== want || !!x.change_approx !== approx) fix[x.id] = { date: x.date, from: x.change ?? null, to: want, approx };
+    }
     prev = x;
   }
   const ids = Object.keys(fix);
@@ -2926,7 +3045,7 @@ async function restitch(store, now, key) {
   for (const m of [...new Set(ids.map((id) => fix[id].date.slice(0, 7)))]) {
     await mutate(store, growKey(m), [], (list) => {
       let n = 0;
-      for (const x of list) if (fix[x.id]) { x.change = fix[x.id].to; n++; }
+      for (const x of list) if (fix[x.id]) { x.change = fix[x.id].to; x.change_source = "computed"; x.change_approx = !!fix[x.id].approx; n++; }
       return n ? { value: n } : { skip: true, value: 0 };
     });
   }
@@ -5221,8 +5340,48 @@ export async function verseReleaseDay(store, now, roster) {
   return out;
 }
 
+/* One claim is one record: video id + claimant + type, with no date (19 Nov 2026). A daily check updates
+   last_checked and keeps the earliest first_seen. Older date-keyed rows for the same claim fold in. */
+export function claimStableKey(c) {
+  const video = (c && (c.video_id || ytIdOf(c.video))) || "";
+  const claimant = songKey((c && c.claimant) || "");
+  const type = songKey((c && c.claim_type) || "");
+  if (video) return `${video}|${claimant}|${type}`;
+  return `${songKey((c && c.claim) || "")}|${claimant}|${type}`;
+}
+export function mergeClaimItems(items) {
+  const list = Array.isArray(items) ? items : (items && Array.isArray(items.items) ? items.items : []);
+  const groups = new Map();
+  const order = [];
+  for (const c of list) {
+    if (!c || typeof c !== "object") continue;
+    const key = claimStableKey(c);
+    if (!groups.has(key)) { groups.set(key, []); order.push(key); }
+    groups.get(key).push(c);
+  }
+  return order.map((key) => {
+    const g = groups.get(key);
+    const byFirst = g.slice().sort((a, b) => String(a.first_seen || a.date || "").localeCompare(String(b.first_seen || b.date || "")));
+    const byLast = g.slice().sort((a, b) => String(a.last_checked || a.date || "").localeCompare(String(b.last_checked || b.date || "")));
+    const first = byFirst[0], last = byLast[byLast.length - 1];
+    const aliases = [...new Set(g.flatMap((x) => [x.key, ...(Array.isArray(x.aliases) ? x.aliases : [])]).filter((k) => k && k !== key))];
+    const out = {};
+    for (const x of byLast) for (const [k, v] of Object.entries(x)) {
+      if (v == null || String(v).trim() === "" || k === "key" || k === "aliases") continue;
+      out[k] = v;
+    }
+    out.key = key;
+    out.by = first.by || out.by || "";
+    out.at = first.at || out.at || "";
+    out.date = first.date || first.first_seen || "";
+    out.first_seen = first.first_seen || first.date || "";
+    out.last_checked = last.last_checked || last.date || first.date || "";
+    if (aliases.length) out.aliases = aliases;
+    return out;
+  });
+}
 /* Content ID claims. Laura records what YouTube showed. A blank claimant or impact stays blank: the page
-   says not reported. The same claim, claimant and day is stored once. A later call fills a blank field. */
+   says not reported. The same video, claimant and type is stored once. A later call fills a blank field. */
 function claimFields(a) {
   const out = {};
   const song = clean(a.song, 120);
@@ -5269,21 +5428,36 @@ export async function recordContentClaim(store, now, roster, a) {
   const impact = a.impact != null && String(a.impact).trim() ? clean(a.impact, 240) : "";
   const more = claimFields(a);
   noSecrets(claim, claimant, impact, more.song || "", more.action || "", more.reach_effect || "", more.money_effect || "");
-  const key = `${songKey(claim)}|${songKey(claimant)}|${date}`;
+  const key = claimStableKey({ claim, claimant, ...more });
   const today = spDay(now);
   return mutate(store, CLAIMS_KEY, { items: [], checked: {} }, (doc) => {
-    const items = doc && Array.isArray(doc.items) ? doc.items : [];
     const checked = doc && doc.checked && typeof doc.checked === "object" ? doc.checked : {};
-    if (!doc || typeof doc !== "object" || Array.isArray(doc)) return { replace: { items, checked }, value: { saved: false, duplicate: false } };
-    const prev = items.find((x) => x && x.key === key);
+    if (!doc || typeof doc !== "object" || Array.isArray(doc)) return { replace: { items: [], checked }, value: { saved: false, duplicate: false } };
+    const items = mergeClaimItems(doc.items);
+    const prev = items.find((x) => {
+      if (!x) return false;
+      if (x.key === key || (x.aliases || []).includes(key)) return true;
+      if (songKey(x.claim) !== songKey(claim) || songKey(x.claimant || "") !== songKey(claimant)) return false;
+      const theirs = songKey(x.claim_type || ""), ours = songKey(more.claim_type || "");
+      return !ours || !theirs || ours === theirs;
+    });
     if (prev) {
       const filled = [];
       for (const [k, v] of Object.entries({ claimant, impact, ...more })) {
         if (!v) continue;
         if (prev[k] == null || prev[k] === "") { prev[k] = v; filled.push(k); }
       }
-      if (!filled.length) return { skip: true, value: { saved: false, duplicate: true, item: prev } };
+      if (date < (prev.first_seen || prev.date || date)) { prev.first_seen = date; prev.date = date; filled.push("first_seen"); }
+      const moved = prev.last_checked !== today;
+      const nextKey = claimStableKey({ ...prev, claim, claimant, ...more });
+      if (nextKey !== prev.key) {
+        prev.aliases = [...new Set([...(prev.aliases || []), prev.key])].filter((k) => k && k !== nextKey);
+        prev.key = nextKey;
+        filled.push("key");
+      }
+      if (!filled.length && !moved && items.length === (doc.items || []).length) return { skip: true, value: { saved: false, duplicate: true, item: prev } };
       prev.last_checked = today;
+      doc.items = items;
       return { value: { saved: true, duplicate: false, updated: true, item: prev } };
     }
     const item = { key, claim, claimant, impact, date, by, at: new Date(now).toISOString(), first_seen: date, last_checked: today, owner: more.owner || "Laura", ...more };
@@ -5298,16 +5472,33 @@ export async function markClaimsChecked(store, now, roster, a) {
   if (!["Laura", "Nova", "Claude", "Luke"].includes(by)) fail("The claims checklist is Laura's. Nothing was saved.", "not_allowed");
   const day = spDay(now);
   return mutate(store, CLAIMS_KEY, { items: [], checked: {} }, (doc) => {
-    const items = doc && Array.isArray(doc.items) ? doc.items : [];
+    const items = mergeClaimItems(doc && Array.isArray(doc.items) ? doc.items : []);
     const checked = doc && doc.checked && typeof doc.checked === "object" && !Array.isArray(doc.checked) ? doc.checked : {};
     checked[day] = { by, at: new Date(now).toISOString() };
     return { replace: { items, checked }, value: { saved: true, day, by, at: checked[day].at } };
   });
 }
+async function retargetClaimCases(store, items) {
+  const map = new Map();
+  for (const c of items || []) for (const a of c.aliases || []) if (a && a !== c.key) map.set(a, c.key);
+  if (!map.size) return;
+  await mutate(store, CASES_KEY, { items: [] }, (doc) => {
+    const list = doc && Array.isArray(doc.items) ? doc.items : [];
+    let n = 0;
+    for (const c of list) if (c && map.has(c.claimId)) { c.claimId = map.get(c.claimId); n++; }
+    return n ? { value: n } : { skip: true, value: 0 };
+  });
+}
 const nrClaim = (v) => (v != null && String(v).trim() !== "" ? v : "not reported");
 export async function readClaims(store, now) {
   const { data } = await readDoc(store, CLAIMS_KEY, { items: [], checked: {} });
-  const items = data && Array.isArray(data.items) ? data.items : [];
+  const raw = data && Array.isArray(data.items) ? data.items : [];
+  const items = mergeClaimItems(raw);
+  if (JSON.stringify(items) !== JSON.stringify(raw)) {
+    const checked0 = data && data.checked && typeof data.checked === "object" ? data.checked : {};
+    await mutate(store, CLAIMS_KEY, { items: [], checked: {} }, () => ({ replace: { items, checked: checked0 }, value: true }));
+  }
+  await retargetClaimCases(store, items);
   const checked = data && data.checked && typeof data.checked === "object" ? data.checked : {};
   const day = spDay(now), today = checked[day] || null;
   return {
@@ -5331,7 +5522,7 @@ export async function readClaims(store, now) {
    Luke is the only one who decides. A bot cannot write his decision. A Content ID claim is escalated
    by its id (claims.json key); the Rights page keeps the claim and links to the case. */
 const CASES_KEY = "disputes.json";
-export const CASE_STATUS = ["open", "waiting on them", "waiting on Luke", "waiting on bot", "resolved", "ignored"];
+export const CASE_STATUS = ["open", "waiting on them", "waiting on Luke", "waiting on bot", "solved - confirm", "resolved", "ignored"];
 const CASE_TYPES = {
   moderation: "moderation",
   "content id": "Content ID claim",
@@ -5355,22 +5546,68 @@ const caseStatusOf = (v) => {
   return hit;
 };
 const caseManagers = (by) => by === "Nova" || by === "Claude" || by === "Luke";
-function caseTimeline(c, now, by, text) {
+/* a redaction the bots paste in. It is never shown. */
+function stripSecure(v) {
+  return String(v == null ? "" : v).replace(/\[\s*secure value:[^\]]*\]/gi, " ").replace(/\s+/g, " ").trim();
+}
+function waitingName(v) {
+  const t = stripSecure(v).replace(/\s+since\b.*$/i, "").trim();
+  if (/^(a human|human)$/i.test(t)) return "Luke";
+  return t;
+}
+function caseDateOf(date, where) {
+  const d = clean(date, 10);
+  if (!d) return "";
+  if (!caseDay(d)) fail(`${where} must be YYYY-MM-DD. Nothing was saved.`);
+  return d;
+}
+function caseLine(now, by, text, date, where) {
   const line = clean(text, 300);
-  if (!line) return;
-  noSecrets(line);
-  c.timeline = [{ at: new Date(now).toISOString(), by, text: line }, ...(Array.isArray(c.timeline) ? c.timeline : [])].slice(0, 40);
+  if (!line) return null;
+  noSecrets(line, by);
+  const row = { at: new Date(now).toISOString(), by, text: line };
+  const d = date ? caseDateOf(date, where || "date") : "";
+  if (d) {
+    if (d > spDay(now)) fail("That day is still in the future. Nothing was saved.");
+    row.date = d;
+  }
+  return row;
+}
+function caseTimeline(c, now, by, text, date) {
+  const row = caseLine(now, by, text, date, "entry_date");
+  if (!row) return;
+  c.timeline = [row, ...(Array.isArray(c.timeline) ? c.timeline : [])].slice(0, 40);
+}
+function replaceTimeline(list, now, by) {
+  if (!Array.isArray(list)) fail("timeline must be a list of entries. Nothing was saved.");
+  if (!list.length) fail("timeline needs at least one line. Nothing was saved.");
+  if (list.length > 40) fail("timeline is 40 lines at most. Nothing was saved.");
+  return list.map((e, i) => {
+    const where = `timeline ${i + 1}`;
+    if (!e || typeof e !== "object") fail(`${where} must be an object. Nothing was saved.`);
+    const who = e.by != null && String(e.by).trim() ? clean(e.by, 40) : by;
+    const row = caseLine(now, who, e.text || e.entry, e.date, `${where} date`);
+    if (!row) fail(`${where} needs text. Nothing was saved.`);
+    return row;
+  });
 }
 export function caseOut(c) {
   if (!c) return null;
-  const decision = c.decision && c.decision.at ? { choice: c.decision.choice, text: c.decision.text || "", at: c.decision.at, by: "Luke" } : null;
+  const closed = c.status === "resolved" || c.status === "ignored";
+  const decision = c.decision && c.decision.at ? { choice: stripSecure(c.decision.choice), text: stripSecure(c.decision.text || ""), at: c.decision.at, by: "Luke" } : null;
   return {
-    id: c.id, song: c.song || "", songKey: c.songKey || songKey(c.song), platform: c.platform || "", type: c.type || "",
-    opened: c.opened || "", owner: c.owner || "", status: c.status || "open",
-    waitingOn: c.waitingOn || "", waitingSince: c.waitingSince || "", nextCheck: c.nextCheck || "",
-    claimId: c.claimId || "", recommendation: c.recommendation || "", proposal: c.proposal || "",
-    decision, needsLuke: c.status === "waiting on Luke",
-    timeline: (Array.isArray(c.timeline) ? c.timeline : []).map((e) => ({ at: e.at || "", when: e.at && Number.isFinite(Date.parse(e.at)) ? spStamp(Date.parse(e.at)) : "", by: e.by || "", text: e.text || "" })),
+    id: c.id, song: stripSecure(c.song || ""), songKey: c.songKey || songKey(c.song), platform: stripSecure(c.platform || ""), type: stripSecure(c.type || ""),
+    opened: c.opened || "", owner: stripSecure(c.owner || ""), status: c.status || "open",
+    waitingOn: closed ? "" : waitingName(c.waitingOn || ""), waitingSince: closed ? "" : (c.waitingSince || ""), nextCheck: closed ? "" : (c.nextCheck || ""),
+    claimId: c.claimId || "", recommendation: stripSecure(c.recommendation || ""), proposal: stripSecure(c.proposal || ""),
+    decision, needsLuke: c.status === "waiting on Luke" || c.status === "solved - confirm",
+    timeline: (Array.isArray(c.timeline) ? c.timeline : []).map((e) => ({
+      at: e.at || "",
+      ...(e.date ? { date: e.date } : {}),
+      when: e.date || "",
+      by: stripSecure(e.by || ""),
+      text: stripSecure(e.text || ""),
+    })),
   };
 }
 async function casesDoc(store) {
@@ -5386,12 +5623,13 @@ export async function openCase(store, now, roster, a) {
   let owner = a.owner != null && String(a.owner).trim() ? whoIs(a.owner, roster) : (PEOPLE.includes(by) ? "" : by);
   if (!owner) fail("owner is the bot who carries this case. Nothing was saved.");
   if (owner !== by && !caseManagers(by)) fail(`That case would be ${owner}'s. Only ${owner} (or Nova) opens it. Nothing was saved.`, "not_allowed");
-  const claimId = a.claim_id != null && String(a.claim_id).trim() ? clean(a.claim_id, 200) : "";
+  let claimId = a.claim_id != null && String(a.claim_id).trim() ? clean(a.claim_id, 200) : "";
   let claim = null;
   if (claimId) {
     const { data } = await readDoc(store, CLAIMS_KEY, { items: [] });
-    const items = data && Array.isArray(data.items) ? data.items : [];
-    claim = items.find((c) => c && c.key === claimId) || null;
+    const items = mergeClaimItems(data && data.items);
+    claim = items.find((c) => c && (c.key === claimId || (c.aliases || []).includes(claimId))) || null;
+    if (claim) claimId = claim.key;
     if (!claim) fail("No Content ID claim has that id. Read them with read_claims, then pass that id as claim_id. Nothing was opened.");
   }
   const song = clean(a.song, 120) || (claim && clean(claim.song, 120)) || "";
@@ -5451,16 +5689,23 @@ export async function updateCase(store, now, roster, a) {
   }
   const recommendation = a.recommendation != null ? cleanText(a.recommendation, 800) : null;
   const proposal = a.proposal != null ? cleanText(a.proposal, 2000) : null;
+  const song = a.song != null && String(a.song).trim() ? clean(a.song, 120) : null;
+  if (a.song != null && String(a.song).trim() && (!song || song.length < 2)) fail("song is the song's title. Nothing was saved.");
   const entry = a.entry != null && String(a.entry).trim() ? clean(a.entry, 300) : "";
-  if (!status && waitingOn == null && nextCheck == null && recommendation == null && proposal == null && !entry) fail("Say what changed: status, waiting_on, next_check, recommendation, proposal, or a timeline entry. Nothing was saved.");
-  noSecrets(waitingOn || "", recommendation || "", proposal || "", entry);
+  const entryDate = a.entry_date != null && String(a.entry_date).trim() ? clean(a.entry_date, 10) : "";
+  if (entryDate && !entry) fail("entry_date needs the timeline line in entry. Nothing was saved.");
+  const hasTimeline = a.timeline != null;
+  if (!status && waitingOn == null && nextCheck == null && recommendation == null && proposal == null && !entry && song == null && !hasTimeline) fail("Say what changed: song, status, waiting_on, next_check, recommendation, proposal, a timeline entry, or timeline. Nothing was saved.");
+  noSecrets(song || "", waitingOn || "", recommendation || "", proposal || "", entry);
   const at = new Date(now).toISOString();
   return mutate(store, CASES_KEY, { items: [] }, (doc) => {
     const items = doc && Array.isArray(doc.items) ? doc.items : [];
     const item = items.find((x) => x && x.id === id);
     if (!item) fail("There is no case with that id. Read them with read_cases. Nothing was saved.", "not_found");
     if (item.owner !== by && !caseManagers(by)) fail(`This case is ${item.owner}'s. Nothing was saved.`, "not_allowed");
+    if (hasTimeline && item.createdBy !== by) fail(`Only ${item.createdBy || "the bot who opened this case"} can replace the timeline. Nothing was saved.`, "not_allowed");
     const bits = [];
+    if (song && song !== item.song) { item.song = song; item.songKey = songKey(song); bits.push("Song: " + song); }
     if (status && status !== item.status) { item.status = status; bits.push("Status: " + status); }
     if (waitingOn != null && waitingOn !== item.waitingOn) {
       item.waitingOn = waitingOn;
@@ -5470,8 +5715,15 @@ export async function updateCase(store, now, roster, a) {
     if (nextCheck != null && nextCheck !== (item.nextCheck || "")) { item.nextCheck = nextCheck; bits.push(nextCheck ? "Next check " + nextCheck : "Next check cleared"); }
     if (recommendation != null && recommendation !== (item.recommendation || "")) { item.recommendation = recommendation; bits.push("Recommendation updated"); }
     if (proposal != null && proposal !== (item.proposal || "")) { item.proposal = proposal; bits.push("Proposal updated"); }
+    if (item.status === "resolved" || item.status === "ignored") {
+      item.waitingOn = "";
+      item.waitingSince = "";
+      item.nextCheck = "";
+    }
     item.updatedAt = at;
-    caseTimeline(item, now, by, entry || bits.join(". "));
+    if (hasTimeline) item.timeline = replaceTimeline(a.timeline, now, by);
+    if (entry) caseTimeline(item, now, by, entry, entryDate);
+    else if (!hasTimeline) caseTimeline(item, now, by, bits.join(". "));
     return { value: { saved: true, item } };
   });
 }
@@ -5492,12 +5744,19 @@ export async function decideCase(store, now, roster, a) {
     const item = items.find((x) => x && x.id === id);
     if (!item) fail("There is no case with that id. Nothing was saved.", "not_found");
     const recorded = choice === "confirm" ? (item.proposal || "Confirmed.") : choice === "ignore" ? text : text;
+    const closing = choice === "confirm" && item.status === "solved - confirm";
     item.decision = { choice, text: recorded, at, by: "Luke" };
-    item.status = choice === "ignore" ? "ignored" : "waiting on bot";
-    item.waitingOn = choice === "ignore" ? "" : item.owner;
-    item.waitingSince = choice === "ignore" ? "" : at;
+    item.status = choice === "ignore" ? "ignored" : closing ? "resolved" : "waiting on bot";
+    if (choice === "ignore" || closing) {
+      item.waitingOn = "";
+      item.waitingSince = "";
+      item.nextCheck = "";
+    } else {
+      item.waitingOn = item.owner;
+      item.waitingSince = at;
+    }
     item.updatedAt = at;
-    const line = choice === "confirm" ? "Luke confirmed the proposal." : choice === "ignore" ? "Luke ignored this case." : "Luke wrote a response.";
+    const line = closing ? "Luke confirmed it is solved." : choice === "confirm" ? "Luke confirmed the proposal." : choice === "ignore" ? "Luke ignored this case." : "Luke wrote a response.";
     caseTimeline(item, now, "Luke", line);
     return { value: item };
   });
@@ -5513,7 +5772,7 @@ export async function readCases(store, now, a = {}) {
     if (status && c.status !== status) return false;
     if (song && songKey(c.song) !== song) return false;
     if (owner && low(c.owner) !== low(owner)) return false;
-    if (needsLuke && c.status !== "waiting on Luke") return false;
+    if (needsLuke && c.status !== "waiting on Luke" && c.status !== "solved - confirm") return false;
     return true;
   }).slice(0, 60).map(caseOut);
   return {
@@ -5563,7 +5822,7 @@ export async function readGrowth(store, now, a = {}) {
   }).slice(0, 60);
   const spend = await listSpend(store, now).catch(() => []);
   const boosts = boostReport(list, spend, { ranking: a.ranking, ads: a.ads });
-  return { read_only: true, wrote: false, rows: list, boosts, how_to_log_a_boost: "Steve logs a boost with log_growth. boosts is a list. Each one needs link (the post's https link), ad (that ad's id, not the ad account), spend (the amount that ad has spent, not the daily budget and not the account's day total), currency (USD) and status (active or paused). Forge does not put this on record_spend.", note: "Read only. A number that is missing was not logged. It is not zero. channel_views is the lifetime total. views is the day's views. YouTube's count is subscribers. A boost's spend is in boosts: a spend row that names that post or ad, or a boost Steve logged. ad_spend on a row is the platform figure that was logged. It is not a boost's spend." };
+  return { read_only: true, wrote: false, rows: list, boosts, how_to_log_a_boost: "Steve logs a boost with log_growth. boosts is a list. Each one needs link (the post's https link), ad (that ad's id, or blank or not shown when Instagram shows no ad id; never the ad account), spend (the amount that ad has spent, not the daily budget and not the account's day total), currency (USD) and status (active or paused). A boost with no ad id is keyed on the post link. Forge does not put this on record_spend.", note: "Read only. A number that is missing was not logged. It is not zero. channel_views is the lifetime total. views is the day's views. YouTube's count is subscribers. A boost's spend is in boosts: a spend row that names that post or ad, or a boost Steve logged. ad_spend on a row is the platform figure that was logged. It is not a boost's spend." };
 }
 
 /* Spark's daily content ideas. One document. HQ stores them. Nothing here posts, comments, or changes an ad. */
@@ -5728,6 +5987,44 @@ export function redAccounts(report) {
   if (report && report.connection && report.connection.state === "down") out.push({ id: "connection", label: "HQ connection" });
   return out;
 }
+export function testCase(c) { return String((c && c.platform) || "").trim().toUpperCase() === "TEST"; }
+/* the lock-screen and standup line: who, the song, and the first 80 characters of the proposal */
+export function disputeNeedText(c) {
+  const who = clean((c && c.owner) || "A bot", 40);
+  const song = clean(stripSecure((c && c.song) || ""), 80) || "a song";
+  const head = c && c.status === "solved - confirm" ? `${who} needs you to confirm ${song} is solved` : `${who} needs your decision on ${song}`;
+  const p = stripSecure(c && c.proposal).replace(/\s+/g, " ").trim();
+  if (!p) return head;
+  const bit = p.length > 80 ? p.slice(0, 80).trimEnd() + "…" : p;
+  return head + ": " + bit;
+}
+/* cases the standup should see. TEST stays out. luke_briefing does not use this. */
+export function disputeWaits(items) {
+  return (items || []).filter((c) => c && c.id && !testCase(c) && (c.status === "waiting on Luke" || c.status === "solved - confirm")).map((c) => ({
+    id: c.id, kind: "dispute", from: c.owner || "", to: "Luke", needs: "decision", status: c.status,
+    song: c.song || "", platform: c.platform || "", text: disputeNeedText(c), at: c.waitingSince || c.updatedAt || c.createdAt || "",
+  }));
+}
+/* the bot who opened a TEST case can delete it. A real case is never deleted from here. */
+export async function deleteCase(store, now, roster, a) {
+  const by = whoIs(a.by || a.bot, roster, { people: true });
+  const id = clean(a.id, 40);
+  if (!id) fail("id is the case id from read_cases. Nothing was deleted.");
+  let removed = null;
+  await mutate(store, CASES_KEY, { items: [] }, (doc) => {
+    const items = doc && Array.isArray(doc.items) ? doc.items : [];
+    const i = items.findIndex((c) => c && c.id === id);
+    if (i < 0) fail("There is no case with that id. Nothing was deleted.", "not_found");
+    const item = items[i];
+    if (!testCase(item)) fail("Only a case whose platform is TEST can be deleted. A real case stays; set it to resolved. Nothing was deleted.", "not_allowed");
+    if (item.createdBy !== by) fail(`Only ${item.createdBy} can delete this test case. Nothing was deleted.`, "not_allowed");
+    items.splice(i, 1);
+    doc.items = items;
+    removed = item;
+    return { value: true };
+  });
+  return { deleted: true, id, song: removed.song, platform: removed.platform };
+}
 export function waitingOnLuke(desk, today, now = null) {
   const out = [];
   for (const m of waitingOn(desk.messages || [], "Luke")) {
@@ -5749,10 +6046,9 @@ export function waitingOnLuke(desk, today, now = null) {
     if (x.state !== "unknown" && x.state !== "retry") continue;
     out.push({ key: "s:" + x.key, kind: "spotify", id: x.key, text: `${clean(x.title, 80)} is in Spotify for Artists: say what it is`, href: "#releases", at: x.firstSeen || null });
   }
-  /* a dispute waiting on Luke (19 Nov 2026). The lock-screen line names the song only, never the draft. */
-  for (const c of desk.disputes || []) {
-    if (!c || c.status !== "waiting on Luke" || !c.id) continue;
-    out.push({ key: "d:" + c.id, kind: "dispute", id: c.id, text: `${clean(c.owner || "A bot", 40)} needs your decision on ${clean(c.song, 80) || "a song"}`, href: "#songs/" + c.id, at: c.waitingSince || c.updatedAt || c.createdAt || null });
+  /* a dispute waiting on Luke, or solved and waiting for him to confirm (19 Nov 2026). TEST cases stay off this list. */
+  for (const c of disputeWaits(desk.disputes)) {
+    out.push({ key: "d:" + c.id, kind: "dispute", id: c.id, text: c.text, href: "#songs/" + c.id, at: c.at || null });
   }
   return out.sort((a, b) => (a.at == null ? 1 : b.at == null ? -1 : a.at < b.at ? -1 : a.at > b.at ? 1 : 0));
 }
