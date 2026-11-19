@@ -136,7 +136,7 @@ test("Luke's 03:20 screen: one lyrics approval and no cards is 1 need you, every
   const tool = await call(d, "needs_you", { bot: "Nova" }, { now: QUIET });
   assert.equal(tool.total, 1);
   assert.equal(tool.line, "1 need you");
-  assert.equal(tool.open, 0, "no Yes/No/Edit cards");
+  assert.equal(tool.open, tool.total, "open is the same count as the cards");
   assert.equal(tool.waiting.length, 1);
   assert.equal(tool.waiting[0].kind, "decision");
   assert.equal(tool.waiting[0].what, "Verse asked you to decide something");
@@ -162,7 +162,7 @@ test("one list: messages, Spotify questions, cards (held ones too) and red accou
   }
   const tool = await call(d, "needs_you", { bot: "Nova" });
   assert.equal(tool.total, 4, "the tool reads the real desk: 2 messages + 2 cards (no red account on this desk)");
-  assert.equal(tool.open, 2);
+  assert.equal(tool.open, tool.total);
 });
 
 test("the app badge, Today's line and the push alerts count the same list", async () => {

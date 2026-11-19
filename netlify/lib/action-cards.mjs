@@ -182,7 +182,7 @@ export function needsCount(desk, today, now) {
     const k = x.kind === "message" ? (x.needs === "decision" ? "decision" : x.needs) : x.kind;
     byKind[k] = (byKind[k] || 0) + 1;
   }
-  return { total: items.length, line: needLine(items.length), byKind, items: items.map(({ key, kind, needs, options, id, text, href }) => ({ key, kind, ...(needs ? { needs } : {}), ...(options ? { options } : {}), id, text, href })) };
+  return { total: items.length, line: needLine(items.length), byKind, items: items.map(({ key, kind, needs, options, id, text, href, from }) => ({ key, kind, ...(needs ? { needs } : {}), ...(options ? { options } : {}), id, text, href, ...(from ? { from } : {}) })) };
 }
 
 function moneyOf(a) {

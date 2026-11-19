@@ -23,7 +23,7 @@ test("every HQ script url carries the same content hash, and the service worker 
   const scripts = [...page.matchAll(/<script src="(js\/[^"]+)" defer><\/script>/g)].map((m) => m[1]);
   assert.deepEqual(scripts, HQ_SCRIPTS.map((s) => s + "?v=" + v));
   assert.match(sw, new RegExp('var V = "' + v + '"'));
-  assert.match(sw, /var CACHE = "bs-hq-v16"/); /* 19 Nov 2026: Needs you status notes and the Google Ads sign-in. */
+  assert.match(sw, /var CACHE = "bs-hq-v17"/); /* 19 Nov 2026: Needs you cards, dispute cards, money and Luke's screens. */
   assert.match(sw, /var FETCH_MS = 8000/);
   for (const s of HQ_SCRIPTS) assert.match(sw, new RegExp('"\\/' + s.replace(/\./g, "\\.") + '\\?v=" \\+ V'));
   for (const tag of page.matchAll(/<link[^>]*rel="stylesheet"[^>]*>/g)) {

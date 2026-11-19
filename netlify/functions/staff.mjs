@@ -225,6 +225,7 @@ async function api(req, context, path) {
     const counted = await needsDesk(st.desk, now, { desk, auto, report: accountHealth, ig: igStore(context) });
     const cap = hqAns && hqAns.money && hqAns.money.cap;
     counted.notRead = cap && Array.isArray(cap.notRead) ? cap.notRead : [];
+    counted.lukeTasks = (hqAns && hqAns.team && hqAns.team.tasks) || [];
     const needs = C.needsCount(counted, S.spDay(now), now);
     return json(200, { ...S.board(desk, now, hqAns && hqAns.team ? hqAns : null), pageBuilds, hqRead: !!(hqAns && hqAns.team), accountHealth, needs, ...(auto ? { auto } : {}), keys: { bots: !!Netlify.env.get("STAFF_BOT_KEY"), claude: !!Netlify.env.get("STAFF_CLAUDE_KEY") } });
   }

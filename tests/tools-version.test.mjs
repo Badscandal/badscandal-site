@@ -19,6 +19,8 @@ test("my_day says how many tools the desk has and the list's version; a new opti
   const v1 = toolsVersion(TOOLS);
   const more = TOOLS.map((t) => (t.name === "fix_payment" ? { ...t, inputSchema: { ...t.inputSchema, properties: { ...t.inputSchema.properties, made_up: { type: "string" } } } } : t));
   assert.notEqual(toolsVersion(more), v1, "an added option is a new version");
+  const nested = TOOLS.map((t) => t.name === "log_growth" ? { ...t, inputSchema: { ...t.inputSchema, properties: { ...t.inputSchema.properties, boosts: { type: "array", items: { type: "object", properties: { link: { type: "string" }, extra_field: { type: "number" } } } } } } } : t);
+  assert.notEqual(toolsVersion(nested), v1, "a nested field is a new version");
   assert.equal(toolsVersion(TOOLS), v1, "the same list, the same version");
   assert.match(INSTRUCTIONS, /connector.*version/);
 });

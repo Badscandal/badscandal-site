@@ -32,7 +32,7 @@ test("waitingOnLuke: open decision/reply/action messages to Luke, not to others,
 
   const w = await waiting(d);
   assert.deepEqual(w.map((x) => x.key), ["m:" + dec.id, "m:" + act.id, "m:" + rep.id], "oldest first; only open ones to Luke");
-  assert.deepEqual(w[0], { key: "m:" + dec.id, kind: "message", id: dec.id, text: "Nova asked you to decide something", href: "#messages/" + dec.id, at: dec.at });
+  assert.deepEqual(w[0], { key: "m:" + dec.id, kind: "message", id: dec.id, needs: "decision", from: "Nova", text: "Nova asked you to decide something", href: "#messages/" + dec.id, at: dec.at });
   assert.equal(w[1].text, "Kevin needs you to do something");
   assert.equal(w[2].text, "Atlas is waiting for your reply");
   assert.equal(w[2].href, "#messages/" + rep.id);

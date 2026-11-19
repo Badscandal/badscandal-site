@@ -168,12 +168,13 @@ test("a no-impact claim is not Watch, and a blank account is not enough data", (
   assert.match(tt.headline, /Not enough data/);
 });
 
-test("month_check is not ready while an FX transfer is still listed", async () => {
+test("month_check lists an FX transfer and still says ready", async () => {
   const d = memoryDesk();
   await d.setJSON("inc/2026-10.json", [{ id: "fx1", date: "2026-10-20", payer: "FX conversion", amount: 10, currency: "EUR", status: "transfer", account: "Revolut", by: "HQ", category: "FX" }]);
   const check = await S.monthCheck(d, NOW, { month: "2026-10" });
   assert.ok(check.ownTransfers.some((e) => e.id === "fx1"));
-  assert.equal(check.ready, false);
+  assert.equal(check.ready, true);
+  assert.equal(check.reason, "ready");
 });
 
 test("to sort shows this month only", async () => {
@@ -199,9 +200,10 @@ test("needs you includes a fan question stored on Instagram", async () => {
   assert.ok(n.total >= 1);
 });
 
-test("a working-on line past its day is late, and a week later it is gone", () => {
+test("a working-on line past its day is not labelled late when nothing is late, and a week later it is gone", () => {
   const fresh = S.workers(R, { hq: null, updates: [], messages: [], cards: { nova: { at: "2026-11-19T12:00:00Z", workingOn: "Cover due 18 Nov" } }, seen: {}, today: "2026-11-19", nowHM: "12:00", releases: [] });
-  assert.match(fresh.find((w) => w.name === "Nova").card.workingOn, /^Late:/);
+  assert.equal(/^Late:/.test(fresh.find((w) => w.name === "Nova").card.workingOn), false);
+  assert.match(fresh.find((w) => w.name === "Nova").card.workingOn, /Cover due 18 Nov/);
   const old = S.workers(R, { hq: null, updates: [], messages: [], cards: { nova: { at: "2026-11-19T12:00:00Z", workingOn: "Cover due 2026-11-01" } }, seen: {}, today: "2026-11-19", nowHM: "12:00", releases: [] });
   assert.equal(old.find((w) => w.name === "Nova").card.workingOn, "");
 });

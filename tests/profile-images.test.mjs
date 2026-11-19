@@ -172,7 +172,7 @@ test("the new tools are on the connector for the owners, and the page buttons se
   assert.match(page, /color-scheme:\s*dark/);
   assert.match(page, /id="profPhoto"/);
   assert.match(page, /id="profBanner"/);
-  assert.match(sw, /var CACHE = "bs-hq-v16"/); /* v16: Needs you. v15: Luke's screens. */
+  assert.match(sw, /var CACHE = "bs-hq-v17"/); /* v17: Needs you cards. v16: the Google Ads sign-in. */
   const fn = readFileSync(new URL("../netlify/functions/staff.mjs", import.meta.url), "utf8");
   assert.match(fn, /profile_rework/);
   assert.match(fn, /profile-file/);

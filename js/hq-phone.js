@@ -44,7 +44,7 @@
     var marks = '<b class="gw" style="left:' + (g.warn / max * 100) + '%"></b><b class="gs" style="left:' + (g.stop / max * 100) + '%"></b>';
     var legend = parts.map(function (p) { return '<span><i class="g-' + esc(L.slug(p.name)) + '"></i>' + esc(p.name) + " " + esc(L.money(p.amount, g.currency)) + "</span>"; }).join("");
     var gap = g.gaps && g.gaps.length ? '<button class="gapbtn" type="button" aria-expanded="false">Days not read</button><p class="gapwhy" hidden>' + esc(g.gaps.join("; ")) + "</p>" : "";
-    return '<div class="gauge" aria-label="' + esc(g.label) + '"><p class="gauge-n"><b>' + esc(g.label) + '</b><span>750 · 900</span></p>' +
+    return '<div class="gauge" aria-label="' + esc(g.label) + '"><p class="gauge-n"><b>' + esc(g.label) + '</b>' + (g.asOf ? '<span>as of ' + esc(g.asOf) + "</span>" : '<span>750 · 900</span>') + "</p>" +
       '<div class="gbar" role="img">' + segs + marks + "</div>" +
       (legend ? '<p class="gleg">' + legend + "</p>" : "") + gap + "</div>";
   }
@@ -144,64 +144,56 @@
     var count = board && board.needs && typeof board.needs.total === "number" ? board.needs.total : V.needTotal({ messages: allWaiting, sightings: board && board.sightings, auto: auto, healthNeeds: health.needs }).total;
     var snoozedN = allWaiting.filter(function (m) { return m && snoozed(m.id); }).length;
     var pulse = V.homePulse({ need: count, risk: risk });
-    var ids = [stack.top].concat(stack.rest).filter(Boolean).map(function (c) { return c.id; });
-    if (ids.indexOf(openId) < 0) openId = stack.top ? stack.top.id : "";
     var today = (board && board.today) || (sheet && sheet.today) || "";
-    var you = V.waitingOnYou({ messages: waiting, tasks: tasks, disputes: board && board.disputes, today: today, releases: (board && board.releases) || [] });
-    var wallets = {};
-    [stack.top].concat(stack.rest).filter(Boolean).forEach(function (c) { wallets[c.id] = c; });
+    var items = board && board.needs && Array.isArray(board.needs.items) ? board.needs.items : null;
     var decision = "";
-    /* the cards' own line says only the money at risk (the count is the pulse above, said once) */
-    if (auto && auto.needsYou && auto.needsYou.length) decision += (auto.money ? '<p class="dhead">' + esc(auto.money) + "</p>" : "") + stackHtml(auto.needsYou, true);
-    if (auto && auto.quiet && auto.held && auto.held.length) decision += '<p class="dnone">Quiet hours until 08:00. These wait.</p>' + stackHtml(auto.held, false);
-    if (you.length) decision += youHtml(you, wallets, openId);
-    (health.needs || []).forEach(function (n) {
-      decision += '<article class="dcard" data-health="' + esc(n.id) + '"><p class="dfrom">' + esc(n.title) + '</p><p class="dline">' + esc(n.line) + "</p>" +
-        (n.next ? '<p class="drec">' + esc(n.next) + "</p>" : "") + '<a class="linkbtn" href="' + esc(n.href || "#growth") + '">Open</a></article>';
-    });
-    decision += alsoHtml(board, ids.concat(you.map(function (it) { return it.id; })).concat(allWaiting.filter(function (m) { return m && snoozed(m.id); }).map(function (m) { return m.id; })));
+    /* one card per item on the shared list. The header count is that list. No second "also waiting" list. */
+    if (items) {
+      decision += askHtml(items, allWaiting);
+      if (!items.length) decision += '<p class="dnone">Nothing is waiting on you.</p>';
+    }
     decision += healthDots(health);
     if (auto) decision += othersHtml(auto.waitingOnOthers);
     if (snoozedN) decision += '<p class="wcount">' + snoozedN + " snoozed on this phone (still counted above)</p>";
-    var heldN = auto && auto.held && auto.held.length;
-    var healthN = health.needs && health.needs.length;
-    var cardN = auto && auto.needsYou && auto.needsYou.length;
-    var needN = board && board.needs && typeof board.needs.total === "number" ? board.needs.total : 0;
-    var lukeN = board && board.waiting && board.waiting.luke ? board.waiting.luke.length : 0;
-    if (!needN && !lukeN && !you.length && !cardN && !heldN && !healthN && !snoozedN) decision += '<p class="dnone">Nothing is waiting on you.</p>';
     var covers = {};
     ((ov && ov.songs) || []).forEach(function (s) { if (s && s.title) covers[s.title] = s.cover || ""; });
     var hero = V.releaseHero((board && board.releases) || [], today, covers);
     var miles = V.milestones((sheet && sheet.songs) || []);
     /* the platform numbers live on Growth & Fans (18 Nov 2026, Luke: they cluttered Needs you) */
     var kpis = [];
-    var watchers = (L.phoneWatchers ? L.phoneWatchers(board) : []).filter(function (w) { return w.kind !== "dispute" && V.lukeSees(w.line) && V.lukeSees(w.title); });
     var h = V.homeHtml({ pulse: pulse, decision: decision, milestones: miles, hero: hero, kpis: kpis });
-    watchers.forEach(function (w) {
-      h += '<article class="dcard"><p class="dfrom">' + esc(w.title) + '</p><p class="dline">' + esc(w.line) + "</p>" +
-        (w.href ? '<a class="linkbtn" href="' + esc(w.href) + '">Open</a>' : "") + "</article>";
-    });
     h += mondayHtml(board);
     el.innerHTML = h;
     var ads = $("adsGauge");
     if (ads) ads.innerHTML = gaugeHtml(L.spendGauge(sheet && sheet.money && sheet.money.cap));
   }
 
-  /* What the count holds that has no card of its own above: replies and actions he owes, a decision with no
-     options, a song in Spotify for Artists only he can name. Each one links to where it is answered.
-     shown: ids already drawn (wallets, snoozed). RouteNote's own card is drawn by the watchers. */
-  function alsoHtml(board, shown) {
-    var items = (board && board.needs && board.needs.items) || [];
-    var routenote = {};
-    ((board && board.waiting && board.waiting.luke) || []).forEach(function (m) { if (m && m.ask === "routenote") routenote[m.id] = true; });
-    var rows = items.filter(function (x) {
-      if (!x || (x.kind !== "message" && x.kind !== "spotify" && x.kind !== "signin" && x.kind !== "access" && x.kind !== "yes" && x.kind !== "fan" && x.kind !== "dispute")) return false;
-      return shown.indexOf(x.id) < 0 && !routenote[x.id];
-    });
-    if (!rows.length) return "";
-    return '<div class="dcard"><p class="dfrom">Also waiting on you</p><ul class="also">' + rows.map(function (x) {
-      return '<li><a href="' + esc(x.href || "#messages") + '">' + esc(x.text) + "</a></li>";
-    }).join("") + "</ul></div>";
+  /* One card per item. The first is "Do this first". A decision has Yes and No. Anything else has a reply box.
+     The answer goes back to the bot that asked. */
+  function askHtml(items, messages) {
+    var byId = {};
+    (messages || []).forEach(function (m) { if (m && m.id) byId[m.id] = m; });
+    return (items || []).map(function (x, i) {
+      if (!x) return "";
+      var m = byId[x.id];
+      var head = i === 0 ? "Do this first" : (x.from || (m && m.from) || "");
+      var headClass = i === 0 ? "dfrom dhead" : "dfrom";
+      var q = x.text || "";
+      var acts = "";
+      if (m && m.needs === "decision" && m.options && m.options.length) {
+        acts = '<div class="dacts">' + m.options.map(function (o) {
+          return '<button class="sendbtn" type="button" data-decide="' + esc(m.id) + '" data-choice="' + esc(o) + '">' + esc(o) + "</button>";
+        }).join("") + "</div>";
+      } else if (x.kind === "card" || x.kind === "yes") {
+        acts = '<div class="dacts"><button class="sendbtn" type="button" data-achoice="yes" data-aid="' + esc(x.id) + '">Yes</button>' +
+          '<button class="copybtn" type="button" data-achoice="no" data-aid="' + esc(x.id) + '">No</button></div>';
+      } else {
+        var who = x.from || (m && m.from) || "";
+        acts = '<form class="needreply" data-reply="' + esc(x.id) + '" data-from="' + esc(who) + '"><input type="text" name="t" maxlength="500" placeholder="Reply" aria-label="Reply" style="font-size:16px">' +
+          '<button type="submit" class="sendbtn">Send</button></form>';
+      }
+      return '<article class="needcard dcard">' + (head ? '<p class="' + headClass + '">' + esc(head) + "</p>" : "") + '<p class="dline">' + esc(q) + "</p>" + acts + "</article>";
+    }).join("");
   }
 
   function healthDots(health) {
@@ -293,6 +285,19 @@
     if (f) { t.src = f; return; }
     var s = document.createElement("span"); s.className = "nothumb"; t.parentNode && t.parentNode.replaceChild(s, t);
   }, true);
+  document.addEventListener("submit", function (ev) {
+    var form = ev.target && ev.target.closest && ev.target.closest(".needreply");
+    if (!form || !window.HQ || HQ.sample) return;
+    ev.preventDefault();
+    var id = form.getAttribute("data-reply") || "", from = form.getAttribute("data-from") || "", input = form.querySelector("input");
+    var text = input ? String(input.value || "").trim() : "";
+    if (text.length < 2 || !from) return;
+    var btn = form.querySelector("button");
+    if (btn) btn.disabled = true;
+    HQ.postJSON("/api/staff/message", { to: from, text: text, needs: "none", re: id }).then(function () {
+      if (window.HQStaff && HQStaff.reload) HQStaff.reload();
+    }, function () { if (btn) btn.disabled = false; });
+  });
   document.addEventListener("click", function (ev) {
     var a = ev.target.closest && ev.target.closest("[data-aopen],[data-achoice],[data-asave]");
     if (a) {

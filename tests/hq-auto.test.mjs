@@ -246,7 +246,7 @@ test("the phone screen has the needs-you header, a stack and Waiting on others",
   const phone = readFileSync(new URL("../js/hq-phone.js", import.meta.url), "utf8");
   const html = readFileSync(new URL("../hq.html", import.meta.url), "utf8");
   const fn = readFileSync(new URL("../netlify/functions/hqauto.mjs", import.meta.url), "utf8");
-  assert.match(phone, /class="dhead"/);
+  assert.match(phone, /Do this first/);
   assert.match(phone, /data-achoice/);
   assert.match(phone, /Waiting on others/);
   assert.match(html, /id="autoCard"/);

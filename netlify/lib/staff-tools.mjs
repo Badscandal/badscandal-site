@@ -109,8 +109,20 @@ const INSTRUCTION_LINES = [
 export const INSTRUCTIONS = INSTRUCTION_LINES.map((l) => l[1]).join("\n");
 /* a short fingerprint of the tool list: names and every option. It changes whenever a tool or an option is added or
    removed (17 Nov 2026, Nova: the bots' app kept an old copy, so new options looked missing) */
+function schemaShape(schema, depth) {
+  if (!schema || typeof schema !== "object" || depth > 6) return "";
+  const props = schema.properties && typeof schema.properties === "object" ? schema.properties : null;
+  const keys = props ? Object.keys(props).sort().map((k) => {
+    const p = props[k] || {};
+    const en = Array.isArray(p.enum) ? "=" + p.enum.join("/") : "";
+    return k + en + schemaShape(p, depth + 1);
+  }).join(",") : "";
+  const items = schema.items ? "[" + schemaShape(schema.items, depth + 1) + "]" : "";
+  return (keys || items) ? "(" + keys + items + ")" : "";
+}
 export function toolsVersion(tools) {
-  const text = tools.map((t) => t.name + ":" + Object.keys((t.inputSchema && t.inputSchema.properties) || {}).sort().join(",")).sort().join("|");
+  /* nested fields count: a new boost or case field changes the version the bots see */
+  const text = tools.map((t) => t.name + ":" + schemaShape(t.inputSchema, 0)).sort().join("|");
   let h = 0x811c9dc5;
   for (let i = 0; i < text.length; i++) { h ^= text.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; }
   return h.toString(16).padStart(8, "0");
@@ -316,7 +328,7 @@ export const TOOLS = [
       avg_watch: str("TikTok: average watch time at 1 day, in seconds, decimals allowed."),
       avg_watch_6h: str("TikTok: average watch time at +6h, in seconds. The +6h gate passes when this is at least 2.5 and follows_6h / views_6h is at least 0.14%."),
       posts: { type: "array", description: "Optional. The day's posts, one fixed window per column. Each: date, hook, views_24h, views_7d, likes, comments, saves, shares, follows, follows_6h, follows_48h, avg_watch, link or video_id, boosted true or false. Leave a number out when you could not read it. Do not send 0 for a number you did not see.", items: { type: "object" } },
-      boosts: { type: "array", description: "Steve. Each: link (https), ad (ad id, or blank or not shown; never the ad account), spend, currency, status (active, paused or deleted). No ad id keys on the post link. Not the day's account total.", items: { type: "object", properties: { link: { type: "string" }, ad: { type: "string" }, spend: { type: "number" }, currency: { type: "string" }, status: { type: "string" }, started: { type: "string" } } } },
+      boosts: { type: "array", description: "Steve. Each: link, ad, spend, currency, status, started, follows, engagements, views, link_clicks, as_of. Cost per follow is spend / follows when follows is above 0.", items: { type: "object", properties: { link: { type: "string" }, ad: { type: "string" }, spend: { type: "number" }, currency: { type: "string" }, status: { type: "string" }, started: { type: "string" }, follows: { type: "number" }, engagements: { type: "number" }, views: { type: "number" }, link_clicks: { type: "number" }, as_of: { type: "string" } } } },
       top_videos: { type: "array", description: "YouTube: the top 3 videos that day. Each: title, views, and link or video_id. 3 at most.", items: { type: "object" } },
       fan_signals: { type: "array", description: "TikTok (Kevin): fan signals, the same idea as the Instagram fan inbox. Each: handle, quote, link, about, engage. 8 at most. Leave one out when you did not see it.", items: { type: "object" } },
       pattern: str("Optional. One line on what worked, for the week card. Only what you actually saw."),
@@ -398,7 +410,7 @@ export const TOOLS = [
     description: "Every bot with today's duties (done, to do, late, blocked), its latest update, what it says it is working on, what is waiting on it, and when it last used this desk; every release with its late steps and warnings, and what Spotify for Artists showed in Atlas's last report. For Nova's standup, the 12:00 chase and the 21:00 wrap-up.",
     inputSchema: obj({ bot: BOT }, ["bot"]) },
   { name: "luke_briefing", title: "What Luke needs to hear", readOnly: true,
-    description: "For Alfred's 10:00 message and for alerts. For Alfred it also gives every new message for him since his last read (messages_for_you). Returns the site's latest check (three times a day), Claude's latest note for Luke, every decision waiting on Luke with its options, ad spend against the monthly cap, the next release and what is late, the songs Spotify for Artists shows as upcoming that are not in the pipeline (Luke has to say what they are), income logged this month, and which bots have not logged. Report it; do not add numbers of your own.",
+    description: "For Alfred's 10:00 message and for alerts. For Alfred it also gives every new message for him since his last read (messages_for_you). Returns the site's latest check (three times a day), Claude's latest note for Luke, every decision waiting on Luke with its options, ad spend against the monthly cap (one figure only, as of the time in this answer), the next release and what is late, the songs Spotify for Artists shows as upcoming that are not in the pipeline (Luke has to say what they are), income logged this month, and which bots have not logged. Report it; do not add numbers of your own.",
     inputSchema: obj({ bot: BOT }, ["bot"]) },
   /* batch 5 (15 Nov 2026): Alfred's SHORT briefing, a separate tool so luke_briefing stays exactly as it is */
   { name: "luke_short_briefing", title: "Luke's short briefing", readOnly: true,
@@ -450,12 +462,13 @@ export const TOOLS = [
       entry: str("Optional. One short line for the timeline."),
       claim_id: str("Optional. The id from read_claims, when this case escalates that Content ID claim.") }, ["bot", "song", "platform", "type"]) },
   { name: "update_case", title: "Update a dispute case",
-    description: "Update ONE case you own (Nova may update any). id from read_cases. Set song, status (open, waiting on them, waiting on Luke, waiting on bot, solved - confirm, resolved), waiting_on, next_check (YYYY-MM-DD), recommendation, proposal, entry (one timeline line; entry_date is its YYYY-MM-DD), or timeline (replaces the whole timeline; only the bot who opened the case). Put status waiting on Luke when he has to decide. Put status solved - confirm when it is solved and he only has to confirm. You cannot set his decision, and you cannot mark a case ignored. Resolved or ignored clears next_check and waiting_on.",
+    description: "Update ONE case you own (Nova may update any). id from read_cases. Set song, status (open, waiting on them, waiting on Luke, waiting on bot, solved - confirm, resolved), waiting_on, waiting_since (when the wait started), next_check (YYYY-MM-DD), recommendation, proposal, entry (one timeline line; entry_date is its YYYY-MM-DD), or timeline (replaces the whole timeline; only the bot who opened the case). Put status waiting on Luke when he has to decide. Put status solved - confirm when it is solved and he only has to confirm. You cannot set his decision, and you cannot mark a case ignored. Resolved or ignored clears next_check and waiting_on. waiting_since is stored and does not add a timeline line by itself.",
     inputSchema: obj({ bot: BOT,
       id: str("The case id from read_cases."),
       song: str("Optional. The song title, when the old one is wrong."),
       status: str("Optional. open | waiting on them | waiting on Luke | waiting on bot | solved - confirm | resolved."),
       waiting_on: str("Optional. Who you are waiting for. Empty clears it. Say Luke, not A human."),
+      waiting_since: str("Optional. When this wait started, YYYY-MM-DD or an ISO time. Stored on the case. It does not add a timeline line."),
       next_check: str("Optional. YYYY-MM-DD. Empty clears it."),
       recommendation: str("Optional. One paragraph. Replaces the previous one."),
       proposal: str("Optional. The reply you want approved. Replaces the previous one."),
@@ -672,7 +685,7 @@ const WAIT_SPOTIFY = "the song to show as upcoming in Spotify for Artists";
 /* 16 Nov 2026 (Luke): the ads come after the release, made with him; the Spotify for Artists step waits for RouteNote */
 const WAIT_ADS = "the release day: the ads are made WITH Luke once the song is out (never before, never on your own)";
 const WAIT_OTHER = { approved: "RouteNote to approve the song (Drop's step \"Approved by RouteNote\"): until then it can't show in Spotify for Artists", page: "Webmaster's song page (badscandal.com/<song>) to be live: the ads link to it", release: "the release day: then check Musixmatch every day and add the lyrics the day the song shows there" };
-const waitFor = (s) => (s.waitingFor === "release" && (s.key === "ads" || s.step === "ads") ? WAIT_ADS : s.waitingFor === "spotify" || !s.waitingFor ? WAIT_SPOTIFY : WAIT_OTHER[s.waitingFor] ? WAIT_OTHER[s.waitingFor] : `the step "${(S.RELEASE_STEPS.find((x) => x.key === s.waitingFor) || {}).label || s.waitingFor}"`);
+const waitFor = (s) => (s.waitingFor === "spotify-window" ? "Waits until Spotify lists it" : s.waitingFor === "release" && (s.key === "ads" || s.step === "ads") ? WAIT_ADS : s.waitingFor === "spotify" || !s.waitingFor ? WAIT_SPOTIFY : WAIT_OTHER[s.waitingFor] ? WAIT_OTHER[s.waitingFor] : `the step "${(S.RELEASE_STEPS.find((x) => x.key === s.waitingFor) || {}).label || s.waitingFor}"`);
 const SPOT_HOW = "done by your spotify_upcoming report, not by release_step";
 /* a block whose note says it is waiting (for the release day, for Luke) is waiting, not blocked (18 Nov 2026) */
 const stepState = (s) => (!s ? "to do" : s.status === "done" ? "done" : s.status === "skipped" ? "skipped" : (s.waiting || S.blockIsWait(s)) ? "waiting" : s.status === "blocked" ? "blocked" : s.late ? "late" : s.status === "working" ? "working" : "to do");
@@ -728,6 +741,23 @@ const cur = (o) => Object.entries(o || {}).map(([c, a]) => `${c} ${Number(a).toF
 /* the recommendations on a decision, for Alfred's SHORT briefing only (A3, 17 Nov 2026); luke_briefing stays as it is */
 const recWords = (m) => (Array.isArray(m.recommendations) ? m.recommendations.slice().sort((a, b) => (a.by === "Nova" ? -1 : b.by === "Nova" ? 1 : 0)) : [])
   .map((x) => ` · ${x.by} recommends: ${x.option || x.why}${x.option ? ` (${x.why})` : ""}`).join("");
+/* the same rows for needs_you, my_day, team_board and both briefings */
+function needRows(count, messages) {
+  const byId = new Map((messages || []).filter((m) => m && m.id).map((m) => [m.id, m]));
+  return (count.items || []).map((x) => {
+    const m = (x.kind === "message" || x.kind === "handle") ? byId.get(x.id) : null;
+    if (!m) return { id: x.id, kind: x.kind, from: x.from || "", text: x.text, what: x.text, screen: S.lukeLine(x.text), ...(x.href ? { href: x.href } : {}) };
+    return { ...short(m), kind: x.kind === "handle" ? "handle" : (m.approval && m.approval.what ? m.approval.what + " approval" : m.needs), what: x.text, screen: S.lukeLine(m.text) };
+  });
+}
+async function oneNeeds(store, now, ctx, desk, hqAns) {
+  const counted = await needsDesk(store, now, { desk, ig: ctx && ctx.ig ? ctx.ig() : null });
+  const cap = hqAns && hqAns.money && hqAns.money.cap;
+  counted.notRead = cap && Array.isArray(cap.notRead) ? cap.notRead : [];
+  counted.lukeTasks = (hqAns && hqAns.team && hqAns.team.tasks) || [];
+  const count = C.needsCount(counted, S.spDay(now), now);
+  return { count, rows: needRows(count, counted.messages || []) };
+}
 const short = (m) => ({ id: m.id, from: m.from, to: m.to, at: m.sp, needs: m.needs, text: m.text, ...(m.options && m.options.length ? { options: m.options } : {}),
   ...(m.questions && m.questions.length ? { questions: m.questions.map((q, i) => ({ n: i + 1, q: q.q, answer: q.answer || "", by: q.by || "" })) } : {}),
   ...(m.answers ? { answers: m.answers } : {}), ...(m.about ? { about: m.about } : {}), ...(m.via ? { via: m.via } : {}),
@@ -1379,7 +1409,8 @@ async function runTool(tool, args, ctx, read) {
         } catch { return { slug: s.slug, status: null, checked_at: checkedAt, note: "couldn't check" }; }
       }));
       const bySlug = Object.fromEntries(live.map((x) => [x.slug, x]));
-      return { requests: list, pages: S.liveSongPages().map((p) => { const c = bySlug[p.slug] || {}; const words = c.note === "couldn't check" || c.status == null ? `couldn't check (${c.checked_at || checkedAt})` : c.ok ? `200 at ${c.checked_at}` : `${c.status} at ${c.checked_at}`; return { ...p, live: words, status: c.status ?? null, checked_at: c.checked_at || checkedAt }; }), home_card: { now: card.title ? `${card.title} (${card.mode})` : "nothing", should_show: rule ? rule.title : "nothing", why: rule ? rule.why : "no song pages yet",
+      const asked = new Set(list.map((r) => r.slug));
+      return { requests: list, pages: S.liveSongPages().map((p) => { const c = bySlug[p.slug] || {}; const words = c.note === "couldn't check" || c.status == null ? `couldn't check (${c.checked_at || checkedAt})` : c.ok ? `200 at ${c.checked_at}` : `${c.status} at ${c.checked_at}`; return { ...p, live: words, status: c.status ?? null, checked_at: c.checked_at || checkedAt, ...(asked.has(p.slug) ? {} : { history: "built before the desk" }) }; }), home_card: { now: card.title ? `${card.title} (${card.mode})` : "nothing", should_show: rule ? rule.title : "nothing", why: rule ? rule.why : "no song pages yet",
         ...(rule && rule.slug !== card.slug ? { to_do: `Ask Luke with song_page kind card, slug ${rule.slug}` } : { to_do: "nothing: the card shows the right song" }) } };
     }
     case "upload_cover": {
@@ -1392,7 +1423,7 @@ async function runTool(tool, args, ctx, read) {
     }
     case "propose_release": {
       const r = await S.proposeRelease(store, now, roster, { by: me, song: args.song, title: args.title, date: args.date, pack: args.pack, send: args.send, why: args.why });
-      return { asked: true, id: r.message.id, question: r.message.text, changes: r.changes.map((c) => `${c.label}: ${c.from ? `${c.from} → ` : ""}${c.to}`),
+      return { asked: true, id: r.message.id, question: r.message.text, changes: r.changes.map((c) => `${c.label}: ${c.from ? `${c.from} → ` : ""}${c.to || "(empty)"}`),
         note: "Nothing has changed yet. Luke answers Yes, correct or No on the dashboard (or tells Alfred or Nova); you get a message on the desk when it is done, or why not." };
     }
     case "release_fill": {
@@ -1413,15 +1444,11 @@ async function runTool(tool, args, ctx, read) {
          the app badge. Texts say who and what kind; the first line of a question is masked like my_day's. */
       const [desk, board, hqAns] = await Promise.all([needsDesk(store, now, { ig: ctx.ig ? ctx.ig() : null }), C.workspaceNeeds(store, now, "badscandal"), ctx.hq ? ctx.hq().catch(() => null) : null]);
       const cap = hqAns && hqAns.money && hqAns.money.cap;
-      const count = C.needsCount({ ...desk, notRead: cap && Array.isArray(cap.notRead) ? cap.notRead : [] }, today, now);
-      const byId = Object.fromEntries((desk.messages || []).map((m) => [m.id, m]));
+      const counted = { ...desk, notRead: cap && Array.isArray(cap.notRead) ? cap.notRead : [], lukeTasks: (hqAns && hqAns.team && hqAns.team.tasks) || [] };
+      const count = C.needsCount(counted, today, now);
+      const rows = needRows(count, desk.messages);
       return { read_only: true, wrote: false, total: count.total, line: count.line, by_kind: count.byKind, quiet_hours: !!board.quiet,
-        waiting: count.items.map((x) => {
-          const m = x.kind === "message" ? byId[x.id] : null;
-          return { kind: m ? (m.approval && m.approval.what ? m.approval.what + " approval" : m.needs) : x.kind, id: x.id, what: x.text, screen: S.lukeLine(x.text),
-            ...(m ? { asked: m.sp, first_line: S.hidePrivate(String(m.text || "").split("\n")[0].slice(0, 120)) } : {}) };
-        }),
-        open: (board.needsYou || []).length + (board.held || []).length, needs_you: board.needsYou || [], held_until_morning: board.held || [],
+        waiting: rows, open: count.total, needs_you: rows, held_until_morning: board.held || [],
         ...(desk.health ? {} : { accounts_note: "Account health could not be read just now: red accounts are not in total." }),
         note: "Read only. total is the number on Luke's phone. Nothing was changed." };
     }
@@ -1459,6 +1486,7 @@ async function runTool(tool, args, ctx, read) {
   const actionCards = Array.isArray(cardDoc && cardDoc.data) ? cardDoc.data : [];
   const rel = (desk.releases || []).map((r) => S.releaseView(r, today, { sightings: desk.sightings, messages: desk.messages, actionCards }));
   const sheetNote = hq ? null : "The team's Google Sheet could not be read just now, so duties and tasks are missing from this answer. Carry on with your job card.";
+  const luke = await oneNeeds(store, now, ctx, desk, hqAns);
   /* no duty row for the caller: before Nova's reset (no rows for anyone yet) that is expected, and work
      done now still counts (batch 5); after it, the row is missing */
   const resetAt = S.dutyResetTime(roster);
@@ -1509,12 +1537,12 @@ async function runTool(tool, args, ctx, read) {
         const link = S.httpsLink(m.link) || (Array.isArray(m.links) ? m.links.map((x) => S.httpsLink(x)).find(Boolean) : "");
         return { id: m.id, needs: m.needs, waiting: S.waitedFor(now - Date.parse(m.at)), since: m.sp, text: S.excerptText(S.hidePrivate(m.text), 160), ...(link ? { link } : {}) };
       });
-      if (me === "Claude") return { reconnect: conn.status, connector: { tools: conn.tools, version: conn.version, reconnect_needed: conn.reconnect_needed }, you: "Claude", today, now: b.now, waiting_on_you: b.waiting.claude.map(short), questions_to_luke: questions("Claude"), card_answers, ...(luke_tap ? { luke_tap } : {}), ...forYou(b.waiting.claude.map((m) => m.id)), waiting_on_luke: b.waiting.luke.map(short).concat(S.disputeWaits(desk.disputes)),
+      if (me === "Claude") return { reconnect: conn.status, connector: { tools: conn.tools, version: conn.version, reconnect_needed: conn.reconnect_needed }, you: "Claude", today, now: b.now, waiting_on_you: b.waiting.claude.map(short), questions_to_luke: questions("Claude"), card_answers, ...(luke_tap ? { luke_tap } : {}), ...forYou(b.waiting.claude.map((m) => m.id)), waiting_on_luke: luke.rows,
         releases: rel.filter((v) => S.releaseActive(v) || v.status === "draft").map((v) => `${v.title}: ${v.status === "draft" ? "draft" : v.released ? "released" : "coming"}, ${when(v.date)}, ${v.counts.done} of ${v.counts.total} steps done` + (v.counts.late ? `, ${v.counts.late} late` : "") + (v.counts.blocked ? `, ${v.counts.blocked} blocked` : "") + (v.missing.length ? `; missing: ${v.missing.map((m) => m.short).join(", ")}` : "")),
         unknown_in_spotify: b.sightings.items.filter((x) => x.state === "unknown").map((x) => `${x.title}, ${x.dateWords}`),
         ...(sheetNote ? { note: sheetNote } : {}) };
       const w = b.staff.find((x) => x.name === me);
-      const rs = w.releaseSteps.map((s) => ({ song: s.title, step: s.key, label: s.label, due: when(s.due), state: stepState(s), ...(s.note ? { note: s.note } : {}), ...(s.link ? { link: s.link } : {}),
+      const rs = w.releaseSteps.map((s) => ({ song: s.title, step: s.key, label: s.label, due: (s.waiting || S.blockIsWait(s)) ? "when it can start" : when(s.due), state: stepState(s), ...(s.note ? { note: s.note } : {}), ...(s.link ? { link: s.link } : {}),
         ...(s.spotifyTrack ? { spotify_track: s.spotifyTrack } : {}), ...((s.waiting || S.blockIsWait(s)) ? { waiting_for: s.waiting ? waitFor(s) : (s.note || "the note on this step") } : {}), ...(s.key === "spotify" ? { how: SPOT_HOW } : {}) }));
       /* the soonest step the bot can work on now; a waiting one (including a block that is only a wait) is not today's job */
       const firstRs = w.releaseSteps.find((s) => !s.waiting && !S.blockIsWait(s));
@@ -1561,7 +1589,7 @@ async function runTool(tool, args, ctx, read) {
         open_tasks: w.tasks.filter((t) => !S.staleTask(t) && S.signInOpen(t, signedRaw.join(" "))).map((t) => ({ id: t.id, task: dutyTask(t.task), deadline: /^invalid date$/i.test(String(t.deadline || "")) ? "" : t.deadline, status: t.late ? "late" : t.status, ...(t.blocker ? { blocker: t.blocker } : {}), ...(t.note ? { your_note: t.note } : {}) })),
         questions_to_luke: questions(me), card_answers, ...(luke_tap ? { luke_tap } : {}),
         ...(signedOut.length ? { signed_out_accounts: signedOut.slice(0, 6) } : {}),
-        waiting_on_you: w.waiting, waiting_on_luke: b.waiting.luke.map(short).concat(S.disputeWaits(desk.disputes)), notes_for_everyone: notes.map(short), ...forYou(w.waiting.map((m) => m.id).concat(notes.map((m) => m.id))),
+        waiting_on_you: w.waiting, waiting_on_luke: luke.rows, notes_for_everyone: notes.map(short), ...forYou(w.waiting.map((m) => m.id).concat(notes.map((m) => m.id))),
         your_last_update: (() => {
           if (!w.last) return "none yet";
           let line = `${w.last.at} ${w.last.status}: ${w.last.message}${w.last.link ? " " + w.last.link : ""}`;
@@ -1591,7 +1619,7 @@ async function runTool(tool, args, ctx, read) {
     }
     case "team_board":
       return { today, now_sao_paulo: b.now, duties: hq ? { done: hq.team.duties.done, total: hq.team.duties.total, late: hq.team.duties.late, blocked: hq.team.duties.blocked } : "not read",
-        team: b.staff.map(worker), waiting_on_luke: b.waiting.luke.map(short).concat(S.disputeWaits(desk.disputes)), waiting_on_claude: b.waiting.claude.map(short), waiting_on_bot: b.waiting.claude.map(short), open_messages_for_bots: b.waiting.bots,
+        team: b.staff.map(worker), waiting_on_luke: luke.rows, waiting_on_claude: b.waiting.claude.map(short), waiting_on_bot: b.waiting.claude.map(short), open_messages_for_bots: b.waiting.bots,
         latest_updates: dedupeGrowthUpdates(b.updates.slice(0, 20).map((u) => `${u.sp} ${u.bot} ${u.status}: ${u.message}${u.link ? " " + u.link : ""}`)),
         latest_for_luke: S.lukeUpdates(b.updates),
         growth: S.growthOnce(await S.listGrowth(store, now, 2)),
@@ -1611,7 +1639,7 @@ async function runTool(tool, args, ctx, read) {
       return { today, now_sao_paulo: b.now,
         site_check: b.report ? { at: b.report.sp, text: b.report.text } : "The site has not run its check yet.",
         claude_note: note ? { at: note.sp, text: note.text } : "none",
-        decisions_waiting_on_luke: b.waiting.luke.map(short),
+        decisions_waiting_on_luke: luke.rows,
         ad_spend: cap ? { month: cap.month, spent: `${cap.currency} ${cap.spent.toFixed(2)}`, cap: `${cap.currency} ${cap.amount}`, left: `${cap.currency} ${cap.left.toFixed(2)}`, status: cap.status, estimated: cap.estimated } : "not read",
         next_release: next ? { song: next.song, date: next.date, days_to_go: next.daysToGo, late_steps: next.steps.filter((s) => s.late).map((s) => `${s.label} (${s.owner})`),
           ...(hq ? {} : { source: "the desk only: the sheet's Releases tab was not read, so an earlier release there can't be ruled out" }) } : hq ? "none planned" : "not read",
@@ -1685,14 +1713,13 @@ async function runTool(tool, args, ctx, read) {
         let t = String(raw || "").replace(/\s+/g, " ").trim();
         if (!t || /none right now|expire often|sessions expire|sfa is signed in/i.test(t)) continue;
         if (/sign-in from luke for account/i.test(t)) continue;
-        const ids = t.match(/\d{3}-\d{3}-\d{4}/g) || [];
-        if (ids.length > 1) t = t.replace(ids[1], "").replace(/\s{2,}/g, " ").trim();
-        const key = (ids[0] || t.toLowerCase());
-        if (seenSign.has(key)) continue;
+        t = t.replace(/\b\d{3}-\d{3}-\d{4}\b/g, "").replace(/\s{2,}/g, " ").replace(/\s+([,.;])/g, "$1").trim();
+        const key = t.toLowerCase();
+        if (!t || seenSign.has(key)) continue;
         seenSign.add(key);
         plainSign.push(t);
       }
-      const need = C.needsCount({ ...desk, notRead: (cap && cap.notRead) || [] }, today, now);
+      const need = luke.count;
       return { today, now_sao_paulo: b.now, ad_spend, income, decisions,
         ...(asks.length > 3 ? { more_decisions: `${asks.length - 3} more waiting on Luke: see the dashboard` } : {}),
         needs_luke_sign_in: plainSign.length ? plainSign : ["nothing"],

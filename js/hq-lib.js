@@ -798,7 +798,8 @@
   /* a bot's proposal (16 Nov 2026): every change, "from → to" (a new value alone when there was none) */
   function proposalRows(m) {
     return ((m && m.proposal && m.proposal.changes) || []).map(function (c) {
-      return { label: c.label, from: c.from || "", to: c.to || "", text: c.from ? c.from + " → " + c.to : c.to };
+      var to = c.to ? c.to : "(empty)";
+      return { label: c.label, from: c.from || "", to: c.to || "", text: c.from ? c.from + " → " + to : to };
     });
   }
   /* what the inline confirm asks before the answer goes */
@@ -824,7 +825,7 @@
           var status = s.status === "ready" || s.status === "uploaded" || s.status === "rework" ? s.status : "waiting";
           return {
             id: s.id || "", kind: s.kind || "", rule: s.rule || "Rule not set",
-            currentLine: !cur ? "Not recorded yet" : (s.status === "uploaded" || s.statusLine === "Live" ? "Live" : (cur.changed && day(cur.changed) && day(cur.changed) !== "unknown" && !/^unknown$/i.test(String(cur.changed)) ? "Changed " + day(cur.changed) + (cur.by ? " · " + cur.by : "") : "Recorded")),
+            currentLine: !cur ? "Not recorded yet" : (s.status === "uploaded" || s.statusLine === "Live" || !(cur.changed && day(cur.changed) && day(cur.changed) !== "unknown" && !/^unknown$/i.test(String(cur.changed))) ? "Live" : "Changed " + day(cur.changed) + (cur.by ? " · " + cur.by : "")),
             currentLink: cur ? cur.link : "",
             waitingLine: wait ? "New image waiting for your “Yes, correct”." : "",
             waitingLink: wait ? wait.link : "",
@@ -832,7 +833,7 @@
             approvedLine: ok ? "You said yes. " + (owner ? owner + " uploads it by hand." : "Luke uploads it himself.") + " HQ does not change the platform." : "",
             approvedLink: ok ? ok.link : "",
             status: status,
-            statusLine: s.statusLine || "Waiting",
+            statusLine: cur && status !== "rework" && status !== "ready" ? "Live" : (s.statusLine || "Waiting"),
             sizeLine: s.sizeLine || s.rule || "",
             preview: typeof s.preview === "string" ? s.preview : "",
             circle: !!s.circle,
@@ -2030,8 +2031,9 @@
       parts.push({ name: name, amount: Number(n) });
     });
     var gaps = gapNotes(cap.notRead || []);
+    var asOf = cap.lastDay ? day(cap.lastDay) : "";
     return { reported: true, spent: Number(cap.spent), amount: amount, warn: Number(cap.warn) || 750, stop: Number(cap.stop) || 900, currency: cur,
-      parts: parts, gaps: gaps, label: money(cap.spent, cur, true) + " of " + money(amount, cur, true) };
+      parts: parts, gaps: gaps, asOf: asOf, label: money(cap.spent, cur, true) + " of " + money(amount, cur, true) + (asOf ? " as of " + asOf : "") };
   }
 
   /* a decision waiting on Luke: the recommended option is Yes, the other is No. Later is only an option
@@ -2244,13 +2246,15 @@
   function proposalHtml(text) {
     var lines = String(text || "").split(/\n/).map(function (l) { return l.trim(); }).filter(Boolean);
     var fields = {};
+    var cur = "";
     lines.forEach(function (line) {
       var m = /^(To|CC|Subject|Body):\s*(.*)$/i.exec(line);
-      if (m) fields[m[1].toLowerCase()] = m[2];
+      if (m) { cur = m[1].toLowerCase(); fields[cur] = m[2]; }
+      else if (cur) fields[cur] = fields[cur] ? fields[cur] + "\n" + line : line;
     });
     if (fields.to || fields.subject || fields.body) {
       return ["to", "cc", "subject", "body"].filter(function (k) { return fields[k]; }).map(function (k) {
-        return "<p><b>" + k.toUpperCase() + "</b> " + escHtml(fields[k]) + "</p>";
+        return "<p><b>" + k.toUpperCase() + "</b> " + escHtml(fields[k]).replace(/\n/g, "<br>") + "</p>";
       }).join("");
     }
     return "<p>" + escHtml(String(text || "")).replace(/\n/g, "<br>") + "</p>";
@@ -2266,21 +2270,26 @@
     head += '<p class="d">Opened ' + escHtml(day(c.opened) || "not reported") + " · " + escHtml(shown(c.owner)) + " · " + escHtml(c.status || "") + "</p>";
     if (wait) head += '<p class="d">' + escHtml(wait) + "</p>";
     if (compact) return '<div class="d">' + head + (c.id ? '<p><a href="#songs/' + escHtml(c.id) + '">Open the case</a></p>' : "") + "</div>";
+    var rec = shown(c.recommendation);
+    var recLine = rec ? String(rec).split(/\n/)[0].replace(/\s+/g, " ").trim() : "";
     var h = '<article class="tile dcase' + (tone ? " tone-" + tone : "") + '" id="song-' + escHtml(c.id || "") + '" data-case="' + escHtml(c.id || "") + '">' + progressHtml(c) + head;
-    if (shown(c.recommendation)) h += '<p class="d"><span class="lbl">Recommendation</span><br>' + escHtml(shown(c.recommendation)) + "</p>";
-    if (shown(c.proposal)) h += '<div class="d"><span class="lbl">Proposed response</span>' + proposalHtml(String(c.proposal || "")) + "</div>";
-    if (c.decision && c.decision.at) h += '<p class="d"><span class="lbl">Your decision</span><br>' + escHtml(shown(c.decision.choice)) + (shown(c.decision.text) ? " · " + escHtml(shown(c.decision.text)) : "") + " · " + escHtml(c.decision.when || day(c.decision.at)) + "</p>";
+    if (recLine) h += '<p class="d"><span class="lbl">Recommendation</span><br>' + escHtml(recLine) + "</p>";
+    var more = "";
+    if (rec && rec !== recLine) more += '<p class="d">' + escHtml(rec).replace(/\n/g, "<br>") + "</p>";
+    if (shown(c.proposal)) more += '<div class="d"><span class="lbl">Proposed response</span>' + proposalHtml(String(c.proposal || "")) + "</div>";
+    if (c.decision && c.decision.at) more += '<p class="d"><span class="lbl">Your decision</span><br>' + escHtml(shown(c.decision.choice)) + (shown(c.decision.text) ? " · " + escHtml(shown(c.decision.text)) : "") + " · " + escHtml(c.decision.when || day(c.decision.at)) + "</p>";
     var lines = c.timeline || [];
     if (lines.length) {
-      h += '<ul class="d">' + lines.slice(0, 12).map(function (e) {
+      more += '<ul class="d">' + lines.slice(0, 12).map(function (e) {
         var when = e.date ? day(e.date) : day(e.at);
         return "<li>" + escHtml(when) + " · " + escHtml(shown(e.by)) + " · " + escHtml(shown(e.text)) + "</li>";
       }).join("") + "</ul>";
     }
+    if (more) h += '<details class="dcase-more"><summary>The full note</summary>' + more + "</details>";
     if ((c.status === "waiting on Luke" || c.status === "solved - confirm") && c.id) {
       h += '<div class="row"><button type="button" class="sendbtn" data-case-do="confirm" data-case="' + escHtml(c.id) + '">Confirm</button>';
       h += '<button type="button" class="linkbtn" data-case-do="ignore" data-case="' + escHtml(c.id) + '">Ignore</button>';
-      h += '<button type="button" class="linkbtn" data-case-do="respond" data-case="' + escHtml(c.id) + '">Respond</button></div>';
+      h += '<button type="button" class="linkbtn" data-case-do="respond" data-case="' + escHtml(c.id) + '">Reply</button></div>';
       h += '<div class="dcase-reply" data-case-reply="' + escHtml(c.id) + '" hidden><textarea data-case-text="' + escHtml(c.id) + '" placeholder="Your response, or what the bot should do"></textarea>';
       h += '<button type="button" class="sendbtn" data-case-do="send" data-case="' + escHtml(c.id) + '">Send</button></div>';
       h += '<p class="d" data-case-msg="' + escHtml(c.id) + '" role="status"></p>';
@@ -2290,8 +2299,15 @@
   /* All cases, or one song's panel (compact: a short card that links to the full one). */
   function disputeHtml(cases, o) {
     o = o || {};
+    var seenCase = {};
     var list = (Array.isArray(cases) ? cases : ((cases && cases.items) || [])).filter(function (c) {
-      return c && !testPlatform(c) && (!o.song || titleKey(c.song) === titleKey(o.song)) && (o.showResolved || (c.status !== "resolved" && c.status !== "ignored"));
+      if (!c || testPlatform(c)) return false;
+      if (o.song && titleKey(c.song) !== titleKey(o.song)) return false;
+      if (!o.showResolved && (c.status === "resolved" || c.status === "ignored")) return false;
+      var id = c.id || (titleKey(c.song) + "|" + c.platform + "|" + c.type);
+      if (seenCase[id]) return false;
+      seenCase[id] = 1;
+      return true;
     });
     var resolved = o.showResolved ? [] : (Array.isArray(cases) ? cases : ((cases && cases.items) || [])).filter(function (c) {
       return c && !testPlatform(c) && (c.status === "resolved" || c.status === "ignored");
@@ -2362,7 +2378,7 @@
     var drop = /\b(my_day|post_update|send_message|read_messages|release_step|release_pack|log_growth|read_growth|record_spend|licence_queue|content_ideas|spotify_upcoming|team_board|luke_short_briefing|needs_you|song_pl|tools_seen|list_version|tools_version|reconnect needed)\b/i;
     var seen = {}, out = [];
     String(text || "").split(/\n+/).forEach(function (line) {
-      var t = line.replace(/\b20\d{2}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?Z?\b/g, " ").replace(/\bT-\d+\b/g, " ").replace(/\bso I can do\s+(?=\()/gi, "").replace(drop, " ").replace(/\s+/g, " ").trim();
+      var t = line.replace(/\b20\d{2}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?Z?\b/g, " ").replace(/\b(20\d{2}-\d{2}-\d{2})\b/g, function (d) { return day(d) || d; }).replace(/\b\d{3}-\d{3}-\d{4}\b/g, "").replace(/\b([01]?\d|2[0-3]):[0-5]\d\b(?!\s*SP\b)/g, "$& SP").replace(/\bT-\d+\b/g, " ").replace(/\bso I can do\s+(?=\()/gi, "").replace(drop, " ").replace(/\s+/g, " ").replace(/\s+([,.;])/g, "$1").trim();
       if (!t || seen[t.toLowerCase()]) return;
       seen[t.toLowerCase()] = 1;
       out.push(t);

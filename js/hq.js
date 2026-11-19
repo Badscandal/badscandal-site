@@ -256,7 +256,12 @@
     var parts = Object.keys(net), bar = $("netBar");
     bar.hidden = !parts.length;
     if (!parts.length) { $("dot").className = "livedot"; return; }
-    var offline = parts.every(function (k) { return net[k].msg === "offline"; });
+    /* a side section failing (Pages, the desk) must not paint the whole app Offline while the sheet is fine */
+    var core = parts.filter(function (k) { return k === "sheet" || k === "ov"; });
+    var offline = core.length > 0 && core.every(function (k) { return net[k].msg === "offline"; });
+    if (!core.length && parts.every(function (k) { return net[k].msg === "offline"; })) {
+      bar.hidden = true; $("dot").className = "livedot"; return;
+    }
     var asOf = parts.map(function (k) { return net[k].asOf; }).filter(Boolean).sort()[0];
     bar.className = "netbar" + (offline ? " offline" : "");
     $("netMsg").textContent = offline ? (asOf ? "Offline · showing the numbers as of " + hhmm(asOf) + " SP" : "Offline · no numbers saved on this device yet")
@@ -970,6 +975,8 @@
     if (act === "respond") {
       var box = document.querySelector('[data-case-reply="' + (window.CSS && CSS.escape ? CSS.escape(id) : id) + '"]');
       if (box) box.hidden = false;
+      var more = b.closest && b.closest("article") && b.closest("article").querySelector("details.dcase-more");
+      if (more) more.open = true;
       return;
     }
     var choice = act === "send" ? "respond" : act;

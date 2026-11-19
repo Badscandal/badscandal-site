@@ -163,7 +163,7 @@ test("Rights links a claim to its case, and the sample desk has one case waiting
   assert.equal(L.disputeHtml(desk.disputes, { song: "No Such Song", compact: true }), "");
 });
 
-test("standup sees a case waiting on Luke, and the briefing does not", async () => {
+test("standup and the briefing share a case waiting on Luke", async () => {
   const d = memoryDesk();
   const opened = await S.openCase(d, NOW, R, { by: "Laura", song: "Northwind", platform: "YouTube", type: "dispute", status: "waiting on Luke", proposal: "Please release the claim." });
   const day = await call(d, "my_day", { bot: "Laura" });
@@ -171,7 +171,7 @@ test("standup sees a case waiting on Luke, and the briefing does not", async () 
   const team = await call(d, "team_board", { bot: "Nova" });
   assert.ok(team.waiting_on_luke.some((x) => x.id === opened.item.id));
   const brief = await call(d, "luke_briefing", { bot: "Alfred" });
-  assert.equal((brief.decisions_waiting_on_luke || []).some((x) => x.id === opened.item.id), false);
+  assert.equal((brief.decisions_waiting_on_luke || []).some((x) => x.id === opened.item.id), true);
 });
 
 test("resolved and ignored clear the next check, and a TEST case can be deleted only by who opened it", async () => {
