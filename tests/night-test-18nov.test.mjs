@@ -188,7 +188,7 @@ test("the three read-only tools write nothing", async () => {
   assert.equal(pl.wrote, false);
 });
 
-test("a sign-in keeps the ads id and a separate day", async () => {
+test("a sign-in drops the ads account number and keeps each day", async () => {
   const d = memoryDesk();
   await S.setCard(d, NOW, R, { bot: "Forge", working_on: "Ads", blockers: "Google Ads 111-222-3333 signed out" });
   await S.postUpdate(d, NOW, R, { bot: "Forge", status: "blocked", message: "Google 14 Nov: signed out" });
@@ -197,7 +197,8 @@ test("a sign-in keeps the ads id and a separate day", async () => {
   await S.postUpdate(d, NOW + 3000, R, { bot: "Nova", status: "info", message: "None right now" });
   const brief = await call(d, "luke_short_briefing", { bot: "Alfred" }, { hq: async () => ({ team: { duties: { byOwner: [], total: 0, done: 0, late: 0, blocked: 0 }, tasks: [] }, money: { cap: { month: "2026-11", currency: "USD", spent: 0, amount: 1000, left: 1000, status: "ok", notRead: ["Google 14 Nov: signed out", "Google 15 Nov: signed out", "Google 16 Nov: signed out"] } } }) });
   const lines = brief.needs_luke_sign_in.join("\n");
-  assert.match(lines, /111-222-3333/);
+  assert.equal(/111-222-3333/.test(lines), false);
+  assert.match(lines, /Google Ads/);
   assert.match(lines, /14 Nov/);
   assert.match(lines, /15 Nov/);
   assert.match(lines, /16 Nov/);

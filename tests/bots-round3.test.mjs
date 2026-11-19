@@ -224,8 +224,8 @@ test("short briefing: each sign-in once (by account), a 'signed in again' is no 
   const lines = ["Google Ads 111-111-1111 needs Luke to sign in (made up)", "Google Ads 111-111-1111: signed out again, sign in please", "TikTok Ads is signed in again"];
   for (const [i, m] of lines.entries()) await S.postUpdate(d, NOW - (10 - i) * MIN, R, { bot: "Forge", status: "blocked", message: m });
   const sb = await call(d, "luke_short_briefing", { bot: "Alfred" });
-  /* 18 Nov 2026 night test: a Google Ads customer id is kept (it is not a card number) and the two lines are one */
-  const google = sb.needs_luke_sign_in.filter((x) => /Google Ads 111-111-1111/.test(x));
+  /* Luke's briefing does not carry the ads account number. The two lines are still one. */
+  const google = sb.needs_luke_sign_in.filter((x) => /Google Ads/.test(x) && !/111-111-1111/.test(x));
   assert.equal(google.length, 1, JSON.stringify(sb.needs_luke_sign_in));
   assert.ok(!sb.needs_luke_sign_in.some((x) => /signed in again/i.test(x)));
 });

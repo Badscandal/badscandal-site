@@ -317,8 +317,18 @@ export function dutiesReport(tasks, today, nowHM = "", overlay = null) {
       let blocker = norm(t.blocker), via = "", working = false, gaps = "";
       /* "done with gaps" (batch 4): done, with what could not be read (in the blocker column) */
       if (/^done with gaps\b/i.test(norm(t.status))) { status = "done"; gaps = blocker; blocker = ""; }
-      /* by duty id only from the duty's OWN bot; a bot with one duty may leave the id out; the newer word wins */
-      const byId = overlay ? (overlay.byDuty || {})[key(t.id)] : null, byBot = overlay && perOwner[key(ownerName(t.owner))] === 1 ? (overlay.byBot || {})[key(ownerName(t.owner))] : null;
+      /* by duty id from the duty's OWN bot. A close id (D-spark and D-spark-1) still matches.
+         A bot with one duty may leave the id out. Naming the duty works when the bot has several. The newer word wins. */
+      const idKey = key(t.id), botKey = key(ownerName(t.owner));
+      const dutyMap = overlay && overlay.byDuty || {};
+      let byId = dutyMap[idKey] || null;
+      if (!byId && overlay) {
+        const hits = Object.keys(dutyMap).filter((k) => k && (idKey === k || idKey.startsWith(k) || k.startsWith(idKey)));
+        if (hits.length === 1) byId = dutyMap[hits[0]];
+      }
+      const botWord = overlay && (overlay.byBot || {})[botKey];
+      const named = !!(botWord && botWord.duty && (key(botWord.duty) === idKey || idKey.startsWith(key(botWord.duty)) || key(botWord.duty).startsWith(idKey)));
+      const byBot = botWord && (perOwner[botKey] === 1 || named) ? botWord : null;
       const mine = byId && (!byId.bot || byId.bot === key(ownerName(t.owner))) ? byId : null;
       const said = mine && byBot ? ((byBot.iso || "") > (mine.iso || "") ? byBot : mine) : mine || byBot;
       if (said && status !== "done") {

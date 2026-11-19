@@ -1132,7 +1132,7 @@ export function profilesView(doc, messages, platform) {
   const want = fold(platform);
   const shown = want ? platforms.filter((p) => fold(p.platform) === want || fold(p.platform).split(" ")[0] === want || p.id === want) : platforms;
   const masterLine = (group) => { const m = masterDoc(doc, group); return m ? { w: m.w, h: m.h, at: m.at || "", line: "Saved · " + m.w + " x " + m.h } : null; };
-  return { note: "HQ never logs in and never changes a platform. A new image waits for your \"Yes, correct\". Then the owner uploads it by hand. You can also upload one profile photo and one banner here. A copy is made when the shape fits. When it does not, nothing is cropped.",
+  return { note: "New images need Luke's yes. The owner uploads them by hand and records them here. HQ never logs in.",
     masters: { photo: masterLine("photo"), banner: masterLine("banner") }, platforms: shown };
 }
 export async function recordProfile(store, now, roster, a) {
@@ -1776,7 +1776,21 @@ export async function monthCheck(store, now, a = {}) {
     };
     for (let n = 2; n <= Math.min(4, cands.length); n++) pick(0, n, []);
   }
-  return { month, received, toSort, waiting, ownTransfers, fromOwn, statementLater, suggestions, ready: !toSort.length && !waiting.length && !ownTransfers.length };
+  const waitingBy = {}, waitingWhere = {};
+  for (const e of waiting) {
+    waitingBy[e.currency] = round((waitingBy[e.currency] || 0) + Number(e.amount || 0));
+    const place = /paypal/i.test(`${e.account} ${e.payer}`) ? "PayPal" : /wise/i.test(`${e.account} ${e.payer}`) ? "Wise" : (e.account || "not in Revolut");
+    (waitingWhere[e.currency] || (waitingWhere[e.currency] = new Set())).add(place);
+  }
+  /* an own transfer (an FX row HQ already marked) is listed, and it does not block the month */
+  const ready = !toSort.length && !waiting.length;
+  const bits = [];
+  if (toSort.length) bits.push(toSort.length + " to sort");
+  if (waiting.length) bits.push(waiting.length + " waiting");
+  const reason = ready ? "ready" : bits.join(", ");
+  return { month, received, toSort, waiting, waiting_count: waiting.length, waiting_by_currency: waitingBy,
+    waiting_where: Object.fromEntries(Object.entries(waitingWhere).map(([k, s]) => [k, [...s].join(" and ")])),
+    ownTransfers, fromOwn, statementLater, suggestions, ready, reason, verdict: reason };
 }
 /* ---------- the locked month close (A7, 17 Nov 2026, Ledger, Sheet) ----------
    When month_check says a finished month is ready, close_month freezes it: close/<month>.json = { month, at, by,
@@ -2813,6 +2827,7 @@ function growthBoosts(list) {
       const n = optNum(p[field]);
       if (n != null) row[key] = n;
     }
+    if (row.follows > 0 && spend > 0) row.cost_per_follow = round(spend / row.follows);
     const asOf = clean(p.as_of || p.asOf, 40);
     if (asOf) row.as_of = asOf;
     const started = clean(p.started || p.boost_started, 40);
@@ -2878,7 +2893,7 @@ export async function listGrowth(store, now, months = 2) {
   const keys = [];
   for (let i = 0; i < months; i++) { keys.push(growKey(m)); m = prevMonth(m); }
   const docs = await Promise.all(keys.map((k) => readDoc(store, k, [])));
-  return docs.flatMap((d) => (Array.isArray(d.data) ? d.data : []));
+  return docs.flatMap((d) => (Array.isArray(d.data) ? d.data : [])).sort((a, b) => String(b && b.date || "").localeCompare(String(a && a.date || "")));
 }
 function noteShown(row, vals, approx, shown) {
   for (const n of Object.keys(vals)) {
@@ -2985,6 +3000,7 @@ export async function logGrowth(store, now, roster, a) {
     const old = list.find((x) => x.key === key && x.date === date);
     if (old) {
       const filled = [], replaced = [];
+      let lived = false;
       for (const [k, v] of Object.entries({ ...vals, ...extra })) {
         if (k === "boosts") {
           const merged = mergeGrowthBoosts(old.boosts, v);
@@ -2993,19 +3009,25 @@ export async function logGrowth(store, now, roster, a) {
           else { (old.was || (old.was = {}))[k] = old.boosts; old.boosts = merged; replaced.push(k); }
           continue;
         }
-        /* HQ fills a blank. It does not replace a bot's own reading (19 Nov 2026). */
+        /* HQ fills a blank. It does not replace a number already logged for that day (19 Nov 2026).
+           A later read of the same day is kept beside it, so the logged day stays fixed. */
         const hqFill = by === "HQ" && old.by && old.by !== "HQ";
         if (old[k] == null || old[k] === "") { old[k] = v; filled.push(k); delete (old.gaps || {})[k]; }
+        else if (by === "HQ" && (k === "followers" || k === "views") && !sameStored(old[k], v)) {
+          old.live = { ...(old.live || {}), [k]: v, at };
+          lived = true;
+        }
         else if (!sameStored(old[k], v) && !hqFill) { (old.was || (old.was = {}))[k] = old[k]; old[k] = v; replaced.push(k); }
       }
       for (const [k, w] of Object.entries(gaps)) if (old[k] == null) (old.gaps || (old.gaps = {}))[k] = w;
       const shownSame = Object.keys(approx).every((n) => old.shown && old.shown[n] === shown[n]);
       const changeSame = studioChange == null || (old.change === studioChange && old.change_source === "studio");
       const lateSame = !lateRead || old.late_read === true;
-      if (!filled.length && !replaced.length && shownSame && changeSame && lateSame) return { skip: true, value: { row: old, duplicate: true, filled, replaced } };
+      if (!filled.length && !replaced.length && !lived && shownSame && changeSame && lateSame) return { skip: true, value: { row: old, duplicate: true, filled, replaced } };
       noteShown(old, vals, approx, shown);
       if (!song) applyFollowerChange(old, { studioChange, prevF, earlier, lateRead, followersTouched: filled.includes("followers") || replaced.includes("followers") || studioChange != null });
-      old.updatedAt = at; old.by = by;
+      old.updatedAt = at;
+      if (by !== "HQ" || !old.by) old.by = by;
       return { value: { row: old, duplicate: false, filled, replaced } };
     }
     if (list.length >= 2000) fail("This month's growth list is full. Tell Claude.", "limit");
@@ -3862,8 +3884,10 @@ export function releaseView(r, today, o = {}) {
     const spotWait = !w && s.key === "spotify" && !finished(s) && isDay(s.due) && today < s.due && ap && ap.status === "done";
     /* due day has passed and the song still is not marked showing: waiting on Spotify, not late (18 Nov 2026 night test) */
     const platformWait = !w && !spotWait && s.key === "spotify" && !finished(s) && !skipped && isDay(s.due) && s.due < today;
+    /* a Canvas with no link, before the release, is waiting on Luke. It is not a skipped step. */
+    const canvasWait = s.key === "canvas" && skipped && canvasSkipNote(s.note) && isDay(date) && today < date;
     const waiting = !!w || spotWait || platformWait;
-    let note = s.note || "";
+    let note = canvasWait ? "Waiting for a Canvas link from Luke" : (s.note || "");
     if (s.key === "lyrics" && !finished(s)) {
       const desk = lyricsDesk(r, o);
       if ((filled(pack.lyrics) || desk === "pack") && (!note || /none provided|no lyrics|not provided/i.test(note))) note = "Luke's lyrics are in the pack.";
@@ -3872,6 +3896,7 @@ export function releaseView(r, today, o = {}) {
     const videoDone = s.key === "video" && s.status === "done" && !isDay(s.doneOn) ? (s.at ? spDay(Date.parse(s.at)) : (isDay(s.due) ? s.due : today)) : "";
     return { ...s, note, ...(videoDone ? { doneOn: videoDone } : {}), late: !finished(s) && !waiting && !!s.due && s.due < today, dueIn: s.due ? daysBetween(today, s.due) : null, waiting,
       ...(w ? { waitingFor: w.key, waitingText: waitWords(w, s) } : (spotWait || platformWait) ? { waitingFor: "spotify-window", waitingText: "waiting on Spotify" } : {}),
+      ...(canvasWait ? { waitingText: "Waiting for a Canvas link from Luke" } : {}),
       ...(skipped ? { skipped: true } : {}), ...(STEP[s.key] && STEP[s.key].after ? { after: STEP[s.key].after } : {}) };
   });
   const dueOf = (key) => { const s = steps.find((x) => x.key === key); return s ? s.due : date && STEP[key] ? addDays(date, -STEP[key].days) : null; };
@@ -5225,8 +5250,8 @@ function cardNow(card, today) {
     const due = dueInLine(out.workingOn, today);
     if (due && due < today) {
       const lateBy = daysBetween(due, today);
+      /* a date in the line is not a late duty. "Late" is only a duty or a step that is actually late. */
       if (lateBy > 7) { out.oldWorkingOn = out.workingOn; out.workingOn = ""; }
-      else if (!/^late:/i.test(out.workingOn)) out.workingOn = "Late: " + out.workingOn;
     }
   }
   const bday = card.blockersAt ? spDay(Date.parse(card.blockersAt)) : day;
@@ -5604,7 +5629,7 @@ const caseStatusOf = (v) => {
 const caseManagers = (by) => by === "Nova" || by === "Claude" || by === "Luke";
 /* a redaction the bots paste in. It is never shown. */
 function stripSecure(v) {
-  return String(v == null ? "" : v).replace(/\[\s*secure value:[^\]]*\]/gi, " ").replace(/\s+/g, " ").trim();
+  return String(v == null ? "" : v).replace(/\[\s*secure value:[^\]]*\]/gi, " ").replace(/[^\S\n]+/g, " ").replace(/[ \t]*\n[ \t]*/g, "\n").trim();
 }
 function waitingName(v) {
   const t = stripSecure(v).replace(/\s+since\b.*$/i, "").trim();
@@ -5769,8 +5794,8 @@ export async function updateCase(store, now, roster, a) {
       item.waitingSince = waitingSinceAsked != null ? waitingSinceAsked : (waitingOn ? at : "");
       bits.push(waitingOn ? "Waiting on " + waitingOn : "Not waiting");
     } else if (waitingSinceAsked != null) {
+      /* the date is stored. It is not a timeline line: only a real change is. */
       item.waitingSince = waitingSinceAsked;
-      bits.push(waitingSinceAsked ? "Waiting since " + waitingSinceAsked : "Waiting since cleared");
     } else if (status && status.startsWith("waiting") && !item.waitingSince) item.waitingSince = at;
     if (nextCheck != null && nextCheck !== (item.nextCheck || "")) { item.nextCheck = nextCheck; bits.push(nextCheck ? "Next check " + nextCheck : "Next check cleared"); }
     if (recommendation != null && recommendation !== (item.recommendation || "")) { item.recommendation = recommendation; bits.push("Recommendation updated"); }
@@ -5853,6 +5878,9 @@ export function lukeLine(text) {
   let t = String(text || "");
   if (/site analytics/i.test(t) && /netlify|viewer|webmaster|needs access/i.test(t)) return "Webmaster needs Netlify Viewer access (site analytics)";
   t = t.replace(/\b20\d{2}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?Z?\b/g, " ");
+  t = t.replace(/\b(20\d{2}-\d{2}-\d{2})\b/g, (d) => dayWords(d) || d);
+  t = t.replace(/\b\d{3}-\d{3}-\d{4}\b/g, "");
+  t = t.replace(/\b([01]?\d|2[0-3]):[0-5]\d\b(?!\s*SP\b)/g, "$& SP");
   t = t.replace(/\bT-\d+\b/g, " ");
   t = t.replace(/\bso I can do\s+(?=\()/gi, "");
   t = t.replace(/\b(my_day|post_update|send_message|read_messages|release_step|release_pack|release_fill|log_growth|read_growth|record_spend|licence_queue|content_ideas|spotify_upcoming|team_board|luke_short_briefing|luke_briefing|needs_you|song_pl|task_update|tools_seen|list_version|tools_version|reconnect needed)\b/gi, " ");
@@ -6181,7 +6209,7 @@ export function freshReport(report, hq) {
   if (!m) return report;
   const done = Number(m[1]), total = Number(m[2]), saidBlocked = blocked ? Number(blocked[1]) : null;
   if (done === Number(d.done) && total === Number(d.total) && (saidBlocked == null || saidBlocked === Number(d.blocked))) return report;
-  return { ...report, stale: true, text: `Out of date. The board now shows ${d.done} of ${d.total} duties done, ${d.blocked} blocked.` };
+  return { ...report, stale: true, text: `The board shows ${d.done} of ${d.total} duties done, ${d.blocked} blocked.` };
 }
 /* Sign-ins, access, a yes Luke still owes, and fan replies only he can send. Notes are not asks. */
 function lukeExtraNeeds(desk) {
@@ -6222,14 +6250,23 @@ export function waitingOnLuke(desk, today, now = null) {
   const out = [];
   for (const m of waitingOn(desk.messages || [], "Luke")) {
     if (!ASKS[m.needs]) continue;
-    out.push({ key: "m:" + m.id, kind: "message", id: m.id, text: `${clean(m.from, 40)} ${ASKS[m.needs]}`, href: "#messages/" + m.id, at: m.at || null });
+    const from = clean(m.from, 40);
+    let kind = "message", text = `${from} ${ASKS[m.needs]}`;
+    /* Nova's "handle this" / "contact me" is its own card. The answer still goes back to Nova. */
+    if (from === "Nova" && m.needs === "action") {
+      kind = "handle";
+      const head = /contact me/i.test(m.text || "") ? "Nova needs you to contact me" : "Nova needs you to handle this";
+      const detail = lukeLine(m.text);
+      text = detail && detail.toLowerCase() !== head.toLowerCase() ? `${head}: ${detail}` : head;
+    }
+    out.push({ key: "m:" + m.id, kind, id: m.id, needs: m.needs, from, text, href: "#messages/" + m.id, at: m.at || null });
   }
   /* 18 Nov 2026 (handoff bug 1): his open Yes/No/Edit cards (held overnight ones too) and red accounts are
      waiting on him as well, when the caller loaded them (netlify/lib/needs.mjs needsDesk). The lock-screen
      text names who and what kind only: never an amount, a payer or the card's text. */
   for (const c of desk.lukeCards || []) {
     if (!c || !c.id) continue;
-    out.push({ key: "c:" + c.id, kind: "card", id: c.id, text: `${clean(c.owner || "HQ", 40)} needs your yes or no`, href: "#today", at: null });
+    out.push({ key: "c:" + c.id, kind: "card", id: c.id, from: clean(c.owner || "HQ", 40), text: `${clean(c.owner || "HQ", 40)} needs your yes or no`, href: "#today", at: null });
   }
   for (const a of redAccounts(desk.health)) {
     out.push({ key: "a:" + a.id, kind: "account", id: a.id, text: `${clean(a.label || "An account", 40)} needs a look`, href: "#growth", at: null });
@@ -6244,7 +6281,35 @@ export function waitingOnLuke(desk, today, now = null) {
     out.push({ key: "d:" + c.id, kind: "dispute", id: c.id, text: c.text, href: "#songs/" + c.id, at: c.at || null });
   }
   for (const x of lukeExtraNeeds(desk)) out.push(x);
-  return out.sort((a, b) => (a.at == null ? 1 : b.at == null ? -1 : a.at < b.at ? -1 : a.at > b.at ? 1 : 0));
+  /* a blocked T-task whose blocker is a real ask. The old task titles (runbook B, Read Google Ads
+     spend, TikTok Campaign A, Site analytics) are not cards: the sign-in and the access line cover them. */
+  const DROP = /runbook\s*b|read google ads spend|tiktok campaign a|site analytics/i;
+  for (const t of desk.lukeTasks || []) {
+    if (!t || !/^T-/i.test(String(t.id || ""))) continue;
+    if (!/block|waiting/i.test(String(t.status || ""))) continue;
+    const title = String(t.task || ""), blocker = String(t.blocker || "");
+    if (DROP.test(title) || DROP.test(blocker)) continue;
+    if (!/luke|your yes|system user|you to/i.test(blocker || title)) continue;
+    if (/google ads/i.test(blocker) && /sign/i.test(blocker)) continue;
+    if (/netlify|viewer access|site analytics/i.test(blocker + " " + title)) continue;
+    const text = lukeLine(blocker || title);
+    if (!text) continue;
+    const owner = clean(t.owner, 40);
+    out.push({ key: "t:" + t.id, kind: owner === "Nova" ? "handle" : "task", id: String(t.id), from: owner, text: owner === "Nova" && !/nova needs you/i.test(text) ? "Nova needs you to handle this: " + text : text, href: "#team", at: null });
+  }
+  const seen = new Set(), deduped = [];
+  for (const x of out) {
+    const bare = String(x.text || "").toLowerCase().replace(/\b\d{3}-\d{3}-\d{4}\b/g, "").replace(/\s+/g, " ").trim();
+    const k = x.kind === "signin" || /^sign in to /.test(bare) ? "signin:" + bare
+      : x.kind === "access" || /netlify viewer/.test(bare) ? "access:" + bare
+      : x.key;
+    if (seen.has(k)) continue;
+    seen.add(k);
+    deduped.push(x);
+  }
+  /* decisions first, so "Do this first" and the briefing's first item are the same question */
+  const rank = (x) => x.needs === "decision" || x.kind === "yes" || x.kind === "card" ? 0 : x.kind === "signin" || x.kind === "access" ? 1 : 2;
+  return deduped.sort((a, b) => rank(a) - rank(b) || (a.at == null ? 1 : b.at == null ? -1 : a.at < b.at ? -1 : a.at > b.at ? 1 : 0));
 }
 
 export function board(desk, now, hq) {

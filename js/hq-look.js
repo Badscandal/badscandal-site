@@ -410,28 +410,45 @@
   function pendingEntry(e) {
     return e && !e.paidBy && !e.movedTo && /^(payable|pending|statement only)$/.test(String(e.status || ""));
   }
+  /* Wise or PayPal money that has not reached Revolut. It is waiting, never received. */
+  function holdingEntry(e) {
+    if (!e || e.movedTo || e.paidBy || landedEntry(e) || pendingEntry(e)) return false;
+    return !!(e.holding || /wise|paypal/i.test(String(e.account || "")));
+  }
   /* One card per currency. Landed is the only received total. Pending is never added in. */
   function moneyCards(o, L) {
     o = o || {};
     var inc = o.income, entries = o.entries || [], month = o.month || (inc && inc.month) || "";
-    var received = (inc && inc.receivedByMonth && month && inc.receivedByMonth[month]) || (inc && inc.received) || null;
+    var booked = inc && inc.receivedByMonth && month && inc.receivedByMonth[month];
+    var received = booked || (inc && inc.received) || null;
     if (!inc) {
       return { reported: false, cards: CURRENCIES.map(function (c) { return { currency: c, landed: null, pending: null, landedText: "not reported", pendingText: "not reported" }; }) };
     }
     return { reported: true, month: month, cards: CURRENCIES.map(function (c) {
       var fromEntries = entries.length ? sumCurrency(entries, c, function (e) { return (!month || String(e.date || "").slice(0, 7) === month) && landedEntry(e); }) : null;
+      var bookedKey = !!(booked && Object.prototype.hasOwnProperty.call(booked, c) && num(booked[c]) != null);
       var hasKey = !!(received && Object.prototype.hasOwnProperty.call(received, c) && num(received[c]) != null);
-      var landed = fromEntries != null ? fromEntries : (hasKey ? num(received[c]) : (received ? 0 : null));
+      /* the connector's month total wins when it is there. A re-sum of the rows can miss a landed payment. */
+      var landed = bookedKey ? num(booked[c]) : (fromEntries != null ? fromEntries : (hasKey ? num(received[c]) : (received ? 0 : null)));
       var pendingListed = num(inc.payable && inc.payable[c]);
       var pendingExtra = entries.length ? sumCurrency(entries, c, function (e) { return (!month || String(e.date || "").slice(0, 7) === month) && e.status === "statement only" && !e.paidBy; }) : null;
+      var holdSum = entries.length ? sumCurrency(entries, c, function (e) { return (!month || String(e.date || "").slice(0, 7) === month) && holdingEntry(e); }) : null;
+      var places = [];
+      (entries || []).forEach(function (e) {
+        if (!e || e.currency !== c || !holdingEntry(e)) return;
+        if (month && String(e.date || "").slice(0, 7) !== month) return;
+        var place = /paypal/i.test(String(e.account || "")) ? "PayPal" : /wise/i.test(String(e.account || "")) ? "Wise" : (e.account || "");
+        if (place && places.indexOf(place) < 0) places.push(place);
+      });
       var pendingKnown = !!(inc.payable || entries.length);
-      var pending = !pendingKnown && pendingListed == null && pendingExtra == null ? null : (pendingListed || 0) + (pendingExtra || 0);
+      var pending = !pendingKnown && pendingListed == null && pendingExtra == null && holdSum == null ? null : (pendingListed || 0) + (pendingExtra || 0) + (holdSum || 0);
+      var where = places.length ? " in " + places.join(" and ") : "";
       return {
         currency: c,
         landed: landed,
         pending: pending,
         landedText: landed == null ? "not reported" : landed === 0 ? "Nothing received" : money(landed, c, L),
-        pendingText: pending == null ? "not reported" : pending === 0 ? "nothing" : money(pending, c, L)
+        pendingText: pending == null ? "not reported" : pending === 0 ? "nothing" : money(pending, c, L) + where
       };
     }) };
   }

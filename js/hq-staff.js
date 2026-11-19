@@ -644,7 +644,8 @@
     /* the main sources, this month: neutral as every month starts, green once received, red once their day has
        passed without it (16 Nov 2026, Luke) */
     var mains = L.mainSources(sources), others = sources.filter(function (s) { return !s.main; });
-    h += '<h4 class="lblh">Where money comes from · ' + esc(month) + "</h4>" + (mains.length ? '<div class="srcmain">' + mains.map(function (s) {
+    var srcLabel = rm && rm.label ? rm.label : month;
+    h += '<h4 class="lblh">Where money comes from · ' + esc(srcLabel) + "</h4>" + (mi ? '<p class="t-hint">The green and red states are still this month. The received cards above are ' + esc(srcLabel) + ".</p>" : "") + (mains.length ? '<div class="srcmain">' + mains.map(function (s) {
       var st = s.thisMonth ? s.thisMonth.state : "waiting";
       return '<div class="tile srcm ' + (st === "received" ? "got" : st === "late" ? "late" : "") + '"><p class="an">' + esc(s.name) + '</p><p class="al">' + esc(L.sourceMonthLine(s)) + "</p>" + (s.category ? '<p class="t-hint">' + esc(s.category) + "</p>" : "") + "</div>";
     }).join("") + "</div>" : '<p class="secsub">Ledger marks the main income sources here (each with the day it usually pays by).</p>');
@@ -824,8 +825,8 @@
      the list, a line taking its place ("Sorted as income (Production)"), and the totals are read again. */
   function sortedNow() { return Object.keys(ui.sorted).map(function (k) { return ui.sorted[k]; }).filter(function (x) { return Date.now() - x.at < KEEP_MS; }); }
   function toSortHtml(inc) {
-    var all = inc.unsortedMonth || inc.unsorted || [], left = all.filter(function (e) { return !ui.sorted[e.id]; }), stubs = sortedNow();
-    var n = Math.max(0, (inc.unsortedCount || all.length) - (all.length - left.length));
+    var all = Array.isArray(inc.unsortedMonth) ? inc.unsortedMonth : (inc.unsorted || []), left = all.filter(function (e) { return !ui.sorted[e.id]; }), stubs = sortedNow();
+    var n = left.length;
     if (!n && !stubs.length) return "";
     var rows = stubs.map(function (x) { return '<li class="landed" role="status" tabindex="-1" id="sort-' + esc(safe(x.id)) + '"><span>' + esc(x.line) + '<span class="lsub">' + esc(x.sub) + "</span></span></li>"; })
       .concat(left.map(sortRow));
