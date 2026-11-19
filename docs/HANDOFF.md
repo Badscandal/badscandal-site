@@ -70,6 +70,7 @@ artist growth bot that all we will need is content and $".
 
 ## In flight (branches not merged)
 
+- **Dispute follow-up** (branch `cursor/hq-dispute-fixes-f1cf`, not merged). Standup lists include a case waiting on Luke. A rounded Studio figure such as 1.7k is stored as approximate. A claim keeps one id. Cases and song cards are coloured. Needs you is one list. Not live until Luke says deploy.
 - **Account health** (PR #92, on main). A view total at about 35% of the median is a dip, not "in line", and that version left boosted posts out.
 - **Engagement health** (branch `cursor/account-health-engagement-1188`, not merged). Instagram health follows engagement per view, (likes + comments + saves + shares) / views, and keeps boosted Reels in. Views stay as context. Not live until Luke says deploy.
 - **Handoff fixes** (PR #90) are on main. Nova refreshes the tool list once (the `needs_you`, `instagram`, `read_messages` and `log_growth` descriptions changed; same 47 names). A new Yes/No/Edit card or a red account now buzzes Luke's phone once (quiet hours and the 10-minute rule still apply).

@@ -3,6 +3,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import * as S from "../netlify/lib/staff.mjs";
 import { liveReport } from "../netlify/lib/hq.mjs";
+import { evaluate } from "../netlify/lib/account-health.mjs";
 import { memoryDesk } from "../netlify/lib/staff-sample.mjs";
 import { callTool, TOOLS } from "../netlify/lib/staff-tools.mjs";
 
@@ -224,4 +225,62 @@ test("a post that beats the others adds a next idea without inventing the song",
   assert.equal(next.hook, "Open on the chorus");
   assert.equal(next.song, undefined);
   assert.match(next.why, /beat the other official posts/);
+});
+
+test("a rounded Studio view is kept as approximate, and Studio's own subscriber change wins", async () => {
+  const d = memoryDesk();
+  const late = await call(d, "log_growth", { bot: "Laura", platform: "YouTube", date: "2026-11-17", subscribers: "100", late_read: true });
+  assert.equal(late.saved, true);
+  const day = await call(d, "log_growth", { bot: "Laura", platform: "YouTube", date: "2026-11-18", subscribers: "102", views: "1.7k", official_views: "3.8k", change: "+1" });
+  assert.equal(day.saved, true);
+  assert.equal(day.change, 1);
+  const read = await call(d, "read_growth", { bot: "Laura", platform: "YouTube", date: "2026-11-18" });
+  assert.equal(read.rows[0].views, 1700);
+  assert.equal(read.rows[0].shown.views, "1.7k");
+  assert.equal(read.rows[0].approx.views, true);
+  assert.equal(read.rows[0].change, 1);
+  assert.equal(read.rows[0].change_source, "studio");
+  assert.equal(read.rows[0].shown.official_views, "3.8k");
+  await call(d, "log_growth", { bot: "Laura", platform: "YouTube", date: "2026-11-19", subscribers: "104" });
+  const computed = await call(d, "read_growth", { bot: "Laura", platform: "YouTube", date: "2026-11-19" });
+  assert.equal(computed.rows[0].change, 2);
+  assert.equal(computed.rows[0].change_approx, false);
+  await call(d, "log_growth", { bot: "Kevin", platform: "TikTok", date: "2026-11-18", followers: "10" });
+  await call(d, "log_growth", { bot: "Kevin", platform: "TikTok", date: "2026-11-17", followers: "8", late_read: true });
+  const next = await call(d, "log_growth", { bot: "Kevin", platform: "TikTok", date: "2026-11-18", followers: "10" });
+  assert.equal(next.duplicate, true);
+  const again = await call(d, "read_growth", { bot: "Kevin", platform: "TikTok", date: "2026-11-18" });
+  assert.equal(again.rows[0].change, 2);
+  assert.equal(again.rows[0].change_approx, true);
+  await assert.rejects(call(d, "log_growth", { bot: "Atlas", platform: "Spotify", date: "2026-11-18", monthly_listeners: "about 41k" }), (e) => /never an estimate/.test(e.message));
+});
+
+test("a Content ID claim keeps one id, and the health note says it once", async () => {
+  const d = memoryDesk();
+  const video = "fOkECq4AIKU";
+  await d.setJSON("claims.json", { items: ["2026-11-17", "2026-11-18", "2026-11-19"].map((date) => ({
+    key: `touchme|samplechannel|${date}`, claim: "Touch Me", claimant: "Sample Channel", video_id: video, claim_type: "audio",
+    date, first_seen: date, last_checked: date, by: "Laura", impact: "one video flagged",
+  })), checked: {} });
+  const read = await call(d, "read_claims", { bot: "Laura" });
+  assert.equal(read.claims.length, 1);
+  assert.equal(read.claims[0].id, video + "|samplechannel|audio");
+  assert.equal(read.claims[0].first_seen, "2026-11-17");
+  assert.equal(read.claims[0].last_checked, "2026-11-19");
+  const again = await call(d, "log_growth", { bot: "Laura", date: "2026-11-19", claim: "Touch Me", claimant: "Sample Channel", video_id: video, claim_type: "audio", impact: "one video flagged" });
+  assert.equal(again.duplicate, true);
+  const report = evaluate({ now: NOW, claims: (await S.loadDesk(d, NOW)).claims });
+  const yt = report.accounts.find((a) => a.id === "youtube");
+  const notes = yt.signals.filter((s) => String(s.id).startsWith("claim:"));
+  assert.equal(notes.length, 1);
+  assert.equal((notes[0].text.match(/Touch Me/g) || []).length, 1);
+});
+
+test("my_day keeps the full duty text beside the short one", async () => {
+  const d = memoryDesk();
+  const day = await call(d, "my_day", { bot: "Laura" });
+  assert.equal(typeof day.daily_duty, "string");
+  assert.equal(typeof day.daily_duty_full, "string");
+  assert.ok(day.daily_duty_full.length >= day.daily_duty.length);
+  assert.ok(day.daily_duty_full.startsWith(day.daily_duty.slice(0, 40)));
 });

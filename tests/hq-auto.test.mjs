@@ -16,7 +16,7 @@ const call = (d, name, args, now = NOW) => callTool(tool(name), args, { store: d
 const roster = S.DEFAULT_ROSTER;
 
 test("the connector stays at 49 tools", () => {
-  assert.equal(TOOLS.length, 54); /* content_ideas (Spark) + account_health, needs_you, song_pl (18 Nov 2026 night test) + profile_jobs, profile_master, profile_rework, profile_uploaded (PR #87) */
+  assert.equal(TOOLS.length, 55); /* content_ideas (Spark) + account_health, needs_you, song_pl (18 Nov 2026 night test) + profile_jobs, profile_master, profile_rework, profile_uploaded (PR #87) */
   assert.ok(tool("my_day").inputSchema.properties.luke_tap);
   assert.ok(tool("send_message").inputSchema.properties.card);
   assert.ok(tool("post_update").inputSchema.properties.card);
@@ -100,6 +100,15 @@ test("waiting on others carries a ticket and days, and is not Luke's", () => {
   assert.equal(lane[1].days, 1);
   assert.equal(lane[2].ticket, "RN-SAMPLE");
   assert.equal(lane.some((x) => x.who === "luke"), false);
+  const chatter = C.othersLane({
+    now: NOW, cards: [], roster,
+    messages: [
+      { id: "brief", from: "Alfred", to: "Nova", needs: "none", text: "Ad spend this morning is inside the cap.", at: "2026-11-18T13:00:00Z" },
+      { id: "chat", from: "Alfred", to: "Nova", needs: "reply", text: "The 10:00 spend line.", at: "2026-11-18T13:00:00Z" }
+    ],
+    releases: [],
+  });
+  assert.deepEqual(chatter, []);
 });
 
 test("an empty webhook sends nothing; a pasted one gets a short ping", async () => {

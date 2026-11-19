@@ -43,6 +43,33 @@ test("a health dot uses the panel when it is there", () => {
   assert.equal(V.healthDot("TikTok", null, null).state, "off");
 });
 
+test("Waiting on you is one list: empty when nothing is there, red then oldest when something is", () => {
+  assert.deepEqual(V.waitingOnYou({}), []);
+  const list = V.waitingOnYou({
+    today: "2026-11-19",
+    messages: [
+      { id: "m-new", to: "Luke", needs: "reply", text: "A newer question", at: "2026-11-19T12:00:00Z" },
+      { id: "m-old", to: "Luke", needs: "decision", text: "An older decision", at: "2026-11-17T12:00:00Z", options: ["Yes", "No"] }
+    ],
+    tasks: [
+      { id: "T-30", status: "blocked", task: "Site analytics", blocker: "Netlify Viewer not granted", deadline: "2026-11-18" },
+      { id: "D-1", status: "blocked", task: "A duty, not a T-row" },
+      { id: "T-9", status: "done", task: "Already done" }
+    ],
+    disputes: [
+      { id: "d-green", song: "Paper Moon", platform: "RouteNote", status: "solved - confirm", waitingSince: "2026-11-18T12:00:00Z" },
+      { id: "d-red", song: "Northwind", platform: "YouTube", status: "waiting on Luke", waitingSince: "2026-11-16T12:00:00Z" },
+      { id: "d-test", song: "Love You", platform: "TEST", status: "waiting on Luke" },
+      { id: "d-shut", song: "Closed", platform: "Spotify", status: "resolved" }
+    ]
+  });
+  assert.deepEqual(list.map((x) => x.id), ["d-red", "m-old", "T-30", "m-new", "d-green"]);
+  assert.equal(list.find((x) => x.id === "T-30").reason, "Netlify Viewer not granted");
+  assert.equal(list.find((x) => x.id === "T-30").title, "Site analytics");
+  assert.equal(list.find((x) => x.id === "d-green").tone, "green");
+  assert.equal(list.some((x) => x.id === "d-test" || x.id === "D-1" || x.id === "T-9"), false);
+});
+
 test("Nova's recommendation is the yes, and a blocked T- task is parked", () => {
   const stack = V.decisionStack([
     { id: "m1", to: "Luke", needs: "decision", text: "Send the USD 40 boost?\n2026-11-20", options: ["No", "Yes"], recommendations: [{ by: "Steve", option: "No" }, { by: "Nova", option: "Yes" }] }

@@ -1148,10 +1148,11 @@
     var statBits = [face.people != null ? L.fmt(face.people) + " people" : "", face.taps != null ? L.fmt(face.taps) + " Spotify taps" : ""].filter(Boolean);
     var stats = statBits.length ? '<p class="rstats">' + esc(statBits.join(" · ")) + "</p>" : "";
     if (face.prehq) { badLeft = []; wg = { bad: [], caution: [] }; }
-    return '<article class="tile relcard rstrip" id="releases-' + esc(safe(v.id)) + '">' +
+    var mark = L.songMark(board && board.disputes, v.title, today, [v]);
+    return '<article class="tile relcard rstrip' + (mark.tone ? " tone-" + mark.tone : "") + '" id="releases-' + esc(safe(v.id)) + '">' +
       (face.cover ? '<img class="rcover" src="' + esc(face.cover) + '" alt="">' : "") +
       '<div class="rface"><div class="bhead"><div><h3>' + esc(v.title) + "</h3>" +
-      '<p class="rwhen">' + esc(face.when) + "</p>" + dealHtml(v) + "</div>" + ring +
+      '<p class="rwhen">' + esc(face.when) + "</p>" + dealHtml(v) + (mark.badge ? '<p class="dbadge">' + esc(mark.badge) + "</p>" : "") + "</div>" + ring +
       '<span class="' + (pill.bad ? "bstate late" : "pill" + (pill.rel ? " rel" : "")) + '">' + esc(pill.text) + "</span></div>" +
       (face.prehq ? '<p class="prehq">pre-HQ</p>' : "") + dots + nxt +
       (face.distributor && !/ISRC|UPC/i.test(face.distributor) ? '<p class="rdist">' + esc(face.distributor) + "</p>" : "") +

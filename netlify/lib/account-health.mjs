@@ -408,14 +408,20 @@ function monetisationSignal(reading, today) {
 }
 
 function claimSignals(claims, today) {
-  const list = (claims || []).filter((c) => c && c.claim && isDay(c.date) && daysBetween(c.date, today) >= 0 && daysBetween(c.date, today) <= 90);
+  const folded = S.mergeClaimItems(claims);
+  const list = folded.filter((c) => {
+    if (!c || !c.claim) return false;
+    const when = isDay(c.last_checked) ? c.last_checked : c.date;
+    return isDay(when) && daysBetween(when, today) >= 0 && daysBetween(when, today) <= 90;
+  });
   if (!list.length) return [gap("claims", "no Content ID claim has been recorded in the last 90 days. That does not mean there is none. Laura records one when YouTube shows one.", "Content ID claims on the desk")];
   return list.map((c) => {
     const hard = String(c.strike || "").toLowerCase() === "yes" || /block|mute|removed|ineligible|restrict|taken down|age-restrict/i.test([c.impact, c.status, c.reach_effect].filter(Boolean).join(" "));
     const who = c.claimant ? c.claimant : "not reported";
     const impact = c.impact ? c.impact : "not reported";
+    const seen = c.first_seen && c.first_seen !== c.date ? `, first seen ${c.first_seen}` : "";
     return sig("claim:" + (c.key || c.date + ":" + c.claim), hard ? "red" : "watch",
-      `Content ID claim recorded by ${c.by || "Laura"} on ${c.date}: "${c.claim}". Claimant: ${who}. Impact: ${impact}.`,
+      `Content ID claim recorded by ${c.by || "Laura"} on ${c.last_checked || c.date}${seen}: "${c.claim}". Claimant: ${who}. Impact: ${impact}.`,
       "Content ID claims on the desk", c.at || c.date);
   });
 }

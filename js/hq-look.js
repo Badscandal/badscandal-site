@@ -222,6 +222,54 @@
     });
     return { top: cards[0] || null, rest: cards.slice(1), parked: parked, caughtUp: !cards.length };
   }
+  /* One Needs-you list (19 Nov 2026). Questions, T-tasks waiting on Luke, and dispute cases
+     (waiting on him, or solved and waiting for his confirm). Red first, then the oldest. */
+  function waitingOnYou(o) {
+    o = o || {};
+    var today = o.today || "";
+    var items = [];
+    (o.messages || []).forEach(function (m) {
+      if (!m || m.resolved || m.to !== "Luke") return;
+      if (m.needs !== "decision" && m.needs !== "reply" && m.needs !== "action") return;
+      items.push({
+        kind: "question", id: m.id || "", title: String(m.text || "").split("\n")[0],
+        reason: "", at: m.at || "", tone: m.needs === "decision" ? "red" : "yellow",
+        href: m.id ? "#messages/" + m.id : "#messages"
+      });
+    });
+    (o.tasks || []).forEach(function (t) {
+      if (!t || !/^T-\d+/i.test(String(t.id || ""))) return;
+      var st = String(t.status || "");
+      if (!/blocked|waiting/i.test(st)) return;
+      items.push({
+        kind: "task", id: t.id, title: t.task || t.title || t.id,
+        reason: t.blocker || t.note || "", at: t.updated || t.at || t.deadline || "",
+        tone: /blocked/i.test(st) || t.late ? "red" : "yellow", href: "#team"
+      });
+    });
+    var disputes = Array.isArray(o.disputes) ? o.disputes : ((o.disputes && o.disputes.items) || []);
+    disputes.forEach(function (c) {
+      if (!c || String(c.platform || "").trim().toUpperCase() === "TEST") return;
+      if (c.status !== "waiting on Luke" && c.status !== "solved - confirm") return;
+      var overdue = c.nextCheck && today && c.nextCheck < today;
+      items.push({
+        kind: "dispute", id: c.id || "", title: (c.song || "A song") + " · " + (c.platform || "a case"),
+        reason: c.status === "solved - confirm" ? "Solved. Confirm to close it." : (c.waitingOn ? "Waiting on " + c.waitingOn : "Waiting on you"),
+        at: c.waitingSince || c.createdAt || c.opened || "",
+        tone: c.status === "solved - confirm" && !overdue ? "green" : "red",
+        href: c.id ? "#songs/" + c.id : "#songs"
+      });
+    });
+    var rank = { red: 0, yellow: 1, green: 2 };
+    items.sort(function (a, b) {
+      var d = (rank[a.tone] == null ? 3 : rank[a.tone]) - (rank[b.tone] == null ? 3 : rank[b.tone]);
+      if (d) return d;
+      if (!a.at) return 1;
+      if (!b.at) return -1;
+      return a.at < b.at ? -1 : a.at > b.at ? 1 : 0;
+    });
+    return items;
+  }
 
   function stepDone(steps, re) {
     return (steps || []).some(function (s) { return s && re.test(String(s.key || "") + " " + String(s.label || "")) && (s.status === "done" || s.done); });
@@ -575,7 +623,7 @@
 
   var api = {
     homePulse: homePulse, needTotal: needTotal, stampDay: stampDay, milestones: milestones, releaseHero: releaseHero, platformKpis: platformKpis, healthDot: healthDot,
-    sparkSvg: sparkSvg, decisionStack: decisionStack, releaseRows: releaseRows, releaseTimeline: releaseTimeline, readinessBox: readinessBox,
+    sparkSvg: sparkSvg, decisionStack: decisionStack, waitingOnYou: waitingOnYou, releaseRows: releaseRows, releaseTimeline: releaseTimeline, readinessBox: readinessBox,
     lyricsState: lyricsState, adsPins: adsPins, runningNow: runningNow, creativePlot: creativePlot,
     moneyCards: moneyCards, monthChip: monthChip, whyPayments: whyPayments, splitOff: splitOff, plainStatus: plainStatus, paymentBucket: paymentBucket,
     bestPost: bestPost, fanCards: fanCards, uploadSlots: uploadSlots, siteRows: siteRows, lyricsDiff: lyricsDiff, lukeSees: lukeSees,

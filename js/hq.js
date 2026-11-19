@@ -518,7 +518,8 @@
   function drawDisputes() {
     var box = $("disputeList");
     if (!box || !window.HQLib || !HQLib.disputeHtml) return;
-    box.innerHTML = HQLib.disputeHtml(staffBoard() && staffBoard().disputes);
+    var desk = staffBoard();
+    box.innerHTML = HQLib.disputeHtml(desk && desk.disputes, { today: (sheet && sheet.today) || spToday(), releases: (desk && desk.releases) || [] });
   }
   /* ---------- Songs: the sheet's Spotify numbers + our page + Meta + royalties, one card each ---------- */
   function drawSongs() {
@@ -544,7 +545,9 @@
       /* released or not, said in words on the card (the sheet's release date, else our song page's) */
       var rw = HQLib.releaseWords((s && s.released) || (p && p.date), (sheet && sheet.today) || spToday());
       var relPill = rw ? '<span class="pill ' + (rw.out ? "rel" : "") + '">' + esc(rw.pill) + "</span>" : "";
-      var out = '<div class="tile" id="song-' + esc(p ? p.id : k) + '"><div class="songhead">' + (p && p.cover ? '<img class="cover" src="' + esc(p.cover) + '" alt="">' : "") + "<h3>" + esc(name) + "</h3>" + (relPill || pill ? '<span class="pills">' + relPill + pill + "</span>" : "") + "</div>";
+      var desk = staffBoard() || {};
+      var mark = HQLib.songMark(desk.disputes, name, (sheet && sheet.today) || spToday(), desk.releases);
+      var out = '<div class="tile' + (mark.tone ? " tone-" + mark.tone : "") + '" id="song-' + esc(p ? p.id : k) + '"><div class="songhead">' + (p && p.cover ? '<img class="cover" src="' + esc(p.cover) + '" alt="">' : "") + "<h3>" + esc(name) + "</h3>" + (relPill || pill ? '<span class="pills">' + relPill + pill + "</span>" : "") + "</div>" + (mark.badge ? '<p class="dbadge">' + esc(mark.badge) + "</p>" : "");
       /* whose song it is (v2, 11 Nov 2026, Luke: "the current songs section should include if the song is a
          collaborative release with a label like magic and the split of the song"): from the team's desk;
          not recorded yet = "Add its details", which opens the form in Upcoming with the title and day in */
@@ -565,7 +568,7 @@
       more += '<div class="kv"><span>Royalties so far</span><b>' + (s ? esc(amounts(s.royalties)) : "–") + "</b></div>" +
         (plBy[k] ? '<div class="kv"><span>Ad spend for this song</span><b>' + esc(plBy[k].adSpend) + "</b></div>" : "") +
         (rw ? '<div class="kv"><span>' + esc(rw.label) + "</span><b>" + esc(rw.line) + "</b></div>" : "");
-      var panel = window.HQLib && HQLib.disputeHtml ? HQLib.disputeHtml((staffBoard() || {}).disputes, { song: name, compact: true }) : "";
+      var panel = window.HQLib && HQLib.disputeHtml ? HQLib.disputeHtml((staffBoard() || {}).disputes, { song: name, compact: true, today: (sheet && sheet.today) || spToday(), releases: ((staffBoard() || {}).releases) || [] }) : "";
       return out + (panel || "") + '<details class="fold"><summary>Numbers</summary>' + more + "</details></div>";
     }).join("");
   }
