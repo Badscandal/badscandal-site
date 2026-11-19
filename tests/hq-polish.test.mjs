@@ -80,9 +80,11 @@ test("Atlas's stale duty text is rewritten: monthly listeners are a field, and t
   const day = await call(memoryDesk(), "my_day", { bot: "Atlas" }, { hq });
   const duty = day.duties_today.find((x) => x.id === "D-atlas-1");
   assert.match(duty.task, /monthly_listeners and brazil_listeners/);
-  assert.match(duty.task, /no Salvation card/);
+  assert.doesNotMatch(duty.task, /Salvation/);
+  assert.match(duty.task, /monthly_listeners/);
   assert.doesNotMatch(duty.task, /in note/);
-  assert.match(day.numbers_how, /no Salvation card/);
+  assert.doesNotMatch(day.numbers_how, /Salvation/);
+  assert.match(day.numbers_how, /monthly_listeners/);
   assert.match(S.DEFAULT_ROSTER.find((b) => b.name === "Atlas").schedule[0].what, /monthly_listeners and brazil_listeners/);
 });
 

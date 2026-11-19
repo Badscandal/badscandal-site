@@ -124,13 +124,15 @@ export function clean(v, max = 240) {
 export function cleanText(v, max = 1500) {
   return String(v == null ? "" : v).replace(/\r/g, "").replace(/[\u0000-\u0009\u000b-\u001f\u007f]+/g, " ").replace(/[ \t]+/g, " ").replace(/\n{3,}/g, "\n\n").trim().slice(0, max);
 }
-/* cut on a word, never mid-word (18 Nov 2026) */
+/* cut on a word, never mid-word. A word longer than max is kept whole. */
 export function clipWords(v, max = 240) {
   const t = String(v == null ? "" : v).replace(/[\u0000-\u001f\u007f]+/g, " ").replace(/\s+/g, " ").trim();
   if (t.length <= max) return t;
   const cut = t.slice(0, max);
   const sp = cut.lastIndexOf(" ");
-  return ((sp > Math.floor(max * 0.6) ? cut.slice(0, sp) : cut).trimEnd()) + "…";
+  if (sp > 0) return cut.slice(0, sp).trimEnd() + "…";
+  const rest = t.indexOf(" ");
+  return (rest < 0 ? t : t.slice(0, rest)) + "…";
 }
 /* a duty line that was cut mid-word ("Luke upload") is restored when it is the start of a known line */
 export function fullDuty(text, lines) {
@@ -254,7 +256,10 @@ export function excerptText(v, max = 160) {
   if (t.length <= max) return t;
   const cut = t.slice(0, max);
   const sp = Math.max(cut.lastIndexOf(" "), cut.lastIndexOf("\n"));
-  return (sp > 40 ? cut.slice(0, sp) : cut).trimEnd() + "…";
+  if (sp > 0) return cut.slice(0, sp).trimEnd() + "…";
+  const flat = t.replace(/\s+/g, " ");
+  const next = flat.indexOf(" ");
+  return (next < 0 ? flat : flat.slice(0, next)) + "…";
 }
 /* Wise and PayPal are not received until the money lands in Revolut (18 Nov 2026 night test). */
 export function holdingLabel(e) {
@@ -447,14 +452,15 @@ export async function postUpdate(store, now, roster, a, extra = {}) {
   const bot = whoIs(a.bot, roster);
   const status = low(a.status);
   if (!UPDATE_STATUS.includes(status)) fail(`status must be one of: ${UPDATE_STATUS.join(", ")}`);
-  const message = clean(a.message, 240);
+  const rawMessage = clean(a.message, 4000);
+  const message = clipWords(rawMessage, 800);
   if (message.length < 3) fail("message is empty. Say what you did or what is in the way, with the number if there is one.");
   /* gaps (batch 4): done, but one number could not be read (TikTok views come a day late): the duty is
      done, not blocked, and says what is missing */
   const gaps = clean(a.gaps, 240);
   if (gaps && status !== "done") fail("gaps goes only with status done: the duty is done except for what you name in gaps. Nothing was saved.");
   noSecrets(message, a.link, gaps);
-  const u = { id: newId("u", now), at: new Date(now).toISOString(), sp: spStamp(now), bot, status, message, link: httpsLink(a.link), duty: /^[Dd]-[\w-]{1,30}$/.test(clean(a.duty, 40)) ? clean(a.duty, 40) : "", ...(gaps ? { gaps } : {}), ...(extra.release ? { release: clean(extra.release, 60) } : {}) };
+  const u = { id: newId("u", now), at: new Date(now).toISOString(), sp: spStamp(now), bot, status, message, ...(message !== rawMessage ? { full: rawMessage } : {}), link: httpsLink(a.link), duty: /^[Dd]-[\w-]{1,30}$/.test(clean(a.duty, 40)) ? clean(a.duty, 40) : "", ...(gaps ? { gaps } : {}), ...(extra.release ? { release: clean(extra.release, 60) } : {}) };
   await mutate(store, `upd/${spDay(now)}.json`, [], (list) => {
     /* a looping bot is told to stop; it never pushes the others' lines out */
     if (list.filter((x) => x.bot === bot).length >= LIMITS.updatesPerBotPerDay) fail(`${bot} has already posted ${LIMITS.updatesPerBotPerDay} updates today, which is the limit. Something is repeating: stop, and tell Nova.`, "limit");
@@ -1743,7 +1749,7 @@ export async function monthCheck(store, now, a = {}) {
   /* only Wise or PayPal candidates. Joint-account, pocket and top-up transfers are not in this list
      (18 Nov 2026 night test). */
   const ownTransfers = list.filter((e) => e.status === "transfer" && isMainAccount(e.account) && !(e.from && e.from.length) && e.by === "HQ" && !(e.history || []).length
-    && /wise|paypal|pay pal/.test(low(`${e.payer} ${e.note} ${e.account}`)) && !/joint|pocket|top-?up|topup|savings|vault/.test(low(`${e.payer} ${e.note}`)));
+    && (/wise|paypal|pay pal/.test(low(`${e.payer} ${e.note} ${e.account}`)) || /\bfx\b|exchange|conversion/.test(low(`${e.payer} ${e.note} ${e.category}`))) && !/joint|pocket|top-?up|topup|savings|vault/.test(low(`${e.payer} ${e.note}`)));
   const revolut = pool.filter((e) => isMainAccount(e.account) && !(e.from && e.from.length) && e.status !== "transfer");
   const nearDay = (a, b) => !isDay(a) || !isDay(b) || Math.abs(daysBetween(a, b)) <= 2;
   const suggestions = [];
@@ -1768,7 +1774,7 @@ export async function monthCheck(store, now, a = {}) {
     };
     for (let n = 2; n <= Math.min(4, cands.length); n++) pick(0, n, []);
   }
-  return { month, received, toSort, waiting, ownTransfers, fromOwn, statementLater, suggestions, ready: !toSort.length && !waiting.length };
+  return { month, received, toSort, waiting, ownTransfers, fromOwn, statementLater, suggestions, ready: !toSort.length && !waiting.length && !ownTransfers.length };
 }
 /* ---------- the locked month close (A7, 17 Nov 2026, Ledger, Sheet) ----------
    When month_check says a finished month is ready, close_month freezes it: close/<month>.json = { month, at, by,
@@ -2483,7 +2489,9 @@ export function incomeReport(entries, checks, sources, today, older = [], rules 
        not a statement and not a row that already moved (18 Nov 2026 night test) */
     const realPay = (e) => e && e.status !== "transfer" && e.status !== "unsorted" && !e.movedTo && !STATEMENT.test(e.account || "") && !(e.paidBy && OWED.includes(e.status)) && e.status !== "statement only";
     const real = mine.filter(realPay);
-    const last = (real.length ? real : mine).reduce((a, e) => (!a || e.date > a.date ? e : a), null);
+    /* A Revolut receipt is the last payment, even when a later statement date is on the desk. */
+    const landed = mine.filter((e) => countsAsReceived(e));
+    const last = (landed.length ? landed : real.length ? real : mine).reduce((a, e) => (!a || e.date > a.date ? e : a), null);
     const chk = s.kind === "account" ? lastCheck[low(s.name)] || Object.values(lastCheck).find((c) => srcMatches(s, c.account)) || null : null;
     const lastLogged = mine.reduce((a, e) => (!a || e.at > a ? e.at : a), null); /* the last time anything was logged for it, as a São Paulo day */
     const lastLook = [lastLogged && spDay(Date.parse(lastLogged)), chk && chk.day].filter(Boolean).sort().pop() || null;
@@ -2539,7 +2547,9 @@ export function incomeReport(entries, checks, sources, today, older = [], rules 
   if (oldPending) problems.push(`${oldPending} pending payment${oldPending === 1 ? "" : "s"} older than 30 days`);
   /* seen in an account (the bank reader), not yet said what it is: listed apart, in no total */
   const pool = entries.concat(older || []);
-  const unsorted = pool.filter((e) => e.status === "unsorted").sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : a.at < b.at ? 1 : -1));
+  const unsortedAll = pool.filter((e) => e.status === "unsorted").sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : a.at < b.at ? 1 : -1));
+  const unsorted = unsortedAll;
+  const unsortedMonth = unsortedAll.filter((e) => e.date.slice(0, 7) === month);
   if (unsorted.length) problems.push(`Payments nobody has sorted: ${unsorted.slice(0, 8).map((e) => `${e.date.slice(0, 7)} · ${e.date} · ${hidePrivate(e.payer)} · ${e.currency} ${e.amount} (id ${e.id})`).join("; ")}`);
   /* the oldest month "To sort" reads: what is still unsorted there drops off the list when this month ends */
   const edge = monthsBack(month, UNSORTED_MONTHS).pop(), leaving = unsorted.filter((e) => e.date.slice(0, 7) <= edge).length;
@@ -2568,8 +2578,8 @@ export function incomeReport(entries, checks, sources, today, older = [], rules 
   const seenId = new Set(entries.map((e) => e && e.id));
   const money = moneyExpectations(entries.concat((older || []).filter((e) => e && !seenId.has(e.id))), sources, today, rules);
   return { month, received, pending, payable, statementOnly, royaltiesOnly, pendingOnly, receivedYear,
-    receivedYearNote: `Revolut only. Received money that landed in Revolut in ${yr}. Wise and PayPal are not in this total, and a row that has moved to Revolut is not counted again. GBP is in the total only when a Revolut row is in GBP.`,
-    receivedByMonth, duplicates, byCategory: byCat, count: entries.filter((e) => e.date.slice(0, 7) === month).length, unsorted: unsorted.slice(0, 40).map(withMatch), unsortedCount: unsorted.length,
+    receivedYearNote: `Revolut only. Received money that landed in Revolut in ${yr}${seenY.length ? `, from ${seenY.map((e) => e.date.slice(0, 7)).sort()[0]} to ${seenY.map((e) => e.date.slice(0, 7)).sort().pop()}` : ""}. This is the months on the desk, not a promise that every month of the year was read. Wise and PayPal are not in this total, and a row that has moved to Revolut is not counted again. GBP is in the total only when a Revolut row is in GBP.`,
+    receivedByMonth, duplicates, byCategory: byCat, count: entries.filter((e) => e.date.slice(0, 7) === month).length, unsorted: unsorted.slice(0, 40).map(withMatch), unsortedCount: unsorted.length, unsortedMonth: unsortedMonth.map(withMatch),
     expected: money.expected, routes: money.routes,
     entries: [...entries].sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : a.at < b.at ? 1 : -1)).slice(0, 60).map((e) => (isHold(e) ? { ...e, holding: true } : e)),
     holding, holdingList: entries.filter((e) => e.status === "received" && !countsAsReceived(e) && !e.movedTo && e.date.slice(0, 7) === month).sort((a, b) => (a.date < b.date ? 1 : -1)),
@@ -2796,6 +2806,13 @@ function growthBoosts(list) {
     const currency = clean(p.currency, 3).toUpperCase();
     if (!/^[A-Z]{3}$/.test(currency)) fail(`${where}: currency must be the three-letter code, for example USD.`);
     const row = { link, ...(ad ? { ad } : {}), spend, currency, status };
+    const optNum = (v) => { if (v == null || String(v).trim() === "") return null; const n = amountOf(v); return n == null || n < 0 ? null : n; };
+    for (const [field, key] of [["follows", "follows"], ["engagements", "engagements"], ["views", "views"], ["link_clicks", "link_clicks"]]) {
+      const n = optNum(p[field]);
+      if (n != null) row[key] = n;
+    }
+    const asOf = clean(p.as_of || p.asOf, 40);
+    if (asOf) row.as_of = asOf;
     const started = clean(p.started || p.boost_started, 40);
     if (started) {
       if (!/^\d{4}-\d{2}-\d{2}/.test(started)) fail(`${where}: started must be YYYY-MM-DD or YYYY-MM-DD HH:MM.`);
@@ -2972,8 +2989,10 @@ export async function logGrowth(store, now, roster, a) {
           else { (old.was || (old.was = {}))[k] = old.boosts; old.boosts = merged; replaced.push(k); }
           continue;
         }
+        /* HQ fills a blank. It does not replace a bot's own reading (19 Nov 2026). */
+        const hqFill = by === "HQ" && old.by && old.by !== "HQ";
         if (old[k] == null || old[k] === "") { old[k] = v; filled.push(k); delete (old.gaps || {})[k]; }
-        else if (!sameStored(old[k], v)) { (old.was || (old.was = {}))[k] = old[k]; old[k] = v; replaced.push(k); }
+        else if (!sameStored(old[k], v) && !hqFill) { (old.was || (old.was = {}))[k] = old[k]; old[k] = v; replaced.push(k); }
       }
       for (const [k, w] of Object.entries(gaps)) if (old[k] == null) (old.gaps || (old.gaps = {}))[k] = w;
       const shownSame = Object.keys(approx).every((n) => old.shown && old.shown[n] === shown[n]);
@@ -5683,6 +5702,7 @@ export async function updateCase(store, now, roster, a) {
   const status = a.status != null && String(a.status).trim() ? caseStatusOf(a.status) : "";
   if (status === "ignored") fail("Ignored is Luke's decision. He closes it on the dashboard. Nothing was saved.", "not_allowed");
   const waitingOn = a.waiting_on != null ? clean(a.waiting_on, 120) : null;
+  const waitingSinceAsked = a.waiting_since != null && String(a.waiting_since).trim() ? clean(a.waiting_since, 40) : (a.waiting_since != null ? "" : null);
   const nextCheck = a.next_check != null && String(a.next_check).trim() ? clean(a.next_check, 10) : (a.next_check != null ? "" : null);
   if (nextCheck) {
     if (!caseDay(nextCheck)) fail("next_check is a day, YYYY-MM-DD. Nothing was saved.");
@@ -5695,7 +5715,7 @@ export async function updateCase(store, now, roster, a) {
   const entryDate = a.entry_date != null && String(a.entry_date).trim() ? clean(a.entry_date, 10) : "";
   if (entryDate && !entry) fail("entry_date needs the timeline line in entry. Nothing was saved.");
   const hasTimeline = a.timeline != null;
-  if (!status && waitingOn == null && nextCheck == null && recommendation == null && proposal == null && !entry && song == null && !hasTimeline) fail("Say what changed: song, status, waiting_on, next_check, recommendation, proposal, a timeline entry, or timeline. Nothing was saved.");
+  if (!status && waitingOn == null && waitingSinceAsked == null && nextCheck == null && recommendation == null && proposal == null && !entry && song == null && !hasTimeline) fail("Say what changed: song, status, waiting_on, waiting_since, next_check, recommendation, proposal, a timeline entry, or timeline. Nothing was saved.");
   noSecrets(song || "", waitingOn || "", recommendation || "", proposal || "", entry);
   const at = new Date(now).toISOString();
   return mutate(store, CASES_KEY, { items: [] }, (doc) => {
@@ -5707,10 +5727,13 @@ export async function updateCase(store, now, roster, a) {
     const bits = [];
     if (song && song !== item.song) { item.song = song; item.songKey = songKey(song); bits.push("Song: " + song); }
     if (status && status !== item.status) { item.status = status; bits.push("Status: " + status); }
-    if (waitingOn != null && waitingOn !== item.waitingOn) {
+    if (waitingOn != null && low(waitingOn) !== low(item.waitingOn)) {
       item.waitingOn = waitingOn;
-      item.waitingSince = waitingOn ? at : "";
+      item.waitingSince = waitingSinceAsked != null ? waitingSinceAsked : (waitingOn ? at : "");
       bits.push(waitingOn ? "Waiting on " + waitingOn : "Not waiting");
+    } else if (waitingSinceAsked != null) {
+      item.waitingSince = waitingSinceAsked;
+      bits.push(waitingSinceAsked ? "Waiting since " + waitingSinceAsked : "Waiting since cleared");
     } else if (status && status.startsWith("waiting") && !item.waitingSince) item.waitingSince = at;
     if (nextCheck != null && nextCheck !== (item.nextCheck || "")) { item.nextCheck = nextCheck; bits.push(nextCheck ? "Next check " + nextCheck : "Next check cleared"); }
     if (recommendation != null && recommendation !== (item.recommendation || "")) { item.recommendation = recommendation; bits.push("Recommendation updated"); }
@@ -6025,6 +6048,87 @@ export async function deleteCase(store, now, roster, a) {
   });
   return { deleted: true, id, song: removed.song, platform: removed.platform };
 }
+/* One plain line per account that is actually signed out. A general note ("sessions expire often"),
+   "none right now", a garbled "sign-in from Luke for account", and a second copy of the same account
+   are not asks. The account number is said once. */
+export function signedOutLines(items) {
+  const NOTE = /expire often|sessions expire|none right now|is signed in|signed in again|nothing to sign|sf a is signed|sfa is signed/i;
+  const REAL = /signed out|logged out|not signed in|sign-?in needed|needs?( you| luke)? to sign in/i;
+  const GARBLED = /sign-in from luke for account/i;
+  const MONTH = { jan: "Jan", feb: "Feb", mar: "Mar", apr: "Apr", may: "May", jun: "Jun", jul: "Jul", aug: "Aug", sep: "Sep", oct: "Oct", nov: "Nov", dec: "Dec" };
+  const out = [];
+  const seen = new Set();
+  for (const it of items || []) {
+    const t = String(it && it.text || "").replace(/\s+/g, " ").trim();
+    if (!t || NOTE.test(t) || GARBLED.test(t) || !REAL.test(t)) continue;
+    const id = (t.match(/\d{3}-\d{3}-\d{4}/) || [])[0] || "";
+    const plat = /google ads/i.test(t) ? "Google Ads" : /tiktok/i.test(t) ? "TikTok" : /meta|facebook/i.test(t) ? "Meta" : /youtube/i.test(t) ? "YouTube" : /spotify/i.test(t) ? "Spotify" : /routenote/i.test(t) ? "RouteNote" : "";
+    if (!plat && !id) continue;
+    const sinceM = t.match(/since\s+(\d{1,2})\s+([A-Za-z]{3,9})/i);
+    const since = sinceM ? `${Number(sinceM[1])} ${MONTH[sinceM[2].slice(0, 3).toLowerCase()] || sinceM[2]}` : "";
+    const key = (id || plat).toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({ who: it.who || "", line: `${plat || "Account"}${id ? " " + id : ""} signed out${since ? " since " + since : ""}` });
+  }
+  return out;
+}
+/* Five daily "Google … signed out" lines become one. Other unread lines stay, cut at a word. */
+export function unreadSpendLine(lines) {
+  const all = (lines || []).map((l) => String(l || "").trim()).filter(Boolean);
+  const google = all.filter((l) => /google/i.test(l));
+  const rest = all.filter((l) => !/google/i.test(l));
+  const days = google.map((l) => {
+    const m = /(\d{1,2})\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)/i.exec(l);
+    return m ? { d: Number(m[1]), mon: m[2].slice(0, 1).toUpperCase() + m[2].slice(1, 3).toLowerCase() } : null;
+  }).filter(Boolean).sort((a, b) => a.d - b.d);
+  const g = days.length ? `Google not read since ${days[0].d} ${days[0].mon} (signed out)` : (google.length ? "Google not read (signed out)" : "");
+  return [g, ...rest.map((l) => clipWords(l, 80))].filter(Boolean).join("; ");
+}
+/* A stored site check that still says an old duty count is replaced with the live board. */
+export function freshReport(report, hq) {
+  if (!report || !report.text) return report;
+  const d = hq && hq.team && hq.team.duties;
+  if (!d || d.total == null) return report;
+  const m = /(\d+)\s+of\s+(\d+)/.exec(report.text);
+  const blocked = /(\d+)\s+blocked/i.exec(report.text);
+  if (!m) return report;
+  const done = Number(m[1]), total = Number(m[2]), saidBlocked = blocked ? Number(blocked[1]) : null;
+  if (done === Number(d.done) && total === Number(d.total) && (saidBlocked == null || saidBlocked === Number(d.blocked))) return report;
+  return { ...report, stale: true, text: `Out of date. The board now shows ${d.done} of ${d.total} duties done, ${d.blocked} blocked.` };
+}
+/* Sign-ins, access, a yes Luke still owes, and fan replies only he can send. Notes are not asks. */
+function lukeExtraNeeds(desk) {
+  const out = [];
+  const cards = desk && desk.cards && typeof desk.cards === "object" ? desk.cards : {};
+  const bits = [];
+  for (const [key, c] of Object.entries(cards)) {
+    if (!c || typeof c !== "object") continue;
+    const who = key.charAt(0).toUpperCase() + key.slice(1);
+    for (const text of [c.needs, c.workingOn, c.blockers]) if (text) bits.push({ who, text: String(text), at: c.at || null });
+  }
+  for (const line of signedOutLines(bits)) {
+    out.push({ key: "sign:" + line.line.toLowerCase(), kind: "signin", id: line.who || line.line, text: line.line, href: "#today", at: null });
+  }
+  const seenYes = new Set(), seenAcc = new Set();
+  for (const b of bits) {
+    const t = b.text.replace(/\s+/g, " ").trim();
+    if (/netlify|viewer|needs access/i.test(t) && /luke|viewer|access/i.test(t) && !seenAcc.has(b.who)) {
+      seenAcc.add(b.who);
+      out.push({ key: "acc:" + b.who, kind: "access", id: b.who, text: `${b.who} needs access: ${clipWords(t, 90)}`, href: "#team", at: b.at });
+    }
+    if (/luke'?s yes|waiting on luke|waits on luke|needs luke/i.test(t) && !seenYes.has(b.who)) {
+      seenYes.add(b.who);
+      out.push({ key: "yes:" + b.who, kind: "yes", id: b.who, text: `${b.who} is waiting on your yes: ${clipWords(t, 90)}`, href: "#team", at: b.at });
+    }
+  }
+  for (const f of desk && desk.needsReply || []) {
+    if (!f || !(f.text || f.quote)) continue;
+    const id = String(f.id || f.handle || f.text || f.quote).slice(0, 40);
+    out.push({ key: "fan:" + id, kind: "fan", id, text: `A fan on Instagram needs a reply: ${clipWords(f.text || f.quote, 80)}`, href: "#growth", at: f.at || null });
+  }
+  return out;
+}
 export function waitingOnLuke(desk, today, now = null) {
   const out = [];
   for (const m of waitingOn(desk.messages || [], "Luke")) {
@@ -6050,6 +6154,7 @@ export function waitingOnLuke(desk, today, now = null) {
   for (const c of disputeWaits(desk.disputes)) {
     out.push({ key: "d:" + c.id, kind: "dispute", id: c.id, text: c.text, href: "#songs/" + c.id, at: c.at || null });
   }
+  for (const x of lukeExtraNeeds(desk)) out.push(x);
   return out.sort((a, b) => (a.at == null ? 1 : b.at == null ? -1 : a.at < b.at ? -1 : a.at > b.at ? 1 : 0));
 }
 
@@ -6091,7 +6196,7 @@ export function board(desk, now, hq) {
     contentIdeas: contentIdeasView(desk.contentIdeas),
     connector: { botsOn: desk.config.botsOn, changedAt: desk.config.changedAt, lastUsed: lastSeen ? { bot: lastSeen[0], at: lastSeen[1].at, tool: lastSeen[1].tool } : null,
       connected: staff.filter((w) => w.connected).length, total: staff.length, claudeSeen: desk.seen.Claude ? desk.seen.Claude.at : null },
-    report: desk.messages.find((m) => m.from === "HQ" && m.kind === "report") || null,
+    report: freshReport(desk.messages.find((m) => m.from === "HQ" && m.kind === "report") || null, hq),
     names: botNames(desk.roster).concat(PEOPLE),
   };
 }

@@ -79,7 +79,7 @@ test("missing reads are listed and make the figure estimated: a 'not read' sheet
   const cap2 = hqModel(sheets(), TODAY, FX, undefined, "", { spend: await S.listSpend(d, NOW) }).money.cap;
   assert.deepEqual([cap2.spent, cap2.notRead, cap2.estimated], [498, [], false]);
   /* HQ's words */
-  assert.equal(L.capRateLine(cap), "Rate: 1.1 USD per EUR (Rates!B1, Nov 2026)");
+  assert.equal(L.capRateLine(cap), "Rate: 1.1 USD per EUR (the month's fixed rate, Nov 2026)");
   assert.equal(L.capRateLine(hqModel({ Spend: SPEND }, TODAY, FX).money.cap), "Rate: 1.2 USD per EUR (ECB average for Nov 2026, so far)");
   assert.equal(L.capMissingLine(cap), "Not read: TikTok Fri 13 Nov: signed out");
 });

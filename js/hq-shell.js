@@ -25,7 +25,7 @@
      no second scrollBy to cancel the first. */
   function subFromHash() { var p = (location.hash || "").replace(/^#/, "").split("/"); return p[1] ? decodeURIComponent(p[1]).replace(/[^a-z0-9-]/gi, "") : ""; }
   function focusSub(tab, sub, tries) {
-    var el = sub && document.getElementById((tab === "songs" ? "song-" : tab + "-") + sub);
+    var el = sub && (document.getElementById((tab === "songs" ? "song-" : tab + "-") + sub) || (sub === "disputes" ? document.getElementById("disputeList") : null));
     if (el) { if (el.tagName === "DETAILS") el.open = true; el.scrollIntoView({ block: "start" }); el.classList.add("pulse"); setTimeout(function () { el.classList.remove("pulse"); }, 1600); return; }
     if (sub && (tries || 0) < 20) setTimeout(function () { focusSub(tab, sub, (tries || 0) + 1); }, 300);
   }
