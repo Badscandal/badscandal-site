@@ -14,7 +14,7 @@ import * as S from "./staff.mjs";
 import * as P from "./profile-images.mjs";
 import * as W from "./workspaces.mjs";
 import * as IG from "./instagram.mjs";
-import { rankLine } from "./postrank.mjs";
+import { rankLine, rankPosts } from "./postrank.mjs";
 import { songProfit } from "./hq.mjs";
 import "../../js/hq-lib.js";
 
@@ -1111,8 +1111,21 @@ async function runTool(tool, args, ctx, read) {
       return { saved: true, ...(fixedWords ? { changes_fixed: fixedWords } : {}), ...(r.row.change != null && r.row.kind === "growth" ? { change: r.row.change } : {}), ...(r.filled && r.filled.length ? { filled: r.filled } : {}), ...(r.replaced && r.replaced.length ? { corrected: r.replaced } : {}),
         duty: r.duty, ...(r.gapText ? { gaps: r.gapText } : {}), ...(r.row && r.row.channel_views != null ? { channel_views_is: "lifetime total, not the day's views" } : {}), ...(r.row && r.row.official_views != null ? { official_views_is: "views that day on the official channel" } : {}), ...(r.row && r.row.gate_6h ? { gate_6h: r.row.gate_6h } : {}), shown_on: "badscandal.com/hq, Growth and Songs", ...extra };
     }
-    case "read_growth":
-      return S.readGrowth(store, now, { platform: args.platform, date: args.date, song: args.song });
+    case "read_growth": {
+      /* The day's best post is a boost when the ranking or an ad names it, even with no posts[] entry. */
+      let ranking = null, ads = null;
+      if (ctx.ig) {
+        try {
+          const ig = ctx.ig();
+          const get = (k) => (typeof ig.get === "function" ? ig.get(k, { type: "json" }) : null);
+          const [posts, adDoc, comments] = await Promise.all([get("posts.json"), get("adposts.json"), get("comments.json")]);
+          ads = adDoc;
+          const spend = (await S.listSpend(store, now).catch(() => [])).filter((r) => /meta|facebook|instagram/i.test((r && r.platform) || ""));
+          if (Array.isArray(posts)) ranking = rankPosts(posts, adDoc, { now, comments: Array.isArray(comments) ? comments : [], spend });
+        } catch { ranking = null; ads = null; }
+      }
+      return S.readGrowth(store, now, { platform: args.platform, date: args.date, song: args.song, ranking, ads });
+    }
     case "read_claims":
       return S.readClaims(store, now);
     case "open_case": {

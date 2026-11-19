@@ -70,6 +70,7 @@ artist growth bot that all we will need is content and $".
 
 ## In flight (branches not merged)
 
+- **Boost from the best post** (branch `cursor/boost-from-best-post-5573`, not merged). A Reel logged only as the day's best post is a boost when the ranking or an ad names it. A ranking spend with no per-ad scope, and a cached ranking from before that, say "spend not read since boost started". Not live until Luke says deploy.
 - **Account health** (PR #92, on main). A view total at about 35% of the median is a dip, not "in line", and that version left boosted posts out.
 - **Engagement health** (branch `cursor/account-health-engagement-1188`, not merged). Instagram health follows engagement per view, (likes + comments + saves + shares) / views, and keeps boosted Reels in. Views stay as context. Not live until Luke says deploy.
 - **Handoff fixes** (PR #90) are on main. Nova refreshes the tool list once (the `needs_you`, `instagram`, `read_messages` and `log_growth` descriptions changed; same 47 names). A new Yes/No/Edit card or a red account now buzzes Luke's phone once (quiet hours and the 10-minute rule still apply).
