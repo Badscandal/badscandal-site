@@ -30,11 +30,9 @@
   function spToday() { try { return new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date()); } catch (e) { return new Date().toISOString().slice(0, 10); } }
   function monthName(m) { return new Date(m + "-15T12:00:00Z").toLocaleDateString("en-GB", { month: "long", year: "numeric", timeZone: "UTC" }); }
   function link(url, text) { return /^https:\/\//.test(url || "") ? '<a href="' + esc(url) + '" target="_blank" rel="noopener noreferrer">' + esc(text) + "</a>" : esc(text); }
-  function spark(series) {
-    if (!series || series.length < 2) return "";
-    var vs = series.map(function (p) { return p.v; }), lo = Math.min.apply(null, vs), hi = Math.max.apply(null, vs), span = hi - lo || 1;
-    var pts = series.map(function (p, i) { return (i / (series.length - 1) * 100).toFixed(2) + "," + (40 - ((p.v - lo) / span) * 36).toFixed(2); }).join(" ");
-    return '<svg class="spark" viewBox="0 0 100 44" preserveAspectRatio="none" aria-hidden="true"><polyline points="' + pts + '" fill="none" stroke="#F2F2F2" stroke-width="1.6" vector-effect="non-scaling-stroke" stroke-linejoin="round"/></svg>';
+  function spark(series, opts) {
+    if (!window.HQChart) return "";
+    return HQChart.html(series, opts || { label: "Streams per day", totals: true });
   }
   function amounts(o) { var k = Object.keys(o || {}); return k.length ? k.map(function (c) { return money(o[c], c); }).join(" + ") : "–"; }
   function flat(block) {
@@ -443,17 +441,20 @@
     $("tiles").innerHTML = ti.map(function (x) {
       var arrow = x.change.dir === "up" ? "▲ " : x.change.dir === "down" ? "▼ " : "";
       return '<div class="htile"><p class="hl">' + esc(x.label) + '</p><p class="hv' + (x.green ? " green" : "") + '">' + esc(x.value) + "</p>" +
-        '<p class="hc"><b>' + arrow + esc(x.change.text) + "</b> " + esc(x.vs) + "</p>" + trend(x.series, x.green) + "</div>";
+        '<p class="hc"><b>' + arrow + esc(x.change.text) + "</b> " + esc(x.vs) + "</p>" + trend(x) + "</div>";
     }).join("");
     lastSummary = L.summaryText({ date: sheet ? day(sheet.today) : day(spToday()), briefing: br, attention: att, tiles: ti });
   }
-  /* a small trend line; gaps (no taps that day) are left out, never drawn as 0 */
-  function trend(vals, green) {
-    var pts = (vals || []).map(function (v, i) { return v == null || !isFinite(v) ? null : [i, v]; }).filter(Boolean);
-    if (pts.length < 2) return "";
-    var n = vals.length - 1 || 1, lo = Math.min.apply(null, pts.map(function (p) { return p[1]; })), hi = Math.max.apply(null, pts.map(function (p) { return p[1]; })), sp = hi - lo || 1;
-    var d = pts.map(function (p, i) { return (i ? "L" : "M") + (p[0] / n * 100).toFixed(1) + " " + (28 - (p[1] - lo) / sp * 24).toFixed(1); }).join("");
-    return '<svg viewBox="0 0 100 30" preserveAspectRatio="none" aria-hidden="true"><path d="' + d + '" fill="none" stroke="' + (green ? "#1ED760" : "#B4B4B4") + '" stroke-width="2" vector-effect="non-scaling-stroke" stroke-linejoin="round" stroke-linecap="round"/></svg>';
+  /* the shared chart. Streams, taps and spend add up; a listener or follower count, or a cost per tap, does not. */
+  function trend(x) {
+    if (!window.HQChart) return "";
+    var moneyKey = x.key === "spend" || x.key === "cpt";
+    return HQChart.html(x.series, {
+      label: x.label,
+      totals: x.key === "spend" || x.key === "taps" || x.key === "streams",
+      tone: x.green ? "spot" : "accent",
+      currency: moneyKey && ov && ov.spend ? (ov.spend.currency || "") : ""
+    });
   }
   /* "Since you last looked": compared with the picture saved when the last visit ended (this device) */
   var SEEN = "bs_hq_seen", sinceShown = false;
@@ -535,7 +536,7 @@
     if (sheet && sheet.songPL) L.songPLView(sheet.songPL).songs.forEach(function (x) { plBy[adKey(x.song)] = x; });
     /* A8 (17 Nov 2026, Atlas): the artist's Spotify monthly listeners and Brazil's share, with their trend */
     var al = L.artistLines(sheet && sheet.artist);
-    $("artistCard").innerHTML = al ? '<div class="tile"><div class="row"><h3>Spotify monthly listeners</h3><span class="lbl">the artist, all songs</span></div><div class="big num">' + esc(al.big) + '</div><div class="d">' + esc(al.sub) + "</div>" + spark(sheet.artist.series) + "</div>" : "";
+    $("artistCard").innerHTML = al ? '<div class="tile"><div class="row"><h3>Spotify monthly listeners</h3><span class="lbl">the artist, all songs</span></div><div class="big num">' + esc(al.big) + '</div><div class="d">' + esc(al.sub) + "</div>" + spark(sheet.artist.series, { label: "Monthly listeners", totals: false }) + "</div>" : "";
     if (!order.length) { $("songList").innerHTML = '<p class="empty">' + (ov || sheet ? "No songs yet." : "Loading…") + "</p>"; return; }
     $("songList").innerHTML = order.map(function (k) {
       var s = bySheet[k], p = byPage[k], sp = spendBy[k];
@@ -555,7 +556,7 @@
       }
       if (s) out += '<div class="big num">' + fmt(s.streams) + " <small>streams · " + esc(day(s.lastDay)) + "</small></div>";
       var more = "";
-      if (s) more += '<div class="d">' + signed(s.dayChange) + " vs the day before · " + fmt(s.week) + " in 7 days" + (s.prevWeek != null ? " (" + fmt(s.prevWeek) + " the 7 before)" : "") + "</div>" + spark(s.series) +
+      if (s) more += '<div class="d">' + signed(s.dayChange) + " vs the day before · " + fmt(s.week) + " in 7 days" + (s.prevWeek != null ? " (" + fmt(s.prevWeek) + " the 7 before)" : "") + "</div>" + spark(s.series, { label: name + " streams per day", totals: true }) +
         '<div class="d">' + fmt(s.listeners) + " listeners · " + fmt(s.saves) + " saves · " + fmt(s.adds) + " playlist adds" + (s.stale > 3 ? ' · <b style="color:var(--paper)">not logged for ' + s.stale + " days</b>" : "") + "</div>";
       else more += '<p class="d" style="margin:8px 0">' + (broken("Songs") ? "The Songs tab can't be read." : sheet ? "No Spotify rows in the sheet yet." : "") + "</p>";
       if (!p && ov) more += '<div class="kv" style="margin-top:8px"><span>Our page</span><b>no song page for this one</b></div>';
@@ -627,6 +628,7 @@
     var sp = ov.spend;
     if (!sp || !sp.connected || sp.error) {
       $("spOn").hidden = true; $("spOff").hidden = false; $("spCur").textContent = "";
+      if ($("spChart")) $("spChart").innerHTML = "";
       $("spOff").textContent = sp && sp.error ? "Couldn't read Meta spend: " + sp.error : "Meta spend not connected. To connect it, add META_ADS_TOKEN on Netlify (a read-only ads token).";
     } else {
       var c = sp.currency, taps = sp.songs.reduce(function (n, s) { return n + s.taps; }, 0), spent = sp.songs.reduce(function (n, s) { return n + s.spend; }, 0) + (sp.unmatched || 0);
@@ -634,6 +636,8 @@
       $("spCur").textContent = c ? "in " + c : "";
       $("spSub").textContent = "Meta ad spend (read-only) against people's Spotify taps, " + (ov.range === "today" ? "today" : "last " + ov.days + " days") + ".";
       $("spSpend").textContent = money(spent, c); $("spTaps").textContent = fmt(taps); $("spCpt").textContent = money(taps ? spent / taps : null, c);
+      var spChart = $("spChart");
+      if (spChart && window.HQChart) spChart.innerHTML = HQChart.html((sp.days || []).map(function (r) { return { d: r.d, v: r.spend }; }), { label: "Ad spend per day", totals: true, currency: c || "" });
       var H = ["Spend", "Taps", "Per tap"];
       mtable($("spAds"), ["Ad"].concat(H), sp.ads.map(function (a) { return [esc(a.ad) + "<small>" + esc(a.song) + "</small>", money(a.spend, c), fmt(a.taps), money(a.cpt, c)]; }));
       mtable($("spSongs"), ["Song"].concat(H), sp.songs.map(function (r) { return [esc(r.title), money(r.spend, c), fmt(r.taps), money(r.cpt, c)]; }));

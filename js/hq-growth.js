@@ -125,11 +125,12 @@
     var gaps = p && Array.isArray(p.gapDays) ? p.gapDays : null;
     var gapLine = gaps == null ? "Gap days: " + miss() : gaps.length ? "Gap days: " + esc(gaps.map(function (d) { return L.day ? L.day(d) : d; }).join(", ")) : "No gap in the logged days.";
     var late = row && row.views_date && row.date && row.views_date < row.date;
+    var chart = g.HQChart && p && p.series ? g.HQChart.html(p.series, { label: labelOf(p.platform || id) + " " + unit, totals: false }) : "";
     return '<article class="tile ghead"><div class="row"><h3>' + esc(labelOf(p.platform || id)) + '</h3></div>' +
       '<p class="lbl">' + esc(unit === "subscribers" ? "Subscribers" : "Followers") + "</p>" +
       '<div class="big num">' + num(p.followers) + "</div>" +
       '<p class="d">Today ' + signed(p.day) + " · 7 days " + signed(p.d7 != null ? p.d7 : p.week) + " · 28 days " + signed(p.d28) + "</p>" +
-      '<p class="d">' + gapLine + "</p>" +
+      '<p class="d">' + gapLine + "</p>" + chart +
       (late ? '<p class="d">Views are for ' + dayOf(row.views_date) + ", a day late.</p>" : "") +
       "</article>";
   }

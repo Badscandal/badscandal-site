@@ -28,12 +28,9 @@
     draw();
   }
 
-  function spark(series) {
-    var v = (series || []).map(Number).filter(function (n) { return isFinite(n); });
-    if (v.length < 2) return "";
-    var w = 72, h = 22, min = Math.min.apply(null, v), max = Math.max.apply(null, v), span = max - min || 1;
-    var d = v.map(function (n, i) { return (i ? "L" : "M") + (i / (v.length - 1) * w).toFixed(1) + " " + (h - ((n - min) / span) * (h - 2) - 1).toFixed(1); }).join(" ");
-    return '<svg class="spark" viewBox="0 0 ' + w + " " + h + '" aria-hidden="true"><path d="' + d + '"/></svg>';
+  function spark(series, name) {
+    if (!window.HQChart) return "";
+    return HQChart.html(series, { label: (name || "Followers") + " followers", totals: false });
   }
   function fmt(n) { return n == null || !isFinite(Number(n)) ? "–" : Math.round(Number(n)).toLocaleString("en-US"); }
   function signed(n) { if (n == null || !isFinite(n)) return ""; return (n > 0 ? "+" : n < 0 ? "−" : "") + fmt(Math.abs(n)); }
@@ -211,7 +208,7 @@
     var bits = rows.map(function (g) {
       var n = g.reported ? fmt(g.followers) : "not reported";
       var d = g.reported && g.day != null ? '<span class="' + (g.day > 0 ? "up" : g.day < 0 ? "dn" : "") + '">' + esc(signed(g.day)) + "</span>" : "";
-      return '<a class="fcell" href="#growth"><b>' + esc(g.platform) + "</b><span class=\"fn\">" + esc(n) + "</span>" + d + spark(g.series) + "</a>";
+      return '<div class="fcell"><a href="#growth"><b>' + esc(g.platform) + "</b><span class=\"fn\">" + esc(n) + "</span>" + d + "</a>" + spark(g.series, g.platform) + "</div>";
     }).join("");
     var art = sheet && L.artistLines(sheet.artist);
     var listeners = art ? esc(art.big) : "not reported";
