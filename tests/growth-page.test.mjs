@@ -263,6 +263,36 @@ test("a best post with no posts[] entry is a boost when the ranking or an ad nam
   assert.equal(freshHit.note, "");
 });
 
+test("Steve logs a boost with the post link, the ad id, the spend and paused", async () => {
+  const link = "https://www.instagram.com/reel/TESTCODE01/";
+  const d = memoryDesk();
+  const saved = await call(d, "log_growth", { bot: "Steve", platform: "Instagram", date: "2026-11-19", followers: "10", best_post: "Stuck in traffic", best_post_link: link, ad_spend: "11.11", ad_currency: "USD", boosts: [{ link, ad: "100000000000001", spend: 40.12, currency: "USD", status: "paused" }] });
+  assert.equal(saved.saved, true);
+  assert.equal(saved.boosts_logged, 1);
+  assert.equal(saved.boosts[0].status, "paused");
+  assert.match(saved.note, /not added to the ad cap/);
+  await assert.rejects(call(d, "log_growth", { bot: "Forge", platform: "Instagram", date: "2026-11-19", boosts: [{ link, ad: "100000000000001", spend: 40.12, currency: "USD", status: "paused" }] }), /Steve/);
+  await assert.rejects(call(d, "log_growth", { bot: "Steve", platform: "Instagram", date: "2026-11-18", followers: "9", boosts: [{ link, ad: "100000000000001", spend: 40.12, currency: "USD" }] }), /status/);
+  await d.setJSON("spend/2026-11.json", [{ id: "s-account", platform: "Meta", account: "Meta", date: "2026-11-19", amount: 11.11, currency: "USD", song: "", by: "HQ", at: "2026-11-19T16:47:00Z" }]);
+  const read = await S.readGrowth(d, NOW, { platform: "Instagram", ranking: { ranked: [{ id: "999000111", caption: "Stuck in traffic", link, at: "2026-11-18T12:00:00Z", boost: "unknown", boosted: false, paid: null }] } });
+  const hit = read.boosts.find((b) => b.link === link);
+  assert.equal(hit.ad, "100000000000001");
+  assert.equal(hit.spend, 40.12);
+  assert.equal(hit.currency, "USD");
+  assert.equal(hit.status, "paused");
+  assert.equal(hit.note, "");
+  assert.match(read.how_to_log_a_boost, /link/);
+  assert.match(read.how_to_log_a_boost, /paused/);
+  assert.doesNotMatch(JSON.stringify(read.boosts), /11\.11/);
+  assert.match(TOOLS.find((t) => t.name === "log_growth").description, /boosts/);
+  assert.match(TOOLS.find((t) => t.name === "log_growth").description, /not the ad account/);
+  const html = L.growthHtml({ rows: [{ platform: "Instagram", date: "2026-11-19", ad_spend: 11.11, best_post: "Stuck in traffic", best_post_link: link, boosts: [{ link, ad: "100000000000001", spend: 40.12, currency: "USD", status: "paused" }] }], ranking: { ranked: [{ id: "999000111", caption: "Stuck in traffic", link, boost: "unknown", boosted: false }] } });
+  assert.match(html, /40\.12/);
+  assert.match(html, /paused/);
+  assert.doesNotMatch(html, /11\.11/);
+  assert.doesNotMatch(html, /spend not read since boost started/);
+});
+
 test("a post that beats the others adds a next idea without inventing the song", async () => {
   const d = memoryDesk();
   const ideas = [
