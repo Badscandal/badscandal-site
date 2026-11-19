@@ -1712,10 +1712,14 @@
       follows: r.follows != null ? fmt(r.follows) + " follows (" + p1(r.followRate) + " of views)" + (r.profileVisits != null ? " · " + fmt(r.profileVisits) + " profile visits" : "") : "",
       own: r.ownComments ? r.ownComments + " of our own comment" + (r.ownComments === 1 ? "" : "s") + " left out" : "",
       paid: "Not boosted", before: "" };
-    if (r.paid) {
+    if (r.paid && r.paid.stale && r.paid.spend == null) out.paid = "spend not read since boost started";
+    else if (r.paid && r.paid.spend != null) {
       var c = r.paid.currency ? r.paid.currency + " " : "";
-      out.paid = "Boosted " + c + r.paid.spend.toFixed(2) + (r.paid.status ? " (" + r.paid.status.toLowerCase() + ")" : "") + " · " + fmt(r.paid.engaged) + " engagements from the ad" +
-        (r.paid.costPerEng != null ? " · " + c + r.paid.costPerEng.toFixed(3) + " each" : "");
+      var who = r.paid.spendOnly ? " engagements" : " engagements from the ad";
+      var cost = r.paid.engaged == null ? "cost per engagement not reported" : fmt(r.paid.engaged) + who + (r.paid.costPerEng != null ? " · " + c + r.paid.costPerEng.toFixed(3) + " each" : "");
+      out.paid = "Boosted " + c + r.paid.spend.toFixed(2) + (r.paid.status ? " (" + r.paid.status.toLowerCase() + ")" : "") +
+        (r.paid.asOf ? " · as of " + spStampOf(r.paid.asOf) : "") + " · " + cost +
+        (r.paid.costPerFollow != null ? " · " + c + r.paid.costPerFollow.toFixed(3) + " per follow" : "");
     }
     if (r.before) out.before = "Before the ad (" + r.before.mark + "): " + p1(r.before.rate) + " of " + fmt(r.before.views) + " views";
     return out;

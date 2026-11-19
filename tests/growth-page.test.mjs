@@ -132,6 +132,81 @@ test("the guide bots read no longer tells them to write Growth into Sheets", asy
   assert.doesNotMatch(text, /you still write your numbers into the Google Sheets/i);
 });
 
+test("a boosted post keeps the title emoji, and a later log that leaves it out does not rewrite it", async () => {
+  const d = memoryDesk();
+  const title = "Stuck in traffic 🚕🤐";
+  const saved = await call(d, "log_growth", { bot: "Steve", platform: "Instagram", date: "2026-11-19", followers: "10", best_post: title, posts: [{ id: "traffic", hook: title, link: "https://example.com/traffic", boosted: true, likes: "10", comments: "2", saves: "3", shares: "5" }] });
+  assert.equal(saved.saved, true);
+  assert.equal(S.clean(title, 200), title);
+  const row = (await S.listGrowth(d, NOW)).find((x) => x.platform === "Instagram" && x.date === "2026-11-19");
+  assert.equal(row.best_post, title);
+  assert.equal(row.posts[0].hook, title);
+  const again = await call(d, "log_growth", { bot: "Steve", platform: "Instagram", date: "2026-11-19", followers: "11" });
+  assert.equal(again.saved, true);
+  const kept = (await S.listGrowth(d, NOW)).find((x) => x.date === "2026-11-19");
+  assert.equal(kept.best_post, title);
+  assert.equal(kept.posts[0].hook, title);
+});
+
+test("Boosted spend is the post's own read, and cost joins that post's engagements", async () => {
+  const posts = [
+    { platform: "Instagram", id: "traffic", date: "2026-11-18", hook: "Stuck in traffic 🚕🤐", link: "https://example.com/traffic", boosted: true, likes: 10, comments: 2, saves: 3, shares: 5, follows: 4, views_24h: 800 },
+    { platform: "Instagram", date: "2026-11-18", hook: "Other clip", boosted: false, likes: 1, comments: 0, saves: 0, shares: 0, views_24h: 1000 },
+  ];
+  const asOf = Date.parse("2026-11-18T21:00:00Z");
+  const fresh = L.growthHtml({
+    rows: [{ platform: "Instagram", date: "2026-11-18", ad_spend: 11.11, ad_currency: "USD", ads_read_at: "2026-11-18 11:05", posts }],
+    ranking: { ranked: [{ id: "traffic", caption: "Stuck in traffic 🚕🤐", link: "https://example.com/traffic", at: "2026-11-18T12:00:00Z", boosted: true, engReported: true, likes: 10, comments: 2, saves: 3, shares: 5, follows: 4,
+      paid: { spend: 40, currency: "USD", asOf, scope: "ad", stale: false, engaged: 20, costPerEng: 2 } }] },
+  });
+  assert.match(fresh, /Spend USD 40\.00 as of 2026-11-18 18:00/);
+  assert.match(fresh, /Cost per engagement 2\.00/);
+  assert.match(fresh, /cost per follow 10\.00/);
+  assert.doesNotMatch(fresh, /11\.11/);
+  const stale = L.growthHtml({
+    rows: [{ platform: "Instagram", date: "2026-11-18", ad_spend: 11.11, ad_currency: "USD", posts }],
+    ranking: { ranked: [{ id: "traffic", caption: "Stuck in traffic", link: "https://example.com/traffic", boosted: true, paid: { spend: null, stale: true, scope: "ad", asOf: Date.parse("2026-11-18T14:05:00Z") } }] },
+  });
+  assert.match(stale, /spend not read since boost started/);
+  assert.doesNotMatch(stale, /11\.11/);
+  const titled = L.growthHtml({
+    rows: [{ platform: "Instagram", date: "2026-11-18", posts: [{ platform: "Instagram", date: "2026-11-18", hook: "Stuck in traffic 🫠", boosted: true, likes: 10, comments: 2, saves: 3, shares: 5, follows: 4 }] }],
+    ranking: { ranked: [{ id: "other-id", caption: "Stuck in traffic", at: "2026-11-18T12:00:00Z", boosted: true, paid: { spend: 40, currency: "USD", asOf, scope: "post", stale: false } }] },
+  });
+  assert.match(titled, /Spend USD 40\.00/);
+  assert.match(titled, /Cost per engagement 2\.00/);
+  assert.doesNotMatch(titled, /11\.11/);
+  const missing = L.growthHtml({
+    rows: [{ platform: "Instagram", date: "2026-11-18", posts: [{ platform: "Instagram", id: "traffic", hook: "Stuck in traffic", boosted: true, likes: 10 }] }],
+    ranking: { ranked: [{ id: "traffic", caption: "Stuck in traffic", boosted: true, paid: { spend: 40, currency: "USD", asOf, scope: "ad", stale: false } }] },
+  });
+  assert.match(missing, /Spend USD 40\.00/);
+  assert.match(missing, /not reported/);
+  assert.doesNotMatch(missing, /Cost per engagement 0/);
+  const d = memoryDesk();
+  await call(d, "log_growth", { bot: "Steve", platform: "Instagram", date: "2026-11-18", followers: "10", posts: [
+    { id: "traffic", hook: "Stuck in traffic 🚕🤐", date: "2026-11-18", boosted: true, boost_started: "2026-11-18 14:55", likes: "10", comments: "2", saves: "3", shares: "5", follows: "4" },
+    { id: "other", hook: "Other clip", date: "2026-11-18", boosted: true, likes: "1", comments: "0", saves: "0", shares: "0" },
+  ] });
+  await d.setJSON("spend/2026-11.json", [
+    { id: "s-account", platform: "Meta", account: "Meta", date: "2026-11-18", amount: 11.11, currency: "USD", song: "", by: "HQ", at: "2026-11-18T21:00:00Z" },
+    { id: "s-post", platform: "Meta", account: "Meta", date: "2026-11-18", amount: 40, currency: "USD", song: "", post: "traffic", by: "Forge", at: "2026-11-18T21:00:00Z" },
+  ]);
+  const read = await call(d, "read_growth", { bot: "Steve", platform: "Instagram" });
+  const hit = read.boosts.find((b) => b.post.includes("Stuck in traffic"));
+  const other = read.boosts.find((b) => b.post === "Other clip");
+  assert.equal(hit.spend, 40);
+  assert.equal(hit.engagements, 20);
+  assert.equal(hit.cost_per_engagement, 2);
+  assert.equal(hit.cost_per_follower, 10);
+  assert.equal(hit.as_of, "2026-11-18 18:00");
+  assert.equal(hit.note, "");
+  assert.equal(other.spend, null);
+  assert.equal(other.note, "spend not read since boost started");
+  assert.equal(other.cost_per_engagement, null);
+  assert.equal(read.rows.find((r) => r.date === "2026-11-18").ad_spend ?? null, null);
+});
+
 test("a post that beats the others adds a next idea without inventing the song", async () => {
   const d = memoryDesk();
   const ideas = [

@@ -78,9 +78,12 @@ test("ranking uses 1,000 views, keeps an old post, and joins a spend row", () =>
     { id: "b", at: "2026-10-20T12:00:00Z", caption: "Crazy vibe on this one", type: "feed", link: "https://example.com/b", snaps: { d1: { at: "2026-10-21T12:00:00Z", views: 26136, likes: 800, comments: 20, saves: 40, shares: 10 } } },
     { id: "c", at: "2026-11-15T12:00:00Z", caption: "Small", type: "feed", snaps: { d1: { at: "2026-11-16T12:00:00Z", views: 400, likes: 10, comments: 0, saves: 0, shares: 0 } } },
   ];
-  const r = P.rankPosts(posts, { ads: [] }, { now, spend: [{ date: "2026-11-15", amount: 32.71, currency: "USD", platform: "Meta" }] });
+  /* 19 Nov 2026: a spend row is this post's only when it names the post. The account's day total (no post, ad, link or song) is not. */
+  const r = P.rankPosts(posts, { ads: [] }, { now, spend: [{ date: "2026-11-15", amount: 32.71, currency: "USD", platform: "Meta", post: "a" }] });
   assert.equal(r.minViews, 1000);
   assert.ok(r.ranked.some((x) => x.id === "a" && x.boosted && x.paid.spend === 32.71));
+  const account = P.rankPosts(posts, { ads: [] }, { now, spend: [{ date: "2026-11-15", amount: 32.71, currency: "USD", platform: "Meta", at: "2026-11-15T18:00:00Z" }] });
+  assert.equal(account.ranked.find((x) => x.id === "a").paid, null);
   assert.ok(r.older.some((x) => x.id === "b"));
   assert.ok(r.tooFew.some((x) => x.id === "c" && x.under_1000));
   assert.match(P.rankLine(r.ranked.find((x) => x.id === "a")), /boosted USD 32\.71/);

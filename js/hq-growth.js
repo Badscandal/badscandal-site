@@ -72,7 +72,7 @@
   function fromIg(p) {
     var s = p && p.snaps || {};
     var d1 = s.d1 || null, d7 = s.d7 || null;
-    var row = { platform: "Instagram", date: String(p && p.at || "").slice(0, 10), hook: String(p && (p.caption || p.song) || "").split("\n")[0].slice(0, 160), link: p && p.link || "" };
+    var row = { platform: "Instagram", id: p && p.id || "", date: String(p && p.at || "").slice(0, 10), hook: String(p && (p.caption || p.song) || "").split("\n")[0].slice(0, 160), link: p && p.link || "" };
     if (d1) {
       ["views", "likes", "comments", "saves", "shares", "follows"].forEach(function (k) { if (d1[k] != null && d1[k] !== "") row[k === "views" ? "views_24h" : k] = Number(d1[k]); });
     }
@@ -217,23 +217,81 @@
     h += '<p class="sub">YouTube on Needs you uses Studio (claims, strikes, monetisation). Post engagement is not the health dot here.</p>';
     return h + "</section>";
   }
-  function boosted(rows, posts) {
+  function titleKey(s) {
+    return String(s || "").toLowerCase().normalize("NFKD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, " ").trim();
+  }
+  function normLink(s) { return String(s || "").trim().toLowerCase().replace(/[?#].*$/, "").replace(/\/+$/, ""); }
+  function samePost(a, b) {
+    if (!a || !b) return false;
+    var ida = String(a.id || ""), idb = String(b.id || "");
+    if (ida && idb) return ida === idb || (ida.length >= 8 && idb.length >= 8 && (ida.slice(-idb.length) === idb || idb.slice(-ida.length) === ida));
+    var la = normLink(a.link), lb = normLink(b.link);
+    if (la && lb) return la === lb;
+    var ta = titleKey(a.hook || a.caption || ""), tb = titleKey(b.hook || b.caption || "");
+    return !!(ta && tb && ta === tb);
+  }
+  function engOf(p) {
+    if (!p) return null;
+    var keys = ["likes", "comments", "saves", "shares"];
+    for (var i = 0; i < keys.length; i++) if (p[keys[i]] == null || p[keys[i]] === "" || !isFinite(Number(p[keys[i]]))) return null;
+    return Number(p.likes) + Number(p.comments) + Number(p.saves) + Number(p.shares);
+  }
+  function followsOf(p) {
+    if (!p || p.follows == null || p.follows === "" || !isFinite(Number(p.follows))) return null;
+    return Number(p.follows);
+  }
+  function rankList(ranking) {
+    if (!ranking) return [];
+    var too = Array.isArray(ranking.tooFew) ? ranking.tooFew : [];
+    return [].concat(ranking.ranked || [], ranking.older || [], too);
+  }
+  function rankHit(post, ranking) {
+    var hits = rankList(ranking).filter(function (r) { return r && samePost(post, { id: r.id, link: r.link, hook: r.caption }); });
+    return hits[0] || null;
+  }
+  function latestCount(post, posts, read) {
+    var hits = (posts || []).filter(function (p) { return samePost(post, p) && read(p) != null; });
+    hits.sort(function (a, b) { return String(a.date || "") < String(b.date || "") ? 1 : -1; });
+    return hits.length ? read(hits[0]) : null;
+  }
+  function boostedPosts(id, posts, ranking) {
+    var list = (posts || []).filter(function (p) { return platId(p.platform) === id && p.boosted === true; });
+    if (id !== "instagram") return list;
+    rankList(ranking).forEach(function (r) {
+      if (!r || (!r.boosted && !r.paid)) return;
+      var row = { platform: "Instagram", id: r.id || "", link: r.link || "", hook: String(r.caption || "").split("\n")[0].slice(0, 160), date: String(r.at || "").slice(0, 10), boosted: true };
+      if (r.engReported) { row.likes = r.likes; row.comments = r.comments; row.saves = r.saves; row.shares = r.shares; }
+      if (r.follows != null) row.follows = r.follows;
+      if (!list.some(function (p) { return samePost(p, row); })) list.push(row);
+    });
+    return list;
+  }
+  function boosted(rows, posts, ranking) {
     var h = '<section class="gsec" id="boostBox"><h3>Boosted</h3>';
     ["tiktok", "instagram", "youtube"].forEach(function (id) {
       var row = latestRow(rows, id);
-      var spend = row && row.ad_spend != null ? (row.ad_currency ? row.ad_currency + " " : "") + row.ad_spend : null;
-      var engaged = null, follows = null, paidPosts = posts.filter(function (p) { return platId(p.platform) === id && p.boosted === true; });
-      var full = paidPosts.filter(function (p) { return epv(p) != null; });
-      if (full.length && full.every(function (p) { return p.views_24h != null; })) {
-        engaged = full.reduce(function (s, p) { return s + Number(p.likes) + Number(p.comments) + Number(p.saves) + Number(p.shares); }, 0);
-      }
-      if (paidPosts.length && paidPosts.every(function (p) { return p.follows != null; })) follows = paidPosts.reduce(function (s, p) { return s + Number(p.follows); }, 0);
-      var costEng = row && row.ad_spend != null && engaged > 0 ? row.ad_spend / engaged : null;
-      var costFol = row && row.ad_spend != null && follows > 0 ? row.ad_spend / follows : null;
+      var paidPosts = boostedPosts(id, posts, ranking);
       h += '<article class="tile"><h3>' + esc(LABEL[id]) + "</h3>";
-      h += "<p class=\"d\">Spend " + shown(spend) + " · paid views " + num(row && row.paid_views) + " · organic views " + num(row && row.organic_views) + "</p>";
-      h += "<p class=\"d\">Cost per engaged view " + (costEng == null ? miss() : esc(costEng.toFixed(2))) + " · cost per follow " + (costFol == null ? miss() : esc(costFol.toFixed(2))) + "</p>";
-      h += "<p class=\"d\">Ads read " + shown(row && row.ads_read_at) + "</p></article>";
+      h += "<p class=\"d\">Paid views " + num(row && row.paid_views) + " · organic views " + num(row && row.organic_views) + "</p>";
+      if (!paidPosts.length) h += "<p class=\"d\">Spend " + miss() + " · cost per engagement " + miss() + " · cost per follow " + miss() + "</p>";
+      paidPosts.forEach(function (p) {
+        var hit = rankHit(p, ranking);
+        var paid = hit && hit.paid;
+        var spendNum = paid && paid.spend != null && !paid.stale && paid.scope !== "account" ? Number(paid.spend) : null;
+        if (spendNum != null && !isFinite(spendNum)) spendNum = null;
+        var asOf = spendNum != null && paid && paid.asOf && L.spStampOf ? L.spStampOf(paid.asOf) : "";
+        var cur = paid && paid.currency ? paid.currency + " " : "";
+        var eng = latestCount(p, posts, engOf);
+        if (eng == null) eng = engOf(p);
+        var fol = latestCount(p, posts, followsOf);
+        if (fol == null) fol = followsOf(p);
+        var costEng = spendNum != null && eng > 0 ? spendNum / eng : null;
+        var costFol = spendNum != null && fol > 0 ? spendNum / fol : null;
+        var spendText = spendNum == null ? "spend not read since boost started" : cur + spendNum.toFixed(2) + (asOf ? " as of " + asOf : "");
+        h += "<p class=\"d\">" + linkOr(videoHref(p), p.hook || "post") + " · Spend " + esc(spendText) + "</p>";
+        h += "<p class=\"d\">Cost per engagement " + (costEng == null ? miss() : esc(costEng.toFixed(2))) + " · cost per follow " + (costFol == null ? miss() : esc(costFol.toFixed(2))) + "</p>";
+      });
+      h += "</article>";
     });
     var organic = posts.filter(function (p) { return p.boosted === false && epv(p) != null; });
     if (organic.length < 3) h += "<p class=\"d\">Boost candidate " + miss() + "</p>";
@@ -336,7 +394,7 @@
     return heads + badge + weekCard(posts, pattern && pattern.pattern) +
       order.filter(function (id) { return LABEL[id] && id !== "spotify"; }).map(function (id) { return table(id, posts); }).join("") +
       tiktokBlock(latestRow(rows, "tiktok"), byId.tiktok) + youtubeBlock(latestRow(rows, "youtube"), input.health, byId.youtube) +
-      healthRow(input.health) + boosted(rows, posts) + ideasHtml(input.ideas) + countdowns(input.releases);
+      healthRow(input.health) + boosted(rows, posts, input.ranking) + ideasHtml(input.ideas) + countdowns(input.releases);
   }
   function cell(label, html) { return '<td data-label="' + esc(label) + '">' + html + "</td>"; }
   function field(v) { return v != null && String(v).trim() !== "" ? String(v) : ""; }
