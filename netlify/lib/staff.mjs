@@ -5277,6 +5277,7 @@ export async function readClaims(store, now) {
     read_only: true, wrote: false, day,
     checked_today: !!today, checked_by: today ? today.by : "not reported", checked_at: today ? today.at : "not reported",
     claims: items.map((c) => ({
+      id: c.key || "",
       song: nrClaim(c.song), claim: c.claim || "not reported", claimant: nrClaim(c.claimant),
       video: nrClaim(c.video || c.video_id), claim_type: nrClaim(c.claim_type), status: nrClaim(c.status),
       reach_effect: nrClaim(c.reach_effect || c.impact), money_effect: nrClaim(c.money_effect),
@@ -5284,7 +5285,203 @@ export async function readClaims(store, now) {
       first_seen: nrClaim(c.first_seen || c.date), last_checked: nrClaim(c.last_checked),
       date: c.date || "not reported", impact: nrClaim(c.impact),
     })),
-    note: "Read only. A missing field is not reported, not zero. Laura marks the day with log_growth, claims_checked true. HQ never invents a claim.",
+    note: "Read only. A missing field is not reported, not zero. id is the claim id: pass it as claim_id to open_case to escalate that claim into a dispute. Laura marks the day with log_growth, claims_checked true. HQ never invents a claim.",
+  };
+}
+
+/* ---------- Disputes (19 Nov 2026) ----------
+   Bots run the case (RouteNote moderation, Content ID, a takedown, a distributor, a copyright dispute).
+   Luke is the only one who decides. A bot cannot write his decision. A Content ID claim is escalated
+   by its id (claims.json key); the Rights page keeps the claim and links to the case. */
+const CASES_KEY = "disputes.json";
+export const CASE_STATUS = ["open", "waiting on them", "waiting on Luke", "waiting on bot", "resolved", "ignored"];
+const CASE_TYPES = {
+  moderation: "moderation",
+  "content id": "Content ID claim",
+  "content id claim": "Content ID claim",
+  dispute: "dispute",
+  takedown: "takedown",
+  "take down": "takedown",
+  other: "other",
+};
+const CASE_DECIDERS = ["Luke"];
+const caseDay = (d) => /^\d{4}-\d{2}-\d{2}$/.test(d || "") && !Number.isNaN(Date.parse(d + "T12:00:00Z")) && new Date(Date.parse(d + "T12:00:00Z")).toISOString().slice(0, 10) === d;
+const caseTypeOf = (v) => {
+  const k = low(v).replace(/[_-]+/g, " ").replace(/\s+/g, " ").trim();
+  const hit = CASE_TYPES[k];
+  if (!hit) fail("type must be moderation, Content ID claim, dispute, takedown or other. Nothing was saved.");
+  return hit;
+};
+const caseStatusOf = (v) => {
+  const hit = CASE_STATUS.find((s) => low(s) === low(clean(v, 40)));
+  if (!hit) fail(`status must be one of: ${CASE_STATUS.join(", ")}. Nothing was saved.`);
+  return hit;
+};
+const caseManagers = (by) => by === "Nova" || by === "Claude" || by === "Luke";
+function caseTimeline(c, now, by, text) {
+  const line = clean(text, 300);
+  if (!line) return;
+  noSecrets(line);
+  c.timeline = [{ at: new Date(now).toISOString(), by, text: line }, ...(Array.isArray(c.timeline) ? c.timeline : [])].slice(0, 40);
+}
+export function caseOut(c) {
+  if (!c) return null;
+  const decision = c.decision && c.decision.at ? { choice: c.decision.choice, text: c.decision.text || "", at: c.decision.at, by: "Luke" } : null;
+  return {
+    id: c.id, song: c.song || "", songKey: c.songKey || songKey(c.song), platform: c.platform || "", type: c.type || "",
+    opened: c.opened || "", owner: c.owner || "", status: c.status || "open",
+    waitingOn: c.waitingOn || "", waitingSince: c.waitingSince || "", nextCheck: c.nextCheck || "",
+    claimId: c.claimId || "", recommendation: c.recommendation || "", proposal: c.proposal || "",
+    decision, needsLuke: c.status === "waiting on Luke",
+    timeline: (Array.isArray(c.timeline) ? c.timeline : []).map((e) => ({ at: e.at || "", when: e.at && Number.isFinite(Date.parse(e.at)) ? spStamp(Date.parse(e.at)) : "", by: e.by || "", text: e.text || "" })),
+  };
+}
+async function casesDoc(store) {
+  const { data } = await readDoc(store, CASES_KEY, { items: [] });
+  const items = data && Array.isArray(data.items) ? data.items : [];
+  return items;
+}
+export async function openCase(store, now, roster, a) {
+  const by = whoIs(a.by, roster, { people: true });
+  for (const k of ["decision", "choice", "luke_decision"]) {
+    if (a[k] != null && String(a[k]).trim() !== "") fail("Luke's decision is Luke's. He decides on the dashboard. Nothing was saved.", "not_allowed");
+  }
+  let owner = a.owner != null && String(a.owner).trim() ? whoIs(a.owner, roster) : (PEOPLE.includes(by) ? "" : by);
+  if (!owner) fail("owner is the bot who carries this case. Nothing was saved.");
+  if (owner !== by && !caseManagers(by)) fail(`That case would be ${owner}'s. Only ${owner} (or Nova) opens it. Nothing was saved.`, "not_allowed");
+  const claimId = a.claim_id != null && String(a.claim_id).trim() ? clean(a.claim_id, 200) : "";
+  let claim = null;
+  if (claimId) {
+    const { data } = await readDoc(store, CLAIMS_KEY, { items: [] });
+    const items = data && Array.isArray(data.items) ? data.items : [];
+    claim = items.find((c) => c && c.key === claimId) || null;
+    if (!claim) fail("No Content ID claim has that id. Read them with read_claims, then pass that id as claim_id. Nothing was opened.");
+  }
+  const song = clean(a.song, 120) || (claim && clean(claim.song, 120)) || "";
+  if (song.length < 2) fail("song is the song's title. Nothing was saved.");
+  const platform = clean(a.platform, 60) || (claim ? "YouTube" : "");
+  if (platform.length < 2) fail("platform is who the case is with, for example RouteNote, YouTube or Spotify. Nothing was saved.");
+  const type = a.type != null && String(a.type).trim() ? caseTypeOf(a.type) : (claim ? "Content ID claim" : "");
+  if (!type) fail("type must be moderation, Content ID claim, dispute, takedown or other. Nothing was saved.");
+  const opened = a.opened != null && String(a.opened).trim() ? clean(a.opened, 10) : spDay(now);
+  if (!caseDay(opened)) fail("opened is the day the case started, YYYY-MM-DD. Nothing was saved.");
+  if (opened > spDay(now)) fail("That day is still in the future. Nothing was saved.");
+  const status = a.status != null && String(a.status).trim() ? caseStatusOf(a.status) : "open";
+  if (status === "ignored") fail("Ignored is Luke's decision. He closes it on the dashboard. Nothing was saved.", "not_allowed");
+  const waitingOn = a.waiting_on != null && String(a.waiting_on).trim() ? clean(a.waiting_on, 120) : "";
+  const nextCheck = a.next_check != null && String(a.next_check).trim() ? clean(a.next_check, 10) : "";
+  if (nextCheck && !caseDay(nextCheck)) fail("next_check is a day, YYYY-MM-DD. Nothing was saved.");
+  const recommendation = a.recommendation != null && String(a.recommendation).trim() ? cleanText(a.recommendation, 800) : "";
+  const proposal = a.proposal != null && String(a.proposal).trim() ? cleanText(a.proposal, 2000) : "";
+  const entry = a.entry != null && String(a.entry).trim() ? clean(a.entry, 300) : "";
+  noSecrets(song, platform, waitingOn, recommendation, proposal, entry);
+  const at = new Date(now).toISOString();
+  return mutate(store, CASES_KEY, { items: [] }, (doc) => {
+    const items = doc && Array.isArray(doc.items) ? doc.items : [];
+    if (claimId) {
+      const prev = items.find((x) => x && x.claimId === claimId && x.status !== "resolved" && x.status !== "ignored");
+      if (prev) return { skip: true, value: { saved: false, duplicate: true, item: prev } };
+    }
+    const item = {
+      id: newId("d", now), song, songKey: songKey(song), platform, type, opened, owner, status,
+      waitingOn, waitingSince: waitingOn || status.startsWith("waiting") ? at : "", nextCheck,
+      claimId, recommendation, proposal, decision: null, timeline: [],
+      createdAt: at, createdBy: by, updatedAt: at,
+    };
+    caseTimeline(item, now, by, entry || `Opened. ${type} with ${platform}.`);
+    if (items.length >= 80) {
+      const drop = items.findIndex((x) => x && (x.status === "resolved" || x.status === "ignored"));
+      if (drop >= 0) items.splice(drop, 1);
+      else fail("The case list is full. Tell Claude.", "limit");
+    }
+    doc.items = [item, ...items];
+    return { value: { saved: true, duplicate: false, item } };
+  });
+}
+export async function updateCase(store, now, roster, a) {
+  const by = whoIs(a.by, roster, { people: true });
+  for (const k of ["decision", "choice", "luke_decision"]) {
+    if (a[k] != null && String(a[k]).trim() !== "") fail("Luke's decision is Luke's. He decides on the dashboard. You cannot set it. Nothing was saved.", "not_allowed");
+  }
+  const id = clean(a.id, 40);
+  if (!id) fail("id is the case id from read_cases. Nothing was saved.");
+  const status = a.status != null && String(a.status).trim() ? caseStatusOf(a.status) : "";
+  if (status === "ignored") fail("Ignored is Luke's decision. He closes it on the dashboard. Nothing was saved.", "not_allowed");
+  const waitingOn = a.waiting_on != null ? clean(a.waiting_on, 120) : null;
+  const nextCheck = a.next_check != null && String(a.next_check).trim() ? clean(a.next_check, 10) : (a.next_check != null ? "" : null);
+  if (nextCheck) {
+    if (!caseDay(nextCheck)) fail("next_check is a day, YYYY-MM-DD. Nothing was saved.");
+  }
+  const recommendation = a.recommendation != null ? cleanText(a.recommendation, 800) : null;
+  const proposal = a.proposal != null ? cleanText(a.proposal, 2000) : null;
+  const entry = a.entry != null && String(a.entry).trim() ? clean(a.entry, 300) : "";
+  if (!status && waitingOn == null && nextCheck == null && recommendation == null && proposal == null && !entry) fail("Say what changed: status, waiting_on, next_check, recommendation, proposal, or a timeline entry. Nothing was saved.");
+  noSecrets(waitingOn || "", recommendation || "", proposal || "", entry);
+  const at = new Date(now).toISOString();
+  return mutate(store, CASES_KEY, { items: [] }, (doc) => {
+    const items = doc && Array.isArray(doc.items) ? doc.items : [];
+    const item = items.find((x) => x && x.id === id);
+    if (!item) fail("There is no case with that id. Read them with read_cases. Nothing was saved.", "not_found");
+    if (item.owner !== by && !caseManagers(by)) fail(`This case is ${item.owner}'s. Nothing was saved.`, "not_allowed");
+    const bits = [];
+    if (status && status !== item.status) { item.status = status; bits.push("Status: " + status); }
+    if (waitingOn != null && waitingOn !== item.waitingOn) {
+      item.waitingOn = waitingOn;
+      item.waitingSince = waitingOn ? at : "";
+      bits.push(waitingOn ? "Waiting on " + waitingOn : "Not waiting");
+    } else if (status && status.startsWith("waiting") && !item.waitingSince) item.waitingSince = at;
+    if (nextCheck != null && nextCheck !== (item.nextCheck || "")) { item.nextCheck = nextCheck; bits.push(nextCheck ? "Next check " + nextCheck : "Next check cleared"); }
+    if (recommendation != null && recommendation !== (item.recommendation || "")) { item.recommendation = recommendation; bits.push("Recommendation updated"); }
+    if (proposal != null && proposal !== (item.proposal || "")) { item.proposal = proposal; bits.push("Proposal updated"); }
+    item.updatedAt = at;
+    caseTimeline(item, now, by, entry || bits.join(". "));
+    return { value: { saved: true, item } };
+  });
+}
+/* Luke only. Confirm and Respond move the case to "waiting on bot". Ignore closes it. */
+export async function decideCase(store, now, roster, a) {
+  const by = whoIs(a.by, roster, { people: true });
+  if (!CASE_DECIDERS.includes(by)) fail("Only Luke decides a case. Nothing was saved.", "not_allowed");
+  const id = clean(a.id, 40);
+  if (!id) fail("id is the case. Nothing was saved.");
+  const choice = low(a.choice);
+  if (!["confirm", "ignore", "respond"].includes(choice)) fail("choice must be confirm, ignore or respond. Nothing was saved.");
+  const text = a.text != null && String(a.text).trim() ? cleanText(a.text, 2000) : "";
+  if (choice === "respond" && text.length < 2) fail("Write the response. Nothing was saved.");
+  noSecrets(text);
+  const at = new Date(now).toISOString();
+  return mutate(store, CASES_KEY, { items: [] }, (doc) => {
+    const items = doc && Array.isArray(doc.items) ? doc.items : [];
+    const item = items.find((x) => x && x.id === id);
+    if (!item) fail("There is no case with that id. Nothing was saved.", "not_found");
+    const recorded = choice === "confirm" ? (item.proposal || "Confirmed.") : choice === "ignore" ? text : text;
+    item.decision = { choice, text: recorded, at, by: "Luke" };
+    item.status = choice === "ignore" ? "ignored" : "waiting on bot";
+    item.waitingOn = choice === "ignore" ? "" : item.owner;
+    item.waitingSince = choice === "ignore" ? "" : at;
+    item.updatedAt = at;
+    const line = choice === "confirm" ? "Luke confirmed the proposal." : choice === "ignore" ? "Luke ignored this case." : "Luke wrote a response.";
+    caseTimeline(item, now, "Luke", line);
+    return { value: item };
+  });
+}
+export async function readCases(store, now, a = {}) {
+  const items = await casesDoc(store);
+  const status = a.status != null && String(a.status).trim() ? caseStatusOf(a.status) : "";
+  const song = a.song != null && String(a.song).trim() ? songKey(a.song) : "";
+  const owner = a.owner != null && String(a.owner).trim() ? clean(a.owner, 40) : "";
+  const needsLuke = a.needs_luke === true || a.needs_luke === "true" || a.needs_luke === "yes";
+  const list = items.filter((c) => {
+    if (!c) return false;
+    if (status && c.status !== status) return false;
+    if (song && songKey(c.song) !== song) return false;
+    if (owner && low(c.owner) !== low(owner)) return false;
+    if (needsLuke && c.status !== "waiting on Luke") return false;
+    return true;
+  }).slice(0, 60).map(caseOut);
+  return {
+    read_only: true, wrote: false, cases: list,
+    note: "Luke's decision is on each case when he has made one (decision.choice, decision.text, decision.at). You cannot set it. When status is waiting on bot, do what he confirmed or wrote, then update_case. needs_luke lists only cases waiting on Luke.",
   };
 }
 export function growthPlatformId(name) {
@@ -5421,9 +5618,10 @@ export async function saveContentIdeas(store, now, a) {
 
 export async function loadDesk(store, now) {
   const [roster, updates, messages, cardsDoc, config, releases, sightings] = await Promise.all([getRoster(store), listUpdates(store, now, 3), listMessages(store, now, 2), readDoc(store, "cards.json", {}), getConfig(store), listReleases(store), getSightings(store)]);
-  const [seen, read, income, closesDoc, profiles, claimsDoc, ideasDoc] = await Promise.all([getSeen(store, roster), getRead(store, roster), incomeState(store, now), readDoc(store, "closes.json", []), getProfiles(store), readDoc(store, CLAIMS_KEY, { items: [] }), readDoc(store, IDEAS_KEY, {})]);
+  const [seen, read, income, closesDoc, profiles, claimsDoc, ideasDoc, disputesDoc] = await Promise.all([getSeen(store, roster), getRead(store, roster), incomeState(store, now), readDoc(store, "closes.json", []), getProfiles(store), readDoc(store, CLAIMS_KEY, { items: [] }), readDoc(store, IDEAS_KEY, {}), readDoc(store, CASES_KEY, { items: [] })]);
   const claims = claimsDoc.data && Array.isArray(claimsDoc.data.items) ? { items: claimsDoc.data.items, checked: claimsDoc.data.checked && typeof claimsDoc.data.checked === "object" ? claimsDoc.data.checked : {} } : { items: [], checked: {} };
-  return { roster, updates, messages, cards: cardsDoc.data || {}, seen, read, income, config, releases, sightings, closes: Array.isArray(closesDoc.data) ? closesDoc.data : [], profiles, claims, contentIdeas: ideasDoc.data || {} };
+  const disputes = disputesDoc.data && Array.isArray(disputesDoc.data.items) ? disputesDoc.data.items : [];
+  return { roster, updates, messages, cards: cardsDoc.data || {}, seen, read, income, config, releases, sightings, closes: Array.isArray(closesDoc.data) ? closesDoc.data : [], profiles, claims, disputes, contentIdeas: ideasDoc.data || {} };
 }
 
 /* Has the person a message was sent to READ it? (V6, 11 Nov 2026: from the read markers, read/<name>,
@@ -5512,6 +5710,11 @@ export function waitingOnLuke(desk, today, now = null) {
     if (x.state !== "unknown" && x.state !== "retry") continue;
     out.push({ key: "s:" + x.key, kind: "spotify", id: x.key, text: `${clean(x.title, 80)} is in Spotify for Artists: say what it is`, href: "#releases", at: x.firstSeen || null });
   }
+  /* a dispute waiting on Luke (19 Nov 2026). The lock-screen line names the song only, never the draft. */
+  for (const c of desk.disputes || []) {
+    if (!c || c.status !== "waiting on Luke" || !c.id) continue;
+    out.push({ key: "d:" + c.id, kind: "dispute", id: c.id, text: `${clean(c.owner || "A bot", 40)} needs your decision on ${clean(c.song, 80) || "a song"}`, href: "#songs/" + c.id, at: c.waitingSince || c.updatedAt || c.createdAt || null });
+  }
   return out.sort((a, b) => (a.at == null ? 1 : b.at == null ? -1 : a.at < b.at ? -1 : a.at > b.at ? 1 : 0));
 }
 
@@ -5549,6 +5752,7 @@ export function board(desk, now, hq) {
     /* L5: RouteNote's inbox is not connected until Luke signs it in. Claims are only what Laura recorded. */
     mail: routeNoteMailSource(),
     claims: desk.claims && Array.isArray(desk.claims.items) ? { items: desk.claims.items.slice(0, 80), checked: desk.claims.checked && typeof desk.claims.checked === "object" ? desk.claims.checked : {} } : { items: [], checked: {} },
+    disputes: { items: (Array.isArray(desk.disputes) ? desk.disputes : []).slice(0, 80).map(caseOut) },
     contentIdeas: contentIdeasView(desk.contentIdeas),
     connector: { botsOn: desk.config.botsOn, changedAt: desk.config.changedAt, lastUsed: lastSeen ? { bot: lastSeen[0], at: lastSeen[1].at, tool: lastSeen[1].tool } : null,
       connected: staff.filter((w) => w.connected).length, total: staff.length, claudeSeen: desk.seen.Claude ? desk.seen.Claude.at : null },
