@@ -165,7 +165,8 @@ export function growthReport(rows, today) {
       week: last && w ? last.followers - w.followers : null,
       weekDays: last && w ? Math.min(7, daysBetween(w.d, last.d)) : null,
       month: last && m ? last.followers - m.followers : null,
-      views7: sum(p.days.filter((x) => last && x.d > addDays(last.d, -7) && x.views != null).map((x) => x.views)),
+      /* null, not 0, when no day of the week carries views (Spotify has none: 19 Nov 2026, "0 views" on its card) */
+      views7: ((v) => (v.length ? sum(v) : null))(p.days.filter((x) => last && x.d > addDays(last.d, -7) && x.views != null).map((x) => x.views)),
       series: read.slice(-30).map((x) => ({ d: x.d, v: x.followers })),
       best,
     };

@@ -692,10 +692,10 @@
     var box = $("claimsBox"); if (!box || !window.HQLib || !HQLib.contentClaimRows) return;
     var b = window.HQStaff && HQStaff.board ? HQStaff.board() : null;
     var view = HQLib.contentClaimRows(b && b.claims);
-    var h = '<div class="tile"><h3>Content ID claims</h3><p class="sub">Recorded by Laura from YouTube. A blank is not reported. HQ never invents a claim.</p>';
-    if (!view.rows.length) h += '<p class="d">' + esc(view.empty) + "</p>";
+    var h = '<div class="tile"><h3>Content ID claims</h3>';
+    if (!view.rows.length) h += '<p class="d">' + esc(view.empty) + ' Laura records them from YouTube; HQ never invents one.</p>';
     else {
-      h += "<ul>";
+      h += '<p class="sub">Recorded by Laura from YouTube. A blank is not reported. HQ never invents a claim.</p><ul>';
       view.rows.forEach(function (r) {
         h += "<li><b>" + esc(r.claim) + "</b> · " + esc(r.claimant) + " · " + esc(r.impact) + " · " + esc(r.date) + "</li>";
       });
@@ -705,25 +705,38 @@
   }
   document.addEventListener("hq:refreshed", drawClaims);
 
+  /* Growth & Fans › Instagram, tidied (19 Nov 2026, Luke: "things are overlapping … easier to use"): the status
+     and its buttons, the best post (picture beside its numbers), the fan inbox (questions first, five repeat fans
+     then "Show all"), the ranking, then the long lists folded. Captions are shown as normal text, never in the
+     small capital label style. */
+  var REGION = null;
+  try { REGION = new Intl.DisplayNames(["en"], { type: "region" }); } catch (e) { REGION = null; }
+  function countryName(code) { try { return (REGION && REGION.of(String(code).toUpperCase())) || code; } catch (e) { return code; } }
+  var TYPE = { reels: "Reel", reel: "Reel", feed: "Post", image: "Photo", carousel_album: "Carousel", video: "Video", story: "Story" };
+  function typeWord(t) { var k = String(t || "").toLowerCase(); return TYPE[k] || (k ? k.charAt(0).toUpperCase() + k.slice(1) : "Post"); }
+  function onPost(c) { return '<span class="fanon">on ' + link(c.link, c.postCaption || "a post") + "</span>"; }
+  function fanRow(o) {
+    return '<li><div class="fanwho">' + (o.flag || "") + "<b>" + esc(o.user) + "</b>" + (o.meta ? '<span class="fanmeta">' + esc(o.meta) + "</span>" : "") + "</div>" +
+      '<p class="fantext">' + esc(o.text || "") + "</p>" + onPost(o.c) + "</li>";
+  }
+  function foldList(rows, first, label) {
+    if (rows.length <= first) return "<ul>" + rows.join("") + "</ul>";
+    return "<ul>" + rows.slice(0, first).join("") + '</ul><details class="fanmore"><summary>Show all ' + rows.length + " " + esc(label) + "</summary><ul>" + rows.slice(first).join("") + "</ul></details>";
+  }
   function drawInstagram() {
     var box = $("igBox"); if (!box) return;
     if (!ig) { box.innerHTML = ""; return; }
     var st = ig.status || {}, line = L.igStatusLine(st, Date.now()), dis = sample || igBusy ? " disabled" : "";
     var h = '<h3 class="sech">Instagram</h3><p class="sub' + (st.lastError ? " igerr" : "") + '">' + esc(line) + "</p>";
-    /* L3 part 1: song questions and repeat fans, from the comments already read. A reply is Luke's. */
+    if (st.connected && st.errorKind !== "refused") h += '<p class="igacts"><button class="copybtn" type="button" id="igRead"' + dis + ">" + (igBusy ? "Reading…" : "Read now") + '</button><button class="linkbtn" type="button" id="igOff"' + dis + ">Disconnect</button>" + (igMsg ? '<span class="d" role="status">' + esc(igMsg) + "</span>" : "") + "</p>";
     var inbox = ig.fanInbox || { questions: [], repeats: [] };
     var askIds = {};
     (inbox.questions || []).forEach(function (q) { askIds[q.id] = 1; });
     if (st.connected && window.HQLook) {
-      var best = HQLook.bestPost(ig.ranking, (sheet && sheet.songs) || []);
-      h += best.reported ? '<article class="bestpost"><p class="kl">Best post this week</p><p class="kn">' + esc(best.title) + '</p><p>' + esc(best.why) + '</p>' +
-        (best.thumb ? '<img alt="" src="' + esc(best.thumb) + '" width="120" height="120">' : "") +
-        '<button type="button" class="whybtn" data-source="' + esc(best.source) + '">Source</button></article>' : '<p class="d">' + esc(best.line) + "</p>";
-      var fans = HQLook.fanCards(inbox);
-      if (fans.length) {
-        var fan = fans[0];
-        h += '<article class="wallet"><p class="kl">' + esc(fan.kind === "whose" ? "Ours or a fan?" : "Fan question") + '</p><p>' + esc(fan.user) + "</p><p>" + esc(fan.text) + "</p><p>" + esc(fan.flag || fan.whose || "") + "</p></article>";
-      }
+      var best = HQLook.bestPost(ig.ranking, (sheet && sheet.songs) || [], L);
+      h += best.reported ? '<article class="bestpost">' + (best.thumb ? '<a class="bpimg" href="' + esc(best.link || "#growth") + '" target="_blank" rel="noopener"><img alt="" src="' + esc(best.thumb) + '" loading="lazy" referrerpolicy="no-referrer"></a>' : "") +
+        '<div class="bptext"><p class="kl">Best post this week</p><p class="bptitle">' + esc(best.title) + "</p>" + (best.caption ? '<p class="bpcap">“' + esc(best.caption) + "”</p>" : "") +
+        '<p class="bprate">' + esc(best.why) + '</p><p class="bpsrc">' + esc(best.source) + "</p></div></article>" : '<p class="d">' + esc(best.line) + "</p>";
       var slots = HQLook.uploadSlots(ig.online);
       if (slots) h += '<p class="d">Best hours are shaded from logged online followers.</p>';
     }
@@ -732,58 +745,54 @@
       h += '<div class="tile faninbox" id="fanInbox"><h3>Fan inbox</h3><p class="sub">' + esc(L.FAN_INTRO) + "</p>";
       if (!qs.length && !rs.length) h += '<p class="d">' + esc(L.FAN_EMPTY) + "</p>";
       if (qs.length) {
-        h += "<details class=\"look-more\"><summary>" + esc(L.FAN_ASK) + " (" + qs.length + ")</summary><ul>";
-        qs.forEach(function (q) {
-          h += '<li><span class="fanflag' + (q.needsReply ? "" : " ok") + '">' + esc(L.fanFlagWord(q.needsReply)) + '</span> <span class="lbl">' + esc(L.fanKindWord(q.kind)) + "</span> <b>" + esc(q.user) + "</b>: " + esc(q.text) + ' <span class="lbl">on ' + link(q.link, q.postCaption || "a post") + "</span></li>";
-        });
-        h += "</ul></details>";
+        h += '<h4 class="fanh">' + esc(L.FAN_ASK) + " (" + qs.length + ")</h4>";
+        h += foldList(qs.map(function (q) {
+          return fanRow({ user: q.user, text: q.text, c: q, meta: L.fanKindWord(q.kind), flag: '<span class="fanflag' + (q.needsReply ? "" : " ok") + '">' + esc(L.fanFlagWord(q.needsReply)) + "</span>" });
+        }), 5, "questions");
       }
       if (rs.length) {
-        h += "<h3>" + esc(L.FAN_BACK) + " (" + rs.length + ")</h3><ul>";
-        rs.forEach(function (r) {
-          h += "<li>" + (r.needsReply ? '<span class="fanflag">' + esc(L.fanFlagWord(true)) + "</span> " : "") + "<b>" + esc(r.user) + "</b> <span class=\"lbl\">" + r.posts + " post" + (r.posts === 1 ? "" : "s") + "</span>: " + esc(r.lastText) + ' <span class="lbl">on ' + link(r.link, r.postCaption || "a post") + "</span></li>";
-        });
-        h += "</ul>";
+        h += '<h4 class="fanh">' + esc(L.FAN_BACK) + " (" + rs.length + ")</h4>";
+        h += foldList(rs.map(function (r) {
+          return fanRow({ user: r.user, text: r.lastText, c: r, meta: r.posts + " post" + (r.posts === 1 ? "" : "s"), flag: r.needsReply ? '<span class="fanflag">' + esc(L.fanFlagWord(true)) + "</span>" : "" });
+        }), 5, "repeat fans");
       }
       h += "</div>";
     }
     if (!st.connected || st.errorKind === "refused") {
-      h += '<div class="tile"><p class="d">Paste the key from Meta (the Graph API Explorer key after "Extend Access Token", or the Instagram setup\u2019s "Generate token"). HQ checks it with Instagram and keeps it to itself; a Facebook key is swapped for the Page\u2019s own key, which doesn\u2019t run out. Read-only: it can never post or change anything.</p>' +
+      h += '<div class="tile"><p class="d">Paste the key from Meta (the Graph API Explorer key after "Extend Access Token", or the Instagram setup’s "Generate token"). HQ checks it with Instagram and keeps it to itself; a Facebook key is swapped for the Page’s own key, which doesn’t run out. Read-only: it can never post or change anything.</p>' +
         '<form class="igform" id="igForm" autocomplete="off"><input type="password" id="igKey" placeholder="The Instagram key" aria-label="The Instagram key"' + dis + '><button class="sendbtn" type="submit"' + dis + ">" + (igBusy ? "Checking…" : "Connect Instagram") + "</button></form>" +
         (igMsg ? '<p class="d" role="status">' + esc(igMsg) + "</p>" : "") + "</div>";
-    } else {
-      h += '<p class="d"><button class="copybtn" type="button" id="igRead"' + dis + ">" + (igBusy ? "Reading…" : "Read now") + '</button> <button class="linkbtn" type="button" id="igOff"' + dis + ">Disconnect</button>" + (igMsg ? " " + esc(igMsg) : "") + "</p>";
     }
     /* L2: What engages best, per view, every post at the same age, with the ads that boosted each (17 Nov 2026) */
     var rk = ig.ranking;
     function rankItem(r) {
       var x = L.rankParts(r);
-      return '<li class="tile"><div class="row"><h3>' + link(r.link, (r.song || r.type || "Post") + " · " + day(String(r.at).slice(0, 10))) + '</h3><span class="lbl">' + esc(x.window) + '</span></div>' +
+      return '<li class="tile"><div class="row"><h3>' + link(r.link, (r.song || typeWord(r.type)) + " · " + day(String(r.at).slice(0, 10))) + '</h3><span class="lbl">' + esc(x.window) + '</span></div>' +
         '<div class="big num">' + esc(x.rate) + '</div><div class="d">' + esc(x.views) + '</div><div class="d">' + esc(x.deep) + "</div>" + (x.follows ? '<div class="d">' + esc(x.follows) + "</div>" : "") +
         '<div class="d' + (r.paid ? "" : " muted") + '">' + esc(x.paid) + "</div>" + (x.before ? '<div class="d">' + esc(x.before) + "</div>" : "") + (x.own ? '<div class="d muted">' + esc(x.own) + "</div>" : "") + "</li>";
     }
     if (rk && ((rk.ranked || []).length || (rk.older || []).length)) {
-      h += '<h3 class="sech" style="margin-top:14px">What engages best</h3><p class="sub">Every post at the same age (its numbers at 1 day). Engaged = likes, comments, saves and shares ÷ views; our own accounts\u2019 comments don\u2019t count. Paid views bring few engagements, so a boosted post doesn\u2019t win on reach alone. ' +
+      h += '<h3 class="sech igsec">What engages best</h3><p class="sub">Every post at the same age (its numbers at 1 day). Engaged = likes, comments, saves and shares ÷ views; our own accounts’ comments don’t count. ' +
         (rk.adsAt ? "Ads read " + esc(L.ago(Date.now() - rk.adsAt)) + "." : "The ads that boosted each post show here once HQ has read them (hourly).") +
         (rk.tooFew ? " " + rk.tooFew + " newer post" + (rk.tooFew === 1 ? "" : "s") + " not ranked yet (under " + rk.minViews + " views, or not a day old)." : "") +
-        ((rk.ranked || []).length < 10 ? " Fewer than 10 posts compared so far: the order isn\u2019t settled yet." : "") + "</p>";
-      if ((rk.ranked || []).length) h += '<ol class="igrank">' + rk.ranked.slice(0, 8).map(rankItem).join("") + "</ol>";
-      if ((rk.older || []).length) h += '<details class="tile" style="margin-bottom:12px"><summary>Older posts (' + rk.older.length + "): lifetime numbers, not the same age</summary>" + '<ol class="igrank">' + rk.older.slice(0, 10).map(rankItem).join("") + "</ol></details>";
+        ((rk.ranked || []).length < 10 ? " Fewer than 10 posts compared so far: the order isn’t settled yet." : "") + "</p>";
+      if ((rk.ranked || []).length) h += '<ol class="igrank">' + rk.ranked.slice(0, 6).map(rankItem).join("") + "</ol>";
+      if ((rk.older || []).length) h += '<details class="tile igfold"><summary>Older posts (' + rk.older.length + "): lifetime numbers, not the same age</summary>" + '<ol class="igrank">' + rk.older.slice(0, 10).map(rankItem).join("") + "</ol></details>";
     }
     var otherAsks = (ig.needsReply || []).filter(function (c) { return !askIds[c.id]; });
-    if (otherAsks.length) h += '<div class="tile" style="margin:12px 0"><h3>Needs a reply (' + otherAsks.length + ')</h3><p class="sub">Other questions nobody of ours has answered yet. Replying is yours.</p><ul class="igcomments">' +
-      otherAsks.map(function (c) { return "<li><b>" + esc(c.user) + "</b>: " + esc(c.text) + ' <span class="lbl">on ' + link(c.link, c.postCaption || "a post") + "</span></li>"; }).join("") + "</ul></div>";
-    /* our own accounts (Nova keeps the list with the instagram tool; Luke sees it here) */
-    if (st.connected) h += '<details class="tile" style="margin:12px 0"><summary>Our own accounts (' + (ig.own || []).length + "): their comments don\u2019t count</summary>" +
-      '<p class="d">' + esc((ig.own || []).map(function (x) { return "@" + x; }).join(", ")) + '</p><p class="d muted">Nova keeps this list (the connected account is always on it). Ask Nova to add or remove one.</p>' +
-      ((ig.ownLog || []).length ? '<ul class="igcomments">' + ig.ownLog.slice(0, 10).map(function (x) { return "<li>" + esc(L.deskWhen(x.at, sheet && sheet.today) + " · " + x.by + " " + (x.action === "add" ? "added" : "removed") + " @" + x.handle) + ' <span class="lbl">' + esc(x.reason) + "</span></li>"; }).join("") + "</ul>" : "") + "</details>";
+    if (otherAsks.length) h += '<div class="tile faninbox igfold"><h3>Needs a reply (' + otherAsks.length + ')</h3><p class="sub">Other questions nobody of ours has answered yet. Replying is yours.</p>' +
+      foldList(otherAsks.map(function (c) { return fanRow({ user: c.user, text: c.text, c: c }); }), 5, "questions") + "</div>";
     var shownPosts = (ig.posts || []).filter(function (p) { return p.views == null || Number(p.views) >= 1000; });
-    if (shownPosts.length) h += '<div class="igposts">' + shownPosts.slice(0, 9).map(function (p) {
-      return '<div class="tile igpost"><div class="row"><h3>' + link(p.link, (p.type || "Post") + " · " + day(p.at.slice(0, 10))) + '</h3></div><div class="d">' + esc(L.igPostNumbers(p) || "No numbers yet") + "</div></div>";
-    }).join("") + "</div>";
-    if ((ig.comments || []).length) h += '<div class="tile" style="margin-top:12px"><h3>Newest comments</h3><ul class="igcomments">' + ig.comments.slice(0, 8).map(function (c) {
-      return "<li><b>" + esc(c.user) + "</b>: " + esc(c.text) + ' <span class="lbl">on ' + link(c.link, c.postCaption || "a post") + "</span></li>"; }).join("") + "</ul></div>";
-    if ((ig.countries || []).length) h += '<p class="d" style="margin-top:10px">Followers by country: ' + esc(ig.countries.slice(0, 6).map(function (c) { return c.country + " " + fmt(c.count); }).join(" · ")) + "</p>";
+    if (shownPosts.length) h += '<details class="tile igfold"><summary>Latest posts (' + Math.min(9, shownPosts.length) + ")</summary>" + '<div class="igposts">' + shownPosts.slice(0, 9).map(function (p) {
+      return '<div class="igpost"><p class="igpt">' + link(p.link, typeWord(p.type) + " · " + day(p.at.slice(0, 10))) + '</p><p class="d">' + esc(L.igPostNumbers(p) || "No numbers yet") + "</p></div>";
+    }).join("") + "</div></details>";
+    if ((ig.comments || []).length) h += '<details class="tile faninbox igfold"><summary>Newest comments (' + Math.min(8, ig.comments.length) + ")</summary><ul>" + ig.comments.slice(0, 8).map(function (c) {
+      return fanRow({ user: c.user, text: c.text, c: c }); }).join("") + "</ul></details>";
+    /* our own accounts (Nova keeps the list with the instagram tool; Luke sees it here) */
+    if (st.connected) h += '<details class="tile igfold"><summary>Our own accounts (' + (ig.own || []).length + "): their comments don’t count</summary>" +
+      '<p class="d">' + esc((ig.own || []).map(function (x) { return "@" + x; }).join(", ")) + '</p><p class="d muted">Nova keeps this list (the connected account is always on it). Ask Nova to add or remove one.</p>' +
+      ((ig.ownLog || []).length ? '<ul class="igcomments">' + ig.ownLog.slice(0, 10).map(function (x) { return "<li>" + esc(L.deskWhen(x.at, sheet && sheet.today) + " · " + x.by + " " + (x.action === "add" ? "added" : "removed") + " @" + x.handle) + ' <span class="fanmeta">' + esc(x.reason) + "</span></li>"; }).join("") + "</ul>" : "") + "</details>";
+    if ((ig.countries || []).length) h += '<p class="d igcountries"><b>Followers by country</b> ' + esc(ig.countries.slice(0, 6).map(function (c) { return countryName(c.country) + " " + fmt(c.count); }).join(" · ")) + "</p>";
     box.innerHTML = h;
   }
   document.addEventListener("submit", function (ev) {
@@ -841,10 +850,10 @@
   }
   function drawFans() {
     var f = sheet.fans;
-    $("fansSub").textContent = f.total ? f.total + " people noticed · " + f.repeat + " came back more than once. Suggestions only: nobody is contacted without your yes." : "People asking for the song name, repeat commenters and DMs.";
+    $("fansSub").textContent = f.total ? f.total + " people noticed · " + f.repeat + " came back more than once. Suggestions only: nobody is contacted without your yes." : "People asking for the song name, repeat commenters and DMs, from the sheet. Nothing logged there yet: the Instagram fan inbox above is read by HQ itself.";
     setTable("fanTable", broken("Fans") ? "" : f.people.length ? "<tr><th>Who</th><th>Where</th><th class='r'>Times</th><th>What they said</th><th>About them</th><th>How to reach them</th></tr>" + f.people.map(function (p) {
       return "<tr><td><b>" + link(p.profile, p.handle) + "</b><br><span class='lbl'>" + esc(p.signals.join(" · ").replace(/_/g, " ")) + "</span></td><td>" + esc(p.platform) + "<br><span class='lbl'>" + esc(day(p.last)) + "</span></td><td class='r'>" + (p.times >= 2 ? "<b>" + p.times + "</b>" : p.times) + "</td><td>" + (p.quote ? "“" + link(p.post, p.quote) + "”" : "–") + "</td><td>" + esc(p.about || "–") + "</td><td>" + esc(p.engage || "–") + "</td></tr>";
-    }).join("") : '<tr><td class="empty">No fan signals logged yet.</td></tr>');
+    }).join("") : "");
   }
   /* Releases (11 Nov 2026): js/hq-staff.js draws the tab from the team's desk (the pipeline, the
      form) and asks for the sheet's own cards for the songs the desk doesn't have. Without the desk,
