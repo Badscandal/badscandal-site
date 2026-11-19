@@ -224,11 +224,17 @@
   function samePost(a, b) {
     if (!a || !b) return false;
     var ida = String(a.id || ""), idb = String(b.id || "");
-    if (ida && idb) return ida === idb || (ida.length >= 8 && idb.length >= 8 && (ida.slice(-idb.length) === idb || idb.slice(-ida.length) === ida));
+    if (ida && idb && (ida === idb || (ida.length >= 8 && idb.length >= 8 && (ida.slice(-idb.length) === idb || idb.slice(-ida.length) === ida)))) return true;
     var la = normLink(a.link), lb = normLink(b.link);
     if (la && lb) return la === lb;
     var ta = titleKey(a.hook || a.caption || ""), tb = titleKey(b.hook || b.caption || "");
     return !!(ta && tb && ta === tb);
+  }
+  function spendOk(paid) {
+    if (!paid || paid.spend == null || paid.stale) return false;
+    if (paid.scope !== "ad" && paid.scope !== "post" && paid.scope !== "title") return false;
+    if (paid.started && paid.asOf && Number(paid.asOf) < Number(paid.started)) return false;
+    return true;
   }
   function engOf(p) {
     if (!p) return null;
@@ -266,18 +272,34 @@
     });
     return list;
   }
+  function bestPostBoosts(rows, ranking) {
+    var out = [];
+    (rows || []).forEach(function (r) {
+      if (!r || platId(r.platform) !== "instagram" || (!r.best_post && !r.best_post_link)) return;
+      var seed = { platform: "Instagram", hook: r.best_post || "", link: r.best_post_link || "", date: r.date || "" };
+      var hit = rankHit(seed, ranking);
+      if (!hit || (!hit.boosted && !hit.paid && hit.boost !== "boosted")) return;
+      if (hit.engReported) { seed.likes = hit.likes; seed.comments = hit.comments; seed.saves = hit.saves; seed.shares = hit.shares; }
+      if (hit.follows != null) seed.follows = hit.follows;
+      out.push(seed);
+    });
+    return out;
+  }
   function boosted(rows, posts, ranking) {
     var h = '<section class="gsec" id="boostBox"><h3>Boosted</h3>';
     ["tiktok", "instagram", "youtube"].forEach(function (id) {
       var row = latestRow(rows, id);
       var paidPosts = boostedPosts(id, posts, ranking);
+      if (id === "instagram") bestPostBoosts(rows, ranking).forEach(function (p) {
+        if (!paidPosts.some(function (x) { return samePost(x, p); })) paidPosts.push(p);
+      });
       h += '<article class="tile"><h3>' + esc(LABEL[id]) + "</h3>";
       h += "<p class=\"d\">Paid views " + num(row && row.paid_views) + " · organic views " + num(row && row.organic_views) + "</p>";
       if (!paidPosts.length) h += "<p class=\"d\">Spend " + miss() + " · cost per engagement " + miss() + " · cost per follow " + miss() + "</p>";
       paidPosts.forEach(function (p) {
         var hit = rankHit(p, ranking);
         var paid = hit && hit.paid;
-        var spendNum = paid && paid.spend != null && !paid.stale && paid.scope !== "account" ? Number(paid.spend) : null;
+        var spendNum = spendOk(paid) ? Number(paid.spend) : null;
         if (spendNum != null && !isFinite(spendNum)) spendNum = null;
         var asOf = spendNum != null && paid && paid.asOf && L.spStampOf ? L.spStampOf(paid.asOf) : "";
         var cur = paid && paid.currency ? paid.currency + " " : "";

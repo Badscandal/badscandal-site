@@ -5530,7 +5530,7 @@ export async function readGrowth(store, now, a = {}) {
     return true;
   }).slice(0, 60);
   const spend = await listSpend(store, now).catch(() => []);
-  const boosts = boostReport(list, spend);
+  const boosts = boostReport(list, spend, { ranking: a.ranking, ads: a.ads });
   return { read_only: true, wrote: false, rows: list, boosts, note: "Read only. A number that is missing was not logged. It is not zero. channel_views is the lifetime total. views is the day's views. YouTube's count is subscribers. A boost's spend is in boosts, and only when a spend row names that post or ad. ad_spend on a row is the platform figure that was logged. It is not a boost's spend." };
 }
 

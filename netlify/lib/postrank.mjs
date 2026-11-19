@@ -186,29 +186,66 @@ function startedMs(v) {
 function sameBoostPost(a, b) {
   if (!a || !b) return false;
   const ida = String(a.id || ""), idb = String(b.id || "");
-  if (ida && idb) return ida === idb || (ida.length >= 8 && idb.length >= 8 && (ida.endsWith(idb) || idb.endsWith(ida)));
-  if (a.link && b.link) return normLink(a.link) === normLink(b.link);
+  if (ida && idb && (ida === idb || (ida.length >= 8 && idb.length >= 8 && (ida.endsWith(idb) || idb.endsWith(ida))))) return true;
+  const la = normLink(a.link), lb = normLink(b.link);
+  if (la && lb) return la === lb;
   const ta = titleKey(a.hook || a.caption || a.title || "");
   const tb = titleKey(b.hook || b.caption || b.title || "");
   return !!(ta && tb && ta === tb);
 }
+/* A number is this boost's spend only when it is that ad, or a spend row that names that post, and the read is not
+   older than the boost. A ranking row left over from the account-day join has a spend and no scope: that is not usable. */
+export function spendUsable(paid) {
+  if (!paid || paid.spend == null || paid.stale) return false;
+  if (paid.scope !== "ad" && paid.scope !== "post" && paid.scope !== "title") return false;
+  if (isFinite(paid.started) && paid.asOf && Number(paid.asOf) < Number(paid.started)) return false;
+  return true;
+}
+function rankRows(ranking) {
+  if (!ranking) return [];
+  const too = Array.isArray(ranking.tooFew) ? ranking.tooFew : [];
+  return [].concat(ranking.ranked || [], ranking.older || [], too);
+}
 /* What read_growth and the Boosted section agree on. ad_spend on a growth row is not used: that figure is the
-   platform's day, not this post. */
-export function boostReport(rows, spendRows) {
+   platform's day, not this post. A boost is a posts[] entry marked boosted, or the day's best post when the
+   ranking or an ad names that same post. */
+export function boostReport(rows, spendRows, o = {}) {
+  const ranked = rankRows(o.ranking);
+  const ads = Array.isArray(o.ads) ? o.ads : ((o.ads && o.ads.ads) || []);
   const posts = [];
-  for (const r of rows || []) for (const p of (r && r.posts) || []) if (p && p.boosted === true) posts.push({ ...p, platform: r.platform || p.platform || "" });
+  const push = (p) => { if (p && !posts.some((x) => sameBoostPost(x, p))) posts.push(p); };
+  for (const r of rows || []) {
+    const platform = (r && r.platform) || "";
+    for (const p of (r && r.posts) || []) if (p && p.boosted === true) push({ ...p, platform: platform || p.platform || "", date: p.date || (r && r.date) || "" });
+    const hook = r && r.best_post || "";
+    const link = r && r.best_post_link || "";
+    if (!hook && !link) continue;
+    const seed = { hook, caption: hook, link, platform, date: (r && r.date) || "", id: shortOf(link) };
+    const hit = ranked.find((x) => x && sameBoostPost(seed, x));
+    const named = scopedSpend(seed, spendRows, { pool: [seed].concat(posts) });
+    const ad = ads.find((a) => adHits(a, seed));
+    if (!(hit && (hit.boosted || hit.paid || hit.boost === "boosted")) && !named && !ad) continue;
+    push({ ...seed, boosted: true, ...(hit && hit.engReported ? { likes: hit.likes, comments: hit.comments, saves: hit.saves, shares: hit.shares } : {}), ...(hit && hit.follows != null ? { follows: hit.follows } : {}) });
+  }
   return posts.map((p) => {
-    const started = startedMs(p.boost_started || p.started);
+    const hit = ranked.find((x) => x && sameBoostPost(p, x));
+    const started = startedMs(p.boost_started || p.started || (hit && hit.paid && hit.paid.started));
     const row = scopedSpend(p, spendRows, { started: isFinite(started) ? started : NaN, pool: posts });
     const mates = posts.filter((x) => sameBoostPost(x, p) && postEngagements(x) != null).sort((a, b) => (String(a.date || "") < String(b.date || "") ? 1 : -1));
     const eng = mates.length ? postEngagements(mates[0]) : null;
     const folM = posts.filter((x) => sameBoostPost(x, p) && x.follows != null && x.follows !== "" && isFinite(Number(x.follows))).sort((a, b) => (String(a.date || "") < String(b.date || "") ? 1 : -1));
     const fol = folM.length ? Number(folM[0].follows) : null;
-    const spend = row ? Number(row.amount) : null;
-    const at = row ? spendClock(row) : 0;
+    let spend = null, currency = "", asOf = "";
+    if (hit && spendUsable(hit.paid)) {
+      spend = Number(hit.paid.spend); currency = hit.paid.currency || ""; asOf = hit.paid.asOf ? spStampOf(hit.paid.asOf) : "";
+    } else if (row) {
+      spend = Number(row.amount); currency = row.currency || "";
+      const at = spendClock(row);
+      asOf = at ? spStampOf(at) : row.date || "";
+    }
     return {
       post: p.hook || p.caption || p.id || "", link: p.link || "", platform: p.platform || "",
-      spend, currency: row && row.currency || "", as_of: at ? spStampOf(at) : (row && row.date) || "",
+      spend, currency, as_of: asOf,
       engagements: eng, follows: fol,
       cost_per_engagement: spend != null && eng > 0 ? Math.round((spend / eng) * 1000) / 1000 : null,
       cost_per_follower: spend != null && fol > 0 ? Math.round((spend / fol) * 1000) / 1000 : null,
@@ -317,7 +354,7 @@ export function rankLine(r) {
     ` · saves + shares ${pct(r.deep)}` + (r.follows != null ? ` · ${fmt(r.follows)} follows (${pct(r.followRate)})` : "") + (r.profileVisits != null ? ` · ${fmt(r.profileVisits)} profile visits` : "") +
     (r.ownComments ? ` · ${r.ownComments} of our own comments left out` : "");
   if (r.boost === "unknown") s += " · boost unknown";
-  else if (r.paid && r.paid.stale && r.paid.spend == null) s += " · spend not read since boost started";
+  else if (r.paid && !spendUsable(r.paid)) s += " · spend not read since boost started";
   else if (r.paid && r.paid.spend != null) {
     const c = r.paid.currency ? r.paid.currency + " " : "";
     const asOf = r.paid.asOf ? ` as of ${spStampOf(r.paid.asOf)}` : "";
