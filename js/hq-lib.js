@@ -2093,7 +2093,80 @@
       if (!m || m.ask !== "routenote" || m.resolved) return;
       out.push({ kind: "routenote", title: "RouteNote needs you", line: m.text || "", href: m.id ? "#messages/" + m.id : "#releases", id: m.id || "" });
     });
+    ((board.disputes && board.disputes.items) || []).forEach(function (c) {
+      if (!c || c.status !== "waiting on Luke") return;
+      out.push({ kind: "dispute", title: (c.owner || "A bot") + " needs your decision", line: (c.song || "A song") + " · " + (c.platform || "A case") + " · " + (c.type || "case"), href: c.id ? "#songs/" + c.id : "#songs", id: c.id || "" });
+    });
     return out;
+  }
+
+  function escHtml(s) {
+    return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+    });
+  }
+  function disputeWait(c) {
+    if (!c || c.status === "resolved" || c.status === "ignored") return "";
+    var who = c.waitingOn ? "Waiting on " + c.waitingOn : "Waiting on " + (c.status === "waiting on Luke" ? "you" : "the next step");
+    var since = c.waitingSince ? " since " + day(c.waitingSince) : "";
+    var next = c.nextCheck ? ". Next check " + day(c.nextCheck) : "";
+    return who + since + next;
+  }
+  function disputeCard(c, compact) {
+    if (!c) return "";
+    var wait = disputeWait(c);
+    var songHref = c.songKey ? "#songs/" + escHtml(c.songKey) : "#songs";
+    var head = '<p class="d"><a href="' + songHref + '"><b>' + escHtml(c.song || "A song") + "</b></a> · " + escHtml(c.platform || "") + " · " + escHtml(c.type || "") + "</p>";
+    head += '<p class="d">Opened ' + escHtml(day(c.opened) || "not reported") + " · " + escHtml(c.owner || "") + " · " + escHtml(c.status || "") + "</p>";
+    if (wait) head += '<p class="d">' + escHtml(wait) + "</p>";
+    if (compact) return '<div class="d">' + head + (c.id ? '<p><a href="#songs/' + escHtml(c.id) + '">Open the case</a></p>' : "") + "</div>";
+    var h = '<article class="tile dcase" id="song-' + escHtml(c.id || "") + '" data-case="' + escHtml(c.id || "") + '">' + head;
+    if (c.recommendation) h += '<p class="d"><span class="lbl">Recommendation</span><br>' + escHtml(c.recommendation) + "</p>";
+    if (c.proposal) h += '<p class="d"><span class="lbl">Proposed response</span><br>' + escHtml(c.proposal) + "</p>";
+    if (c.decision && c.decision.at) h += '<p class="d"><span class="lbl">Your decision</span><br>' + escHtml(c.decision.choice || "") + (c.decision.text ? " · " + escHtml(c.decision.text) : "") + " · " + escHtml(c.decision.when || day(c.decision.at)) + "</p>";
+    var lines = c.timeline || [];
+    if (lines.length) {
+      h += '<ul class="d">' + lines.slice(0, 12).map(function (e) {
+        return "<li>" + escHtml(e.when || day(e.at)) + " · " + escHtml(e.by || "") + " · " + escHtml(e.text || "") + "</li>";
+      }).join("") + "</ul>";
+    }
+    if (c.status === "waiting on Luke" && c.id) {
+      h += '<div class="row"><button type="button" class="sendbtn" data-case-do="confirm" data-case="' + escHtml(c.id) + '">Confirm</button>';
+      h += '<button type="button" class="linkbtn" data-case-do="ignore" data-case="' + escHtml(c.id) + '">Ignore</button>';
+      h += '<button type="button" class="linkbtn" data-case-do="respond" data-case="' + escHtml(c.id) + '">Respond</button></div>';
+      h += '<div class="dcase-reply" data-case-reply="' + escHtml(c.id) + '" hidden><textarea data-case-text="' + escHtml(c.id) + '" placeholder="Your response, or what the bot should do"></textarea>';
+      h += '<button type="button" class="sendbtn" data-case-do="send" data-case="' + escHtml(c.id) + '">Send</button></div>';
+      h += '<p class="d" data-case-msg="' + escHtml(c.id) + '" role="status"></p>';
+    }
+    return h + "</article>";
+  }
+  /* All cases, or one song's panel (compact: a short card that links to the full one). */
+  function disputeHtml(cases, o) {
+    o = o || {};
+    var list = (Array.isArray(cases) ? cases : ((cases && cases.items) || [])).filter(function (c) {
+      return c && (!o.song || titleKey(c.song) === titleKey(o.song));
+    });
+    if (o.compact) {
+      if (!list.length) return "";
+      return '<details class="fold" open><summary>Disputes (' + list.length + ")</summary>" + list.map(function (c) { return disputeCard(c, true); }).join("") + "</details>";
+    }
+    var h = '<h3 class="sth">Disputes</h3><p class="sub">Bots run the case. You decide.</p>';
+    if (!list.length) return h + '<p class="empty">No cases yet.</p>';
+    return h + list.map(function (c) { return disputeCard(c, false); }).join("");
+  }
+  /* Rights keeps the claim. A case that names its id gets a link. */
+  function claimCaseLinks(claims, cases) {
+    var items = !claims ? [] : (Array.isArray(claims) ? claims : (claims.items || []));
+    var list = Array.isArray(cases) ? cases : ((cases && cases.items) || []);
+    var h = "";
+    items.forEach(function (c) {
+      var id = c && (c.key || c.id);
+      if (!id) return;
+      var hit = list.find(function (x) { return x && x.claimId === id && x.status !== "resolved" && x.status !== "ignored"; }) || list.find(function (x) { return x && x.claimId === id; });
+      if (!hit || !hit.id) return;
+      h += '<p class="d"><a href="#songs/' + escHtml(hit.id) + '">Case for ' + escHtml(c.song || c.claim || "this claim") + "</a></p>";
+    });
+    return h;
   }
 
   function teamDots(workers) {
@@ -2216,6 +2289,8 @@
     mondayPick: mondayPick, lyricsPreview: lyricsPreview,
     /* L5 watchers (18 Nov 2026) */
     routeMailLine: routeMailLine, contentClaimRows: contentClaimRows, contentIdeasCard: contentIdeasCard, phoneWatchers: phoneWatchers,
+    /* disputes (19 Nov 2026): cases live on Songs; a claim on Rights links across */
+    disputeHtml: disputeHtml, claimCaseLinks: claimCaseLinks,
     /* account health (18 Nov 2026) */
     accountHealthHome: accountHealthHome };
 });

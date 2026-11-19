@@ -10,6 +10,7 @@
      POST /api/staff/sort      Luke (or Claude) says what a Revolut payment is { id, month, status: received|transfer, category, pending_id? }
      POST /api/staff/config    Luke switches the bots' key off / on         { botsOn }
      POST /api/staff/card      Luke answers an action card                  { id, choice: yes|no|edit, text? }
+     POST /api/staff/case      Luke decides a dispute case                   { id, choice: confirm|ignore|respond, text? }
      POST /api/staff/auto      Luke only: taps count as his yes, or one bot's webhook { tapsCountAsYes?, webhook?: { bot, url } }
      PUT  /api/staff/seed      Claude loads the roster, the income sources and the guide
      POST /api/staff/release         a release pack: start a draft or change one { id?, title, date, pack }
@@ -284,6 +285,11 @@ async function api(req, context, path) {
     if (path === "config" && req.method === "POST") {
       if (role !== "luke") return json(403, { error: "Only Luke switches the bots' key" });
       return json(200, { ok: true, config: await S.setConfig(st.desk, now, { botsOn: a.botsOn }) });
+    }
+    if (path === "case" && req.method === "POST") {
+      if (role !== "luke") return json(403, { error: "Only Luke decides a case" });
+      const item = await S.decideCase(st.desk, now, roster, { by: "Luke", id: a.id, choice: a.choice, text: a.text });
+      return json(200, { ok: true, case: S.caseOut(item) });
     }
     if (path === "card" && req.method === "POST") {
       if (role !== "luke") return json(403, { error: "Only Luke answers a card" });

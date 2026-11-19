@@ -172,7 +172,12 @@ export function sampleDesk(now = Date.now()) {
     seen, income: S.incomeReport(entries, checks, SOURCES.map((s) => ({ match: [], category: "Other", currency: "", lands: "", how: "", blocker: "", needsLuke: "", ...s })), today), config: { botsOn: true, changedAt: null },
     releases: sampleReleases(now), read, sightings: sampleSightings(now),
     /* L5: one made-up claim so the panel has a shape under the SAMPLE banner. Mail stays not connected. */
-    claims: { items: [{ claim: "Sample claim (sample)", claimant: "Sample Channel", impact: "one video flagged", date: "2026-11-01", by: "Laura" }] },
+    claims: { items: [{ key: "sampleclaimsample|samplechannel|2026-11-01", song: "Slow Burn", claim: "Sample claim (sample)", claimant: "Sample Channel", impact: "one video flagged", date: "2026-11-01", by: "Laura" }] },
+    /* one case waiting on Luke (Needs you) and one RouteNote case the bot is still running. Made up. */
+    disputes: [
+      { id: "dsampleyt", song: "Slow Burn", songKey: "slowburn", platform: "YouTube", type: "Content ID claim", opened: d(1), owner: "Laura", status: "waiting on Luke", waitingOn: "Luke", waitingSince: new Date(ago(180)).toISOString(), nextCheck: d(-1), claimId: "sampleclaimsample|samplechannel|2026-11-01", recommendation: "The claim is on one video of ours. Ask them to release it.", proposal: "Hello. This video is our own recording. Please release the claim.", decision: null, timeline: [{ at: new Date(ago(180)).toISOString(), by: "Laura", text: "Opened. Content ID claim with YouTube." }], createdAt: new Date(ago(180)).toISOString(), updatedAt: new Date(ago(180)).toISOString() },
+      { id: "dsamplern", song: "Me Dá Seu Body", songKey: "medaseubody", platform: "RouteNote", type: "moderation", opened: d(2), owner: "Drop", status: "waiting on them", waitingOn: "RouteNote", waitingSince: new Date(ago(400)).toISOString(), nextCheck: d(-2), claimId: "", recommendation: "Wait for their reply. The cover they asked about is already replaced.", proposal: "", decision: null, timeline: [{ at: new Date(ago(400)).toISOString(), by: "Drop", text: "Opened. moderation with RouteNote." }], createdAt: new Date(ago(400)).toISOString(), updatedAt: new Date(ago(400)).toISOString() },
+    ],
     /* L12: a live Spotify header, and an Instagram photo Luke already said yes to (made-up links) */
     profiles: { slots: {
       "spotify-header": { current: { link: "https://example.com/sample/spotify-header.jpg", changed: d(40), by: "Atlas", at: new Date(ago(40 * 1440)).toISOString() } },
