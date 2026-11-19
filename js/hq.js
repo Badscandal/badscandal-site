@@ -779,7 +779,7 @@
     var b = staffBoard() || {};
     $("growthMain").innerHTML = broken("Growth") ? '<p class="empty">See the note above.</p>' : L.growthHtml({
       today: sheet.today, platforms: sheet.growth || [], rows: sheet.growthDetail || [],
-      igPosts: (ig && ig.posts) || [], ideas: b.contentIdeas || null, releases: sheet.releases || [],
+      igPosts: (ig && ig.posts) || [], ranking: (ig && ig.ranking) || null, ideas: b.contentIdeas || null, releases: sheet.releases || [],
       health: b.accountHealth || null, claims: b.claims || null
     });
     drawClaims();

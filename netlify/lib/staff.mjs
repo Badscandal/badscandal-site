@@ -30,6 +30,7 @@
      is public) carries no real data. */
 
 import { SONGS, RESERVED as SONG_RESERVED, SLUG_RE, TRACK_RE, homeCardSong, homeCardNow as homeCardPublished } from "./songs.mjs";
+import { boostReport } from "./postrank.mjs";
 export const homeCardNow = homeCardPublished;
 export const TZ = "America/Sao_Paulo";
 export const UPDATE_STATUS = ["done", "working", "blocked", "error", "info"];
@@ -2709,6 +2710,10 @@ function growthPosts(list) {
       if (!id) fail(`posts ${i + 1}: video_id must be a YouTube video id.`);
       row.video_id = id;
     }
+    const pid = clean(p.id || p.post, 80);
+    if (pid) row.id = pid;
+    const started = clean(p.boost_started || p.started, 40);
+    if (started && /^\d{4}-\d{2}-\d{2}/.test(started)) row.boost_started = started;
     if (p.boosted === true || p.boosted === "boosted" || p.boosted === "yes") row.boosted = true;
     else if (p.boosted === false || p.boosted === "organic" || p.boosted === "no") row.boosted = false;
     return row;
@@ -5327,7 +5332,9 @@ export async function readGrowth(store, now, a = {}) {
     if (date && r.date !== date) return false;
     return true;
   }).slice(0, 60);
-  return { read_only: true, wrote: false, rows: list, note: "Read only. A number that is missing was not logged. It is not zero. channel_views is the lifetime total. views is the day's views. YouTube's count is subscribers." };
+  const spend = await listSpend(store, now).catch(() => []);
+  const boosts = boostReport(list, spend);
+  return { read_only: true, wrote: false, rows: list, boosts, note: "Read only. A number that is missing was not logged. It is not zero. channel_views is the lifetime total. views is the day's views. YouTube's count is subscribers. A boost's spend is in boosts, and only when a spend row names that post or ad. ad_spend on a row is the platform figure that was logged. It is not a boost's spend." };
 }
 
 /* Spark's daily content ideas. One document. HQ stores them. Nothing here posts, comments, or changes an ad. */

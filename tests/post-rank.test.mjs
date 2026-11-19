@@ -112,7 +112,7 @@ test("rankPosts: same age (1 day), engagement per view wins, our own comments le
 });
 test("rankLine: one post in plain words, for Luke and the bots", () => {
   const r = P.rankPosts(posts, adDoc, { now: NOW, comments });
-  assert.equal(P.rankLine(r.ranked[1]), "“Clip A: the drop” · reels · 2026-11-14 · 1 day: 7.8% engaged (1,797 of 23,000 views) · saves + shares 0.7% · 120 follows (0.5%) · 300 profile visits · 3 of our own comments left out · boosted USD 90.00 (ACTIVE): 1,550 engagements from the ad, USD 0.058 each · organic before the ad (6 hours): 8.6% of 2,100 views · song not linked");
+  assert.equal(P.rankLine(r.ranked[1]), "“Clip A: the drop” · reels · 2026-11-14 · 1 day: 7.8% engaged (1,797 of 23,000 views) · saves + shares 0.7% · 120 follows (0.5%) · 300 profile visits · 3 of our own comments left out · boosted USD 90.00 (ACTIVE) as of 2026-11-17 11:50: 1,550 engagements from the ad, USD 0.058 each · organic before the ad (6 hours): 8.6% of 2,100 views · song not linked");
   assert.equal(P.rankLine(r.ranked[0]), "“Cover reveal” · feed · 2026-11-13 · 1 day: 11.2% engaged (560 of 5,000 views) · saves + shares 0.8% · 40 follows (0.8%) · not boosted · song not linked");
   /* 18 Nov 2026: an old post the current ads don't cover says boost unknown, and the song is not guessed from the caption */
   assert.equal(P.rankLine(r.older[0]), "“Old reel” · reels · 2026-10-18 · lifetime: 11.1% engaged (1,000 of 9,000 views) · saves + shares 1.0% · boost unknown · song not linked");
@@ -201,5 +201,50 @@ test("the bots get the ranking (Steve, Kevin and Forge) with the how-to; HQ draw
   const x = globalThis.HQLib.rankParts(P.rankPosts(posts, adDoc, { now: NOW, comments }).ranked[1]);
   assert.deepEqual(x, { rate: "7.8% engaged", window: "At 1 day", views: "1,797 of 23,000 views · 1,600 likes · 37 comments", deep: "Saves + shares 0.7% (100 saves · 60 shares)",
     follows: "120 follows (0.5% of views) · 300 profile visits", own: "3 of our own comments left out",
-    paid: "Boosted USD 90.00 (active) · 1,550 engagements from the ad · USD 0.058 each", before: "Before the ad (6 hours): 8.6% of 2,100 views" });
+    paid: "Boosted USD 90.00 (active) · as of 2026-11-17 11:50 · 1,550 engagements from the ad · USD 0.058 each", before: "Before the ad (6 hours): 8.6% of 2,100 views" });
+});
+
+/* 19 Nov 2026: a boost's spend is that ad, or a spend row that names the post. The account day total is a different scope.
+   Numbers here are made up. A read from before the boost starts is not a number. */
+test("a stale ad read is not the boost's spend, and a later row that names the post is", () => {
+  const now = Date.parse("2026-11-19T15:00:00Z");
+  const posted = "2026-11-17T18:00:00Z";
+  const one = {
+    id: "traffic", at: posted, type: "reels", caption: "Stuck in traffic 🚕🤐", link: "https://www.instagram.com/reel/TRAFFIC1/",
+    snaps: { d1: { at: Date.parse(posted) + DAY, views: 8000, likes: 10, comments: 2, saves: 3, shares: 5, follows: 4 } },
+  };
+  const other = { id: "quiet", at: posted, type: "reels", caption: "Quiet hour", snaps: { d1: { at: Date.parse(posted) + DAY, views: 2000, likes: 4, comments: 1, saves: 1, shares: 0 } } };
+  const started = "2026-11-18T17:55:00Z";
+  const staleAds = { at: Date.parse("2026-11-18T14:05:00Z"), ads: [{ id: "ad1", media: "traffic", status: "ACTIVE", created: started, spend: 9, currency: "USD", impressions: 100, likes: 1, comments: 0, saves: 0, shares: 0 }] };
+  const account = { date: "2026-11-18", amount: 11.11, currency: "USD", platform: "Meta", at: "2026-11-18T21:00:00Z" };
+  const stale = P.rankPosts([one, other], staleAds, { now, spend: [account] });
+  const row = stale.ranked.find((x) => x.id === "traffic");
+  assert.equal(row.boost, "boosted");
+  assert.equal(row.paid.spend, null);
+  assert.match(P.rankLine(row), /spend not read since boost started/);
+  assert.doesNotMatch(P.rankLine(row), /11\.11/);
+  assert.equal(stale.ranked.find((x) => x.id === "quiet").paid, null);
+  const freshAds = { at: Date.parse("2026-11-18T21:00:00Z"), ads: [{ id: "ad1", media: "traffic", status: "ACTIVE", created: started, spend: 40, currency: "USD", impressions: 1000, likes: 8, comments: 1, saves: 1, shares: 0 }] };
+  const fresh = P.rankPosts([one], freshAds, { now, spend: [account] });
+  assert.equal(fresh.ranked[0].paid.spend, 40);
+  assert.equal(fresh.ranked[0].paid.scope, "ad");
+  assert.match(P.rankLine(fresh.ranked[0]), /USD 40\.00/);
+  assert.match(P.rankLine(fresh.ranked[0]), /as of 2026-11-18 18:00/);
+  assert.doesNotMatch(P.rankLine(fresh.ranked[0]), /11\.11/);
+  const named = P.rankPosts([one, other], { at: Date.parse("2026-11-18T14:05:00Z"), ads: [] }, { now, spend: [account, { date: "2026-11-18", amount: 40, currency: "USD", platform: "Meta", post: "traffic", at: "2026-11-18T21:00:00Z" }] });
+  const hit = named.ranked.find((x) => x.id === "traffic");
+  assert.equal(hit.paid.spend, 40);
+  assert.equal(hit.paid.engaged, 20);
+  assert.equal(Math.round(hit.paid.costPerEng * 1000) / 1000, 2);
+  assert.equal(Math.round(hit.paid.costPerFollow * 1000) / 1000, 10);
+  assert.match(P.rankLine(hit), /as of 2026-11-18 18:00/);
+  assert.doesNotMatch(P.rankLine(hit), /11\.11/);
+  assert.equal(named.ranked.find((x) => x.id === "quiet").paid, null);
+  const bare = { ...one, snaps: { d1: { at: Date.parse(posted) + DAY, views: 8000, likes: 10 } } };
+  const missing = P.rankPosts([bare], { ads: [] }, { now, spend: [{ date: "2026-11-18", amount: 40, currency: "USD", platform: "Meta", post: "traffic", at: "2026-11-18T21:00:00Z" }] });
+  assert.equal(missing.ranked[0].paid.spend, 40);
+  assert.equal(missing.ranked[0].paid.engaged, null);
+  assert.equal(missing.ranked[0].paid.costPerEng, null);
+  assert.match(P.rankLine(missing.ranked[0]), /not reported/);
+  assert.doesNotMatch(P.rankLine(missing.ranked[0]), /USD 0/);
 });
