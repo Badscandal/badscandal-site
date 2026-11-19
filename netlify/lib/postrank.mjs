@@ -207,16 +207,31 @@ function rankRows(ranking) {
   return [].concat(ranking.ranked || [], ranking.older || [], too);
 }
 /* What read_growth and the Boosted section agree on. ad_spend on a growth row is not used: that figure is the
-   platform's day, not this post. A boost is a posts[] entry marked boosted, or the day's best post when the
-   ranking or an ad names that same post. */
+   platform's day, not this post. A boost is a posts[] entry marked boosted, a boost Steve logged (link, ad, spend,
+   status), or the day's best post when the ranking or an ad names that same post. */
 export function boostReport(rows, spendRows, o = {}) {
   const ranked = rankRows(o.ranking);
   const ads = Array.isArray(o.ads) ? o.ads : ((o.ads && o.ads.ads) || []);
   const posts = [];
-  const push = (p) => { if (p && !posts.some((x) => sameBoostPost(x, p))) posts.push(p); };
+  const push = (p) => {
+    if (!p) return;
+    const prev = posts.find((x) => sameBoostPost(x, p));
+    if (!prev) { posts.push(p); return; }
+    if (prev.loggedSpend == null && p.loggedSpend != null) { prev.loggedSpend = p.loggedSpend; prev.loggedCurrency = p.loggedCurrency || prev.loggedCurrency; }
+    if (!prev.status && p.status) prev.status = p.status;
+    if (!prev.ad && p.ad) prev.ad = p.ad;
+    if (!prev.link && p.link) prev.link = p.link;
+    for (const k of ["likes", "comments", "saves", "shares", "follows"]) if (prev[k] == null && p[k] != null) prev[k] = p[k];
+  };
   for (const r of rows || []) {
     const platform = (r && r.platform) || "";
     for (const p of (r && r.posts) || []) if (p && p.boosted === true) push({ ...p, platform: platform || p.platform || "", date: p.date || (r && r.date) || "" });
+    for (const b of (r && r.boosts) || []) {
+      if (!b || !b.link) continue;
+      const seed = { hook: b.hook || (r && r.best_post) || "", caption: b.hook || (r && r.best_post) || "", link: b.link, platform, date: (r && r.date) || "", id: shortOf(b.link), ad: b.ad || "", boosted: true, boost_started: b.started || "", loggedSpend: b.spend != null ? Number(b.spend) : null, loggedCurrency: b.currency || "", status: b.status || "" };
+      const known = ranked.find((x) => x && sameBoostPost(seed, x));
+      push({ ...seed, ...(known && known.engReported ? { likes: known.likes, comments: known.comments, saves: known.saves, shares: known.shares } : {}), ...(known && known.follows != null ? { follows: known.follows } : {}) });
+    }
     const hook = r && r.best_post || "";
     const link = r && r.best_post_link || "";
     if (!hook && !link) continue;
@@ -238,6 +253,8 @@ export function boostReport(rows, spendRows, o = {}) {
     let spend = null, currency = "", asOf = "";
     if (hit && spendUsable(hit.paid)) {
       spend = Number(hit.paid.spend); currency = hit.paid.currency || ""; asOf = hit.paid.asOf ? spStampOf(hit.paid.asOf) : "";
+    } else if (p.loggedSpend != null && isFinite(p.loggedSpend)) {
+      spend = p.loggedSpend; currency = p.loggedCurrency || "";
     } else if (row) {
       spend = Number(row.amount); currency = row.currency || "";
       const at = spendClock(row);
@@ -245,6 +262,7 @@ export function boostReport(rows, spendRows, o = {}) {
     }
     return {
       post: p.hook || p.caption || p.id || "", link: p.link || "", platform: p.platform || "",
+      ...(p.ad ? { ad: p.ad } : {}), ...(p.status ? { status: p.status } : {}),
       spend, currency, as_of: asOf,
       engagements: eng, follows: fol,
       cost_per_engagement: spend != null && eng > 0 ? Math.round((spend / eng) * 1000) / 1000 : null,

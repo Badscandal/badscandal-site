@@ -2719,6 +2719,36 @@ function growthPosts(list) {
     return row;
   });
 }
+/* Steve logs a boost he can see in the ad tools. This is that one ad, not the account's day and not the cap. */
+const BOOST_STATUS = ["active", "paused", "deleted"];
+function growthBoosts(list) {
+  if (list == null) return null;
+  if (!Array.isArray(list)) fail("boosts must be a list.");
+  if (!list.length) fail("boosts needs the post. Each one has link, ad, spend, currency and status.");
+  if (list.length > 10) fail("boosts is 10 at most.");
+  return list.map((p, i) => {
+    if (!p || typeof p !== "object") fail(`boosts ${i + 1} must be an object.`);
+    const where = `boosts ${i + 1}`;
+    const link = httpsLink(clean(p.link, 400));
+    if (!link) fail(`${where}: link must be the post's https link.`);
+    const ad = clean(p.ad || p.ad_id, 40);
+    if (!/^[A-Za-z0-9]{4,40}$/.test(ad)) fail(`${where}: ad must be that ad's id, as shown. Not the ad account.`);
+    const status = clean(p.status, 20).toLowerCase();
+    if (!BOOST_STATUS.includes(status)) fail(`${where}: status must be active, paused or deleted.`);
+    const spend = amountOf(p.spend);
+    if (spend == null || spend < 0) fail(`${where}: spend must be the amount that ad has spent, for example 12.40. Not the daily budget and not the account's day total.`);
+    const currency = clean(p.currency, 3).toUpperCase();
+    if (!/^[A-Z]{3}$/.test(currency)) fail(`${where}: currency must be the three-letter code, for example USD.`);
+    const row = { link, ad, spend, currency, status };
+    const started = clean(p.started || p.boost_started, 40);
+    if (started) {
+      if (!/^\d{4}-\d{2}-\d{2}/.test(started)) fail(`${where}: started must be YYYY-MM-DD or YYYY-MM-DD HH:MM.`);
+      row.started = started;
+    }
+    noSecrets(link, ad, status, started);
+    return row;
+  });
+}
 function topVideosOf(list) {
   if (list == null) return null;
   if (!Array.isArray(list)) fail("top_videos must be a list.");
@@ -2815,6 +2845,8 @@ export async function logGrowth(store, now, roster, a) {
     if (pattern) extra.pattern = pattern;
     const posts = growthPosts(a.posts);
     if (posts) extra.posts = posts;
+    const boosts = growthBoosts(a.boosts);
+    if (boosts) extra.boosts = boosts;
     const tops = topVideosOf(a.top_videos);
     if (tops) extra.top_videos = tops;
     const fans = fanSignalsOf(a.fan_signals);
@@ -5531,7 +5563,7 @@ export async function readGrowth(store, now, a = {}) {
   }).slice(0, 60);
   const spend = await listSpend(store, now).catch(() => []);
   const boosts = boostReport(list, spend, { ranking: a.ranking, ads: a.ads });
-  return { read_only: true, wrote: false, rows: list, boosts, note: "Read only. A number that is missing was not logged. It is not zero. channel_views is the lifetime total. views is the day's views. YouTube's count is subscribers. A boost's spend is in boosts, and only when a spend row names that post or ad. ad_spend on a row is the platform figure that was logged. It is not a boost's spend." };
+  return { read_only: true, wrote: false, rows: list, boosts, how_to_log_a_boost: "Steve logs a boost with log_growth. boosts is a list. Each one needs link (the post's https link), ad (that ad's id, not the ad account), spend (the amount that ad has spent, not the daily budget and not the account's day total), currency (USD) and status (active or paused). Forge does not put this on record_spend.", note: "Read only. A number that is missing was not logged. It is not zero. channel_views is the lifetime total. views is the day's views. YouTube's count is subscribers. A boost's spend is in boosts: a spend row that names that post or ad, or a boost Steve logged. ad_spend on a row is the platform figure that was logged. It is not a boost's spend." };
 }
 
 /* Spark's daily content ideas. One document. HQ stores them. Nothing here posts, comments, or changes an ad. */
