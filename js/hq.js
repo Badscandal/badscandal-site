@@ -412,7 +412,7 @@
     var mine = sheet.team.forLuke;
     $("forLuke").innerHTML = broken("Tasks") ? '<p class="empty2 attn">The Tasks tab can\'t be read.</p>' : mine.length ? '<ul class="t-list">' + mine.slice(0, 4).map(function (x) {
       return '<li class="' + (x.late ? "late" : "") + '"><span>' + esc(x.task) + '</span><span class="when">' + (x.late ? "late · " : "") + esc(x.deadline ? day(x.deadline) : "") + "</span></li>"; }).join("") + "</ul>"
-      : '<p class="empty2">Nothing waiting on you.</p>';
+      : '<p class="empty2">No tasks on your list.</p>';
     var du = sheet.team.duties;
     $("dutyBig").innerHTML = broken("Tasks") ? "–" : du.total ? du.done + " <small>of " + du.total + " done</small>" : "–";
     $("dutyMsg").innerHTML = broken("Tasks") ? '<span class="attn">The Tasks tab can\'t be read.</span>' : !du.total ? "No duties logged for today." :
@@ -597,7 +597,10 @@
     var rl = window.HQLib.capRateLine(c), ml = window.HQLib.capMissingLine(c);
     if (rl) msg += " " + rl + ".";
     if (ml) msg += " " + ml + ".";
-    if (c.estimated) msg += " Estimated: " + (c.estimatedWhy && c.estimatedWhy.length ? c.estimatedWhy.join("; ") : "something is missing") + ".";
+    if (c.estimated) {
+      var why = window.HQLib.gapNotes(c.notRead && c.notRead.length ? c.notRead : (c.estimatedWhy || []));
+      msg += why.length ? " Estimated: " + why.join("; ") + "." : " Estimated while a platform is unread.";
+    }
     if (c.lastDay) msg += " Last day logged: " + day(c.lastDay) + ".";
     $("capMsg").textContent = msg;
     var src = sheet.money.metaSource, plat = c.byPlatform || {};
@@ -835,7 +838,7 @@
       /* v2: the pitch waits (never late) while the latest Spotify for Artists report doesn't show the song;
          a step the label delivers is not ours */
       '<ul class="steps">' + r.steps.map(function (s) { return '<li class="' + (s.done && !s.skipped ? "done" : s.late ? "late" : "") + '"><span class="dot"></span><span>' + esc(s.label) + ' <span class="lbl">' + esc(s.owner) + '</span></span><span class="w' + (s.waiting && !s.done ? " wait" : "") + '">' +
-        (s.skipped ? "not ours" : s.done ? "done" : s.waiting && !s.late ? esc(s.waitingText || "waiting") : esc(day(s.due)) + (s.late ? " · late" : "")) + "</span></li>"; }).join("") + "</ul>" +
+        (s.skipped ? "not ours" : s.done ? "done" : s.waiting && !s.late ? esc((s.waitingFor === "spotify-window" || s.waitingText === "waiting on Spotify") ? "Waits until Spotify lists it, about 7 days before release" : (s.waitingText || "waiting")) : esc(day(s.due)) + (s.late ? " · late" : "")) + "</span></li>"; }).join("") + "</ul>" +
       (r.notes ? '<div class="d" style="margin-top:8px">' + esc(r.notes) + "</div>" : "") +
       '<button class="rel-btn" type="button" data-release="' + esc(r.song) + '">See what\'s missing ›</button></div>';
   }

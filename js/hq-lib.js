@@ -367,13 +367,18 @@
 
   /* The release panel (Today "Next release" and Releases): every step, what's missing first.
      today: "YYYY-MM-DD". -> { song, date, daysToGo, summary, missing: [...], done: [...] } */
+  function waitShown(st) {
+    if (!st) return "waiting";
+    if (st.waitingFor === "spotify-window" || st.waitingText === "waiting on Spotify") return "Waits until Spotify lists it, about 7 days before release";
+    return st.waitingText || "waiting";
+  }
   function releaseDetail(r, today) {
     if (!r) return null;
     var dd = function (a, b) { return Math.round((Date.parse(b + "T12:00:00Z") - Date.parse(a + "T12:00:00Z")) / 86400000); };
     var steps = r.steps.map(function (st) {
       /* v2: a step the label delivers is "not ours"; the pitch waits (never late) until the song shows in
          Spotify for Artists */
-      var when = st.skipped ? "not ours" : st.done ? "done" : st.waiting && !st.late ? st.waitingText || "waiting" : !st.due ? "no date yet" : st.late ? "late by " + plural(dd(st.due, today), "day") : st.due === today ? "due today" : "due in " + plural(dd(today, st.due), "day");
+      var when = st.skipped ? "not ours" : st.done ? "done" : st.waiting && !st.late ? waitShown(st) : !st.due ? "no date yet" : st.late ? "late by " + plural(dd(st.due, today), "day") : st.due === today ? "due today" : "due in " + plural(dd(today, st.due), "day");
       var note = String(st.note || "").trim();
       return { label: st.label, owner: st.owner, due: st.due, done: st.done, late: st.late, when: when, note: /^(done|yes|✓|✔)$/i.test(note) ? "" : note };
     });
@@ -612,7 +617,8 @@
   function capRateLine(cap) {
     var r = cap && cap.rateUsed;
     if (!r || !r.value) return "";
-    return "Rate: " + r.value + " USD per EUR (" + (r.from === "ECB average" ? "ECB average for " + monthWords(r.month) + ", so far" : r.from + ", " + monthWords(r.month)) + ")";
+    var from = r.from === "Rates!B1" ? "the month's fixed rate" : (r.from === "ECB average" ? "ECB average for " + monthWords(r.month) + ", so far" : r.from);
+    return "Rate: " + r.value + " USD per EUR (" + from + (r.from === "Rates!B1" ? ", " + monthWords(r.month) : (r.from === "ECB average" ? "" : ", " + monthWords(r.month))) + ")";
   }
   function capMissingLine(cap) { return cap && cap.notRead && cap.notRead.length ? "Not read: " + cap.notRead.join(", ") : ""; }
   /* a duty done with a number it couldn't read: done, never red */
@@ -970,7 +976,7 @@
       var sn = String(st.note || "").trim();
       return { text: sn === LABEL_NOTE ? "not ours: the label delivers it" : sn === OUT_NOTE ? "already out when it was recorded" : "skipped" + (sn ? ": " + sn : ""), bad: false, done: false, skipped: true };
     }
-    if (st.waiting && st.status !== "done" && st.status !== "blocked") return { text: st.waitingText || "waiting", bad: false, done: false, waiting: true };
+    if (st.waiting && st.status !== "done" && st.status !== "blocked") return { text: waitShown(st), bad: false, done: false, waiting: true };
     /* 18 Nov 2026: a block that is only waiting (on a date, on Luke, or on a decision he made) is not red */
     if (st.status === "blocked" && (st.waiting || blockWaitNote(st.label, st.note))) {
       var note = String(st.note || "").replace(/^\s*waiting:?\s*/i, "");
@@ -1066,7 +1072,7 @@
       if (n != null && n < 0) return { text: "Late: " + shortStep(s.label) + " · " + who + " · " + plural(-n, "day"), bad: true, more: 0 };
       return { text: "Next: " + shortStep(s.label) + " · " + who + (isDay(s.due) ? " · " + day(s.due) : ""), bad: false, more: 0 };
     }
-    if (steps.length) { var t = String(steps[0].waitingText || (blockWaitNote(steps[0].label, steps[0].note) ? "waiting on you" : "waiting for the step before")).replace(/^waiting: /i, ""); return { text: "Waiting: " + t, bad: false, more: 0 }; }
+    if (steps.length) { var t = String(waitShown(steps[0]) || (blockWaitNote(steps[0].label, steps[0].note) ? "waiting on you" : "waiting for the step before")).replace(/^waiting: /i, ""); return { text: "Waiting: " + t, bad: false, more: 0 }; }
     if (g.caution.length) return { text: g.caution[0], bad: false, caution: true, more: g.caution.length - 1 };
     return { text: "All steps done", bad: false, more: 0 };
   }
@@ -1474,8 +1480,10 @@
     if (e && e.paidBy && (s === "pending" || s === "payable" || s === "statement only")) return { text: "Paid (see the received payment)", counted: false }; /* 16 Nov 2026 */
     /* one entry per payment (17 Nov 2026): Wise / PayPal money counts when it reaches Revolut */
     if (e && e.movedTo) return { text: "Moved to Revolut", counted: false };
-    if (e && e.holding) return { text: "In " + e.account + ": counts when it reaches Revolut", counted: false };
-    if (s === "received" && e && e.account && !/revolut/i.test(e.account) && !/^statement/i.test(e.account)) return { text: "In " + e.account + ": counts when it reaches Revolut", counted: false };
+    if (e && (e.holding || (s === "received" && e.account && !/revolut/i.test(e.account) && !/^statement/i.test(e.account)))) {
+      var where = /wise/i.test(e.account || "") ? "Wise" : /paypal/i.test(e.account || "") ? "PayPal" : (e.account || "that account");
+      return { text: "Waiting in " + where, counted: false };
+    }
     if (s === "unsorted") return { text: "To sort", counted: false };
     if (s === "transfer") return { text: e.by === "HQ" && !(e.history || []).length ? "Your own transfer" : "Not income", counted: false };
     /* batch 4: a statement under the payout line counts nowhere yet; payable is owed to us */
@@ -1503,7 +1511,7 @@
   function pendingSorted(p) { return "Sorted as the " + p.payer + " statement: received"; }
   /* "2 payments in Revolut to sort" */
   function toSortWords(inc) {
-    var list = (inc && inc.unsorted) || [], n = (inc && inc.unsortedCount) || list.length;
+    var list = (inc && inc.unsortedMonth) || (inc && inc.unsorted) || [], n = list.length;
     if (!n) return "";
     var where = list.map(function (e) { return e.account; }).filter(function (a, i, all) { return a && all.indexOf(a) === i; });
     return n + " payment" + (n === 1 ? "" : "s") + " in " + (where.length ? joinWords(where) : "the accounts") + " to sort";
@@ -1561,7 +1569,14 @@
      opens to the full detail. The views are workerView()s, already in sortWorkers() order. */
   function teamGroups(views) {
     var g = { stuck: [], quiet: [], onTrack: [] };
-    (views || []).forEach(function (w) { (w.state === "blocked" || w.state === "late" ? g.stuck : w.state === "quiet" ? g.quiet : g.onTrack).push(w); });
+    (views || []).forEach(function (w) {
+      var duties = (w && w.duties) || [];
+      var openBad = duties.some(function (d) { return d && (d.status === "blocked" || (d.late && d.status !== "done")); });
+      var dutyDone = duties.length && duties.every(function (d) { return d.status === "done"; });
+      var amber = dutyDone && (w.lateTasks || 0) > 0;
+      var stuck = !amber && (w.state === "blocked" || w.state === "late" || openBad);
+      (stuck ? g.stuck : w.state === "quiet" ? g.quiet : g.onTrack).push(w);
+    });
     return g;
   }
   function teamCounts(views) {
@@ -1596,6 +1611,8 @@
     var duty = duties.filter(function (d) { return d.status !== "done"; })[0];
     if (duty) return "Next: " + duty.task + (duty.due ? " · " + duty.due : "");
     var step = steps.filter(function (st) { return !st.waiting; })[0];
+    var lateTasks = w.lateTasks || 0;
+    if (duties.length && duties.every(function (d) { return d.status === "done"; }) && lateTasks) return "Duty done, " + lateTasks + " task" + (lateTasks === 1 ? "" : "s") + " late";
     if (w.state === "done" || (duties.length && !duty && w.state !== "quiet")) return "All done today";
     if (w.state === "quiet" && !step) return "No update today";
     if (step) return "Next: " + step.label + (step.title ? " · " + step.title : "") + (step.due ? " · " + day(step.due) : "");
@@ -1845,8 +1862,10 @@
         royaltyStores: ((u.royalties && u.royalties.stores) || []).map(function (st) { return (st.store || "Store not named") + " · " + songPLList(st.amounts); }),
         payments: songPLList(u.payments && u.payments.amounts),
         spend: songPLList(u.spend && u.spend.amounts),
+        spendFrom: (u.spend && u.spend.from) || "",
+        spendTo: (u.spend && u.spend.to) || "",
         spendPlatforms: ((u.spend && u.spend.platforms) || []).map(function (p) { return (p.platform || "Ad") + " · " + songPLList(p.amounts); }),
-        note: notes.join(" "),
+        note: [notes.join(" "), (u.spend && (u.spend.from || u.spend.to) ? "Unlinked ad spend " + (u.spend.from || "") + (u.spend.to && u.spend.to !== u.spend.from ? " to " + u.spend.to : "") + ". Not the monthly cap." : "")].filter(Boolean).join(" "),
       },
     };
   }
@@ -1982,7 +2001,14 @@
       else { if (cur) out.push(cur); cur = { platform: r.platform, month: r.month, from: r.day, to: r.day, why: r.why }; }
     });
     if (cur) out.push(cur);
-    return out.map(function (g) { return g.platform + " " + (g.from === g.to ? g.from : g.from + "-" + g.to) + " " + g.month + ", " + g.why; });
+    var google = out.filter(function (g) { return /google/i.test(g.platform) && /signed out/i.test(g.why); });
+    var rest = out.filter(function (g) { return google.indexOf(g) < 0; });
+    var lines = rest.map(function (g) { return g.platform + " " + (g.from === g.to ? g.from : g.from + "-" + g.to) + " " + g.month + ", " + g.why; });
+    if (google.length) {
+      var first = google.slice().sort(function (a, b) { return a.from - b.from; })[0];
+      lines.unshift("Google not read since " + first.from + " " + first.month + " (signed out)");
+    }
+    return lines;
   }
   /* the month's ad spend against the cap. Display only. Grey gaps are days that were not read, not money. */
   function spendGauge(cap) {
@@ -2201,10 +2227,24 @@
   function disputeWait(c) {
     if (!c || c.status === "resolved" || c.status === "ignored") return "";
     var raw = shown(c.waitingOn || "").replace(/\s+since\b.*$/i, "").trim();
-    if (/^(a human|human)$/i.test(raw)) raw = "Luke";
+    if (/human/i.test(raw)) raw = "a reply";
     var who = raw ? "Waiting on " + raw : (c.status === "waiting on Luke" ? "Waiting on Luke" : "Waiting on the next step");
     var next = c.nextCheck ? ". Next check " + day(c.nextCheck) : "";
     return who + next;
+  }
+  function proposalHtml(text) {
+    var lines = String(text || "").split(/\n/).map(function (l) { return l.trim(); }).filter(Boolean);
+    var fields = {};
+    lines.forEach(function (line) {
+      var m = /^(To|CC|Subject|Body):\s*(.*)$/i.exec(line);
+      if (m) fields[m[1].toLowerCase()] = m[2];
+    });
+    if (fields.to || fields.subject || fields.body) {
+      return ["to", "cc", "subject", "body"].filter(function (k) { return fields[k]; }).map(function (k) {
+        return "<p><b>" + k.toUpperCase() + "</b> " + escHtml(fields[k]) + "</p>";
+      }).join("");
+    }
+    return "<p>" + escHtml(String(text || "")).replace(/\n/g, "<br>") + "</p>";
   }
   function disputeCard(c, compact, o) {
     if (!c || testPlatform(c)) return "";
@@ -2219,7 +2259,7 @@
     if (compact) return '<div class="d">' + head + (c.id ? '<p><a href="#songs/' + escHtml(c.id) + '">Open the case</a></p>' : "") + "</div>";
     var h = '<article class="tile dcase' + (tone ? " tone-" + tone : "") + '" id="song-' + escHtml(c.id || "") + '" data-case="' + escHtml(c.id || "") + '">' + progressHtml(c) + head;
     if (shown(c.recommendation)) h += '<p class="d"><span class="lbl">Recommendation</span><br>' + escHtml(shown(c.recommendation)) + "</p>";
-    if (shown(c.proposal)) h += '<p class="d"><span class="lbl">Proposed response</span><br>' + escHtml(shown(c.proposal)) + "</p>";
+    if (shown(c.proposal)) h += '<div class="d"><span class="lbl">Proposed response</span>' + proposalHtml(String(c.proposal || "")) + "</div>";
     if (c.decision && c.decision.at) h += '<p class="d"><span class="lbl">Your decision</span><br>' + escHtml(shown(c.decision.choice)) + (shown(c.decision.text) ? " · " + escHtml(shown(c.decision.text)) : "") + " · " + escHtml(c.decision.when || day(c.decision.at)) + "</p>";
     var lines = c.timeline || [];
     if (lines.length) {
@@ -2242,15 +2282,21 @@
   function disputeHtml(cases, o) {
     o = o || {};
     var list = (Array.isArray(cases) ? cases : ((cases && cases.items) || [])).filter(function (c) {
-      return c && !testPlatform(c) && (!o.song || titleKey(c.song) === titleKey(o.song));
+      return c && !testPlatform(c) && (!o.song || titleKey(c.song) === titleKey(o.song)) && (o.showResolved || (c.status !== "resolved" && c.status !== "ignored"));
+    });
+    var resolved = o.showResolved ? [] : (Array.isArray(cases) ? cases : ((cases && cases.items) || [])).filter(function (c) {
+      return c && !testPlatform(c) && (c.status === "resolved" || c.status === "ignored");
     });
     if (o.compact) {
       if (!list.length) return "";
       return '<details class="fold" open><summary>Disputes (' + list.length + ")</summary>" + list.map(function (c) { return disputeCard(c, true, o); }).join("") + "</details>";
     }
     var h = '<h3 class="sth">Disputes</h3><p class="sub">Bots run the case. You decide.</p>';
-    if (!list.length) return h + '<p class="empty">No cases yet.</p>';
-    return h + list.map(function (c) { return disputeCard(c, false, o); }).join("");
+    if (!list.length && !resolved.length) return h + '<p class="empty">No cases yet.</p>';
+    var done = resolved.length ? '<details class="fold"><summary>' + resolved.length + " resolved</summary>" + resolved.map(function (c) {
+      return '<p class="d">' + escHtml(shown(c.song) || "A song") + " · " + escHtml(c.status || "resolved") + "</p>";
+    }).join("") + "</details>" : "";
+    return h + list.map(function (c) { return disputeCard(c, false, o); }).join("") + done;
   }
   /* Rights keeps the claim. A case that names its id gets a link. */
   function claimCaseLinks(claims, cases) {
@@ -2382,7 +2428,7 @@
     /* per-song profit (L4, 18 Nov 2026) */
     songPLView: songPLView, songPLHtml: songPLHtml,
     /* phone HQ (18 Nov 2026): Needs you, the release strip, the team dots, the week, money, the spend gauge */
-    deskWhen: deskWhen, moneyHead: moneyHead, payFlow: payFlow, spendGauge: spendGauge, decisionCards: decisionCards,
+    deskWhen: deskWhen, moneyHead: moneyHead, payFlow: payFlow, spendGauge: spendGauge, gapNotes: gapNotes, decisionCards: decisionCards,
     releaseFace: releaseFace, teamDots: teamDots, weekAhead: weekAhead, quietFeed: quietFeed, followerStrip: followerStrip,
     mondayPick: mondayPick, lyricsPreview: lyricsPreview,
     /* L5 watchers (18 Nov 2026) */

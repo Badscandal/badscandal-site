@@ -674,7 +674,10 @@ export function songProfit({ royalties = [], payments = [], spend = [], releases
     unlinked: {
       royalties: { amounts: sumRows(unRoy), count: unRoy.length, stores: grouped(unRoy, "store") },
       payments: { amounts: sumRows(unPay), count: unPay.length },
-      spend: { amounts: sumRows(unSpend), count: unSpend.length, platforms: grouped(unSpend, "platform") },
+      spend: { amounts: sumRows(unSpend), count: unSpend.length, platforms: grouped(unSpend, "platform"),
+        from: unSpend.length ? unSpend.map((r) => String(r.month || r.date || "").slice(0, 7)).filter(Boolean).sort()[0] : "",
+        to: unSpend.length ? unSpend.map((r) => String(r.month || r.date || "").slice(0, 7)).filter(Boolean).sort().pop() : "",
+        note: "Not the monthly ad cap. This is spend that names no song." },
     },
     notReceived: notReceived || 0, holding: holding || 0,
   };

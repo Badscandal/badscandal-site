@@ -129,7 +129,7 @@
     return '<article class="tile ghead"><div class="row"><h3>' + esc(labelOf(p.platform || id)) + '</h3></div>' +
       '<p class="lbl">' + esc(unit === "subscribers" ? "Subscribers" : "Followers") + "</p>" +
       '<div class="big num">' + num(p.followers) + "</div>" +
-      '<p class="d">Today ' + signed(p.day) + " · 7 days " + signed(p.d7 != null ? p.d7 : p.week) + " · 28 days " + signed(p.d28) + "</p>" +
+      '<p class="d">Today ' + signed(p.day) + " · 7 days " + signed(p.d7 != null ? p.d7 : p.week) + (p.d28 != null ? " · 28 days " + signed(p.d28) : "") + "</p>" +
       '<p class="d">' + gapLine + "</p>" + chart +
       (late ? '<p class="d">Views are for ' + dayOf(row.views_date) + ", a day late.</p>" : "") +
       "</article>";
@@ -151,7 +151,7 @@
     if (!top.length) h += "<p class=\"d\">Top 3: " + miss() + "</p><p class=\"d\">Bottom 3: " + miss() + "</p>";
     else {
       h += "<p class=\"lbl\">Top</p><ol>" + top.map(line).join("") + "</ol>";
-      h += "<p class=\"lbl\">Bottom</p>" + (bottom.length ? "<ol>" + bottom.map(line).join("") + "</ol>" : "<p class=\"d\">" + miss() + "</p>");
+      if (bottom.length) h += "<p class=\"lbl\">Bottom</p><ol>" + bottom.map(line).join("") + "</ol>";
     }
     return h + "</section>";
   }
@@ -188,7 +188,7 @@
     h += '<p class="d">+6h views ' + num(row && row.views_6h) + " · avg watch " + (row && row.avg_watch_6h != null ? hours(row.avg_watch_6h) + "s" : miss()) + " · follows " + num(row && row.follows_6h) + " · follows/view " + (rate == null ? miss() : pct(rate)) + "</p>";
     h += '<p class="d">1 day views ' + num(pick(summary && summary.views, row && row.views)) + " · avg watch " + (row && row.avg_watch != null ? hours(row.avg_watch) + "s" : miss()) + " · follows at 48h " + num(row && row.follows_48h) + "</p>";
     h += '<p class="d">+6h gate ' + (gate == null ? miss() : '<b class="gate-' + gate + '">' + (gate === "pass" ? "PASS" : "FAIL") + "</b>") + " · pass is avg watch at least 2.5s and follows/view at least 0.14%.</p>";
-    h += "<p class=\"d\">Best post " + (row && (row.best_post_link || row.best_post) ? linkOr(row.best_post_link, row.best_post || "link") : miss()) + "</p>";
+    h += "<p class=\"d\">Best of last 7 days " + (row && (row.best_post_link || row.best_post) ? linkOr(row.best_post_link, row.best_post || "link") : miss()) + "</p>";
     h += "<p class=\"d\">Views date " + (viewsDate ? dayOf(viewsDate) : miss()) + (late ? " · a day late." : "") + "</p>";
     var gaps = row && row.gaps && typeof row.gaps === "object" ? Object.keys(row.gaps) : [];
     h += "<p class=\"d\">Gaps " + (gaps.length ? esc(gaps.map(function (k) { return k + ": " + row.gaps[k]; }).join("; ")) : miss()) + "</p>";
@@ -444,17 +444,14 @@
   function claimsHtml(claims, today) {
     var items = !claims ? [] : (Array.isArray(claims) ? claims : (claims.items || []));
     var checked = claims && claims.checked && today ? claims.checked[today] : null;
-    var h = '<p class="d">Label licences stay on the Label workspace (licence_queue).</p>';
-    h += "<p class=\"d\">Checked today " + (checked ? esc(checked.by || "Laura") + " · " + esc(String(checked.at || "").replace("T", " ").slice(0, 16)) : miss()) + "</p>";
+    var h = "<!-- licence_queue stays with the Label bot, not on this table --><p class=\"d\">Checked " + (checked ? dayOf(today) : miss()) + "</p>";
     if (!items.length) return h + '<p class="d">No Content ID claim has been recorded.</p>';
-    h += '<div class="scroll"><table class="posttable"><tr><th>Song</th><th>Claimant</th><th>Video</th><th>Type</th><th>Status</th><th>Reach</th><th>Money</th><th>Strike</th><th>Action</th><th>Owner</th><th>First seen</th><th>Last checked</th></tr>';
+    h += '<div class="scroll"><table class="posttable"><tr><th>Song</th><th>Claimant</th><th>Status</th><th>Action</th></tr>';
     items.forEach(function (c) {
-      var video = field(c.video) || field(c.video_id);
-      var href = /^https:\/\//.test(video) ? video : (/^[A-Za-z0-9_-]{6,20}$/.test(video) ? "https://www.youtube.com/watch?v=" + video : "");
-      h += "<tr>" + cell("Song", shown(c.song) + (c.song ? "" : (c.claim ? '<br><span class="lbl">Claim</span> ' + esc(c.claim) : ""))) + cell("Claimant", shown(c.claimant)) + cell("Video", href ? linkOr(href, video) : shown(video)) +
-        cell("Type", shown(c.claim_type)) + cell("Status", shown(c.status)) + cell("Reach", shown(field(c.reach_effect) || field(c.impact))) +
-        cell("Money", shown(c.money_effect)) + cell("Strike", shown(c.strike)) + cell("Action", shown(c.action)) + cell("Owner", shown(c.owner)) +
-        cell("First seen", dayOf(c.first_seen || c.date)) + cell("Last checked", dayOf(c.last_checked)) + "</tr>";
+      var title = field(c.song) || field(c.claim) || miss();
+      var when = dayOf(c.first_seen) || dayOf(c.last_checked);
+      var status = shown(c.status) + (when && when !== miss() ? " · " + when : "");
+      h += "<tr>" + cell("Song", title) + cell("Claimant", shown(c.claimant)) + cell("Status", status) + cell("Action", shown(c.action)) + "</tr>";
     });
     return h + "</table></div>";
   }

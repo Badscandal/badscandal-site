@@ -121,7 +121,7 @@
         (HQ.sample ? '<span class="fok">Sample: the switch does nothing here.</span>' : "") + "</div>";
     el.hidden = false;
     if ($("connFold")) { $("connFold").hidden = false; $("connState").textContent = c.on ? "on" : "OFF"; $("connState").className = c.on ? "" : "off"; if (!c.on) $("connFold").open = true; }
-    el.innerHTML = '<p class="conn-line"><b class="' + (c.on ? "" : "off") + '">' + esc(c.head) + "</b> · " + esc(c.rest) + "</p>" +
+    el.innerHTML = '<p class="conn-line"><b class="' + (c.on ? "" : "off") + '">' + (c.on ? "Connection on" : "Connection off") + "</b> · " + esc(c.rest) + "</p>" +
       c.notes.map(function (n) { return '<p class="conn-note">' + esc(n) + "</p>"; }).join("") + ask + '<p class="ferr" role="alert">' + esc(ui.keyErr) + "</p>";
   }
   var shown = []; /* the bots as drawn (for "Copy message for Nova") */
@@ -190,7 +190,7 @@
       '<div class="ts ok"><b>' + c.onTrack + "</b><span>On track</span></div>";
     $("dutyList").innerHTML = !shown.length ? '<p class="empty">No bots are on the list yet.</p>' :
       (g.stuck.length ? '<h3 class="lblh">Stuck</h3><p class="secsub">Only what is wrong. Copy the message for Nova, or open a card for everything.</p><div class="botgrid">' + g.stuck.map(stuckCard).join("") + "</div>"
-        : '<p class="allgood">Nobody is stuck right now.</p>') +
+        : (sheet && sheet.team && (sheet.team.blocked || sheet.team.late) ? '<p class="allgood">' + (sheet.team.blocked || 0) + " blocked, " + (sheet.team.late || 0) + " late on the task list.</p>" : '<p class="allgood">Nobody is stuck right now.</p>')) +
       (g.quiet.length ? '<h3 class="lblh">Haven\'t checked in today</h3><div class="botlist">' + g.quiet.map(botRow).join("") + "</div>" : "") +
       (g.onTrack.length ? '<h3 class="lblh">On track</h3><div class="botlist">' + g.onTrack.map(botRow).join("") + "</div>" : "");
     HQ.drawFeed(L.liveFeed(board, sheet), board.today);
@@ -813,7 +813,7 @@
      the list, a line taking its place ("Sorted as income (Production)"), and the totals are read again. */
   function sortedNow() { return Object.keys(ui.sorted).map(function (k) { return ui.sorted[k]; }).filter(function (x) { return Date.now() - x.at < KEEP_MS; }); }
   function toSortHtml(inc) {
-    var all = inc.unsorted || [], left = all.filter(function (e) { return !ui.sorted[e.id]; }), stubs = sortedNow();
+    var all = inc.unsortedMonth || inc.unsorted || [], left = all.filter(function (e) { return !ui.sorted[e.id]; }), stubs = sortedNow();
     var n = Math.max(0, (inc.unsortedCount || all.length) - (all.length - left.length));
     if (!n && !stubs.length) return "";
     var rows = stubs.map(function (x) { return '<li class="landed" role="status" tabindex="-1" id="sort-' + esc(safe(x.id)) + '"><span>' + esc(x.line) + '<span class="lsub">' + esc(x.sub) + "</span></span></li>"; })
@@ -1145,7 +1145,8 @@
     var ring = face.progress.total ? '<span class="ring" style="--p:' + face.progress.pct + '" aria-label="' + esc(face.progress.text) + '"><b>' + face.progress.done + "/" + face.progress.total + "</b></span>" : "";
     var dots = face.dots.length ? '<p class="rdots" aria-hidden="true">' + face.dots.map(function (t) { return '<i class="' + t + '"></i>'; }).join("") + "</p>" : "";
     var nxt = face.next ? '<p class="rnext">Next: ' + esc(face.next.label) + " · " + esc(face.next.owner) + (face.next.when ? " · " + esc(face.next.when) : "") + "</p>" : "";
-    var statBits = [face.people != null ? L.fmt(face.people) + " people" : "", face.taps != null ? L.fmt(face.taps) + " Spotify taps" : ""].filter(Boolean);
+    var tapN = face.taps == null ? null : Number(String(face.taps).replace(/,/g, ""));
+    var statBits = [face.people != null ? L.fmt(face.people) + " people" : "", face.taps != null ? L.fmt(face.taps) + " Spotify tap" + (tapN === 1 ? "" : "s") : ""].filter(Boolean);
     var stats = statBits.length ? '<p class="rstats">' + esc(statBits.join(" · ")) + "</p>" : "";
     if (face.prehq) { badLeft = []; wg = { bad: [], caution: [] }; }
     var mark = L.songMark(board && board.disputes, v.title, today, [v]);

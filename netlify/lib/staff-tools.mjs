@@ -834,7 +834,7 @@ async function runTool(tool, args, ctx, read) {
       }
       const u = await S.postUpdate(store, now, roster, { ...args, bot: me });
       const proof = card_done && card_done.proof && card_done.proof.link ? card_done.proof.link : (S.httpsLink(args.proof_link) || "");
-      return { saved: true, id: u.id, at: u.sp, bot: u.bot, status: u.status, message: u.message, ...(u.link ? { link: u.link } : {}), ...(proof ? { proof_link: proof } : {}), shown_on: "badscandal.com/hq, Team", ...(card_done ? { card_done, may_act: card_done.may_act } : {}) };
+      return { saved: true, id: u.id, at: u.sp, bot: u.bot, status: u.status, message: u.full || u.message, ...(u.link ? { link: u.link } : {}), ...(proof ? { proof_link: proof } : {}), shown_on: "badscandal.com/hq, Team", ...(card_done ? { card_done, may_act: card_done.may_act } : {}) };
     }
     case "send_message": {
       if ((me === "Licence" || me === "Spark") && (!/^nova$/i.test(String(args.to || "").trim()) || (args.card && typeof args.card === "object"))) throw new S.StaffError(`${me} reports to Nova only. Put Nova in to. Nothing was sent.`, "not_allowed");
@@ -1130,7 +1130,9 @@ async function runTool(tool, args, ctx, read) {
           const [posts, adDoc, comments] = await Promise.all([get("posts.json"), get("adposts.json"), get("comments.json")]);
           ads = adDoc;
           const spend = (await S.listSpend(store, now).catch(() => [])).filter((r) => /meta|facebook|instagram/i.test((r && r.platform) || ""));
-          if (Array.isArray(posts)) ranking = rankPosts(posts, adDoc, { now, comments: Array.isArray(comments) ? comments : [], spend });
+          const growth = await S.listGrowth(store, now, 2).catch(() => []);
+          const boosts = (growth || []).flatMap((r) => (r && r.boosts) || []);
+          if (Array.isArray(posts)) ranking = rankPosts(posts, adDoc, { now, comments: Array.isArray(comments) ? comments : [], spend, boosts });
         } catch { ranking = null; ads = null; }
       }
       return S.readGrowth(store, now, { platform: args.platform, date: args.date, song: args.song, ranking, ads });
@@ -1418,7 +1420,7 @@ async function runTool(tool, args, ctx, read) {
         }),
         open: (board.needsYou || []).length + (board.held || []).length, needs_you: board.needsYou || [], held_until_morning: board.held || [],
         ...(desk.health ? {} : { accounts_note: "Account health could not be read just now: red accounts are not in total." }),
-        note: "Read only. total is the number on Luke's phone (\"N need you\"), Today's \"N things waiting on you\" and the app badge: messages waiting on him (decisions, lyrics and pitch approvals, replies, actions), Spotify for Artists songs only he can name, his open Yes/No/Edit cards (open; in quiet hours most wait in held_until_morning) and red accounts. Alerts like a late step are not in it. Nothing was changed." };
+        note: "Read only. total is the number on Luke's phone. Nothing was changed." };
     }
     case "song_pl": {
       const hqAns = ctx.hq ? await ctx.hq().catch(() => null) : null;
@@ -1528,14 +1530,14 @@ async function runTool(tool, args, ctx, read) {
       const uncut = (duty) => S.fullDuty(duty, dutyPool);
       const dutyShown = S.dutyPair(w.duty, dutyPool);
       const dutyTask = (task) => (me === "Atlas" && /monthly listeners in note|salvation/i.test(task || "")
-        ? "Log yesterday's Spotify numbers for every released song, plus monthly listeners and Brazil listeners in their own fields (monthly_listeners and brazil_listeners). There is no Salvation card."
+        ? "Log yesterday's Spotify numbers for every released song, plus monthly listeners and Brazil listeners in their own fields (monthly_listeners and brazil_listeners)."
         : uncut(task));
       const clearBlock = (text) => S.blockerForDuty("", S.freshBlocker(text, { igConnected, revolutLive, ...lyricOpt }), titles);
       const shownBlocker = clearBlock(w.blockers);
-      const signedRaw = [];
-      for (const person of b.staff) for (const bit of [person.blockers, person.card && person.card.needs]) if (bit && /sign-?in|signed out|log in/i.test(bit)) signedRaw.push(`${person.name}: ${bit}`);
-      const signOutLine = (line) => line.replace(/\b\d{3}-\d{3}-\d{4}\b/g, "").replace(/(?:\*{2,}|x{2,}|•{2,}|·{2,})\s*\d{2,4}/gi, "").replace(/\[account\]/g, "an account").replace(/\(\s*\)/g, "").replace(/\s{2,}/g, " ").replace(/\s+([,.:])/g, "$1").trim();
-      const signedOut = signedRaw.map(signOutLine);
+      const signedBits = [];
+      for (const person of b.staff) for (const bit of [person.blockers, person.card && person.card.needs, person.card && person.card.workingOn]) if (bit) signedBits.push({ who: person.name, text: bit });
+      const signedRaw = signedBits.map((x) => `${x.who}: ${x.text}`);
+      const signedOut = S.signedOutLines(signedBits).filter((x) => x.who === me).map((x) => x.line);
       const duties = w.duties.filter((d) => !S.staleTask(d)).map((d) => {
         const blocker = S.blockerForDuty(d.task, S.freshBlocker(d.blocker, { igConnected, revolutLive, ...lyricOpt }), titles);
         const status = d.late ? "late" : (d.status === "blocked" && !blocker ? "todo" : d.status);
@@ -1547,7 +1549,7 @@ async function runTool(tool, args, ctx, read) {
         ...(w.grok ? { grok_bot: w.grok } : {}),
         ...(licenceDay ? { reports_to: "Nova", licence_queue: licenceDay, idle_until: "Luke starts a cover. He writes the covers and keeps the songs." } : {}),
         ...(sparkDay ? { reports_to: "Nova", content_ideas: sparkDay, posts: "Read only. Never post, comment, send a DM, or touch an ad." } : {}),
-        ...(me === "Atlas" ? { numbers_how: "Monthly listeners and Brazil listeners go in log_growth as monthly_listeners and brazil_listeners. They are not a note, and there is no Salvation card." } : {}),
+        ...(me === "Atlas" ? { numbers_how: "Monthly listeners and Brazil listeners go in log_growth as monthly_listeners and brazil_listeners. They are not a note." } : {}),
         ...(me === "Laura" ? { claims_page: "badscandal.com/hq#rights", claims_how: "Read claims with read_claims. Each claim has an id: escalate one into a dispute with open_case and that claim_id. The claim stays on Rights. When YouTube's Content ID page has been checked today, call log_growth with claims_checked true and no follower numbers. A missing field stays not reported." } : {}),
         daily_duty: dutyShown.text, daily_duty_full: dutyShown.full, usual_time: w.time, schedule: S.scheduleForMyDay(me, w.schedule, { today, releases: rel, nextDate: nextRel && nextRel.date, duty: duties[0] }),
         duties_today: duties,
@@ -1579,11 +1581,12 @@ async function runTool(tool, args, ctx, read) {
           (me === "Atlas" && !spotNext ? "Every day: report what Spotify for Artists shows as upcoming with spotify_upcoming. " : "") +
           (me === "Atlas" ? "Record a pitch you sent with pitch_log (pitched_on). When you see a new editorial playlist in Spotify for Artists, record it with pitch_log (playlist and added_on) the same day. HQ never pitches. " : "") +
           dutyLine(duties.length),
+        next_one: !duties.filter((d) => d.status !== "done").length && !rs.length ? "Done for today" : S.clipWords(firstRs ? `${firstRs.label} for ${firstRs.title}` : (duties.find((d) => d.status !== "done") || {}).task || "Done for today", 140),
         ...((() => { const dutyNote = !duties.length && !w.paused ? dutyLine(false) : ""; const note = [dutyNote, sheetNote].filter(Boolean).join(" "); return note ? { note } : {}; })()) };
     }
     case "team_board":
       return { today, now_sao_paulo: b.now, duties: hq ? { done: hq.team.duties.done, total: hq.team.duties.total, late: hq.team.duties.late, blocked: hq.team.duties.blocked } : "not read",
-        team: b.staff.map(worker), waiting_on_luke: b.waiting.luke.map(short).concat(S.disputeWaits(desk.disputes)), waiting_on_claude: b.waiting.claude.map(short), open_messages_for_bots: b.waiting.bots,
+        team: b.staff.map(worker), waiting_on_luke: b.waiting.luke.map(short).concat(S.disputeWaits(desk.disputes)), waiting_on_claude: b.waiting.claude.map(short), waiting_on_bot: b.waiting.claude.map(short), open_messages_for_bots: b.waiting.bots,
         latest_updates: dedupeGrowthUpdates(b.updates.slice(0, 20).map((u) => `${u.sp} ${u.bot} ${u.status}: ${u.message}${u.link ? " " + u.link : ""}`)),
         growth: S.growthOnce(await S.listGrowth(store, now, 2)),
         releases: rel.filter(S.releaseActive).map((v) => ({ song: v.title, date: when(v.date), done: `${v.counts.done} of ${v.counts.total}`, late: v.counts.late, blocked: v.counts.blocked,
@@ -1615,13 +1618,15 @@ async function runTool(tool, args, ctx, read) {
     case "luke_short_briefing": {
       const cap = hq && hq.money ? hq.money.cap : null;
       const money = (n) => Number(n).toFixed(2);
+      const rateFrom = cap && cap.rateUsed && cap.rateUsed.from === "Rates!B1" ? "the month's fixed rate" : (cap && cap.rateUsed && cap.rateUsed.from) || "the month's average";
+      const unread = cap ? S.unreadSpendLine(cap.notRead || cap.estimatedWhy || []) : "";
       const ad_spend = cap ? `${cap.month}: ${cap.currency} ${money(cap.spent)} of ${cap.currency} ${cap.amount}, ${cap.currency} ${money(cap.left)} left (${cap.status})` +
-        (cap.rateUsed ? `; EUR at ${cap.rateUsed.value} (${cap.rateUsed.from || "the month's average"})` : "") +
-        (cap.estimated ? `; estimated${cap.estimatedWhy && cap.estimatedWhy.length ? ": " + cap.estimatedWhy.join(", ") : ""}` : "")
+        (cap.rateUsed ? `; EUR at ${cap.rateUsed.value} (${rateFrom})` : "") +
+        (cap.estimated || unread ? `; estimated${unread ? ": " + unread : ""}` : "")
         : "not read: the team's sheet could not be read just now";
       const inc = b.income;
       /* received only (16 Nov 2026, Luke); Ledger's problems by name, not a count */
-      const income = `Received ${cur(inc.received)} this month` + (inc.problems.length ? `; for Ledger: ${inc.problems.slice(0, 3).map((x) => (x.length > 70 ? x.slice(0, 69) + "…" : x)).join("; ")}` + (inc.problems.length > 3 ? ` (+${inc.problems.length - 3} more)` : "") : "");
+      const income = `Received ${cur(inc.received)} this month` + (inc.problems.length ? `; for Ledger: ${inc.problems.slice(0, 3).map((x) => S.clipWords(x, 70)).join("; ")}` + (inc.problems.length > 3 ? ` (+${inc.problems.length - 3} more)` : "") : "");
       /* a decision's deadline: an approval -> that step's day; "ready to resubmit" -> the release day */
       const due = (m) => {
         const id = m.approval ? m.approval.id : m.ask === "resubmit" ? m.release : null;
@@ -1665,10 +1670,25 @@ async function runTool(tool, args, ctx, read) {
         for (const x of w.duties) add(w.name, x.blocker);
       }
       for (const u of b.updates) if (u.sp && u.sp.slice(0, 10) === today && ["blocked", "error"].includes(u.status)) add(u.bot, u.message);
-      if (cap) for (const x of cap.notRead || []) add("Ad spend", x);
+      if (cap) for (const x of cap.notRead || []) if (!(/google/i.test(x) && /signed out/i.test(x))) add("Ad spend", x);
+      const googleLine = ((cap && S.unreadSpendLine(cap.notRead || [])) || "").split("; ").find((l) => /Google not read/.test(l));
+      if (googleLine && !signIns.includes(googleLine)) signIns.push(googleLine);
+      const plainSign = [];
+      const seenSign = new Set();
+      for (const raw of signIns) {
+        let t = String(raw || "").replace(/\s+/g, " ").trim();
+        if (!t || /none right now|expire often|sessions expire|sfa is signed in/i.test(t)) continue;
+        if (/sign-in from luke for account/i.test(t)) continue;
+        const ids = t.match(/\d{3}-\d{3}-\d{4}/g) || [];
+        if (ids.length > 1) t = t.replace(ids[1], "").replace(/\s{2,}/g, " ").trim();
+        const key = (ids[0] || t.toLowerCase());
+        if (seenSign.has(key)) continue;
+        seenSign.add(key);
+        plainSign.push(t);
+      }
       return { today, now_sao_paulo: b.now, ad_spend, income, decisions,
         ...(asks.length > 3 ? { more_decisions: `${asks.length - 3} more waiting on Luke: see the dashboard` } : {}),
-        needs_luke_sign_in: signIns.length ? signIns : ["nothing"],
+        needs_luke_sign_in: plainSign.length ? plainSign : ["nothing"],
         how_to_report: "Short: four lines at most, numbers exactly as given, \"not read\" never as 0." };
     }
     case "profile_jobs": return P.listProfileJobs(store, now, roster, { by: me });

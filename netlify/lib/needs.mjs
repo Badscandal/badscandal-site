@@ -6,6 +6,7 @@
 import * as S from "./staff.mjs";
 import * as C from "./action-cards.mjs";
 import { loadReport } from "./account-health.mjs";
+import { igView } from "./instagram.mjs";
 
 export async function healthReport(store, now, { ig, claims, builds } = {}) {
   const [c, b] = await Promise.all([
@@ -17,7 +18,14 @@ export async function healthReport(store, now, { ig, claims, builds } = {}) {
 
 /* o.desk: an already-loaded desk; o.auto / o.report: already computed (the board has both) */
 export async function needsDesk(store, now, o = {}) {
-  const desk = o.desk || (await S.loadDesk(store, now));
+  let desk = o.desk || (await S.loadDesk(store, now));
+  /* Instagram fan questions only Luke can answer are part of the same list (needs_you, the phone, Today). */
+  if (o.ig && typeof o.ig.get === "function" && !(desk.needsReply && desk.needsReply.length)) {
+    try {
+      const view = await igView(o.ig, now);
+      desk = { ...desk, needsReply: (view && view.needsReply) || [] };
+    } catch { /* a missing Instagram store must not blank Needs you */ }
+  }
   const [auto, report] = await Promise.all([
     o.auto !== undefined ? o.auto : C.boardAuto(store, now, desk).catch(() => null),
     o.report !== undefined ? o.report : healthReport(store, now, { ig: o.ig, claims: desk.claims, builds: o.builds }).catch(() => null),

@@ -39,7 +39,7 @@ test("money in PayPal or Wise is seen, never counted; Revolut is the one entry",
   assert.equal(i.sources.find((s) => s.id === "distro").thisMonth.state, "waiting", "not received until it is in Revolut");
   const row = i.entries.find((e) => e.account === "PayPal");
   assert.equal(row.holding, true);
-  assert.deepEqual(L.payStatus(row), { text: "In PayPal: counts when it reaches Revolut", counted: false });
+  assert.deepEqual(L.payStatus(row), { text: "Waiting in PayPal", counted: false });
   const st = await call(d, "income_status", { bot: "Ledger" });
   assert.equal(st.in_wise_or_paypal_not_counted, "USD 100.00");
   assert.match(st.waiting_in_wise_or_paypal[0].line, /Sample Distro/);

@@ -94,17 +94,21 @@
       return "<li>" + esc(p.date) + " · @" + esc(p.handle) + " · " + esc(p.song) + " · " + esc(p.contentType || "post") + " · " + esc(p.views == null ? "views not read" : p.views + " views") + "</li>";
     }).join("") + "</ul>" : "<p>No posts recorded yet. A post needs the account, the day, the song and the numbers you could read.</p>";
     var songs = (roll.viewsPerSong || []).map(function (s) { return "<li>" + esc(s.song) + ": " + esc(s.views) + " views</li>"; }).join("") || "<li>No song rollup yet.</li>";
-    return needs(v) + '<div class="wscard"><h2>Numbers</h2><p>' + esc(v.numbers.accounts) + " accounts · " + esc(v.numbers.posts) + " posts · " + esc(v.numbers.views) + " views</p></div>" + team(v) +
-      "<h2>Accounts</h2>" + list + '<form class="wscard" data-act="add_account"><h3>Record an account</h3><p>' + esc(v.recording) + "</p>" +
+    var accountForm = '<form class="wscard" data-act="add_account"><h3>Record an account</h3><p>' + esc(v.recording) + "</p>" +
       '<label>Platform<select name="platform"><option>TikTok</option><option>Instagram</option><option>YouTube</option></select></label>' +
       field("Handle", "handle", "text", "without the @") + field("Niche", "niche", "text", "what it posts") + field("Songs", "songs", "text", "our songs, separated by commas") +
       field("Owner", "owner", "text", "person or bot") + '<label>Health<select name="status"><option>active</option><option>paused</option><option>restricted</option><option>banned</option></select></label>' +
-      field("Created", "created", "date") + go("Record account") + '<p class="ferr" hidden></p></form>' +
-      "<h2>Posts</h2>" + postList + '<form class="wscard" data-act="add_post"><h3>Record a post</h3>' +
+      field("Created", "created", "date") + go("Record account") + '<p class="ferr" hidden></p></form>';
+    var postForm = '<form class="wscard" data-act="add_post"><h3>Record a post</h3>' +
       field("Account", "account", "text", "the handle") + field("Date", "date", "date") + field("Song", "song", "text", "which of our songs") +
       field("Content type", "contentType", "text", "clip, photo, duet") + field("Views", "views", "text") + field("Likes", "likes", "text") +
       field("Shares", "shares", "text") + field("Saves", "saves", "text") + field("Follows", "follows", "text") + field("Link", "link", "url", "https://") +
-      go("Record post") + '<p class="ferr" hidden></p></form>' +
+      go("Record post") + '<p class="ferr" hidden></p></form>';
+    var forms = accounts.length ? accountForm + "<h2>Posts</h2>" + postList + postForm
+      : '<details class="fold"><summary>Add account</summary>' + accountForm + "</details>";
+    return needs(v) + '<div class="wscard"><h2>Numbers</h2><p>' + esc(v.numbers.accounts) + " accounts · " + esc(v.numbers.posts) + " posts · " + esc(v.numbers.views) + " views</p></div>" + team(v) +
+      "<h2>Accounts</h2>" + list + (accounts.length ? "" : "") + forms +
+      (accounts.length ? "" : "<h2>Posts</h2>" + postList) +
       '<div class="wscard"><h2>Rollups</h2><p>Views per song</p><ul>' + songs + "</ul></div>";
   }
 
@@ -136,7 +140,8 @@
         "</section>";
     }).join("");
     var research = (v.research || []).length ? "<ul>" + v.research.map(function (r) { return "<li>" + esc(r.name) + (r.score == null ? "" : " · " + esc(r.score)) + "</li>"; }).join("") + "</ul>" : "<p>No candidate genres yet. Add a name, a score and a note.</p>";
-    return needs(v) + '<div class="wscard"><h2>Numbers</h2><p>' + esc(v.numbers.genres) + " genres · " + esc(v.numbers.releases) + " covers</p><p>" + esc(v.payments) + "</p></div>" + team(v) + blocks +
+    var nWord = function (n, one, many) { var x = Number(n); return (isFinite(x) ? x : (n == null ? "not reported" : n)) + " " + (x === 1 ? one : many); };
+    return needs(v) + '<div class="wscard"><h2>Numbers</h2><p>' + esc(nWord(v.numbers.genres, "genre", "genres")) + " · " + esc(nWord(v.numbers.releases, "cover", "covers")) + "</p><p>" + esc(v.payments) + "</p></div>" + team(v) + blocks +
       '<form class="wscard" data-act="add_genre"><h2>Add genre</h2>' + field("Genre", "name", "text", "a genre to add") + go("Add genre") + '<p class="ferr" hidden></p></form>' +
       '<form class="wscard" data-act="research"><h2>Genre research</h2>' + field("Name", "name", "text") + field("Score", "score", "text", "0 to 100") + field("Notes", "notes", "text") + field("Source", "source", "url", "https://") + go("Add candidate") + '<p class="ferr" hidden></p></form>' +
       research;

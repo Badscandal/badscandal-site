@@ -222,7 +222,7 @@ async function api(req, context, path) {
     /* account health reads the desk and the stored Instagram copy. A failure here must not blank the board. */
     const accountHealth = await loadReport({ store: st.desk, ig: igStore(context), now, claims: desk.claims, builds: pageBuilds }).catch(() => null);
     /* the ONE Needs you count (C.needsCount): the phone's line and the needs_you tool say the same number */
-    const needs = C.needsCount(await needsDesk(st.desk, now, { desk, auto, report: accountHealth }), S.spDay(now), now);
+    const needs = C.needsCount(await needsDesk(st.desk, now, { desk, auto, report: accountHealth, ig: igStore(context) }), S.spDay(now), now);
     return json(200, { ...S.board(desk, now, hqAns && hqAns.team ? hqAns : null), pageBuilds, hqRead: !!(hqAns && hqAns.team), accountHealth, needs, ...(auto ? { auto } : {}), keys: { bots: !!Netlify.env.get("STAFF_BOT_KEY"), claude: !!Netlify.env.get("STAFF_CLAUDE_KEY") } });
   }
   if (path === "trace" && req.method === "GET") return sample ? json(200, { sample: true, trace: [] }) : json(200, { trace: await S.getTrace(stores(context).desk) });

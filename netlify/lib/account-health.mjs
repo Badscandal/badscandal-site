@@ -416,11 +416,16 @@ function claimSignals(claims, today) {
   });
   if (!list.length) return [gap("claims", "no Content ID claim has been recorded in the last 90 days. That does not mean there is none. Laura records one when YouTube shows one.", "Content ID claims on the desk")];
   return list.map((c) => {
-    const hard = String(c.strike || "").toLowerCase() === "yes" || /block|mute|removed|ineligible|restrict|taken down|age-restrict/i.test([c.impact, c.status, c.reach_effect].filter(Boolean).join(" "));
+    const blob = [c.impact, c.status, c.reach_effect, c.money_effect].filter(Boolean).join(" ");
+    const hard = String(c.strike || "").toLowerCase() === "yes" || /block|mute|removed|ineligible|restrict|taken down|age-restrict|strike/i.test(blob);
+    const quiet = /no impact|no reach|no money|^none$/i.test(String(c.impact || ""));
+    const own = /our label|own label|our own label/i.test(String(c.claimant || ""));
+    const costs = /money|reach|demonet|lost|copyright strike/i.test(blob) && !quiet;
+    const level = hard ? "red" : ((quiet || own) && !costs ? "ok" : "watch");
     const who = c.claimant ? c.claimant : "not reported";
     const impact = c.impact ? c.impact : "not reported";
     const seen = c.first_seen && c.first_seen !== c.date ? `, first seen ${c.first_seen}` : "";
-    return sig("claim:" + (c.key || c.date + ":" + c.claim), hard ? "red" : "watch",
+    return sig("claim:" + (c.key || c.date + ":" + c.claim), level,
       `Content ID claim recorded by ${c.by || "Laura"} on ${c.last_checked || c.date}${seen}: "${c.claim}". Claimant: ${who}. Impact: ${impact}.`,
       "Content ID claims on the desk", c.at || c.date);
   });
@@ -469,15 +474,16 @@ function guidanceFor(state, signals) {
   const hold = " Do not buy reach or followers, and do not use a pod or another login. HQ will not delete, appeal or post anything.";
   if (state === "red" && red) return red.text + " " + nextFor(signals) + hold;
   if (state === "watch" && watch) return watch.text + " Post as normal. Do not delete posts." + hold;
+  if (state === "gap") return "Not enough data. Open Account Status and record what that page says. Post as normal. Do not delete posts." + hold;
   if (state === "watch") return "Not enough of this account's own numbers are on the desk to call it healthy. Open Account Status (or the site) and record what it says. Post as normal. Do not delete posts." + hold;
   return "Nothing in the numbers on the desk points to a restriction. Post as normal. Do not delete posts to chase a number." + hold;
 }
 function judge(signals) {
   const list = signals.filter(Boolean);
-  const state = list.some((s) => s.level === "red") ? "red" : list.some((s) => s.level === "watch") ? "watch" : list.some((s) => s.level === "ok") ? "green" : "watch";
+  const state = list.some((s) => s.level === "red") ? "red" : list.some((s) => s.level === "watch") ? "watch" : list.some((s) => s.level === "ok") ? "green" : "gap";
   const known = list.some((s) => s.level === "ok" || s.level === "watch" || s.level === "red");
   return { state, known: state === "green" ? true : known, signals: list, next: state === "red" ? nextFor(list) : "", guidance: guidanceFor(state, list),
-    headline: (list.find((s) => s.level === "red") || list.find((s) => s.level === "watch") || list.find((s) => s.level === "ok") || list[0] || { text: "Not enough data." }).text };
+    headline: state === "gap" ? "Not enough data." : (list.find((s) => s.level === "red") || list.find((s) => s.level === "watch") || list.find((s) => s.level === "ok") || list[0] || { text: "Not enough data." }).text };
 }
 
 function latestReading(checks, platform, field) {

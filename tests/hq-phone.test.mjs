@@ -50,7 +50,7 @@ test("the spend gauge is the cap, split by platform, with unread days named and 
   assert.equal(g.warn, 750);
   assert.equal(g.stop, 900);
   assert.deepEqual(g.parts.map((p) => p.name), ["Google", "Meta", "TikTok"]);
-  assert.deepEqual(g.gaps, ["Google 14-16 Nov, signed out"]);
+  assert.deepEqual(g.gaps, ["Google not read since 14 Nov (signed out)"]);
   assert.equal(JSON.stringify(g).includes("pause"), false);
 });
 

@@ -14,7 +14,7 @@
   function applyQuiet() {
     document.body.classList.toggle("quiet", quietOn());
     var b = $("quietBtn");
-    if (b) { b.setAttribute("aria-pressed", quietOn() ? "true" : "false"); b.textContent = quietOn() ? "Quiet on" : "Quiet off"; }
+    if (b) { b.setAttribute("aria-pressed", quietOn() ? "true" : "false"); b.title = "Holds non-urgent cards until morning"; b.textContent = quietOn() ? "Night quiet" : "Night quiet off"; }
   }
   function snoozed(id) {
     try { var o = JSON.parse(localStorage.getItem(LATER) || "{}"); return o[id] && o[id] > Date.now(); } catch (e) { return false; }
@@ -165,7 +165,9 @@
     var heldN = auto && auto.held && auto.held.length;
     var healthN = health.needs && health.needs.length;
     var cardN = auto && auto.needsYou && auto.needsYou.length;
-    if (!you.length && !cardN && !heldN && !healthN && !snoozedN) decision += '<p class="dnone">Nothing is waiting on you.</p>';
+    var needN = board && board.needs && typeof board.needs.total === "number" ? board.needs.total : 0;
+    var lukeN = board && board.waiting && board.waiting.luke ? board.waiting.luke.length : 0;
+    if (!needN && !lukeN && !you.length && !cardN && !heldN && !healthN && !snoozedN) decision += '<p class="dnone">Nothing is waiting on you.</p>';
     var covers = {};
     ((ov && ov.songs) || []).forEach(function (s) { if (s && s.title) covers[s.title] = s.cover || ""; });
     var hero = V.releaseHero((board && board.releases) || [], today, covers);
@@ -192,7 +194,7 @@
     var routenote = {};
     ((board && board.waiting && board.waiting.luke) || []).forEach(function (m) { if (m && m.ask === "routenote") routenote[m.id] = true; });
     var rows = items.filter(function (x) {
-      if (!x || (x.kind !== "message" && x.kind !== "spotify")) return false;
+      if (!x || (x.kind !== "message" && x.kind !== "spotify" && x.kind !== "signin" && x.kind !== "access" && x.kind !== "yes" && x.kind !== "fan" && x.kind !== "dispute")) return false;
       return shown.indexOf(x.id) < 0 && !routenote[x.id];
     });
     if (!rows.length) return "";
@@ -244,14 +246,14 @@
       /* the post's picture; if Instagram's link has expired, the song's cover, else a plain tile with no "missing" words */
       var img = p.cover ? '<img src="' + esc(p.cover) + '" alt="" loading="lazy" referrerpolicy="no-referrer" data-fallback="' + esc(p.fallback || "") + '">' : '<span class="nothumb">' + esc(p.song) + "</span>";
       return '<article class="mpick"><p class="dfrom">' + esc(label) + "</p>" + img + "<h3>" + esc(p.song) + "</h3>" +
-        "<p>" + esc(p.rate) + "</p><p>" + esc(p.deep) + "</p><p>Cost per engagement: " + esc(p.cost) + "</p></article>";
+        "<p>" + esc(p.rate) + "</p><p>" + esc(p.deep) + "</p>" + (p.cost && p.cost !== "not reported" ? "<p>Cost per engagement: " + esc(p.cost) + "</p>" : "") + "</article>";
     };
     var acts = "";
     if (pick.decisionId && pick.yes) {
       var dis = HQ.sample ? " disabled" : "";
       acts = '<div class="dacts"><button class="sendbtn" type="button" data-decide="' + esc(pick.decisionId) + '" data-choice="' + esc(pick.yes) + '"' + dis + ">Yes<small>" + esc(pick.yes) + "</small></button>" +
         (pick.no ? '<button class="copybtn" type="button" data-decide="' + esc(pick.decisionId) + '" data-choice="' + esc(pick.no) + '"' + dis + ">No<small>" + esc(pick.no) + "</small></button>" : "") + "</div>";
-    } else acts = '<p class="drec">Forge has not asked yet, so there is nothing to answer.</p>';
+    } else acts = "";
     return '<section class="monday"><h2>Monday pick</h2><div class="mswipes">' + slide(pick.pick, "This one") + slide(pick.runner, "Runner-up") + "</div>" + acts + "</section>";
   }
 
