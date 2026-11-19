@@ -236,3 +236,45 @@ test("case colour and the song badge follow the worst open case", () => {
   assert.match(html, /csteps/);
   assert.doesNotMatch(html, /Love You/);
 });
+
+test("the opening bot can rename a song and replace the timeline with event dates", async () => {
+  const d = memoryDesk();
+  const opened = await S.openCase(d, NOW, R, {
+    by: "Laura", song: "Love You", platform: "YouTube", type: "Content ID claim",
+    status: "waiting on Luke", waiting_on: "A human",
+    proposal: "Please release [secure value: hidden] the claim.",
+  });
+  const id = opened.item.id;
+  await call(d, "update_case", { bot: "Laura", id, song: "Love you", entry: "They wrote back.", entry_date: "2026-11-12" });
+  await fails(call(d, "update_case", { bot: "Nova", id, timeline: [{ text: "Nova rewrote the history." }] }), /Laura/);
+  const replaced = await call(d, "update_case", { bot: "Laura", id, timeline: [
+    { text: "Opened the case.", date: "2026-11-01", by: "Laura" },
+    { text: "They wrote back.", date: "2026-11-12" },
+  ] });
+  assert.equal(replaced.saved, true);
+  const read = await call(d, "read_cases", { bot: "Laura", song: "Love you" });
+  assert.equal(read.cases.length, 1);
+  assert.equal(read.cases[0].song, "Love you");
+  assert.equal(read.cases[0].waitingOn, "Luke");
+  assert.equal(read.cases[0].timeline[0].date, "2026-11-01");
+  assert.equal(read.cases[0].timeline[1].date, "2026-11-12");
+  assert.equal(read.cases[0].timeline[1].when, "2026-11-12");
+  assert.doesNotMatch(read.cases[0].proposal, /secure value/);
+  assert.match(read.cases[0].proposal, /Please release the claim/);
+  const html = L.disputeHtml(read.cases, { today: "2026-11-19" });
+  assert.match(html, /Waiting on Luke/);
+  assert.doesNotMatch(html, /A human/);
+  assert.doesNotMatch(html, /secure value/);
+  assert.match(html, /12 Nov/);
+  assert.doesNotMatch(html, /since\s+\S+\s+since/);
+  assert.doesNotMatch(html, /\d{2}:\d{2}/);
+  await call(d, "update_case", { bot: "Laura", id, status: "resolved" });
+  const closed = await call(d, "read_cases", { bot: "Laura", song: "Love you" });
+  assert.equal(closed.cases[0].status, "resolved");
+  assert.equal(closed.cases[0].waitingSince, "");
+  assert.equal(closed.cases[0].waitingOn, "");
+  const stale = { ...closed.cases[0], status: "resolved", waitingOn: "A human", waitingSince: "2026-11-01T12:00:00Z" };
+  const closedHtml = L.disputeHtml({ items: [stale] }, { today: "2026-11-19" });
+  assert.doesNotMatch(closedHtml, /A human/);
+  assert.doesNotMatch(closedHtml, /since/);
+});

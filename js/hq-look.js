@@ -73,7 +73,7 @@
     var out = [];
     (songs || []).forEach(function (s) {
       if (!s) return;
-      var series = (s.series || []).map(num).filter(function (n) { return n != null; });
+      var series = (s.series || []).map(function (p) { return p != null && typeof p === "object" ? num(p.v) : num(p); }).filter(function (n) { return n != null; });
       if (series.length < 2) return;
       var prev = series[series.length - 2], cur = series[series.length - 1];
       var hit = MARKS.filter(function (m) { return prev < m && cur >= m; });
@@ -127,7 +127,10 @@
       hero: h == null ? "not reported" : (h > 0 ? "+" : h < 0 ? "−" : "") + fmt(Math.abs(h)),
       dir: h == null ? "flat" : h > 0 ? "up" : h < 0 ? "down" : "flat",
       total: num(total) == null ? "not reported" : fmt(total),
-      series: Array.isArray(series) ? series.map(function (n) { return num(n); }) : [],
+      series: Array.isArray(series) ? series.map(function (n) {
+        if (n != null && typeof n === "object") return { d: n.d || n.date || "", v: num("v" in n ? n.v : n.value) };
+        return num(n);
+      }) : [],
       source: source || "not reported"
     };
   }
@@ -142,31 +145,12 @@
     });
   }
 
-  function sparkPath(vals, w, h) {
-    var pts = [];
-    (vals || []).forEach(function (n, i) { if (num(n) != null) pts.push([i, num(n)]); });
-    if (pts.length < 2) return "";
-    var lo = Math.min.apply(null, pts.map(function (p) { return p[1]; }));
-    var hi = Math.max.apply(null, pts.map(function (p) { return p[1]; }));
-    var span = hi - lo || 1, n = (vals.length - 1) || 1;
-    return pts.map(function (p, i) {
-      return (i ? "L" : "M") + (p[0] / n * w).toFixed(1) + " " + (h - ((p[1] - lo) / span) * (h - 4) - 2).toFixed(1);
-    }).join(" ");
-  }
-  /* Previous stretch dotted, the latest point dashed ("so far"), the rest solid. Fixed box, so the card doesn't jump. */
-  function sparkSvg(series) {
-    var vals = series || [];
-    if (vals.filter(function (n) { return num(n) != null; }).length < 2) return "";
-    var w = 120, h = 36, mid = Math.max(1, Math.floor(vals.length / 2));
-    var prev = vals.slice(0, mid).concat(vals.slice(mid).map(function () { return null; }));
-    var now = vals.slice();
-    if (now.length) now[now.length - 1] = null;
-    var last = vals.map(function (n, i) { return i >= vals.length - 2 ? n : null; });
-    var a = sparkPath(prev, w, h), b = sparkPath(now, w, h), c = sparkPath(last, w, h);
-    return '<svg class="sparkline" viewBox="0 0 ' + w + " " + h + '" aria-hidden="true">' +
-      (a ? '<path class="prev" d="' + a + '"/>' : "") +
-      (b ? '<path class="now" d="' + b + '"/>' : "") +
-      (c ? '<path class="sofar" d="' + c + '"/>' : "") + "</svg>";
+  /* The shared chart. Followers and listeners are a level, so there is no period total. */
+  function sparkSvg(series, opts) {
+    var C = root.HQChart;
+    if (!C) return "";
+    opts = opts || {};
+    return C.html(series, { label: opts.label || "Trend", totals: opts.totals === true, tone: opts.tone || "accent" });
   }
 
   function amountIn(text) {
@@ -595,7 +579,7 @@
     var cards = (block.cards || []).map(function (c) {
       return '<article class="kcard"><p class="kl">' + esc(c.label) + "</p>" +
         '<p class="kn num">' + esc(c.hero) + badge(c.dir) + "</p>" +
-        '<p class="kt">Now ' + esc(c.total) + "</p>" + sparkSvg(c.series) +
+        '<p class="kt">Now ' + esc(c.total) + "</p>" + sparkSvg(c.series, { label: c.label, totals: false }) +
         '<button type="button" class="whybtn" data-source="' + esc(c.source) + '">Source</button></article>';
     }).join("");
     return '<section class="kplat"><h3>' + esc(block.platform) + ' <i class="hdot ' + esc(h.state) + '" title="' + esc(h.label) + '"></i><span class="sr">' + esc(h.label) + "</span></h3><div class=\"krow\">" + cards + "</div></section>";

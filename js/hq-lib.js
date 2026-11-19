@@ -314,23 +314,33 @@
       var taps = sumOf(function (x) { return x.taps; });
       if (ov.spend && ov.spend.connected && !ov.spend.error) {
         var sp = sumOf(function (x) { return x.spend; });
-        out.push({ key: "spend", label: "Ad spend", value: money(sp, cur), change: change(sp, ov.prev.spend), vs: vs, series: ser.map(function (x) { return x.spend; }) });
-        out.push({ key: "taps", label: "Real Spotify taps", value: fmt(taps), green: true, change: change(taps, ov.prev.taps), vs: vs, series: ser.map(function (x) { return x.taps; }) });
+        out.push({ key: "spend", label: "Ad spend", value: money(sp, cur), change: change(sp, ov.prev.spend), vs: vs, series: ser.map(function (x) { return { d: x.d, v: x.spend }; }) });
+        out.push({ key: "taps", label: "Real Spotify taps", value: fmt(taps), green: true, change: change(taps, ov.prev.taps), vs: vs, series: ser.map(function (x) { return { d: x.d, v: x.taps }; }) });
         out.push({ key: "cpt", label: "Cost per tap", value: taps ? money(sp / taps, cur) : "–", change: change(taps ? sp / taps : null, ov.prev.taps ? ov.prev.spend / ov.prev.taps : null), vs: vs,
-          series: ser.map(function (x) { return x.taps ? x.spend / x.taps : null; }) });
-      } else out.push({ key: "taps", label: "Real Spotify taps", value: fmt(taps), green: true, change: change(taps, ov.prev ? ov.prev.taps : null), vs: vs, series: ser.map(function (x) { return x.taps; }) });
+          series: ser.map(function (x) { return { d: x.d, v: x.taps ? x.spend / x.taps : null }; }) });
+      } else out.push({ key: "taps", label: "Real Spotify taps", value: fmt(taps), green: true, change: change(taps, ov.prev ? ov.prev.taps : null), vs: vs, series: ser.map(function (x) { return { d: x.d, v: x.taps }; }) });
     }
     if (sheet && (sheet.songs || []).length) {
-      var bydate = function (key) { var m = {}; sheet.songs.forEach(function (s) { (s[key] || []).forEach(function (p) { m[p.d] = (m[p.d] || 0) + p.v; }); }); return Object.keys(m).sort().slice(-14).map(function (d) { return m[d]; }); };
+      /* dated points, and a day nobody logged stays missing (the chart draws the gap; a null is never 0) */
+      var bydate = function (key) {
+        var m = {};
+        sheet.songs.forEach(function (s) {
+          (s[key] || []).forEach(function (p) {
+            if (!p || !p.d || p.v == null || !isFinite(Number(p.v))) return;
+            m[p.d] = (m[p.d] || 0) + Number(p.v);
+          });
+        });
+        return Object.keys(m).sort().slice(-14).map(function (d) { return { d: d, v: m[d] }; });
+      };
       var week = sheet.songs.reduce(function (n, s) { return n + (s.week || 0); }, 0);
       var prevWeek = sheet.songs.every(function (s) { return s.prevWeek != null; }) ? sheet.songs.reduce(function (n, s) { return n + s.prevWeek; }, 0) : null;
       out.push({ key: "streams", label: "Spotify streams, 7 days", value: fmt(week), change: change(week, prevWeek), vs: "vs the 7 days before", series: bydate("series") });
-      var ls = bydate("listenersSeries"), lnow = ls.length ? ls[ls.length - 1] : null, lthen = ls.length > 7 ? ls[ls.length - 8] : null;
+      var ls = bydate("listenersSeries"), lnow = ls.length ? ls[ls.length - 1].v : null, lthen = ls.length > 7 ? ls[ls.length - 8].v : null;
       out.push({ key: "listeners", label: "Spotify listeners", value: fmt(lnow), change: change(lnow, lthen), vs: "vs 7 days earlier", series: ls });
     }
     if (sheet) (sheet.growth || []).forEach(function (g) {
       out.push({ key: "f:" + g.platform, label: g.platform + " followers", value: fmt(g.followers), change: g.week == null ? { text: "–", dir: "flat" } : { text: (g.week > 0 ? "+" : g.week < 0 ? "−" : "") + fmt(Math.abs(g.week)), dir: g.week > 0 ? "up" : g.week < 0 ? "down" : "flat" },
-        vs: growthWhen(g), series: (g.series || []).slice(-14).map(function (p) { return p.v; }) });
+        vs: growthWhen(g), series: (g.series || []).slice(-14) });
     });
     return out;
   }
@@ -1712,7 +1722,8 @@
       follows: r.follows != null ? fmt(r.follows) + " follows (" + p1(r.followRate) + " of views)" + (r.profileVisits != null ? " · " + fmt(r.profileVisits) + " profile visits" : "") : "",
       own: r.ownComments ? r.ownComments + " of our own comment" + (r.ownComments === 1 ? "" : "s") + " left out" : "",
       paid: "Not boosted", before: "" };
-    if (r.paid && r.paid.stale && r.paid.spend == null) out.paid = "spend not read since boost started";
+    var spendOk = r.paid && r.paid.spend != null && !r.paid.stale && (r.paid.scope === "ad" || r.paid.scope === "post" || r.paid.scope === "title") && !(r.paid.started && r.paid.asOf && Number(r.paid.asOf) < Number(r.paid.started));
+    if (r.paid && !spendOk) out.paid = "spend not read since boost started";
     else if (r.paid && r.paid.spend != null) {
       var c = r.paid.currency ? r.paid.currency + " " : "";
       var who = r.paid.spendOnly ? " engagements" : " engagements from the ad";
@@ -2111,8 +2122,11 @@
     });
   }
   function testPlatform(c) { return String((c && c.platform) || "").trim().toUpperCase() === "TEST"; }
+  function shown(s) {
+    return String(s == null ? "" : s).replace(/\[\s*secure value:[^\]]*\]/gi, " ").replace(/\s+/g, " ").trim();
+  }
   function proposalBit(text) {
-    var p = String(text || "").replace(/\s+/g, " ").trim();
+    var p = shown(text);
     if (!p) return "";
     return p.length > 80 ? p.slice(0, 80).trim() + "…" : p;
   }
@@ -2170,6 +2184,7 @@
     if (cases.length) {
       var lead = cases.slice().sort(function (a, b) { return toneRank(caseColour(b, today, date)) - toneRank(caseColour(a, today, date)); })[0];
       var who = lead.waitingOn || lead.platform || "the case";
+      if (/^(a human|human)$/i.test(String(who).replace(/\s+since\b.*$/i, "").trim())) who = "Luke";
       badge = cases.length + " dispute" + (cases.length === 1 ? "" : "s") + " - waiting on " + who;
     } else if (delay === "red" && rel && rel.counts && rel.counts.blocked) badge = "Release blocked";
     else if (delay === "red") badge = "Check before it goes to the stores";
@@ -2185,10 +2200,11 @@
   }
   function disputeWait(c) {
     if (!c || c.status === "resolved" || c.status === "ignored") return "";
-    var who = c.waitingOn ? "Waiting on " + c.waitingOn : "Waiting on " + (c.status === "waiting on Luke" ? "you" : "the next step");
-    var since = c.waitingSince ? " since " + day(c.waitingSince) : "";
+    var raw = shown(c.waitingOn || "").replace(/\s+since\b.*$/i, "").trim();
+    if (/^(a human|human)$/i.test(raw)) raw = "Luke";
+    var who = raw ? "Waiting on " + raw : (c.status === "waiting on Luke" ? "Waiting on Luke" : "Waiting on the next step");
     var next = c.nextCheck ? ". Next check " + day(c.nextCheck) : "";
-    return who + since + next;
+    return who + next;
   }
   function disputeCard(c, compact, o) {
     if (!c || testPlatform(c)) return "";
@@ -2197,18 +2213,19 @@
     var wait = disputeWait(c);
     var tone = caseColour(c, o.today, rel && rel.date);
     var songHref = c.songKey ? "#songs/" + escHtml(c.songKey) : "#songs";
-    var head = '<p class="d"><a href="' + songHref + '"><b>' + escHtml(c.song || "A song") + "</b></a> · " + escHtml(c.platform || "") + " · " + escHtml(c.type || "") + "</p>";
-    head += '<p class="d">Opened ' + escHtml(day(c.opened) || "not reported") + " · " + escHtml(c.owner || "") + " · " + escHtml(c.status || "") + "</p>";
+    var head = '<p class="d"><a href="' + songHref + '"><b>' + escHtml(shown(c.song) || "A song") + "</b></a> · " + escHtml(shown(c.platform)) + " · " + escHtml(shown(c.type)) + "</p>";
+    head += '<p class="d">Opened ' + escHtml(day(c.opened) || "not reported") + " · " + escHtml(shown(c.owner)) + " · " + escHtml(c.status || "") + "</p>";
     if (wait) head += '<p class="d">' + escHtml(wait) + "</p>";
     if (compact) return '<div class="d">' + head + (c.id ? '<p><a href="#songs/' + escHtml(c.id) + '">Open the case</a></p>' : "") + "</div>";
     var h = '<article class="tile dcase' + (tone ? " tone-" + tone : "") + '" id="song-' + escHtml(c.id || "") + '" data-case="' + escHtml(c.id || "") + '">' + progressHtml(c) + head;
-    if (c.recommendation) h += '<p class="d"><span class="lbl">Recommendation</span><br>' + escHtml(c.recommendation) + "</p>";
-    if (c.proposal) h += '<p class="d"><span class="lbl">Proposed response</span><br>' + escHtml(c.proposal) + "</p>";
-    if (c.decision && c.decision.at) h += '<p class="d"><span class="lbl">Your decision</span><br>' + escHtml(c.decision.choice || "") + (c.decision.text ? " · " + escHtml(c.decision.text) : "") + " · " + escHtml(c.decision.when || day(c.decision.at)) + "</p>";
+    if (shown(c.recommendation)) h += '<p class="d"><span class="lbl">Recommendation</span><br>' + escHtml(shown(c.recommendation)) + "</p>";
+    if (shown(c.proposal)) h += '<p class="d"><span class="lbl">Proposed response</span><br>' + escHtml(shown(c.proposal)) + "</p>";
+    if (c.decision && c.decision.at) h += '<p class="d"><span class="lbl">Your decision</span><br>' + escHtml(shown(c.decision.choice)) + (shown(c.decision.text) ? " · " + escHtml(shown(c.decision.text)) : "") + " · " + escHtml(c.decision.when || day(c.decision.at)) + "</p>";
     var lines = c.timeline || [];
     if (lines.length) {
       h += '<ul class="d">' + lines.slice(0, 12).map(function (e) {
-        return "<li>" + escHtml(e.when || day(e.at)) + " · " + escHtml(e.by || "") + " · " + escHtml(e.text || "") + "</li>";
+        var when = e.date ? day(e.date) : day(e.at);
+        return "<li>" + escHtml(when) + " · " + escHtml(shown(e.by)) + " · " + escHtml(shown(e.text)) + "</li>";
       }).join("") + "</ul>";
     }
     if ((c.status === "waiting on Luke" || c.status === "solved - confirm") && c.id) {

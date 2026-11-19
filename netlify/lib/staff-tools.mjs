@@ -14,7 +14,7 @@ import * as S from "./staff.mjs";
 import * as P from "./profile-images.mjs";
 import * as W from "./workspaces.mjs";
 import * as IG from "./instagram.mjs";
-import { rankLine } from "./postrank.mjs";
+import { rankLine, rankPosts } from "./postrank.mjs";
 import { songProfit } from "./hq.mjs";
 import "../../js/hq-lib.js";
 
@@ -299,7 +299,7 @@ export const TOOLS = [
       alias: str("Label only. The alias, when this spend is for one alias."),
       days: { type: "array", description: "Optional. Several days in one call: each {date, amount, currency, song} or {date, not_read}.", items: { type: "object", properties: { date: { type: "string" }, amount: { type: "number" }, currency: { type: "string" }, not_read: { type: "string" }, song: { type: "string" } } } } }, ["bot", "platform"]) },
   { name: "log_growth", title: "Log a day's growth or song numbers",
-    description: "STEVE, ATLAS, KEVIN, LAURA: ONE call per platform (Growth: followers, views, the best post) or per song (Songs: Spotify streams, listeners, saves, playlist adds) for ONE day, numbers exactly as shown. The change in followers is worked out for you. Anything you could not read: leave it out and name it in gaps with why (TikTok views come a day late; Instagram has no daily views on the web): your duty is marked done, with gaps, never blocked. Sending the same numbers again does nothing; a later call for the same day fills in what was missing. Put your duty id (D-...) in duty if you have more than one duty today. LAURA, a Content ID claim: send claim, and claimant and impact when YouTube showed them, with date. Leave a blank when it was not shown. Do not also send follower numbers on that call. Never guess a claim. Steve, Atlas and Kevin do not record claims. Account health, same tool: Steve, Kevin, Laura, Atlas and Webmaster can send account_status, visible, non_follower_share, recent_posts or site_ok without follower numbers. Atlas or Drop can send artificial_streams on Spotify. Atlas can send track_moved. A check on its own does not mark a growth duty done. Record only what the page showed.",
+    description: "STEVE, ATLAS, KEVIN, LAURA: ONE call per platform (Growth: followers, views, the best post) or per song (Songs: Spotify streams, listeners, saves, playlist adds) for ONE day, numbers exactly as shown. The change in followers is worked out for you. Anything you could not read: leave it out and name it in gaps with why (TikTok views come a day late; Instagram has no daily views on the web): your duty is marked done, with gaps, never blocked. Sending the same numbers again does nothing; a later call for the same day fills in what was missing. Put your duty id (D-...) in duty if you have more than one duty today. LAURA, a Content ID claim: send claim, and claimant and impact when YouTube showed them, with date. Leave a blank when it was not shown. Do not also send follower numbers on that call. Never guess a claim. Steve, Atlas and Kevin do not record claims. Account health, same tool: Steve, Kevin, Laura, Atlas and Webmaster can send account_status, visible, non_follower_share, recent_posts or site_ok without follower numbers. Atlas or Drop can send artificial_streams on Spotify. Atlas can send track_moved. A check on its own does not mark a growth duty done. Record only what the page showed. STEVE, a boost: send boosts. Each item is link (the post's https link), ad (that ad's id, not the ad account), spend (the amount that one ad has spent), currency (USD) and status (active or paused). Not the daily budget. Not the account's day total. Forge does not record this with record_spend. It is not added to the cap.",
     inputSchema: obj({ bot: BOT, date: str("The day the numbers are for, YYYY-MM-DD. For a Content ID claim: the day YouTube showed it."),
       platform: str("For Growth: TikTok, Instagram, YouTube..."), account: str("For Growth: the account handle."),
       followers: str("Followers as shown, for example 1240 or 1,240. YouTube: use subscribers (followers is accepted too). A rounded figure like 1.7k is stored as approximate."), subscribers: str("YouTube: subscribers as shown. Stored as the follower number. 1.7k is approximate."), views: str("Views as shown, including 1.7k or 3.8k. A k or m figure is approximate and shown with a tilde. Not the channel's lifetime total."),
@@ -316,6 +316,7 @@ export const TOOLS = [
       avg_watch: str("TikTok: average watch time at 1 day, in seconds, decimals allowed."),
       avg_watch_6h: str("TikTok: average watch time at +6h, in seconds. The +6h gate passes when this is at least 2.5 and follows_6h / views_6h is at least 0.14%."),
       posts: { type: "array", description: "Optional. The day's posts, one fixed window per column. Each: date, hook, views_24h, views_7d, likes, comments, saves, shares, follows, follows_6h, follows_48h, avg_watch, link or video_id, boosted true or false. Leave a number out when you could not read it. Do not send 0 for a number you did not see.", items: { type: "object" } },
+      boosts: { type: "array", description: "Steve. Each: link (https), ad (ad id, or blank or not shown; never the ad account), spend, currency, status (active, paused or deleted). No ad id keys on the post link. Not the day's account total.", items: { type: "object", properties: { link: { type: "string" }, ad: { type: "string" }, spend: { type: "number" }, currency: { type: "string" }, status: { type: "string" }, started: { type: "string" } } } },
       top_videos: { type: "array", description: "YouTube: the top 3 videos that day. Each: title, views, and link or video_id. 3 at most.", items: { type: "object" } },
       fan_signals: { type: "array", description: "TikTok (Kevin): fan signals, the same idea as the Instagram fan inbox. Each: handle, quote, link, about, engage. 8 at most. Leave one out when you did not see it.", items: { type: "object" } },
       pattern: str("Optional. One line on what worked, for the week card. Only what you actually saw."),
@@ -369,7 +370,7 @@ export const TOOLS = [
       action: str("Laura, with a claim: the action needed, in a few words, only when YouTube showed one."),
       owner: str("Laura, with a claim: the bot who owns the next step. Defaults to Laura.") }, ["bot", "date"]) },
   { name: "read_growth", title: "Read growth rows", readOnly: true,
-    description: "STEVE, ATLAS, KEVIN, LAURA (Nova too): the growth rows already on the desk. Read only. Filter with platform, date or song. A missing number was not logged. It is not zero. channel_views is the lifetime total. views is that day's views. YouTube's count is subscribers. TikTok fan_signals are on the TikTok rows.",
+    description: "STEVE, ATLAS, KEVIN, LAURA (Nova too): the growth rows already on the desk. Read only. Filter with platform, date or song. A missing number was not logged. It is not zero. channel_views is the lifetime total. views is that day's views. YouTube's count is subscribers. TikTok fan_signals are on the TikTok rows. boosts lists a post Steve logged as boosted. how_to_log_a_boost says what to send: link, ad, spend, currency, status.",
     inputSchema: obj({ bot: BOT, platform: str("Optional. TikTok, Instagram, YouTube or Spotify."), date: str("Optional. One day, YYYY-MM-DD."), song: str("Optional. A song title, for the Songs rows.") }, ["bot"]) },
   { name: "income_check", title: "Say an account was checked",
     description: 'Call this once per account, every day, after you looked at it, EVEN WHEN NOTHING IS NEW. It is how the dashboard tells "checked, nothing came in" from "nobody looked". new_payments is how many new payments you found (each one also goes through submit_income).',
@@ -449,15 +450,18 @@ export const TOOLS = [
       entry: str("Optional. One short line for the timeline."),
       claim_id: str("Optional. The id from read_claims, when this case escalates that Content ID claim.") }, ["bot", "song", "platform", "type"]) },
   { name: "update_case", title: "Update a dispute case",
-    description: "Update ONE case you own (Nova may update any). id from read_cases. Set status (open, waiting on them, waiting on Luke, waiting on bot, solved - confirm, resolved), waiting_on, next_check (YYYY-MM-DD), recommendation, proposal, or entry (one short timeline line). Put status waiting on Luke when he has to decide, with the recommendation and the proposal filled in. Put status solved - confirm when it is solved and he only has to confirm: his Confirm then closes it. You cannot set his decision, and you cannot mark a case ignored: he does that on the dashboard. When he has decided, read_cases shows decision and the status is waiting on bot: do what he confirmed or wrote, then update the case. Resolved or ignored clears next_check and waiting_on.",
+    description: "Update ONE case you own (Nova may update any). id from read_cases. Set song, status (open, waiting on them, waiting on Luke, waiting on bot, solved - confirm, resolved), waiting_on, next_check (YYYY-MM-DD), recommendation, proposal, entry (one timeline line; entry_date is its YYYY-MM-DD), or timeline (replaces the whole timeline; only the bot who opened the case). Put status waiting on Luke when he has to decide. Put status solved - confirm when it is solved and he only has to confirm. You cannot set his decision, and you cannot mark a case ignored. Resolved or ignored clears next_check and waiting_on.",
     inputSchema: obj({ bot: BOT,
       id: str("The case id from read_cases."),
+      song: str("Optional. The song title, when the old one is wrong."),
       status: str("Optional. open | waiting on them | waiting on Luke | waiting on bot | solved - confirm | resolved."),
-      waiting_on: str("Optional. Who or what you are waiting for. Empty clears it."),
-      next_check: str("Optional. The next day you will look, YYYY-MM-DD. Empty clears it."),
-      recommendation: str("Optional. One plain paragraph. Replaces the previous one."),
-      proposal: str("Optional. The reply or dispute text. Replaces the previous one."),
-      entry: str("Optional. One short line added to the timeline.") }, ["bot", "id"]) },
+      waiting_on: str("Optional. Who you are waiting for. Empty clears it. Say Luke, not A human."),
+      next_check: str("Optional. YYYY-MM-DD. Empty clears it."),
+      recommendation: str("Optional. One paragraph. Replaces the previous one."),
+      proposal: str("Optional. The reply you want approved. Replaces the previous one."),
+      entry: str("Optional. One timeline line."),
+      entry_date: str("Optional. YYYY-MM-DD for entry. Shown instead of the save time."),
+      timeline: { type: "array", description: "Optional. Opening bot only. Replaces the timeline. Each: text, date (YYYY-MM-DD), by.", items: { type: "object", properties: { text: { type: "string" }, date: { type: "string" }, by: { type: "string" } } } } }, ["bot", "id"]) },
   { name: "read_cases", title: "Read dispute cases", readOnly: true,
     description: "The dispute cases on Songs. Filters: status, song, owner, needs_luke (true = only cases waiting on Luke). Each case includes the timeline, the recommendation, the proposal, and Luke's decision when he has made one (choice, text, at). You cannot set that decision. When status is waiting on bot, do what the decision says, then update_case. A claim_id is the Content ID claim this case came from.",
     inputSchema: obj({ bot: BOT,
@@ -1075,7 +1079,7 @@ async function runTool(tool, args, ctx, read) {
           : "not read just now: the team's sheet could not be read" };
     }
     case "log_growth": {
-      const growthKeys = ["followers", "subscribers", "views", "channel_views", "shorts_views", "watch_hours", "monthly_listeners", "brazil_listeners", "best_post", "best_post_link", "song", "streams", "listeners", "saves", "playlist_adds", "video_id", "official_views", "other_views", "views_6h", "follows_6h", "follows_48h", "avg_watch", "avg_watch_6h", "posts", "top_videos", "fan_signals", "pattern", "ad_spend", "paid_views", "organic_views"];
+      const growthKeys = ["followers", "subscribers", "views", "channel_views", "shorts_views", "watch_hours", "monthly_listeners", "brazil_listeners", "best_post", "best_post_link", "song", "streams", "listeners", "saves", "playlist_adds", "video_id", "official_views", "other_views", "views_6h", "follows_6h", "follows_48h", "avg_watch", "avg_watch_6h", "posts", "boosts", "top_videos", "fan_signals", "pattern", "ad_spend", "paid_views", "organic_views"];
       const hasNumbers = growthKeys.some((k) => args[k] != null && (Array.isArray(args[k]) ? args[k].length > 0 : String(args[k]).trim() !== ""));
       const checkOf = async () => {
         const c = await recordAccountCheck(store, now, roster, { ...args, by: me });
@@ -1107,17 +1111,30 @@ async function runTool(tool, args, ctx, read) {
       }
       const prev = me !== "Claude" && args.platform && ctx.hq ? await ctx.hq().then((h) => { const g = h && h.growth ? h.growth.find((p) => String(p.platform).toLowerCase() === String(args.platform).trim().toLowerCase()) : null; return g && g.lastDay ? { date: g.lastDay, followers: g.followers } : null; }).catch(() => null) : null;
       const r = await S.logGrowth(store, now, roster, { by: me, date: args.date, platform: args.platform, account: args.account, followers: args.followers, subscribers: args.subscribers, views: args.views, views_date: args.views_date, channel_views: args.channel_views, shorts_views: args.shorts_views, watch_hours: args.watch_hours, monthly_listeners: args.monthly_listeners, brazil_listeners: args.brazil_listeners, best_post: args.best_post, best_post_link: args.best_post_link,
-        video_id: args.video_id, official_views: args.official_views, other_views: args.other_views, views_6h: args.views_6h, follows_6h: args.follows_6h, follows_48h: args.follows_48h, avg_watch: args.avg_watch, avg_watch_6h: args.avg_watch_6h, posts: args.posts, top_videos: args.top_videos, fan_signals: args.fan_signals, pattern: args.pattern, ad_spend: args.ad_spend, ad_currency: args.ad_currency, paid_views: args.paid_views, organic_views: args.organic_views, ads_read_at: args.ads_read_at,
+        video_id: args.video_id, official_views: args.official_views, other_views: args.other_views, views_6h: args.views_6h, follows_6h: args.follows_6h, follows_48h: args.follows_48h, avg_watch: args.avg_watch, avg_watch_6h: args.avg_watch_6h, posts: args.posts, boosts: args.boosts, top_videos: args.top_videos, fan_signals: args.fan_signals, pattern: args.pattern, ad_spend: args.ad_spend, ad_currency: args.ad_currency, paid_views: args.paid_views, organic_views: args.organic_views, ads_read_at: args.ads_read_at,
         song: args.song, streams: args.streams, listeners: args.listeners, saves: args.saves, playlist_adds: args.playlist_adds, gaps: args.gaps, duty: args.duty, change: args.change, late_read: args.late_read, prev });
       const extra = hasAccountCheck(args) ? await checkOf() : {};
       const fixedWords = r.corrected && r.corrected.length ? r.corrected.map((c) => `${c.date}: ${c.from == null ? "none" : (c.from >= 0 ? "+" : "") + c.from} -> ${(c.to >= 0 ? "+" : "") + c.to}`) : null;
       if (r.duplicate) return { saved: false, duplicate: true, ...(fixedWords ? { changes_fixed: fixedWords } : {}),
         note: "Those numbers were already logged for that day. Nothing was added." + (fixedWords ? " The day-to-day change was worked out again from the day before's total and put right (changes_fixed)." : ""), ...extra };
       return { saved: true, ...(fixedWords ? { changes_fixed: fixedWords } : {}), ...(r.row.change != null && r.row.kind === "growth" ? { change: r.row.change } : {}), ...(r.filled && r.filled.length ? { filled: r.filled } : {}), ...(r.replaced && r.replaced.length ? { corrected: r.replaced } : {}),
-        duty: r.duty, ...(r.gapText ? { gaps: r.gapText } : {}), ...(r.row && r.row.channel_views != null ? { channel_views_is: "lifetime total, not the day's views" } : {}), ...(r.row && r.row.official_views != null ? { official_views_is: "views that day on the official channel" } : {}), ...(r.row && r.row.gate_6h ? { gate_6h: r.row.gate_6h } : {}), shown_on: "badscandal.com/hq, Growth and Songs", ...extra };
+        duty: r.duty, ...(r.gapText ? { gaps: r.gapText } : {}), ...(r.row && r.row.boosts ? { boosts_logged: r.row.boosts.length, boosts: r.row.boosts, note: "Saved on this day's growth row. It is not added to the ad cap. record_spend is not used for this." } : {}), ...(r.row && r.row.channel_views != null ? { channel_views_is: "lifetime total, not the day's views" } : {}), ...(r.row && r.row.official_views != null ? { official_views_is: "views that day on the official channel" } : {}), ...(r.row && r.row.gate_6h ? { gate_6h: r.row.gate_6h } : {}), shown_on: "badscandal.com/hq, Growth and Songs", ...extra };
     }
-    case "read_growth":
-      return S.readGrowth(store, now, { platform: args.platform, date: args.date, song: args.song });
+    case "read_growth": {
+      /* The day's best post is a boost when the ranking or an ad names it, even with no posts[] entry. */
+      let ranking = null, ads = null;
+      if (ctx.ig) {
+        try {
+          const ig = ctx.ig();
+          const get = (k) => (typeof ig.get === "function" ? ig.get(k, { type: "json" }) : null);
+          const [posts, adDoc, comments] = await Promise.all([get("posts.json"), get("adposts.json"), get("comments.json")]);
+          ads = adDoc;
+          const spend = (await S.listSpend(store, now).catch(() => [])).filter((r) => /meta|facebook|instagram/i.test((r && r.platform) || ""));
+          if (Array.isArray(posts)) ranking = rankPosts(posts, adDoc, { now, comments: Array.isArray(comments) ? comments : [], spend });
+        } catch { ranking = null; ads = null; }
+      }
+      return S.readGrowth(store, now, { platform: args.platform, date: args.date, song: args.song, ranking, ads });
+    }
     case "read_claims":
       return S.readClaims(store, now);
     case "open_case": {

@@ -1652,6 +1652,36 @@ body.ws-on .nav{display:none}
 .csteps li.on{color:var(--paper);font-weight:600}
 .csteps li.done{color:var(--uv)}
 .dbadge{margin:4px 0 0;font-size:13px}
+/* one chart for every line on /hq (19 Nov 2026). Labels stay 13px; the line stretches. The pill stays dark in both themes. */
+.hqchart{position:relative;margin:10px 0 0;max-width:100%;touch-action:pan-y;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
+.hqchart-plot{display:flex;gap:6px;align-items:stretch;height:128px;touch-action:pan-y}
+.hqchart-ylabels{flex:0 0 46px;display:flex;flex-direction:column;justify-content:space-between;align-items:flex-end;font:500 13px/1 var(--mono);color:var(--muted)}
+.hqchart-stage{position:relative;flex:1;min-width:0;height:100%;touch-action:pan-y}
+.hqchart-svg{display:block;width:100%;height:100%;touch-action:pan-y;overflow:visible}
+.hqchart-grid line{stroke:var(--uv);stroke-opacity:.45;stroke-width:1;vector-effect:non-scaling-stroke}
+.hqchart-line{fill:none;stroke:var(--accent);stroke-width:2;stroke-linejoin:round;stroke-linecap:round;vector-effect:non-scaling-stroke}
+.hqchart-area{fill:var(--accent);opacity:.16;stroke:none}
+.hqchart.spot .hqchart-line{stroke:var(--spot)}
+.hqchart.spot .hqchart-area{fill:var(--spot)}
+.hqchart-marks{position:absolute;inset:0;pointer-events:none}
+.hqchart-dotpt{position:absolute;width:7px;height:7px;margin:-3.5px 0 0 -3.5px;border-radius:50%;background:var(--accent)}
+.hqchart.spot .hqchart-dotpt{background:var(--spot)}
+.hqchart-cursor{position:absolute;inset:0;pointer-events:none}
+.hqchart-guide{position:absolute;top:0;bottom:0;width:1px;background:var(--paper)}
+.hqchart-dot{position:absolute;width:11px;height:11px;margin:-5.5px 0 0 -5.5px;border-radius:50%;background:var(--paper);box-shadow:0 0 0 2px var(--accent)}
+.hqchart.spot .hqchart-dot{box-shadow:0 0 0 2px var(--spot)}
+.hqchart-pill{position:absolute;z-index:2;top:6px;left:0;transform:translateX(-50%);background:#14161c;color:#f3f5f9;border-radius:999px;padding:5px 10px;font:600 13px/1.3 var(--sans);white-space:nowrap;pointer-events:none;box-shadow:0 6px 18px rgba(0,0,0,.35)}
+.hqchart-x{display:flex;justify-content:space-between;gap:8px;margin:6px 0 0 52px;font:500 13px/1 var(--mono);color:var(--muted)}
+.hqchart-sum{display:flex;justify-content:space-between;gap:12px;margin:8px 0 0;font-size:13px;color:var(--muted)}
+.hqchart-sum b{color:var(--paper);font-weight:650;font-variant-numeric:tabular-nums}
+.htile .hqchart-svg,.pg .kpi .hqchart-svg,.fcell .hqchart-svg{height:100%}
+.fcell a{color:inherit;text-decoration:none}
+.hqchart:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+.pg .kpi:has(.hqchart){overflow:visible}
+.htile:has(.hqchart.is-on),.tile:has(.hqchart.is-on),.pg .kpi:has(.hqchart.is-on){position:relative;z-index:4}
+@media(max-width:640px){
+  .htiles,.pg .kpis{grid-template-columns:1fr}
+}
 </style>
 </head>
 <body>
@@ -1781,6 +1811,7 @@ body.ws-on .nav{display:none}
             <div class="mini"><div class="lbl">Real Spotify taps</div><div class="big num" id="spTaps">–</div></div>
             <div class="mini"><div class="lbl">Cost per tap</div><div class="big num" id="spCpt">–</div></div>
           </div>
+          <div id="spChart"></div>
           <div class="sp-cols">
             <div><div class="lbl" style="margin:14px 0 4px">By ad</div><div class="scroll"><table class="mt" id="spAds"></table></div></div>
             <div><div class="lbl" style="margin:14px 0 4px">By song</div><div class="scroll"><table class="mt" id="spSongs"></table></div></div>
@@ -1825,10 +1856,10 @@ body.ws-on .nav{display:none}
     <div id="pgLoading"><div class="ph big"></div><div class="ph"></div><div class="ph"></div></div>
     <div class="pgrid" id="pgBody" hidden>
       <div class="w12"><div class="kpis">
-        <div class="tile kpi hero"><div class="lbl"><span class="swatch" style="background:var(--spot)"></span>Spotify taps</div><div class="v num" id="kTaps">0</div><div class="d" id="dTaps"></div><svg id="sTaps" aria-hidden="true"></svg></div>
-        <div class="tile kpi"><div class="lbl">Visits</div><div class="v num" id="kVisits">0</div><div class="d" id="dVisits"></div><svg id="sVisits" aria-hidden="true"></svg></div>
-        <div class="tile kpi"><div class="lbl">People</div><div class="v num" id="kUnique">0</div><div class="d" id="dUnique"></div><svg id="sUnique" aria-hidden="true"></svg></div>
-        <div class="tile kpi"><div class="lbl">Click-through</div><div class="v num" id="kCtr">–</div><div class="d" id="dCtr"></div><svg id="sCtr" aria-hidden="true"></svg></div>
+        <div class="tile kpi hero"><div class="lbl"><span class="swatch" style="background:var(--spot)"></span>Spotify taps</div><div class="v num" id="kTaps">0</div><div class="d" id="dTaps"></div><div id="sTaps"></div></div>
+        <div class="tile kpi"><div class="lbl">Visits</div><div class="v num" id="kVisits">0</div><div class="d" id="dVisits"></div><div id="sVisits"></div></div>
+        <div class="tile kpi"><div class="lbl">People</div><div class="v num" id="kUnique">0</div><div class="d" id="dUnique"></div><div id="sUnique"></div></div>
+        <div class="tile kpi"><div class="lbl">Click-through</div><div class="v num" id="kCtr">–</div><div class="d" id="dCtr"></div><div id="sCtr"></div></div>
         <div class="tile kpi" id="cptCard"><div class="lbl">Cost per tap</div><div class="v num" id="kCpt">–</div><div class="d" id="dCpt" style="color:var(--muted);font-weight:400"></div></div>
       </div></div>
       <div class="tile w5"><h3>Funnel</h3><p class="sub">From landing on the page to tapping a store.</p>
@@ -2056,17 +2087,18 @@ body.ws-on .nav{display:none}
   }, 400);
 })();
 </script>
-<script src="js/crt.js?v=9e85286d4412" defer></script>
-<script src="js/hq-lib.js?v=9e85286d4412" defer></script>
-<script src="js/hq-growth.js?v=9e85286d4412" defer></script>
-<script src="js/hq-look.js?v=9e85286d4412" defer></script>
-<script src="js/hq.js?v=9e85286d4412" defer></script>
-<script src="js/hq-staff.js?v=9e85286d4412" defer></script>
-<script src="js/hq-phone.js?v=9e85286d4412" defer></script>
-<script src="js/hq-shell.js?v=9e85286d4412" defer></script>
-<script src="js/hq-workspaces.js?v=9e85286d4412" defer></script>
-<script src="js/hq-app.js?v=9e85286d4412" defer></script>
-<script src="js/hq-cmd.js?v=9e85286d4412" defer></script>
-<script src="js/hq-pages.js?v=9e85286d4412" defer></script>
+<script src="js/crt.js?v=591ef0f862e7" defer></script>
+<script src="js/hq-lib.js?v=591ef0f862e7" defer></script>
+<script src="js/hq-chart.js?v=591ef0f862e7" defer></script>
+<script src="js/hq-growth.js?v=591ef0f862e7" defer></script>
+<script src="js/hq-look.js?v=591ef0f862e7" defer></script>
+<script src="js/hq.js?v=591ef0f862e7" defer></script>
+<script src="js/hq-staff.js?v=591ef0f862e7" defer></script>
+<script src="js/hq-phone.js?v=591ef0f862e7" defer></script>
+<script src="js/hq-shell.js?v=591ef0f862e7" defer></script>
+<script src="js/hq-workspaces.js?v=591ef0f862e7" defer></script>
+<script src="js/hq-app.js?v=591ef0f862e7" defer></script>
+<script src="js/hq-cmd.js?v=591ef0f862e7" defer></script>
+<script src="js/hq-pages.js?v=591ef0f862e7" defer></script>
 </body>
 </html>

@@ -2738,6 +2738,73 @@ function growthPosts(list) {
     return row;
   });
 }
+/* Steve logs a boost he can see in the ad tools. This is that one ad, not the account's day and not the cap.
+   An Instagram-app boost often has no ad id: leave ad blank, or say "not shown". That boost is keyed on the post link. */
+const BOOST_STATUS = ["active", "paused", "deleted"];
+const AD_ACCOUNT_IDS = new Set(["230002830106369"]);
+function boostAdOf(raw, where) {
+  const t = clean(raw, 40);
+  if (!t || /^not shown$/i.test(t)) return "";
+  const bare = t.replace(/^act_/i, "");
+  if (AD_ACCOUNT_IDS.has(t) || AD_ACCOUNT_IDS.has(bare)) fail(`${where}: ad must be that ad's id, as shown. Not the ad account.`);
+  if (!/^[A-Za-z0-9]{4,40}$/.test(t)) fail(`${where}: ad must be that ad's id, as shown. Not the ad account. Leave it blank, or say not shown, when the page shows no ad id.`);
+  return t;
+}
+function boostKeyOf(b) {
+  return b && b.ad ? "ad:" + b.ad : "link:" + (b && b.link || "");
+}
+/* a later log updates the boost with the same ad, or the same post link when there is no ad id */
+function mergeGrowthBoosts(prev, next) {
+  const out = [];
+  const index = new Map();
+  const add = (b) => {
+    if (!b || !b.link) return;
+    const key = boostKeyOf(b);
+    const linkKey = "link:" + b.link;
+    const at = index.has(key) ? index.get(key) : (!b.ad && index.has(linkKey) ? index.get(linkKey) : -1);
+    if (at >= 0) {
+      const kept = out[at].ad && !b.ad ? out[at].ad : (b.ad || "");
+      out[at] = { ...out[at], ...b, ...(kept ? { ad: kept } : {}) };
+      if (!out[at].ad) delete out[at].ad;
+      return;
+    }
+    const row = { ...b };
+    if (!row.ad) delete row.ad;
+    index.set(boostKeyOf(row), out.length);
+    if (row.link) index.set("link:" + row.link, out.length);
+    out.push(row);
+  };
+  for (const b of prev || []) add(b);
+  for (const b of next || []) add(b);
+  return out.slice(0, 10);
+}
+function growthBoosts(list) {
+  if (list == null) return null;
+  if (!Array.isArray(list)) fail("boosts must be a list.");
+  if (!list.length) fail("boosts needs the post. Each one has link, spend, currency and status. ad is the ad id, or blank or not shown.");
+  if (list.length > 10) fail("boosts is 10 at most.");
+  return mergeGrowthBoosts([], list.map((p, i) => {
+    if (!p || typeof p !== "object") fail(`boosts ${i + 1} must be an object.`);
+    const where = `boosts ${i + 1}`;
+    const link = httpsLink(clean(p.link, 400));
+    if (!link) fail(`${where}: link must be the post's https link.`);
+    const ad = boostAdOf(p.ad != null ? p.ad : p.ad_id, where);
+    const status = clean(p.status, 20).toLowerCase();
+    if (!BOOST_STATUS.includes(status)) fail(`${where}: status must be active, paused or deleted.`);
+    const spend = amountOf(p.spend);
+    if (spend == null || spend < 0) fail(`${where}: spend must be the amount that ad has spent, for example 12.40. Not the daily budget and not the account's day total.`);
+    const currency = clean(p.currency, 3).toUpperCase();
+    if (!/^[A-Z]{3}$/.test(currency)) fail(`${where}: currency must be the three-letter code, for example USD.`);
+    const row = { link, ...(ad ? { ad } : {}), spend, currency, status };
+    const started = clean(p.started || p.boost_started, 40);
+    if (started) {
+      if (!/^\d{4}-\d{2}-\d{2}/.test(started)) fail(`${where}: started must be YYYY-MM-DD or YYYY-MM-DD HH:MM.`);
+      row.started = started;
+    }
+    noSecrets(link, ad, status, started);
+    return row;
+  }));
+}
 function topVideosOf(list) {
   if (list == null) return null;
   if (!Array.isArray(list)) fail("top_videos must be a list.");
@@ -2873,6 +2940,8 @@ export async function logGrowth(store, now, roster, a) {
     if (pattern) extra.pattern = pattern;
     const posts = growthPosts(a.posts);
     if (posts) extra.posts = posts;
+    const boosts = growthBoosts(a.boosts);
+    if (boosts) extra.boosts = boosts;
     const tops = topVideosOf(a.top_videos);
     if (tops) extra.top_videos = tops;
     const fans = fanSignalsOf(a.fan_signals);
@@ -2896,6 +2965,13 @@ export async function logGrowth(store, now, roster, a) {
     if (old) {
       const filled = [], replaced = [];
       for (const [k, v] of Object.entries({ ...vals, ...extra })) {
+        if (k === "boosts") {
+          const merged = mergeGrowthBoosts(old.boosts, v);
+          if (sameStored(old.boosts || [], merged)) continue;
+          if (old.boosts == null || old.boosts === "") { old.boosts = merged; filled.push(k); }
+          else { (old.was || (old.was = {}))[k] = old.boosts; old.boosts = merged; replaced.push(k); }
+          continue;
+        }
         if (old[k] == null || old[k] === "") { old[k] = v; filled.push(k); delete (old.gaps || {})[k]; }
         else if (!sameStored(old[k], v)) { (old.was || (old.was = {}))[k] = old[k]; old[k] = v; replaced.push(k); }
       }
@@ -5470,22 +5546,68 @@ const caseStatusOf = (v) => {
   return hit;
 };
 const caseManagers = (by) => by === "Nova" || by === "Claude" || by === "Luke";
-function caseTimeline(c, now, by, text) {
+/* a redaction the bots paste in. It is never shown. */
+function stripSecure(v) {
+  return String(v == null ? "" : v).replace(/\[\s*secure value:[^\]]*\]/gi, " ").replace(/\s+/g, " ").trim();
+}
+function waitingName(v) {
+  const t = stripSecure(v).replace(/\s+since\b.*$/i, "").trim();
+  if (/^(a human|human)$/i.test(t)) return "Luke";
+  return t;
+}
+function caseDateOf(date, where) {
+  const d = clean(date, 10);
+  if (!d) return "";
+  if (!caseDay(d)) fail(`${where} must be YYYY-MM-DD. Nothing was saved.`);
+  return d;
+}
+function caseLine(now, by, text, date, where) {
   const line = clean(text, 300);
-  if (!line) return;
-  noSecrets(line);
-  c.timeline = [{ at: new Date(now).toISOString(), by, text: line }, ...(Array.isArray(c.timeline) ? c.timeline : [])].slice(0, 40);
+  if (!line) return null;
+  noSecrets(line, by);
+  const row = { at: new Date(now).toISOString(), by, text: line };
+  const d = date ? caseDateOf(date, where || "date") : "";
+  if (d) {
+    if (d > spDay(now)) fail("That day is still in the future. Nothing was saved.");
+    row.date = d;
+  }
+  return row;
+}
+function caseTimeline(c, now, by, text, date) {
+  const row = caseLine(now, by, text, date, "entry_date");
+  if (!row) return;
+  c.timeline = [row, ...(Array.isArray(c.timeline) ? c.timeline : [])].slice(0, 40);
+}
+function replaceTimeline(list, now, by) {
+  if (!Array.isArray(list)) fail("timeline must be a list of entries. Nothing was saved.");
+  if (!list.length) fail("timeline needs at least one line. Nothing was saved.");
+  if (list.length > 40) fail("timeline is 40 lines at most. Nothing was saved.");
+  return list.map((e, i) => {
+    const where = `timeline ${i + 1}`;
+    if (!e || typeof e !== "object") fail(`${where} must be an object. Nothing was saved.`);
+    const who = e.by != null && String(e.by).trim() ? clean(e.by, 40) : by;
+    const row = caseLine(now, who, e.text || e.entry, e.date, `${where} date`);
+    if (!row) fail(`${where} needs text. Nothing was saved.`);
+    return row;
+  });
 }
 export function caseOut(c) {
   if (!c) return null;
-  const decision = c.decision && c.decision.at ? { choice: c.decision.choice, text: c.decision.text || "", at: c.decision.at, by: "Luke" } : null;
+  const closed = c.status === "resolved" || c.status === "ignored";
+  const decision = c.decision && c.decision.at ? { choice: stripSecure(c.decision.choice), text: stripSecure(c.decision.text || ""), at: c.decision.at, by: "Luke" } : null;
   return {
-    id: c.id, song: c.song || "", songKey: c.songKey || songKey(c.song), platform: c.platform || "", type: c.type || "",
-    opened: c.opened || "", owner: c.owner || "", status: c.status || "open",
-    waitingOn: c.waitingOn || "", waitingSince: c.waitingSince || "", nextCheck: c.nextCheck || "",
-    claimId: c.claimId || "", recommendation: c.recommendation || "", proposal: c.proposal || "",
-    decision, needsLuke: c.status === "waiting on Luke",
-    timeline: (Array.isArray(c.timeline) ? c.timeline : []).map((e) => ({ at: e.at || "", when: e.at && Number.isFinite(Date.parse(e.at)) ? spStamp(Date.parse(e.at)) : "", by: e.by || "", text: e.text || "" })),
+    id: c.id, song: stripSecure(c.song || ""), songKey: c.songKey || songKey(c.song), platform: stripSecure(c.platform || ""), type: stripSecure(c.type || ""),
+    opened: c.opened || "", owner: stripSecure(c.owner || ""), status: c.status || "open",
+    waitingOn: closed ? "" : waitingName(c.waitingOn || ""), waitingSince: closed ? "" : (c.waitingSince || ""), nextCheck: closed ? "" : (c.nextCheck || ""),
+    claimId: c.claimId || "", recommendation: stripSecure(c.recommendation || ""), proposal: stripSecure(c.proposal || ""),
+    decision, needsLuke: c.status === "waiting on Luke" || c.status === "solved - confirm",
+    timeline: (Array.isArray(c.timeline) ? c.timeline : []).map((e) => ({
+      at: e.at || "",
+      ...(e.date ? { date: e.date } : {}),
+      when: e.date || "",
+      by: stripSecure(e.by || ""),
+      text: stripSecure(e.text || ""),
+    })),
   };
 }
 async function casesDoc(store) {
@@ -5567,16 +5689,23 @@ export async function updateCase(store, now, roster, a) {
   }
   const recommendation = a.recommendation != null ? cleanText(a.recommendation, 800) : null;
   const proposal = a.proposal != null ? cleanText(a.proposal, 2000) : null;
+  const song = a.song != null && String(a.song).trim() ? clean(a.song, 120) : null;
+  if (a.song != null && String(a.song).trim() && (!song || song.length < 2)) fail("song is the song's title. Nothing was saved.");
   const entry = a.entry != null && String(a.entry).trim() ? clean(a.entry, 300) : "";
-  if (!status && waitingOn == null && nextCheck == null && recommendation == null && proposal == null && !entry) fail("Say what changed: status, waiting_on, next_check, recommendation, proposal, or a timeline entry. Nothing was saved.");
-  noSecrets(waitingOn || "", recommendation || "", proposal || "", entry);
+  const entryDate = a.entry_date != null && String(a.entry_date).trim() ? clean(a.entry_date, 10) : "";
+  if (entryDate && !entry) fail("entry_date needs the timeline line in entry. Nothing was saved.");
+  const hasTimeline = a.timeline != null;
+  if (!status && waitingOn == null && nextCheck == null && recommendation == null && proposal == null && !entry && song == null && !hasTimeline) fail("Say what changed: song, status, waiting_on, next_check, recommendation, proposal, a timeline entry, or timeline. Nothing was saved.");
+  noSecrets(song || "", waitingOn || "", recommendation || "", proposal || "", entry);
   const at = new Date(now).toISOString();
   return mutate(store, CASES_KEY, { items: [] }, (doc) => {
     const items = doc && Array.isArray(doc.items) ? doc.items : [];
     const item = items.find((x) => x && x.id === id);
     if (!item) fail("There is no case with that id. Read them with read_cases. Nothing was saved.", "not_found");
     if (item.owner !== by && !caseManagers(by)) fail(`This case is ${item.owner}'s. Nothing was saved.`, "not_allowed");
+    if (hasTimeline && item.createdBy !== by) fail(`Only ${item.createdBy || "the bot who opened this case"} can replace the timeline. Nothing was saved.`, "not_allowed");
     const bits = [];
+    if (song && song !== item.song) { item.song = song; item.songKey = songKey(song); bits.push("Song: " + song); }
     if (status && status !== item.status) { item.status = status; bits.push("Status: " + status); }
     if (waitingOn != null && waitingOn !== item.waitingOn) {
       item.waitingOn = waitingOn;
@@ -5592,7 +5721,9 @@ export async function updateCase(store, now, roster, a) {
       item.nextCheck = "";
     }
     item.updatedAt = at;
-    caseTimeline(item, now, by, entry || bits.join(". "));
+    if (hasTimeline) item.timeline = replaceTimeline(a.timeline, now, by);
+    if (entry) caseTimeline(item, now, by, entry, entryDate);
+    else if (!hasTimeline) caseTimeline(item, now, by, bits.join(". "));
     return { value: { saved: true, item } };
   });
 }
@@ -5690,8 +5821,8 @@ export async function readGrowth(store, now, a = {}) {
     return true;
   }).slice(0, 60);
   const spend = await listSpend(store, now).catch(() => []);
-  const boosts = boostReport(list, spend);
-  return { read_only: true, wrote: false, rows: list, boosts, note: "Read only. A number that is missing was not logged. It is not zero. channel_views is the lifetime total. views is the day's views. YouTube's count is subscribers. A boost's spend is in boosts, and only when a spend row names that post or ad. ad_spend on a row is the platform figure that was logged. It is not a boost's spend." };
+  const boosts = boostReport(list, spend, { ranking: a.ranking, ads: a.ads });
+  return { read_only: true, wrote: false, rows: list, boosts, how_to_log_a_boost: "Steve logs a boost with log_growth. boosts is a list. Each one needs link (the post's https link), ad (that ad's id, or blank or not shown when Instagram shows no ad id; never the ad account), spend (the amount that ad has spent, not the daily budget and not the account's day total), currency (USD) and status (active or paused). A boost with no ad id is keyed on the post link. Forge does not put this on record_spend.", note: "Read only. A number that is missing was not logged. It is not zero. channel_views is the lifetime total. views is the day's views. YouTube's count is subscribers. A boost's spend is in boosts: a spend row that names that post or ad, or a boost Steve logged. ad_spend on a row is the platform figure that was logged. It is not a boost's spend." };
 }
 
 /* Spark's daily content ideas. One document. HQ stores them. Nothing here posts, comments, or changes an ad. */
@@ -5860,9 +5991,9 @@ export function testCase(c) { return String((c && c.platform) || "").trim().toUp
 /* the lock-screen and standup line: who, the song, and the first 80 characters of the proposal */
 export function disputeNeedText(c) {
   const who = clean((c && c.owner) || "A bot", 40);
-  const song = clean((c && c.song) || "", 80) || "a song";
+  const song = clean(stripSecure((c && c.song) || ""), 80) || "a song";
   const head = c && c.status === "solved - confirm" ? `${who} needs you to confirm ${song} is solved` : `${who} needs your decision on ${song}`;
-  const p = String((c && c.proposal) || "").replace(/\s+/g, " ").trim();
+  const p = stripSecure(c && c.proposal).replace(/\s+/g, " ").trim();
   if (!p) return head;
   const bit = p.length > 80 ? p.slice(0, 80).trimEnd() + "…" : p;
   return head + ": " + bit;
