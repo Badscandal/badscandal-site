@@ -272,9 +272,10 @@ test("Needs you: no platform stat blocks and no 'RouteNote email: not connected'
   await import("../js/hq-lib.js");
   const L = globalThis.HQLib;
   assert.deepEqual(L.phoneWatchers({ mail: { connected: false }, waiting: { luke: [] } }), []);
-  const hq = fs.readFileSync(new URL("../js/hq.js", import.meta.url), "utf8");
-  assert.match(hq, /views in the last 7 days/);
-  assert.match(hq, /Account health: /);
+  const growth = fs.readFileSync(new URL("../js/hq-growth.js", import.meta.url), "utf8");
+  assert.match(growth, /Views 7d/);
+  assert.match(growth, /Account status/);
+  assert.equal(/Account health/.test(growth), false, "the engagement dot is not called account health");
   const staff = fs.readFileSync(new URL("../js/hq-staff.js", import.meta.url), "utf8");
   assert.equal(/RouteNote email is not connected yet/.test(staff), false);
 });

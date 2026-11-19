@@ -689,19 +689,9 @@
   }
   /* L5: Content ID claims Laura recorded. Empty means none recorded, never a guessed claim. */
   function drawClaims() {
-    var box = $("claimsBox"); if (!box || !window.HQLib || !HQLib.contentClaimRows) return;
+    var box = $("rightsBody"); if (!box || !window.HQLib || !HQLib.claimsHtml) return;
     var b = window.HQStaff && HQStaff.board ? HQStaff.board() : null;
-    var view = HQLib.contentClaimRows(b && b.claims);
-    var h = '<div class="tile"><h3>Content ID claims</h3><p class="sub">Recorded by Laura from YouTube. A blank is not reported. HQ never invents a claim.</p>';
-    if (!view.rows.length) h += '<p class="d">' + esc(view.empty) + "</p>";
-    else {
-      h += "<ul>";
-      view.rows.forEach(function (r) {
-        h += "<li><b>" + esc(r.claim) + "</b> · " + esc(r.claimant) + " · " + esc(r.impact) + " · " + esc(r.date) + "</li>";
-      });
-      h += "</ul>";
-    }
-    box.innerHTML = h + "</div>";
+    box.innerHTML = HQLib.claimsHtml(b && b.claims, sheet && sheet.today);
   }
   document.addEventListener("hq:refreshed", drawClaims);
 
@@ -715,10 +705,6 @@
     var askIds = {};
     (inbox.questions || []).forEach(function (q) { askIds[q.id] = 1; });
     if (st.connected && window.HQLook) {
-      var best = HQLook.bestPost(ig.ranking, (sheet && sheet.songs) || []);
-      h += best.reported ? '<article class="bestpost"><p class="kl">Best post this week</p><p class="kn">' + esc(best.title) + '</p><p>' + esc(best.why) + '</p>' +
-        (best.thumb ? '<img alt="" src="' + esc(best.thumb) + '" width="120" height="120">' : "") +
-        '<button type="button" class="whybtn" data-source="' + esc(best.source) + '">Source</button></article>' : '<p class="d">' + esc(best.line) + "</p>";
       var fans = HQLook.fanCards(inbox);
       if (fans.length) {
         var fan = fans[0];
@@ -754,22 +740,7 @@
     } else {
       h += '<p class="d"><button class="copybtn" type="button" id="igRead"' + dis + ">" + (igBusy ? "Reading…" : "Read now") + '</button> <button class="linkbtn" type="button" id="igOff"' + dis + ">Disconnect</button>" + (igMsg ? " " + esc(igMsg) : "") + "</p>";
     }
-    /* L2: What engages best, per view, every post at the same age, with the ads that boosted each (17 Nov 2026) */
-    var rk = ig.ranking;
-    function rankItem(r) {
-      var x = L.rankParts(r);
-      return '<li class="tile"><div class="row"><h3>' + link(r.link, (r.song || r.type || "Post") + " · " + day(String(r.at).slice(0, 10))) + '</h3><span class="lbl">' + esc(x.window) + '</span></div>' +
-        '<div class="big num">' + esc(x.rate) + '</div><div class="d">' + esc(x.views) + '</div><div class="d">' + esc(x.deep) + "</div>" + (x.follows ? '<div class="d">' + esc(x.follows) + "</div>" : "") +
-        '<div class="d' + (r.paid ? "" : " muted") + '">' + esc(x.paid) + "</div>" + (x.before ? '<div class="d">' + esc(x.before) + "</div>" : "") + (x.own ? '<div class="d muted">' + esc(x.own) + "</div>" : "") + "</li>";
-    }
-    if (rk && ((rk.ranked || []).length || (rk.older || []).length)) {
-      h += '<h3 class="sech" style="margin-top:14px">What engages best</h3><p class="sub">Every post at the same age (its numbers at 1 day). Engaged = likes, comments, saves and shares ÷ views; our own accounts\u2019 comments don\u2019t count. Paid views bring few engagements, so a boosted post doesn\u2019t win on reach alone. ' +
-        (rk.adsAt ? "Ads read " + esc(L.ago(Date.now() - rk.adsAt)) + "." : "The ads that boosted each post show here once HQ has read them (hourly).") +
-        (rk.tooFew ? " " + rk.tooFew + " newer post" + (rk.tooFew === 1 ? "" : "s") + " not ranked yet (under " + rk.minViews + " views, or not a day old)." : "") +
-        ((rk.ranked || []).length < 10 ? " Fewer than 10 posts compared so far: the order isn\u2019t settled yet." : "") + "</p>";
-      if ((rk.ranked || []).length) h += '<ol class="igrank">' + rk.ranked.slice(0, 8).map(rankItem).join("") + "</ol>";
-      if ((rk.older || []).length) h += '<details class="tile" style="margin-bottom:12px"><summary>Older posts (' + rk.older.length + "): lifetime numbers, not the same age</summary>" + '<ol class="igrank">' + rk.older.slice(0, 10).map(rankItem).join("") + "</ol></details>";
-    }
+    /* Posts and the week ranking are one list in the tables above (24h and 7d kept apart). */
     var otherAsks = (ig.needsReply || []).filter(function (c) { return !askIds[c.id]; });
     if (otherAsks.length) h += '<div class="tile" style="margin:12px 0"><h3>Needs a reply (' + otherAsks.length + ')</h3><p class="sub">Other questions nobody of ours has answered yet. Replying is yours.</p><ul class="igcomments">' +
       otherAsks.map(function (c) { return "<li><b>" + esc(c.user) + "</b>: " + esc(c.text) + ' <span class="lbl">on ' + link(c.link, c.postCaption || "a post") + "</span></li>"; }).join("") + "</ul></div>";
@@ -777,10 +748,6 @@
     if (st.connected) h += '<details class="tile" style="margin:12px 0"><summary>Our own accounts (' + (ig.own || []).length + "): their comments don\u2019t count</summary>" +
       '<p class="d">' + esc((ig.own || []).map(function (x) { return "@" + x; }).join(", ")) + '</p><p class="d muted">Nova keeps this list (the connected account is always on it). Ask Nova to add or remove one.</p>' +
       ((ig.ownLog || []).length ? '<ul class="igcomments">' + ig.ownLog.slice(0, 10).map(function (x) { return "<li>" + esc(L.deskWhen(x.at, sheet && sheet.today) + " · " + x.by + " " + (x.action === "add" ? "added" : "removed") + " @" + x.handle) + ' <span class="lbl">' + esc(x.reason) + "</span></li>"; }).join("") + "</ul>" : "") + "</details>";
-    var shownPosts = (ig.posts || []).filter(function (p) { return p.views == null || Number(p.views) >= 1000; });
-    if (shownPosts.length) h += '<div class="igposts">' + shownPosts.slice(0, 9).map(function (p) {
-      return '<div class="tile igpost"><div class="row"><h3>' + link(p.link, (p.type || "Post") + " · " + day(p.at.slice(0, 10))) + '</h3></div><div class="d">' + esc(L.igPostNumbers(p) || "No numbers yet") + "</div></div>";
-    }).join("") + "</div>";
     if ((ig.comments || []).length) h += '<div class="tile" style="margin-top:12px"><h3>Newest comments</h3><ul class="igcomments">' + ig.comments.slice(0, 8).map(function (c) {
       return "<li><b>" + esc(c.user) + "</b>: " + esc(c.text) + ' <span class="lbl">on ' + link(c.link, c.postCaption || "a post") + "</span></li>"; }).join("") + "</ul></div>";
     if ((ig.countries || []).length) h += '<p class="d" style="margin-top:10px">Followers by country: ' + esc(ig.countries.slice(0, 6).map(function (c) { return c.country + " " + fmt(c.count); }).join(" · ")) + "</p>";
@@ -806,42 +773,27 @@
   });
 
   /* ---------- Growth, Fans, Releases, Money, Team (the sheet) ---------- */
-  function drawIdeas() {
-    var box = $("ideasBox"); if (!box || !window.HQLib.contentIdeasCard) return;
-    var card = L.contentIdeasCard(staffBoard() && staffBoard().contentIdeas);
-    var h = '<div class="tile"><h3>' + esc(card.title) + '</h3><p class="sub">' + esc(card.reported ? card.note : card.empty) + "</p>";
-    if (card.reported) {
-      h += '<p class="d"><b>Best post</b> · ' + esc(card.best) + "</p>";
-      if (card.compared) h += '<p class="d">' + esc(card.compared) + "</p>";
-      h += "<ul>" + card.ideas.map(function (line) { return "<li>" + esc(line) + "</li>"; }).join("") + "</ul>";
-    }
-    box.innerHTML = h + "</div>";
-  }
+  function drawIdeas() { /* Spark's cards are inside the Growth page, one list with the posts. */ }
   function drawGrowth() {
-    drawIdeas();
-    if (!sheet) return;
-    /* the account's health dot and its 7-day views live here (18 Nov 2026, Luke: the platform blocks cluttered Needs you) */
-    var b = staffBoard(), dots = (L.accountHealthHome && b ? L.accountHealthHome(b.accountHealth).dots : []) || [];
-    var dotOf = function (name) {
-      var k = String(name || "").toLowerCase().replace(/[^a-z]/g, "");
-      return dots.filter(function (d) { var l = String(d.label || d.id || "").toLowerCase().replace(/[^a-z]/g, ""); return k && (l === k || l.indexOf(k) === 0 || k.indexOf(l) === 0); })[0] || null;
-    };
-    var DOT = { ok: "Fine", watch: "Watch", red: "Needs a look", gap: "Not enough data" };
-    var SAME = { green: "ok", amber: "watch", yellow: "watch" };
-    $("growthList").innerHTML = broken("Growth") ? '<p class="empty">See the note above.</p>' : sheet.growth.length ? sheet.growth.map(function (g) {
-      var d = dotOf(g.platform);
-      if (d) d = { state: SAME[d.state] || (DOT[d.state] ? d.state : "gap") };
-      return '<div class="tile"><div class="row"><h3>' + esc(g.platform) + (d ? ' <a class="gdot ' + esc(d.state) + '" href="#growth" title="Account health: ' + esc(DOT[d.state] || d.state) + '"><i></i><span>' + esc(DOT[d.state] || d.state) + "</span></a>" : "") + '</h3><span class="lbl">' + esc(g.account) + "</span></div>" +
-        '<div class="big num">' + fmt(g.followers) + "</div>" +
-        (g.views7 != null ? '<div class="d">' + fmt(g.views7) + " views in the last 7 days</div>" : "") +
-        '<div class="d">' + signed(g.day) + " yesterday · " + signed(g.week) + " " + L.growthWhen(g) + (g.month != null ? " · " + signed(g.month) + " in 30" : "") + "</div>" + spark(g.series) +
-        (g.best.length ? '<div class="lbl" style="margin-top:4px">Best days</div>' + g.best.map(function (b) { return '<div class="d" style="margin-top:4px">' + signed(b.change) + " · " + esc(day(b.d)) + " · " + link(b.link, b.post) + "</div>"; }).join("") : "") +
-        (g.stale > 2 ? '<div class="d" style="margin-top:6px;color:var(--paper)">Not logged for ' + g.stale + " days</div>" : "") + "</div>";
-    }).join("") : '<p class="empty">No growth rows yet. Steve, Kevin, Laura and Atlas log one row a day.</p>';
+    if (!sheet || !$("growthMain") || !L.growthHtml) return;
+    var b = staffBoard() || {};
+    $("growthMain").innerHTML = broken("Growth") ? '<p class="empty">See the note above.</p>' : L.growthHtml({
+      today: sheet.today, platforms: sheet.growth || [], rows: sheet.growthDetail || [],
+      igPosts: (ig && ig.posts) || [], ideas: b.contentIdeas || null, releases: sheet.releases || [],
+      health: b.accountHealth || null, claims: b.claims || null
+    });
+    drawClaims();
   }
   function drawFans() {
     var f = sheet.fans;
-    $("fansSub").textContent = f.total ? f.total + " people noticed · " + f.repeat + " came back more than once. Suggestions only: nobody is contacted without your yes." : "People asking for the song name, repeat commenters and DMs.";
+    var extra = $("fanExtra");
+    if (extra && L.tiktokFans) {
+      var signals = L.tiktokFans((sheet && sheet.growthDetail) || []);
+      extra.innerHTML = signals.length ? '<div class="tile"><h3>TikTok</h3><ul>' + signals.map(function (s) {
+        return "<li><b>" + esc(s.handle || "not reported") + "</b> " + (s.quote ? "“" + esc(s.quote) + "”" : '<span class="gmiss">not reported</span>') + " <span class=\"lbl\">" + esc(s.date || "") + "</span></li>";
+      }).join("") + "</ul></div>" : '<p class="d">TikTok fan signals <span class="gmiss">not reported</span></p>';
+    }
+    $("fansSub").textContent = f.total ? f.total + " people noticed · " + f.repeat + " came back more than once. Suggestions only: nobody is contacted without your yes." : "People asking for the song name, repeat commenters and DMs. Instagram comments are just above. TikTok signals are logged with log_growth.";
     setTable("fanTable", broken("Fans") ? "" : f.people.length ? "<tr><th>Who</th><th>Where</th><th class='r'>Times</th><th>What they said</th><th>About them</th><th>How to reach them</th></tr>" + f.people.map(function (p) {
       return "<tr><td><b>" + link(p.profile, p.handle) + "</b><br><span class='lbl'>" + esc(p.signals.join(" · ").replace(/_/g, " ")) + "</span></td><td>" + esc(p.platform) + "<br><span class='lbl'>" + esc(day(p.last)) + "</span></td><td class='r'>" + (p.times >= 2 ? "<b>" + p.times + "</b>" : p.times) + "</td><td>" + (p.quote ? "“" + link(p.post, p.quote) + "”" : "–") + "</td><td>" + esc(p.about || "–") + "</td><td>" + esc(p.engage || "–") + "</td></tr>";
     }).join("") : '<tr><td class="empty">No fan signals logged yet.</td></tr>');

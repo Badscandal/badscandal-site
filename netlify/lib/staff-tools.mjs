@@ -304,7 +304,25 @@ export const TOOLS = [
       platform: str("For Growth: TikTok, Instagram, YouTube..."), account: str("For Growth: the account handle."),
       followers: str("Followers as shown, for example 1240 or 1,240. YouTube: use subscribers (followers is accepted too)."), subscribers: str("YouTube: subscribers as shown. Stored as the follower number."), views: str("Views for the day (or the newest day shown). Not the channel's lifetime total."),
       views_date: str("The day those views are for, YYYY-MM-DD, when they arrive a day late (TikTok)."),
-      channel_views: str("YouTube: the channel's lifetime views (the Official Artist Channel total), not the day's views."), shorts_views: str("Shorts or Reels views as shown."), watch_hours: str("YouTube: watch hours as shown."), monthly_listeners: str("Platform Spotify (Atlas): the artist's monthly listeners as shown in Spotify for Artists (17 Nov 2026)."), brazil_listeners: str("Platform Spotify: the monthly listeners in Brazil, as shown (Audience, Location)."), best_post: str("Optional. The day's best post, in a few words."), best_post_link: str("Optional. Its https link."),
+      channel_views: str("YouTube: the channel's lifetime views (the Official Artist Channel total), not the day's views. The page labels this Lifetime channel views."), shorts_views: str("Shorts or Reels views as shown."), watch_hours: str("YouTube: watch hours as shown. Decimals are kept (for example 56.6)."), monthly_listeners: str("Platform Spotify (Atlas): the artist's monthly listeners as shown in Spotify for Artists (17 Nov 2026)."), brazil_listeners: str("Platform Spotify: the monthly listeners in Brazil, as shown (Audience, Location)."), best_post: str("Optional. The day's best post, in a few words."), best_post_link: str("Optional. Its https link. YouTube may send video_id instead."),
+      video_id: str("YouTube: the video id when there is no https link. Either this or best_post_link."),
+      official_views: str("YouTube: views that day on the official channel. Not the lifetime total."),
+      other_views: str("YouTube: views that day on other channels."),
+      views_6h: str("TikTok: views at the +6h snapshot."),
+      follows_6h: str("TikTok: follows from the post at +6h."),
+      follows_48h: str("TikTok: follows from the post at 48h."),
+      avg_watch: str("TikTok: average watch time at 1 day, in seconds, decimals allowed."),
+      avg_watch_6h: str("TikTok: average watch time at +6h, in seconds. The +6h gate passes when this is at least 2.5 and follows_6h / views_6h is at least 0.14%."),
+      posts: { type: "array", description: "Optional. The day's posts, one fixed window per column. Each: date, hook, views_24h, views_7d, likes, comments, saves, shares, follows, follows_6h, follows_48h, avg_watch, link or video_id, boosted true or false. Leave a number out when you could not read it. Do not send 0 for a number you did not see.", items: { type: "object" } },
+      top_videos: { type: "array", description: "YouTube: the top 3 videos that day. Each: title, views, and link or video_id. 3 at most.", items: { type: "object" } },
+      fan_signals: { type: "array", description: "TikTok (Kevin): fan signals, the same idea as the Instagram fan inbox. Each: handle, quote, link, about, engage. 8 at most. Leave one out when you did not see it.", items: { type: "object" } },
+      pattern: str("Optional. One line on what worked, for the week card. Only what you actually saw."),
+      ad_spend: str("Optional. Ad spend for this platform that day, the amount shown."),
+      ad_currency: str("Optional. The currency of ad_spend, a 3-letter code."),
+      paid_views: str("Optional. Paid views that day, as shown."),
+      organic_views: str("Optional. Organic views that day, as shown."),
+      ads_read_at: str("Optional. When the ads numbers were read, YYYY-MM-DD or YYYY-MM-DD HH:MM."),
+      claims_checked: { type: "boolean", description: "Laura: true once YouTube's Content ID page was checked today. No follower numbers on that call. It does not invent a claim." },
       song: str("For Songs: the song's title."), streams: str("Spotify streams for that day."), listeners: str("Spotify listeners."), saves: str("Saves."), playlist_adds: str("Playlist adds."),
       gaps: { type: "object", description: 'What could not be read, and why: {"views": "TikTok shows them a day late"}.', additionalProperties: { type: "string" } },
       duty: str('Optional. Your duty id from my_day (it starts with "D-").'),
@@ -337,7 +355,20 @@ export const TOOLS = [
       track_moved: str("Spotify only. Atlas: a track he saw on another profile, named as shown."),
       moved_to: str("Spotify only. The other profile's name, when Atlas saw it. Needs track_moved."),
       site_ok: str("Webmaster only, platform badscandal.com: yes or no, as the page answered."),
-      site_note: str("Webmaster only. One line about what the page showed. Needs site_ok.") }, ["bot", "date"]) },
+      site_note: str("Webmaster only. One line about what the page showed. Needs site_ok."),
+      monetisation: str("YouTube only. What Studio shows: on, limited or off. Leave it out when Studio did not show it."),
+      song_claim: str("Laura, with a Content ID claim: the song's title, when YouTube showed which song. This is not the claim text."),
+      video: str("Laura, with a claim: the video's https link or its YouTube video id."),
+      claim_type: str("Laura, with a claim: the claim type YouTube showed."),
+      status: str("Laura, with a claim: the status YouTube showed (for example active, blocked, muted)."),
+      reach_effect: str("Laura, with a claim: the effect on reach, in YouTube's words."),
+      money_effect: str("Laura, with a claim: the effect on money, in YouTube's words."),
+      strike: str("Laura, with a claim: yes or no, only when YouTube showed whether it is a strike."),
+      action: str("Laura, with a claim: the action needed, in a few words, only when YouTube showed one."),
+      owner: str("Laura, with a claim: the bot who owns the next step. Defaults to Laura.") }, ["bot", "date"]) },
+  { name: "read_growth", title: "Read growth rows", readOnly: true,
+    description: "STEVE, ATLAS, KEVIN, LAURA (Nova too): the growth rows already on the desk. Read only. Filter with platform, date or song. A missing number was not logged. It is not zero. channel_views is the lifetime total. views is that day's views. YouTube's count is subscribers. TikTok fan_signals are on the TikTok rows.",
+    inputSchema: obj({ bot: BOT, platform: str("Optional. TikTok, Instagram, YouTube or Spotify."), date: str("Optional. One day, YYYY-MM-DD."), song: str("Optional. A song title, for the Songs rows.") }, ["bot"]) },
   { name: "income_check", title: "Say an account was checked",
     description: 'Call this once per account, every day, after you looked at it, EVEN WHEN NOTHING IS NEW. It is how the dashboard tells "checked, nothing came in" from "nobody looked". new_payments is how many new payments you found (each one also goes through submit_income).',
     inputSchema: obj({ bot: BOT, account: str('The account you checked: "Wise", "PayPal", "Statement emails", "RouteNote"...'),
@@ -397,6 +428,9 @@ export const TOOLS = [
       original_publisher: str("Label licence: the original publisher, if known."),
       flag_reason: str("Label licence: required when status is flagged. What is wrong."),
       s4a: { type: "boolean", description: "Label pitch: true once the alias has Spotify for Artists access." } }, ["bot", "song", "step", "status"]) },
+  { name: "read_claims", title: "Read Content ID claims", readOnly: true,
+    description: "LAURA (Nova too): the Content ID claims on the Rights page, and whether Laura checked them today. Read only. A missing field is not reported, not zero. To mark the day checked, call log_growth with claims_checked true and no follower numbers. HQ never invents a claim. Label licences stay on licence_queue.",
+    inputSchema: obj({ bot: BOT }, ["bot"]) },
   { name: "licence_queue", title: "Label licence queue",
     description: "For the Licence bot. With no song: the Label covers whose release pack is ready and whose licence is not done. Each one says waiting on licence. Licensed covers are listed separately with their proof link. To mark one licensed: pass song and proof_link (an https link to the licence saved with the song and the assets in Google Drive). Do this only after Luke has said yes for that song. Nova records that yes with luke_said (Luke's exact words) and the song; the Licence bot cannot record the yes. Never pass an amount, a card or a bank detail: HQ does not take payment. You report to Nova only.",
     inputSchema: obj({ bot: BOT,
@@ -404,10 +438,11 @@ export const TOOLS = [
       proof_link: str("The https link that proves the licence is saved (the Drive folder or the licence PDF). Required to mark one licensed."),
       luke_said: str("Nova, Claude or Luke only: Luke's exact yes for this one cover. The Licence bot cannot record this.") }, ["bot"]) },
   { name: "content_ideas", title: "Content ideas for Nova",
-    description: "For Spark, once a day around 10:00 São Paulo. With no ideas: the latest ideas already on the desk. To send today's: posts (the official ones you ranked, whose \"ours\", plus similar artists' outlier posts, whose \"similar\") and ideas (3 to 5). Each post needs platform (Instagram, TikTok or YouTube), views, and likes, comments, saves and shares. Engagement per view is (likes + comments + saves + shares) / views. The best official post is the highest of those. Each idea needs hook, text (the on-screen text), format, platform and why. You report to Nova only. Never post, comment, send a DM, or touch an ad. HQ only stores the ideas.",
+    description: "For Spark, once a day around 10:00 São Paulo. With no ideas: the latest ideas already on the desk. To send today's: posts (the official ones you ranked, whose \"ours\", plus similar artists' outlier posts, whose \"similar\") and ideas (3 to 5). Each post needs platform (Instagram, TikTok or YouTube), views, and likes, comments, saves and shares. Engagement per view is (likes + comments + saves + shares) / views. The best official post is the highest of those. Each idea needs hook, text (the on-screen text), format, platform and why. Optional on an idea: song, market, source (https), score, status (idea, shot or posted), and once posted: views, epv, verdict (won, flat or lost) and why_won. Optional next_song: when an official post beats the others, HQ adds one next-idea card with the same recipe. If next_song is left out, the song on that card is not reported. A post may include at (YYYY-MM-DD) so the page can compare with a 14-day average. You report to Nova only. Never post, comment, send a DM, or touch an ad. HQ only stores the ideas.",
     inputSchema: obj({ bot: BOT,
-      posts: { type: "array", description: "The posts you ranked. Each: platform, title, views, likes, comments, saves, shares, whose (ours or similar), and an optional https link.", items: { type: "object" } },
-      ideas: { type: "array", description: "3 to 5 ideas. Each: hook, text, format, platform, why.", items: { type: "object" } },
+      posts: { type: "array", description: "The posts you ranked. Each: platform, title, views, likes, comments, saves, shares, whose (ours or similar), an optional https link, and an optional at (YYYY-MM-DD).", items: { type: "object" } },
+      ideas: { type: "array", description: "3 to 5 ideas. Each: hook, text, format, platform, why. Optional: song, market, source, score, status (idea, shot, posted), views, epv, verdict, why_won.", items: { type: "object" } },
+      next_song: str("Optional. The next song for an auto idea, when a post beat the average. Leave it out if you do not know it: HQ does not invent a title."),
       compared: str("Optional. One line on the similar artists' outlier posts you compared. No lyrics.") }, ["bot"]) },
   { name: "release_fill", title: "Fill one field of a release pack",
     description: `Fill ONE field of a release pack that you are responsible for, once you have the real value: ${S.PACK_FIELDS.filter((f) => f.fill.length).map((f) => `${f.key} (${f.short}): ${f.fill.join(" or ")}`).join("; ")}. Nova may fill any of these. Copy the value exactly as the store or platform shows it; links must start with https://. Every other field is filled by Luke on the dashboard: if one is wrong or missing, send Luke a message.`,
@@ -551,6 +586,7 @@ export const TOOL_USERS = {
   submit_income: INCOME_TEAM, fix_payment: INCOME_TEAM, income_source: INCOME_TEAM, income_check: INCOME_TEAM, sort_payment: INCOME_TEAM,
   income_status: [...INCOME_TEAM, "Alfred"], payments: INCOME_TEAM, link_transfer: INCOME_TEAM, month_check: INCOME_TEAM, close_month: INCOME_TEAM,
   record_spend: ["Forge"], log_growth: ["Steve", "Atlas", "Kevin", "Laura"],
+  read_growth: ["Steve", "Atlas", "Kevin", "Laura"], read_claims: ["Laura"],
   account_health: ["Steve", "Kevin", "Laura", "Atlas", "Drop", "Webmaster"],
   song_pl: ["Ledger", "Sheet", "Forge"],
   store_status: ["Drop"], spotify_upcoming: ["Atlas"], pitch_log: ["Atlas"], song_page: ["Webmaster"], roster_card: ["Nova"], recommend: ["Nova"], preflight: ["Forge", "Drop", "Verse", "Webmaster", "Atlas", "Laura"], instagram: ["Steve", "Kevin", "Forge"], song_pages: ["Webmaster"], upload_cover: ["Webmaster"],
@@ -703,6 +739,18 @@ export async function settleRead(store, now, me, since, answer, list = null) {
   const byId = new Map(all.map((m) => [m.id, m]));
   await S.touchRead(store, at, me, also.filter((id) => byId.has(id) && byId.get(id).at > cut), now);
   return left.length;
+}
+/* two auto lines for the same platform on the same day ("YouTube 19 Nov:") are one line */
+function dedupeGrowthUpdates(lines) {
+  const seen = new Set(), out = [];
+  for (const line of lines || []) {
+    const m = String(line).match(/(Instagram|TikTok|YouTube|Spotify)\s+(\d{1,2}\s+[A-Za-z]{3})\s*:/i);
+    const k = m ? m[1].toLowerCase() + "|" + m[2].toLowerCase() : "";
+    if (k && seen.has(k)) continue;
+    if (k) seen.add(k);
+    out.push(line);
+  }
+  return out;
 }
 export async function callTool(tool, args, ctx) {
   const read = {};
@@ -990,8 +1038,8 @@ async function runTool(tool, args, ctx, read) {
           : "not read just now: the team's sheet could not be read" };
     }
     case "log_growth": {
-      const growthKeys = ["followers", "subscribers", "views", "channel_views", "shorts_views", "watch_hours", "monthly_listeners", "brazil_listeners", "best_post", "best_post_link", "song", "streams", "listeners", "saves", "playlist_adds"];
-      const hasNumbers = growthKeys.some((k) => args[k] != null && String(args[k]).trim() !== "");
+      const growthKeys = ["followers", "subscribers", "views", "channel_views", "shorts_views", "watch_hours", "monthly_listeners", "brazil_listeners", "best_post", "best_post_link", "song", "streams", "listeners", "saves", "playlist_adds", "video_id", "official_views", "other_views", "views_6h", "follows_6h", "follows_48h", "avg_watch", "avg_watch_6h", "posts", "top_videos", "fan_signals", "pattern", "ad_spend", "paid_views", "organic_views"];
+      const hasNumbers = growthKeys.some((k) => args[k] != null && (Array.isArray(args[k]) ? args[k].length > 0 : String(args[k]).trim() !== ""));
       const checkOf = async () => {
         const c = await recordAccountCheck(store, now, roster, { ...args, by: me });
         return { account_check: c.summary, account_check_saved: !!c.saved };
@@ -1000,10 +1048,14 @@ async function runTool(tool, args, ctx, read) {
          A claim on its own returns the same shape as before. A status check sent with it is kept too. */
       if (args.claim != null && String(args.claim).trim()) {
         const extra = hasAccountCheck(args) ? await checkOf() : {};
-        const c = await S.recordContentClaim(store, now, roster, { by: me, date: args.date, claim: args.claim, claimant: args.claimant, impact: args.impact });
+        const c = await S.recordContentClaim(store, now, roster, { by: me, date: args.date, claim: args.claim, claimant: args.claimant, impact: args.impact, song: args.song_claim || args.song, video: args.video, video_id: args.video_id, claim_type: args.claim_type, status: args.status, reach_effect: args.reach_effect, money_effect: args.money_effect, strike: args.strike, action: args.action, owner: args.owner });
         if (!c || !c.item) throw new S.StaffError("That claim was not saved. Try again.");
         if (c.duplicate) return { saved: false, duplicate: true, note: "That claim was already recorded for that day. Nothing was added.", ...extra };
-        return { saved: true, duplicate: false, claim: c.item.claim, date: c.item.date, shown_on: "badscandal.com/hq, Growth and Fans", ...extra };
+        return { saved: true, duplicate: false, claim: c.item.claim, date: c.item.date, shown_on: "badscandal.com/hq, Rights", ...extra };
+      }
+      if ((args.claims_checked === true || args.claims_checked === "yes" || args.claims_checked === "true") && !hasNumbers) {
+        const c = await S.markClaimsChecked(store, now, roster, { by: me });
+        return { saved: true, checked_today: true, day: c.day, by: c.by, shown_on: "badscandal.com/hq, Rights" };
       }
       /* A status-page check with no follower numbers does not mark a growth duty done. */
       if (!hasNumbers && hasAccountCheck(args)) {
@@ -1018,14 +1070,19 @@ async function runTool(tool, args, ctx, read) {
       }
       const prev = me !== "Claude" && args.platform && ctx.hq ? await ctx.hq().then((h) => { const g = h && h.growth ? h.growth.find((p) => String(p.platform).toLowerCase() === String(args.platform).trim().toLowerCase()) : null; return g && g.lastDay ? { date: g.lastDay, followers: g.followers } : null; }).catch(() => null) : null;
       const r = await S.logGrowth(store, now, roster, { by: me, date: args.date, platform: args.platform, account: args.account, followers: args.followers, subscribers: args.subscribers, views: args.views, views_date: args.views_date, channel_views: args.channel_views, shorts_views: args.shorts_views, watch_hours: args.watch_hours, monthly_listeners: args.monthly_listeners, brazil_listeners: args.brazil_listeners, best_post: args.best_post, best_post_link: args.best_post_link,
+        video_id: args.video_id, official_views: args.official_views, other_views: args.other_views, views_6h: args.views_6h, follows_6h: args.follows_6h, follows_48h: args.follows_48h, avg_watch: args.avg_watch, avg_watch_6h: args.avg_watch_6h, posts: args.posts, top_videos: args.top_videos, fan_signals: args.fan_signals, pattern: args.pattern, ad_spend: args.ad_spend, ad_currency: args.ad_currency, paid_views: args.paid_views, organic_views: args.organic_views, ads_read_at: args.ads_read_at,
         song: args.song, streams: args.streams, listeners: args.listeners, saves: args.saves, playlist_adds: args.playlist_adds, gaps: args.gaps, duty: args.duty, prev });
       const extra = hasAccountCheck(args) ? await checkOf() : {};
       const fixedWords = r.corrected && r.corrected.length ? r.corrected.map((c) => `${c.date}: ${c.from == null ? "none" : (c.from >= 0 ? "+" : "") + c.from} -> ${(c.to >= 0 ? "+" : "") + c.to}`) : null;
       if (r.duplicate) return { saved: false, duplicate: true, ...(fixedWords ? { changes_fixed: fixedWords } : {}),
         note: "Those numbers were already logged for that day. Nothing was added." + (fixedWords ? " The day-to-day change was worked out again from the day before's total and put right (changes_fixed)." : ""), ...extra };
       return { saved: true, ...(fixedWords ? { changes_fixed: fixedWords } : {}), ...(r.row.change != null && r.row.kind === "growth" ? { change: r.row.change } : {}), ...(r.filled && r.filled.length ? { filled: r.filled } : {}), ...(r.replaced && r.replaced.length ? { corrected: r.replaced } : {}),
-        duty: r.duty, ...(r.gapText ? { gaps: r.gapText } : {}), shown_on: "badscandal.com/hq, Growth and Songs", ...extra };
+        duty: r.duty, ...(r.gapText ? { gaps: r.gapText } : {}), ...(r.row && r.row.channel_views != null ? { channel_views_is: "lifetime total, not the day's views" } : {}), ...(r.row && r.row.official_views != null ? { official_views_is: "views that day on the official channel" } : {}), ...(r.row && r.row.gate_6h ? { gate_6h: r.row.gate_6h } : {}), shown_on: "badscandal.com/hq, Growth and Songs", ...extra };
     }
+    case "read_growth":
+      return S.readGrowth(store, now, { platform: args.platform, date: args.date, song: args.song });
+    case "read_claims":
+      return S.readClaims(store, now);
     case "income_check": {
       const c = await S.incomeCheck(store, now, roster, { ...args, bot: me });
       return { saved: true, account: c.account, day: c.day, new_payments: c.new, note: c.new > 0 ? "Now make sure each of those payments went through submit_income." : "Recorded as checked, nothing new." };
@@ -1185,7 +1242,7 @@ async function runTool(tool, args, ctx, read) {
     case "content_ideas": {
       const posting = Array.isArray(args.ideas) || Array.isArray(args.posts) || String(args.compared || "").trim();
       if (!posting) return { you: me, ...(await S.readContentIdeas(store)) };
-      return S.saveContentIdeas(store, now, { by: me, posts: args.posts, ideas: args.ideas, compared: args.compared, comment: args.comment, dm: args.dm, reply: args.reply, ad: args.ad, boost: args.boost, publish: args.publish });
+      return S.saveContentIdeas(store, now, { by: me, posts: args.posts, ideas: args.ideas, compared: args.compared, next_song: args.next_song, comment: args.comment, dm: args.dm, reply: args.reply, ad: args.ad, boost: args.boost, publish: args.publish });
     }
     case "licence_queue": {
       const said = String(args.luke_said || "").trim();
@@ -1308,10 +1365,12 @@ async function runTool(tool, args, ctx, read) {
         "A statement that is still payable is settled the same way payments settles it: paid_by. It then shows as settled, not still payable.",
         "expected_money lists each statement. payout_routes shows Exchange and fees from amounts already recorded. A gap with no source is short, unexplained, never a fee. A split with no rule Luke confirmed says rule pending. close_month needs an evidence link (https). A remainder of 1.00 or less after every Revolut leg of one Wise or PayPal payment is left in Wise or PayPal, not a fee.",
         "A payment counts in the month it arrived. HQ never moves money and never writes to the Google Sheet.",
+        "GROWTH (19 Nov 2026). Daily numbers are logged on the desk with log_growth and read back with read_growth. They are not written into a Google Sheet. YouTube's count is subscribers, not followers. watch_hours may be a decimal (56.6). A YouTube video may be a video id when there is no https link. official_views and other_views are that day's views. channel_views is the lifetime total. TikTok fan signals go in fan_signals (handle, quote, link), the same idea as the Instagram fan inbox. Content ID claims are on the Rights page: read them with read_claims. Laura marks the day checked with log_growth claims_checked true. A missing number is left out. The page says not reported. Do not send a zero you did not see.",
         `RouteNote mail is read from ${S.ROUTE_NOTE_INBOX} (Lilian's mail is forwarded there). A draft to a moderation team is From ${S.MODERATION_FROM}, CC ${S.MODERATION_CC}. HQ does not send the email.`,
       ].join("\n");
       let text = g.text || BUILT_IN_GUIDE;
       text = text.replace(/eighteen tools/gi, `${TOOLS.length} tools`);
+      text = text.replace(/you still write your numbers into the Google Sheets exactly as before[^.]*\./gi, "Growth, Songs, Fans and Content ID claims are logged on the desk with log_growth. Read them with read_growth and read_claims. They are not written into a Google Sheet.");
       return `${current}\n\n${live}\n\n` + (g.text ? `STAFF GUIDE (stored ${g.at ? g.at.slice(0, 10) : "?"}; the current rules above win)\n\n${text}` : text);
     }
   }
@@ -1394,11 +1453,7 @@ async function runTool(tool, args, ctx, read) {
       try { if (ctx.ig) { const st = await ctx.ig().get("state.json"); igConnected = !!(st && (st.lastOkAt || st.username)); } } catch {}
       const knownDuty = INSTRUCTION_LINES.filter(([who]) => who && who.split(" ").includes(me)).map(([, text]) => text);
       const full = (S.DEFAULT_ROSTER.find((b) => b.name === me) || {}).duty || "";
-      const uncut = (duty) => {
-        const d = S.freshDuty(duty);
-        for (const line of [full, ...knownDuty]) if (line.length > d.length + 5 && line.startsWith(d) && /[A-Za-z]$/.test(d)) return line;
-        return d;
-      };
+      const uncut = (duty) => S.fullDuty(duty, [full, ...knownDuty]);
       const dutyTask = (task) => (me === "Atlas" && /monthly listeners in note|salvation/i.test(task || "")
         ? "Log yesterday's Spotify numbers for every released song, plus monthly listeners and Brazil listeners in their own fields (monthly_listeners and brazil_listeners). There is no Salvation card."
         : uncut(task));
@@ -1420,6 +1475,7 @@ async function runTool(tool, args, ctx, read) {
         ...(licenceDay ? { reports_to: "Nova", licence_queue: licenceDay, idle_until: "Luke starts a cover. He writes the covers and keeps the songs." } : {}),
         ...(sparkDay ? { reports_to: "Nova", content_ideas: sparkDay, posts: "Read only. Never post, comment, send a DM, or touch an ad." } : {}),
         ...(me === "Atlas" ? { numbers_how: "Monthly listeners and Brazil listeners go in log_growth as monthly_listeners and brazil_listeners. They are not a note, and there is no Salvation card." } : {}),
+        ...(me === "Laura" ? { claims_page: "badscandal.com/hq#rights", claims_how: "Read claims with read_claims. When YouTube's Content ID page has been checked today, call log_growth with claims_checked true and no follower numbers. A missing field stays not reported." } : {}),
         daily_duty: uncut(w.duty), usual_time: w.time, schedule: S.scheduleForMyDay(me, w.schedule, { today, releases: rel, nextDate: nextRel && nextRel.date, duty: duties[0] }),
         duties_today: duties,
         open_tasks: w.tasks.filter((t) => !S.staleTask(t) && S.signInOpen(t, signedRaw.join(" "))).map((t) => ({ id: t.id, task: dutyTask(t.task), deadline: /^invalid date$/i.test(String(t.deadline || "")) ? "" : t.deadline, status: t.late ? "late" : t.status, ...(t.blocker ? { blocker: t.blocker } : {}), ...(t.note ? { your_note: t.note } : {}) })),
@@ -1455,7 +1511,8 @@ async function runTool(tool, args, ctx, read) {
     case "team_board":
       return { today, now_sao_paulo: b.now, duties: hq ? { done: hq.team.duties.done, total: hq.team.duties.total, late: hq.team.duties.late, blocked: hq.team.duties.blocked } : "not read",
         team: b.staff.map(worker), waiting_on_luke: b.waiting.luke.map(short), waiting_on_claude: b.waiting.claude.map(short), open_messages_for_bots: b.waiting.bots,
-        latest_updates: b.updates.slice(0, 20).map((u) => `${u.sp} ${u.bot} ${u.status}: ${u.message}${u.link ? " " + u.link : ""}`),
+        latest_updates: dedupeGrowthUpdates(b.updates.slice(0, 20).map((u) => `${u.sp} ${u.bot} ${u.status}: ${u.message}${u.link ? " " + u.link : ""}`)),
+        growth: S.growthOnce(await S.listGrowth(store, now, 2)),
         releases: rel.filter(S.releaseActive).map((v) => ({ song: v.title, date: when(v.date), done: `${v.counts.done} of ${v.counts.total}`, late: v.counts.late, blocked: v.counts.blocked,
           late_steps: v.steps.filter((s) => s.late).map((s) => `${s.label} (${s.owner})`), warnings: v.warnings })),
         spotify_for_artists: s4aOut(b.sightings),

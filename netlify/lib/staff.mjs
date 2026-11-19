@@ -131,6 +131,27 @@ export function clipWords(v, max = 240) {
   const sp = cut.lastIndexOf(" ");
   return ((sp > Math.floor(max * 0.6) ? cut.slice(0, sp) : cut).trimEnd()) + "…";
 }
+/* a duty line that was cut mid-word ("Luke upload") is restored when it is the start of a known line */
+export function fullDuty(text, lines) {
+  const raw = freshDuty(text);
+  const d = raw.replace(/\s*(…|\.\.\.)\s*$/, "").trim();
+  const pool = (Array.isArray(lines) ? lines : []).filter((l) => typeof l === "string" && l.length > d.length + 5);
+  if (/[A-Za-z]$/.test(d)) {
+    for (const line of pool) if (line.startsWith(d)) return line;
+  }
+  const sp = d.lastIndexOf(" ");
+  if (sp > 40) {
+    const stem = d.slice(0, sp), last = d.slice(sp + 1);
+    if (last.length >= 3) {
+      for (const line of pool) {
+        if (!line.startsWith(stem + " ")) continue;
+        const word = line.slice(stem.length + 1).split(/\s/)[0];
+        if (word.length > last.length && word.toLowerCase().startsWith(last.toLowerCase())) return line;
+      }
+    }
+  }
+  return raw;
+}
 /* known stale duty lines, rewritten when they are shown. The sheet itself is not changed. */
 export function freshDuty(text) {
   let t = String(text || "");
@@ -2635,8 +2656,9 @@ export async function listSpend(store, now) {
 }
 
 export const GROWERS = ["Steve", "Atlas", "Kevin", "Laura", "Nova", "Claude", "HQ"]; /* HQ: the Instagram reader (B4, 17 Nov 2026) */
-/* A8 (17 Nov 2026, Atlas): monthly_listeners and brazil_listeners are the artist's Spotify numbers: platform Spotify */
-const GROWTH_NUM = ["followers", "views", "channel_views", "shorts_views", "monthly_listeners", "brazil_listeners", "subscribers", "watch_hours"], SONG_NUM = ["streams", "listeners", "saves", "playlist_adds"];
+/* A8 (17 Nov 2026, Atlas): monthly_listeners and brazil_listeners are the artist's Spotify numbers: platform Spotify.
+   watch_hours is not here: it keeps a decimal (56.6). subscribers is copied onto followers for YouTube. */
+const GROWTH_NUM = ["followers", "views", "channel_views", "shorts_views", "monthly_listeners", "brazil_listeners", "subscribers", "official_views", "other_views", "views_6h", "follows_6h", "follows_48h", "paid_views", "organic_views"], SONG_NUM = ["streams", "listeners", "saves", "playlist_adds"];
 const growKey = (month) => `grow/${month}.json`;
 /* a count: "1240" or "1,240" (never "about 1k", never a guess) */
 function countOf(v, name) {
@@ -2645,6 +2667,101 @@ function countOf(v, name) {
   return Number(t.replace(/,/g, ""));
 }
 const fmtN = (n) => Number(n).toLocaleString("en-US");
+function decOf(v, name) {
+  const n = Number(String(v).replace(/,/g, "").replace(/\s*(hours?|secs?|seconds?)$/i, "").trim());
+  if (!Number.isFinite(n) || n < 0) fail(`${name} must be the number shown. Decimals are allowed (for example 56.6). If you could not read it, leave it out and name it in gaps.`);
+  return Math.round(n * 10) / 10;
+}
+function ytIdOf(v) {
+  const s = String(v || "").trim();
+  const m = s.match(/(?:v=|youtu\.be\/|shorts\/)([A-Za-z0-9_-]{6,20})/);
+  const id = m ? m[1] : s;
+  return /^[A-Za-z0-9_-]{6,20}$/.test(id) ? id : "";
+}
+function optCount(v, name) {
+  if (v == null || String(v).trim() === "") return null;
+  return countOf(v, name);
+}
+function growthPosts(list) {
+  if (list == null) return null;
+  if (!Array.isArray(list)) fail("posts must be a list.");
+  if (list.length > 30) fail("posts is 30 at most.");
+  return list.map((p, i) => {
+    if (!p || typeof p !== "object") fail(`posts ${i + 1} must be an object.`);
+    const row = {};
+    const date = p.date != null && String(p.date).trim() ? clean(p.date, 10) : "";
+    if (date && !isDay(date)) fail(`posts ${i + 1}: date must be YYYY-MM-DD.`);
+    if (date) row.date = date;
+    const hook = clean(p.hook || p.caption, 160);
+    if (hook) row.hook = hook;
+    for (const n of ["views_24h", "views_7d", "views_6h", "likes", "comments", "saves", "shares", "follows", "follows_6h", "follows_48h"]) {
+      const v = optCount(p[n], `posts ${i + 1} ${n}`);
+      if (v != null) row[n] = v;
+    }
+    for (const n of ["avg_watch", "avg_watch_6h"]) if (p[n] != null && String(p[n]).trim() !== "") row[n] = decOf(p[n], `posts ${i + 1} ${n}`);
+    if (p.link != null && String(p.link).trim()) {
+      const l = httpsLink(clean(p.link, 400));
+      if (!l) fail(`posts ${i + 1}: link must start with https://`);
+      row.link = l;
+    }
+    if (p.video_id != null && String(p.video_id).trim()) {
+      const id = ytIdOf(p.video_id);
+      if (!id) fail(`posts ${i + 1}: video_id must be a YouTube video id.`);
+      row.video_id = id;
+    }
+    if (p.boosted === true || p.boosted === "boosted" || p.boosted === "yes") row.boosted = true;
+    else if (p.boosted === false || p.boosted === "organic" || p.boosted === "no") row.boosted = false;
+    return row;
+  });
+}
+function topVideosOf(list) {
+  if (list == null) return null;
+  if (!Array.isArray(list)) fail("top_videos must be a list.");
+  if (list.length > 3) fail("top_videos is the top 3 only.");
+  return list.map((p, i) => {
+    if (!p || typeof p !== "object") fail(`top_videos ${i + 1} must be an object.`);
+    const row = {};
+    const title = clean(p.title, 160);
+    if (title) row.title = title;
+    if (p.link != null && String(p.link).trim()) {
+      const l = httpsLink(clean(p.link, 400));
+      if (!l) fail(`top_videos ${i + 1}: link must start with https://`);
+      row.link = l;
+    }
+    if (p.video_id != null && String(p.video_id).trim()) {
+      const id = ytIdOf(p.video_id);
+      if (!id) fail(`top_videos ${i + 1}: video_id must be a YouTube video id.`);
+      row.video_id = id;
+    }
+    if (!row.title && !row.link && !row.video_id) fail(`top_videos ${i + 1} needs a title, a link or a video id.`);
+    const views = optCount(p.views, `top_videos ${i + 1} views`);
+    if (views != null) row.views = views;
+    return row;
+  });
+}
+function fanSignalsOf(list) {
+  if (list == null) return null;
+  if (!Array.isArray(list)) fail("fan_signals must be a list.");
+  if (list.length > 8) fail("fan_signals is 8 at most.");
+  return list.map((p, i) => {
+    if (!p || typeof p !== "object") fail(`fan_signals ${i + 1} must be an object.`);
+    const quote = clean(p.quote || p.text, 240), handle = clean(p.handle || p.user, 40).replace(/^@/, "");
+    if (!quote && !handle) fail(`fan_signals ${i + 1} needs the words or the handle, as shown.`);
+    const row = { platform: "TikTok" };
+    if (handle) row.handle = "@" + handle;
+    if (quote) row.quote = quote;
+    if (p.link != null && String(p.link).trim()) {
+      const l = httpsLink(clean(p.link, 400));
+      if (!l) fail(`fan_signals ${i + 1}: link must start with https://`);
+      row.link = l;
+    }
+    const about = clean(p.about, 160), engage = clean(p.engage || p.how_to_engage, 160);
+    if (about) row.about = about;
+    if (engage) row.engage = engage;
+    return row;
+  });
+}
+const sameStored = (a, b) => a === b || (a != null && b != null && typeof a === "object" && JSON.stringify(a) === JSON.stringify(b));
 const shortDay = (d) => `${Number(d.slice(8, 10))} ${MONTH[Number(d.slice(5, 7)) - 1]}`;
 export async function listGrowth(store, now, months = 2) {
   let m = spDay(now).slice(0, 7);
@@ -2673,8 +2790,32 @@ export async function logGrowth(store, now, roster, a) {
   if (!song) {
     if (a.best_post != null && clean(a.best_post, 200)) extra.best_post = clean(a.best_post, 200);
     if (a.best_post_link != null && String(a.best_post_link).trim()) { const l = httpsLink(clean(a.best_post_link, 400)); if (!l) fail("best_post_link must start with https://"); extra.best_post_link = l; }
+    if (a.video_id != null && String(a.video_id).trim()) { const id = ytIdOf(a.video_id); if (!id) fail("video_id must be a YouTube video id, or use best_post_link (https)."); extra.video_id = id; }
     if (a.views_date != null && String(a.views_date).trim()) { const vd = clean(a.views_date, 10); if (!isDay(vd)) fail("views_date must be YYYY-MM-DD: the day those views are for (TikTok's views arrive a day late)."); extra.views_date = vd; }
-    if (a.watch_hours != null && String(a.watch_hours).trim()) { const w = Number(String(a.watch_hours).replace(/,/g, "")); if (!isFinite(w) || w < 0) fail("watch_hours must be a number (YouTube)."); extra.watch_hours = Math.round(w * 10) / 10; delete a.watch_hours; }
+    if (a.watch_hours != null && String(a.watch_hours).trim()) extra.watch_hours = decOf(a.watch_hours, "watch_hours");
+    for (const n of ["avg_watch", "avg_watch_6h"]) if (a[n] != null && String(a[n]).trim() !== "") extra[n] = decOf(a[n], n);
+    if (a.ad_spend != null && String(a.ad_spend).trim() !== "") {
+      const n = Number(String(a.ad_spend).replace(/,/g, "").replace(/^[A-Z]{3}\s*/i, ""));
+      if (!Number.isFinite(n) || n < 0) fail("ad_spend must be the amount shown. If you could not read it, leave it out.");
+      extra.ad_spend = Math.round(n * 100) / 100;
+      const cur = clean(a.ad_currency, 3).toUpperCase();
+      if (cur) { if (!/^[A-Z]{3}$/.test(cur)) fail("ad_currency must be a 3-letter code, as shown."); extra.ad_currency = cur; }
+    }
+    if (a.ads_read_at != null && String(a.ads_read_at).trim()) {
+      const t = clean(a.ads_read_at, 40);
+      if (!/^\d{4}-\d{2}-\d{2}([ T]\d{2}:\d{2})?/.test(t) && !/^\d{4}-\d{2}-\d{2}T/.test(t)) fail("ads_read_at must be the time the ads data was read, YYYY-MM-DD or YYYY-MM-DD HH:MM.");
+      extra.ads_read_at = t;
+    }
+    const pattern = clean(a.pattern, 240);
+    if (pattern) extra.pattern = pattern;
+    const posts = growthPosts(a.posts);
+    if (posts) extra.posts = posts;
+    const tops = topVideosOf(a.top_videos);
+    if (tops) extra.top_videos = tops;
+    const fans = fanSignalsOf(a.fan_signals);
+    if (fans) extra.fan_signals = fans;
+    const g6 = extra.avg_watch_6h != null && vals.follows_6h != null && vals.views_6h > 0 ? (extra.avg_watch_6h >= 2.5 && (vals.follows_6h / vals.views_6h) >= 0.0014 ? "pass" : "fail") : null;
+    if (g6) extra.gate_6h = g6;
   }
   const gin = a.gaps == null ? {} : typeof a.gaps === "string" ? { note: a.gaps } : a.gaps;
   if (typeof gin !== "object" || Array.isArray(gin)) fail('gaps must be {"views": "why it could not be read"}.');
@@ -2682,7 +2823,7 @@ export async function logGrowth(store, now, roster, a) {
   for (const [k, v] of Object.entries(gin)) { const w = clean(v, 160); if (w) gaps[clean(k, 30)] = w; }
   if (!Object.keys(vals).length && !Object.keys(extra).length) fail(`There are no numbers in this call. Send at least one of: ${names.join(", ")}.`);
   const account = clean(a.account, 60);
-  noSecrets(platform, song, account, JSON.stringify(gaps), extra.best_post || "");
+  noSecrets(platform, song, account, JSON.stringify(gaps), extra.best_post || "", extra.pattern || "", JSON.stringify(extra.fan_signals || ""));
   const key = song ? "s:" + songKey(song) : "g:" + low(platform);
   const at = new Date(now).toISOString();
   const earlier = (await listGrowth(store, now, 3)).filter((x) => x.key === key && x.date < date && x.followers != null).sort((x, y) => (x.date < y.date ? 1 : -1))[0];
@@ -2693,7 +2834,7 @@ export async function logGrowth(store, now, roster, a) {
       const filled = [], replaced = [];
       for (const [k, v] of Object.entries({ ...vals, ...extra })) {
         if (old[k] == null || old[k] === "") { old[k] = v; filled.push(k); delete (old.gaps || {})[k]; }
-        else if (old[k] !== v) { (old.was || (old.was = {}))[k] = old[k]; old[k] = v; replaced.push(k); }
+        else if (!sameStored(old[k], v)) { (old.was || (old.was = {}))[k] = old[k]; old[k] = v; replaced.push(k); }
       }
       for (const [k, w] of Object.entries(gaps)) if (old[k] == null) (old.gaps || (old.gaps = {}))[k] = w;
       if (!filled.length && !replaced.length) return { skip: true, value: { row: old, duplicate: true, filled, replaced } };
@@ -2719,8 +2860,12 @@ export async function logGrowth(store, now, roster, a) {
   /* a live-log line only when the bot names the duty. Otherwise the bot's own post_update is the line (18 Nov 2026). */
   if (!a.duty) return { ...res, duty: null, ...(corrected.length ? { corrected } : {}) };
   const r = res.row, words = [];
-  if (!song && r.followers != null && (res.added || res.filled.includes("followers") || res.replaced.includes("followers"))) words.push(`${fmtN(r.followers)} followers` + (r.change != null ? ` (${r.change >= 0 ? "+" : ""}${fmtN(r.change)})` : ""));
-  for (const n of names) if (n !== "followers" && r[n] != null && (res.added || res.filled.includes(n) || res.replaced.includes(n))) words.push(`${n.replace("_", " ")} ${fmtN(r[n])}`);
+  const yt = !song && /youtube/i.test(platform);
+  const unit = yt ? "subscribers" : "followers";
+  if (!song && r.followers != null && (res.added || res.filled.includes("followers") || res.replaced.includes("followers") || res.filled.includes("subscribers") || res.replaced.includes("subscribers"))) words.push(`${fmtN(r.followers)} ${unit}` + (r.change != null ? ` (${r.change >= 0 ? "+" : ""}${fmtN(r.change)})` : ""));
+  const label = { channel_views: "lifetime channel views", official_views: "official channel views that day", other_views: "other channel views that day", shorts_views: "Shorts views", views: "views that day", views_6h: "views at 6h", follows_6h: "follows at 6h", follows_48h: "follows at 48h", paid_views: "paid views", organic_views: "organic views", monthly_listeners: "monthly listeners", brazil_listeners: "Brazil listeners" };
+  for (const n of names) if (n !== "followers" && n !== "subscribers" && r[n] != null && (res.added || res.filled.includes(n) || res.replaced.includes(n))) words.push(`${label[n] || n.replace(/_/g, " ")} ${fmtN(r[n])}`);
+  if (r.watch_hours != null && (res.added || res.filled.includes("watch_hours") || res.replaced.includes("watch_hours"))) words.push(`watch hours ${r.watch_hours}`);
   const gapText = Object.entries(r.gaps || {}).map(([k, w]) => `${k}: ${w}`).join("; ");
   const msg = `${song || platform} ${shortDay(date)}: ${words.join(", ") || "numbers filled in"}` + (res.added ? "" : " (filled in)");
   let duty = null;
@@ -5040,7 +5185,41 @@ export async function verseReleaseDay(store, now, roster) {
 }
 
 /* Content ID claims. Laura records what YouTube showed. A blank claimant or impact stays blank: the page
-   says not reported. The same claim, claimant and day is stored once. */
+   says not reported. The same claim, claimant and day is stored once. A later call fills a blank field. */
+function claimFields(a) {
+  const out = {};
+  const song = clean(a.song, 120);
+  if (song) out.song = song;
+  const video = a.video != null ? String(a.video).trim() : "";
+  if (video) {
+    if (/^https:\/\//i.test(video)) {
+      const l = httpsLink(video);
+      if (!l) fail("video must be an https link or a YouTube video id.");
+      out.video = l;
+    } else {
+      const id = ytIdOf(video);
+      if (!id) fail("video must be an https link or a YouTube video id.");
+      out.video_id = id;
+    }
+  }
+  if (a.video_id != null && String(a.video_id).trim() && !out.video_id) {
+    const id = ytIdOf(a.video_id);
+    if (!id) fail("video_id must be a YouTube video id.");
+    out.video_id = id;
+  }
+  for (const [k, max] of [["claim_type", 80], ["status", 40], ["reach_effect", 240], ["money_effect", 240], ["action", 240]]) {
+    const v = clean(a[k], max);
+    if (v) out[k] = v;
+  }
+  if (a.strike != null && String(a.strike).trim()) {
+    const s = low(a.strike);
+    if (s !== "yes" && s !== "no") fail("strike must be yes or no, as YouTube showed.");
+    out.strike = s;
+  }
+  const owner = clean(a.owner, 40);
+  if (owner) out.owner = owner;
+  return out;
+}
 export async function recordContentClaim(store, now, roster, a) {
   const by = whoIs(a.by, roster, { people: true });
   if (!["Laura", "Nova", "Claude", "Luke"].includes(by)) fail("Content ID claims are Laura's to record (Nova may record one for her). Nothing was saved.", "not_allowed");
@@ -5051,17 +5230,104 @@ export async function recordContentClaim(store, now, roster, a) {
   if (date > spDay(now)) fail("That day is still in the future. Nothing was saved.");
   const claimant = a.claimant != null && String(a.claimant).trim() ? clean(a.claimant, 120) : "";
   const impact = a.impact != null && String(a.impact).trim() ? clean(a.impact, 240) : "";
-  noSecrets(claim, claimant, impact);
+  const more = claimFields(a);
+  noSecrets(claim, claimant, impact, more.song || "", more.action || "", more.reach_effect || "", more.money_effect || "");
   const key = `${songKey(claim)}|${songKey(claimant)}|${date}`;
-  return mutate(store, CLAIMS_KEY, { items: [] }, (doc) => {
+  const today = spDay(now);
+  return mutate(store, CLAIMS_KEY, { items: [], checked: {} }, (doc) => {
     const items = doc && Array.isArray(doc.items) ? doc.items : [];
-    if (!doc || typeof doc !== "object" || Array.isArray(doc)) return { replace: { items }, value: { saved: false, duplicate: false } };
+    const checked = doc && doc.checked && typeof doc.checked === "object" ? doc.checked : {};
+    if (!doc || typeof doc !== "object" || Array.isArray(doc)) return { replace: { items, checked }, value: { saved: false, duplicate: false } };
     const prev = items.find((x) => x && x.key === key);
-    if (prev) return { skip: true, value: { saved: false, duplicate: true, item: prev } };
-    const item = { key, claim, claimant, impact, date, by, at: new Date(now).toISOString() };
+    if (prev) {
+      const filled = [];
+      for (const [k, v] of Object.entries({ claimant, impact, ...more })) {
+        if (!v) continue;
+        if (prev[k] == null || prev[k] === "") { prev[k] = v; filled.push(k); }
+      }
+      if (!filled.length) return { skip: true, value: { saved: false, duplicate: true, item: prev } };
+      prev.last_checked = today;
+      return { value: { saved: true, duplicate: false, updated: true, item: prev } };
+    }
+    const item = { key, claim, claimant, impact, date, by, at: new Date(now).toISOString(), first_seen: date, last_checked: today, owner: more.owner || "Laura", ...more };
     doc.items = [item, ...items].slice(0, 80);
+    if (!doc.checked) doc.checked = checked;
     return { value: { saved: true, duplicate: false, item } };
   });
+}
+/* Laura's daily claims checklist. It does not invent a claim and it does not mark one resolved. */
+export async function markClaimsChecked(store, now, roster, a) {
+  const by = whoIs(a.by, roster, { people: true });
+  if (!["Laura", "Nova", "Claude", "Luke"].includes(by)) fail("The claims checklist is Laura's. Nothing was saved.", "not_allowed");
+  const day = spDay(now);
+  return mutate(store, CLAIMS_KEY, { items: [], checked: {} }, (doc) => {
+    const items = doc && Array.isArray(doc.items) ? doc.items : [];
+    const checked = doc && doc.checked && typeof doc.checked === "object" && !Array.isArray(doc.checked) ? doc.checked : {};
+    checked[day] = { by, at: new Date(now).toISOString() };
+    return { replace: { items, checked }, value: { saved: true, day, by, at: checked[day].at } };
+  });
+}
+const nrClaim = (v) => (v != null && String(v).trim() !== "" ? v : "not reported");
+export async function readClaims(store, now) {
+  const { data } = await readDoc(store, CLAIMS_KEY, { items: [], checked: {} });
+  const items = data && Array.isArray(data.items) ? data.items : [];
+  const checked = data && data.checked && typeof data.checked === "object" ? data.checked : {};
+  const day = spDay(now), today = checked[day] || null;
+  return {
+    read_only: true, wrote: false, day,
+    checked_today: !!today, checked_by: today ? today.by : "not reported", checked_at: today ? today.at : "not reported",
+    claims: items.map((c) => ({
+      song: nrClaim(c.song), claim: c.claim || "not reported", claimant: nrClaim(c.claimant),
+      video: nrClaim(c.video || c.video_id), claim_type: nrClaim(c.claim_type), status: nrClaim(c.status),
+      reach_effect: nrClaim(c.reach_effect || c.impact), money_effect: nrClaim(c.money_effect),
+      strike: nrClaim(c.strike), action: nrClaim(c.action), owner: nrClaim(c.owner),
+      first_seen: nrClaim(c.first_seen || c.date), last_checked: nrClaim(c.last_checked),
+      date: c.date || "not reported", impact: nrClaim(c.impact),
+    })),
+    note: "Read only. A missing field is not reported, not zero. Laura marks the day with log_growth, claims_checked true. HQ never invents a claim.",
+  };
+}
+export function growthPlatformId(name) {
+  const k = String(name || "").toLowerCase().replace(/[^a-z]/g, "");
+  if (k === "ig" || k === "instagram") return "instagram";
+  if (k === "tt" || k === "tiktok") return "tiktok";
+  if (k === "yt" || k === "youtube") return "youtube";
+  if (k === "spotify") return "spotify";
+  return k;
+}
+const GROWTH_LABEL = { instagram: "Instagram", tiktok: "TikTok", youtube: "YouTube", spotify: "Spotify" };
+/* one growth row per platform per day. Two logs of YouTube on the same day are one line. */
+export function growthOnce(rows) {
+  const seen = new Map();
+  for (const r of rows || []) {
+    if (!r || r.kind === "song" || !r.platform || !r.date) continue;
+    const id = growthPlatformId(r.platform);
+    const k = id + "|" + r.date;
+    if (seen.has(k)) continue;
+    seen.set(k, {
+      platform: GROWTH_LABEL[id] || r.platform, date: r.date,
+      unit: id === "youtube" ? "subscribers" : "followers",
+      followers: r.followers ?? null, views: r.views ?? null, views_date: r.views_date || "",
+      gaps: r.gaps && typeof r.gaps === "object" ? r.gaps : {},
+      channel_views: r.channel_views ?? null, channel_views_is: r.channel_views != null ? "lifetime total, not the day's views" : "",
+    });
+  }
+  return [...seen.values()];
+}
+export async function readGrowth(store, now, a = {}) {
+  const rows = await listGrowth(store, now, 3);
+  const platform = a.platform ? growthPlatformId(a.platform) : "";
+  const date = a.date ? clean(a.date, 10) : "";
+  const song = a.song ? songKey(a.song) : "";
+  const list = rows.filter((r) => {
+    if (!r) return false;
+    if (song) return r.kind === "song" && songKey(r.song) === song && (!date || r.date === date);
+    if (r.kind === "song") return false;
+    if (platform && growthPlatformId(r.platform) !== platform) return false;
+    if (date && r.date !== date) return false;
+    return true;
+  }).slice(0, 60);
+  return { read_only: true, wrote: false, rows: list, note: "Read only. A number that is missing was not logged. It is not zero. channel_views is the lifetime total. views is the day's views. YouTube's count is subscribers." };
 }
 
 /* Spark's daily content ideas. One document. HQ stores them. Nothing here posts, comments, or changes an ad. */
@@ -5081,7 +5347,7 @@ const ideaNum = (v, label) => {
 export function contentIdeasView(doc) {
   const d = doc && doc.latest ? doc.latest : doc;
   if (!d || !d.at || !Array.isArray(d.ideas) || !d.ideas.length) return { reported: false, ideas: [], best: null, empty: "No content ideas yet. Spark sends them once a day. Nothing is posted." };
-  return { reported: true, at: d.at, day: d.day || "", by: d.by || "Spark", best: d.best || null, ideas: d.ideas, compared: d.compared || "", empty: "", note: "Ideas for Nova. HQ does not post, comment, send a DM, or change an ad." };
+  return { reported: true, at: d.at, day: d.day || "", by: d.by || "Spark", best: d.best || null, ideas: d.ideas, posts: Array.isArray(d.posts) ? d.posts : [], compared: d.compared || "", empty: "", note: "Ideas for Nova. HQ does not post, comment, send a DM, or change an ad." };
 }
 export async function readContentIdeas(store) {
   const { data } = await readDoc(store, IDEAS_KEY, {});
@@ -5098,9 +5364,18 @@ export async function saveContentIdeas(store, now, a) {
     const format = clean(idea && idea.format, 80);
     const why = clean(idea && idea.why, 240);
     if ([hook, text, format, why].some((s) => s.length < 2)) fail(`Idea ${i + 1} needs a hook, the on-screen text, a format and why. Nothing was saved.`);
-    const bad = secretIn([hook, text, why].join(" "));
+    const status = ["idea", "shot", "posted"].includes(low(idea && idea.status)) ? low(idea.status) : "idea";
+    const song = clean(idea && idea.song, 120), market = clean(idea && idea.market, 80);
+    const source = idea && idea.source ? httpsLink(idea.source) : "";
+    if (idea && idea.source && !source) fail(`Idea ${i + 1}: source must start with https://. Nothing was saved.`);
+    const score = idea && idea.score != null && String(idea.score).trim() !== "" ? ideaNum(idea.score, "score") : null;
+    const views = idea && idea.views != null && String(idea.views).trim() !== "" ? ideaNum(idea.views, "views") : null;
+    const epv = idea && idea.epv != null && String(idea.epv).trim() !== "" ? ideaNum(idea.epv, "epv") : null;
+    const verdict = ["won", "flat", "lost"].includes(low(idea && idea.verdict)) ? low(idea.verdict) : "";
+    const whyWon = clean(idea && (idea.why_won || idea.whyWon), 240);
+    const bad = secretIn([hook, text, why, song, market, whyWon].join(" "));
     if (bad) fail(`Idea ${i + 1} looks like ${bad}. Nothing was saved.`);
-    return { hook, text, format, platform: ideaPlatform(idea && idea.platform), why };
+    return { hook, text, format, platform: ideaPlatform(idea && idea.platform), why, status, ...(song ? { song } : {}), ...(market ? { market } : {}), ...(source ? { source } : {}), ...(score != null ? { score } : {}), ...(views != null ? { views } : {}), ...(epv != null ? { epv } : {}), ...(verdict ? { verdict } : {}), ...(whyWon ? { why_won: whyWon } : {}) };
   });
   const posts = Array.isArray(a.posts) ? a.posts : [];
   const ranked = [];
@@ -5116,10 +5391,23 @@ export async function saveContentIdeas(store, now, a) {
     const link = p.link ? httpsLink(p.link) : "";
     if (p.link && !link) fail("A post link must start with https://. Nothing was saved.");
     const eng = (likes || 0) + (comments || 0) + (saves || 0) + (shares || 0);
-    ranked.push({ whose, platform: ideaPlatform(p.platform), title: clean(p.title, 120) || "Untitled", link, views, likes: likes || 0, comments: comments || 0, saves: saves || 0, shares: shares || 0, perView: Math.round((eng / views) * 10000) / 10000 });
+    const at = p.at || p.date;
+    ranked.push({ whose, platform: ideaPlatform(p.platform), title: clean(p.title, 120) || "Untitled", link, views, likes: likes || 0, comments: comments || 0, saves: saves || 0, shares: shares || 0, perView: Math.round((eng / views) * 10000) / 10000, ...(isDay(String(at || "").slice(0, 10)) ? { at: String(at).slice(0, 10) } : {}) });
   }
   const ours = ranked.filter((p) => p.whose === "ours").sort((x, y) => y.perView - x.perView);
   if (!ours.length) fail("Name the official posts you ranked, with views and likes, comments, saves and shares. Nothing was saved.");
+  if (ours.length >= 2) {
+    const rest = ours.slice(1);
+    const avg = rest.reduce((s, p) => s + p.perView, 0) / rest.length;
+    const winner = ours[0];
+    if (winner.perView > avg) {
+      const recipe = ideas.find((i) => i.platform === winner.platform) || ideas[0];
+      const nextSong = clean(a.next_song, 120);
+      if (!ideas.some((i) => i.auto && i.hook === recipe.hook && i.platform === recipe.platform)) {
+        ideas.push({ hook: recipe.hook, text: recipe.text, format: recipe.format, platform: recipe.platform, status: "idea", auto: true, ...(nextSong ? { song: nextSong } : {}), ...(recipe.market ? { market: recipe.market } : {}), ...(winner.link ? { source: winner.link } : {}), why: "Same recipe. That post's engagement per view beat the other official posts in this report." });
+      }
+    }
+  }
   const { whose, ...best } = ours[0];
   const compared = clean(a.compared, 400);
   const row = { at: new Date(now).toISOString(), by: a.by, day: spDay(now), best, ideas, compared, posts: ranked.slice(0, 12) };
@@ -5134,7 +5422,7 @@ export async function saveContentIdeas(store, now, a) {
 export async function loadDesk(store, now) {
   const [roster, updates, messages, cardsDoc, config, releases, sightings] = await Promise.all([getRoster(store), listUpdates(store, now, 3), listMessages(store, now, 2), readDoc(store, "cards.json", {}), getConfig(store), listReleases(store), getSightings(store)]);
   const [seen, read, income, closesDoc, profiles, claimsDoc, ideasDoc] = await Promise.all([getSeen(store, roster), getRead(store, roster), incomeState(store, now), readDoc(store, "closes.json", []), getProfiles(store), readDoc(store, CLAIMS_KEY, { items: [] }), readDoc(store, IDEAS_KEY, {})]);
-  const claims = claimsDoc.data && Array.isArray(claimsDoc.data.items) ? { items: claimsDoc.data.items } : { items: [] };
+  const claims = claimsDoc.data && Array.isArray(claimsDoc.data.items) ? { items: claimsDoc.data.items, checked: claimsDoc.data.checked && typeof claimsDoc.data.checked === "object" ? claimsDoc.data.checked : {} } : { items: [], checked: {} };
   return { roster, updates, messages, cards: cardsDoc.data || {}, seen, read, income, config, releases, sightings, closes: Array.isArray(closesDoc.data) ? closesDoc.data : [], profiles, claims, contentIdeas: ideasDoc.data || {} };
 }
 
@@ -5260,7 +5548,7 @@ export function board(desk, now, hq) {
     closes: desk.closes || [], /* A7, 17 Nov 2026: the closed months (closes.json) */
     /* L5: RouteNote's inbox is not connected until Luke signs it in. Claims are only what Laura recorded. */
     mail: routeNoteMailSource(),
-    claims: desk.claims && Array.isArray(desk.claims.items) ? { items: desk.claims.items.slice(0, 80) } : { items: [] },
+    claims: desk.claims && Array.isArray(desk.claims.items) ? { items: desk.claims.items.slice(0, 80), checked: desk.claims.checked && typeof desk.claims.checked === "object" ? desk.claims.checked : {} } : { items: [], checked: {} },
     contentIdeas: contentIdeasView(desk.contentIdeas),
     connector: { botsOn: desk.config.botsOn, changedAt: desk.config.changedAt, lastUsed: lastSeen ? { bot: lastSeen[0], at: lastSeen[1].at, tool: lastSeen[1].tool } : null,
       connected: staff.filter((w) => w.connected).length, total: staff.length, claudeSeen: desk.seen.Claude ? desk.seen.Claude.at : null },

@@ -63,7 +63,7 @@ export function median(list) {
   return v.length % 2 ? v[m] : (v[m - 1] + v[m]) / 2;
 }
 
-const CHECK_KEYS = ["account_status", "status_note", "visible", "visible_where", "non_follower_share", "recent_posts", "artificial_streams", "track_moved", "moved_to", "site_ok", "site_note"];
+const CHECK_KEYS = ["account_status", "status_note", "visible", "visible_where", "non_follower_share", "recent_posts", "artificial_streams", "track_moved", "moved_to", "site_ok", "site_note", "monetisation"];
 export function hasAccountCheck(args) {
   if (!args || typeof args !== "object") return false;
   return CHECK_KEYS.some((k) => {
@@ -102,6 +102,13 @@ export async function recordAccountCheck(store, now, roster, a) {
     if (a.status_note != null && String(a.status_note).trim()) reading.status_note = S.clean(a.status_note, 200);
   } else if (a.status_note != null && String(a.status_note).trim()) {
     throw new S.StaffError("A status note needs account_status (the word the platform's page uses). Nothing was saved.");
+  }
+  if (a.monetisation != null && String(a.monetisation).trim()) {
+    if (platform !== "youtube") throw new S.StaffError("Monetisation is recorded for YouTube. Nothing was saved.");
+    if (!may(by, platform, "reading")) refuse(by, platform, OWNER[platform]);
+    const m = low(a.monetisation);
+    if (!["on", "limited", "off"].includes(m)) throw new S.StaffError("monetisation must be on, limited or off, as Studio shows. Nothing was saved.");
+    reading.monetisation = m;
   }
   if (a.visible != null && String(a.visible).trim()) {
     if (platform === "site") throw new S.StaffError("The site check is site_ok yes or no. Nothing was saved.");
@@ -390,11 +397,21 @@ function statusSignal(reading, today) {
   return sig("status", "red", `Account Status was recorded as ${reading.account_status} on ${reading.date}.${note}`, source, reading.date);
 }
 
+function monetisationSignal(reading, today) {
+  if (!reading || !reading.monetisation || !isDay(reading.date) || daysBetween(reading.date, today) > 30) {
+    return gap("monetisation", "Monetisation was not reported. That does not mean it is on or off.", "not recorded");
+  }
+  const source = `recorded by ${reading.by}`;
+  if (reading.monetisation === "on") return sig("monetisation", "ok", `Monetisation was recorded on, on ${reading.date}.`, source, reading.date);
+  if (reading.monetisation === "limited") return sig("monetisation", "watch", `Monetisation was recorded limited, on ${reading.date}.`, source, reading.date);
+  return sig("monetisation", "red", `Monetisation was recorded off, on ${reading.date}.`, source, reading.date);
+}
+
 function claimSignals(claims, today) {
   const list = (claims || []).filter((c) => c && c.claim && isDay(c.date) && daysBetween(c.date, today) >= 0 && daysBetween(c.date, today) <= 90);
   if (!list.length) return [gap("claims", "no Content ID claim has been recorded in the last 90 days. That does not mean there is none. Laura records one when YouTube shows one.", "Content ID claims on the desk")];
   return list.map((c) => {
-    const hard = c.impact && /block|removed|ineligible|restrict|taken down|age-restrict/i.test(c.impact);
+    const hard = String(c.strike || "").toLowerCase() === "yes" || /block|mute|removed|ineligible|restrict|taken down|age-restrict/i.test([c.impact, c.status, c.reach_effect].filter(Boolean).join(" "));
     const who = c.claimant ? c.claimant : "not reported";
     const impact = c.impact ? c.impact : "not reported";
     return sig("claim:" + (c.key || c.date + ":" + c.claim), hard ? "red" : "watch",
@@ -569,6 +586,11 @@ export function evaluate(input) {
       const bad = (builds || []).filter((b) => b && typeof b.state === "string" && b.state.startsWith("not done"));
       if (bad.length) signals.push(sig("builds", "watch", bad.slice(0, 3).map((b) => `${b.what || "A song page"}: ${b.state}`).join(" "), "song page builds already on the desk", bad[0].asked || ""));
       else if ((builds || []).some((b) => b && b.state === "live")) signals.push(sig("builds", "ok", "The latest song-page record on the desk is live.", "song page builds already on the desk", ""));
+    } else if (id === "youtube") {
+      /* Studio only: Account Status (strikes), Content ID claims, monetisation. Not post-engagement medians. */
+      signals.push(statusSignal(latestReading(checks, id, "account_status"), today));
+      signals.push(...claimSignals(claims, today));
+      signals.push(monetisationSignal(latestReading(checks, id, "monetisation"), today));
     } else {
       const g = growthRows(growth, id);
       const igPoints = id === "instagram" && igPosts != null ? igSeries(igPosts) : [];
@@ -580,7 +602,6 @@ export function evaluate(input) {
       signals.push(followerSignal(g.map((r) => ({ date: r.date, change: r.change, views: r.views, followers: r.followers })), today));
       signals.push(visibilitySignal(latestReading(checks, id, "visible"), today));
       signals.push(statusSignal(latestReading(checks, id, "account_status"), today));
-      if (id === "youtube") signals.push(...claimSignals(claims, today));
       if (id === "spotify") {
         signals.push(listenerSignal(g));
         for (const e of events(checks, "spotify", "moved", today, 60)) {
