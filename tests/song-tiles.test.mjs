@@ -49,6 +49,9 @@ test("songTile: a released page doing its job is all green", () => {
   assert.equal(line(t, "Visitors").text, "30 people · 9 Spotify taps (30%)");
   assert.equal(line(t, "Meta").text, "Receiving this page's events · last 7 min ago");
   assert.equal(line(t, "Home card").text, "On the home card");
+  const quiet = L.songTile(song({ people: 0, visits: 0, taps: 0 }), { today: "2026-11-17", now: NOW, card, builds: [] });
+  assert.equal(line(quiet, "Page").text, "Live");
+  assert.equal(line(quiet, "Visitors").text, "Live, no visits in this range yet");
 });
 test("songTile: what goes wrong is said, in red or amber", () => {
   const out = L.songTile(song({ track: false, people: 0, visits: 0, taps: 0, health: { sends: 4, errors: 2, blocked: 0, lastOk: NOW - 90 * MIN, lastError: { ts: NOW - 20 * MIN, detail: "http-400-code-100" } } }),

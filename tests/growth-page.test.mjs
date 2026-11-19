@@ -316,23 +316,23 @@ test("an Instagram boost with no ad id is keyed on the post link, and an ad acco
   await assert.rejects(call(d, "log_growth", { bot: "Steve", platform: "Instagram", date: "2026-11-18", followers: "9", boosts: [{ link, ad: "act_230002830106369", spend: 1, currency: "USD", status: "active" }] }), /ad account/);
 });
 
-test("a post that beats the others adds a next idea without inventing the song", async () => {
+test("ideas keep one hook each and every one names a song", async () => {
   const d = memoryDesk();
   const ideas = [
     { hook: "Open on the chorus", text: "the chorus", format: "Reel", platform: "Instagram", why: "It held.", song: "Northwind", status: "posted", views: "2000", epv: "0.2" },
-    { hook: "A second line", text: "second", format: "Reel", platform: "TikTok", why: "A try." },
-    { hook: "A third line", text: "third", format: "Short", platform: "YouTube", why: "Another try." },
+    { hook: "Open on the chorus", text: "copied", format: "Reel", platform: "TikTok", why: "The same hook on another post." },
+    { hook: "A second line", text: "second", format: "Reel", platform: "TikTok", why: "A try.", song: "Paper Moon" },
+    { hook: "A third line", text: "third", format: "Short", platform: "YouTube", why: "Another try.", song: "Paper Moon" },
   ];
   const posts = [
     { whose: "ours", platform: "Instagram", title: "Winner", views: 1000, likes: 200, comments: 0, saves: 0, shares: 0, at: "2026-11-18" },
     { whose: "ours", platform: "Instagram", title: "Quiet", views: 1000, likes: 10, comments: 0, saves: 0, shares: 0, at: "2026-11-17" },
   ];
   const saved = await call(d, "content_ideas", { bot: "Spark", ideas, posts });
-  assert.equal(saved.ideas.length, 4);
-  const next = saved.ideas.find((i) => i.auto);
-  assert.equal(next.hook, "Open on the chorus");
-  assert.equal(next.song, undefined);
-  assert.match(next.why, /beat the other official posts/);
+  assert.equal(saved.ideas.length, 3);
+  assert.equal(saved.ideas.filter((i) => i.hook === "Open on the chorus").length, 1);
+  assert.equal(saved.ideas.every((i) => i.song), true);
+  assert.equal(saved.ideas.some((i) => i.auto), false);
 });
 
 test("a rounded Studio view is kept as approximate, and Studio's own subscriber change wins", async () => {

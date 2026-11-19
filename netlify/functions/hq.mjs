@@ -32,12 +32,14 @@ export default async (req, context) => {
     if (req.method === "GET" && !sub) {
       if (sample) return json(200, IG.sampleView(Date.now()));
       const now = Date.now();
-      let spend = [];
+      let spend = [], boosts = [];
       try {
         const desk = prod ? getStore({ name: "staff", consistency: "strong" }) : getDeployStore({ name: "staff", consistency: "strong" });
         spend = (await S.listSpend(desk, now) || []).filter((r) => /meta|facebook|instagram/i.test(r.platform || ""));
-      } catch { spend = []; }
-      return json(200, await IG.igView(igStore(prod), now, { spend }));
+        const growth = await S.listGrowth(desk, now, 2);
+        boosts = (growth || []).flatMap((r) => (r && r.boosts) || []);
+      } catch { spend = []; boosts = []; }
+      return json(200, await IG.igView(igStore(prod), now, { spend, boosts }));
     }
     if (req.method !== "POST") return json(404, { error: "Not found" });
     const origin = req.headers.get("origin");

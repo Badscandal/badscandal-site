@@ -143,7 +143,7 @@
         return '<li class="' + (d.status === "blocked" || d.late ? "bad" : d.status === "done" ? "done" : "") + '"><span class="bt">' + esc(d.task) + (d.blocker ? "<small>Blocked: " + esc(d.blocker) + "</small>" : "") + (d.gaps ? "<small>" + esc(window.HQLib.dutyGapsLine(d)) + "</small>" : "") +
           '</span><span class="bw">' + esc(L.dutyWhen(d)) + "</span></li>"; }).join("") + "</ul>" : "") +
       relSteps(w) +
-      (w.last ? '<p class="blast"><b>' + esc(lastMs ? L.ago(now - lastMs) : w.last.at) + "</b> " + HQ.link(w.last.link, w.last.message) + "</p>" : "") +
+      (w.last ? '<p class="blast"><b>' + esc(lastMs ? L.ago(now - lastMs) : L.screenText(w.last.at, 40)) + "</b> " + HQ.link(w.last.link, L.screenText(w.last.message)) + "</p>" : "") +
       (w.card && w.card.workingOn ? '<p class="bline"><b>Working on</b><span>' + esc(w.card.workingOn) + "</span></p>" : "") +
       (w.card && w.card.needs ? '<p class="bline need"><b>Needs</b><span>' + esc(w.card.needs) + "</span></p>" : "") +
       '<p class="bmeta">' + (counts ? "<span>" + esc(counts) + "</span>" : "") + "<span>" + esc(L.seenLine(w, now)) + "</span></p>" +
@@ -314,7 +314,7 @@
       (m.proposal.send ? '<p class="mabout">Then it goes to the team: every bot gets its steps.</p>' : "") + "</div>";
     var tag = m.approval ? " · approval" : m.proposal ? " · is this correct?" : m.ask === "resubmit" ? " · ready to resubmit" : "";
     return '<article class="wmsg" id="wait-' + esc(safe(m.id)) + '"><p class="mhead"><span><b>' + esc(m.from) + "</b> " + esc(L.needWords(m)) + esc(tag) + (m.about ? " · about " + esc(m.about) : "") + '</span><span class="mtime">' + esc(when(m)) + "</span></p>" + about +
-      '<p class="mtext">' + esc(m.text) + "</p>" + ap + opts + qhtml +
+      '<p class="mtext">' + esc(L.screenText(m.text)) + "</p>" + ap + opts + qhtml +
       (ui.reply === k ? replyBox(k, m) : '<div class="macts"><button class="copybtn" type="button" data-act="reply" data-k="' + esc(k) + '"' + dis + '>Reply</button><button class="copybtn" type="button" data-act="done" data-k="' + esc(k) + '"' + dis + ">" +
         (busy ? "Saving…" : "Mark as done") + "</button></div>") + errLine(k) + "</article>";
   }
@@ -352,10 +352,16 @@
         (p.rest ? '<button class="linkbtn" type="button" data-act="more" data-k="' + esc(k) + '" aria-expanded="' + open + '">' + (open ? "Show less" : "Show all (" + p.more + " more line" + (p.more === 1 ? "" : "s") + ")") + "</button>" : "") + "</article>";
     }
     var tq = L.questionLines(th);
-    return '<article class="t-card thread" id="messages-' + esc(id) + '">' + head(th) + (th.about ? '<p class="mabout">About ' + esc(th.about) + "</p>" : "") + '<p class="mtext">' + esc(th.text) + "</p>" +
+    var body = L.screenText(th.text);
+    var words = body.split(" ").filter(Boolean);
+    var short = words.slice(0, 12).join(" ");
+    var folded = th.resolved
+      ? '<p class="mtext">' + esc(short) + "</p>" + (words.length > 12 ? '<details class="answered"><summary>Show more</summary><p class="mtext">' + esc(body) + "</p></details>" : "")
+      : '<p class="mtext">' + esc(body) + "</p>";
+    return '<article class="t-card thread" id="messages-' + esc(id) + '">' + head(th) + (th.about ? '<p class="mabout">About ' + esc(th.about) + "</p>" : "") + folded +
       (tq.length ? '<ol class="mqs">' + tq.map(function (q) { return '<li><p class="mq">' + esc(q.q) + '</p><p class="ma' + (q.open ? " open" : "") + '">' + esc(q.open ? "No answer yet" : q.answer) + "</p></li>"; }).join("") + "</ol>" : "") +
       ((th.options || []).length ? '<p class="mabout">Choices: ' + esc(th.options.join(" · ")) + "</p>" : "") +
-      ((th.replies || []).length ? '<ul class="treplies">' + th.replies.map(function (r) { return "<li>" + head(r) + '<p class="mtext">' + esc(r.text) + "</p></li>"; }).join("") + "</ul>" : "") +
+      ((th.replies || []).length ? '<ul class="treplies">' + th.replies.map(function (r) { return "<li>" + head(r) + '<p class="mtext">' + esc(L.screenText(r.text)) + "</p></li>"; }).join("") + "</ul>" : "") +
       (ui.tsent[k] && Date.now() - ui.tsent[k].at < KEEP_MS ? '<p class="landed tsent" role="status"><span>' + esc(ui.tsent[k].line) + "</span></p>" : "") +
       (ui.reply === k ? replyBox(k, th) + errLine(k) : '<div class="tfoot"><button class="linkbtn" type="button" data-act="reply" data-k="' + esc(k) + '"' + off() + ">Reply</button></div>" + errLine(k)) + "</article>";
   }
@@ -660,12 +666,17 @@
     var rows = mainEntries.slice(0, ui.payAll ? 60 : 15), nc = function (e) { return L.payStatus(e).counted ? "" : " nc"; };
     function payLine(e, open) {
       var flow = L.payFlow(e, entries);
+      var current = null;
+      for (var i = flow.length - 1; i >= 0; i--) if (!flow[i].missing) { current = flow[i]; break; }
+      if (!current) current = flow[flow.length - 1];
+      var land = (/revolut/i.test(e.account || "") && !e.movedTo) ? e : entries.filter(function (x) { return x && e.movedTo && x.id === e.movedTo && /revolut/i.test(x.account || ""); })[0];
+      var amt = land && e.movedTo ? land.amount : e.amount, cur = land && e.movedTo ? land.currency : e.currency;
       var dots = (e.status === "unsorted" ? '<i class="pdot wait" aria-label="Waiting for you to sort"></i>' : "") + (V && V.splitOff(e) ? '<i class="pdot bad" aria-label="The split does not add up"></i>' : "");
       var kids = confirming.filter(function (c) { return c.movedTo === e.id; });
-      return '<li>' + dots + '<button class="paybtn" type="button" data-pay="' + esc(e.id || "") + '" aria-expanded="' + open + '"><b>' + esc(e.payer) + '</b><span class="pa' + nc(e) + '">' + esc(L.money(e.amount, e.currency)) + '</span><span class="pm">' + esc([L.day(e.date), e.account, e.by ? "by " + e.by : ""].filter(Boolean).join(" · ")) +
+      return '<li>' + dots + '<button class="paybtn" type="button" data-pay="' + esc(e.id || "") + '" aria-expanded="' + open + '"><b>' + esc(e.payer) + '</b><span class="pa' + nc(e) + '">' + esc(L.money(amt, cur)) + '</span><span class="pm">' + esc([L.day(e.date), e.account, e.by ? "by " + e.by : ""].filter(Boolean).join(" · ")) +
         '</span><span class="ps">' + esc(plain(e)) + "</span></button>" + (e.note ? '<span class="pn">' + esc(e.note) + "</span>" : "") +
         (open && kids.length ? '<ul class="confirming">' + kids.map(function (c) { return "<li>" + esc(c.payer) + " · " + esc(L.money(c.amount, c.currency)) + " · " + esc(plain(c)) + "</li>"; }).join("") + "</ul>" : "") +
-        (open ? '<ol class="flow">' + flow.map(function (s) { return '<li class="' + (s.missing ? "miss" : "ok") + '"><b>' + esc(V ? V.plainStatus(s.label) : s.label) + "</b><span>" + esc(V ? V.plainStatus(s.text) : s.text) + "</span></li>"; }).join("") + "</ol>" : "") + "</li>";
+        (open && current ? '<p class="flow"><b>' + esc(V ? V.plainStatus(current.label) : current.label) + "</b> <span>" + esc(V ? V.plainStatus(current.text) : current.text) + (land && current.key === "landed" ? " · arrived " + esc(L.money(land.amount, land.currency)) : "") + "</span></p>" : "") + "</li>";
     }
     h += '<h4 class="lblh">Latest payments</h4><div class="tile">' + (!rows.length ? '<p class="empty2">No payments have landed yet.</p>'
       : '<ul class="paylist">' + rows.map(function (e) { return payLine(e, !!ui.payOpen[e.id]); }).join("") + "</ul>") +
@@ -802,7 +813,7 @@
     return '<div class="tile bank' + (v.attn ? " attn-t" : "") + '" id="bankTile">' + head + '<p class="al">' + esc(cap(v.line.replace(/^Revolut: /, ""))) + "</p>" +
       (v.error ? '<p class="al">' + esc(v.error) + "</p>" : "") +
       (bankProblem ? '<p class="al">Couldn\'t check again just now: this is what was read before.</p>' : "") +
-      (v.accounts.length ? '<p class="al bacc">Reads ' + esc(v.accounts.join(", ")) + ". Read only: it can never move money.</p>" : "") +
+      (v.accounts.length ? '<p class="al bacc">' + v.accounts.length + " accounts, read only.</p>" : "") +
       flag + (b.done ? '<p class="rdone" role="status">' + esc(b.done) + "</p>" : "") + acts +
       (v.note ? '<p class="al">' + esc(v.note) + "</p>" : "") + '<p class="ferr" role="alert">' + esc(b.err) + "</p>" +
       (HQ.sample && v.buttons.length ? '<p class="fok bnote">Sample: these buttons do nothing here.</p>' : "") + "</div>";
@@ -1246,8 +1257,10 @@
           }).join("") + "</ul>" : '<p class="empty2">Nothing due.</p>') + "</details>";
       }).join("") + "</section>";
     var slots = L.pitchBlock(board.pitchSlots || []);
+    var pitchLine = L.pitchSentence(board.pitchSlots || []);
     var pitchSec = '<section class="tile six-weeks" aria-labelledby="pitchTitle"><h3 class="lblh" id="pitchTitle">Spotify pitches</h3>' +
       '<p class="secsub">One pitch in two weeks. Spotify needs it at least 7 days before the release. The warning starts two weeks out, while there is still time. HQ only records what Atlas saw. It never pitches.</p>' +
+      (pitchLine ? '<p>' + esc(pitchLine) + "</p>" : "") +
       (slots.length ? slots.map(function (s) {
         return '<div class="pslot"><p><b>' + esc(s.title) + "</b>" + (s.when ? " · out " + esc(s.when) : "") + "</p><p>" + esc(s.line) + "</p>" +
           (s.editorial.length ? "<p>Editorial: " + esc(s.editorial.join(" · ")) + "</p>" : "") +
@@ -1318,7 +1331,7 @@
     drawRelRows(lists.coming);
     if (sheet && HQ.releasesBroken()) $("relList").innerHTML = '<p class="empty">See the note above.</p>';
     else $("relList").innerHTML = lists.sheetOnly.map(HQ.sheetReleaseCard).join("") ||
-      (lists.coming.length ? "" : '<p class="empty2">Nothing has been sent to the team yet. A song moves here from “In the pipeline” when you send it.</p>');
+      ((lists.coming.length || (board.releases || []).some(function (r) { return r && r.status === "scheduled"; })) ? "" : '<p class="empty2">Nothing has been sent to the team yet. A song moves here from “In the pipeline” when you send it.</p>');
     /* the songs whose day has come leave Upcoming: one quiet line (they live in Songs); one that still has
        a step open keeps its card, so the step can be finished */
     var outs = lists.out.map(function (v) { return { title: v.title, date: v.date }; }).concat(lists.sheetOut.map(function (r) { return { title: r.song, date: r.date }; }))
@@ -1807,7 +1820,9 @@
         p.slots.map(function (s) {
           var href = /^#messages\/[A-Za-z0-9]+$/.test(s.waitingHref) ? s.waitingHref : "";
           var cls = s.status === "ready" || s.status === "uploaded" || s.status === "rework" ? s.status : "wait";
-          var src = /^\/api\/staff\/profile-file\/(?:master-(?:photo|banner)|slot-[a-z0-9-]+)$/.test(s.preview || "") ? s.preview : "";
+          var fileSrc = /^\/api\/staff\/profile-file\/(?:master-(?:photo|banner)|slot-[a-z0-9-]+)$/.test(s.preview || "") ? s.preview : "";
+          var webSrc = /^https:\/\/.+\.(?:jpg|jpeg|png|webp|gif)(?:\?|$)/i.test(s.currentLink || "") ? s.currentLink : "";
+          var src = fileSrc || webSrc;
           var frame = s.circle ? " circle" : " banner";
           var ratio = !s.circle && s.exactW > 0 && s.exactH > 0 ? ' style="aspect-ratio:' + Number(s.exactW) + " / " + Number(s.exactH) + '"' : "";
           var preview = src ? '<div class="profprev' + frame + '"' + ratio + '><img alt="" src="' + esc(src) + '">' + (s.circle ? '<i class="safe"></i>' : "") + "</div>" : "";
@@ -1817,7 +1832,7 @@
             preview +
             (s.detail && s.status === "rework" ? '<p class="secsub">' + esc(s.detail) + "</p>" : "") +
             '<p class="profrule">' + esc(s.rule) + "</p>" +
-            (s.currentLink ? "<p>Current image: " + outLink(s.currentLink, shortUrl(s.currentLink)) + "</p><p class=\"secsub\">" + esc(s.currentLine) + "</p>" : '<p class="secsub">' + esc(s.currentLine) + "</p>") +
+            (s.currentLink && !src ? "<p>Current image: " + outLink(s.currentLink, "Image") + "</p>" : "") + '<p class="secsub">' + esc(s.currentLine) + "</p>" +
             (s.waitingLine ? '<p class="attn">' + esc(s.waitingLine) + (s.waitingLink ? " " + outLink(s.waitingLink, shortUrl(s.waitingLink)) : "") + (href ? ' <a href="' + esc(href) + '">Answer on Messages</a>' : "") + "</p>" : "") +
             (s.approvedLine ? "<p>" + esc(s.approvedLine) + (s.approvedLink ? " " + outLink(s.approvedLink, shortUrl(s.approvedLink)) : "") + "</p>" : "") + "</div>";
         }).join("") + "</article>";

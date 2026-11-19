@@ -416,7 +416,7 @@ export async function igView(store, now, o = {}) {
   const shown = marked.filter((c) => !c.hidden).map((c) => ({ ...c, user: redactHandles(c.user), text: redactHandles(c.text), postCaption: redactHandles(c.postCaption || ""),
     repliedBy: (c.repliedBy || []).filter((u) => !isHiddenHandle(u)).map((u) => redactHandles(u)) }));
   /* L2: which posts engage best, with the ads that boosted them (postrank.mjs); our own comments don't count */
-  const ranking = rankPosts(posts, adDoc, { now, comments: marked, spend: o.spend || [], songs: songDoc || {} });
+  const ranking = rankPosts(posts, adDoc, { now, comments: marked, spend: o.spend || [], songs: songDoc || {}, boosts: o.boosts || [] });
   const ownLog = (((ownDoc && ownDoc.log) || []).slice().reverse()).filter((x) => !isHiddenHandle(x.handle)).slice(0, 20)
     .map((x) => ({ ...x, reason: redactHandles(x.reason || "") }));
   return { status: isHiddenHandle(status.username) ? { ...status, username: "" } : status,

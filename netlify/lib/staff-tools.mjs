@@ -878,14 +878,16 @@ async function runTool(tool, args, ctx, read) {
         if (!IG.OWN_EDITORS.includes(me)) throw new S.StaffError("Only Nova changes the list of our own accounts. Read it with our_accounts list; to change it, ask Nova (send_message).");
         try { changed = await IG.editOwn(ctx.ig(), now, { by: me, action: oa, handle: args.handle, reason: args.reason }); } catch (e) { throw new S.StaffError(e.message); }
       } else if (oa && oa !== "list") throw new S.StaffError("our_accounts is list, add or remove.");
-      let spend = [];
+      let spend = [], boosts = [];
       try { spend = (await S.listSpend(store, now) || []).filter((r) => /meta|facebook|instagram/i.test(r.platform || "")); } catch {}
+      try { boosts = ((await S.listGrowth(store, now, 2)) || []).flatMap((r) => (r && r.boosts) || []); } catch {}
       const fresh = oa === "add" || oa === "remove" || oa === "list";
       if (!fresh) {
         const cached = await IG.readToolCache(ig, now);
-        if (cached && cached.body) return { ...cached.body, last_read: S.spStamp(cached.at), cached: `This is the read from ${S.spStamp(cached.at)}. It did not use a call.` };
+        const staleBoost = boosts.some((b) => b && b.link) && cached && /boost unknown/.test(JSON.stringify(cached.body));
+        if (cached && cached.body && !staleBoost) return { ...cached.body, last_read: S.spStamp(cached.at), cached: `This is the read from ${S.spStamp(cached.at)}. It did not use a call.` };
       }
-      const v = await IG.igView(ig, now, { spend });
+      const v = await IG.igView(ig, now, { spend, boosts });
       const ourAccounts = { handles: v.own.map((h) => "@" + h), count: v.own.length, note: "Comments from these accounts never count: not in the ranking, the fans' list or needs_reply. The connected account is always on it. Only Nova changes it.",
         changes: (v.ownLog || []).map((x) => ({ on: S.spStamp(x.at), by: x.by, what: `${x.action} @${x.handle}`, reason: x.reason })) };
       const calls_left = await callsLeft(oa !== "list");
@@ -1415,7 +1417,7 @@ async function runTool(tool, args, ctx, read) {
       return { read_only: true, wrote: false, total: count.total, line: count.line, by_kind: count.byKind, quiet_hours: !!board.quiet,
         waiting: count.items.map((x) => {
           const m = x.kind === "message" ? byId[x.id] : null;
-          return { kind: m ? (m.approval && m.approval.what ? m.approval.what + " approval" : m.needs) : x.kind, id: x.id, what: x.text,
+          return { kind: m ? (m.approval && m.approval.what ? m.approval.what + " approval" : m.needs) : x.kind, id: x.id, what: x.text, screen: S.lukeLine(x.text),
             ...(m ? { asked: m.sp, first_line: S.hidePrivate(String(m.text || "").split("\n")[0].slice(0, 120)) } : {}) };
         }),
         open: (board.needsYou || []).length + (board.held || []).length, needs_you: board.needsYou || [], held_until_morning: board.held || [],
@@ -1476,7 +1478,9 @@ async function runTool(tool, args, ctx, read) {
     return !realLate && spot;
   };
   const worker = (w) => ({ name: w.name, role: w.role, state: waitingSpotify(w) ? "waiting on Spotify" : w.state, ...(waitingSpotify(w) ? { waiting_on: "Spotify" } : {}), duties: w.duties.map((d) => ({ id: d.id, task: d.task, due: d.due || "today", status: d.late ? "late" : d.status, ...(d.blocker ? { blocker: d.blocker } : {}) })),
-    last_update: w.last ? `${w.last.at} ${w.last.status}: ${w.last.message}${w.last.link ? " " + w.last.link : ""}` : "none", working_on: w.card ? w.card.workingOn : "", needs: w.card ? w.card.needs : "",
+    last_update: w.last ? `${w.last.at} ${w.last.status}: ${w.last.message}${w.last.link ? " " + w.last.link : ""}` : "none",
+    for_luke: w.last ? `${w.name}: ${S.lukeLine(w.last.message) || "Update posted."}` : "No update yet",
+    working_on: w.card ? w.card.workingOn : "", needs: w.card ? w.card.needs : "",
     open_tasks: w.tasks.length, late_tasks: w.lateTasks, waiting_on_it: w.waiting.length, last_used_the_desk: w.seen ? S.spStamp(Date.parse(w.seen)) : "never" });
   /* everything new for the caller since its last read (S.messagesFor), not repeating what the same answer
      already lists (shown = ids); a reply to one of its own messages carries the start of that message */
@@ -1573,7 +1577,7 @@ async function runTool(tool, args, ctx, read) {
         /* L1 + L9: Ledger and Sheet see the summary at the start of the day. The full rows are in income_status. luke_briefing is unchanged. */
         ...(me === "Ledger" || me === "Sheet" ? { expected_money: b.income.expected ? b.income.expected.summary.text : "not read", payout_routes: S.routeSummary(b.income.routes) } : {}),
         /* L5: Verse, on a release day only. Not a sheet duty, and not the lyrics. */
-        ...(me === "Verse" ? { lyrics_duty: (desk.releases || []).filter((r) => r && r.status === "scheduled" && r.date === today && r.verseDay === today).map((r) => `${r.title}: submit the approved lyrics on Musixmatch when the song shows there. A song not on Musixmatch yet is not a block.`) } : {}),
+        ...(me === "Verse" ? { lyrics_duty: rel.filter((v) => v.status === "scheduled" && v.daysToGo != null && v.daysToGo >= 0 && v.daysToGo <= 14).map((v) => `${v.title}: submit the approved lyrics on Musixmatch when the song shows there. A song not on Musixmatch yet is not a block.`) } : {}),
         release_steps: rs, rules: RULES,
         next: (spotNext ? `Report what Spotify for Artists shows as upcoming with spotify_upcoming: the first report that lists ${firstRs.title} marks "${firstRs.label}" done (due ${when(firstRs.due)}${firstRs.late ? ", LATE" : ""}). Do not mark it with release_step.${rs.length > 1 ? ` You have ${rs.length} open release steps in all: see release_steps.` : ""} `
           : firstRs ? `You have ${rs.length} open release step${rs.length === 1 ? "" : "s"}; the soonest is "${firstRs.label}" for ${firstRs.title}, due ${when(firstRs.due)}${firstRs.late ? " (LATE)" : ""}. Read the pack with release_pack, do it, then mark it with release_step (done only when it is really done). `
@@ -1588,6 +1592,7 @@ async function runTool(tool, args, ctx, read) {
       return { today, now_sao_paulo: b.now, duties: hq ? { done: hq.team.duties.done, total: hq.team.duties.total, late: hq.team.duties.late, blocked: hq.team.duties.blocked } : "not read",
         team: b.staff.map(worker), waiting_on_luke: b.waiting.luke.map(short).concat(S.disputeWaits(desk.disputes)), waiting_on_claude: b.waiting.claude.map(short), waiting_on_bot: b.waiting.claude.map(short), open_messages_for_bots: b.waiting.bots,
         latest_updates: dedupeGrowthUpdates(b.updates.slice(0, 20).map((u) => `${u.sp} ${u.bot} ${u.status}: ${u.message}${u.link ? " " + u.link : ""}`)),
+        latest_for_luke: S.lukeUpdates(b.updates),
         growth: S.growthOnce(await S.listGrowth(store, now, 2)),
         releases: rel.filter(S.releaseActive).map((v) => ({ song: v.title, date: when(v.date), done: `${v.counts.done} of ${v.counts.total}`, late: v.counts.late, blocked: v.counts.blocked,
           late_steps: v.steps.filter((s) => s.late).map((s) => `${s.label} (${s.owner})`), warnings: v.warnings })),
@@ -1637,7 +1642,7 @@ async function runTool(tool, args, ctx, read) {
       };
       const asks = b.waiting.luke.map((m) => ({ m, due: due(m) }))
         .sort((x, y) => (x.due && y.due ? (x.due < y.due ? -1 : x.due > y.due ? 1 : 0) : x.due ? -1 : y.due ? 1 : x.m.at < y.m.at ? -1 : 1));
-      const decisions = asks.slice(0, 3).map(({ m, due: d }) => `${m.from}: ${m.text.length > 140 ? m.text.slice(0, 139) + "…" : m.text}` +
+      const decisions = asks.slice(0, 3).map(({ m, due: d }) => `${m.from}: ${S.lukeLine(m.text) || (m.text.length > 140 ? m.text.slice(0, 139) + "…" : m.text)}` +
         (m.options && m.options.length ? ` [${m.options.join(" / ")}]` : "") + (d ? ` (by ${S.dayWords(d)})` : "") + recWords(m));
       /* everything that needs Luke to sign in, from wherever a bot said it, each once */
       const SIGN_IN = /sign(ed)?[ -]?(in|out)\b|log(ged)?[ -]?(in|out)\b|login|2fa|two[- ]factor|phone code|verification code|security code|session (expired|ended)|re-?authori[sz]/i;

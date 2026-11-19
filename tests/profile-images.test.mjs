@@ -127,7 +127,7 @@ test("a rework must be the exact size; a bad one is not stored and Luke is told 
   view = S.profilesView(await S.getProfiles(d), []);
   const slot = view.platforms.find((p) => p.platform === "YouTube").slots.find((s) => s.id === "youtube-banner");
   assert.equal(slot.status, "uploaded");
-  assert.match(slot.statusLine, /Uploaded by Laura/);
+  assert.match(slot.statusLine, /Live/);
   const rejected = await callTool(TOOLS.find((t) => t.name === "profile_uploaded"), { bot: "Laura", slot: "youtube-banner", rejected: true, note: "The picture was too busy." }, { store: d, now: NOW + 10, role: "bot" });
   assert.equal(rejected.rejected, true);
   view = S.profilesView(await S.getProfiles(d), await S.listMessages(d, NOW + 10));
@@ -172,7 +172,7 @@ test("the new tools are on the connector for the owners, and the page buttons se
   assert.match(page, /color-scheme:\s*dark/);
   assert.match(page, /id="profPhoto"/);
   assert.match(page, /id="profBanner"/);
-  assert.match(sw, /var CACHE = "bs-hq-v14"/); /* v14: one Needs-you list and the phone drawer. v13: case dates. */
+  assert.match(sw, /var CACHE = "bs-hq-v15"/); /* v15: Luke's screens. v14: one Needs-you list. */
   const fn = readFileSync(new URL("../netlify/functions/staff.mjs", import.meta.url), "utf8");
   assert.match(fn, /profile_rework/);
   assert.match(fn, /profile-file/);

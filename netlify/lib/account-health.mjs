@@ -501,8 +501,8 @@ function events(checks, platform, kind, today, days) {
 function engagedOf(snap) {
   if (!snap) return null;
   const likes = num(snap.likes), comments = num(snap.comments), saves = num(snap.saves), shares = num(snap.shares);
-  if (likes == null && comments == null && saves == null && shares == null) return null;
-  return (likes || 0) + (comments || 0) + (saves || 0) + (shares || 0);
+  if ([likes, comments, saves, shares].some((n) => n == null)) return null;
+  return likes + comments + saves + shares;
 }
 function igSeries(posts) {
   const out = [];
@@ -627,7 +627,10 @@ export function evaluate(input) {
       }
     }
     const j = judge(signals);
-    return { id, label: a.label, owner: a.owner, ...j };
+    const dates = signals.map((s) => String(s.at || "").slice(0, 10)).filter((d) => /^\d{4}-\d{2}-\d{2}$/.test(d)).sort();
+    const checked = dates.length ? dates[dates.length - 1] : "";
+    if (id === "spotify" && checked) j.headline = `${String(j.headline || "").replace(/\s+$/, "")} Last check ${checked}.`.replace(/([^.]) Last/, "$1. Last");
+    return { id, label: a.label, owner: a.owner, ...(checked ? { checked } : {}), ...j };
   });
   return { at: new Date(now).toISOString(), today, accounts, connection: connectionFrom(input && input.igState, now) };
 }

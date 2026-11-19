@@ -117,7 +117,7 @@
     var state = s.status;
     if (s.key === "licence") {
       state = s.shown || (s.status === "licensed" ? "licensed" : "waiting on licence");
-      extra = "<p>Proof " + esc(s.proof_link || "not set") + "</p><p>Order " + esc(s.esl_order_number || "not set") + "</p><p>PDF " + esc(s.licence_pdf_url || "not set") + "</p><p>Folder " + esc(s.drive_folder_url || "not set") + "</p><p>Original: " + esc(s.original_title || "not set") + "</p><p>Writers: " + esc(s.original_writers || "not known") + " · Publisher: " + esc(s.original_publisher || "not known") + "</p>" + (s.flag_reason ? "<p>Flag: " + esc(s.flag_reason) + "</p>" : "") + "<p>Only the Licence bot or Nova can mark this, after Luke says yes for this song. HQ does not take payment.</p>";
+      extra = "<p>Proof " + esc(s.proof_link || "not set") + "</p><p>Order " + esc(s.esl_order_number || "not set") + "</p><p>PDF " + esc(s.licence_pdf_url || "not set") + "</p><p>Folder " + esc(s.drive_folder_url || "not set") + "</p><p>Original: " + esc(s.original_title || "not set") + "</p><p>Writers: " + esc(s.original_writers || "not known") + " · Publisher: " + esc(s.original_publisher || "not known") + "</p>" + (s.flag_reason ? "<p>Flag: " + esc(s.flag_reason) + "</p>" : "") + "<p>Only the Licence bot or Nova can mark this, after Luke says yes for this song. HQ does not take or send payment. The licence is paid outside HQ, and this page only records it.</p>";
     }
     return '<article class="wsstep' + (s.status === "blocked" ? " blocked" : "") + '"><h3>' + esc(s.label) + '</h3><p>' + esc(s.owner_bot || s.owner) + " · " + esc(state) + "</p>" + (s.note ? "<p>" + esc(s.note) + "</p>" : "") + extra + "</article>";
   }
