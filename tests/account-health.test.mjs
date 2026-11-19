@@ -301,7 +301,7 @@ test("the site is red when Webmaster records it down, and a failed song-page bui
 });
 
 test("log_growth records a status check without follower numbers, and the wrong bot is refused", async () => {
-  assert.equal(TOOLS.length, 51); /* content_ideas (Spark) + account_health, needs_you, song_pl (18 Nov 2026 night test) + profile_jobs, profile_master, profile_rework, profile_uploaded (PR #87) */
+  assert.equal(TOOLS.length, 54); /* content_ideas (Spark) + account_health, needs_you, song_pl (18 Nov 2026 night test) + profile_jobs, profile_master, profile_rework, profile_uploaded (PR #87) */
   assert.ok(tool("log_growth").inputSchema.properties.account_status);
   assert.match(INSTRUCTIONS, /Account health/);
   const d = memoryDesk();

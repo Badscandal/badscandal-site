@@ -515,8 +515,14 @@
     var k = document.querySelector("#pages .controls"); if (k && k.scrollIntoView) k.scrollIntoView();
   });
 
+  function drawDisputes() {
+    var box = $("disputeList");
+    if (!box || !window.HQLib || !HQLib.disputeHtml) return;
+    box.innerHTML = HQLib.disputeHtml(staffBoard() && staffBoard().disputes);
+  }
   /* ---------- Songs: the sheet's Spotify numbers + our page + Meta + royalties, one card each ---------- */
   function drawSongs() {
+    drawDisputes();
     var bySheet = {}, order = [];
     (sheet ? sheet.songs : []).forEach(function (s) { bySheet[adKey(s.song)] = s; order.push(adKey(s.song)); });
     var byPage = {};
@@ -559,7 +565,8 @@
       more += '<div class="kv"><span>Royalties so far</span><b>' + (s ? esc(amounts(s.royalties)) : "–") + "</b></div>" +
         (plBy[k] ? '<div class="kv"><span>Ad spend for this song</span><b>' + esc(plBy[k].adSpend) + "</b></div>" : "") +
         (rw ? '<div class="kv"><span>' + esc(rw.label) + "</span><b>" + esc(rw.line) + "</b></div>" : "");
-      return out + '<details class="fold"><summary>Numbers</summary>' + more + "</details></div>";
+      var panel = window.HQLib && HQLib.disputeHtml ? HQLib.disputeHtml((staffBoard() || {}).disputes, { song: name, compact: true }) : "";
+      return out + (panel || "") + '<details class="fold"><summary>Numbers</summary>' + more + "</details></div>";
     }).join("");
   }
 
@@ -691,7 +698,7 @@
   function drawClaims() {
     var box = $("rightsBody"); if (!box || !window.HQLib || !HQLib.claimsHtml) return;
     var b = window.HQStaff && HQStaff.board ? HQStaff.board() : null;
-    box.innerHTML = HQLib.claimsHtml(b && b.claims, sheet && sheet.today);
+    box.innerHTML = HQLib.claimsHtml(b && b.claims, sheet && sheet.today) + (HQLib.claimCaseLinks ? HQLib.claimCaseLinks(b && b.claims, b && b.disputes) : "");
   }
   document.addEventListener("hq:refreshed", drawClaims);
 
@@ -946,6 +953,30 @@
     var b = ev.target.closest && ev.target.closest("[data-adddeal]");
     if (b && window.HQStaff) window.HQStaff.addDetails({ id: b.getAttribute("data-adddeal"), title: b.getAttribute("data-title"), date: b.getAttribute("data-date") });
   });
+  document.addEventListener("click", function (ev) {
+    var b = ev.target.closest && ev.target.closest("[data-case-do]");
+    if (!b) return;
+    var id = b.getAttribute("data-case"), act = b.getAttribute("data-case-do");
+    var msg = document.querySelector('[data-case-msg="' + (window.CSS && CSS.escape ? CSS.escape(id) : id) + '"]');
+    if (act === "respond") {
+      var box = document.querySelector('[data-case-reply="' + (window.CSS && CSS.escape ? CSS.escape(id) : id) + '"]');
+      if (box) box.hidden = false;
+      return;
+    }
+    var choice = act === "send" ? "respond" : act;
+    var text = "";
+    if (choice === "respond") {
+      var ta = document.querySelector('[data-case-text="' + (window.CSS && CSS.escape ? CSS.escape(id) : id) + '"]');
+      text = ta ? ta.value : "";
+    }
+    if (sample) { if (msg) msg.textContent = "This is the sample: nothing is sent."; return; }
+    b.disabled = true;
+    postJSON("/api/staff/case", { id: id, choice: choice, text: text }).then(function (res) {
+      b.disabled = false;
+      if (res.s === 200 && res.j && res.j.ok) { if (window.HQStaff) window.HQStaff.reload(); return; }
+      if (msg) msg.textContent = (res.j && res.j.error) || "Couldn't save that. Try again.";
+    }, function () { b.disabled = false; if (msg) msg.textContent = "Couldn't save that. Try again."; });
+  });
   $("detailClose").addEventListener("click", closeRelease);
   $("scrim").addEventListener("click", closeRelease);
   document.addEventListener("keydown", function (ev) { if (ev.key === "Escape") closeRelease(); });
@@ -964,7 +995,7 @@
       return out;
     },
     /* the staff desk answered (or was cleared): Today's attention, the site-check line and Data health read it */
-    boardChanged: function () { if (sheet || ov) { drawBriefing(); drawSongs(); } drawIdeas(); if (sheet) drawGrowth(); drawDataHealth(); drawSongTiles(); if (!staffBoard()) drawLive(); },
+    boardChanged: function () { drawDisputes(); if (sheet || ov) { drawBriefing(); drawSongs(); } drawIdeas(); if (sheet) drawGrowth(); drawDataHealth(); drawSongTiles(); if (!staffBoard()) drawLive(); },
     overview: function () { return ov; }, instagram: function () { return ig; } };
   /* hq-pages.js is loaded with defer right after this file: start once both are in */
   document.addEventListener("DOMContentLoaded", start);
