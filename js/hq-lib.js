@@ -2358,10 +2358,11 @@
   /* quiet mode: one line per bot, the latest, with the older lines behind it */
   function screenText(text, max) {
     max = max || 280;
+    if (/site analytics/i.test(String(text || "")) && /netlify|viewer|webmaster|needs access/i.test(String(text || ""))) return "Webmaster needs Netlify Viewer access (site analytics)";
     var drop = /\b(my_day|post_update|send_message|read_messages|release_step|release_pack|log_growth|read_growth|record_spend|licence_queue|content_ideas|spotify_upcoming|team_board|luke_short_briefing|needs_you|song_pl|tools_seen|list_version|tools_version|reconnect needed)\b/i;
     var seen = {}, out = [];
     String(text || "").split(/\n+/).forEach(function (line) {
-      var t = line.replace(/\b20\d{2}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?Z?\b/g, " ").replace(/\bT-\d+\b/g, " ").replace(drop, " ").replace(/\s+/g, " ").trim();
+      var t = line.replace(/\b20\d{2}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?Z?\b/g, " ").replace(/\bT-\d+\b/g, " ").replace(/\bso I can do\s+(?=\()/gi, "").replace(drop, " ").replace(/\s+/g, " ").trim();
       if (!t || seen[t.toLowerCase()]) return;
       seen[t.toLowerCase()] = 1;
       out.push(t);

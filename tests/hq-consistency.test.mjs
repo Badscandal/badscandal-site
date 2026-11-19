@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import * as S from "../netlify/lib/staff.mjs";
 import { memoryDesk } from "../netlify/lib/staff-sample.mjs";
 import { needsCount } from "../netlify/lib/action-cards.mjs";
+import { callTool, TOOLS } from "../netlify/lib/staff-tools.mjs";
 import { songProfit } from "../netlify/lib/hq.mjs";
 import { evaluate } from "../netlify/lib/account-health.mjs";
 import { needsDesk } from "../netlify/lib/needs.mjs";
@@ -37,7 +38,7 @@ test("signed-out lines are one plain line per real account", () => {
     { who: "Forge", text: "Google Ads 111-222-3333 signed out since 14 Nov, still" },
     { who: "Forge", text: "Google Ads sign-in from Luke for account, so the read failed" },
   ]);
-  assert.deepEqual(lines.map((x) => x.line), ["Google Ads 111-222-3333 signed out since 14 Nov"]);
+  assert.deepEqual(lines.map((x) => x.line), ["Sign in to Google Ads (signed out since 14 Nov)"]);
 });
 
 test("google unread days collapse to one line", () => {
@@ -68,6 +69,51 @@ test("needs you counts sign-ins, access, a yes, and a fan reply", () => {
   assert.ok(n.items.some((x) => x.kind === "yes"));
   assert.ok(n.items.some((x) => x.kind === "fan"));
   assert.equal(needsCount({ messages: [], releases: [], disputes: [] }, "2026-11-19", NOW).line, "Nothing needs you");
+});
+
+test("a status note and a future sign-out are not a yes, and Google Ads is one sign-in", async () => {
+  assert.equal(S.realYes("Daily RouteNote status. Love you approved 17 Nov. Waiting on Luke's yes."), false);
+  assert.equal(S.realYes("None right now. SfA is signed in. If it signs out, Luke's yes is needed."), false);
+  assert.equal(S.realYes("Waiting on Luke's yes for the featured-artist line"), true);
+  const drop = "Daily RouteNote status. Love you approved 17 Nov. Waiting on Luke if the cover changes.";
+  const atlas = "None right now. SfA is signed in. If it signs out, Luke's yes is needed.";
+  const forge = "Google Ads account 376-151-8792, signed out since 14 Nov. Forge needs Luke to sign into it.";
+  const web = "so I can do T-19 (site analytics). Needs Netlify Viewer access.";
+  const desk = {
+    messages: [], releases: [], sightings: null, disputes: [],
+    notRead: ["Google Fri 14 Nov: signed out", "Google Sat 15 Nov: signed out"],
+    cards: {
+      Drop: { needs: drop },
+      Atlas: { needs: atlas },
+      Forge: { needs: forge },
+      Webmaster: { needs: web },
+    },
+  };
+  const n = needsCount(desk, "2026-11-19", NOW);
+  assert.equal(n.items.some((x) => x.kind === "yes"), false);
+  assert.equal(n.items.some((x) => /Daily RouteNote status/.test(x.text)), false);
+  assert.equal(n.items.some((x) => /None right now/.test(x.text)), false);
+  const signs = n.items.filter((x) => x.kind === "signin");
+  assert.deepEqual(signs.map((x) => x.text), ["Sign in to Google Ads (signed out since 14 Nov)"]);
+  const access = n.items.find((x) => x.kind === "access");
+  assert.equal(access.text, "Webmaster needs Netlify Viewer access (site analytics)");
+  assert.equal(S.lukeLine("Webmaster needs access: so I can do T-19 (site analytics)"), "Webmaster needs Netlify Viewer access (site analytics)");
+  assert.equal(/T-\d/.test(S.lukeLine(web)), false);
+  assert.equal(/so I can do \(/.test(S.lukeLine("Webmaster needs access: so I can do T-19 (site analytics)")), false);
+
+  const d = memoryDesk();
+  await S.setCard(d, NOW, R, { bot: "Drop", needs: drop });
+  await S.setCard(d, NOW, R, { bot: "Atlas", needs: atlas });
+  await S.setCard(d, NOW, R, { bot: "Forge", needs: forge });
+  await S.setCard(d, NOW, R, { bot: "Webmaster", needs: web });
+  const hq = async () => ({ money: { cap: { month: "2026-11", currency: "USD", spent: 0, amount: 1000, left: 1000, status: "ok", notRead: ["Google Fri 14 Nov: signed out", "Google Sat 15 Nov: signed out"] } } });
+  const brief = await callTool(TOOLS.find((t) => t.name === "luke_short_briefing"), { bot: "Alfred" }, { store: d, now: NOW, role: "bot", hq });
+  const loaded = await S.loadDesk(d, NOW);
+  loaded.notRead = ["Google Fri 14 Nov: signed out", "Google Sat 15 Nov: signed out"];
+  const webCount = needsCount(loaded, "2026-11-19", NOW);
+  assert.equal(brief.needs_you, webCount.total);
+  assert.equal(webCount.items.filter((x) => x.kind === "signin").length, 1);
+  assert.equal(webCount.items.filter((x) => x.kind === "yes").length, 0);
 });
 
 test("a stale site check is replaced with the live duty count", () => {

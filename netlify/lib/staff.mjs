@@ -5851,8 +5851,10 @@ export function growthPlatformId(name) {
 /* one plain sentence per bot, for Luke's screens. Tool names, reconnect lines and ISO stamps stay off it. */
 export function lukeLine(text) {
   let t = String(text || "");
+  if (/site analytics/i.test(t) && /netlify|viewer|webmaster|needs access/i.test(t)) return "Webmaster needs Netlify Viewer access (site analytics)";
   t = t.replace(/\b20\d{2}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?Z?\b/g, " ");
   t = t.replace(/\bT-\d+\b/g, " ");
+  t = t.replace(/\bso I can do\s+(?=\()/gi, "");
   t = t.replace(/\b(my_day|post_update|send_message|read_messages|release_step|release_pack|release_fill|log_growth|read_growth|record_spend|licence_queue|content_ideas|spotify_upcoming|team_board|luke_short_briefing|luke_briefing|needs_you|song_pl|task_update|tools_seen|list_version|tools_version|reconnect needed)\b/gi, " ");
   const seen = new Set();
   const lines = [];
@@ -6118,30 +6120,44 @@ export async function deleteCase(store, now, roster, a) {
   });
   return { deleted: true, id, song: removed.song, platform: removed.platform };
 }
+/* A status note, a "none right now", or a sign-out that only might happen later is not a decision. */
+export function realYes(text) {
+  const t = String(text || "").replace(/\s+/g, " ").trim();
+  if (!t) return false;
+  if (/^(none|nothing|no)\b/i.test(t)) return false;
+  if (/\bif it signs out\b|\bif \w+ signs out\b|\bshould it sign out\b|\bin case it signs out\b/i.test(t)) return false;
+  if (/sign[\s-]?in|signed out|logged out|2fa|phone code/i.test(t)) return false;
+  if (/\bstatus\b/i.test(t.split(/[.!?]/)[0])) return false;
+  return /luke'?s yes|waiting on luke|waits on luke|needs luke/i.test(t);
+}
 /* One plain line per account that is actually signed out. A general note ("sessions expire often"),
-   "none right now", a garbled "sign-in from Luke for account", and a second copy of the same account
-   are not asks. The account number is said once. */
+   "none right now", a possible future sign-out, a garbled "sign-in from Luke for account", and a
+   second copy of the same account are not asks. Luke sees one line, without the account number twice. */
 export function signedOutLines(items) {
   const NOTE = /expire often|sessions expire|none right now|is signed in|signed in again|nothing to sign|sf a is signed|sfa is signed/i;
-  const REAL = /signed out|logged out|not signed in|sign-?in needed|needs?( you| luke)? to sign in/i;
+  const FUTURE = /\bif it signs out\b|\bif \w+ signs out\b|\bshould it sign out\b|\bin case it signs out\b/i;
+  const REAL = /signed out|logged out|not signed in|sign-?in needed|needs?(?: you| luke)? to sign[\s-]?in/i;
   const GARBLED = /sign-in from luke for account/i;
   const MONTH = { jan: "Jan", feb: "Feb", mar: "Mar", apr: "Apr", may: "May", jun: "Jun", jul: "Jul", aug: "Aug", sep: "Sep", oct: "Oct", nov: "Nov", dec: "Dec" };
-  const out = [];
-  const seen = new Set();
+  const found = new Map();
   for (const it of items || []) {
     const t = String(it && it.text || "").replace(/\s+/g, " ").trim();
-    if (!t || NOTE.test(t) || GARBLED.test(t) || !REAL.test(t)) continue;
+    if (!t || NOTE.test(t) || GARBLED.test(t) || FUTURE.test(t) || !REAL.test(t)) continue;
+    const plat = /google ads/i.test(t) || (/\bgoogle\b/i.test(t) && !/youtube/i.test(t)) ? "Google Ads"
+      : /tiktok/i.test(t) ? "TikTok" : /meta|facebook/i.test(t) ? "Meta" : /youtube/i.test(t) ? "YouTube"
+      : /spotify/i.test(t) ? "Spotify" : /routenote/i.test(t) ? "RouteNote" : "";
     const id = (t.match(/\d{3}-\d{3}-\d{4}/) || [])[0] || "";
-    const plat = /google ads/i.test(t) ? "Google Ads" : /tiktok/i.test(t) ? "TikTok" : /meta|facebook/i.test(t) ? "Meta" : /youtube/i.test(t) ? "YouTube" : /spotify/i.test(t) ? "Spotify" : /routenote/i.test(t) ? "RouteNote" : "";
     if (!plat && !id) continue;
-    const sinceM = t.match(/since\s+(\d{1,2})\s+([A-Za-z]{3,9})/i);
+    const sinceM = t.match(/(?:since\s+)?(\d{1,2})\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)/i);
     const since = sinceM ? `${Number(sinceM[1])} ${MONTH[sinceM[2].slice(0, 3).toLowerCase()] || sinceM[2]}` : "";
-    const key = (id || plat).toLowerCase();
-    if (seen.has(key)) continue;
-    seen.add(key);
-    out.push({ who: it.who || "", line: `${plat || "Account"}${id ? " " + id : ""} signed out${since ? " since " + since : ""}` });
+    const name = plat || "the account";
+    const line = since ? `Sign in to ${name} (signed out since ${since})` : `Sign in to ${name}`;
+    const key = (plat || id).toLowerCase();
+    const prev = found.get(key);
+    if (prev && (prev.since || !since)) continue;
+    found.set(key, { who: (it && it.who) || (prev && prev.who) || "", line, since });
   }
-  return out;
+  return [...found.values()].map(({ who, line }) => ({ who, line }));
 }
 /* Five daily "Google … signed out" lines become one. Other unread lines stay, cut at a word. */
 export function unreadSpendLine(lines) {
@@ -6177,17 +6193,20 @@ function lukeExtraNeeds(desk) {
     const who = key.charAt(0).toUpperCase() + key.slice(1);
     for (const text of [c.needs, c.workingOn, c.blockers]) if (text) bits.push({ who, text: String(text), at: c.at || null });
   }
+  for (const text of desk && desk.notRead || []) if (text) bits.push({ who: "", text: String(text), at: null });
   for (const line of signedOutLines(bits)) {
     out.push({ key: "sign:" + line.line.toLowerCase(), kind: "signin", id: line.who || line.line, text: line.line, href: "#today", at: null });
   }
   const seenYes = new Set(), seenAcc = new Set();
   for (const b of bits) {
     const t = b.text.replace(/\s+/g, " ").trim();
-    if (/netlify|viewer|needs access/i.test(t) && /luke|viewer|access/i.test(t) && !seenAcc.has(b.who)) {
+    if (!b.who) continue;
+    if (/netlify|viewer|site analytics/i.test(t) && /luke|viewer|access|analytics/i.test(t) && !seenAcc.has(b.who)) {
       seenAcc.add(b.who);
-      out.push({ key: "acc:" + b.who, kind: "access", id: b.who, text: `${b.who} needs access: ${clipWords(t, 90)}`, href: "#team", at: b.at });
+      const text = /site analytics/i.test(t) ? `${b.who} needs Netlify Viewer access (site analytics)` : `${b.who} needs Netlify Viewer access`;
+      out.push({ key: "acc:" + b.who, kind: "access", id: b.who, text, href: "#team", at: b.at });
     }
-    if (/luke'?s yes|waiting on luke|waits on luke|needs luke/i.test(t) && !seenYes.has(b.who)) {
+    if (realYes(t) && !seenYes.has(b.who)) {
       seenYes.add(b.who);
       out.push({ key: "yes:" + b.who, kind: "yes", id: b.who, text: `${b.who} is waiting on your yes: ${clipWords(t, 90)}`, href: "#team", at: b.at });
     }
