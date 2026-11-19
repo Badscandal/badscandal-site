@@ -7,6 +7,9 @@ import { memoryDesk } from "../netlify/lib/staff-sample.mjs";
 import { callTool, TOOLS, INSTRUCTIONS } from "../netlify/lib/staff-tools.mjs";
 import { evaluate, loadReport, runAccountHealth, sampleReport, HEALTH_SCHEDULE, connectionFrom } from "../netlify/lib/account-health.mjs";
 
+await import("../js/hq-lib.js");
+const L = globalThis.HQLib;
+
 const NOW = Date.parse("2026-11-18T15:00:00Z"); /* 12:00 São Paulo */
 const TODAY = "2026-11-18";
 const DAY = 86400000;
@@ -158,7 +161,7 @@ test("a 1-day engagement snapshot is not compared with the latest total", () => 
 
 test("under the 14-day median but not the 30-day median is a watch, not a suppression", () => {
   const list = [[1, 400], [2, 400], [3, 400], [5, 2000], [7, 2000], [9, 2000], [12, 2000], [20, 100], [22, 100], [24, 100], [26, 100]];
-  const a = acc({ checks: [{ type: "reading", platform: "youtube", date: day(1), by: "Laura", posts: posts(list) }] }, "youtube");
+  const a = acc({ checks: [{ type: "reading", platform: "tiktok", date: day(1), by: "Kevin", posts: posts(list) }] }, "tiktok");
   const reach = sig(a, "reach");
   assert.equal(reach.level, "watch");
   assert.match(reach.text, /14-day median/);
@@ -187,13 +190,13 @@ test("three unusual follower losses are red, one is a watch, and flat followers 
   assert.equal(sig(acc({ growth: growth("TikTok", one) }, "tiktok"), "followers").level, "watch");
 
   const flat = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => ({ date: day(n), change: n < 3 ? 0 : 20, views: 1000, followers: 8000 }));
-  const held = sig(acc({ growth: growth("YouTube", flat) }, "youtube"), "followers");
+  const held = sig(acc({ growth: growth("TikTok", flat) }, "tiktok"), "followers");
   assert.equal(held.level, "watch");
   assert.match(held.text, /barely moved/);
   assert.match(held.text, /1,000/);
 
   const noViews = flat.map((r) => ({ ...r, views: null }));
-  const skipped = sig(acc({ growth: growth("YouTube", noViews) }, "youtube"), "followers");
+  const skipped = sig(acc({ growth: growth("TikTok", noViews) }, "tiktok"), "followers");
   assert.equal(skipped.level, "ok");
   assert.match(skipped.text, /not judged/);
 });
@@ -229,6 +232,24 @@ test("Content ID claims are the ones already on the desk, and a blank stays not 
   const none = acc({ claims: [] }, "youtube");
   assert.equal(sig(none, "claims").level, "gap");
   assert.match(sig(none, "claims").text, /does not mean there is none/);
+});
+
+test("YouTube health is Studio only: claims, strikes and monetisation, not a post median", () => {
+  const weak = [[1, 100], [2, 100], [3, 100], [5, 2000], [7, 2000], [9, 2000], [12, 2000], [16, 2000], [20, 2000]];
+  const postsOnly = acc({ checks: [{ type: "reading", platform: "youtube", date: day(1), by: "Laura", posts: posts(weak) }] }, "youtube");
+  assert.equal(sig(postsOnly, "reach"), undefined);
+  assert.equal(sig(postsOnly, "followers"), undefined);
+  assert.notEqual(postsOnly.state, "red");
+  const off = acc({ checks: [{ type: "reading", platform: "youtube", date: day(1), by: "Laura", monetisation: "off", account_status: "clear" }] }, "youtube");
+  assert.equal(sig(off, "monetisation").level, "red");
+  assert.equal(off.state, "red");
+  const limited = acc({ checks: [{ type: "reading", platform: "youtube", date: day(1), by: "Laura", monetisation: "limited", account_status: "clear" }] }, "youtube");
+  assert.equal(sig(limited, "monetisation").level, "watch");
+  assert.notEqual(limited.state, "red");
+  const home = L.accountHealthHome(evaluate({ now: NOW, checks: [{ type: "reading", platform: "youtube", date: day(1), by: "Laura", monetisation: "off" }] }));
+  assert.ok(home.needs.some((n) => n.id === "youtube"));
+  const quiet = L.accountHealthHome(evaluate({ now: NOW, checks: [{ type: "reading", platform: "youtube", date: day(1), by: "Laura", monetisation: "limited", account_status: "clear" }] }));
+  assert.equal(quiet.needs.some((n) => n.id === "youtube"), false);
 });
 
 test("an Instagram connection problem does not paint the account, and a failed store read does not fetch", async () => {
@@ -280,7 +301,7 @@ test("the site is red when Webmaster records it down, and a failed song-page bui
 });
 
 test("log_growth records a status check without follower numbers, and the wrong bot is refused", async () => {
-  assert.equal(TOOLS.length, 49); /* content_ideas (Spark) + account_health, needs_you, song_pl (18 Nov 2026 night test) + profile_jobs, profile_master, profile_rework, profile_uploaded (PR #87) */
+  assert.equal(TOOLS.length, 51); /* content_ideas (Spark) + account_health, needs_you, song_pl (18 Nov 2026 night test) + profile_jobs, profile_master, profile_rework, profile_uploaded (PR #87) */
   assert.ok(tool("log_growth").inputSchema.properties.account_status);
   assert.match(INSTRUCTIONS, /Account health/);
   const d = memoryDesk();

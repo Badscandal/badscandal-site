@@ -6,10 +6,10 @@
 (function () {
   "use strict";
   var $ = function (id) { return document.getElementById(id); };
-  var TABS = ["today", "songs", "ads", "pages", "growth", "profiles", "releases", "money", "team", "messages"];
+  var TABS = ["today", "songs", "ads", "pages", "growth", "rights", "profiles", "releases", "money", "team", "messages"];
   /* songs and ads sit behind More on the phone; releases and team are on the bar (18 Nov 2026).
-     profiles stays here. The desktop rail still lists every tab. */
-  var MORE = ["songs", "ads", "pages", "growth", "profiles", "messages"];
+     profiles stays here. The desktop rail still lists every tab. Rights is Content ID claims. */
+  var MORE = ["songs", "ads", "pages", "growth", "rights", "profiles", "messages"];
   /* addresses that moved: Fans is a part of the Growth & Fans page since 12 Nov 2026 (Luke: "growth and
      fans can be on the same page"); an old #fans link or bookmark lands on that part */
   var ALIAS = { fans: "growth/fans" };

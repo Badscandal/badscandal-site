@@ -1860,7 +1860,7 @@
      already loaded (o.board = the staff board, o.songs = [{name, id}] as Songs draws them); cmdResults
      picks the best matches for what was typed: accents and capitals don't count, a match at the start
      beats one inside, and nothing typed shows what waits on Luke first. */
-  var CMD_TABS = [["today", "Today", "home briefing start"], ["songs", "Songs", "spotify streams tracks"], ["ads", "Ads", "meta cap spend cost tap"],
+  var CMD_TABS = [["today", "Today", "home briefing start"], ["songs", "Songs", "spotify streams tracks"], ["ads", "Ads", "meta cap spend cost tap"], ["rights", "Rights", "content id claims licence"],
     ["pages", "Pages", "visits page counter people"], ["growth", "Growth & Fans", "followers instagram tiktok fans"], ["growth/fans", "Fans", "fans forming comments dms"],
     ["profiles", "Profiles", "profile photo banner header cover"],
     ["releases", "Upcoming", "releases pipeline new song"], ["money", "Money", "income revolut payments royalties"], ["team", "Team", "bots duties staff"],

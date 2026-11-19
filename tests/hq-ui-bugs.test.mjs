@@ -115,5 +115,5 @@ test("growthWhen() and the tiles say 'in N days' from weekDays", () => {
   const t = L.tiles({ sheet: { growth: [{ platform: "TikTok", followers: 1040, week: 40, weekDays: 3, series: [] }] } }).find((x) => x.key === "f:TikTok");
   assert.equal(t.vs, "in 3 days");
   assert.equal(t.change.text, "+40");
-  assert.match(src("js/hq.js"), /L\.growthWhen\(g\)/);
+  assert.match(src("js/hq-lib.js"), /growthWhen\(g\)/);
 });

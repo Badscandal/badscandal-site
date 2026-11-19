@@ -1,0 +1,374 @@
+/* Growth page and Rights page (19 Nov 2026).
+   One list of posts feeds the week card and the tables, at one age per column.
+   A missing number is "not reported". Nothing here invents a zero. */
+(function (g) {
+  "use strict";
+  var L = g.HQLib || (g.HQLib = {});
+  function esc(s) {
+    return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+    });
+  }
+  function miss() { return '<span class="gmiss">not reported</span>'; }
+  function shown(v) { return v == null || v === "" ? miss() : esc(v); }
+  function num(v) {
+    if (v == null || v === "") return miss();
+    var n = Number(v);
+    if (!isFinite(n)) return miss();
+    return esc(n.toLocaleString("en-US"));
+  }
+  function signed(v) {
+    if (v == null || v === "") return miss();
+    var n = Number(v);
+    if (!isFinite(n)) return miss();
+    return esc((n > 0 ? "+" : "") + n.toLocaleString("en-US"));
+  }
+  function hours(v) {
+    if (v == null || v === "") return miss();
+    var n = Number(v);
+    if (!isFinite(n)) return miss();
+    return esc(String(Math.round(n * 10) / 10));
+  }
+  function pct(v) {
+    if (v == null || !isFinite(v)) return miss();
+    return esc((v * 100).toFixed(2) + "%");
+  }
+  function dayOf(v) {
+    if (!v) return miss();
+    return L.day ? esc(L.day(v)) : esc(v);
+  }
+  function platId(name) {
+    var k = String(name || "").toLowerCase().replace(/[^a-z]/g, "");
+    if (k === "ig" || k === "instagram") return "instagram";
+    if (k === "tt" || k === "tiktok") return "tiktok";
+    if (k === "yt" || k === "youtube") return "youtube";
+    if (k === "spotify") return "spotify";
+    return k || "";
+  }
+  var LABEL = { instagram: "Instagram", tiktok: "TikTok", youtube: "YouTube", spotify: "Spotify" };
+  function labelOf(name) { var id = platId(name); return LABEL[id] || String(name || ""); }
+  function unitOf(id) { return id === "youtube" ? "subscribers" : "followers"; }
+  function linkOr(href, text) {
+    if (!href) return shown(text);
+    var t = text || href;
+    if (!/^https:\/\//i.test(href)) return esc(t);
+    return '<a href="' + esc(href) + '">' + esc(t) + "</a>";
+  }
+  function videoHref(p) {
+    if (p && p.link && /^https:\/\//i.test(p.link)) return p.link;
+    if (p && p.video_id && /^[A-Za-z0-9_-]{6,20}$/.test(p.video_id)) return "https://www.youtube.com/watch?v=" + p.video_id;
+    return "";
+  }
+  function epv(p) {
+    if (!p || p.views_24h == null || !(Number(p.views_24h) > 0)) return null;
+    var keys = ["likes", "comments", "saves", "shares"];
+    for (var i = 0; i < keys.length; i++) if (p[keys[i]] == null || p[keys[i]] === "") return null;
+    return (Number(p.likes) + Number(p.comments) + Number(p.saves) + Number(p.shares)) / Number(p.views_24h);
+  }
+  function savesShares(p) {
+    if (!p || p.views_24h == null || !(Number(p.views_24h) > 0) || p.saves == null || p.shares == null) return null;
+    return (Number(p.saves) + Number(p.shares)) / Number(p.views_24h);
+  }
+  function fromIg(p) {
+    var s = p && p.snaps || {};
+    var d1 = s.d1 || null, d7 = s.d7 || null;
+    var row = { platform: "Instagram", date: String(p && p.at || "").slice(0, 10), hook: String(p && (p.caption || p.song) || "").split("\n")[0].slice(0, 160), link: p && p.link || "" };
+    if (d1) {
+      ["views", "likes", "comments", "saves", "shares", "follows"].forEach(function (k) { if (d1[k] != null && d1[k] !== "") row[k === "views" ? "views_24h" : k] = Number(d1[k]); });
+    }
+    if (d7 && d7.views != null && d7.views !== "") row.views_7d = Number(d7.views);
+    if (p && p.paid === true) row.boosted = true;
+    else if (p && p.paid === false) row.boosted = false;
+    return row;
+  }
+  function collectPosts(rows, igPosts) {
+    var out = [], seen = {};
+    (rows || []).forEach(function (r) {
+      var plat = labelOf(r.platform);
+      (r.posts || []).forEach(function (p) {
+        if (!p || typeof p !== "object") return;
+        out.push(Object.assign({ platform: plat }, p));
+      });
+    });
+    (igPosts || []).forEach(function (p) { if (p) out.push(fromIg(p)); });
+    return out.filter(function (p) {
+      var k = [p.platform, p.date || "", p.link || p.video_id || "", p.hook || ""].join("|");
+      if (seen[k]) return false;
+      seen[k] = 1;
+      return true;
+    });
+  }
+  function latestRow(rows, id) {
+    var list = (rows || []).filter(function (r) { return r && platId(r.platform) === id && r.kind !== "song"; })
+      .sort(function (a, b) { return a.date < b.date ? 1 : a.date > b.date ? -1 : 0; });
+    return list[0] || null;
+  }
+  function signal(account, id) {
+    return ((account && account.signals) || []).filter(function (s) { return s && (s.id === id || String(s.id).indexOf(id + ":") === 0); })[0] || null;
+  }
+  function accountOf(health, id) {
+    return ((health && health.accounts) || []).filter(function (a) { return a && a.id === id; })[0] || null;
+  }
+  var DOT = { ok: "Fine", watch: "Watch", red: "Needs a look", gap: "Not enough data" };
+  function dot(level, word) {
+    var state = level && DOT[level] ? level : "gap";
+    return '<a class="gdot ' + esc(state) + '" href="#growth"><i></i><span>' + esc(word) + ": " + esc(DOT[state]) + "</span></a>";
+  }
+  function blocks(c) {
+    if (!c) return false;
+    if (String(c.strike || "").toLowerCase() === "yes") return true;
+    return /block|mute|remov|taken down|age-restrict/i.test([c.status, c.impact, c.reach_effect, c.claim_type].join(" "));
+  }
+  function headline(p, row) {
+    var id = platId(p && p.platform);
+    var unit = unitOf(id);
+    var gaps = p && Array.isArray(p.gapDays) ? p.gapDays : null;
+    var gapLine = gaps == null ? "Gap days: " + miss() : gaps.length ? "Gap days: " + esc(gaps.map(function (d) { return L.day ? L.day(d) : d; }).join(", ")) : "No gap in the logged days.";
+    var late = row && row.views_date && row.date && row.views_date < row.date;
+    return '<article class="tile ghead"><div class="row"><h3>' + esc(labelOf(p.platform || id)) + '</h3></div>' +
+      '<p class="lbl">' + esc(unit === "subscribers" ? "Subscribers" : "Followers") + "</p>" +
+      '<div class="big num">' + num(p.followers) + "</div>" +
+      '<p class="d">Today ' + signed(p.day) + " · 7 days " + signed(p.d7 != null ? p.d7 : p.week) + " · 28 days " + signed(p.d28) + "</p>" +
+      '<p class="d">' + gapLine + "</p>" +
+      (late ? '<p class="d">Views are for ' + dayOf(row.views_date) + ", a day late.</p>" : "") +
+      "</article>";
+  }
+  function weekCard(posts, pattern) {
+    var ranked = posts.map(function (p) { return { p: p, e: epv(p) }; }).filter(function (x) { return x.e != null; })
+      .sort(function (a, b) { return b.e - a.e; });
+    var settled = ranked.length >= 6;
+    var top = ranked.slice(0, 3);
+    var bottom = settled ? ranked.slice(-3).reverse() : [];
+    function line(x) {
+      var p = x.p;
+      return "<li>" + esc(p.platform) + " · " + dayOf(p.date) + " · " + linkOr(videoHref(p), p.hook || "post") + " · " + pct(x.e) + " per view</li>";
+    }
+    var h = '<section class="gsec"><h3>What worked this week</h3>';
+    h += '<p class="sub">Engagement per view is (likes + comments + saves + shares) / views, at 24 hours. ' +
+      (settled ? "Top 3 and bottom 3 use that same list." : "Fewer than 6 posts have a full 24-hour count, so the order is not settled yet.") + "</p>";
+    h += "<p class=\"d\"><b>Pattern</b> · " + (pattern ? esc(pattern) : miss()) + "</p>";
+    if (!top.length) h += "<p class=\"d\">Top 3: " + miss() + "</p><p class=\"d\">Bottom 3: " + miss() + "</p>";
+    else {
+      h += "<p class=\"lbl\">Top</p><ol>" + top.map(line).join("") + "</ol>";
+      h += "<p class=\"lbl\">Bottom</p>" + (bottom.length ? "<ol>" + bottom.map(line).join("") + "</ol>" : "<p class=\"d\">" + miss() + "</p>");
+    }
+    return h + "</section>";
+  }
+  function tag(p) {
+    if (p.boosted === true) return "Boosted";
+    if (p.boosted === false) return "Organic";
+    return null;
+  }
+  function table(platform, posts) {
+    var rows = posts.filter(function (p) { return platId(p.platform) === platform; });
+    var h = '<section class="gsec"><h3>' + esc(LABEL[platform]) + " posts</h3>";
+    h += '<div class="scroll"><table class="posttable"><tr><th>Date</th><th>Hook</th><th>Views 24h</th><th>Views 7d</th><th>EPV 24h</th><th>Saves + shares / view</th><th>Follows</th><th></th></tr>';
+    if (!rows.length) h += '<tr><td colspan="8">' + miss() + "</td></tr>";
+    rows.forEach(function (p) {
+      var e = epv(p), ss = savesShares(p);
+      h += "<tr>" + cell("Date", dayOf(p.date)) + cell("Hook", linkOr(videoHref(p), p.hook)) + cell("Views 24h", num(p.views_24h)) + cell("Views 7d", num(p.views_7d)) +
+        cell("EPV 24h", e == null ? miss() : pct(e)) + cell("Saves + shares / view", ss == null ? miss() : pct(ss)) + cell("Follows", num(p.follows)) + cell("Reach", shown(tag(p))) + "</tr>";
+    });
+    return h + "</table></div></section>";
+  }
+  function gateOf(row) {
+    if (!row) return null;
+    if (row.avg_watch_6h == null || row.follows_6h == null || !(Number(row.views_6h) > 0)) return null;
+    var rate = Number(row.follows_6h) / Number(row.views_6h);
+    return Number(row.avg_watch_6h) >= 2.5 && rate >= 0.0014 ? "pass" : "fail";
+  }
+  function pick(a, b) { return a != null && a !== "" ? a : b; }
+  function tiktokBlock(row, summary) {
+    var gate = gateOf(row);
+    var rate = row && row.follows_6h != null && Number(row.views_6h) > 0 ? Number(row.follows_6h) / Number(row.views_6h) : null;
+    var viewsDate = pick(summary && summary.viewsDate, row && row.views_date);
+    var late = viewsDate && ((summary && summary.lastDay) || (row && row.date)) && viewsDate < ((summary && summary.lastDay) || row.date);
+    var h = '<section class="gsec" id="tiktokBox"><h3>TikTok</h3>';
+    h += '<p class="d">+6h views ' + num(row && row.views_6h) + " · avg watch " + (row && row.avg_watch_6h != null ? hours(row.avg_watch_6h) + "s" : miss()) + " · follows " + num(row && row.follows_6h) + " · follows/view " + (rate == null ? miss() : pct(rate)) + "</p>";
+    h += '<p class="d">1 day views ' + num(pick(summary && summary.views, row && row.views)) + " · avg watch " + (row && row.avg_watch != null ? hours(row.avg_watch) + "s" : miss()) + " · follows at 48h " + num(row && row.follows_48h) + "</p>";
+    h += '<p class="d">+6h gate ' + (gate == null ? miss() : '<b class="gate-' + gate + '">' + (gate === "pass" ? "PASS" : "FAIL") + "</b>") + " · pass is avg watch at least 2.5s and follows/view at least 0.14%.</p>";
+    h += "<p class=\"d\">Best post " + (row && (row.best_post_link || row.best_post) ? linkOr(row.best_post_link, row.best_post || "link") : miss()) + "</p>";
+    h += "<p class=\"d\">Views date " + (viewsDate ? dayOf(viewsDate) : miss()) + (late ? " · a day late." : "") + "</p>";
+    var gaps = row && row.gaps && typeof row.gaps === "object" ? Object.keys(row.gaps) : [];
+    h += "<p class=\"d\">Gaps " + (gaps.length ? esc(gaps.map(function (k) { return k + ": " + row.gaps[k]; }).join("; ")) : miss()) + "</p>";
+    return h + "</section>";
+  }
+  function youtubeBlock(row, health, summary) {
+    var acc = accountOf(health, "youtube");
+    var status = signal(acc, "status");
+    var money = signal(acc, "monetisation");
+    var claim = (acc && acc.signals || []).filter(function (s) { return s && String(s.id).indexOf("claim") === 0 && s.level === "red"; });
+    var href = videoHref(row || {});
+    var h = '<section class="gsec" id="youtubeBox"><h3>YouTube</h3>';
+    h += '<p class="d">Subscribers ' + num(pick(summary && summary.followers, row && (row.subscribers != null ? row.subscribers : row.followers))) + " · gained " + signed(pick(summary && summary.day, row && row.change)) + "</p>";
+    h += '<p class="d">Views that day ' + num(pick(summary && summary.views, row && row.views)) + " · official channel " + num(pick(summary && summary.officialViews, row && row.official_views)) + " · other channels " + num(pick(summary && summary.otherViews, row && row.other_views)) + "</p>";
+    h += '<p class="d">Lifetime channel views ' + num(pick(summary && summary.channelViews, row && row.channel_views)) + " · Shorts views " + num(pick(summary && summary.shortsViews, row && row.shorts_views)) + " · watch hours " + hours(pick(row && row.watch_hours, summary && summary.watchHours)) + "</p>";
+    h += "<p class=\"d\">Top video " + (href || (row && row.best_post) ? linkOr(href, row.best_post || row.video_id || "video") : miss()) + "</p>";
+    var tops = row && Array.isArray(row.top_videos) ? row.top_videos : [];
+    if (!tops.length) h += "<p class=\"d\">Top 3 videos " + miss() + "</p>";
+    else {
+      h += "<ol>" + tops.slice(0, 3).map(function (v) {
+        var u = v && v.link && /^https:\/\//.test(v.link) ? v.link : (v && v.video_id ? "https://www.youtube.com/watch?v=" + v.video_id : "");
+        return "<li>" + linkOr(u, v && (v.title || v.video_id)) + " · " + num(v && v.views) + "</li>";
+      }).join("") + "</ol>";
+    }
+    h += '<p class="d">Account status ' + (status && status.level !== "gap" ? esc(status.text) : miss()) + "</p>";
+    h += '<p class="d">Studio · monetisation ' + (money && money.level !== "gap" ? esc(money.text) : miss()) + " · claims " + (claim.length ? esc(claim.map(function (s) { return s.text; }).join(" ")) : miss()) + "</p>";
+    h += '<p class="sub">YouTube on Needs you uses Studio (claims, strikes, monetisation). Post engagement is not the health dot here.</p>';
+    return h + "</section>";
+  }
+  function boosted(rows, posts) {
+    var h = '<section class="gsec" id="boostBox"><h3>Boosted</h3>';
+    ["tiktok", "instagram", "youtube"].forEach(function (id) {
+      var row = latestRow(rows, id);
+      var spend = row && row.ad_spend != null ? (row.ad_currency ? row.ad_currency + " " : "") + row.ad_spend : null;
+      var engaged = null, follows = null, paidPosts = posts.filter(function (p) { return platId(p.platform) === id && p.boosted === true; });
+      var full = paidPosts.filter(function (p) { return epv(p) != null; });
+      if (full.length && full.every(function (p) { return p.views_24h != null; })) {
+        engaged = full.reduce(function (s, p) { return s + Number(p.likes) + Number(p.comments) + Number(p.saves) + Number(p.shares); }, 0);
+      }
+      if (paidPosts.length && paidPosts.every(function (p) { return p.follows != null; })) follows = paidPosts.reduce(function (s, p) { return s + Number(p.follows); }, 0);
+      var costEng = row && row.ad_spend != null && engaged > 0 ? row.ad_spend / engaged : null;
+      var costFol = row && row.ad_spend != null && follows > 0 ? row.ad_spend / follows : null;
+      h += '<article class="tile"><h3>' + esc(LABEL[id]) + "</h3>";
+      h += "<p class=\"d\">Spend " + shown(spend) + " · paid views " + num(row && row.paid_views) + " · organic views " + num(row && row.organic_views) + "</p>";
+      h += "<p class=\"d\">Cost per engaged view " + (costEng == null ? miss() : esc(costEng.toFixed(2))) + " · cost per follow " + (costFol == null ? miss() : esc(costFol.toFixed(2))) + "</p>";
+      h += "<p class=\"d\">Ads read " + shown(row && row.ads_read_at) + "</p></article>";
+    });
+    var organic = posts.filter(function (p) { return p.boosted === false && epv(p) != null; });
+    if (organic.length < 3) h += "<p class=\"d\">Boost candidate " + miss() + "</p>";
+    else {
+      var med = organic.map(epv).sort(function (a, b) { return a - b; });
+      var mid = med.length % 2 ? med[(med.length - 1) / 2] : (med[med.length / 2 - 1] + med[med.length / 2]) / 2;
+      var hits = organic.filter(function (p) { return epv(p) > mid; });
+      h += "<p class=\"d\">Boost candidate " + (hits.length ? hits.map(function (p) { return linkOr(videoHref(p), (p.hook || p.platform) + " beat the median 24h engagement per view"); }).join("; ") : "none of the organic posts with a 24h count beat the median") + "</p>";
+    }
+    return h + "</section>";
+  }
+  function datedAvg(posts) {
+    var dated = (posts || []).filter(function (p) { return p && /^\d{4}-\d{2}-\d{2}/.test(String(p.at || p.date || "")) && epvFromRank(p) != null; });
+    if (dated.length < 2) return null;
+    var newest = dated.map(function (p) { return String(p.at || p.date).slice(0, 10); }).sort().pop();
+    var in14 = dated.filter(function (p) {
+      var d = String(p.at || p.date).slice(0, 10);
+      return d && newest && d <= newest && d >= addDays(newest, -14);
+    });
+    if (in14.length < 2) return null;
+    var vals = in14.map(epvFromRank);
+    return vals.reduce(function (s, n) { return s + n; }, 0) / vals.length;
+  }
+  function epvFromRank(p) {
+    if (p.perView != null && isFinite(Number(p.perView))) return Number(p.perView);
+    return epv(p);
+  }
+  function addDays(day, n) {
+    var t = Date.parse(day + "T12:00:00Z");
+    if (!isFinite(t)) return "";
+    return new Date(t + n * 86400000).toISOString().slice(0, 10);
+  }
+  function ideasHtml(doc) {
+    var d = doc && doc.reported != null ? doc : null;
+    var ideas = d && d.ideas || [];
+    var posts = d && d.posts || [];
+    var avg = datedAvg(posts);
+    var h = '<section class="gsec" id="sparkIdeas"><h3>Spark ideas</h3>';
+    if (!d || !d.reported) return h + '<p class="d">' + esc((d && d.empty) || "No content ideas yet. Spark sends them once a day. Nothing is posted.") + "</p></section>";
+    var songs = {};
+    ideas.forEach(function (i) { if (i && i.song) songs[i.song.toLowerCase()] = (songs[i.song.toLowerCase()] || 0) + 1; });
+    ideas.forEach(function (i) {
+      var count = i.song ? songs[i.song.toLowerCase()] : null;
+      var v = "";
+      if (i.status === "posted") {
+        var e = i.epv != null ? Number(i.epv) : null;
+        var verdict = e == null || avg == null || avg === 0 ? null : (e / avg >= 1.1 ? "won" : e / avg <= 0.9 ? "lost" : "flat");
+        v = "<p class=\"d\">Views " + num(i.views) + " · EPV " + (e == null ? miss() : pct(e)) + " · 14-day average " + (avg == null ? miss() : pct(avg)) + " · " + (verdict || miss()) + "</p>";
+        if (i.why_won) v += "<p class=\"d\">Why it won · " + esc(i.why_won) + "</p>";
+      }
+      h += '<article class="idea-card"><p class="lbl">' + esc(i.platform || "") + " · " + esc(i.status || "idea") + (i.auto ? " · next idea" : "") + "</p>";
+      h += "<p class=\"d\"><b>" + esc(i.hook || "") + "</b></p>";
+      h += "<p class=\"d\">On screen · " + shown(i.text) + "</p>";
+      h += "<p class=\"d\">Format · " + shown(i.format) + " · song " + shown(i.song) + " · market " + shown(i.market) + "</p>";
+      h += "<p class=\"d\">Source " + (i.source ? linkOr(i.source, "link") : miss()) + " · score " + shown(i.score) + "</p>";
+      h += "<p class=\"d\">" + esc(i.why || "") + "</p>" + v;
+      h += "<p class=\"d\">Hooks for this song " + (count == null ? miss() : esc(count + " of 10")) + "</p></article>";
+    });
+    return h + "</section>";
+  }
+  function countdowns(releases) {
+    var list = (releases || []).filter(function (r) { return r && r.date && r.daysToGo != null && r.daysToGo >= 0; });
+    var h = '<section class="gsec"><h3>Releases</h3>';
+    if (!list.length) return h + '<p class="d">No release dated.</p></section>';
+    h += "<ul>" + list.map(function (r) {
+      var when = r.daysToGo === 0 ? "out today" : "in " + r.daysToGo + " day" + (r.daysToGo === 1 ? "" : "s");
+      return "<li>" + esc(r.song || r.title) + " · " + dayOf(r.date) + " · " + esc(when) + "</li>";
+    }).join("") + "</ul></section>";
+    return h;
+  }
+  function healthRow(health) {
+    var h = '<section class="gsec"><h3>Accounts</h3><div class="trend-row">';
+    ["tiktok", "instagram"].forEach(function (id) {
+      var acc = accountOf(health, id);
+      var status = signal(acc, "status");
+      var reach = signal(acc, "reach");
+      h += '<article class="tile"><h3>' + esc(LABEL[id]) + "</h3>";
+      h += "<p class=\"d\">Account status " + (status && status.level !== "gap" ? esc(status.text) : miss()) + "</p>";
+      h += "<p class=\"d\">" + dot(reach && reach.level, "Engagement") + "</p></article>";
+    });
+    h += '<article class="tile"><h3>YouTube</h3><p class="d">Account status is under the YouTube block. Engagement is not used for YouTube.</p></article>';
+    return h + "</div></section>";
+  }
+  function growthHtml(input) {
+    input = input || {};
+    var rows = input.rows || [];
+    var posts = collectPosts(rows, input.igPosts || []);
+    var byId = {};
+    (input.platforms || []).forEach(function (p) { if (p && p.platform) byId[platId(p.platform)] = p; });
+    var order = ["tiktok", "instagram", "youtube"];
+    (input.platforms || []).forEach(function (p) { var id = platId(p.platform); if (id && order.indexOf(id) < 0) order.push(id); });
+    var pattern = "";
+    rows.forEach(function (r) { if (r && r.pattern && (!pattern || (r.date || "") >= pattern.date)) pattern = r; });
+    var heads = '<section class="gsec"><h3>Followers</h3><div class="trend-row">' + order.filter(function (id) { return id !== "spotify" || byId[id]; }).map(function (id) {
+      var p = byId[id] || { platform: LABEL[id] || id, followers: null, day: null, d7: null, d28: null, gapDays: null };
+      return headline(p, latestRow(rows, id));
+    }).join("") + "</div><p class=\"sub\">YouTube says subscribers. A gap day is a day with no reading between the first log and the latest.</p></section>";
+    var blocking = ((input.claims && input.claims.items) || []).filter(blocks);
+    var badge = blocking.length ? '<p><a class="claimbadge" href="#rights">' + blocking.length + " Content ID claim" + (blocking.length === 1 ? "" : "s") + " blocking or muting a video</a></p>" : "";
+    return heads + badge + weekCard(posts, pattern && pattern.pattern) +
+      order.filter(function (id) { return LABEL[id] && id !== "spotify"; }).map(function (id) { return table(id, posts); }).join("") +
+      tiktokBlock(latestRow(rows, "tiktok"), byId.tiktok) + youtubeBlock(latestRow(rows, "youtube"), input.health, byId.youtube) +
+      healthRow(input.health) + boosted(rows, posts) + ideasHtml(input.ideas) + countdowns(input.releases);
+  }
+  function cell(label, html) { return '<td data-label="' + esc(label) + '">' + html + "</td>"; }
+  function field(v) { return v != null && String(v).trim() !== "" ? String(v) : ""; }
+  function claimsHtml(claims, today) {
+    var items = !claims ? [] : (Array.isArray(claims) ? claims : (claims.items || []));
+    var checked = claims && claims.checked && today ? claims.checked[today] : null;
+    var h = '<p class="d">Label licences stay on the Label workspace (licence_queue).</p>';
+    h += "<p class=\"d\">Checked today " + (checked ? esc(checked.by || "Laura") + " · " + esc(String(checked.at || "").replace("T", " ").slice(0, 16)) : miss()) + "</p>";
+    if (!items.length) return h + '<p class="d">No Content ID claim has been recorded.</p>';
+    h += '<div class="scroll"><table class="posttable"><tr><th>Song</th><th>Claimant</th><th>Video</th><th>Type</th><th>Status</th><th>Reach</th><th>Money</th><th>Strike</th><th>Action</th><th>Owner</th><th>First seen</th><th>Last checked</th></tr>';
+    items.forEach(function (c) {
+      var video = field(c.video) || field(c.video_id);
+      var href = /^https:\/\//.test(video) ? video : (/^[A-Za-z0-9_-]{6,20}$/.test(video) ? "https://www.youtube.com/watch?v=" + video : "");
+      h += "<tr>" + cell("Song", shown(c.song) + (c.song ? "" : (c.claim ? '<br><span class="lbl">Claim</span> ' + esc(c.claim) : ""))) + cell("Claimant", shown(c.claimant)) + cell("Video", href ? linkOr(href, video) : shown(video)) +
+        cell("Type", shown(c.claim_type)) + cell("Status", shown(c.status)) + cell("Reach", shown(field(c.reach_effect) || field(c.impact))) +
+        cell("Money", shown(c.money_effect)) + cell("Strike", shown(c.strike)) + cell("Action", shown(c.action)) + cell("Owner", shown(c.owner)) +
+        cell("First seen", dayOf(c.first_seen || c.date)) + cell("Last checked", dayOf(c.last_checked)) + "</tr>";
+    });
+    return h + "</table></div>";
+  }
+  function tiktokFans(rows) {
+    var out = [];
+    (rows || []).forEach(function (r) {
+      if (platId(r.platform) !== "tiktok" || !Array.isArray(r.fan_signals)) return;
+      r.fan_signals.forEach(function (s) { if (s) out.push(Object.assign({ date: r.date }, s)); });
+    });
+    return out;
+  }
+  L.growthPosts = collectPosts;
+  L.growthEpv = epv;
+  L.growthHtml = growthHtml;
+  L.claimsHtml = claimsHtml;
+  L.tiktokFans = tiktokFans;
+  L.claimBlocks = blocks;
+})(typeof globalThis !== "undefined" ? globalThis : this);

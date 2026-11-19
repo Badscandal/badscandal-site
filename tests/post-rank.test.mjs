@@ -196,7 +196,8 @@ test("the bots get the ranking (Steve, Kevin and Forge) with the how-to; HQ draw
   assert.match(src, /ranking: \{ how: /); assert.match(src, /needs_reply: /); assert.match(src, /SAME age/);
   assert.match(readFileSync(new URL("../netlify/functions/pushhourly.mjs", import.meta.url), "utf8"), /syncAdPosts\(/);
   const js = readFileSync(new URL("../js/hq.js", import.meta.url), "utf8");
-  assert.match(js, /What engages best/); assert.match(js, /Needs a reply/); assert.match(js, /Our own accounts/);
+  assert.match(readFileSync(new URL("../js/hq-growth.js", import.meta.url), "utf8"), /What worked this week/);
+  assert.match(js, /Needs a reply/); assert.match(js, /Our own accounts/);
   const x = globalThis.HQLib.rankParts(P.rankPosts(posts, adDoc, { now: NOW, comments }).ranked[1]);
   assert.deepEqual(x, { rate: "7.8% engaged", window: "At 1 day", views: "1,797 of 23,000 views · 1,600 likes · 37 comments", deep: "Saves + shares 0.7% (100 saves · 60 shares)",
     follows: "120 follows (0.5% of views) · 300 profile visits", own: "3 of our own comments left out",

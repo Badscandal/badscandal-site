@@ -138,13 +138,29 @@ export function songsReport(rows, royalties, releases, today) {
 }
 
 /* ---------- growth per platform, tied to the day's best post ---------- */
+function growthCanon(name) {
+  const k = key(name).replace(/[^a-z]/g, "");
+  if (k === "ig" || k === "instagram") return "instagram";
+  if (k === "tt" || k === "tiktok") return "tiktok";
+  if (k === "yt" || k === "youtube") return "youtube";
+  if (k === "spotify") return "spotify";
+  return key(name);
+}
+const GROWTH_LABEL = { instagram: "Instagram", tiktok: "TikTok", youtube: "YouTube", spotify: "Spotify" };
 export function growthReport(rows, today) {
   const by = {};
   for (const r of rows) {
     if (!DAY.test(r.date) || !r.platform) continue;
-    (by[key(r.platform)] || (by[key(r.platform)] = { platform: r.platform, account: r.account || "", days: [] })).days.push({
-      d: r.date, followers: num(r.followers), change: num(r.change), views: num(r.views), post: r.best_post || "", link: /^https:\/\//.test(r.best_post_link) ? r.best_post_link : "",
-    });
+    const id = growthCanon(r.platform);
+    const bucket = by[id] || (by[id] = { platform: GROWTH_LABEL[id] || r.platform, account: r.account || "", days: [] });
+    let day = bucket.days.find((d) => d.d === r.date);
+    const next = {
+      d: r.date, followers: num(r.followers), change: num(r.change), views: num(r.views), post: r.best_post || "", link: /^https:\/\//.test(r.best_post_link || "") ? r.best_post_link : "",
+      viewsDate: r.views_date || "", gaps: r.gaps && typeof r.gaps === "object" && !Array.isArray(r.gaps) ? r.gaps : null,
+      channelViews: num(r.channel_views), officialViews: num(r.official_views), otherViews: num(r.other_views), shortsViews: num(r.shorts_views), watchHours: num(r.watch_hours),
+    };
+    if (!day) bucket.days.push(next);
+    else for (const [k, v] of Object.entries(next)) if ((day[k] == null || day[k] === "") && v != null && v !== "") day[k] = v;
   }
   return Object.values(by).map((p) => {
     p.days.sort((a, b) => (a.d < b.d ? -1 : 1));
@@ -153,19 +169,32 @@ export function growthReport(rows, today) {
     const at = (n) => { const lim = last ? addDays(last.d, -n) : ""; const c = read.filter((x) => x.d <= lim); return c.length ? c[c.length - 1] : null; };
     /* fewer than 7 days of readings: compare with the oldest one and say how many days it covers (A1,
        17 Nov 2026: the card said "– in 7 days" for a new platform) */
-    const w = at(7) || (read.length > 1 ? read[0] : null), m = at(30);
+    const w = at(7) || (read.length > 1 ? read[0] : null), m = at(30), d28 = at(28);
+    const have = new Set(p.days.map((x) => x.d));
+    let gapDays = null;
+    if (p.days.length) {
+      gapDays = [];
+      const end = p.days[p.days.length - 1].d;
+      for (let d = p.days[0].d; d < end; d = addDays(d, 1)) if (!have.has(d) && d > addDays(end, -28)) gapDays.push(d);
+    }
     /* the days that grew the most, with the post that went out that day */
     const best = p.days.filter((x) => x.change != null && x.post).sort((a, b) => b.change - a.change).slice(0, 3)
       .map((x) => ({ d: x.d, change: x.change, post: x.post, link: x.link }));
+    const lastDay = p.days[p.days.length - 1] || null;
     return {
-      platform: p.platform, account: p.account,
+      platform: p.platform, account: p.account, unit: growthCanon(p.platform) === "youtube" ? "subscribers" : "followers",
       lastDay: last ? last.d : null, stale: last ? daysBetween(last.d, today) : null,
       followers: last ? last.followers : null,
       day: last ? last.change : null,
       week: last && w ? last.followers - w.followers : null,
+      d7: last && w ? last.followers - w.followers : null,
       weekDays: last && w ? Math.min(7, daysBetween(w.d, last.d)) : null,
       month: last && m ? last.followers - m.followers : null,
+      d28: last && d28 ? last.followers - d28.followers : null,
       views7: sum(p.days.filter((x) => last && x.d > addDays(last.d, -7) && x.views != null).map((x) => x.views)),
+      views: lastDay ? lastDay.views : null, viewsDate: lastDay ? lastDay.viewsDate || "" : "",
+      gaps: lastDay ? lastDay.gaps : null, gapDays,
+      channelViews: lastDay ? lastDay.channelViews : null, officialViews: lastDay ? lastDay.officialViews : null, otherViews: lastDay ? lastDay.otherViews : null,
       series: read.slice(-30).map((x) => ({ d: x.d, v: x.followers })),
       best,
     };
@@ -312,13 +341,20 @@ export function dutiesReport(tasks, today, nowHM = "", overlay = null) {
    row whenever they start or finish a duty or hit a blocker (brief 2026-11-11-live-updates.md in
    badscandal-hq). rows === null means the tab doesn't exist yet: the page says so, nothing breaks. */
 export const UPDATE_STATUS = ["done", "working", "blocked", "error", "info"];
+function clipLive(v) {
+  const t = norm(v);
+  if (t.length <= 400) return t;
+  const cut = t.slice(0, 400);
+  const sp = cut.lastIndexOf(" ");
+  return (sp > 240 ? cut.slice(0, sp) : cut).trimEnd() + "…";
+}
 export function liveReport(rows) {
   if (rows == null) return { ready: false, feed: [], bots: [] };
   const feed = rows.map((r) => {
     const m = /^(\d{4}-\d{2}-\d{2})[ T](\d{1,2}):(\d{2})/.exec(norm(r.time));
     const st = key(r.status);
     return m && norm(r.bot) ? { at: m[1] + " " + m[2].padStart(2, "0") + ":" + m[3], bot: norm(r.bot), status: UPDATE_STATUS.includes(st) ? st : "info",
-      message: norm(r.message).slice(0, 240), link: /^https:\/\//.test(norm(r.link)) ? norm(r.link) : "" } : null;
+      message: clipLive(r.message), link: /^https:\/\//.test(norm(r.link)) ? norm(r.link) : "" } : null;
   }).filter(Boolean).sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0));
   const by = {};
   for (const u of feed) if (!by[u.bot]) by[u.bot] = { bot: u.bot, lastAt: u.at, status: u.status, message: u.message, link: u.link };
@@ -505,16 +541,19 @@ export function mergeUpdates(sheetRows, staffUpdates) {
 }
 /* log_growth's rows (the desk, batch 4) in the sheet's own shape: a sheet row of the same day (and platform
    or song) keeps its numbers and only gains the ones it lacks; a day the sheet doesn't have is added */
-const GROWTH_COLS = { followers: "followers", change: "change", views: "views", best_post: "best_post", best_post_link: "best_post_link" };
+const GROWTH_COLS = { followers: "followers", change: "change", views: "views", best_post: "best_post", best_post_link: "best_post_link", channel_views: "channel_views", shorts_views: "shorts_views", official_views: "official_views", other_views: "other_views", watch_hours: "watch_hours", views_6h: "views_6h", follows_6h: "follows_6h", follows_48h: "follows_48h", paid_views: "paid_views", organic_views: "organic_views", ad_spend: "ad_spend" };
+const GROWTH_KEEP = ["views_date", "gaps", "video_id", "top_videos", "posts", "fan_signals", "avg_watch", "avg_watch_6h", "gate_6h", "ads_read_at", "ad_currency", "pattern", "subscribers"];
 const SONG_COLS = { streams: "spotify_streams", listeners: "spotify_listeners", saves: "saves", playlist_adds: "playlist_adds" };
 function mergeDeskGrowth(t, rows) {
   for (const x of rows) {
     if (!x || !DAY.test(x.date || "")) continue;
     const song = x.kind === "song", tab = song ? t.Songs : t.Growth, cols = song ? SONG_COLS : GROWTH_COLS;
-    if (!Object.keys(cols).some((k) => x[k] != null && x[k] !== "")) continue; /* only artist numbers (A8): they go to artistReport */
-    const same = tab.find((r) => r.date === x.date && (song ? sameSong(r.song, x.song) : key(r.platform) === key(x.platform)));
-    const row = same || (song ? { date: x.date, song: x.song } : { date: x.date, platform: x.platform, account: x.account || "" });
-    for (const [k, col] of Object.entries(cols)) if (x[k] != null && x[k] !== "" && !norm(row[col])) row[col] = String(x[k]);
+    const hasGrowth = !song && (Object.keys(cols).some((k) => x[k] != null && x[k] !== "") || GROWTH_KEEP.some((k) => x[k] != null && x[k] !== "" && !(typeof x[k] === "object" && !Array.isArray(x[k]) && !Object.keys(x[k]).length)));
+    if (song ? !Object.keys(cols).some((k) => x[k] != null && x[k] !== "") : !hasGrowth) continue; /* only artist numbers (A8): they go to artistReport */
+    const same = tab.find((r) => r.date === x.date && (song ? sameSong(r.song, x.song) : growthCanon(r.platform) === growthCanon(x.platform)));
+    const row = same || (song ? { date: x.date, song: x.song } : { date: x.date, platform: GROWTH_LABEL[growthCanon(x.platform)] || x.platform, account: x.account || "" });
+    for (const [k, col] of Object.entries(cols)) if (x[k] != null && x[k] !== "" && (row[col] == null || row[col] === "")) row[col] = typeof x[k] === "number" ? x[k] : String(x[k]);
+    if (!song) for (const k of GROWTH_KEEP) if (x[k] != null && x[k] !== "" && (row[k] == null || row[k] === "")) row[k] = x[k];
     row.logged_by = row.logged_by || x.by || "";
     if (!same) tab.push(row);
   }
@@ -682,5 +721,6 @@ export function hqModel(sheets, today, fx = {}, meta, nowHM = "", staff = null) 
   const sheetUpdates = sheets.Updates == null ? null : rowsToObjects(sheets.Updates);
   team.live = liveReport(sheetUpdates == null && !staff ? null : mergeUpdates(sheetUpdates, staff ? staff.updates : []));
   return { today, songs, growth, fans, releases, team, money, songPL, empty, sheetErrors: sheetErrors(sheets), artist: artistReport(staff && staff.growth),
+    growthDetail: staff && Array.isArray(staff.growth) ? staff.growth.filter((r) => r && r.kind !== "song") : [],
     next: releases.find((r) => r.date && r.date >= today) || null };
 }

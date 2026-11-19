@@ -6,11 +6,12 @@
    An airline network can hang, so each fetch gives up after 8s and uses the cached copy.
    Script urls carry ?v= (one content hash of the HQ scripts, including hq-look.js and hq-workspaces.js).
    The cache key is the full url, so a new page can never be paired with an older script. */
-var CACHE = "bs-hq-v10"; /* v10 (18 Nov 2026): Spark's content ideas on Growth. v9: Needs you count and the Label licence status. */
-var V = "2551ecc34211";
+var CACHE = "bs-hq-v11"; /* v11 (19 Nov 2026): Growth page order and the Rights page. v10: Spark's content ideas on Growth. */
+var V = "80ad836b66c7";
 var SHELL = ["/hq",
   "/js/crt.js?v=" + V,
   "/js/hq-lib.js?v=" + V,
+  "/js/hq-growth.js?v=" + V,
   "/js/hq-look.js?v=" + V,
   "/js/hq.js?v=" + V,
   "/js/hq-staff.js?v=" + V,

@@ -223,12 +223,12 @@ test("the page: Messages is the tenth tab, the new script is kept offline, and n
   assert.ok(page.indexOf("js/hq.js?v=") < page.indexOf("js/hq-staff.js?v=") && page.indexOf("js/hq-staff.js?v=") < page.indexOf("js/hq-shell.js?v="), "after hq.js (it uses window.HQ), before the shell routes");
   assert.equal(page.split('href="#messages" data-tab="messages"').length - 1, 2, "in the rail and in the More sheet");
   assert.ok(page.indexOf('href="#team"') < page.indexOf('href="#messages"'), "after the nine");
-  assert.match(shell, /TABS = \["today", "songs", "ads", "pages", "growth", "profiles", "releases", "money", "team", "messages"\]/); /* + profiles, L12, 18 Nov 2026 */
+  assert.match(shell, /TABS = \["today", "songs", "ads", "pages", "growth", "rights", "profiles", "releases", "money", "team", "messages"\]/); /* + rights, 19 Nov 2026 */
   assert.match(shell, /MORE = \[[^\]]*"messages"\]/);
   assert.doesNotMatch(shell, /scrollBy\(/, "the deep link is one plain jump");
   assert.doesNotMatch(page, /scroll-behavior:\s*smooth/);
   /* 18 Nov 2026: profile masters. Cache is v8 so phones drop the old shell. */
-  assert.match(sw, /var CACHE = "bs-hq-v10"/);
+  assert.match(sw, /var CACHE = "bs-hq-v11"/);
   assert.match(sw, /"\/js\/hq-look\.js\?v=" \+ V/); assert.match(sw, /"\/js\/hq-phone\.js\?v=" \+ V/); assert.match(sw, /"\/js\/hq-workspaces\.js\?v=" \+ V/); assert.match(sw, /"\/js\/hq-cmd\.js\?v=" \+ V/); assert.match(sw, /"\/js\/hq-staff\.js\?v=" \+ V/); assert.match(sw, /"\/js\/hq-app\.js\?v=" \+ V/);
   for (const [name, src] of [["hq-staff.js", staff], ["hq.js", readFileSync(new URL("../js/hq.js", import.meta.url), "utf8")]]) assert.doesNotMatch(src, /\b(confirm|alert|prompt)\s*\(/, name + ": questions are asked on the page, never in a browser dialog");
   assert.doesNotMatch(staff, /innerHTML\s*=\s*[^;]*\b(m|th|r|w|e|s|a)\.(text|message|payer|note|name|task|blocker)\b(?![^;]*esc\()/, "board text is escaped");
