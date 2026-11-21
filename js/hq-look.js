@@ -366,7 +366,7 @@
         source: cap.fetched ? "Ad spend, read " + cap.fetched : "Ad spend"
       },
       yesterday: { reported: ySpend != null, label: ySpend == null ? "not reported" : money(ySpend, (o.yesterday && o.yesterday.currency) || cap.currency || "USD", L), vs: vs(ySpend, prevSpend, true), source: "Yesterday's ad spend" },
-      engagement: { reported: cpe != null, label: cpe == null ? "not reported" : money(cpe, o.currency || cap.currency || "USD", L), vs: vs(cpe, num(o.prevCostPerEngagement), true), source: "Cost per engagement" },
+      engagement: { reported: cpe != null, label: cpe == null ? "not reported" : money(cpe, o.currency || cap.currency || "USD", L), vs: cpe == null ? "Meta's engagements aren't read here. A boost's cost per engagement is on Growth." : vs(cpe, num(o.prevCostPerEngagement), true), source: "Cost per engagement" },
       visits: { reported: visits != null, label: visits == null ? "not reported" : fmt(visits), vs: vs(visits, prevVisits), source: "Song-page visits" }
     };
   }
@@ -452,6 +452,25 @@
       };
     }) };
   }
+  /* v18 (21 Nov 2026, Forge/Ledger): the chip said "2 still to sort" (every month read) while that month had
+     none and the box listed this month only. The chip counts the month on screen; older ones are listed. */
+  function unsortedIn(inc, month) {
+    return ((inc && inc.unsorted) || []).filter(function (e) { return e && String(e.date || "").slice(0, 7) === month; }).length;
+  }
+  function toSortSplit(inc) {
+    var month = (inc && inc.month) || "", all = (inc && inc.unsorted) || [];
+    var mine = Array.isArray(inc && inc.unsortedMonth) ? inc.unsortedMonth : all.filter(function (e) { return String(e.date || "").slice(0, 7) === month; });
+    var ids = {};
+    mine.forEach(function (e) { ids[e.id] = 1; });
+    return { month: mine, older: all.filter(function (e) { return e && !ids[e.id] && String(e.date || "").slice(0, 7) < month; }) };
+  }
+  /* v18 (21 Nov 2026, Forge): the overview has no top-level people count, so "Song-page visits" always said
+     not reported. It is the sum of the song pages' people (people only, as the Pages tab counts). */
+  function songVisits(ov) {
+    var any = false, n = 0;
+    ((ov && ov.songs) || []).forEach(function (s) { var v = num(s && s.people); if (v != null) { any = true; n += v; } });
+    return any ? n : null;
+  }
   function monthChip(o) {
     o = o || {};
     var month = o.month || "";
@@ -517,7 +536,7 @@
     return {
       reported: true,
       title: (song || "Post") + (when ? " · " + when : ""),
-      why: (num(r.rate) == null ? "Engagement not reported" : (Math.round(r.rate * 1000) / 10).toFixed(1) + "% engaged per view"),
+      why: (num(r.rate) == null ? "Engagement not reported" : (Math.round(r.rate * 10000) / 100).toFixed(2) + "% engaged per view"), /* v18: two decimals, as on Growth */
       thumb: https(r.thumb || r.thumbnail || r.media || ""),
       link: https(r.link),
       source: "Ranked at the same age, from the posts already read"
@@ -689,7 +708,7 @@
     homePulse: homePulse, needTotal: needTotal, stampDay: stampDay, milestones: milestones, releaseHero: releaseHero, platformKpis: platformKpis, healthDot: healthDot,
     sparkSvg: sparkSvg, decisionStack: decisionStack, waitingOnYou: waitingOnYou, releaseRows: releaseRows, releaseTimeline: releaseTimeline, readinessBox: readinessBox,
     lyricsState: lyricsState, adsPins: adsPins, runningNow: runningNow, creativePlot: creativePlot,
-    moneyCards: moneyCards, monthChip: monthChip, whyPayments: whyPayments, splitOff: splitOff, plainStatus: plainStatus, paymentBucket: paymentBucket,
+    moneyCards: moneyCards, monthChip: monthChip, songVisits: songVisits, unsortedIn: unsortedIn, toSortSplit: toSortSplit, whyPayments: whyPayments, splitOff: splitOff, plainStatus: plainStatus, paymentBucket: paymentBucket,
     bestPost: bestPost, fanCards: fanCards, uploadSlots: uploadSlots, siteRows: siteRows, lyricsDiff: lyricsDiff, lukeSees: lukeSees,
     homeHtml: homeHtml, kpiHtml: kpiHtml, CURRENCIES: CURRENCIES
   };

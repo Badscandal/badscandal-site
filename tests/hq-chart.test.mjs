@@ -1,4 +1,5 @@
 /* The shared /hq line chart (19 Nov 2026): lookup at x, last/this period, gaps stay gaps. */
+/* v18, 21 Nov 2026: chart dates read "Tue 10 Nov", not the US "11/10/26" (Forge). */
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -23,13 +24,13 @@ test("a missing day is a gap, and the scrub does not invent a value", () => {
   assert.equal(at.date, "2026-11-10");
   assert.equal(at.value, null);
   assert.equal(at.gap, true);
-  assert.equal(at.label, "11/10/26 • no reading");
+  assert.equal(at.label, "Tue 10 Nov • no reading");
   assert.notEqual(at.value, 30);
   const px = C.valueAt(m, m.w * (2 / 3), m.w);
   assert.equal(px.value, null);
   assert.equal(px.gap, true);
   assert.equal(C.valueAt(m, 0).value, 10);
-  assert.equal(C.valueAt(m, 1).label, "11/11/26 • 40");
+  assert.equal(C.valueAt(m, 1).label, "Wed 11 Nov • 40");
   assert.equal(C.periodTotals(m), null, "a gap in either window means no total");
   const html = C.html(streams, { totals: true, label: "Streams per day" });
   assert.doesNotMatch(html, /Last period/);
@@ -41,8 +42,8 @@ test("lookup at x reads the point under the finger, and the example pill is the 
   const series = [];
   for (let day = 1; day <= 10; day++) series.push({ d: "2026-11-" + String(day).padStart(2, "0"), v: day === 10 ? 26605 : day * 1000 });
   const m = C.model(series);
-  assert.equal(C.valueAt(m, 1).label, "11/10/26 • 26,605");
-  assert.equal(C.valueAt(m, 0).label, "11/1/26 • 1,000");
+  assert.equal(C.valueAt(m, 1).label, "Tue 10 Nov • 26,605");
+  assert.equal(C.valueAt(m, 0).label, "Sun 1 Nov • 1,000");
   assert.deepEqual(m.ticks.map((t) => t.text), ["0", "20K", "40K"]);
   const edge = C.valueAt(m, m.plot.r, m.w);
   assert.equal(edge.value, 26605);
@@ -53,8 +54,8 @@ test("lookup at x reads the point under the finger, and the example pill is the 
   assert.match(html, />0</);
   assert.match(html, />20K</);
   assert.match(html, />40K</);
-  assert.match(html, />11\/1\/26</);
-  assert.match(html, />11\/10\/26</);
+  assert.match(html, />Sun 1 Nov</);
+  assert.match(html, />Tue 10 Nov</);
   assert.match(html, /Last period <b>15,000<\/b>/);
   assert.match(html, /This period <b>56,605<\/b>/);
 });
@@ -76,7 +77,7 @@ test("last period and this period are the same length, and a zero is not a gap",
   assert.equal(z.points[0].v, 0);
   assert.equal(z.points[0].y, 100);
   assert.equal(C.valueAt(z, 0).value, 0);
-  assert.equal(C.valueAt(z, 0).label, "11/1/26 • 0");
+  assert.equal(C.valueAt(z, 0).label, "Sun 1 Nov • 0");
 });
 
 test("a level chart omits the totals, and arrows move one point at a time including a gap", () => {

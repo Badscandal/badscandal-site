@@ -1251,7 +1251,10 @@ async function runTool(tool, args, ctx, read) {
         received_this_year: cur(i.receivedYear), received_this_year_note: i.receivedYearNote,
         /* 17 Nov 2026: money in Wise / PayPal is seen, not counted, until it reaches Revolut (link_transfer) */
         in_wise_or_paypal_not_counted: cur(i.holding),
+        in_wise_or_paypal_not_counted_is: `this month (${i.month}) only. Older money still waiting is in waiting_from_earlier_months.`,
         waiting_in_wise_or_paypal: (i.holdingList || []).map((e) => ({ id: e.id, month: e.date.slice(0, 7), line: `${e.date} · ${S.hidePrivate(e.payer)} · ${e.currency} ${e.amount.toFixed(2)} · ${e.account}` })),
+        /* v18 (21 Nov 2026): a Wise or PayPal row from an earlier month that never reached Revolut */
+        waiting_from_earlier_months: (i.holdingOlder || []).map((e) => ({ id: e.id, month: e.date.slice(0, 7), line: `${e.date} · ${S.hidePrivate(e.payer)} · ${e.currency} ${e.amount.toFixed(2)} · ${S.holdingLabel(e)}` })),
         duplicates: i.duplicates.map((x) => `${x.date} · ${x.currency} ${Number(x.amount).toFixed(2)} · "${x.also}" is the same payment as "${x.kept}" (id ${x.id}): counted once`),
         /* batch 4: the music's own money (no salary), what is owed and ready to pay out, statements under the payout line */
         royalties_only_this_month: cur(i.royaltiesOnly), payable_this_month: cur(i.payable), statement_only_this_month: cur(i.statementOnly),
@@ -1487,6 +1490,13 @@ async function runTool(tool, args, ctx, read) {
       ].join("\n");
       let text = g.text || BUILT_IN_GUIDE;
       text = text.replace(/eighteen tools/gi, `${TOOLS.length} tools`);
+      /* v18 (21 Nov 2026, Forge): the stored guide's old count and version line */
+      const NUM_WORD = "(?:one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|\\d+)";
+      text = text.replace(new RegExp(`\\b${NUM_WORD}\\s+new\\s+tools?\\s*:\\s*${NUM_WORD}\\s+in all\\b`, "gi"), `${TOOLS.length} tools in all`);
+      const COUNT_WORD = "(?:ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|\\d{2})";
+      text = text.replace(new RegExp(`\\b${COUNT_WORD}\\s+in all\\b`, "gi"), `${TOOLS.length} tools in all`);
+      text = text.replace(new RegExp(`\\b${COUNT_WORD}\\s+tools\\b`, "gi"), `${TOOLS.length} tools`);
+      text = text.replace(/\bv\d+,\s*((?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)\s+\d{1,2}\s+[A-Z][a-z]{2}\s+20\d{2})\b/g, "first written $1");
       text = text.replace(/you still write your numbers into the Google Sheets exactly as before[^.]*\./gi, "Growth, Songs, Fans and Content ID claims are logged on the desk with log_growth. Read them with read_growth and read_claims. They are not written into a Google Sheet.");
       return `${current}\n\n${live}\n\n` + (g.text ? `STAFF GUIDE (stored ${g.at ? g.at.slice(0, 10) : "?"}; the current rules above win)\n\n${text}` : text);
     }
@@ -1520,7 +1530,7 @@ async function runTool(tool, args, ctx, read) {
     const spot = steps.some((s) => s.key === "spotify" && s.waiting && /spotify/i.test(s.waitingText || ""));
     return !realLate && spot;
   };
-  const worker = (w) => ({ name: w.name, role: w.role, state: waitingSpotify(w) ? "waiting on Spotify" : w.state, ...(waitingSpotify(w) ? { waiting_on: "Spotify" } : {}), duties: w.duties.map((d) => ({ id: d.id, task: d.task, due: d.due || "today", status: d.late ? "late" : d.status, ...(d.blocker ? { blocker: d.blocker } : {}) })),
+  const worker = (w) => ({ name: w.name, role: w.role, state: waitingSpotify(w) ? "waiting on Spotify" : w.state, ...(waitingSpotify(w) ? { waiting_on: "Spotify" } : {}), duties: w.duties.map((d) => ({ id: d.id, task: S.freshDuty(d.task), due: d.due || "today", status: d.late ? "late" : d.status, ...(d.blocker ? { blocker: d.blocker } : {}) })),
     last_update: w.last ? `${w.last.at} ${w.last.status}: ${w.last.message}${w.last.link ? " " + w.last.link : ""}` : "none",
     for_luke: w.last ? `${w.name}: ${S.lukeLine(w.last.message) || "Update posted."}` : "No update yet",
     working_on: w.card ? w.card.workingOn : "", needs: w.card ? w.card.needs : "",
@@ -1585,6 +1595,7 @@ async function runTool(tool, args, ctx, read) {
       for (const person of b.staff) for (const bit of [person.blockers, person.card && person.card.needs, person.card && person.card.workingOn]) if (bit) signedBits.push({ who: person.name, text: bit });
       const signedRaw = signedBits.map((x) => `${x.who}: ${x.text}`);
       const signedOut = S.signedOutLines(signedBits).filter((x) => x.who === me).map((x) => x.line);
+      const backIn = S.signedInAgain(signedBits); /* v18: T-30's "TikTok Ads sign-in" when TikTok is back */
       const duties = w.duties.filter((d) => !S.staleTask(d)).map((d) => {
         const blocker = S.blockerForDuty(d.task, S.freshBlocker(d.blocker, { igConnected, revolutLive, ...lyricOpt }), titles);
         const status = d.late ? "late" : (d.status === "blocked" && !blocker ? "todo" : d.status);
@@ -1600,7 +1611,7 @@ async function runTool(tool, args, ctx, read) {
         ...(me === "Laura" ? { claims_page: "badscandal.com/hq#rights", claims_how: "Read claims with read_claims. Each claim has an id: escalate one into a dispute with open_case and that claim_id. The claim stays on Rights. When YouTube's Content ID page has been checked today, call log_growth with claims_checked true and no follower numbers. A missing field stays not reported." } : {}),
         daily_duty: dutyShown.text, daily_duty_full: dutyShown.full, usual_time: w.time, schedule: S.scheduleForMyDay(me, w.schedule, { today, releases: rel, nextDate: nextRel && nextRel.date, duty: duties[0] }),
         duties_today: duties,
-        open_tasks: w.tasks.filter((t) => !S.staleTask(t) && S.signInOpen(t, signedRaw.join(" "))).map((t) => ({ id: t.id, task: dutyTask(t.task), deadline: /^invalid date$/i.test(String(t.deadline || "")) ? "" : t.deadline, status: t.late ? "late" : t.status, ...(t.blocker ? { blocker: t.blocker } : {}), ...(t.note ? { your_note: t.note } : {}) })),
+        open_tasks: w.tasks.filter((t) => !S.staleTask(t) && S.signInOpen(t, signedRaw.join(" "))).map((t) => ({ id: t.id, task: dutyTask(t.task), deadline: /^invalid date$/i.test(String(t.deadline || "")) ? "" : t.deadline, status: t.late ? "late" : t.status, ...(t.blocker ? { blocker: t.blocker } : {}), ...(S.blockerCheck(t.blocker, backIn) ? { blocker_check: S.blockerCheck(t.blocker, backIn) } : {}), ...(t.note ? { your_note: t.note } : {}) })),
         questions_to_luke: questions(me), card_answers, ...(luke_tap ? { luke_tap } : {}),
         ...(signedOut.length ? { signed_out_accounts: signedOut.slice(0, 6) } : {}),
         waiting_on_you: w.waiting, waiting_on_luke: luke.rows, notes_for_everyone: notes.map(short), ...forYou(w.waiting.map((m) => m.id).concat(notes.map((m) => m.id))),
@@ -1654,12 +1665,16 @@ async function runTool(tool, args, ctx, read) {
         site_check: b.report ? { at: b.report.sp, text: b.report.text } : "The site has not run its check yet.",
         claude_note: note ? { at: note.sp, text: note.text } : "none",
         decisions_waiting_on_luke: luke.briefingRows,
-        ad_spend: cap ? { month: cap.month, spent: `${cap.currency} ${cap.spent.toFixed(2)}`, cap: `${cap.currency} ${cap.amount}`, left: `${cap.currency} ${cap.left.toFixed(2)}`, status: cap.status, estimated: cap.estimated } : "not read",
+        /* v18 (21 Nov 2026, Forge): one plain sentence for the days that were not read (Google since 14 Nov).
+           The six keys stay as they were; not_read is added only when something was not read. */
+        ad_spend: cap ? { month: cap.month, spent: `${cap.currency} ${cap.spent.toFixed(2)}`, cap: `${cap.currency} ${cap.amount}`, left: `${cap.currency} ${cap.left.toFixed(2)}`, status: cap.status, estimated: cap.estimated,
+          ...((() => { const u = S.unreadSpendLine(cap.notRead || []); return u ? { not_read: u } : {}; })()) } : "not read",
         next_release: next ? { song: next.song, date: next.date, days_to_go: next.daysToGo, late_steps: next.steps.filter((s) => s.late).map((s) => `${s.label} (${s.owner})`),
           ...(hq ? {} : { source: "the desk only: the sheet's Releases tab was not read, so an earlier release there can't be ruled out" }) } : hq ? "none planned" : "not read",
         unknown_in_spotify: b.sightings.items.filter((x) => x.state === "unknown").map((x) => `${x.title}, ${x.dateWords}`),
         ...(me === "Alfred" ? forYou([]) : {}), /* Alfred's call marks his messages read: they are handed to him here */
-        income_this_month: { received: cur(b.income.received), pending: cur(b.income.pendingOnly), payable: cur(b.income.payable), problems: b.income.problems },
+        /* v18 (21 Nov 2026, Luke's spec): the same keys; a problem no longer carries a payment id */
+        income_this_month: { received: cur(b.income.received), pending: cur(b.income.pendingOnly), payable: cur(b.income.payable), problems: b.income.problems.map(S.lukeProblem) },
         duties_not_done: hq ? quiet : "not read",
         how_to_report: "One message, 8 lines at most. Numbers exactly as given here, with their currency. \"not read\" is said as not read, never as 0. Decisions: say the question and the options.", ...(sheetNote ? { note: sheetNote } : {}) };
     }
@@ -1674,7 +1689,8 @@ async function runTool(tool, args, ctx, read) {
         : "not read: the team's sheet could not be read just now";
       const inc = b.income;
       /* received only (16 Nov 2026, Luke); Ledger's problems by name, not a count */
-      const income = `Received ${cur(inc.received)} this month` + (inc.problems.length ? `; for Ledger: ${inc.problems.slice(0, 3).map((x) => S.clipWords(x, 70)).join("; ")}` + (inc.problems.length > 3 ? ` (+${inc.problems.length - 3} more)` : "") : "");
+      /* v18 (21 Nov 2026): said short and whole, never cut with "…", no payment ids or payer names */
+      const income = S.shortIncomeLine(inc, cur);
       /* a decision's deadline: an approval -> that step's day; "ready to resubmit" -> the release day */
       const due = (m) => {
         const id = m.approval ? m.approval.id : m.ask === "resubmit" ? m.release : null;
@@ -1727,7 +1743,7 @@ async function runTool(tool, args, ctx, read) {
         let t = String(raw || "").replace(/\s+/g, " ").trim();
         if (!t || /none right now|expire often|sessions expire|sfa is signed in/i.test(t)) continue;
         if (/sign-in from luke for account/i.test(t)) continue;
-        t = t.replace(/\b\d{3}-\d{3}-\d{4}\b/g, "").replace(/\s{2,}/g, " ").replace(/\s+([,.;])/g, "$1").trim();
+        t = S.dropAccountId(t); /* v18: no "signed out ()" left behind */
         const key = t.toLowerCase();
         if (!t || seenSign.has(key)) continue;
         seenSign.add(key);

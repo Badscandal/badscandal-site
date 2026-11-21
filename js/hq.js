@@ -271,8 +271,15 @@
   }
   $("retry").addEventListener("click", function () { refresh(); });
 
+  /* v18 (21 Nov 2026, Forge: "Offline as of 20:23 SP" on every screen while online): a section that fails to
+     DRAW is not the network. Only a request that got no answer says Offline; a drawing error is logged. */
+  function drewBadly(part, e) {
+    try { console.error("HQ: drawing " + part + " failed", e); } catch (x) {}
+  }
   function loadSheet() {
+    var answered = false;
     return getJSON("/api/hq/data" + (sample ? "?sample=1" : "")).then(function (res) {
+      answered = true;
       if (authFail(res)) return;
       if (res.s === 200) dataOkAt = Date.now();
       showShell();
@@ -292,7 +299,8 @@
       sheet = res.j;
       keep("bs_hq_last_sheet", "", sheet);
       drawSheet();
-    }).catch(function () {
+    }).catch(function (e) {
+      if (answered) { drewBadly("the sheet", e); return; }
       /* no answer at all (offline, or the request died): ALWAYS show the shell, with the last good
          numbers if this device has them, else the "Offline · no numbers saved" line. Never black. */
       var old = kept("bs_hq_last_sheet");
@@ -320,7 +328,9 @@
     /* the range may change while this is on its way (two quick picks, or the 5-minute refresh): an
        answer for an older range is dropped, the newer request draws */
     var stale = function () { return q !== rangeQuery().toString(); };
+    var answered = false;
     return getJSON("/api/admin/overview?" + q).then(function (res) {
+      answered = true;
       if (authFail(res)) return;
       if (res.s === 200) dataOkAt = Date.now();
       showShell();
@@ -336,8 +346,9 @@
       keep("bs_hq_last_ov", q, ov);
       $("when").textContent = (sample ? "sample · " : "live · ") + hhmm(Date.now()) + " SP";
       drawOverview();
-    }).catch(function () {
+    }).catch(function (e) {
       showShell();
+      if (answered) { drewBadly("the page numbers", e); return; }
       if (stale()) return;
       var old = kept("bs_hq_last_ov", q);
       if (old) { ov = old.j; drawOverview(); }
@@ -443,7 +454,7 @@
     var item = function (a) { return '<li><a href="' + esc(a.href) + '"' + (a.href === "#health" ? " data-health" : "") + ">" + esc(a.text) + "</a></li>"; };
     var top = att.slice(0, 4), moreAtt = att.slice(4);
     $("attnList").innerHTML = att.length ? top.map(item).join("") + (moreAtt.length ? '<li class="foldli"><details class="fold"><summary>' + moreAtt.length + " more</summary><ul class=\"attn-list\">" + moreAtt.map(item).join("") + "</ul></details></li>" : "") : '<li class="calm">Nothing needs attention.</li>';
-    $("tilesRange").textContent = ov ? "· " + (ov.range === "today" ? "today" : ov.range === "custom" ? ov.from.slice(5).replace("-", "/") + " to " + ov.to.slice(5).replace("-", "/") : "last " + ov.days + " days") + " for ads and taps" : "";
+    $("tilesRange").textContent = ov ? "· " + (ov.range === "today" ? "today" : ov.range === "custom" ? day(ov.from) + " to " + day(ov.to) : "last " + ov.days + " days") + " for ads and taps" : "";
     $("tiles").innerHTML = ti.map(function (x) {
       var arrow = x.change.dir === "up" ? "▲ " : x.change.dir === "down" ? "▼ " : "";
       return '<div class="htile"><p class="hl">' + esc(x.label) + '</p><p class="hv' + (x.green ? " green" : "") + '">' + esc(x.value) + "</p>" +
@@ -548,7 +559,7 @@
     $("songList").innerHTML = order.map(function (k) {
       var s = bySheet[k], p = byPage[k], sp = spendBy[k];
       var name = s ? s.song : p.title;
-      var pill = !s ? "" : s.trend === "rising" ? '<span class="pill hot">Rising ' + signed(s.momentum) + "%</span>" : s.trend === "cooling" ? '<span class="pill warn">Cooling ' + signed(s.momentum) + "%</span>" : s.trend === "steady" ? '<span class="pill">Steady ' + signed(s.momentum) + "%</span>" : '<span class="pill">New</span>';
+      var tp = L.trendPill(s), pill = !tp ? "" : '<span class="pill' + (tp.cls ? " " + tp.cls : "") + '">' + esc(tp.text) + "</span>"; /* v18: with its baseline */
       /* released or not, said in words on the card (the sheet's release date, else our song page's) */
       var rw = HQLib.releaseWords((s && s.released) || (p && p.date), (sheet && sheet.today) || spToday());
       var relPill = rw ? '<span class="pill ' + (rw.out ? "rel" : "") + '">' + esc(rw.pill) + "</span>" : "";
@@ -605,7 +616,8 @@
     if (ml) msg += " " + ml + ".";
     if (c.estimated) {
       var why = window.HQLib.gapNotes(c.notRead && c.notRead.length ? c.notRead : (c.estimatedWhy || []));
-      msg += why.length ? " Estimated: " + why.join("; ") + "." : " Estimated while a platform is unread.";
+      /* v18 (21 Nov 2026): the unread days are said once (capMissingLine above) */
+      msg += ml ? " The total is an estimate." : why.length ? " Estimated: " + why.join("; ") + "." : " Estimated while a platform is unread.";
     }
     if (c.lastDay) msg += " Last day logged: " + day(c.lastDay) + ".";
     $("capMsg").textContent = msg;
@@ -664,7 +676,7 @@
     var box = $("adsPins");
     if (!box || !window.HQLook) return;
     var cap = (sheet && sheet.money && sheet.money.cap) || {};
-    var pins = HQLook.adsPins({ cap: cap, yesterday: ov && ov.yesterday, visits: ov && ov.people, prevVisits: ov && ov.prev && ov.prev.people }, L);
+    var pins = HQLook.adsPins({ cap: cap, yesterday: ov && ov.yesterday, visits: HQLook.songVisits(ov), prevVisits: ov && ov.prev && ov.prev.people }, L); /* v18: the song pages' people */
     var ads = (ov && ov.spend && ov.spend.ads) || [];
     var run = HQLook.runningNow(ads);
     var plot = HQLook.creativePlot(ads);
@@ -694,9 +706,11 @@
     $("hRangeLbl").textContent = ov.days === 1 ? "Today, calls to Meta" : "Last " + ov.days + " days";
     $("hRange").textContent = fmt(g.sent) + " sent · " + fmt(g.received) + " accepted · " + fmt(g.errors) + " errors";
     $("hBlocked").textContent = fmt(t.blocked) + " today · " + fmt(g.blocked) + " this period";
-    $("hLastOk").textContent = h.lastOk ? h.lastOk.slice(5, 16).replace("-", "/") + " SP" : "none yet";
+    /* v18 (21 Nov 2026, Forge): "Thu 19 Nov 19:51 SP", never the US "11/19" */
+    var spAt = function (s) { s = String(s || ""); return day(s.slice(0, 10)) + " " + s.slice(11, 16) + " SP"; };
+    $("hLastOk").textContent = h.lastOk ? spAt(h.lastOk) : "none yet";
     var le = h.lastErrorFull;
-    $("hLastErr").textContent = le ? le.time.slice(5, 16).replace("-", "/") + " SP · " + le.detail : h.lastError ? h.lastError.time.slice(5, 16).replace("-", "/") + " SP · " + h.lastError.detail : "none";
+    $("hLastErr").textContent = le ? spAt(le.time) + " · " + le.detail : h.lastError ? spAt(h.lastError.time) + " · " + h.lastError.detail : "none";
     $("hErrMsg").hidden = !(le && le.message); $("hErrMsg").textContent = le && le.message ? "Meta said: " + le.message : "";
     $("hTest").hidden = !h.testMode;
     var pill = $("hPill");

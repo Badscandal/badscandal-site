@@ -168,7 +168,7 @@ export function dutyPair(text, lines) {
 /* known stale duty lines, rewritten when they are shown. The sheet itself is not changed. */
 export function freshDuty(text) {
   let t = String(text || "");
-  t = t.replace(/meta too until the meta-api-feed brief says live/gi, "HQ records Meta itself");
+  t = plainWords(t);
   t = t.replace(/google\s*\(\s*eur\s*\)/gi, "Google (currency not confirmed)");
   /* v18 (21 Nov 2026, Luke): no "Salvation" line anywhere in Atlas's duty or its reminders */
   t = t.replace(/[^.\n]*\bsalvation\b[^.\n]*\.?/gi, "");
@@ -233,6 +233,52 @@ export function hidePrivate(s, o = {}) {
     .replace(/\(\s*\)/g, "")
     .replace(/\s{2,}/g, " ")
     .trim();
+}
+/* v18 (21 Nov 2026, Forge): an ads id (XXX-XXX-XXXX) taken out of a line for Luke used to leave
+   "signed out at )" and "signed out ()". It now goes with the words and brackets that held it.
+   js/hq-lib.js has the same function for the page. */
+export function dropAccountId(text) {
+  let t = String(text == null ? "" : text);
+  if (!/\d{3}-\d{3}-\d{4}/.test(t)) return t;
+  t = t.replace(/\s*\(\s*(?:(?:google ads|ads|customer|account|acct|id|no\.?|number|#)\s*)*:?\s*\d{3}-\d{3}-\d{4}\s*\)/gi, "");
+  t = t.replace(/\s*(?:\b(?:at|for|on|of|customer|account|acct|id|no\.?|number)\b\s*|#\s*)*:?\s*\b\d{3}-\d{3}-\d{4}\b/gi, "");
+  t = t.replace(/\(\s*\)|\[\s*\]/g, "");
+  let depth = 0, out = "";
+  for (const ch of t) { if (ch === "(") depth++; else if (ch === ")") { if (!depth) continue; depth--; } out += ch; }
+  return out.replace(/[ \t]{2,}/g, " ").replace(/\s+([,.;:)])/g, "$1").replace(/\(\s+/g, "(").trim();
+}
+/* v18 (21 Nov 2026, Forge): the desk's shorthand in plain words, on lines Luke reads and in task text */
+export function plainWords(text) {
+  return String(text == null ? "" : text)
+    .replace(/\s*\(\s*(?:see\s+)?runbook\s+[A-Z0-9]\b\s*\)/gi, "")
+    .replace(/,?\s*(?:as in |per |see )?runbook\s+[A-Z0-9]\b/gi, "")
+    .replace(/meta too until the meta-api-feed brief says live/gi, "HQ records Meta itself")
+    .replace(/\bthe meta-api-feed brief\b/gi, "the Meta feed plan").replace(/\bmeta-api-feed brief\b/gi, "Meta feed plan")
+    .replace(/\b(?:the\s+)?Revolut[- ]once rule\b/gi, "the rule that income counts once, when it lands in Revolut")
+    .replace(/[ \t]{2,}/g, " ").replace(/\s+([,.;])/g, "$1");
+}
+/* v18 (21 Nov 2026): one income problem for Luke (luke_briefing): no payment ids. The words are kept. */
+export function lukeProblem(p) {
+  return String(p == null ? "" : p).replace(/\s*\(id [^)]*\)/gi, "").replace(/\s*\bid\s+i[0-9a-z]{8,16}\b/g, "").replace(/[ \t]{2,}/g, " ").replace(/\s+([,.;])/g, "$1").trim();
+}
+/* v18 (21 Nov 2026, Spark and Forge): luke_short_briefing's income line. It was cut at 70 characters with
+   "…" and carried payer names and payment ids. Now each problem is said short and whole: the unsorted
+   list is a count, an overdue source keeps its first sentence, nothing is cut mid-way. */
+export function shortIncomeLine(inc, cur) {
+  const problems = (inc && inc.problems) || [];
+  const short = (p) => {
+    const t = lukeProblem(p);
+    if (/^Payments nobody has sorted:/i.test(t)) {
+      const n = Number.isFinite(inc && inc.unsortedCount) ? inc.unsortedCount : t.split("; ").length;
+      return `${n} payment${n === 1 ? "" : "s"} to sort`;
+    }
+    if (/logged twice under two payer names/i.test(t)) return t.split(":")[0];
+    if (/^New payer\(s\)/i.test(t)) return "New payers not on the list of sources";
+    const first = t.split(/(?<=\.)\s/)[0].replace(/\.$/, "");
+    return first.length <= 90 ? first : first.split(/[(,;]/)[0].trim();
+  };
+  const bits = problems.slice(0, 3).map(short).filter(Boolean);
+  return `Received ${cur((inc && inc.received) || {})} this month` + (bits.length ? `; for Ledger: ${bits.join("; ")}` + (problems.length > 3 ? ` (+${problems.length - 3} more)` : "") : "");
 }
 /* A note for a tool. Card and top-up digits are already hidden. A sentence that says a statement
    is not on the desk is dropped when a statement of that amount is in the months already read.
@@ -2311,7 +2357,7 @@ export function routeCostText(r) {
   if (fees.length) bits.push(`Fees: ${fees.join(" + ")} on ${r.feePayouts} payout${r.feePayouts === 1 ? "" : "s"}`);
   const left = moneyBits(r.left);
   if (left.length) bits.push(`${left.join(" + ")} left in Wise or PayPal, not a fee`);
-  if (r.checkLink) bits.push("Check link");
+  if (r.checkLink) bits.push("More landed in Revolut than was sent: check which payments link_transfer tied together"); /* v18 (21 Nov 2026, Forge) */
   if (r.noFee && !fees.length && !r.checkLink && !r.mixed) bits.push("No fee on the amounts recorded");
   if (r.mixed) {
     for (const m of r.mixedExamples || []) bits.push(`${sentBits(m.sent)} sent, ${m.landed.currency} ${Number(m.landed.amount).toFixed(2)} landed`);
@@ -2394,9 +2440,14 @@ export function moneyExpectations(entries, sources, today, rules) {
     const age = j.landed && DAY.test(j.landed.date) ? daysBetween(j.landed.date, today) : null;
     if (j.landed && !shortBy && age != null && age > RECENT_LANDED) continue;
     const payableDate = j.payable.state === "date" ? j.payable.date : null;
+    /* v18 (21 Nov 2026, Forge): a payment that already notes why it is short (a bot wrote "fee or short
+       payment, not checked") carries that note, so the screen shows it instead of only "unexplained" */
+    const noteOf = (x) => { const n = x && typeof x.note === "string" ? hidePrivate(x.note) : ""; return /short|fee/i.test(n) ? clipWords(n, 90) : ""; };
+    const holderE = e.paidBy ? byId.get(e.paidBy) : null;
+    const shortNote = shortBy ? (noteOf(e) || noteOf(holderE) || noteOf(holderE && holderE.movedTo ? byId.get(holderE.movedTo) : null)) : "";
     rows.push({
       id: e.id, payer: hidePrivate(e.payer), source: src ? src.name : "", sourceId: src ? src.id : "", amount: e.amount, currency: e.currency, status: j.landed ? "received" : settled ? "settled" : e.status,
-      ...(shortBy && (!src || !viaHop) ? { shortReason: "unexplained" } : {}),
+      ...(shortBy && (!src || !viaHop) ? { shortReason: "unexplained" } : {}), ...(shortNote ? { shortNote } : {}),
       due, dueFrom, dueNote, flags, shortBy, open: !j.landed && !settled, missingLink: j.missingLink,
       statement: { date: j.statementDate, amount: e.amount, currency: e.currency },
       payable: payableDate, payableState: j.payable.state,
@@ -2600,6 +2651,9 @@ export function incomeReport(entries, checks, sources, today, older = [], rules 
     expected: money.expected, routes: money.routes,
     entries: [...entries].sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : a.at < b.at ? 1 : -1)).slice(0, 60).map((e) => (isHold(e) ? { ...e, holding: true } : e)),
     holding, holdingList: entries.filter((e) => e.status === "received" && !countsAsReceived(e) && !e.movedTo && e.date.slice(0, 7) === month).sort((a, b) => (a.date < b.date ? 1 : -1)),
+    /* v18 (21 Nov 2026, Forge/Ledger): a Wise or PayPal row from an earlier month that has not moved to Revolut
+       (a September PayPal payment) is still waiting: listed apart, never counted */
+    holdingOlder: entries.filter((e) => e.status === "received" && !countsAsReceived(e) && !e.movedTo && !STATEMENT.test(e.account || "") && /wise|paypal/i.test(e.account || "") && e.date.slice(0, 7) < month).sort((a, b) => (a.date < b.date ? 1 : -1)),
     accounts, sources: src, unknown, problems,
     lastEntryAt: entries.reduce((a, e) => (!a || e.at > a ? e.at : a), null) };
 }
@@ -5880,7 +5934,8 @@ export function lukeLine(text) {
   if (/site analytics/i.test(t) && /netlify|viewer|webmaster|needs access/i.test(t)) return "Webmaster needs Netlify Viewer access (site analytics)";
   t = t.replace(/\b20\d{2}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?Z?\b/g, " ");
   t = t.replace(/\b(20\d{2}-\d{2}-\d{2})\b/g, (d) => dayWords(d) || d);
-  t = t.replace(/\b\d{3}-\d{3}-\d{4}\b/g, "");
+  t = dropAccountId(t);
+  t = plainWords(t);
   t = t.replace(/\b([01]?\d|2[0-3]):[0-5]\d\b(?!\s*SP\b)/g, "$& SP");
   t = t.replace(/\bT-\d+\b/g, " ");
   t = t.replace(/\bso I can do\s+(?=\()/gi, "");
@@ -6189,6 +6244,26 @@ export function signedOutLines(items) {
   }
   return [...found.values()].map(({ who, line }) => ({ who, line }));
 }
+/* v18 (21 Nov 2026, Forge T-30): the platforms a bot says are signed in again, and nobody says are signed
+   out. A task blocker that still waits on that sign-in gets a check line; the blocker itself is the
+   sheet's, so it is not rewritten. */
+const SIGN_PLATFORMS = [["TikTok", /tiktok/i], ["Google Ads", /google/i], ["Meta", /\bmeta\b|facebook/i], ["YouTube", /youtube/i], ["Spotify", /spotify/i], ["Instagram", /instagram/i]];
+export function signedInAgain(items) {
+  const back = new Set(), out = new Set();
+  for (const it of items || []) {
+    const t = String(it && it.text || "");
+    if (!/signed (back )?in again|is signed in\b|signed back in/i.test(t)) continue;
+    for (const [name, re] of SIGN_PLATFORMS) if (re.test(t)) back.add(name);
+  }
+  for (const x of signedOutLines(items)) for (const [name, re] of SIGN_PLATFORMS) if (re.test(x.line)) out.add(name);
+  return [...back].filter((n) => !out.has(n));
+}
+export function blockerCheck(blocker, back) {
+  const b = String(blocker || "");
+  if (!/sign[\s-]?in|signed out|log ?in/i.test(b)) return "";
+  const hit = SIGN_PLATFORMS.find(([name, re]) => (back || []).includes(name) && re.test(b));
+  return hit ? `${hit[0]} is signed in again (the desk says so). If the rest of this blocker still stands, say only that with task_update.` : "";
+}
 /* Five daily "Google … signed out" lines become one. Other unread lines stay, cut at a word. */
 export function unreadSpendLine(lines) {
   const all = (lines || []).map((l) => String(l || "").trim()).filter(Boolean);
@@ -6199,10 +6274,11 @@ export function unreadSpendLine(lines) {
     return m ? { d: Number(m[1]), mon: m[2].slice(0, 1).toUpperCase() + m[2].slice(1, 3).toLowerCase() } : null;
   }).filter(Boolean).sort((a, b) => a.d - b.d);
   const g = days.length ? `Google not read since ${days[0].d} ${days[0].mon} (signed out)` : (google.length ? "Google not read (signed out)" : "");
-  return [g, ...rest.map((l) => clipWords(l, 80))].filter(Boolean).join("; ");
+  return [g, ...rest.map((l) => clipWords(l.replace(/\s*(?:at|see|on|via)?\s*https?:\/\/\S+/gi, "").trim(), 80))].filter(Boolean).join("; ");
 }
-/* A stored site check that still says an old duty count is replaced with the live board. */
-export function freshReport(report, hq) {
+/* A stored site check that still says an old duty count is replaced with the live board.
+   v18 (21 Nov 2026, Forge): the rewritten line carries the live time (liveAt), not the old check's 15:35. */
+export function freshReport(report, hq, liveAt) {
   if (!report || !report.text) return report;
   const d = hq && hq.team && hq.team.duties;
   if (!d || d.total == null) return report;
@@ -6211,7 +6287,7 @@ export function freshReport(report, hq) {
   if (!m) return report;
   const done = Number(m[1]), total = Number(m[2]), saidBlocked = blocked ? Number(blocked[1]) : null;
   if (done === Number(d.done) && total === Number(d.total) && (saidBlocked == null || saidBlocked === Number(d.blocked))) return report;
-  return { ...report, stale: true, text: `The board shows ${d.done} of ${d.total} duties done, ${d.blocked} blocked.` };
+  return { ...report, stale: true, ...(liveAt ? { sp: liveAt } : {}), text: `The board shows ${d.done} of ${d.total} duties done, ${d.blocked} blocked.` };
 }
 /* Sign-ins, access, a yes Luke still owes, and fan replies only he can send. Notes are not asks. */
 function lukeExtraNeeds(desk) {
@@ -6405,7 +6481,7 @@ export function board(desk, now, hq) {
     contentIdeas: contentIdeasView(desk.contentIdeas),
     connector: { botsOn: desk.config.botsOn, changedAt: desk.config.changedAt, lastUsed: lastSeen ? { bot: lastSeen[0], at: lastSeen[1].at, tool: lastSeen[1].tool } : null,
       connected: staff.filter((w) => w.connected).length, total: staff.length, claudeSeen: desk.seen.Claude ? desk.seen.Claude.at : null },
-    report: freshReport(desk.messages.find((m) => m.from === "HQ" && m.kind === "report") || null, hq),
+    report: freshReport(desk.messages.find((m) => m.from === "HQ" && m.kind === "report") || null, hq, spStamp(now)),
     names: botNames(desk.roster).concat(PEOPLE),
   };
 }

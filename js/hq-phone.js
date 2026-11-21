@@ -108,7 +108,7 @@
     return '<section class="waitlane"><h2>Waiting on others</h2><ul>' + items.map(function (it) {
       var meta = [];
       if (it.ticket) meta.push(it.ticket);
-      if (it.days != null) meta.push(it.days === 1 ? "1 day" : it.days + " days");
+      if (it.days != null) meta.push(window.HQLib.waitedWords(it.days));
       return '<li class="' + (it.tone === "bad" ? "bad" : "") + '"><b>' + esc(it.name) + "</b> " + esc(it.text) + (meta.length ? "<small>" + esc(meta.join(" · ")) + "</small>" : "") + "</li>";
     }).join("") + "</ul></section>";
   }

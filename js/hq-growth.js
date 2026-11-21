@@ -163,12 +163,12 @@
   function table(platform, posts) {
     var rows = posts.filter(function (p) { return platId(p.platform) === platform; });
     var h = '<section class="gsec"><h3>' + esc(LABEL[platform]) + " posts</h3>";
-    h += '<div class="scroll"><table class="posttable"><tr><th>Date</th><th>Hook</th><th>Views 24h</th><th>Views 7d</th><th>EPV 24h</th><th>Saves + shares / view</th><th>Follows</th><th></th></tr>';
+    h += '<div class="scroll"><table class="posttable"><tr><th>Date</th><th>Hook</th><th>Views 24h</th><th>Views 7d</th><th>Engagement, 24h</th><th>Saves + shares / view</th><th>Follows</th><th></th></tr>';
     if (!rows.length) h += '<tr><td colspan="8">' + miss() + "</td></tr>";
     rows.forEach(function (p) {
       var e = epv(p), ss = savesShares(p);
       h += "<tr>" + cell("Date", dayOf(p.date)) + cell("Hook", linkOr(videoHref(p), p.hook)) + cell("Views 24h", num(p.views_24h)) + cell("Views 7d", num(p.views_7d)) +
-        cell("EPV 24h", e == null ? miss() : pct(e)) + cell("Saves + shares / view", ss == null ? miss() : pct(ss)) + cell("Follows", num(p.follows)) + cell("Reach", shown(tag(p))) + "</tr>";
+        cell("Engagement, 24h", e == null ? miss() : pct(e)) + cell("Saves + shares / view", ss == null ? miss() : pct(ss)) + cell("Follows", num(p.follows)) + cell("Reach", shown(tag(p))) + "</tr>";
     });
     return h + "</table></div></section>";
   }

@@ -199,9 +199,10 @@ test("the bots get the ranking (Steve, Kevin and Forge) with the how-to; HQ draw
   assert.match(readFileSync(new URL("../js/hq-growth.js", import.meta.url), "utf8"), /What worked this week/);
   assert.match(js, /Needs a reply/); assert.match(js, /Our own accounts/);
   const x = globalThis.HQLib.rankParts(P.rankPosts(posts, adDoc, { now: NOW, comments }).ranked[1]);
-  assert.deepEqual(x, { rate: "7.8% engaged", window: "At 1 day", views: "1,797 of 23,000 views · 1,600 likes · 37 comments", deep: "Saves + shares 0.7% (100 saves · 60 shares)",
-    follows: "120 follows (0.5% of views) · 300 profile visits", own: "3 of our own comments left out",
-    paid: "Boosted USD 90.00 (active) · as of 2026-11-17 11:50 · 1,550 engagements from the ad · USD 0.058 each", before: "Before the ad (6 hours): 8.6% of 2,100 views" });
+  /* v18, 21 Nov 2026: HQ shows engagement with two decimals everywhere (Forge: 9.01% / 8.9% / 8.97%) */
+  assert.deepEqual(x, { rate: "7.81% engaged", window: "At 1 day", views: "1,797 of 23,000 views · 1,600 likes · 37 comments", deep: "Saves + shares 0.70% (100 saves · 60 shares)",
+    follows: "120 follows (0.52% of views) · 300 profile visits", own: "3 of our own comments left out",
+    paid: "Boosted USD 90.00 (active) · as of 2026-11-17 11:50 · 1,550 engagements from the ad · USD 0.058 each", before: "Before the ad (6 hours): 8.57% of 2,100 views" });
 });
 
 /* 19 Nov 2026: a boost's spend is that ad, or a spend row that names the post. The account day total is a different scope.

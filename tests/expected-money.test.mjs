@@ -140,7 +140,7 @@ test("a route's cost is sent minus landed, and a currency change is not enough d
   /* 18 Nov 2026: landed above what was sent is a wrong pairing, not a negative fee */
   assert.deepEqual(extra.extra, {});
   assert.equal(extra.checkLink, 1);
-  assert.match(S.routeCostText(extra), /Check link/);
+  assert.match(S.routeCostText(extra), /More landed in Revolut than was sent/); /* v18, 21 Nov 2026: "Check link" said in plain words */
   assert.doesNotMatch(S.routeCostText(extra), /more than was sent/);
   assert.equal(S.routeCosts([statement], [src()]).length, 0);
   const lines = L.routeLines(mixed);

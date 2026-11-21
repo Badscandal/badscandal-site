@@ -190,7 +190,7 @@
       '<div class="ts ok"><b>' + c.onTrack + "</b><span>On track</span></div>";
     $("dutyList").innerHTML = !shown.length ? '<p class="empty">No bots are on the list yet.</p>' :
       (g.stuck.length ? '<h3 class="lblh">Stuck</h3><p class="secsub">Only what is wrong. Copy the message for Nova, or open a card for everything.</p><div class="botgrid">' + g.stuck.map(stuckCard).join("") + "</div>"
-        : (sheet && sheet.team && (sheet.team.blocked || sheet.team.late) ? '<p class="allgood">' + (sheet.team.blocked || 0) + " blocked, " + (sheet.team.late || 0) + " late on the task list.</p>" : '<p class="allgood">Nobody is stuck right now.</p>')) +
+        : '<p class="allgood">' + esc(L.taskListLine(sheet && sheet.team)) + "</p>") +
       (g.quiet.length ? '<h3 class="lblh">Haven\'t checked in today</h3><div class="botlist">' + g.quiet.map(botRow).join("") + "</div>" : "") +
       (g.onTrack.length ? '<h3 class="lblh">On track</h3><div class="botlist">' + g.onTrack.map(botRow).join("") + "</div>" : "");
     HQ.drawFeed(L.liveFeed(board, sheet), board.today);
@@ -210,7 +210,7 @@
     var ask = ui.tapAsk ? '<div class="confirm" role="group"><p>A Yes on a card will count as your yes, except payments and signatures, which you still do yourself. HQ will not change ads.</p><button class="sendbtn" type="button" data-taps="yes"' + (ui.tapBusy ? " disabled" : "") + '>Yes, switch it on</button><button class="copybtn" type="button" data-taps="cancel">Cancel</button></div>' : "";
     el.innerHTML = '<h3 class="lblh">One-tap cards</h3><p>' + esc(a.tapsLine || "") + "</p>" +
       (taps ? '<button class="copybtn" type="button" data-taps="off"' + off() + ">Switch taps off</button>" : '<button class="copybtn" type="button" data-taps="on"' + off() + ">Taps count as my yes</button>") +
-      ask + '<h3 class="lblh">Desk push</h3><p>Empty means off. Paste the https address that bot\'s app gives you. HQ does not invent one. Nova can send you the address. Only you paste it here. Leave the box empty and save to turn that bot off.</p>' +
+      ask + '<h3 class="lblh">Wake a bot\'s app</h3><p>Paste the https address the bot\'s app gives you (Nova can send it). Empty means off.</p>' + /* v18: was "Desk push", five sentences */
       rows + '<p class="ferr" role="alert">' + esc(ui.tapErr) + "</p>";
   }
   var autoEl = $("autoCard");
@@ -621,7 +621,7 @@
     var V = window.HQLook;
     var monthKey = rm && rm.month;
     var cards = V ? V.moneyCards({ income: inc, entries: entries, month: monthKey }, L) : { cards: [] };
-    var chip = V ? V.monthChip({ month: monthKey, closes: board.closes, unsorted: monthKey && monthKey === inc.month ? (inc.unsorted || []).length : 0, pending: cards.cards.some(function (c) { return c.pending; }), ready: inc.ready === true }) : null;
+    var chip = V ? V.monthChip({ month: monthKey, closes: board.closes, unsorted: monthKey && V ? V.unsortedIn(inc, monthKey) : 0, pending: cards.cards.some(function (c) { return c.pending; }), ready: inc.ready === true }) : null;
     h += '<div class="inmonth one"><div class="tile balbox"><div class="rmhead"><p class="t-lbl">Received' + (rm && rm.label ? " · " + esc(rm.label) : "") + "</p>" +
       '<span class="rmnav"><button class="copybtn" type="button" data-inc-month="' + (mi + 1) + '"' + (mi + 1 >= rms.length ? " disabled" : "") + ' aria-label="The month before">‹</button>' +
       '<button class="copybtn" type="button" data-inc-month="' + (mi - 1) + '"' + (mi <= 0 ? " disabled" : "") + ' aria-label="The month after">›</button></span></div>' +
@@ -814,7 +814,7 @@
     return '<div class="tile bank' + (v.attn ? " attn-t" : "") + '" id="bankTile">' + head + '<p class="al">' + esc(cap(v.line.replace(/^Revolut: /, ""))) + "</p>" +
       (v.error ? '<p class="al">' + esc(v.error) + "</p>" : "") +
       (bankProblem ? '<p class="al">Couldn\'t check again just now: this is what was read before.</p>' : "") +
-      (v.accounts.length ? '<p class="al bacc">' + v.accounts.length + " accounts, read only.</p>" : "") +
+      (v.accounts.length ? '<p class="al bacc">HQ reads ' + v.accounts.length + " account" + (v.accounts.length === 1 ? "" : "s") + ". It never moves money.</p>" : "") +
       flag + (b.done ? '<p class="rdone" role="status">' + esc(b.done) + "</p>" : "") + acts +
       (v.note ? '<p class="al">' + esc(v.note) + "</p>" : "") + '<p class="ferr" role="alert">' + esc(b.err) + "</p>" +
       (HQ.sample && v.buttons.length ? '<p class="fok bnote">Sample: these buttons do nothing here.</p>' : "") + "</div>";
@@ -825,16 +825,20 @@
      the list, a line taking its place ("Sorted as income (Production)"), and the totals are read again. */
   function sortedNow() { return Object.keys(ui.sorted).map(function (k) { return ui.sorted[k]; }).filter(function (x) { return Date.now() - x.at < KEEP_MS; }); }
   function toSortHtml(inc) {
-    var all = Array.isArray(inc.unsortedMonth) ? inc.unsortedMonth : (inc.unsorted || []), left = all.filter(function (e) { return !ui.sorted[e.id]; }), stubs = sortedNow();
+    var split = window.HQLook ? window.HQLook.toSortSplit(inc) : { month: inc.unsortedMonth || inc.unsorted || [], older: [] };
+    var all = split.month, left = all.filter(function (e) { return !ui.sorted[e.id]; }), stubs = sortedNow();
+    var older = split.older.filter(function (e) { return !ui.sorted[e.id]; });
     var n = left.length;
-    if (!n && !stubs.length) return "";
+    if (!n && !stubs.length && !older.length) return "";
     var rows = stubs.map(function (x) { return '<li class="landed" role="status" tabindex="-1" id="sort-' + esc(safe(x.id)) + '"><span>' + esc(x.line) + '<span class="lsub">' + esc(x.sub) + "</span></span></li>"; })
       .concat(left.map(sortRow));
     return '<section class="tile tosort" aria-labelledby="toSortH"><h4 class="t-lbl" id="toSortH">To sort' + (n ? " · " + n : "") + "</h4>" +
       '<p class="tsub">In the account, and nobody has said what it is yet. It counts as nothing until it is sorted.</p>' +
       (HQ.sample ? '<p class="mnote">This is the sample: sorting is switched off here.</p>' : "") +
       '<ul class="sortlist">' + rows.join("") + "</ul>" +
-      (n > left.length ? '<p class="tsub">Showing the newest ' + left.length + " of " + n + ". Sort these and the next ones show.</p>" : !left.length ? '<p class="tsub">Nothing left to sort.</p>' : "") + "</section>";
+      (n > left.length ? '<p class="tsub">Showing the newest ' + left.length + " of " + n + ". Sort these and the next ones show.</p>" : !left.length ? '<p class="tsub">Nothing left to sort this month.</p>' : "") +
+      /* v18 (21 Nov 2026, Ledger): the older ones the count used to include, listed so they can be sorted */
+      (older.length ? '<details class="tsold"><summary>From earlier months · ' + older.length + '</summary><ul class="sortlist">' + older.map(sortRow).join("") + "</ul></details>" : "") + "</section>";
   }
   function sortRow(e) {
     var s = ui.sort.id === e.id ? ui.sort : null, busy = !!(s && s.busy), dis = HQ.sample || busy ? " disabled" : "", id = esc(e.id);
