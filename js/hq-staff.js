@@ -1812,37 +1812,57 @@
     var s = String(u || "").replace(/^https:\/\//, "");
     return s.length > 72 ? s.slice(0, 69) + "…" : s;
   }
+  /* Profiles v2 (21 Nov 2026, Luke): one line of counts, a strip with every platform's photo (coloured by
+     what matters most), then one card per platform. Each image: a thumbnail, ONE state, one line, Answer /
+     Open, and the size rule folded away. The words come from HQLib.profileBlocks / profileOverview. */
+  function pImg(src) {
+    return src ? '<img alt="" loading="lazy" referrerpolicy="no-referrer" data-pthumb src="' + esc(src) + '">' : "";
+  }
+  var profFoldSet = false;
   function drawProfiles() {
     var el = $("profList");
     if (!el) return;
     if (!board || !board.profiles) { el.innerHTML = problem ? '<p class="empty2">' + esc(problem) + "</p>" : '<div class="ph big"></div>'; return; }
     var b = L.profileBlocks(board.profiles);
-    if ($("profNote")) $("profNote").textContent = b.note;
+    var o = L.profileOverview(b);
+    if ($("profNote")) $("profNote").textContent = "The profile photo and banner on every official platform. HQ never logs in and never changes one.";
+    if ($("profSum")) $("profSum").textContent = o.line;
+    if ($("profStrip")) $("profStrip").innerHTML = o.chips.map(function (c) {
+      return '<a class="pf-chip pf-t-' + esc(c.tone) + '" href="' + esc(c.href) + '" aria-label="' + esc(c.platform) + '"><span class="pf-av">' + esc(c.initials) + pImg(c.thumb) + '</span><span class="pf-n">' + esc(c.label || c.platform) + "</span></a>";
+    }).join("");
+    var ms = [];
+    if (b.masters && b.masters.photo) ms.push("Photo " + b.masters.photo.replace(/^Saved · /, ""));
+    if (b.masters && b.masters.banner) ms.push("Banner " + b.masters.banner.replace(/^Saved · /, ""));
+    /* open the masters once when nothing is uploaded yet; after that it stays as Luke left it */
+    if (!profFoldSet && $("profMasters")) { profFoldSet = true; if (!ms.length) $("profMasters").open = true; }
+    if ($("profMastersLine")) $("profMastersLine").textContent = ms.length ? "Saved: " + ms.join(" · ") : "Not uploaded yet. One photo and one banner make every platform's copy.";
     if ($("profPhotoLine") && b.masters && b.masters.photo) $("profPhotoLine").textContent = b.masters.photo + ". Only scaled down, never cropped.";
-    if ($("profBannerLine") && b.masters && b.masters.banner) $("profBannerLine").textContent = b.masters.banner + ". A shape that does not fit is not cropped.";
+    if ($("profBannerLine") && b.masters && b.masters.banner) $("profBannerLine").textContent = b.masters.banner + ". A shape that doesn't fit is not cropped.";
     el.innerHTML = b.platforms.map(function (p) {
-      return '<article class="t-card" id="profiles-' + esc(p.id) + '"><h3 class="t-lbl">' + esc(p.platform) + '</h3><p class="secsub">' + esc(p.ownerLine) + "</p>" +
+      var chip = o.chips.filter(function (c) { return c.id === p.id; })[0] || { tone: "none", initials: "", thumb: "" };
+      return '<article class="t-card pf-card" id="profiles-' + esc(p.id) + '"><header class="pf-head"><span class="pf-av pf-t-' + esc(chip.tone) + '">' + esc(chip.initials) + pImg(chip.thumb) + "</span><div><h3>" + esc(p.platform) + '</h3><p class="secsub">' + esc(p.ownerLine) + "</p></div></header>" +
         p.slots.map(function (s) {
+          var st = s.state || { tone: "none", label: "Not recorded", line: "" };
           var href = /^#messages\/[A-Za-z0-9]+$/.test(s.waitingHref) ? s.waitingHref : "";
-          var cls = s.status === "ready" || s.status === "uploaded" || s.status === "rework" ? s.status : "wait";
-          var fileSrc = /^\/api\/staff\/profile-file\/(?:master-(?:photo|banner)|slot-[a-z0-9-]+)$/.test(s.preview || "") ? s.preview : "";
-          var webSrc = /^https:\/\/.+\.(?:jpg|jpeg|png|webp|gif)(?:\?|$)/i.test(s.currentLink || "") ? s.currentLink : "";
-          var src = fileSrc || webSrc;
-          var frame = s.circle ? " circle" : " banner";
           var ratio = !s.circle && s.exactW > 0 && s.exactH > 0 ? ' style="aspect-ratio:' + Number(s.exactW) + " / " + Number(s.exactH) + '"' : "";
-          var preview = src ? '<div class="profprev' + frame + '"' + ratio + '><img alt="" src="' + esc(src) + '">' + (s.circle ? '<i class="safe"></i>' : "") + "</div>" : "";
-          return '<div class="profslot"><p><b>' + esc(s.kind) + "</b></p>" +
-            '<p class="profstat ' + cls + '">' + esc(s.statusLine) + "</p>" +
-            (s.sizeLine ? '<p class="secsub">' + esc(s.sizeLine) + "</p>" : "") +
-            preview +
-            (s.detail && s.status === "rework" ? '<p class="secsub">' + esc(s.detail) + "</p>" : "") +
-            '<p class="profrule">' + esc(s.rule) + "</p>" +
-            (s.currentLink && !src ? "<p>Current image: " + outLink(s.currentLink, "Image") + "</p>" : "") + '<p class="secsub">' + esc(s.currentLine) + "</p>" +
-            (s.waitingLine ? '<p class="attn">' + esc(s.waitingLine) + (s.waitingLink ? " " + outLink(s.waitingLink, shortUrl(s.waitingLink)) : "") + (href ? ' <a href="' + esc(href) + '">Answer on Messages</a>' : "") + "</p>" : "") +
-            (s.approvedLine ? "<p>" + esc(s.approvedLine) + (s.approvedLink ? " " + outLink(s.approvedLink, shortUrl(s.approvedLink)) : "") + "</p>" : "") + "</div>";
+          var thumb = '<div class="pf-thumb ' + (s.circle ? "pf-round" : "pf-wide") + (s.thumb ? "" : " empty") + " pf-t-" + esc(st.tone) + '"' + (s.thumb ? ratio : "") + ">" + (s.thumb ? pImg(s.thumb) : s.circle ? "" : "<span>No image yet</span>") + "</div>";
+          var size = s.exactW > 0 && s.exactH > 0 ? s.exactW + " × " + s.exactH : "";
+          var acts = (href ? '<a class="go" href="' + esc(href) + '">Answer</a>' : "") + (s.openLink && /^https:\/\//.test(s.openLink) ? outLink(s.openLink, s.state && s.state.key === "you" ? "See the new image" : "Open") : "");
+          var rule = '<details class="pf-rule"><summary>Size rule</summary><p>' + esc(s.rule) + "</p>" + (s.detail && s.status === "rework" ? "<p>" + esc(s.detail) + "</p>" : "") + "</details>";
+          return '<div class="pf-slot' + (s.circle ? "" : " wide") + '">' + thumb + '<div class="pf-info"><p class="pf-kind">' + esc(s.kind) + (size ? "<small>" + esc(size) + "</small>" : "") + "</p>" +
+            '<p class="pf-state pf-t-' + esc(st.tone) + '"><i></i>' + esc(st.label) + "</p>" + (st.line ? '<p class="pf-line">' + esc(st.line) + "</p>" : "") +
+            (acts ? '<div class="pf-acts">' + acts + "</div>" : "") + rule + "</div></div>";
         }).join("") + "</article>";
     }).join("");
   }
+  /* a thumbnail that won't load (an expired platform link, a file not stored yet) becomes a plain tile */
+  document.addEventListener("error", function (ev) {
+    var t = ev.target;
+    if (!t || t.tagName !== "IMG" || !t.hasAttribute("data-pthumb")) return;
+    var box = t.parentNode;
+    t.parentNode.removeChild(t);
+    if (box && box.classList && box.classList.contains("pf-thumb")) { box.classList.add("empty"); box.removeAttribute("style"); if (box.classList.contains("pf-wide") && !box.textContent) box.innerHTML = "<span>Preview not available</span>"; }
+  }, true);
 
   /* Luke's master upload. The sized copies are drawn here, in the browser, and only scaled down. */
   var profBusy = false;

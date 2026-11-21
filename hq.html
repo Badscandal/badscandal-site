@@ -1702,6 +1702,49 @@ body.ws-on main{margin-left:0;max-width:none}
 .nfld span{font-size:13px;color:var(--muted)}
 @media(min-width:640px){.nemail .nfld:not(:has(textarea)){flex-direction:row;align-items:center;gap:10px}.nemail .nfld:not(:has(textarea)) span{width:64px;flex:none}}
 .needcard .ferr:empty{display:none}
+/* ---------- Profiles v2 (21 Nov 2026): counts, a strip of photos, one state per image, rules folded ---------- */
+.profsum{margin:4px 0 12px;font-size:16px;font-weight:600;color:var(--paper)}
+.pf-strip{display:flex;gap:10px;overflow-x:auto;padding:4px 2px 12px;margin:0 -2px 8px;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+.pf-strip::-webkit-scrollbar{display:none}
+.pf-chip{flex:none;display:flex;flex-direction:column;align-items:center;gap:6px;width:76px;color:inherit;text-decoration:none;font-size:12px;text-align:center}
+.pf-chip span.pf-n{max-width:76px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--muted)}
+.pf-av{position:relative;display:grid;place-items:center;width:52px;height:52px;border-radius:50%;background:#1a1d27;color:var(--paper);font:700 15px/1 var(--sans);overflow:hidden;box-shadow:0 0 0 2px #0B0D12,0 0 0 4px var(--ptone,#5a5f6e)}
+.pf-av img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.pf-t-you{--ptone:var(--red)}.pf-t-bot{--ptone:#E8A317}.pf-t-live{--ptone:#3DDC97}.pf-t-none{--ptone:#5a5f6e}
+.profmasters-fold{margin:0 0 16px;border:1px solid var(--glass-line,var(--ink-3));border-radius:16px;padding:0 14px}
+.profmasters-fold>summary{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 12px;min-height:48px;padding:12px 0;cursor:pointer;list-style:none}
+.profmasters-fold>summary::-webkit-details-marker{display:none}
+.profmasters-fold>summary::after{content:"Show";margin-left:auto;font-size:13px;color:var(--muted)}
+.profmasters-fold[open]>summary::after{content:"Hide"}
+.profmasters-fold[open]{padding-bottom:14px}
+.pf-card{scroll-margin-top:120px}
+.pf-head{display:flex;align-items:center;gap:12px;margin:0 0 4px}
+.pf-head .pf-av{width:40px;height:40px;font-size:13px}
+.pf-head h3{margin:0;font-size:17px}
+.pf-head p{margin:2px 0 0}
+.pf-slot{display:grid;grid-template-columns:64px minmax(0,1fr);gap:12px;align-items:start;margin-top:12px;padding-top:12px;border-top:1px solid var(--glass-line,var(--ink-3))}
+.pf-slot.wide{grid-template-columns:minmax(0,1fr)}
+.pf-thumb{position:relative;overflow:hidden;background:#141722;display:grid;place-items:center;color:var(--muted);font-size:12px;text-align:center}
+.pf-thumb.pf-round{width:64px;height:64px;border-radius:50%;box-shadow:0 0 0 2px var(--ptone,#5a5f6e)}
+.pf-thumb.pf-wide{width:100%;max-width:420px;aspect-ratio:3/1;border-radius:12px;box-shadow:0 0 0 1.5px var(--ptone,#5a5f6e)}
+.pf-thumb img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.pf-thumb.pf-round img{object-fit:cover}
+.pf-kind{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 10px;margin:0;font-weight:650;font-size:15px}
+.pf-kind small{font-weight:500;font-size:13px;color:var(--muted)}
+.pf-state{display:inline-flex;align-items:center;gap:6px;margin:6px 0 0;font-size:14px;font-weight:600}
+.pf-state i{width:8px;height:8px;border-radius:50%;background:var(--ptone,#5a5f6e)}
+.pf-state.pf-t-you{color:var(--red)}
+.pf-line{margin:2px 0 0;font-size:14px;color:var(--muted)}
+.pf-acts{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+.pf-acts a{display:inline-flex;align-items:center;min-height:44px;padding:0 14px;border-radius:999px;border:1px solid var(--ink-3);text-decoration:none;font-size:14px;font-weight:600}
+.pf-acts a.go{background:var(--accent,#A5B4FC);color:#0B0D12;border-color:transparent}
+.pf-rule{margin-top:6px}
+.pf-rule summary{display:inline-flex;align-items:center;min-height:36px;font-size:13px;color:var(--muted);cursor:pointer}
+.pf-rule p{margin:4px 0 0;font-size:14px;color:var(--muted)}
+.profgrid{align-items:start}
+.pf-thumb.empty{background:transparent;box-shadow:none;border:1.5px dashed var(--ptone,#5a5f6e)}
+.pf-thumb.pf-wide.empty{aspect-ratio:auto !important;height:56px;max-width:260px}
+.pf-thumb span{font-size:12px;color:var(--muted)}
 </style>
 </head>
 <body>
@@ -1937,24 +1980,29 @@ body.ws-on main{margin-left:0;max-width:none}
     <div class="subsec" id="growth-fans"><h3 class="sech">Fans</h3><p class="sub" id="fansSub"></p><div class="sheeterr" id="errFans" hidden></div><div id="fanExtra"></div><div class="tile"><div class="scroll"><table class="stack" id="fanTable"></table></div></div></div>
   </section>
   <section class="card view" id="rights"><h2>Rights</h2><p class="sub">Content ID claims.</p><div id="rightsBody"></div></section>
-  <section class="card view" id="profiles"><h2>Profiles</h2><p class="sub" id="profNote">The profile photo and the banner on every official platform. HQ never logs in and never changes one.</p>
-    <div class="profmasters">
-      <article class="t-card">
-        <h3 class="t-lbl">Profile photo</h3>
-        <p class="secsub" id="profPhotoLine">One photo for every platform. It is only scaled down, never cropped. A circle shows the part people see.</p>
-        <label class="profup">Choose a photo<input id="profPhoto" type="file" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.heic,.heif"></label>
-        <p class="profprog" id="profPhotoProg" role="status"></p>
-        <div class="profprev circle" id="profPhotoPrev" hidden></div>
-      </article>
-      <article class="t-card">
-        <h3 class="t-lbl">Banner</h3>
-        <p class="secsub" id="profBannerLine">One banner. If a platform's shape does not match, nothing is cropped. A bot extends it.</p>
-        <label class="profup">Choose a banner<input id="profBanner" type="file" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.heic,.heif"></label>
-        <p class="profprog" id="profBannerProg" role="status"></p>
-        <div class="profprev banner" id="profBannerPrev" hidden></div>
-      </article>
-    </div>
-    <p class="secsub">HQ never logs in and never sends these to a platform.</p>
+  <section class="card view" id="profiles"><h2>Profiles</h2><p class="sub" id="profNote">The profile photo and banner on every official platform. HQ never logs in and never changes one.</p>
+    <!-- Profiles v2 (21 Nov 2026): one line of counts, a strip with every platform's photo, then the cards -->
+    <p class="profsum" id="profSum" role="status"></p>
+    <nav class="pf-strip" id="profStrip" aria-label="Platforms"></nav>
+    <details class="profmasters-fold" id="profMasters">
+      <summary><span class="t-lbl">Master images</span><span class="secsub" id="profMastersLine">One photo and one banner. Each platform's copy is made from them.</span></summary>
+      <div class="profmasters">
+        <article class="t-card">
+          <h3 class="t-lbl">Profile photo</h3>
+          <p class="secsub" id="profPhotoLine">Only scaled down, never cropped. The circle shows what people see.</p>
+          <label class="profup">Choose a photo<input id="profPhoto" type="file" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.heic,.heif"></label>
+          <p class="profprog" id="profPhotoProg" role="status"></p>
+          <div class="profprev circle" id="profPhotoPrev" hidden></div>
+        </article>
+        <article class="t-card">
+          <h3 class="t-lbl">Banner</h3>
+          <p class="secsub" id="profBannerLine">If a platform's shape doesn't match, nothing is cropped: a bot extends it.</p>
+          <label class="profup">Choose a banner<input id="profBanner" type="file" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.heic,.heif"></label>
+          <p class="profprog" id="profBannerProg" role="status"></p>
+          <div class="profprev banner" id="profBannerPrev" hidden></div>
+        </article>
+      </div>
+    </details>
     <div class="profgrid" id="profList"><div class="ph big"></div><div class="ph"></div></div>
   </section>
   <!-- Upcoming (11 Nov 2026, v2: the tab's id stays "releases", so #releases and every deep link keep
@@ -2107,18 +2155,18 @@ body.ws-on main{margin-left:0;max-width:none}
   }, 400);
 })();
 </script>
-<script src="js/crt.js?v=41a935a2221b" defer></script>
-<script src="js/hq-lib.js?v=41a935a2221b" defer></script>
-<script src="js/hq-chart.js?v=41a935a2221b" defer></script>
-<script src="js/hq-growth.js?v=41a935a2221b" defer></script>
-<script src="js/hq-look.js?v=41a935a2221b" defer></script>
-<script src="js/hq.js?v=41a935a2221b" defer></script>
-<script src="js/hq-staff.js?v=41a935a2221b" defer></script>
-<script src="js/hq-phone.js?v=41a935a2221b" defer></script>
-<script src="js/hq-shell.js?v=41a935a2221b" defer></script>
-<script src="js/hq-workspaces.js?v=41a935a2221b" defer></script>
-<script src="js/hq-app.js?v=41a935a2221b" defer></script>
-<script src="js/hq-cmd.js?v=41a935a2221b" defer></script>
-<script src="js/hq-pages.js?v=41a935a2221b" defer></script>
+<script src="js/crt.js?v=3676d4cec2d5" defer></script>
+<script src="js/hq-lib.js?v=3676d4cec2d5" defer></script>
+<script src="js/hq-chart.js?v=3676d4cec2d5" defer></script>
+<script src="js/hq-growth.js?v=3676d4cec2d5" defer></script>
+<script src="js/hq-look.js?v=3676d4cec2d5" defer></script>
+<script src="js/hq.js?v=3676d4cec2d5" defer></script>
+<script src="js/hq-staff.js?v=3676d4cec2d5" defer></script>
+<script src="js/hq-phone.js?v=3676d4cec2d5" defer></script>
+<script src="js/hq-shell.js?v=3676d4cec2d5" defer></script>
+<script src="js/hq-workspaces.js?v=3676d4cec2d5" defer></script>
+<script src="js/hq-app.js?v=3676d4cec2d5" defer></script>
+<script src="js/hq-cmd.js?v=3676d4cec2d5" defer></script>
+<script src="js/hq-pages.js?v=3676d4cec2d5" defer></script>
 </body>
 </html>
