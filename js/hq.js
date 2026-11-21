@@ -605,7 +605,8 @@
     if (ml) msg += " " + ml + ".";
     if (c.estimated) {
       var why = window.HQLib.gapNotes(c.notRead && c.notRead.length ? c.notRead : (c.estimatedWhy || []));
-      msg += why.length ? " Estimated: " + why.join("; ") + "." : " Estimated while a platform is unread.";
+      /* v18 (21 Nov 2026): the unread days are said once (capMissingLine above) */
+      msg += ml ? " The total is an estimate." : why.length ? " Estimated: " + why.join("; ") + "." : " Estimated while a platform is unread.";
     }
     if (c.lastDay) msg += " Last day logged: " + day(c.lastDay) + ".";
     $("capMsg").textContent = msg;

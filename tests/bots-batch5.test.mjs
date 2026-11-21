@@ -229,7 +229,10 @@ test("luke_briefing is unchanged: the same keys, in the same order", async () =>
   const d = memoryDesk();
   const b = await call(d, "luke_briefing", { bot: "Alfred" }, { hq: capHq });
   assert.deepEqual(Object.keys(b), ["today", "now_sao_paulo", "site_check", "claude_note", "decisions_waiting_on_luke", "ad_spend", "next_release", "unknown_in_spotify", "messages_for_you", "income_this_month", "duties_not_done", "how_to_report"]);
-  assert.deepEqual(Object.keys(b.ad_spend), ["month", "spent", "cap", "left", "status", "estimated"]);
+  /* v18, 21 Nov 2026: Luke's spec asked for one Google sentence here. The six keys stay first and in
+     order; not_read follows them only when days were not read. */
+  assert.deepEqual(Object.keys(b.ad_spend).slice(0, 6), ["month", "spent", "cap", "left", "status", "estimated"]);
+  assert.ok(Object.keys(b.ad_spend).every((k, i) => i < 6 || k === "not_read"));
 });
 
 test("times disagree only when none of a bot's duty times is on its card (Forge's evening cap check is fine)", async () => {
