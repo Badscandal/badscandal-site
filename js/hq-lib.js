@@ -813,23 +813,45 @@
     return (p.action === "add" ? "Add " + p.title + " to the releases" : "Make these changes to " + p.title) + (p.send ? " and send it to the team" : "") + ", as " + m.from + " proposed?";
   }
   /* L12 (18 Nov 2026): the Profiles section. view = board.profiles from profilesView. */
-  /* Profiles v2 (21 Nov 2026, Luke). ONE state per image, most urgent first:
-       you   a new image waits for his "Yes, correct"
-       bot   the owner has work: approved and not uploaded, a sized copy ready, or it needs a new shape
-       live  what is on the platform now is recorded
-       none  nothing recorded yet
-     The line under it never invents a day: "Since Thu 1 Oct" only when the day is known. */
-  function profileState(s, owner, cur, wait, ok) {
+  /* Profiles (21 Nov 2026, Luke: "green should indicate that they're using my uploaded banner... red means
+     there's an issue"). ONE state per image, from Luke's two uploads:
+       issue  red: a new image waits for his yes, the master is the wrong shape or too small (the bot is making
+              an AI version), the platform rejected it, or the copy was not saved
+       ok     green: the platform's copy is made from his upload (ready, or live)
+       none   grey: nothing uploaded for it yet
+     The line under it never invents a day. */
+  function profileState(s, owner, cur, wait, ok, master) {
     var who = owner && owner !== "Luke" ? owner : "";
-    if (wait) return { key: "you", tone: "you", label: "Needs your yes", line: "Tap Answer to say yes or no" };
-    if (s.status === "rework") return { key: "rework", tone: "bot", label: "Needs a new shape", line: who ? who + " is reworking it" : "It needs reworking" };
-    if (ok) return { key: "approved", tone: "bot", label: "Approved", line: who ? who + " uploads it by hand" : "You upload it by hand" };
-    if (s.status === "ready") return { key: "ready", tone: "bot", label: "Ready to upload", line: who ? who + " uploads it by hand" : "You upload it by hand" };
-    if (cur || s.status === "uploaded") {
-      var d = cur && cur.changed && !/^unknown$/i.test(String(cur.changed)) ? day(cur.changed) : "";
-      return { key: "live", tone: "live", label: "Live", line: d && d !== "unknown" ? "Since " + d : "" };
+    var maker = who || "Nova";
+    var what = s.group === "banner" ? "banner" : "photo";
+    if (wait) return { key: "you", tone: "issue", label: "Needs your yes", line: (who || "A bot") + " proposes a new image" };
+    if (s.status === "rework") {
+      if (/rejected/i.test(s.statusLine || "")) return { key: "rejected", tone: "issue", label: "Rejected by " + (s.platform || "the platform"), line: (who || "You") + " to fix it" };
+      if (/too small/i.test(s.statusLine || "")) return { key: "small", tone: "issue", label: "Your " + what + " is too small", line: maker + " is making a bigger AI version" };
+      return { key: "shape", tone: "issue", label: "Different shape needed", line: maker + " is making an AI version" };
     }
-    return { key: "none", tone: "none", label: "Not recorded", line: who ? who + " records what is live" : "You record what is live" };
+    if (s.status === "uploaded") {
+      var d = cur && cur.changed && !/^unknown$/i.test(String(cur.changed)) ? day(cur.changed) : "";
+      return { key: "live", tone: "ok", label: "Live with your " + what, line: d && d !== "unknown" ? "Since " + d : "" };
+    }
+    if (s.status === "ready") return { key: "ready", tone: "ok", label: "Uses your " + what, line: who ? who + " uploads it" : "You upload it" };
+    if (master) return { key: "unsaved", tone: "issue", label: "Copy not saved", line: "Upload your " + what + " again" };
+    if (ok) return { key: "approved", tone: "none", label: "Approved", line: who ? who + " uploads it by hand" : "You upload it by hand" };
+    return { key: "none", tone: "none", label: "Waiting for your " + what, line: cur ? "Something is live, not from your upload" : "" };
+  }
+  /* the clear sentence on an issue card (21 Nov 2026: "a card saying the issue clearly") */
+  function profileIssueText(s, platform, owner, master) {
+    var who = owner && owner !== "Luke" ? owner : "";
+    var what = s.group === "banner" ? "banner" : "photo";
+    var need = s.exactW > 0 && s.exactH > 0 ? s.exactW + " × " + s.exactH : "";
+    var have = master && master.w && master.h ? master.w + " × " + master.h : "";
+    var k = s.state && s.state.key;
+    if (k === "you") return (who || "A bot") + " proposes a new " + String(s.kind || "image").toLowerCase() + " for " + platform + ". Open it, then say yes or no.";
+    if (k === "rejected") return platform + " rejected the " + String(s.kind || "image").toLowerCase() + (s.detail ? ": " + s.detail : ".") + " " + (who ? who + " fixes it and uploads again." : "Upload it again yourself.");
+    if (k === "small") return "Your " + what + (have ? " is " + have : " is too small") + ". " + platform + " needs " + (need || "a bigger one") + ". " + (who || "Nova") + " is making a bigger AI version that looks exactly like yours.";
+    if (k === "shape") return "Your " + what + (have ? " is " + have : "") + ". " + platform + " needs " + (need || "another shape") + ", a different shape. " + (who || "Nova") + " is making an AI version that looks exactly like yours. Nothing is cropped.";
+    if (k === "unsaved") return "The " + platform + " copy of your " + what + " was not saved. Upload your " + what + " again.";
+    return "";
   }
   var IMG_LINK = /^https:\/\/[^\s"'<>]+\.(?:jpg|jpeg|png|webp|gif)(?:[?#][^\s"'<>]*)?$/i;
   var OWN_FILE = /^\/api\/staff\/profile-file\/(?:master-(?:photo|banner)|slot-[a-z0-9-]+)$/;
@@ -843,35 +865,51 @@
     }
     return "";
   }
-  var PROF_RANK = { you: 0, bot: 1, none: 2, live: 3 };
-  /* the strip at the top: one chip per platform (its worst state, its photo) and one line of counts */
+  var PROF_RANK = { issue: 0, none: 1, ok: 2 };
+  /* the strip: one chip per platform (red if any of its images has an issue, green when all use his uploads),
+     one line of counts, and the issue cards below it */
   function profileOverview(blocks) {
     var plats = (blocks && blocks.platforms) || [];
-    var counts = { you: 0, bot: 0, live: 0, none: 0 }, total = 0;
+    var counts = { ok: 0, issue: 0, none: 0 }, total = 0, issues = [];
+    var MARK = { facebook: "FB", instagram: "IG", youtube: "YT", spotify: "SP", apple: "AP", tiktok: "TT", x: "X", soundcloud: "SC", deezer: "DZ", amazon: "AM", tidal: "TD" };
     var chips = plats.map(function (p) {
-      var tone = "live", thumb = "";
+      var tone = "ok", thumb = "";
       (p.slots || []).forEach(function (s) {
         var t = (s.state && s.state.tone) || "none";
         counts[t] = (counts[t] || 0) + 1; total++;
         if (PROF_RANK[t] < PROF_RANK[tone]) tone = t;
         if (!thumb && s.circle && s.thumb) thumb = s.thumb;
+        if (t === "issue") issues.push({ id: s.id, platformId: p.id, platform: p.platform, kind: s.kind, title: p.platform + " · " + s.kind, label: s.state.label, text: s.issue, to: s.to,
+          answer: /^#messages\/[A-Za-z0-9]+$/.test(s.waitingHref || "") ? s.waitingHref : "", open: s.openLink || "", thumb: s.thumb, circle: !!s.circle });
       });
       if (!thumb) (p.slots || []).forEach(function (s) { if (!thumb && s.thumb) thumb = s.thumb; });
       var words = String(p.platform || "").split(/\s+/).filter(Boolean);
-      var initials = (words.length > 1 ? words[0].charAt(0) + words[1].charAt(0) : String(p.platform || "?").slice(0, words[0] && words[0].length > 2 ? 2 : 1)).toUpperCase();
-      var MARK = { facebook: "FB", instagram: "IG", youtube: "YT", spotify: "SP", apple: "AP", tiktok: "TT", x: "X", soundcloud: "SC", deezer: "DZ", amazon: "AM", tidal: "TD" };
-      if (MARK[p.id]) initials = MARK[p.id];
+      var initials = MARK[p.id] || (words.length > 1 ? words[0].charAt(0) + words[1].charAt(0) : String(p.platform || "?").slice(0, 2)).toUpperCase();
       var label = String(p.platform || "").replace(/ (Page|Music)$/, "");
-      return { id: p.id, platform: p.platform, label: label, tone: tone, thumb: thumb, initials: initials, href: "#profiles/" + p.id };
+      var href = tone === "issue" ? "#profiles/issue-" + p.id : "#profiles/" + p.id;
+      return { id: p.id, platform: p.platform, label: label, tone: tone, thumb: thumb, initials: initials, href: href };
     });
-    if (!total) return { total: 0, counts: counts, chips: [], line: "No profiles listed." };
-    var bits = [counts.live + " of " + total + " live"];
-    if (counts.you) bits.push(counts.you + (counts.you === 1 ? " needs" : " need") + " your yes");
-    if (counts.bot) bits.push(counts.bot + " with the owner");
-    if (counts.none) bits.push(counts.none + " not recorded");
-    return { total: total, counts: counts, chips: chips, line: bits.join(" · ") };
+    if (!total) return { total: 0, counts: counts, chips: [], issues: [], line: "No profiles listed." };
+    var line;
+    if (!counts.ok && !counts.issue) line = "Upload your profile photo and banner to start.";
+    else {
+      var bits = [counts.ok + " of " + total + " use your uploads"];
+      if (counts.issue) bits.push(counts.issue + (counts.issue === 1 ? " issue" : " issues"));
+      if (counts.none) bits.push(counts.none + " waiting for an upload");
+      line = bits.join(" · ");
+    }
+    /* one card per platform with an issue (its images' sentences together) */
+    var byPlat = [];
+    issues.forEach(function (x) {
+      var g = byPlat.filter(function (y) { return y.platformId === x.platformId; })[0];
+      if (!g) { g = { platformId: x.platformId, platform: x.platform, to: x.to, items: [] }; byPlat.push(g); }
+      g.items.push(x);
+    });
+    return { total: total, counts: counts, chips: chips, issues: byPlat, line: line };
   }
   function profileBlocks(view) {
+    var mastersRaw = {};
+    ["photo", "banner"].forEach(function (g) { var m = view && view.masters && view.masters[g]; if (m && m.w && m.h) mastersRaw[g] = { w: m.w, h: m.h }; });
     var note = (view && view.note) || "HQ never logs in and never changes a platform.";
     var platforms = ((view && view.platforms) || []).map(function (p) {
       var owner = p.owner || "";
@@ -902,10 +940,19 @@
             exactH: exact ? exact[1] : 0,
             detail: s.detail || "",
             /* Profiles v2 (21 Nov 2026): one state, a thumbnail, and the link to open */
-            state: profileState(s, owner, cur, wait, ok),
+            group: s.group === "banner" || s.group === "photo" ? s.group : (s.circle ? "photo" : "banner"),
+            platform: p.platform || "",
+            state: null,
             thumb: profileThumb(s, cur, wait, ok),
             openLink: wait ? wait.link : ok ? ok.link : cur ? cur.link : ""
           };
+        }).map(function (x, i) {
+          var raw = (p.slots || [])[i] || {};
+          var m = mastersRaw[x.group] || null;
+          x.state = profileState(x, owner, raw.current && raw.current.link ? raw.current : null, raw.waiting && raw.waiting.link ? raw.waiting : null, raw.approved && raw.approved.link ? raw.approved : null, m);
+          x.issue = x.state.tone === "issue" ? profileIssueText(x, p.platform || "", owner, m) : "";
+          x.to = owner && owner !== "Luke" ? owner : "Nova";
+          return x;
         })
       };
     });
@@ -2565,7 +2612,7 @@
     snapshot: snapshot, changesSince: changesSince, tiles: tiles, summaryText: summaryText, shortStep: shortStep, day: day,
     slug: slug, workerLabel: workerLabel, sortWorkers: sortWorkers, workerView: workerView, dutyWhen: dutyWhen, workerCounts: workerCounts, seenLine: seenLine, connectorLine: connectorLine,
     novaMessage: novaMessage, liveFeed: liveFeed, spWhen: spWhen, waitLabel: waitLabel, needWords: needWords, reportParts: reportParts, siteCheckLine: siteCheckLine, composeNames: composeNames,
-    threadRoot: threadRoot, answerTarget: answerTarget, questionLines: questionLines, questionsLeft: questionsLeft, stepButton: stepButton, formKey: formKey, storeLine: storeLine, storeHistory: storeHistory, capRateLine: capRateLine, capMissingLine: capMissingLine, dutyGapsLine: dutyGapsLine, incomeTotals: incomeTotals, approvalLines: approvalLines, approvalUndo: approvalUndo, warnTone: warnTone, warnGroups: warnGroups, resubmitAsk: resubmitAsk, relStatus: relStatus, relProgress: relProgress, stepGroups: stepGroups, upcomingAsks: upcomingAsks, staffAttention: staffAttention, staffHealth: staffHealth, curList: curList, cadenceWord: cadenceWord, accountLine: accountLine, sourceState: sourceState, payLine: payLine, accountsLine: accountsLine, receivedMonths: receivedMonths, releasePage: releasePage, monthRows: monthRows, mainSources: mainSources, sourceMonthLine: sourceMonthLine, proposalRows: proposalRows, proposalConfirm: proposalConfirm, profileBlocks: profileBlocks, profileOverview: profileOverview, profileState: profileState,
+    threadRoot: threadRoot, answerTarget: answerTarget, questionLines: questionLines, questionsLeft: questionsLeft, stepButton: stepButton, formKey: formKey, storeLine: storeLine, storeHistory: storeHistory, capRateLine: capRateLine, capMissingLine: capMissingLine, dutyGapsLine: dutyGapsLine, incomeTotals: incomeTotals, approvalLines: approvalLines, approvalUndo: approvalUndo, warnTone: warnTone, warnGroups: warnGroups, resubmitAsk: resubmitAsk, relStatus: relStatus, relProgress: relProgress, stepGroups: stepGroups, upcomingAsks: upcomingAsks, staffAttention: staffAttention, staffHealth: staffHealth, curList: curList, cadenceWord: cadenceWord, accountLine: accountLine, sourceState: sourceState, payLine: payLine, accountsLine: accountsLine, receivedMonths: receivedMonths, releasePage: releasePage, monthRows: monthRows, mainSources: mainSources, sourceMonthLine: sourceMonthLine, proposalRows: proposalRows, proposalConfirm: proposalConfirm, profileBlocks: profileBlocks, profileOverview: profileOverview, profileState: profileState, profileIssueText: profileIssueText,
     incomeEmpty: incomeEmpty, incomeProblems: incomeProblems, expectedJourney: expectedJourney, expectedDue: expectedDue, expectedFlags: expectedFlags, expectedFlagKind: expectedFlagKind, missingLine: missingLine, learnedLine: learnedLine, routeLines: routeLines,
     /* replies that visibly land + the release pipeline (11 Nov 2026) */
     spStampOf: spStampOf, seenWords: seenWords, sentLine: sentLine, answeredList: answeredList, CLAUDE_ROUNDS: CLAUDE_ROUNDS,

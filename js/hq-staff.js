@@ -1818,43 +1818,82 @@
   function pImg(src) {
     return src ? '<img alt="" loading="lazy" referrerpolicy="no-referrer" data-pthumb src="' + esc(src) + '">' : "";
   }
-  var profFoldSet = false;
+  /* Profiles (21 Nov 2026, Luke): his two uploads on top; the strip (green = that platform uses his upload, red = an
+     issue); one issue card per red platform, saying it plainly, with a reply that goes straight to that bot; then
+     every platform folded away. Words from HQLib.profileBlocks / profileOverview. */
+  var pfMsg = {};
+  function masterPrev(boxId, kind, saved) {
+    var box = $(boxId);
+    if (!box || box.getAttribute("data-local")) return;
+    if (!saved) { box.hidden = true; box.innerHTML = ""; return; }
+    if (HQ.sample) { box.hidden = true; return; }
+    var src = "/api/staff/profile-file/master-" + kind;
+    box.hidden = false;
+    if (!box.querySelector("img")) box.innerHTML = '<img alt="" data-pthumb src="' + esc(src) + '">' + (kind === "photo" ? '<i class="safe"></i>' : "");
+  }
   function drawProfiles() {
     var el = $("profList");
     if (!el) return;
     if (!board || !board.profiles) { el.innerHTML = problem ? '<p class="empty2">' + esc(problem) + "</p>" : '<div class="ph big"></div>'; return; }
     var b = L.profileBlocks(board.profiles);
     var o = L.profileOverview(b);
-    if ($("profNote")) $("profNote").textContent = "The profile photo and banner on every official platform. HQ never logs in and never changes one.";
     if ($("profSum")) $("profSum").textContent = o.line;
     if ($("profStrip")) $("profStrip").innerHTML = o.chips.map(function (c) {
       return '<a class="pf-chip pf-t-' + esc(c.tone) + '" href="' + esc(c.href) + '" aria-label="' + esc(c.platform) + '"><span class="pf-av">' + esc(c.initials) + pImg(c.thumb) + '</span><span class="pf-n">' + esc(c.label || c.platform) + "</span></a>";
     }).join("");
-    var ms = [];
-    if (b.masters && b.masters.photo) ms.push("Photo " + b.masters.photo.replace(/^Saved · /, ""));
-    if (b.masters && b.masters.banner) ms.push("Banner " + b.masters.banner.replace(/^Saved · /, ""));
-    /* open the masters once when nothing is uploaded yet; after that it stays as Luke left it */
-    if (!profFoldSet && $("profMasters")) { profFoldSet = true; if (!ms.length) $("profMasters").open = true; }
-    if ($("profMastersLine")) $("profMastersLine").textContent = ms.length ? "Saved: " + ms.join(" · ") : "Not uploaded yet. One photo and one banner make every platform's copy.";
-    if ($("profPhotoLine") && b.masters && b.masters.photo) $("profPhotoLine").textContent = b.masters.photo + ". Only scaled down, never cropped.";
-    if ($("profBannerLine") && b.masters && b.masters.banner) $("profBannerLine").textContent = b.masters.banner + ". A shape that doesn't fit is not cropped.";
+    var pv = board.profiles.masters || {};
+    if ($("profPhotoLine")) $("profPhotoLine").textContent = b.masters && b.masters.photo ? b.masters.photo + ". Only scaled down, never cropped." : "Not uploaded yet. Only scaled down, never cropped.";
+    if ($("profBannerLine")) $("profBannerLine").textContent = b.masters && b.masters.banner ? b.masters.banner + ". Another shape or size: its bot makes an AI version that looks exactly like yours." : "Not uploaded yet. Another shape or size: its bot makes an AI version that looks exactly like yours.";
+    masterPrev("profPhotoPrev", "photo", !!pv.photo);
+    masterPrev("profBannerPrev", "banner", !!pv.banner);
+    var iss = $("profIssues");
+    if (iss) {
+      iss.innerHTML = o.issues.length ? o.issues.map(function (g) {
+        var chip = o.chips.filter(function (c) { return c.id === g.platformId; })[0] || { initials: "" };
+        var key = g.platformId;
+        return '<article class="t-card pf-issue" id="profiles-issue-' + esc(key) + '"><header class="pf-head"><span class="pf-av pf-t-issue">' + esc(chip.initials) + pImg(chip.thumb) + "</span><div><h3>" + esc(g.platform) + '</h3><p class="secsub">' + esc(g.to) + " is on it</p></div></header>" +
+          g.items.map(function (x) {
+            var acts = (x.answer ? '<a class="go" href="' + esc(x.answer) + '">Answer</a>' : "") + (x.open && /^https:\/\//.test(x.open) ? outLink(x.open, "See the image") : "");
+            return '<div class="pf-item"><p class="pf-state pf-t-issue"><i></i>' + esc(x.kind) + " · " + esc(x.label) + '</p><p class="pf-itext">' + esc(x.text) + "</p>" + (acts ? '<div class="pf-acts">' + acts + "</div>" : "") + "</div>";
+          }).join("") +
+          '<form class="pf-reply" data-pfreply="' + esc(key) + '" data-to="' + esc(g.to) + '" data-about="' + esc(g.items.map(function (x) { return g.platform + " " + String(x.kind || "").toLowerCase(); }).join(" and ")) + '">' +
+          '<textarea name="t" maxlength="1200" placeholder="Reply to ' + esc(g.to) + '" aria-label="Reply to ' + esc(g.to) + '"></textarea>' +
+          '<button type="submit" class="sendbtn"' + (HQ.sample ? " disabled" : "") + ">Send to " + esc(g.to) + '</button><p class="pf-msg" role="status">' + esc(pfMsg[key] || "") + "</p></form></article>";
+      }).join("") : (o.counts.ok ? '<p class="pf-allgood">No issues. Every platform with an upload uses yours.</p>' : "");
+    }
     el.innerHTML = b.platforms.map(function (p) {
       var chip = o.chips.filter(function (c) { return c.id === p.id; })[0] || { tone: "none", initials: "", thumb: "" };
       return '<article class="t-card pf-card" id="profiles-' + esc(p.id) + '"><header class="pf-head"><span class="pf-av pf-t-' + esc(chip.tone) + '">' + esc(chip.initials) + pImg(chip.thumb) + "</span><div><h3>" + esc(p.platform) + '</h3><p class="secsub">' + esc(p.ownerLine) + "</p></div></header>" +
         p.slots.map(function (s) {
-          var st = s.state || { tone: "none", label: "Not recorded", line: "" };
-          var href = /^#messages\/[A-Za-z0-9]+$/.test(s.waitingHref) ? s.waitingHref : "";
+          var st = s.state || { tone: "none", label: "", line: "" };
           var ratio = !s.circle && s.exactW > 0 && s.exactH > 0 ? ' style="aspect-ratio:' + Number(s.exactW) + " / " + Number(s.exactH) + '"' : "";
           var thumb = '<div class="pf-thumb ' + (s.circle ? "pf-round" : "pf-wide") + (s.thumb ? "" : " empty") + " pf-t-" + esc(st.tone) + '"' + (s.thumb ? ratio : "") + ">" + (s.thumb ? pImg(s.thumb) : s.circle ? "" : "<span>No image yet</span>") + "</div>";
           var size = s.exactW > 0 && s.exactH > 0 ? s.exactW + " × " + s.exactH : "";
-          var acts = (href ? '<a class="go" href="' + esc(href) + '">Answer</a>' : "") + (s.openLink && /^https:\/\//.test(s.openLink) ? outLink(s.openLink, s.state && s.state.key === "you" ? "See the new image" : "Open") : "");
-          var rule = '<details class="pf-rule"><summary>Size rule</summary><p>' + esc(s.rule) + "</p>" + (s.detail && s.status === "rework" ? "<p>" + esc(s.detail) + "</p>" : "") + "</details>";
+          var rule = '<details class="pf-rule"><summary>Size rule</summary><p>' + esc(s.rule) + "</p></details>";
           return '<div class="pf-slot' + (s.circle ? "" : " wide") + '">' + thumb + '<div class="pf-info"><p class="pf-kind">' + esc(s.kind) + (size ? "<small>" + esc(size) + "</small>" : "") + "</p>" +
-            '<p class="pf-state pf-t-' + esc(st.tone) + '"><i></i>' + esc(st.label) + "</p>" + (st.line ? '<p class="pf-line">' + esc(st.line) + "</p>" : "") +
-            (acts ? '<div class="pf-acts">' + acts + "</div>" : "") + rule + "</div></div>";
+            '<p class="pf-state pf-t-' + esc(st.tone) + '"><i></i>' + esc(st.label) + "</p>" + (st.line ? '<p class="pf-line">' + esc(st.line) + "</p>" : "") + rule + "</div></div>";
         }).join("") + "</article>";
     }).join("");
   }
+  /* a reply on an issue card goes straight to that platform's bot, as a message from Luke */
+  document.addEventListener("submit", function (ev) {
+    var f = ev.target && ev.target.closest && ev.target.closest("[data-pfreply]");
+    if (!f) return;
+    ev.preventDefault();
+    if (HQ.sample) return;
+    var key = f.getAttribute("data-pfreply"), to = f.getAttribute("data-to"), about = f.getAttribute("data-about");
+    var box = f.querySelector("textarea"), btn = f.querySelector("button"), msg = f.querySelector(".pf-msg");
+    var text = box ? String(box.value || "").trim() : "";
+    if (text.length < 2) { if (msg) msg.textContent = "Write the reply first."; return; }
+    btn.disabled = true; btn.textContent = "Sending…";
+    write("message", { to: to, text: "About the " + about + ": " + text, needs: "none" }).then(function (r) {
+      btn.disabled = false; btn.textContent = "Send to " + to;
+      if (!r.ok) { if (msg) msg.textContent = r.error || "That didn't send. Your text is still here."; return; }
+      box.value = "";
+      pfMsg[key] = "Sent to " + to + ".";
+      if (msg) msg.textContent = pfMsg[key];
+    });
+  });
   /* a thumbnail that won't load (an expired platform link, a file not stored yet) becomes a plain tile */
   document.addEventListener("error", function (ev) {
     var t = ev.target;
@@ -1909,6 +1948,7 @@
     var box = $(boxId);
     if (!box) return;
     box.hidden = false;
+    box.setAttribute("data-local", "1"); /* the picture just chosen stays until the page reloads */
     box.className = "profprev" + (circle ? " circle" : " banner");
     box.innerHTML = "";
     var el = document.createElement("img");
