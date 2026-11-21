@@ -47,21 +47,21 @@ test("a matching shape is scaled down, a small one is not scaled up, and a diffe
   assert.deepEqual(spec("apple-image").exact, [800, 800]);
 });
 
-test("a small master asks Luke once and opens no crop job", async () => {
+/* 21 Nov 2026 (Luke): "any issue with specs they generate a new AI image to make it fit correctly but exactly
+   like mine". A small master is a job for each platform's bot now, not a "upload a bigger one" question. */
+test("a small master opens a job for each platform's bot to make a bigger AI version, and asks Luke nothing", async () => {
   const d = memoryDesk();
   const first = await P.saveProfileMaster(d, NOW, R, { by: "Luke", kind: "photo", image_base64: b64(100, 100) });
   assert.equal(first.width, 100);
   assert.ok(first.slots.every((s) => s.fit === false));
-  assert.equal((await S.getProfiles(d)).jobs.length, 0, "a square that is only too small is not given to a bot to crop");
-  const asks = await openToLuke(d);
-  assert.equal(asks.length, 1);
-  assert.match(asks[0].text, /100 x 100/);
-  assert.match(asks[0].text, /not scaled up/);
-  assert.match(asks[0].text, /Deezer \(1200 x 1200\)/);
-  assert.match(asks[0].text, /TIDAL \(1500 x 1500\)/);
-  assert.deepEqual(asks[0].options, ["I'll upload a bigger one", "Leave it"]);
+  const jobs = (await S.getProfiles(d)).jobs.filter((j) => j.status === "open");
+  assert.ok(jobs.some((j) => j.slot === "deezer-photo" && j.problem === "small" && j.owner === "Atlas"));
+  assert.ok(jobs.some((j) => j.slot === "tiktok-photo" && j.owner === "Kevin"));
+  assert.match(jobs.find((j) => j.slot === "deezer-photo").note, /Atlas makes an AI version at 1200 x 1200 that looks exactly like Luke's/);
+  assert.match(jobs.find((j) => j.slot === "instagram-photo").note, /^Nova makes an AI version/);
+  assert.equal((await openToLuke(d)).length, 0, "no question to Luke");
   await P.saveProfileMaster(d, NOW + 1000, R, { by: "Luke", kind: "photo", image_base64: b64(100, 100) });
-  assert.equal((await openToLuke(d, NOW + 1000)).length, 1, "the same small photo does not ask again");
+  assert.equal((await S.getProfiles(d)).jobs.filter((j) => j.status === "open" && j.slot === "deezer-photo").length, 1, "a second upload replaces the jobs, never doubles them");
   const file = await P.profileFileResponse(d, "master-photo");
   assert.equal(file.status, 200);
   assert.equal(file.headers.get("content-type"), "image/png");

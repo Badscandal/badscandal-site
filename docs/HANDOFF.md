@@ -2,6 +2,12 @@
 
 **Full picture:** [docs/HQ-FULL-HANDOFF.md](HQ-FULL-HANDOFF.md) (18 Nov 2026). It was checked against the code at `9e447e2` (PR #88). If this file disagrees with it, the full file wins. Main is through PR #89: 47 connector tools, service worker `bs-hq-v8`, 745 tests. The paragraphs below still describe the state at PR #84 in places. They are kept as the running log.
 
+**21 Nov 2026: Profiles is upload-driven (PR #110 + this one).** Luke uploads one profile photo and one banner. Each platform's copy is made from them. Green means the platform uses his upload (a copy is ready, or live). Red means an issue. Grey means nothing has been uploaded yet.
+- **What counts as red:** the wrong shape or too small (that platform's bot makes an AI version that looks exactly like his), the platform rejected it, the copy was not saved, or a new image waits for his yes.
+- **A small master is a bot job now,** not a question to Luke. `jobNote` and the `profile_*` tool texts say: make an AI version at the exact size, exactly like his.
+- **The page:** the two uploads, then the strip, then one issue card per red platform with a plain sentence and a reply box. The reply is a message from Luke to that bot ("About the YouTube banner: …"). Below that, every platform folded away.
+- **Code:** `HQLib.profileState` / `profileIssueText` / `profileOverview`. Tests: `tests/hq-profiles-v2.test.mjs` and `tests/profile-images.test.mjs`.
+
 **21 Nov 2026: HQ v18 is LIVE (PR #108, main 76790d3).** `/hq` answered 200, `/mcp` 401, and hq-sw.js serves `bs-hq-v18`. Luke's issue #5 in the private repo is the spec.
 - **Needs you cards.** A decision is one short question with Yes, No and Reply. Under it: song, status, waiting on, next check, and one recommended line. The draft email (To, CC, Subject, body with its line breaks) opens only on Reply and can be edited there. An ask (a sign-in, Netlify access, a task, a fan) has a reply box, plus Done for an action.
 - **How answers are recorded.** The same way as before: a message reply, Mark as done, the case Confirm/Ignore/Respond, or the card's yes/no/edit. Asks with no message of their own go through the new `POST /api/staff/need` (Luke only). It writes a done mark in `needs-done.json` and sends the answer to the bot as a message from Luke.
@@ -82,7 +88,6 @@ artist growth bot that all we will need is content and $".
 
 ## In flight (branches not merged)
 
-- **Profiles v2** (branch `hq-profiles-v2`, not merged; waits for Luke's "deploy"). One line of counts, a strip with every platform's photo coloured by state, then one card per platform. Each image has a thumbnail, ONE state (Needs your yes / with the owner / Live / Not recorded), Answer and Open buttons, and the size rule folded away. A thumbnail that won't load becomes a plain tile. Masters fold away once uploaded. `HQLib.profileOverview` / `profileState`, `tests/hq-profiles-v2.test.mjs`. Page only: no tool or endpoint changed.
 - **Dispute follow-up** (branch `cursor/hq-dispute-fixes-f1cf`, not merged). Standup lists include a case waiting on Luke. A rounded Studio figure such as 1.7k is stored as approximate. A claim keeps one id. Cases and song cards are coloured. Needs you is one list. A boost with no ad id is keyed on the post link. The opening bot can rename a song and replace its timeline with event dates. Not live until Luke says deploy.
 - **Interactive charts** (PR #102, on main, `84f32a3`). Every line on /hq scrubs like Spotify for Artists: a guide, a dot and a dark pill with the day and the real number. A missing day stays a gap. Last period and this period show under a chart only when both windows are the same length and complete. Cache `bs-hq-v12`.
 - **Log a boost** (PR #100, on main). Steve logs a boost on `log_growth` with the post link, the ad id, the amount that ad has spent, the currency and paused or active. The account's day total is not that boost.

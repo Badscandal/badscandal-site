@@ -1,91 +1,96 @@
-/* Profiles v2 (21 Nov 2026, Luke: "perfect the profile page"). One clear state per image, an overview strip
-   with each platform's photo, thumbnails instead of "Image" links, size rules folded away. Made-up links. */
+/* Profiles (21 Nov 2026, Luke): "just have profile photo and banner I upload ... green should indicate that they're
+   using my uploaded banner ... red means there's an issue ... a card saying the issue clearly and with a chance for
+   me to respond easily to the bot". Made-up links and sizes. */
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import * as S from "../netlify/lib/staff.mjs";
-import { sampleBoard } from "../netlify/lib/staff-sample.mjs";
+import * as P from "../netlify/lib/profile-images.mjs";
+import { memoryDesk, sampleBoard } from "../netlify/lib/staff-sample.mjs";
 await import("../js/hq-lib.js");
 const L = globalThis.HQLib;
 const NOW = Date.parse("2026-11-21T15:00:00Z");
+const R = S.DEFAULT_ROSTER;
 
-function view() {
-  return S.profilesView({
-    slots: {
-      "spotify-photo": { current: { link: "https://example.com/spot.jpg", changed: "2026-10-01", by: "Atlas" } },
-      "tiktok-photo": { current: { link: "https://example.com/profile/badscandal", changed: "unknown", by: "Kevin" } },
-      "instagram-photo": { approved: { link: "https://example.com/ig.jpg", by: "Steve", at: "2026-11-18T12:00:00Z" } },
-    },
-  }, [{ id: "mabc", from: "Laura", to: "Luke", needs: "decision", resolved: null, proposal: { action: "profile", slot: "youtube-banner", link: "https://example.com/yt.jpg" } }]);
+/* a PNG header with the given size is enough for the reader */
+function png(w, h) {
+  const b = Buffer.alloc(32);
+  Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]).copy(b, 0);
+  b.writeUInt32BE(13, 8); b.write("IHDR", 12, "latin1"); b.writeUInt32BE(w, 16); b.writeUInt32BE(h, 20);
+  return b.toString("base64");
 }
 const find = (b, plat, id) => b.platforms.find((p) => p.platform === plat).slots.find((s) => !id || s.id === id);
 
-test("each image has ONE state: needs your yes, with the bots, live, or not recorded", () => {
-  const b = L.profileBlocks(view());
-  const yt = find(b, "YouTube", "youtube-banner");
-  assert.deepEqual([yt.state.key, yt.state.tone, yt.state.label], ["you", "you", "Needs your yes"]);
-  const ig = find(b, "Instagram");
-  assert.deepEqual([ig.state.key, ig.state.tone, ig.state.label], ["approved", "bot", "Approved"]);
-  assert.equal(ig.state.line, "You upload it by hand");
-  const sp = find(b, "Spotify", "spotify-photo");
-  assert.deepEqual([sp.state.key, sp.state.tone, sp.state.label], ["live", "live", "Live"]);
-  assert.equal(sp.state.line, "Since Thu 1 Oct");
-  const tt = find(b, "TikTok");
-  assert.equal(tt.state.key, "live");
-  assert.equal(tt.state.line, "", "an unknown day is not invented");
-  const am = find(b, "Amazon Music");
-  assert.deepEqual([am.state.key, am.state.tone, am.state.label], ["none", "none", "Not recorded"]);
-  assert.equal(am.state.line, "Atlas records what is live");
-  assert.equal(find(b, "X").state.line, "You record what is live");
-  for (const p of b.platforms) for (const s of p.slots) assert.notEqual(s.state.label, "Waiting", "the old ambiguous word is gone");
+test("before any upload: everything is grey and the line says to upload", () => {
+  const b = L.profileBlocks(S.profilesView({}, []));
+  for (const p of b.platforms) for (const s of p.slots) assert.equal(s.state.tone, "none");
+  assert.equal(find(b, "YouTube", "youtube-banner").state.label, "Waiting for your banner");
+  assert.equal(find(b, "Spotify", "spotify-photo").state.label, "Waiting for your photo");
+  const o = L.profileOverview(b);
+  assert.equal(o.line, "Upload your profile photo and banner to start.");
+  assert.equal(o.issues.length, 0);
 });
 
-test("a thumbnail only from an image link or HQ's own file; a profile page link is not a picture", () => {
-  const b = L.profileBlocks(view());
-  assert.equal(find(b, "Spotify", "spotify-photo").thumb, "https://example.com/spot.jpg");
-  assert.equal(find(b, "TikTok").thumb, "", "a page link is opened, not drawn");
-  assert.equal(find(b, "TikTok").openLink, "https://example.com/profile/badscandal");
-  assert.equal(find(b, "YouTube", "youtube-banner").thumb, "https://example.com/yt.jpg", "the image waiting for yes is shown");
+test("after uploads: green where the copy is made from them, red with a clear sentence where a bot makes an AI version", async () => {
+  const d = memoryDesk();
+  await P.saveProfileMaster(d, NOW, R, { by: "Luke", kind: "photo", image_base64: png(1000, 1000) });
+  await P.saveProfileMaster(d, NOW, R, { by: "Luke", kind: "banner", image_base64: png(3000, 1000) });
+  /* the page stores the copies that fit (here: Spotify's photo) */
+  await P.saveProfileVersion(d, NOW, R, { by: "Luke", slot: "spotify-photo", image_base64: png(750, 750) });
+  const b = L.profileBlocks(S.profilesView(await S.getProfiles(d), []));
+  const sp = find(b, "Spotify", "spotify-photo");
+  assert.deepEqual([sp.state.tone, sp.state.label, sp.state.line], ["ok", "Uses your photo", "Atlas uploads it"]);
+  const tidal = find(b, "TIDAL");
+  assert.equal(tidal.state.tone, "issue");
+  assert.equal(tidal.state.label, "Your photo is too small");
+  assert.equal(tidal.issue, "Your photo is 1000 × 1000. TIDAL needs 1500 × 1500. Atlas is making a bigger AI version that looks exactly like yours.");
+  const yt = find(b, "YouTube", "youtube-banner");
+  assert.equal(yt.state.label, "Different shape needed");
+  assert.equal(yt.issue, "Your banner is 3000 × 1000. YouTube needs 2560 × 1440, a different shape. Laura is making an AI version that looks exactly like yours. Nothing is cropped.");
+  assert.equal(yt.to, "Laura");
+  assert.equal(find(b, "Instagram").to, "Nova", "Instagram has no bot: questions go to Nova");
+  const o = L.profileOverview(b);
+  const chip = (n) => o.chips.find((c) => c.platform === n);
+  assert.equal(chip("YouTube").tone, "issue");
+  assert.equal(chip("YouTube").href, "#profiles/issue-youtube");
+  assert.equal(chip("YouTube").initials, "YT");
+  assert.equal(chip("Amazon Music").label, "Amazon");
+  const ytCard = o.issues.find((g) => g.platformId === "youtube");
+  assert.ok(ytCard, "one issue card per platform with a problem");
+  assert.equal(ytCard.to, "Laura");
+  assert.ok(ytCard.items.some((x) => x.id === "youtube-banner"));
+  assert.match(o.line, /^\d+ of 17 use your uploads · \d+ issues?/);
+});
+
+test("the platform's copy is green once uploaded; a new image waiting for his yes is red with Answer", async () => {
+  const d = memoryDesk();
+  await P.saveProfileMaster(d, NOW, R, { by: "Luke", kind: "photo", image_base64: png(1000, 1000) });
+  await P.saveProfileVersion(d, NOW, R, { by: "Luke", slot: "spotify-photo", image_base64: png(750, 750) });
+  await P.markProfileUploaded(d, NOW, R, { by: "Atlas", slot: "spotify-photo", link: "https://example.com/spotify-live.jpg" });
+  const msgs = [{ id: "mabc", from: "Laura", to: "Luke", needs: "decision", resolved: null, proposal: { action: "profile", slot: "youtube-photo", link: "https://example.com/yt.jpg" } }];
+  const b = L.profileBlocks(S.profilesView(await S.getProfiles(d), msgs));
+  assert.equal(find(b, "Spotify", "spotify-photo").state.label, "Live with your photo");
+  assert.equal(find(b, "Spotify", "spotify-photo").state.tone, "ok");
+  const yt = find(b, "YouTube", "youtube-photo");
+  assert.deepEqual([yt.state.tone, yt.state.label], ["issue", "Needs your yes"]);
+  const card = L.profileOverview(b).issues.find((g) => g.platformId === "youtube").items[0];
+  assert.equal(card.answer, "#messages/mabc");
+});
+
+test("a thumbnail only from an image link or HQ's own file", () => {
   const own = L.profileBlocks({ platforms: [{ id: "x", platform: "X", slots: [{ id: "x-photo", kind: "Profile photo", status: "ready", preview: "/api/staff/profile-file/slot-x-photo", circle: true }] }] });
   assert.equal(own.platforms[0].slots[0].thumb, "/api/staff/profile-file/slot-x-photo");
   const bad = L.profileBlocks({ platforms: [{ id: "x", platform: "X", slots: [{ id: "x-photo", kind: "Profile photo", current: { link: "javascript:alert(1).jpg" } }] }] });
   assert.equal(bad.platforms[0].slots[0].thumb, "");
 });
 
-test("the overview: one line of counts and one chip per platform, coloured by what matters most", () => {
-  const b = L.profileBlocks(view());
-  const o = L.profileOverview(b);
-  const total = b.platforms.reduce((n, p) => n + p.slots.length, 0);
-  assert.equal(o.total, total);
-  assert.equal(o.counts.you, 1);
-  assert.equal(o.counts.live, 2);
-  assert.equal(o.counts.bot, 1);
-  assert.equal(o.counts.none, total - 4);
-  assert.equal(o.line, `2 of ${total} live · 1 needs your yes · 1 with the owner · ${total - 4} not recorded`);
-  const chip = (name) => o.chips.find((c) => c.platform === name);
-  assert.equal(chip("YouTube").tone, "you");
-  assert.equal(chip("Instagram").tone, "bot");
-  assert.equal(chip("Spotify").tone, "none", "Spotify's header is not recorded yet, so the chip is not green");
-  assert.equal(chip("Spotify").thumb, "https://example.com/spot.jpg", "the chip shows the profile photo");
-  assert.equal(chip("TikTok").tone, "live");
-  assert.equal(chip("TikTok").initials, "TT");
-  assert.equal(chip("Amazon Music").initials, "AM");
-  assert.equal(chip("Amazon Music").label, "Amazon");
-  assert.equal(chip("YouTube").initials, "YT");
-  assert.equal(chip("Facebook Page").label, "Facebook");
-  assert.equal(chip("YouTube").href, "#profiles/youtube");
-  assert.equal(L.profileOverview({ platforms: [] }).line, "No profiles listed.");
-});
-
-test("the sample draws the overview and the page has its places", () => {
+test("the page: uploads first, the strip, issue cards with a reply to the bot, every platform folded", () => {
   const b = L.profileBlocks(sampleBoard(NOW).profiles);
-  const o = L.profileOverview(b);
-  assert.ok(o.counts.you >= 1 && o.counts.live >= 1);
+  assert.ok(L.profileOverview(b).chips.length > 0);
   const page = readFileSync(new URL("../hq.html", import.meta.url), "utf8");
-  assert.match(page, /id="profSum"/);
-  assert.match(page, /id="profStrip"/);
+  for (const id of ["profSum", "profStrip", "profIssues", "profiles-all", "profPhoto", "profBanner"]) assert.match(page, new RegExp('id="' + id + '"'));
   const staff = readFileSync(new URL("../js/hq-staff.js", import.meta.url), "utf8");
-  assert.match(staff, /profileOverview/);
-  assert.match(staff, /data-pthumb/, "a broken thumbnail falls back to a plain tile");
-  assert.match(staff, /<details class="pf-rule">/, "the size rule is folded away");
+  assert.match(staff, /data-pfreply/, "a reply box on each issue card");
+  assert.match(staff, /About the /, "the reply names what it is about");
+  assert.match(staff, /data-pthumb/);
 });

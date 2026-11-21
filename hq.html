@@ -1710,7 +1710,7 @@ body.ws-on main{margin-left:0;max-width:none}
 .pf-chip span.pf-n{max-width:76px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--muted)}
 .pf-av{position:relative;display:grid;place-items:center;width:52px;height:52px;border-radius:50%;background:#1a1d27;color:var(--paper);font:700 15px/1 var(--sans);overflow:hidden;box-shadow:0 0 0 2px #0B0D12,0 0 0 4px var(--ptone,#5a5f6e)}
 .pf-av img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
-.pf-t-you{--ptone:var(--red)}.pf-t-bot{--ptone:#E8A317}.pf-t-live{--ptone:#3DDC97}.pf-t-none{--ptone:#5a5f6e}
+.pf-t-ok{--ptone:#3DDC97}.pf-t-issue{--ptone:var(--red)}.pf-t-none{--ptone:#5a5f6e}
 .profmasters-fold{margin:0 0 16px;border:1px solid var(--glass-line,var(--ink-3));border-radius:16px;padding:0 14px}
 .profmasters-fold>summary{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 12px;min-height:48px;padding:12px 0;cursor:pointer;list-style:none}
 .profmasters-fold>summary::-webkit-details-marker{display:none}
@@ -1733,7 +1733,7 @@ body.ws-on main{margin-left:0;max-width:none}
 .pf-kind small{font-weight:500;font-size:13px;color:var(--muted)}
 .pf-state{display:inline-flex;align-items:center;gap:6px;margin:6px 0 0;font-size:14px;font-weight:600}
 .pf-state i{width:8px;height:8px;border-radius:50%;background:var(--ptone,#5a5f6e)}
-.pf-state.pf-t-you{color:var(--red)}
+.pf-state.pf-t-issue{color:var(--red)}.pf-state.pf-t-ok{color:#3DDC97}
 .pf-line{margin:2px 0 0;font-size:14px;color:var(--muted)}
 .pf-acts{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
 .pf-acts a{display:inline-flex;align-items:center;min-height:44px;padding:0 14px;border-radius:999px;border:1px solid var(--ink-3);text-decoration:none;font-size:14px;font-weight:600}
@@ -1745,6 +1745,24 @@ body.ws-on main{margin-left:0;max-width:none}
 .pf-thumb.empty{background:transparent;box-shadow:none;border:1.5px dashed var(--ptone,#5a5f6e)}
 .pf-thumb.pf-wide.empty{aspect-ratio:auto !important;height:56px;max-width:260px}
 .pf-thumb span{font-size:12px;color:var(--muted)}
+/* 21 Nov 2026: uploads first, issue cards, every platform folded */
+#profMasters{margin:0 0 16px}
+#profMasters .profprev{margin:0 0 10px}
+.pf-issue{margin:0 0 12px;box-shadow:inset 3px 0 0 var(--red)}
+.pf-issue .pf-item{margin:10px 0 0}
+.pf-issue .pf-itext{margin:4px 0 0;font-size:15px;line-height:1.45}
+.pf-reply{display:flex;flex-direction:column;gap:8px;margin-top:12px}
+.pf-reply textarea{width:100%;box-sizing:border-box;min-height:72px;font:inherit;font-size:16px;color:var(--paper);background:rgba(255,255,255,.05);border:1px solid var(--ink-3);border-radius:12px;padding:10px 12px;resize:vertical}
+.pf-reply .sendbtn{align-self:flex-start;min-height:44px;padding:0 16px}
+.pf-msg{margin:0;font-size:14px;color:var(--muted)}
+.pf-msg:empty{display:none}
+.pf-all{margin-top:8px;border:1px solid var(--glass-line,var(--ink-3));border-radius:16px;padding:0 14px}
+.pf-all>summary{display:flex;align-items:center;min-height:52px;cursor:pointer;list-style:none;font-weight:650}
+.pf-all>summary::-webkit-details-marker{display:none}
+.pf-all>summary::after{content:"Show";margin-left:auto;font-weight:500;font-size:13px;color:var(--muted)}
+.pf-all[open]>summary::after{content:"Hide"}
+.pf-all[open]{padding-bottom:14px}
+.pf-allgood{margin:0 0 12px;color:#3DDC97;font-weight:600}
 </style>
 </head>
 <body>
@@ -1980,30 +1998,31 @@ body.ws-on main{margin-left:0;max-width:none}
     <div class="subsec" id="growth-fans"><h3 class="sech">Fans</h3><p class="sub" id="fansSub"></p><div class="sheeterr" id="errFans" hidden></div><div id="fanExtra"></div><div class="tile"><div class="scroll"><table class="stack" id="fanTable"></table></div></div></div>
   </section>
   <section class="card view" id="rights"><h2>Rights</h2><p class="sub">Content ID claims.</p><div id="rightsBody"></div></section>
-  <section class="card view" id="profiles"><h2>Profiles</h2><p class="sub" id="profNote">The profile photo and banner on every official platform. HQ never logs in and never changes one.</p>
-    <!-- Profiles v2 (21 Nov 2026): one line of counts, a strip with every platform's photo, then the cards -->
+  <section class="card view" id="profiles"><h2>Profiles</h2><p class="sub" id="profNote">Upload your photo and banner. Each platform's copy is made from them. Green: it uses yours. Red: there's an issue.</p>
+    <!-- Profiles (21 Nov 2026, Luke): his two uploads, the strip (green = uses his upload, red = an issue), issue
+         cards with a reply to the bot, then every platform folded away -->
+    <div class="profmasters" id="profMasters">
+      <article class="t-card">
+        <h3 class="t-lbl">Profile photo</h3>
+        <div class="profprev circle" id="profPhotoPrev" hidden></div>
+        <p class="secsub" id="profPhotoLine">Only scaled down, never cropped. The circle shows what people see.</p>
+        <label class="profup">Choose a photo<input id="profPhoto" type="file" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.heic,.heif"></label>
+        <p class="profprog" id="profPhotoProg" role="status"></p>
+      </article>
+      <article class="t-card">
+        <h3 class="t-lbl">Banner</h3>
+        <div class="profprev banner" id="profBannerPrev" hidden></div>
+        <p class="secsub" id="profBannerLine">When a platform needs another shape or size, its bot makes an AI version that looks exactly like yours.</p>
+        <label class="profup">Choose a banner<input id="profBanner" type="file" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.heic,.heif"></label>
+        <p class="profprog" id="profBannerProg" role="status"></p>
+      </article>
+    </div>
     <p class="profsum" id="profSum" role="status"></p>
     <nav class="pf-strip" id="profStrip" aria-label="Platforms"></nav>
-    <details class="profmasters-fold" id="profMasters">
-      <summary><span class="t-lbl">Master images</span><span class="secsub" id="profMastersLine">One photo and one banner. Each platform's copy is made from them.</span></summary>
-      <div class="profmasters">
-        <article class="t-card">
-          <h3 class="t-lbl">Profile photo</h3>
-          <p class="secsub" id="profPhotoLine">Only scaled down, never cropped. The circle shows what people see.</p>
-          <label class="profup">Choose a photo<input id="profPhoto" type="file" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.heic,.heif"></label>
-          <p class="profprog" id="profPhotoProg" role="status"></p>
-          <div class="profprev circle" id="profPhotoPrev" hidden></div>
-        </article>
-        <article class="t-card">
-          <h3 class="t-lbl">Banner</h3>
-          <p class="secsub" id="profBannerLine">If a platform's shape doesn't match, nothing is cropped: a bot extends it.</p>
-          <label class="profup">Choose a banner<input id="profBanner" type="file" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.heic,.heif"></label>
-          <p class="profprog" id="profBannerProg" role="status"></p>
-          <div class="profprev banner" id="profBannerPrev" hidden></div>
-        </article>
-      </div>
+    <div id="profIssues"></div>
+    <details class="pf-all" id="profiles-all"><summary><span>Every platform</span></summary>
+      <div class="profgrid" id="profList"><div class="ph big"></div><div class="ph"></div></div>
     </details>
-    <div class="profgrid" id="profList"><div class="ph big"></div><div class="ph"></div></div>
   </section>
   <!-- Upcoming (11 Nov 2026, v2: the tab's id stays "releases", so #releases and every deep link keep
        working). Three parts: In the pipeline (drafts + the form), Upcoming (sent to the team, not out
@@ -2155,18 +2174,18 @@ body.ws-on main{margin-left:0;max-width:none}
   }, 400);
 })();
 </script>
-<script src="js/crt.js?v=3676d4cec2d5" defer></script>
-<script src="js/hq-lib.js?v=3676d4cec2d5" defer></script>
-<script src="js/hq-chart.js?v=3676d4cec2d5" defer></script>
-<script src="js/hq-growth.js?v=3676d4cec2d5" defer></script>
-<script src="js/hq-look.js?v=3676d4cec2d5" defer></script>
-<script src="js/hq.js?v=3676d4cec2d5" defer></script>
-<script src="js/hq-staff.js?v=3676d4cec2d5" defer></script>
-<script src="js/hq-phone.js?v=3676d4cec2d5" defer></script>
-<script src="js/hq-shell.js?v=3676d4cec2d5" defer></script>
-<script src="js/hq-workspaces.js?v=3676d4cec2d5" defer></script>
-<script src="js/hq-app.js?v=3676d4cec2d5" defer></script>
-<script src="js/hq-cmd.js?v=3676d4cec2d5" defer></script>
-<script src="js/hq-pages.js?v=3676d4cec2d5" defer></script>
+<script src="js/crt.js?v=fcf8b857f112" defer></script>
+<script src="js/hq-lib.js?v=fcf8b857f112" defer></script>
+<script src="js/hq-chart.js?v=fcf8b857f112" defer></script>
+<script src="js/hq-growth.js?v=fcf8b857f112" defer></script>
+<script src="js/hq-look.js?v=fcf8b857f112" defer></script>
+<script src="js/hq.js?v=fcf8b857f112" defer></script>
+<script src="js/hq-staff.js?v=fcf8b857f112" defer></script>
+<script src="js/hq-phone.js?v=fcf8b857f112" defer></script>
+<script src="js/hq-shell.js?v=fcf8b857f112" defer></script>
+<script src="js/hq-workspaces.js?v=fcf8b857f112" defer></script>
+<script src="js/hq-app.js?v=fcf8b857f112" defer></script>
+<script src="js/hq-cmd.js?v=fcf8b857f112" defer></script>
+<script src="js/hq-pages.js?v=fcf8b857f112" defer></script>
 </body>
 </html>

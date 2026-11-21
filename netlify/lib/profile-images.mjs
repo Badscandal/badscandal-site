@@ -69,10 +69,12 @@ async function putFile(store, key, buf, ext) {
 function slotsOf(group) {
   return PROFILE_SLOTS.filter((s) => profileGroup(s) === group);
 }
+/* 21 Nov 2026 (Luke): "any issue with specs they generate a new AI image to make it fit correctly but exactly like
+   mine". The bot makes it from Luke's master with an image model; HQ only stores it at the exact size. */
 function jobNote(slot, spec) {
   const size = spec.exact ? `${spec.exact[0]} x ${spec.exact[1]}` : "the right shape";
-  if (slot.owner && slot.owner !== "Luke") return `${slot.owner} can extend the canvas or pad it to ${size}. Nothing is cropped.`;
-  return `Luke uploads a fitting master, or Nova may extend the canvas to ${size}. Nothing is cropped.`;
+  const who = slot.owner && slot.owner !== "Luke" ? slot.owner : "Nova";
+  return `${who} makes an AI version at ${size} that looks exactly like Luke's: the same picture, nothing cropped or changed.`;
 }
 
 /* one decision for Luke. The same key + token is not asked again. */
@@ -101,12 +103,11 @@ export async function saveProfileMaster(store, now, roster, a) {
   const buf = bufOf(a.image_base64);
   const pic = readPic(buf);
   const at = new Date(now).toISOString();
-  const small = [];
   const plans = [];
   const cleared = [];
   await putFile(store, "master-" + group, buf, pic.ext);
   await changeProfiles(store, (doc) => {
-    small.length = 0; plans.length = 0; cleared.length = 0;
+    plans.length = 0; cleared.length = 0;
     doc.masters[group] = { w: pic.w, h: pic.h, bytes: buf.length, format: pic.ext, at, by };
     doc.jobs = doc.jobs.filter((j) => { const s = PROFILE_SLOTS.find((x) => x.id === j.slot); return s && profileGroup(s) !== group; });
     for (const slot of slotsOf(group)) {
@@ -117,18 +118,12 @@ export async function saveProfileMaster(store, now, roster, a) {
       const spec = profileSpec(slot);
       const plan = profilePlan(pic.w, pic.h, spec);
       plans.push({ id: slot.id, platform: slot.platform, kind: slot.kind, fit: plan.fit, out: plan.out, reason: plan.reason, mb: spec.mb, formats: spec.formats });
-      if (plan.problem === "ratio") doc.jobs.push({ id: "job-" + slot.id, slot: slot.id, status: "open", reason: plan.reason, note: jobNote(slot, spec), at, by, owner: slot.owner || "" });
-      if (plan.problem === "small" || plan.alsoSmall) small.push({ slot, spec });
+      /* a different shape OR too small: the slot's bot makes an AI version (21 Nov 2026: no "upload a bigger one" ask) */
+      if (plan.problem === "ratio" || plan.problem === "small" || plan.alsoSmall) doc.jobs.push({ id: "job-" + slot.id, slot: slot.id, status: "open", problem: plan.problem === "ratio" ? "shape" : "small", reason: plan.reason, note: jobNote(slot, spec), at, by, owner: slot.owner || "" });
     }
     return { ok: true };
   });
   for (const id of cleared) { try { await store.delete(FILE("slot-" + id)); } catch { /* the old copy is unused */ } }
-  if (small.length) {
-    const what = group === "photo" ? "profile photo" : "banner";
-    const bits = small.map(({ slot, spec }) => `${slot.platform} (${spec.exact[0]} x ${spec.exact[1]})`);
-    const text = `The ${what} you uploaded is ${pic.w} x ${pic.h}. These need a bigger one, and it was not scaled up: ${bits.join(", ")}. Upload a bigger one, or leave these until you do.`;
-    await askLuke(store, now, roster, "small-" + group, `${pic.w}x${pic.h}`, text, ["I'll upload a bigger one", "Leave it"]);
-  }
   return { kind: group, width: pic.w, height: pic.h, bytes: buf.length, slots: plans, note: "Saved. HQ did not log in and did not send this to a platform." };
 }
 
