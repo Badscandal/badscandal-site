@@ -2,7 +2,7 @@
 
 **Full picture:** [docs/HQ-FULL-HANDOFF.md](HQ-FULL-HANDOFF.md) (18 Nov 2026). It was checked against the code at `9e447e2` (PR #88). If this file disagrees with it, the full file wins. Main is through PR #89: 47 connector tools, service worker `bs-hq-v8`, 745 tests. The paragraphs below still describe the state at PR #84 in places. They are kept as the running log.
 
-**21 Nov 2026: HQ v18 (branch `hq-v18-fixes`; live once merged, see STATUS.md).** Luke's issue #5 in the private repo is the spec.
+**21 Nov 2026: HQ v18 is LIVE (PR #108, main 76790d3).** `/hq` answered 200, `/mcp` 401, and hq-sw.js serves `bs-hq-v18`. Luke's issue #5 in the private repo is the spec.
 - **Needs you cards.** A decision is one short question with Yes, No and Reply. Under it: song, status, waiting on, next check, and one recommended line. The draft email (To, CC, Subject, body with its line breaks) opens only on Reply and can be edited there. An ask (a sign-in, Netlify access, a task, a fan) has a reply box, plus Done for an action.
 - **How answers are recorded.** The same way as before: a message reply, Mark as done, the case Confirm/Ignore/Respond, or the card's yes/no/edit. Asks with no message of their own go through the new `POST /api/staff/need` (Luke only). It writes a done mark in `needs-done.json` and sends the answer to the bot as a message from Luke.
 - **Where the cards live.** `netlify/lib/need-cards.mjs` builds each card. `needsCount` attaches it, so the phone, needs_you, my_day and team_board say the same short question. luke_briefing keeps its row shape.
