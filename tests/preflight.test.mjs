@@ -74,10 +74,11 @@ test("the preflight tool: a song, a text, a link", async () => {
   assert.ok(!toolsFor("Kevin", R).some((t) => t.name === "preflight"));
   /* the tool count is pinned in mcp.test.mjs */
 });
-test("upload_cover says when a cover is not square or under 3000 px (the page is fine, the stores are not)", () => {
+test("upload_cover says when a cover is not square or under 3000 px", () => {
   assert.deepEqual(S.coverWarnings(3000, 3000), []);
   assert.deepEqual(S.coverWarnings(null, null), []);
-  assert.match(S.coverWarnings(1400, 1400)[0], /1400 x 1400: fine for the song page; RouteNote needs 3000 x 3000/);
+  /* v18, 21 Nov 2026: one cover rule, a square 3000 x 3000 everywhere (the song page no longer has its own 1000 px rule) */
+  assert.match(S.coverWarnings(1400, 1400)[0], /1400 x 1400 is too small: a cover is a square 3000 x 3000/);
   assert.match(S.coverWarnings(3000, 2000)[0], /not square/);
   assert.match(readFileSync(new URL("../netlify/lib/staff-tools.mjs", import.meta.url), "utf8"), /coverWarnings|r\.warnings/);
 });

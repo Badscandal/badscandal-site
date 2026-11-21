@@ -183,7 +183,9 @@ test("our_accounts in the instagram tool: Nova (and Claude) change it; every oth
   assert.deepEqual(read.our_accounts.handles, ["@ouraccount", "@made_up_family", "@liliancardos", "@liliancardosomakeup"]);
   assert.equal(read.our_accounts.changes[0].by, "Nova");
   const plain = await call("Kevin", {});
-  assert.deepEqual(plain.own_accounts, ["@ouraccount", "@made_up_family", "@liliancardos", "@liliancardosomakeup"]);
+  /* v18, 21 Nov 2026: one list, our_accounts (own_accounts was the same list twice) */
+  assert.deepEqual(plain.our_accounts, ["@ouraccount", "@made_up_family", "@liliancardos", "@liliancardosomakeup"]);
+  assert.equal("own_accounts" in plain || "own_accounts" in read, false);
   const schema = TOOLS.find((t) => t.name === "instagram").inputSchema.properties;
   assert.deepEqual(schema.our_accounts.enum, ["list", "add", "remove"]);
   assert.ok(schema.handle && schema.reason);

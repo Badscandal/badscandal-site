@@ -2,7 +2,7 @@
 /* Adds a song page (10 Nov 2026). Run from the repo root, on the Mac (uses macOS `sips`, and
    `cwebp` from Homebrew when it's there):
 
-     1. Put the cover in assets/ as  listen-<slug>-cover-v1.jpg   (square JPG, 1000 px or more)
+     1. Put the cover in assets/ as  listen-<slug>-cover-v1.jpg   (a square JPG, 3000 x 3000: one cover rule, v18)
      2. node tools/new-song.mjs <slug> "<Title>" <YYYY-MM-DD>
           e.g. node tools/new-song.mjs medaseubody "Me Dá Seu Body" 2026-11-24
      3. npm test, then commit the new files BY NAME (the tool prints the list) and push.

@@ -147,6 +147,13 @@ function growthCanon(name) {
   return key(name);
 }
 const GROWTH_LABEL = { instagram: "Instagram", tiktok: "TikTok", youtube: "YouTube", spotify: "Spotify" };
+/* a gap whose number is on the day is answered (v18, 21 Nov 2026) */
+function openGaps(day) {
+  if (!day || !day.gaps) return null;
+  const out = {};
+  for (const [k, w] of Object.entries(day.gaps)) if (day[k] == null || day[k] === "") out[k] = w;
+  return out;
+}
 export function growthReport(rows, today) {
   const by = {};
   for (const r of rows) {
@@ -193,7 +200,7 @@ export function growthReport(rows, today) {
       d28: last && d28 ? last.followers - d28.followers : null,
       views7: sum(p.days.filter((x) => last && x.d > addDays(last.d, -7) && x.views != null).map((x) => x.views)),
       views: lastDay ? lastDay.views : null, viewsDate: lastDay ? lastDay.viewsDate || "" : "",
-      gaps: lastDay ? lastDay.gaps : null, gapDays,
+      gaps: lastDay ? openGaps(lastDay) : null, gapDays,
       channelViews: lastDay ? lastDay.channelViews : null, officialViews: lastDay ? lastDay.officialViews : null, otherViews: lastDay ? lastDay.otherViews : null,
       series: read.slice(-30).map((x) => ({ d: x.d, v: x.followers })),
       best,
