@@ -15,6 +15,9 @@
    skipped); every amount keeps its own currency; an amount in another currency is an ESTIMATE at
    that month's average ECB rate (netlify/lib/fx.mjs) and is always labelled as one. */
 import { convert } from "./fx.mjs";
+/* v18 (21 Nov 2026, Luke): the "Salvation" line is gone from Atlas's duty, so the duty list and the reminders
+   built from it never say it (the sheet itself is not changed) */
+const noSalvation = (v) => (v == null ? v : String(v).replace(/[^.\n]*\bsalvation\b[^.\n]*\.?/gi, "").replace(/\s{2,}/g, " ").trim());
 
 export const HQ_TABS = ["Growth", "Songs", "Fans", "Releases", "Tasks", "Royalties", "Spend", "Income"];
 export const CAP = { amount: 1000, warn: 750, stop: 900, currency: "USD" };
@@ -147,6 +150,13 @@ function growthCanon(name) {
   return key(name);
 }
 const GROWTH_LABEL = { instagram: "Instagram", tiktok: "TikTok", youtube: "YouTube", spotify: "Spotify" };
+/* a gap whose number is on the day is answered (v18, 21 Nov 2026) */
+function openGaps(day) {
+  if (!day || !day.gaps) return null;
+  const out = {};
+  for (const [k, w] of Object.entries(day.gaps)) if (day[k] == null || day[k] === "") out[k] = w;
+  return out;
+}
 export function growthReport(rows, today) {
   const by = {};
   for (const r of rows) {
@@ -193,7 +203,7 @@ export function growthReport(rows, today) {
       d28: last && d28 ? last.followers - d28.followers : null,
       views7: sum(p.days.filter((x) => last && x.d > addDays(last.d, -7) && x.views != null).map((x) => x.views)),
       views: lastDay ? lastDay.views : null, viewsDate: lastDay ? lastDay.viewsDate || "" : "",
-      gaps: lastDay ? lastDay.gaps : null, gapDays,
+      gaps: lastDay ? openGaps(lastDay) : null, gapDays,
       channelViews: lastDay ? lastDay.channelViews : null, officialViews: lastDay ? lastDay.officialViews : null, otherViews: lastDay ? lastDay.otherViews : null,
       series: read.slice(-30).map((x) => ({ d: x.d, v: x.followers })),
       best,
@@ -336,7 +346,7 @@ export function dutiesReport(tasks, today, nowHM = "", overlay = null) {
         else if (said.status === "blocked") { status = "blocked"; blocker = blocker || said.message; via = "connector"; }
         else if (said.status === "working") working = true;
       }
-      return { id: norm(t.id), owner: ownerName(t.owner) || "?", task: t.task, blocker, status, due,
+      return { id: norm(t.id), owner: ownerName(t.owner) || "?", task: noSalvation(t.task), blocker: noSalvation(blocker), status, due,
         late: status === "todo" && !!due && !!nowHM && nowHM > due, updated: norm(t.updated), ...(via ? { via } : {}), ...(working ? { working } : {}), ...(gaps ? { gaps } : {}) };
     });
   const owners = {};

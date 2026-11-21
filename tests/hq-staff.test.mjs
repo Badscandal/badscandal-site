@@ -228,7 +228,7 @@ test("the page: Messages is the tenth tab, the new script is kept offline, and n
   assert.doesNotMatch(shell, /scrollBy\(/, "the deep link is one plain jump");
   assert.doesNotMatch(page, /scroll-behavior:\s*smooth/);
   /* 19 Nov 2026: interactive charts. Cache is v12 so phones drop the old shell. */
-  assert.match(sw, /var CACHE = "bs-hq-v17"/);
+  assert.match(sw, /var CACHE = "bs-hq-v18"/); /* v18, 21 Nov 2026 */
   assert.match(sw, /"\/js\/hq-look\.js\?v=" \+ V/); assert.match(sw, /"\/js\/hq-phone\.js\?v=" \+ V/); assert.match(sw, /"\/js\/hq-workspaces\.js\?v=" \+ V/); assert.match(sw, /"\/js\/hq-cmd\.js\?v=" \+ V/); assert.match(sw, /"\/js\/hq-staff\.js\?v=" \+ V/); assert.match(sw, /"\/js\/hq-app\.js\?v=" \+ V/);
   for (const [name, src] of [["hq-staff.js", staff], ["hq.js", readFileSync(new URL("../js/hq.js", import.meta.url), "utf8")]]) assert.doesNotMatch(src, /\b(confirm|alert|prompt)\s*\(/, name + ": questions are asked on the page, never in a browser dialog");
   assert.doesNotMatch(staff, /innerHTML\s*=\s*[^;]*\b(m|th|r|w|e|s|a)\.(text|message|payer|note|name|task|blocker)\b(?![^;]*esc\()/, "board text is escaped");
@@ -694,8 +694,8 @@ test("Revolut: the one line is the server's sentence, word for word", async () =
     bst({ lastError: "Revolut could not be reached just now.", lastRunAt: "2026-11-12T10:00:00.000Z" }), bst({ lastOkAt: null, lastAdded: null }), bst({ lastOkAt: null, partial: true }),
     bst({ partial: true, lastOkAt: "2026-11-11T09:50:00.000Z" }), bst({ connected: false, daysLeft: null }), bst({ connected: false, needsApproval: true }), bst({ configured: false }), null];
   for (const c of cases) assert.equal(L.bankLine(c, BNOW), B.bankLine(c, BNOW), JSON.stringify(c));
-  assert.equal(L.bankLine(bst(), BNOW), "Revolut: read today at 06:50 · 2 payments in · approval ends in 86 days");
-  assert.equal(L.bankLine(bst({ partial: true, lastOkAt: "2026-11-11T09:50:00.000Z" }), BNOW), "Revolut: read yesterday at 06:50 · the last read stopped part way, the rest comes at the next read · approval ends in 86 days");
+  assert.equal(L.bankLine(bst(), BNOW), "Revolut: read today at 06:50 SP · 2 payments in · approval ends in 86 days"); /* v18, 21 Nov 2026: the Revolut time says its zone (SP) */
+  assert.equal(L.bankLine(bst({ partial: true, lastOkAt: "2026-11-11T09:50:00.000Z" }), BNOW), "Revolut: read yesterday at 06:50 SP · the last read stopped part way, the rest comes at the next read · approval ends in 86 days"); /* v18, 21 Nov 2026: the Revolut time says its zone (SP) */
 });
 
 test("Revolut: the tile's buttons, red only when Luke has to act, and Connect only where it works", () => {
@@ -787,7 +787,7 @@ test("Revolut in the sample: made-up rows to sort and a transfer, none of them i
   assert.deepEqual(inc.received, { USD: 520.5 }, "neither the payments to sort nor the transfer count; the PayPal payment counts only once it reaches Revolut (17 Nov 2026). The sample's made-up route lands USD 100 (18 Nov 2026)");
   const { sampleBankStatus } = await import("../netlify/lib/staff-sample.mjs");
   const st = sampleBankStatus(NOW);
-  assert.equal(L.bankLine(st, NOW), "Revolut: read today at 06:50 · 2 payments in · approval ends in 86 days");
+  assert.equal(L.bankLine(st, NOW), "Revolut: read today at 06:50 SP · 2 payments in · approval ends in 86 days"); /* v18, 21 Nov 2026: the Revolut time says its zone (SP) */
   assert.equal(L.bankHealth(st, "", NOW).state, "ok");
 });
 

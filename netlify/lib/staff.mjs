@@ -87,7 +87,7 @@ export const DEFAULT_ROSTER = [
     schedule: [{ time: "09:20", what: "From each release day: check Musixmatch; add Luke's approved lyrics the day the song shows there" }], writes: "The release timeline's lyrics step" },
   { name: "Webmaster", role: "Website", duty: "Daily check that the site is up and clean", time: "09:20",
     why: "Every ad and the bio link land on our own pages; if a page is down, the ad money is wasted.",
-    schedule: [{ time: "09:20", what: "Home page, every song page and the dashboard answer" }, { time: "a week after the previous release", what: "The next song's page live" }, { time: "Release day", what: "Add the Spotify link" }], writes: "Its own duty row; the song pages" },
+    schedule: [{ time: "09:20", what: "Home page, every song page and the dashboard answer" }, { time: "a week after the previous release", what: "The next song's page live" }, { time: "Release day", what: "Put the Spotify link on the song's page" }], writes: "Its own duty row; the song pages" },
   { name: "Forge", role: "Ads", duty: "Logs ad spend, checks the cap before any launch", time: "09:30",
     why: "Keeps ad spend inside USD 1,000 a month: logs what Meta, Google and TikTok spent and checks the cap before anything launches.",
     schedule: [{ time: "09:30", what: "Yesterday's Meta, Google and TikTok spend (record_spend)" }, { time: "Monday", what: "Compare the month's Meta total with Ads Manager" }, { time: "before any launch", what: "Month to date + planned budgets must stay under the cap" }, { time: "at USD 900", what: "Switch every ad off (never delete) and confirm" }], writes: "The Ads Tracker's daily log" },
@@ -160,6 +160,11 @@ export function fullDuty(text, lines) {
 export function dutyPair(text, lines) {
   const full = fullDuty(text, lines);
   const max = 700;
+  /* v18, 21 Nov 2026 (Laura: "… Luke upload"): a stored line whose last sentence was cut shows up to its last whole sentence */
+  if (full && full.length <= max && !/[.!?)"'’…]$/.test(full) && !(Array.isArray(lines) && lines.includes(full))) {
+    const end = Math.max(full.lastIndexOf(". "), full.lastIndexOf("! "), full.lastIndexOf("? "));
+    if (end >= 20) return { text: full.slice(0, end + 1).trim(), full };
+  }
   if (!full || full.length <= max) return { text: full, full };
   const slice = full.slice(0, max);
   const end = Math.max(slice.lastIndexOf(". "), slice.lastIndexOf("! "), slice.lastIndexOf("? "));
@@ -168,9 +173,14 @@ export function dutyPair(text, lines) {
 /* known stale duty lines, rewritten when they are shown. The sheet itself is not changed. */
 export function freshDuty(text) {
   let t = String(text || "");
-  t = t.replace(/meta too until the meta-api-feed brief says live/gi, "HQ records Meta itself");
+  t = plainWords(t);
   t = t.replace(/google\s*\(\s*eur\s*\)/gi, "Google (currency not confirmed)");
-  t = t.replace(/[^.]*salvation card[^.]*\.?/gi, "");
+  /* v18 (21 Nov 2026, Luke): no "Salvation" line anywhere in Atlas's duty or its reminders */
+  t = t.replace(/[^.\n]*\bsalvation\b[^.\n]*\.?/gi, "");
+  /* v18, 21 Nov 2026 (Webmaster: Nova's duty read as bot shorthand) */
+  t = t.replace(/\breset (?:today's |the )?D-\s*rows\b/gi, "reset today's duties");
+  t = t.replace(/\bD-\s*rows\b/gi, "duties");
+  t = t.replace(/\b(?:todo|to do)\s*(?:->|→|=>)\s*blocked\b/gi, "mark a missed duty blocked");
   return t.replace(/\s{2,}/g, " ").replace(/\s+([,.;])/g, "$1").trim();
 }
 export function freshWhy(name, why) {
@@ -232,6 +242,52 @@ export function hidePrivate(s, o = {}) {
     .replace(/\(\s*\)/g, "")
     .replace(/\s{2,}/g, " ")
     .trim();
+}
+/* v18 (21 Nov 2026, Forge): an ads id (XXX-XXX-XXXX) taken out of a line for Luke used to leave
+   "signed out at )" and "signed out ()". It now goes with the words and brackets that held it.
+   js/hq-lib.js has the same function for the page. */
+export function dropAccountId(text) {
+  let t = String(text == null ? "" : text);
+  if (!/\d{3}-\d{3}-\d{4}/.test(t)) return t;
+  t = t.replace(/\s*\(\s*(?:(?:google ads|ads|customer|account|acct|id|no\.?|number|#)\s*)*:?\s*\d{3}-\d{3}-\d{4}\s*\)/gi, "");
+  t = t.replace(/\s*(?:\b(?:at|for|on|of|customer|account|acct|id|no\.?|number)\b\s*|#\s*)*:?\s*\b\d{3}-\d{3}-\d{4}\b/gi, "");
+  t = t.replace(/\(\s*\)|\[\s*\]/g, "");
+  let depth = 0, out = "";
+  for (const ch of t) { if (ch === "(") depth++; else if (ch === ")") { if (!depth) continue; depth--; } out += ch; }
+  return out.replace(/[ \t]{2,}/g, " ").replace(/\s+([,.;:)])/g, "$1").replace(/\(\s+/g, "(").trim();
+}
+/* v18 (21 Nov 2026, Forge): the desk's shorthand in plain words, on lines Luke reads and in task text */
+export function plainWords(text) {
+  return String(text == null ? "" : text)
+    .replace(/\s*\(\s*(?:see\s+)?runbook\s+[A-Z0-9]\b\s*\)/gi, "")
+    .replace(/,?\s*(?:as in |per |see )?runbook\s+[A-Z0-9]\b/gi, "")
+    .replace(/meta too until the meta-api-feed brief says live/gi, "HQ records Meta itself")
+    .replace(/\bthe meta-api-feed brief\b/gi, "the Meta feed plan").replace(/\bmeta-api-feed brief\b/gi, "Meta feed plan")
+    .replace(/\b(?:the\s+)?Revolut[- ]once rule\b/gi, "the rule that income counts once, when it lands in Revolut")
+    .replace(/[ \t]{2,}/g, " ").replace(/\s+([,.;])/g, "$1");
+}
+/* v18 (21 Nov 2026): one income problem for Luke (luke_briefing): no payment ids. The words are kept. */
+export function lukeProblem(p) {
+  return String(p == null ? "" : p).replace(/\s*\(id [^)]*\)/gi, "").replace(/\s*\bid\s+i[0-9a-z]{8,16}\b/g, "").replace(/[ \t]{2,}/g, " ").replace(/\s+([,.;])/g, "$1").trim();
+}
+/* v18 (21 Nov 2026, Spark and Forge): luke_short_briefing's income line. It was cut at 70 characters with
+   "…" and carried payer names and payment ids. Now each problem is said short and whole: the unsorted
+   list is a count, an overdue source keeps its first sentence, nothing is cut mid-way. */
+export function shortIncomeLine(inc, cur) {
+  const problems = (inc && inc.problems) || [];
+  const short = (p) => {
+    const t = lukeProblem(p);
+    if (/^Payments nobody has sorted:/i.test(t)) {
+      const n = Number.isFinite(inc && inc.unsortedCount) ? inc.unsortedCount : t.split("; ").length;
+      return `${n} payment${n === 1 ? "" : "s"} to sort`;
+    }
+    if (/logged twice under two payer names/i.test(t)) return t.split(":")[0];
+    if (/^New payer\(s\)/i.test(t)) return "New payers not on the list of sources";
+    const first = t.split(/(?<=\.)\s/)[0].replace(/\.$/, "");
+    return first.length <= 90 ? first : first.split(/[(,;]/)[0].trim();
+  };
+  const bits = problems.slice(0, 3).map(short).filter(Boolean);
+  return `Received ${cur((inc && inc.received) || {})} this month` + (bits.length ? `; for Ledger: ${bits.join("; ")}` + (problems.length > 3 ? ` (+${problems.length - 3} more)` : "") : "");
 }
 /* A note for a tool. Card and top-up digits are already hidden. A sentence that says a statement
    is not on the desk is dropped when a statement of that amount is in the months already read.
@@ -844,14 +900,16 @@ export function adLinkProblem(link, slug = "", own = "") {
 }
 /* A release-day Spotify track link (preflight mode "track", song_page kind track). An ad link stays
    badscandal.com/<song>. ?si= is flagged: the clean link is the one to store (18 Nov 2026 night test). */
+/* v18, 21 Nov 2026 (Webmaster): one wording for ?si= everywhere */
+export const SI_REMOVED = "?si= is removed for you.";
 export function spotifyTrackProblem(link) {
   const raw = String(link == null ? "" : link).trim();
   let u;
-  try { u = new URL(raw); } catch { return { problem: "That is not a Spotify track link. Use https://open.spotify.com/track/<id> with no ?si=.", clean: "", si: false }; }
+  try { u = new URL(raw); } catch { return { problem: "That is not a Spotify track link. Use https://open.spotify.com/track/<id>. ?si= is removed for you.", clean: "", si: false }; }
   if (u.protocol !== "https:") return { problem: "Use the https Spotify link: https://open.spotify.com/track/<id>.", clean: "", si: false };
   const host = u.hostname.toLowerCase().replace(/^www\./, "");
   const id = (u.pathname.match(/^\/track\/([A-Za-z0-9]+)/) || [])[1] || "";
-  if (host !== "open.spotify.com" || !id) return { problem: "A release-day track link is https://open.spotify.com/track/<id>, with no ?si=.", clean: "", si: false };
+  if (host !== "open.spotify.com" || !id) return { problem: "A release-day track link is https://open.spotify.com/track/<id>. ?si= is removed for you.", clean: "", si: false };
   const si = u.searchParams.has("si") || /[?&]si=/.test(raw);
   return { problem: "", clean: `https://open.spotify.com/track/${id}`, si };
 }
@@ -881,11 +939,11 @@ export function preflightOf(r) {
   for (const l of String(pack.adplan || "").match(/https?:\/\/[^\s"'<>)]+/g) || []) { const pr = adLinkProblem(l.replace(/[.,;]+$/, ""), "", own); if (pr) out.push({ field: "adplan", text: `${short("adplan")}: ${pr}` }); }
   return out;
 }
-/* a cover upload (the song page crops any picture to a square; the stores need a square 3000 x 3000) */
+/* a cover: one rule everywhere, a square 3000 x 3000 (v18, 21 Nov 2026: song_page said 1000 px, preflight and the pack 3000) */
 export function coverWarnings(w, h) {
   if (w == null || h == null) return [];
-  if (w !== h) return [`The picture is ${w} x ${h}: not square. The song page crops it to a square; the stores need a square 3000 x 3000.`];
-  if (w < 3000) return [`${w} x ${h}: fine for the song page; RouteNote needs 3000 x 3000 for the stores.`];
+  if (w !== h) return [`The picture is ${w} x ${h}: not square. A cover is a square 3000 x 3000.`];
+  if (w < 3000) return [`${w} x ${h} is too small: a cover is a square 3000 x 3000.`];
   return [];
 }
 
@@ -2310,7 +2368,7 @@ export function routeCostText(r) {
   if (fees.length) bits.push(`Fees: ${fees.join(" + ")} on ${r.feePayouts} payout${r.feePayouts === 1 ? "" : "s"}`);
   const left = moneyBits(r.left);
   if (left.length) bits.push(`${left.join(" + ")} left in Wise or PayPal, not a fee`);
-  if (r.checkLink) bits.push("Check link");
+  if (r.checkLink) bits.push("More landed in Revolut than was sent: check which payments link_transfer tied together"); /* v18 (21 Nov 2026, Forge) */
   if (r.noFee && !fees.length && !r.checkLink && !r.mixed) bits.push("No fee on the amounts recorded");
   if (r.mixed) {
     for (const m of r.mixedExamples || []) bits.push(`${sentBits(m.sent)} sent, ${m.landed.currency} ${Number(m.landed.amount).toFixed(2)} landed`);
@@ -2393,9 +2451,14 @@ export function moneyExpectations(entries, sources, today, rules) {
     const age = j.landed && DAY.test(j.landed.date) ? daysBetween(j.landed.date, today) : null;
     if (j.landed && !shortBy && age != null && age > RECENT_LANDED) continue;
     const payableDate = j.payable.state === "date" ? j.payable.date : null;
+    /* v18 (21 Nov 2026, Forge): a payment that already notes why it is short (a bot wrote "fee or short
+       payment, not checked") carries that note, so the screen shows it instead of only "unexplained" */
+    const noteOf = (x) => { const n = x && typeof x.note === "string" ? hidePrivate(x.note) : ""; return /short|fee/i.test(n) ? clipWords(n, 90) : ""; };
+    const holderE = e.paidBy ? byId.get(e.paidBy) : null;
+    const shortNote = shortBy ? (noteOf(e) || noteOf(holderE) || noteOf(holderE && holderE.movedTo ? byId.get(holderE.movedTo) : null)) : "";
     rows.push({
       id: e.id, payer: hidePrivate(e.payer), source: src ? src.name : "", sourceId: src ? src.id : "", amount: e.amount, currency: e.currency, status: j.landed ? "received" : settled ? "settled" : e.status,
-      ...(shortBy && (!src || !viaHop) ? { shortReason: "unexplained" } : {}),
+      ...(shortBy && (!src || !viaHop) ? { shortReason: "unexplained" } : {}), ...(shortNote ? { shortNote } : {}),
       due, dueFrom, dueNote, flags, shortBy, open: !j.landed && !settled, missingLink: j.missingLink,
       statement: { date: j.statementDate, amount: e.amount, currency: e.currency },
       payable: payableDate, payableState: j.payable.state,
@@ -2599,6 +2662,9 @@ export function incomeReport(entries, checks, sources, today, older = [], rules 
     expected: money.expected, routes: money.routes,
     entries: [...entries].sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : a.at < b.at ? 1 : -1)).slice(0, 60).map((e) => (isHold(e) ? { ...e, holding: true } : e)),
     holding, holdingList: entries.filter((e) => e.status === "received" && !countsAsReceived(e) && !e.movedTo && e.date.slice(0, 7) === month).sort((a, b) => (a.date < b.date ? 1 : -1)),
+    /* v18 (21 Nov 2026, Forge/Ledger): a Wise or PayPal row from an earlier month that has not moved to Revolut
+       (a September PayPal payment) is still waiting: listed apart, never counted */
+    holdingOlder: entries.filter((e) => e.status === "received" && !countsAsReceived(e) && !e.movedTo && !STATEMENT.test(e.account || "") && /wise|paypal/i.test(e.account || "") && e.date.slice(0, 7) < month).sort((a, b) => (a.date < b.date ? 1 : -1)),
     accounts, sources: src, unknown, problems,
     lastEntryAt: entries.reduce((a, e) => (!a || e.at > a ? e.at : a), null) };
 }
@@ -2950,6 +3016,7 @@ export async function logGrowth(store, now, roster, a) {
     studioChange = Number(t);
   }
   const lateRead = a.late_read === true || /^(true|yes)$/i.test(String(a.late_read || "").trim());
+  const correct = a.correct === true || /^(true|yes)$/i.test(String(a.correct || "").trim());
   const extra = {};
   if (!song) {
     if (a.best_post != null && clean(a.best_post, 200)) extra.best_post = clean(a.best_post, 200);
@@ -2975,7 +3042,8 @@ export async function logGrowth(store, now, roster, a) {
     const posts = growthPosts(a.posts);
     if (posts) extra.posts = posts;
     const boosts = growthBoosts(a.boosts);
-    if (boosts) extra.boosts = boosts;
+    /* v18, 21 Nov 2026 (Steve): a boost logged without as_of is as of when it was logged */
+    if (boosts) { for (const b of boosts) if (!b.as_of) b.as_of = spStamp(now); extra.boosts = boosts; }
     const tops = topVideosOf(a.top_videos);
     if (tops) extra.top_videos = tops;
     const fans = fanSignalsOf(a.fan_signals);
@@ -2986,7 +3054,8 @@ export async function logGrowth(store, now, roster, a) {
   const gin = a.gaps == null ? {} : typeof a.gaps === "string" ? { note: a.gaps } : a.gaps;
   if (typeof gin !== "object" || Array.isArray(gin)) fail('gaps must be {"views": "why it could not be read"}.');
   const gaps = {};
-  for (const [k, v] of Object.entries(gin)) { const w = clean(v, 160); if (w) gaps[clean(k, 30)] = w; }
+  /* one line each, cut at a word (v18, 21 Nov 2026, Kevin: long gap notes) */
+  for (const [k, v] of Object.entries(gin)) { const w = clipWords(v, 120); if (w) gaps[clean(k, 30)] = w; }
   /* a 0 sent with a gap note was not a real count: leave it unreported */
   for (const n of ["comments", "saves", "shares"]) if (gaps[n] && vals[n] === 0) delete vals[n];
   if (!Object.keys(vals).length && !Object.keys(extra).length) fail(`There are no numbers in this call. Send at least one of: ${names.join(", ")}.`);
@@ -3012,13 +3081,18 @@ export async function logGrowth(store, now, roster, a) {
         /* HQ fills a blank. It does not replace a number already logged for that day (19 Nov 2026).
            A later read of the same day is kept beside it, so the logged day stays fixed. */
         const hqFill = by === "HQ" && old.by && old.by !== "HQ";
+        /* v18, 21 Nov 2026 (Steve: 19 Nov changed again by a later call): a bot's logged followers or views
+           stay as logged. A later different number is kept beside it as a later read, unless correct is true. */
+        const laterRead = !correct && by !== "HQ" && old.by && old.by !== "HQ" && (k === "followers" || k === "views");
         if (old[k] == null || old[k] === "") { old[k] = v; filled.push(k); delete (old.gaps || {})[k]; }
-        else if (by === "HQ" && (k === "followers" || k === "views") && !sameStored(old[k], v)) {
+        else if ((by === "HQ" || laterRead) && (k === "followers" || k === "views") && !sameStored(old[k], v)) {
           old.live = { ...(old.live || {}), [k]: v, at };
           lived = true;
         }
         else if (!sameStored(old[k], v) && !hqFill) { (old.was || (old.was = {}))[k] = old[k]; old[k] = v; replaced.push(k); }
       }
+      /* a free-text gap note is answered once a later call fills in numbers on the row (v18, 21 Nov 2026, Atlas) */
+      if (old.gaps && old.gaps.note && !gaps.note && filled.length) delete old.gaps.note;
       for (const [k, w] of Object.entries(gaps)) if (old[k] == null) (old.gaps || (old.gaps = {}))[k] = w;
       const shownSame = Object.keys(approx).every((n) => old.shown && old.shown[n] === shown[n]);
       const changeSame = studioChange == null || (old.change === studioChange && old.change_source === "studio");
@@ -3294,6 +3368,8 @@ const FIELD = Object.assign(Object.create(null), Object.fromEntries(PACK_FIELDS.
    the video and the lyrics stay live (18 Nov 2026). */
 export const PREHQ_NOT_NEEDED = new Set(["kind", "label", "split", "distributor", "deal", "wav", "artwork", "folder", "language", "explicit", "genre", "subgenre", "version", "writers", "producers", "featuring", "primary", "copyright"]);
 const STEP_LINK = { video: "video", page: "page", spotifyTrack: "live" };
+/* v18, 21 Nov 2026 (Webmaster): the Spotify track link is required from the release day */
+const trackDue = (f, o) => f.key === "spotifyTrack" && !!o.released;
 export function packFieldView(f, pack, steps, o = {}) {
   const preHq = pack.prehq === "Yes";
   const pitchSkipped = (steps || []).some((s) => s.key === "pitch" && s.status === "skipped");
@@ -3312,7 +3388,7 @@ export function packFieldView(f, pack, steps, o = {}) {
   const routeSkip = preHq && PREHQ_NOT_NEEDED.has(f.key);
   const pitchSkip = pitchSkipped && f.neededBy === "pitch";
   const forNext = !!(o.nextKey && (requiredNow(f, pack) || f.neededBy === o.nextKey));
-  const state = shown ? "" : routeSkip || pitchSkip ? "not needed" : forNext && requiredNow(f, pack) ? "missing for next step" : requiredNow(f, pack) ? "missing (required)" : forNext ? "missing for next step" : f.neededBy ? `missing (needed for "${(STEP[f.neededBy] || {}).label || f.neededBy}")` : "optional";
+  const state = shown ? "" : routeSkip || pitchSkip ? "not needed" : trackDue(f, o) ? "missing (required)" : forNext && requiredNow(f, pack) ? "missing for next step" : requiredNow(f, pack) ? "missing (required)" : forNext ? "missing for next step" : f.neededBy ? `missing (needed for "${(STEP[f.neededBy] || {}).label || f.neededBy}")` : "optional";
   return { field: f.key, label: f.label, value: shown, ...(state ? { state } : {}), ...(doneOn ? { done_on: doneOn } : {}), filled_by: f.fill.length ? f.fill.join(" or ") + " (or Luke)" : "Luke" };
 }
 /* my_day schedule: never cut mid-word, never a past date, never a step that is already done (18 Nov 2026) */
@@ -3896,7 +3972,7 @@ export function releaseView(r, today, o = {}) {
     const videoDone = s.key === "video" && s.status === "done" && !isDay(s.doneOn) ? (s.at ? spDay(Date.parse(s.at)) : (isDay(s.due) ? s.due : today)) : "";
     return { ...s, note, ...(videoDone ? { doneOn: videoDone } : {}), late: !finished(s) && !waiting && !!s.due && s.due < today, dueIn: s.due ? daysBetween(today, s.due) : null, waiting,
       ...(w ? { waitingFor: w.key, waitingText: waitWords(w, s) } : (spotWait || platformWait) ? { waitingFor: "spotify-window", waitingText: "waiting on Spotify" } : {}),
-      ...(canvasWait ? { waitingText: "Waiting for a Canvas link from Luke" } : {}),
+      ...(canvasWait ? { waitingText: "Waiting for a Canvas link from Luke", canvasWait: true } : {}),
       ...(skipped ? { skipped: true } : {}), ...(STEP[s.key] && STEP[s.key].after ? { after: STEP[s.key].after } : {}) };
   });
   const dueOf = (key) => { const s = steps.find((x) => x.key === key); return s ? s.due : date && STEP[key] ? addDays(date, -STEP[key].days) : null; };
@@ -3907,6 +3983,9 @@ export function releaseView(r, today, o = {}) {
   if (!date) missing.push({ key: "date", label: "Release day", short: "Release day", required: true, neededBy: "", step: "", owner: "", due: null });
   /* already out: only whose song it is matters (the files and the details went to the stores long ago) */
   for (const f of PACK_FIELDS) if (!preHq && requiredNow(f, pack) && !filled(pack[f.key]) && (!out || f.group === "deal")) missing.push({ key: f.key, label: f.label, short: f.short, required: true, neededBy: "", step: "", owner: "", due: null });
+  /* v18, 21 Nov 2026: from the release day the Spotify track link is required (on the pack, or on the done live step) */
+  const liveLink = raw.some((s) => s.key === "live" && s.status === "done" && s.link);
+  if (r.status === "scheduled" && !r.alreadyOut && isDay(date) && date <= today && !filled(pack.spotifyTrack) && !liveLink) { const f = FIELD.spotifyTrack; missing.push({ key: f.key, label: f.label, short: f.short, required: true, neededBy: "", step: "", owner: "", due: null }); }
   const pitchSkipped = raw.some((s) => s.key === "pitch" && s.status === "skipped");
   for (const f of PACK_FIELDS) if (!out && !requiredNow(f, pack) && f.neededBy && !filled(pack[f.key])) {
     if (pitchSkipped && f.neededBy === "pitch") continue; /* a skipped pitch does not ask for mood, instruments or story */
@@ -4273,7 +4352,7 @@ export async function proposeSongPage(store, now, roster, a) {
     if (!song) fail(`There is no page called badscandal.com/${slug}. The song pages are: ${SONGS.map((x) => x.slug).join(", ")}. Nothing was asked.`, "not_found");
     let track = clean(a.track, 300).replace(/([?&])si=[^&]*/g, "$1").replace(/[?&]$/, "").replace(/\?&/, "?");
     const si = /[?&]si=/.test(clean(a.track, 300));
-    if (!TRACK_RE.test(track)) fail("track must be the song's Spotify link: https://open.spotify.com/track/<22 letters and digits>. A ?si= on the end is removed. Nothing was asked.");
+    if (!TRACK_RE.test(track)) fail("track must be the song's Spotify link: https://open.spotify.com/track/<22 letters and digits>. ?si= is removed for you. Nothing was asked.");
     if (song.spotifyTrack === track) fail(`badscandal.com/${slug} already has that Spotify link. Nothing was asked.`);
     const isrc = clean(a.isrc, 20).toUpperCase();
     let isrcNote = "";
@@ -4283,7 +4362,7 @@ export async function proposeSongPage(store, now, roster, a) {
       if (packIsrc && packIsrc.replace(/-/g, "") !== isrc.replace(/-/g, "")) isrcNote = `ISRC ${isrc} does not match the pack (${packIsrc}).`;
     }
     p = { action: "track", kind, slug, title: song.title, track, ...(si ? { stripped_si: true } : {}), ...(isrcNote ? { isrc_warning: isrcNote } : {}) };
-    changes = [{ label: "Spotify link", from: song.spotifyTrack || "", to: track }, ...(si ? [{ label: "Link", from: "", to: "Removed ?si= from the Spotify link." }] : []), ...(isrcNote ? [{ label: "ISRC", from: "", to: isrcNote }] : [])];
+    changes = [{ label: "Spotify link", from: song.spotifyTrack || "", to: track }, ...(si ? [{ label: "Link", from: "", to: SI_REMOVED }] : []), ...(isrcNote ? [{ label: "ISRC", from: "", to: isrcNote }] : [])];
     head = `Put the Spotify link on badscandal.com/${slug} (${song.title})` + (isrcNote ? `. ${isrcNote}` : "");
   }
   const open = (await listMessages(store, now)).find((m) => m.proposal && isOpen(m) && (kind === "card" ? m.proposal.action === "card" : m.from === by && (m.proposal.action === "page" || m.proposal.action === "track") && m.proposal.slug === slug));
@@ -4378,7 +4457,7 @@ export async function checkSongBuilds(store, now, roster) {
 /* ---------- covers on the desk (16 Nov 2026, Webmaster: a Drive link answered with a sign-in page) ----------
    Webmaster (or Nova) sends the cover itself (base64) or a link the site can open; the desk keeps it
    (covers/<id>.json: type + base64) and answers with a public link, https://badscandal.com/api/staff/cover/<id>.<ext>,
-   for song_page. Only a real JPG, PNG or WebP, at least 1000 px on each side when its size can be read, 4 MB at
+   for song_page. Only a real JPG, PNG or WebP, a square 3000 x 3000 when its size can be read (v18, 21 Nov 2026: one cover rule), 4 MB at
    most; the newest 40 are kept. A cover is public on purpose: it goes on the song page anyway. */
 export const COVER_BOTS = ["Webmaster", "Nova"];
 const COVER_MAX = 4 * 1024 * 1024;
@@ -4421,7 +4500,7 @@ export async function uploadCover(store, now, roster, a, fetchImpl = fetch) {
   if (buf.length > COVER_MAX) fail("The picture is over 4 MB. Send a smaller JPG (3000 x 3000 at about 85% quality is fine). Nothing was saved.");
   const pic = pictureOf(buf);
   if (!pic) fail("That is not a JPG, PNG or WebP picture (a share page or a sign-in page instead of the file?). Send the picture itself. Nothing was saved.");
-  if (pic.w != null && (pic.w < 1000 || pic.h < 1000)) fail(`The picture is ${pic.w} x ${pic.h}: a cover needs at least 1000 pixels on each side (3000 x 3000 is best). Nothing was saved.`);
+  if (pic.w != null && (pic.w !== pic.h || pic.w < 3000)) fail(`The picture is ${pic.w} x ${pic.h}: a cover is a square 3000 x 3000 (the song page and the stores). Nothing was saved.`);
   const id = newId("c", now) + Math.floor(Math.random() * 1e4).toString(36);
   const at = new Date(now).toISOString();
   await store.setJSON(`covers/${id}.json`, { type: COVER_TYPES[pic.ext], b64: buf.toString("base64") });
@@ -5195,8 +5274,12 @@ export function workers(roster, { hq, updates, messages, cards, seen, today, now
     let items = mine ? mine.items : [];
     /* Spark's daily ideas are a duty even when the sheet has no D- row yet */
     if (b.name === "Spark" && !items.length) {
-      const late = !!(b.time && nowHM && nowHM > b.time && !updates.some((u) => low(u.bot) === k && u.sp.slice(0, 10) === today));
-      items = [{ id: "D-spark", task: b.duty || "Content ideas", due: b.time || "10:00", status: late ? "late" : "todo", late }];
+      /* v18, 21 Nov 2026 (Spark, Webmaster): the shared feed keeps 40 lines, so the desk's own list is read too,
+         and a done line today finishes the duty (it read "todo" or "late, No update yet" after Spark posted done) */
+      const mineToday = [...updates, ...deskUpdates].filter((u) => u && low(u.bot) === k && String(u.sp || "").slice(0, 10) === today && !u.release);
+      const done = mineToday.some((u) => u.status === "done");
+      const late = !done && !!(b.time && nowHM && nowHM > b.time && !mineToday.length);
+      items = [{ id: "D-spark", task: b.duty || "Content ideas", due: b.time || "10:00", status: done ? "done" : late ? "late" : "todo", late, ...(done ? { via: "connector" } : {}) }];
     }
     /* the shared live log keeps the newest 40 lines only: a bot's own last word is looked up in the desk's
        full list too (16 Nov 2026, Steve and Verse read "none yet" after a busy morning) */
@@ -5206,7 +5289,7 @@ export function workers(roster, { hq, updates, messages, cards, seen, today, now
     const asks = waitingOn(messages, b.name);
     const relSteps = releases.filter(releaseActive).flatMap((r) => r.steps.filter((s) => !finished(s) && low(s.owner) === k)
       .map((s) => ({ id: r.id, title: r.title, key: s.key, label: s.label, due: s.due, dueIn: s.dueIn, status: s.status, late: s.late, note: s.note || "", waiting: !!s.waiting,
-        ...(s.waitingFor ? { waitingFor: s.waitingFor, waitingText: s.waitingText } : {}), ...(s.link ? { link: s.link } : {}), ...(s.key === "live" && r.pack && r.pack.spotifyTrack ? { spotifyTrack: r.pack.spotifyTrack } : {}) })))
+        ...(s.waitingFor ? { waitingFor: s.waitingFor, waitingText: s.waitingText } : {}), ...(s.canvasWait ? { canvasWait: true, waitingText: s.waitingText } : {}), ...(s.link ? { link: s.link } : {}), ...(s.key === "live" && r.pack && r.pack.spotifyTrack ? { spotifyTrack: r.pack.spotifyTrack } : {}) })))
       .sort((a, b) => (a.due < b.due ? -1 : a.due > b.due ? 1 : 0));
     let state = "idle";
     if (b.state === "paused") state = "paused";
@@ -5250,8 +5333,10 @@ function cardNow(card, today) {
     const due = dueInLine(out.workingOn, today);
     if (due && due < today) {
       const lateBy = daysBetween(due, today);
-      /* a date in the line is not a late duty. "Late" is only a duty or a step that is actually late. */
-      if (lateBy > 7) { out.oldWorkingOn = out.workingOn; out.workingOn = ""; }
+      /* a date in the line is not a late duty. "Late" is only a duty or a step that is actually late.
+         v18, 21 Nov 2026 (Steve: "fan signals due 18 Nov" still listed): a line written on or before its own
+         date leaves the card once that date has passed and the card was not said again. */
+      if (lateBy > 7 || (day && day <= due)) { out.oldWorkingOn = out.workingOn; out.workingOn = ""; }
     }
   }
   const bday = card.blockersAt ? spDay(Date.parse(card.blockersAt)) : day;
@@ -5879,9 +5964,10 @@ export function lukeLine(text) {
   if (/site analytics/i.test(t) && /netlify|viewer|webmaster|needs access/i.test(t)) return "Webmaster needs Netlify Viewer access (site analytics)";
   t = t.replace(/\b20\d{2}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?Z?\b/g, " ");
   t = t.replace(/\b(20\d{2}-\d{2}-\d{2})\b/g, (d) => dayWords(d) || d);
-  t = t.replace(/\b\d{3}-\d{3}-\d{4}\b/g, "");
-  t = t.replace(/\b([01]?\d|2[0-3]):[0-5]\d\b(?!\s*SP\b)/g, "$& SP");
-  t = t.replace(/\bT-\d+\b/g, " ");
+  t = dropAccountId(t);
+  t = plainWords(t);
+  t = t.replace(/\b([01]?\d|2[0-3]):[0-5]\d\b(?!\s*(?:SP|Paris|Dublin|London|Lisbon|UTC|GMT|CET|CEST|BST|BRT|Europe\/|America\/)\b)/g, "$& SP"); /* v18: a named zone is not São Paulo */
+  t = t.replace(/\bT-\d+(?:\s*(?:,|and|&)\s*T-\d+)*\b/g, (m) => { const n = (m.match(/T-\d+/g) || []).length; return n === 1 ? "a task" : `${n} tasks`; }); /* v18: "T-31 and T-32 stay" no longer becomes " and  stay" */
   t = t.replace(/\bso I can do\s+(?=\()/gi, "");
   t = t.replace(/\b(my_day|post_update|send_message|read_messages|release_step|release_pack|release_fill|log_growth|read_growth|record_spend|licence_queue|content_ideas|spotify_upcoming|team_board|luke_short_briefing|luke_briefing|needs_you|song_pl|task_update|tools_seen|list_version|tools_version|reconnect needed)\b/gi, " ");
   const seen = new Set();
@@ -5906,6 +5992,21 @@ export function lukeUpdates(updates) {
   }
   return out;
 }
+/* v18, 21 Nov 2026 (Atlas: "17 Nov not yet in SfA" stayed on the 16 Nov row): a gap is not shown once its
+   number is on the row, or once the day it names has its own row of the same platform with numbers. */
+const GAP_NUMS = ["followers", "subscribers", "views", "monthly_listeners", "brazil_listeners", "streams", "listeners"];
+export function answeredGaps(row, rows) {
+  const gaps = row && row.gaps && typeof row.gaps === "object" && !Array.isArray(row.gaps) ? { ...row.gaps } : {};
+  const pid = row && (row.kind === "song" ? "s:" + songKey(row.song) : "g:" + growthPlatformId(row.platform));
+  for (const [k, w] of Object.entries(gaps)) {
+    if (row[k] != null && row[k] !== "") { delete gaps[k]; continue; }
+    const day = dateMentioned(w, row.date || "");
+    if (!day || day <= (row.date || "")) continue;
+    const later = (rows || []).some((x) => x && x !== row && x.date === day && (x.kind === "song" ? "s:" + songKey(x.song) : "g:" + growthPlatformId(x.platform)) === pid && GAP_NUMS.some((n) => x[n] != null && x[n] !== ""));
+    if (later) delete gaps[k];
+  }
+  return gaps;
+}
 const GROWTH_LABEL = { instagram: "Instagram", tiktok: "TikTok", youtube: "YouTube", spotify: "Spotify" };
 /* one growth row per platform per day. Two logs of YouTube on the same day are one line. */
 export function growthOnce(rows) {
@@ -5914,7 +6015,7 @@ export function growthOnce(rows) {
     if (!r || r.kind === "song" || !r.platform || !r.date) continue;
     const id = growthPlatformId(r.platform);
     const k = id + "|" + r.date;
-    const gaps = r.gaps && typeof r.gaps === "object" ? { ...r.gaps } : {};
+    const gaps = answeredGaps(r, rows);
     for (const key of Object.keys(gaps)) if (r[key] != null && r[key] !== "") delete gaps[key];
     if (seen.has(k)) {
       const prev = seen.get(k);
@@ -5943,7 +6044,7 @@ export async function readGrowth(store, now, a = {}) {
     if (platform && growthPlatformId(r.platform) !== platform) return false;
     if (date && r.date !== date) return false;
     return true;
-  }).slice(0, 60);
+  }).slice(0, 60).map((r) => (r.gaps && Object.keys(r.gaps).length ? { ...r, gaps: answeredGaps(r, rows) } : r));
   const spend = await listSpend(store, now).catch(() => []);
   const boosts = boostReport(list, spend, { ranking: a.ranking, ads: a.ads });
   return { read_only: true, wrote: false, rows: list, boosts, how_to_log_a_boost: "Steve logs a boost with log_growth. boosts is a list. Each one needs link (the post's https link), ad (that ad's id, or blank or not shown when Instagram shows no ad id; never the ad account), spend (the amount that ad has spent, not the daily budget and not the account's day total), currency (USD) and status (active or paused). A boost with no ad id is keyed on the post link. Forge does not put this on record_spend.", note: "Read only. A number that is missing was not logged. It is not zero. channel_views is the lifetime total. views is the day's views. YouTube's count is subscribers. A boost's spend is in boosts: a spend row that names that post or ad, or a boost Steve logged. ad_spend on a row is the platform figure that was logged. It is not a boost's spend." };
@@ -5963,10 +6064,23 @@ const ideaNum = (v, label) => {
   if (!Number.isFinite(n) || n < 0) fail(`${label} has to be a number, 0 or more. Nothing was saved.`);
   return n;
 };
+/* v18, 21 Nov 2026 (Spark): an older stored set is shown by today's rule too: one hook each, a song on every idea, no auto card */
+function ideasShown(list) {
+  const seen = new Set(), out = [];
+  for (const i of list || []) {
+    if (!i || i.auto || !String(i.song || "").trim()) continue;
+    const k = low(i.hook);
+    if (!k || seen.has(k)) continue;
+    seen.add(k);
+    out.push(i);
+  }
+  return out;
+}
 export function contentIdeasView(doc) {
   const d = doc && doc.latest ? doc.latest : doc;
-  if (!d || !d.at || !Array.isArray(d.ideas) || !d.ideas.length) return { reported: false, ideas: [], best: null, empty: "No content ideas yet. Spark sends them once a day. Nothing is posted." };
-  return { reported: true, at: d.at, day: d.day || "", by: d.by || "Spark", best: d.best || null, ideas: d.ideas, posts: Array.isArray(d.posts) ? d.posts : [], compared: d.compared || "", empty: "", note: "Ideas for Nova. HQ does not post, comment, send a DM, or change an ad." };
+  const ideas = d && Array.isArray(d.ideas) ? ideasShown(d.ideas) : [];
+  if (!d || !d.at || !ideas.length) return { reported: false, ideas: [], best: null, empty: "No content ideas yet. Spark sends them once a day. Nothing is posted." };
+  return { reported: true, at: d.at, day: d.day || "", by: d.by || "Spark", best: d.best || null, ideas, posts: Array.isArray(d.posts) ? d.posts : [], compared: d.compared || "", empty: "", note: "Ideas for Nova. HQ does not post, comment, send a DM, or change an ad." };
 }
 export async function readContentIdeas(store) {
   const { data } = await readDoc(store, IDEAS_KEY, {});
@@ -6011,9 +6125,13 @@ export async function saveContentIdeas(store, now, a) {
     if (p.link && !link) fail("A post link must start with https://. Nothing was saved.");
     const eng = (likes || 0) + (comments || 0) + (saves || 0) + (shares || 0);
     const at = p.at || p.date;
-    ranked.push({ whose, platform: ideaPlatform(p.platform), title: clean(p.title, 120) || "Untitled", link, views, likes: likes || 0, comments: comments || 0, saves: saves || 0, shares: shares || 0, perView: Math.round((eng / views) * 10000) / 10000, ...(isDay(String(at || "").slice(0, 10)) ? { at: String(at).slice(0, 10) } : {}) });
+    /* v18, 21 Nov 2026 (Spark): a count the platform did not show is not reported, never stored as 0 */
+    const counts = { likes, comments, saves, shares };
+    const notReported = Object.keys(counts).filter((k) => counts[k] == null);
+    ranked.push({ whose, platform: ideaPlatform(p.platform), title: clean(p.title, 120) || "Untitled", link, views, ...counts, perView: Math.round((eng / views) * 10000) / 10000, ...(notReported.length ? { not_reported: notReported } : {}), ...(isDay(String(at || "").slice(0, 10)) ? { at: String(at).slice(0, 10) } : {}) });
   }
-  const ours = ranked.filter((p) => p.whose === "ours").sort((x, y) => y.perView - x.perView);
+  /* a post with every count shown ranks before one whose engagement per view leaves counts out */
+  const ours = ranked.filter((p) => p.whose === "ours").sort((x, y) => (!!x.not_reported - !!y.not_reported) || y.perView - x.perView);
   if (!ours.length) fail("Name the official posts you ranked, with views and likes, comments, saves and shares. Nothing was saved.");
   const seenHooks = new Set();
   const unique = [];
@@ -6039,10 +6157,11 @@ export async function saveContentIdeas(store, now, a) {
 
 export async function loadDesk(store, now) {
   const [roster, updates, messages, cardsDoc, config, releases, sightings] = await Promise.all([getRoster(store), listUpdates(store, now, 3), listMessages(store, now, 2), readDoc(store, "cards.json", {}), getConfig(store), listReleases(store), getSightings(store)]);
-  const [seen, read, income, closesDoc, profiles, claimsDoc, ideasDoc, disputesDoc] = await Promise.all([getSeen(store, roster), getRead(store, roster), incomeState(store, now), readDoc(store, "closes.json", []), getProfiles(store), readDoc(store, CLAIMS_KEY, { items: [] }), readDoc(store, IDEAS_KEY, {}), readDoc(store, CASES_KEY, { items: [] })]);
+  const [seen, read, income, closesDoc, profiles, claimsDoc, ideasDoc, disputesDoc, doneDoc] = await Promise.all([getSeen(store, roster), getRead(store, roster), incomeState(store, now), readDoc(store, "closes.json", []), getProfiles(store), readDoc(store, CLAIMS_KEY, { items: [] }), readDoc(store, IDEAS_KEY, {}), readDoc(store, CASES_KEY, { items: [] }), readDoc(store, NEED_DONE_KEY, { marks: {} })]);
   const claims = claimsDoc.data && Array.isArray(claimsDoc.data.items) ? { items: claimsDoc.data.items, checked: claimsDoc.data.checked && typeof claimsDoc.data.checked === "object" ? claimsDoc.data.checked : {} } : { items: [], checked: {} };
   const disputes = disputesDoc.data && Array.isArray(disputesDoc.data.items) ? disputesDoc.data.items : [];
-  return { roster, updates, messages, cards: cardsDoc.data || {}, seen, read, income, config, releases, sightings, closes: Array.isArray(closesDoc.data) ? closesDoc.data : [], profiles, claims, disputes, contentIdeas: ideasDoc.data || {} };
+  const needsDone = doneDoc.data && doneDoc.data.marks && typeof doneDoc.data.marks === "object" ? { marks: doneDoc.data.marks } : { marks: {} };
+  return { roster, updates, messages, cards: cardsDoc.data || {}, seen, read, income, config, releases, sightings, closes: Array.isArray(closesDoc.data) ? closesDoc.data : [], profiles, claims, disputes, contentIdeas: ideasDoc.data || {}, needsDone };
 }
 
 /* Has the person a message was sent to READ it? (V6, 11 Nov 2026: from the read markers, read/<name>,
@@ -6187,6 +6306,26 @@ export function signedOutLines(items) {
   }
   return [...found.values()].map(({ who, line }) => ({ who, line }));
 }
+/* v18 (21 Nov 2026, Forge T-30): the platforms a bot says are signed in again, and nobody says are signed
+   out. A task blocker that still waits on that sign-in gets a check line; the blocker itself is the
+   sheet's, so it is not rewritten. */
+const SIGN_PLATFORMS = [["TikTok", /tiktok/i], ["Google Ads", /google/i], ["Meta", /\bmeta\b|facebook/i], ["YouTube", /youtube/i], ["Spotify", /spotify/i], ["Instagram", /instagram/i]];
+export function signedInAgain(items) {
+  const back = new Set(), out = new Set();
+  for (const it of items || []) {
+    const t = String(it && it.text || "");
+    if (!/signed (back )?in again|is signed in\b|signed back in/i.test(t)) continue;
+    for (const [name, re] of SIGN_PLATFORMS) if (re.test(t)) back.add(name);
+  }
+  for (const x of signedOutLines(items)) for (const [name, re] of SIGN_PLATFORMS) if (re.test(x.line)) out.add(name);
+  return [...back].filter((n) => !out.has(n));
+}
+export function blockerCheck(blocker, back) {
+  const b = String(blocker || "");
+  if (!/sign[\s-]?in|signed out|log ?in/i.test(b)) return "";
+  const hit = SIGN_PLATFORMS.find(([name, re]) => (back || []).includes(name) && re.test(b));
+  return hit ? `${hit[0]} is signed in again (the desk says so). If the rest of this blocker still stands, say only that with task_update.` : "";
+}
 /* Five daily "Google … signed out" lines become one. Other unread lines stay, cut at a word. */
 export function unreadSpendLine(lines) {
   const all = (lines || []).map((l) => String(l || "").trim()).filter(Boolean);
@@ -6197,10 +6336,11 @@ export function unreadSpendLine(lines) {
     return m ? { d: Number(m[1]), mon: m[2].slice(0, 1).toUpperCase() + m[2].slice(1, 3).toLowerCase() } : null;
   }).filter(Boolean).sort((a, b) => a.d - b.d);
   const g = days.length ? `Google not read since ${days[0].d} ${days[0].mon} (signed out)` : (google.length ? "Google not read (signed out)" : "");
-  return [g, ...rest.map((l) => clipWords(l, 80))].filter(Boolean).join("; ");
+  return [g, ...rest.map((l) => clipWords(l.replace(/\s*(?:at|see|on|via)?\s*https?:\/\/\S+/gi, "").trim(), 80))].filter(Boolean).join("; ");
 }
-/* A stored site check that still says an old duty count is replaced with the live board. */
-export function freshReport(report, hq) {
+/* A stored site check that still says an old duty count is replaced with the live board.
+   v18 (21 Nov 2026, Forge): the rewritten line carries the live time (liveAt), not the old check's 15:35. */
+export function freshReport(report, hq, liveAt) {
   if (!report || !report.text) return report;
   const d = hq && hq.team && hq.team.duties;
   if (!d || d.total == null) return report;
@@ -6209,7 +6349,7 @@ export function freshReport(report, hq) {
   if (!m) return report;
   const done = Number(m[1]), total = Number(m[2]), saidBlocked = blocked ? Number(blocked[1]) : null;
   if (done === Number(d.done) && total === Number(d.total) && (saidBlocked == null || saidBlocked === Number(d.blocked))) return report;
-  return { ...report, stale: true, text: `The board shows ${d.done} of ${d.total} duties done, ${d.blocked} blocked.` };
+  return { ...report, stale: true, ...(liveAt ? { sp: liveAt } : {}), text: `The board shows ${d.done} of ${d.total} duties done, ${d.blocked} blocked.` };
 }
 /* Sign-ins, access, a yes Luke still owes, and fan replies only he can send. Notes are not asks. */
 function lukeExtraNeeds(desk) {
@@ -6223,7 +6363,9 @@ function lukeExtraNeeds(desk) {
   }
   for (const text of desk && desk.notRead || []) if (text) bits.push({ who: "", text: String(text), at: null });
   for (const line of signedOutLines(bits)) {
-    out.push({ key: "sign:" + line.line.toLowerCase(), kind: "signin", id: line.who || line.line, text: line.line, href: "#today", at: null });
+    /* v18: the id is a short slug, never the whole sentence; the answer goes to the bot that said it */
+    const slug = line.line.toLowerCase().replace(/\(.*?\)/g, "").replace(/^sign in to /, "").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40) || "account";
+    out.push({ key: "sign:" + line.line.toLowerCase(), kind: "signin", id: "sign-" + slug, ...(line.who ? { from: line.who } : {}), text: line.line, href: "#today", at: null });
   }
   const seenYes = new Set(), seenAcc = new Set();
   for (const b of bits) {
@@ -6236,7 +6378,20 @@ function lukeExtraNeeds(desk) {
     }
     if (realYes(t) && !seenYes.has(b.who)) {
       seenYes.add(b.who);
-      out.push({ key: "yes:" + b.who, kind: "yes", id: b.who, text: `${b.who} is waiting on your yes: ${clipWords(t, 90)}`, href: "#team", at: b.at });
+      out.push({ key: "yes:" + b.who, kind: "yes", id: b.who, from: b.who, detail: clipWords(t, 200), text: `${b.who} is waiting on your yes: ${clipWords(t, 90)}`, href: "#team", at: b.at });
+    }
+  }
+  /* v18 (21 Nov 2026): a release step blocked on Luke's yes ("Waiting on Luke's Yes, correct for the typo fix")
+     is the same ask as a bot card saying it: one card per bot */
+  for (const r of desk && desk.releases || []) {
+    if (!r || r.status === "cancelled") continue;
+    for (const st of r.steps || []) {
+      const t = String((st && st.note) || "").replace(/\s+/g, " ").trim();
+      if (!st || !["blocked", "working", "todo"].includes(st.status) || !realYes(t)) continue;
+      const who = clean(st.owner, 40);
+      if (!who || seenYes.has(who)) continue;
+      seenYes.add(who);
+      out.push({ key: "yes:" + who, kind: "yes", id: who, from: who, detail: clipWords(t, 200), text: `${who} is waiting on your yes: ${clipWords(t, 90)}`, href: "#releases/" + r.id, at: st.at || null });
     }
   }
   for (const f of desk && desk.needsReply || []) {
@@ -6245,6 +6400,31 @@ function lukeExtraNeeds(desk) {
     out.push({ key: "fan:" + id, kind: "fan", id, text: `A fan on Instagram needs a reply: ${clipWords(f.text || f.quote, 80)}`, href: "#growth", at: f.at || null });
   }
   return out;
+}
+export const NEED_DONE_KEY = "needs-done.json", NEED_DONE_DAYS = 3;
+/* v18 (21 Nov 2026): Luke answers an ask that has no message of its own (a sign-in, Netlify access, a task, a
+   fan, a bot waiting on his yes) on its card. ONE write records the mark (key -> when), then the answer goes to
+   the bot as a message from Luke, so the bot reads it in messages_for_you exactly like any other answer. */
+export async function markNeedDone(store, now, roster, a) {
+  const by = whoIs(a.by, roster, { people: true });
+  if (by !== "Luke") fail("Only Luke answers his own asks. Nothing was saved.", "not_allowed");
+  const key = clean(a.key, 200);
+  if (!/^(sign|acc|yes|fan|t):/.test(key)) fail("key must be the item's key from the Needs you list. Nothing was saved.");
+  const text = cleanText(a.text, 1500);
+  if (text.length < 2) fail("Write the answer. Nothing was saved.");
+  noSecrets(text);
+  const to = whoIs(a.to, roster);
+  const at = new Date(now).toISOString();
+  const done = a.done !== false;
+  if (done) await mutate(store, NEED_DONE_KEY, { marks: {} }, (doc) => {
+    const marks = doc && doc.marks && typeof doc.marks === "object" ? doc.marks : {};
+    const keep = {};
+    for (const [k, v] of Object.entries(marks)) if (v && v.at && Date.parse(at) - Date.parse(v.at) < 30 * 86400000) keep[k] = v;
+    keep[key] = { at, by, choice: clean(a.choice, 20) || "done" };
+    return { replace: { marks: keep }, value: true };
+  });
+  const r = await sendMessage(store, now, roster, { from: "Luke", to, text, needs: a.needs === "action" ? "action" : "none" });
+  return { ok: true, key, done, message: r.message };
 }
 export function waitingOnLuke(desk, today, now = null) {
   const out = [];
@@ -6283,7 +6463,9 @@ export function waitingOnLuke(desk, today, now = null) {
   for (const x of lukeExtraNeeds(desk)) out.push(x);
   /* a blocked T-task whose blocker is a real ask. The old task titles (runbook B, Read Google Ads
      spend, TikTok Campaign A, Site analytics) are not cards: the sign-in and the access line cover them. */
-  const DROP = /runbook\s*b|read google ads spend|tiktok campaign a|site analytics/i;
+  /* v18 (21 Nov 2026, Luke): T-32 (the Meta system user) IS his to do, so "runbook B" no longer drops a task;
+     the words are taken off what he reads */
+  const DROP = /read google ads spend|tiktok campaign a|site analytics/i;
   for (const t of desk.lukeTasks || []) {
     if (!t || !/^T-/i.test(String(t.id || ""))) continue;
     if (!/block|waiting/i.test(String(t.status || ""))) continue;
@@ -6292,13 +6474,24 @@ export function waitingOnLuke(desk, today, now = null) {
     if (!/luke|your yes|system user|you to/i.test(blocker || title)) continue;
     if (/google ads/i.test(blocker) && /sign/i.test(blocker)) continue;
     if (/netlify|viewer access|site analytics/i.test(blocker + " " + title)) continue;
-    const text = lukeLine(blocker || title);
+    const text = lukeLine(blocker || title).replace(/\s*\(?\b(?:see |per |use |in )?runbook\s*b\b\)?[,.;:]?/gi, "").replace(/\s{2,}/g, " ").trim();
     if (!text) continue;
     const owner = clean(t.owner, 40);
     out.push({ key: "t:" + t.id, kind: owner === "Nova" ? "handle" : "task", id: String(t.id), from: owner, text: owner === "Nova" && !/nova needs you/i.test(text) ? "Nova needs you to handle this: " + text : text, href: "#team", at: null });
   }
+  /* v18: an ask Luke marked done (or answered Yes/No) on a card leaves the list. An ask with a time comes back
+     when the bot says it again later; one without a time stays off for NEED_DONE_DAYS. */
+  const marks = (desk.needsDone && desk.needsDone.marks) || {};
+  const nowMs = now == null ? Date.now() : Number(now);
+  const isDone = (x) => {
+    const mk = marks[x.key];
+    if (!mk || !mk.at) return false;
+    if (x.at) return String(x.at) <= String(mk.at);
+    return nowMs - Date.parse(mk.at) < NEED_DONE_DAYS * 86400000;
+  };
   const seen = new Set(), deduped = [];
   for (const x of out) {
+    if (x.kind !== "message" && x.kind !== "handle" && x.kind !== "card" && x.kind !== "dispute" && x.kind !== "spotify" && x.kind !== "account" && isDone(x)) continue;
     const bare = String(x.text || "").toLowerCase().replace(/\b\d{3}-\d{3}-\d{4}\b/g, "").replace(/\s+/g, " ").trim();
     const k = x.kind === "signin" || /^sign in to /.test(bare) ? "signin:" + bare
       : x.kind === "access" || /netlify viewer/.test(bare) ? "access:" + bare
@@ -6350,7 +6543,7 @@ export function board(desk, now, hq) {
     contentIdeas: contentIdeasView(desk.contentIdeas),
     connector: { botsOn: desk.config.botsOn, changedAt: desk.config.changedAt, lastUsed: lastSeen ? { bot: lastSeen[0], at: lastSeen[1].at, tool: lastSeen[1].tool } : null,
       connected: staff.filter((w) => w.connected).length, total: staff.length, claudeSeen: desk.seen.Claude ? desk.seen.Claude.at : null },
-    report: freshReport(desk.messages.find((m) => m.from === "HQ" && m.kind === "report") || null, hq),
+    report: freshReport(desk.messages.find((m) => m.from === "HQ" && m.kind === "report") || null, hq, spStamp(now)),
     names: botNames(desk.roster).concat(PEOPLE),
   };
 }

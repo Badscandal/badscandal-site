@@ -31,7 +31,7 @@ test("reconnect is the count or the names, never a version bump on its own", () 
 test("the connector says the tools version when a bot connects", async () => {
   const deps = { tools: TOOLS, instructions: "hello", call: async () => ({}) };
   const init = await handle({ jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion: "2025-06-18" } }, {}, deps);
-  assert.equal(init.body.result.serverInfo.version, "1.0.0");
+  assert.equal(init.body.result.serverInfo.version, "1.18.0"); /* v18, 21 Nov 2026: bumped so the bots see the batch */
   assert.equal(init.body.result.serverInfo.tools, TOOLS.length);
   assert.match(init.body.result.serverInfo.toolsVersion, /^[0-9a-f]{8}$/);
   const disc = await handle({ jsonrpc: "2.0", id: 2, method: "server/discover", params: { _meta: { "io.modelcontextprotocol/protocolVersion": "2026-07-28" } } }, { "mcp-protocol-version": "2026-07-28" }, deps);
@@ -49,7 +49,7 @@ test("before the duty rows, and in quiet hours, the note and the next line agree
   assert.match(quiet.next, /Today's duties appear after 07:00/);
   const day = await call(d, "my_day", { bot: "Kevin" });
   assert.equal(day.open_questions, undefined);
-  assert.equal(day.reconnect.includes("reconnect needed"), false);
+  assert.equal(day.reconnect, undefined); /* v18, 21 Nov 2026: said only when needed */
 });
 
 test("one questions list, a word-boundary excerpt, and the unsorted ids once", async () => {

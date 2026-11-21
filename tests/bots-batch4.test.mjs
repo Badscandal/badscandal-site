@@ -81,7 +81,8 @@ test("missing reads are listed and make the figure estimated: a 'not read' sheet
   /* HQ's words */
   assert.equal(L.capRateLine(cap), "Rate: 1.1 USD per EUR (the month's fixed rate, Nov 2026)");
   assert.equal(L.capRateLine(hqModel({ Spend: SPEND }, TODAY, FX).money.cap), "Rate: 1.2 USD per EUR (ECB average for Nov 2026, so far)");
-  assert.equal(L.capMissingLine(cap), "Not read: TikTok Fri 13 Nov: signed out");
+  /* v18, 21 Nov 2026: the Ads line uses the same short form as gapNotes (Forge: five Google day lines with web addresses) */
+  assert.equal(L.capMissingLine(cap), "Not read: TikTok 13 Nov, signed out");
 });
 
 /* ---------- 4. record_spend ---------- */

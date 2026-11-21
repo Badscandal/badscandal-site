@@ -98,7 +98,8 @@ test("ad tiles name a missing account and never invent a cost per engagement", (
   const pins = V.adsPins({ cap: { spent: 40, amount: 1000, currency: "USD", notRead: ["Google yesterday"] }, yesterday: { spend: 4, currency: "USD" } });
   assert.ok(pins.cap.missing.includes("Google not read"));
   assert.equal(pins.engagement.label, "not reported");
-  assert.equal(pins.engagement.vs, "vs last week: not reported");
+  /* v18, 21 Nov 2026: a missing figure says why and where it is (Forge), still never invented */
+  assert.equal(pins.engagement.vs, "Meta's engagements aren't read here. A boost's cost per engagement is on Growth.");
   const plot = V.creativePlot([
     { ad: "A", spend: 30, engagements: 2, cpeSeries: [1, 2, 3] },
     { ad: "B", spend: 4, engagements: 20 }

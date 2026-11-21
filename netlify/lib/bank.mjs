@@ -327,7 +327,7 @@ export function bankLine(st, now = Date.now()) {
   if (Number.isFinite(ok)) {
     const d = S.spDay(ok), today = S.spDay(now);
     const when = d === today ? "today" : d === addDays(today, -1) ? "yesterday" : `on ${Number(d.slice(8, 10))} ${MON[Number(d.slice(5, 7)) - 1]}`;
-    parts.push(`Revolut: read ${when} at ${S.spHM(ok)}`);
+    parts.push(`Revolut: read ${when} at ${S.spHM(ok)} SP`); /* v18 (21 Nov 2026): the time says its zone */
   } else parts.push(st.partial ? "Revolut: not fully read yet" : "Revolut: not read yet");
   const failedSince = st.lastError && (!Number.isFinite(ok) || Date.parse(st.lastRunAt) > ok);
   if (failedSince) parts.push("the last read failed");

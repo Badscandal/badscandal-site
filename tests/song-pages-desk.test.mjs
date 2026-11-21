@@ -76,7 +76,7 @@ test("what is refused before Luke is ever asked", async () => {
   await fails(call(d, "song_page", { bot: "Webmaster", kind: "track", slug: "nosuchsong", track: TRACK }), /no page called/);
   /* 18 Nov 2026: a ?si= on the Spotify link is removed, not refused */
   const si = await call(d, "song_page", { bot: "Webmaster", kind: "track", slug: "medaseubody", track: TRACK + "?si=abc" });
-  assert.equal(si.note_link, "Removed ?si= from the Spotify link.");
+  assert.equal(si.note_link, "?si= is removed for you."); /* v18, 21 Nov 2026: one wording for ?si= */
   await fails(call(d, "song_page", { bot: "Webmaster", kind: "move", slug: "medaseubody" }), /kind/);
   await fails(call(d, "song_page", { ...NEW, bot: "Kevin" }), /Webmaster/);
   const first = await call(d, "song_page", NEW);

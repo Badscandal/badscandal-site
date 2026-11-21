@@ -1685,6 +1685,23 @@ body.ws-on main{margin-left:0;max-width:none}
 @media(max-width:640px){
   .htiles,.pg .kpis{grid-template-columns:1fr}
 }
+/* ---------- v18 (21 Nov 2026): Needs you cards: one short question, Yes / No / Reply, the email on Reply ---------- */
+.needcard{margin:0 0 12px;padding:16px;border-radius:18px}
+.needcard .dq{margin:0 0 6px;font-size:18px;line-height:1.3;font-weight:650;color:var(--paper);overflow-wrap:anywhere}
+.needcard .dfacts{margin:0 0 6px;font-size:14px;color:var(--muted);overflow-wrap:anywhere}
+.needcard .drec{margin:0 0 10px;font-size:14px}
+.needcard .drec::before{content:"Recommended: ";color:var(--muted)}
+.needcard .dacts{margin-top:10px}
+.needcard .dacts a.copybtn{display:inline-flex;align-items:center;min-height:48px;padding:0 16px;text-decoration:none}
+.needcard.gone{display:none}
+.nreply{margin-top:12px;display:flex;flex-direction:column;gap:8px}
+.nreply textarea,.nreply input{width:100%;box-sizing:border-box;font:inherit;font-size:16px;color:var(--paper);background:rgba(255,255,255,.05);border:1px solid var(--ink-3);border-radius:12px;padding:10px 12px}
+.nreply textarea{min-height:88px;resize:vertical;white-space:pre-wrap;line-height:1.45}
+.nemail textarea{min-height:200px}
+.nfld{display:flex;flex-direction:column;gap:4px}
+.nfld span{font-size:13px;color:var(--muted)}
+@media(min-width:640px){.nemail .nfld:not(:has(textarea)){flex-direction:row;align-items:center;gap:10px}.nemail .nfld:not(:has(textarea)) span{width:64px;flex:none}}
+.needcard .ferr:empty{display:none}
 </style>
 </head>
 <body>
@@ -1824,7 +1841,7 @@ body.ws-on main{margin-left:0;max-width:none}
         </div>
       </div>
       <div class="tile w12" id="healthCard">
-        <div class="head"><div><h3>Meta events health</h3><p class="sub">Our server's copy of each event (Conversions API) and what Meta answered.</p></div><span class="pill" id="hPill">–</span></div>
+        <div class="head"><div><h3>Meta events health</h3><p class="sub">What our server told Meta about each visit and tap, and what Meta answered.</p></div><span class="pill" id="hPill">–</span></div>
         <div class="mstat" id="mstat" style="margin-bottom:12px"><span id="mstatTxt">Meta: no events yet</span></div>
         <div class="lbl" style="margin-bottom:6px">Today</div>
         <div class="trio">
@@ -1839,7 +1856,7 @@ body.ws-on main{margin-left:0;max-width:none}
         <div class="keyrow"><span>Last error</span><b id="hLastErr">–</b></div>
         <p class="note" id="hErrMsg" hidden></p>
         <div class="warnbox" id="hTest" hidden>Test mode is ON: events go to Events Manager → Test events. Delete META_TEST_EVENT_CODE on Netlify when you're done.</div>
-        <p class="note">The browser copy (the Pixel) goes straight from the phone to Meta, so only Events Manager can show it. When both arrive, Meta lists the event as <b>Browser · Server</b> and counts it once.</p>
+        <p class="note">The phone also tells Meta directly. Only Meta's Events Manager shows that copy. Meta counts each visit or tap once.</p>
       </div>
     </div>
   </section>
@@ -1886,7 +1903,7 @@ body.ws-on main{margin-left:0;max-width:none}
       <div class="tile w6"><h3>Meta can see</h3><p class="sub" id="metaSub">Of our counted Spotify taps.</p>
         <div class="mini"><div class="lbl">Sent to Meta</div><div class="big num" id="mSent">–</div></div>
         <div class="stackbar" id="mStack"></div>
-        <div class="keyrow"><span><span class="swatch" style="background:var(--spot)"></span>Sent (Pixel + server)</span><b id="mS">–</b></div>
+        <div class="keyrow"><span><span class="swatch" style="background:var(--spot)"></span>Sent to Meta</span><b id="mS">–</b></div>
         <div class="keyrow"><span><span class="swatch" style="background:var(--grey-mark)"></span>Not sent (no consent, or opted out)</span><b id="mN">–</b></div>
         <div class="keyrow"><span>EU/UK consent: allowed / declined</span><b id="mC">–</b></div>
       </div>
@@ -2090,18 +2107,18 @@ body.ws-on main{margin-left:0;max-width:none}
   }, 400);
 })();
 </script>
-<script src="js/crt.js?v=3aa0a05fc991" defer></script>
-<script src="js/hq-lib.js?v=3aa0a05fc991" defer></script>
-<script src="js/hq-chart.js?v=3aa0a05fc991" defer></script>
-<script src="js/hq-growth.js?v=3aa0a05fc991" defer></script>
-<script src="js/hq-look.js?v=3aa0a05fc991" defer></script>
-<script src="js/hq.js?v=3aa0a05fc991" defer></script>
-<script src="js/hq-staff.js?v=3aa0a05fc991" defer></script>
-<script src="js/hq-phone.js?v=3aa0a05fc991" defer></script>
-<script src="js/hq-shell.js?v=3aa0a05fc991" defer></script>
-<script src="js/hq-workspaces.js?v=3aa0a05fc991" defer></script>
-<script src="js/hq-app.js?v=3aa0a05fc991" defer></script>
-<script src="js/hq-cmd.js?v=3aa0a05fc991" defer></script>
-<script src="js/hq-pages.js?v=3aa0a05fc991" defer></script>
+<script src="js/crt.js?v=41a935a2221b" defer></script>
+<script src="js/hq-lib.js?v=41a935a2221b" defer></script>
+<script src="js/hq-chart.js?v=41a935a2221b" defer></script>
+<script src="js/hq-growth.js?v=41a935a2221b" defer></script>
+<script src="js/hq-look.js?v=41a935a2221b" defer></script>
+<script src="js/hq.js?v=41a935a2221b" defer></script>
+<script src="js/hq-staff.js?v=41a935a2221b" defer></script>
+<script src="js/hq-phone.js?v=41a935a2221b" defer></script>
+<script src="js/hq-shell.js?v=41a935a2221b" defer></script>
+<script src="js/hq-workspaces.js?v=41a935a2221b" defer></script>
+<script src="js/hq-app.js?v=41a935a2221b" defer></script>
+<script src="js/hq-cmd.js?v=41a935a2221b" defer></script>
+<script src="js/hq-pages.js?v=41a935a2221b" defer></script>
 </body>
 </html>

@@ -43,7 +43,7 @@ test("needs you is one list and one count on every answer", async () => {
   assert.deepEqual(idsOf(brief.decisions_waiting_on_luke), idsOf(you.waiting));
   assert.equal(short.needs_you, you.total);
   assert.equal(you.waiting.some((x) => /Site analytics|Read Google Ads|runbook/i.test(x.what || x.text || "")), false);
-  assert.ok(you.waiting.some((x) => x.kind === "handle" && /Nova needs you to contact me/.test(x.what)));
+  assert.ok(you.waiting.some((x) => x.kind === "handle" && /Nova needs you to contact me/.test(x.text))); /* v18: text, no what */
   assert.ok(you.waiting.some((x) => /Meta system user/.test(x.what || x.text || "")));
   assert.equal(you.waiting[0].kind, "decision");
   assert.equal(you.waiting[0].options.length, 2);
@@ -67,7 +67,8 @@ test("dispute cards stay collapsed, keep line breaks, and a song shows once", ()
   assert.match(html, /<br>/);
   assert.equal((html.match(/data-case="c1"/g) || []).length, 1);
   const phone = fs.readFileSync(new URL("../js/hq-phone.js", import.meta.url), "utf8");
-  assert.match(phone, /Do this first/);
+  /* v18, 21 Nov 2026: the card is drawn by HQLook.needCardHtml (js/hq-look.js) */
+  assert.match(fs.readFileSync(new URL("../js/hq-look.js", import.meta.url), "utf8"), /Do this first/);
   assert.equal(/Also waiting on you/.test(phone), false);
 });
 

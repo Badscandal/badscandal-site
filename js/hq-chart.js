@@ -26,7 +26,8 @@
   }
   function dateLabel(d) {
     if (!isDay(d)) return "";
-    return Number(d.slice(5, 7)) + "/" + Number(d.slice(8, 10)) + "/" + d.slice(2, 4);
+    /* v18 (21 Nov 2026, Forge): "Fri 13 Nov", never the US "11/13/26" */
+    return new Date(d + "T12:00:00Z").toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" });
   }
   function group(n) {
     var s = String(Math.abs(Math.round(n))), out = "";

@@ -29,6 +29,13 @@
     if (!isFinite(n)) return miss();
     return esc(String(Math.round(n * 10) / 10));
   }
+  /* seconds of watch time, 2 decimals (v18, 21 Nov 2026, Kevin) */
+  function secs(v) {
+    if (v == null || v === "") return miss();
+    var n = Number(v);
+    if (!isFinite(n)) return miss();
+    return esc(n.toFixed(2) + "s");
+  }
   function pct(v) {
     if (v == null || !isFinite(v)) return miss();
     return esc((v * 100).toFixed(2) + "%");
@@ -163,12 +170,12 @@
   function table(platform, posts) {
     var rows = posts.filter(function (p) { return platId(p.platform) === platform; });
     var h = '<section class="gsec"><h3>' + esc(LABEL[platform]) + " posts</h3>";
-    h += '<div class="scroll"><table class="posttable"><tr><th>Date</th><th>Hook</th><th>Views 24h</th><th>Views 7d</th><th>EPV 24h</th><th>Saves + shares / view</th><th>Follows</th><th></th></tr>';
+    h += '<div class="scroll"><table class="posttable"><tr><th>Date</th><th>Hook</th><th>Views 24h</th><th>Views 7d</th><th>Engagement, 24h</th><th>Saves + shares / view</th><th>Follows</th><th></th></tr>';
     if (!rows.length) h += '<tr><td colspan="8">' + miss() + "</td></tr>";
     rows.forEach(function (p) {
       var e = epv(p), ss = savesShares(p);
       h += "<tr>" + cell("Date", dayOf(p.date)) + cell("Hook", linkOr(videoHref(p), p.hook)) + cell("Views 24h", num(p.views_24h)) + cell("Views 7d", num(p.views_7d)) +
-        cell("EPV 24h", e == null ? miss() : pct(e)) + cell("Saves + shares / view", ss == null ? miss() : pct(ss)) + cell("Follows", num(p.follows)) + cell("Reach", shown(tag(p))) + "</tr>";
+        cell("Engagement, 24h", e == null ? miss() : pct(e)) + cell("Saves + shares / view", ss == null ? miss() : pct(ss)) + cell("Follows", num(p.follows)) + cell("Reach", shown(tag(p))) + "</tr>";
     });
     return h + "</table></div></section>";
   }
@@ -179,19 +186,34 @@
     return Number(row.avg_watch_6h) >= 2.5 && rate >= 0.0014 ? "pass" : "fail";
   }
   function pick(a, b) { return a != null && a !== "" ? a : b; }
+  /* "First 6 hours: watch time ok, no new followers" (v18, 21 Nov 2026, Kevin: not "+6h gate PASS/FAIL") */
+  function gateWords(row) {
+    var watch = Number(row.avg_watch_6h) >= 2.5 ? "watch time ok" : "watch time short";
+    var f = Number(row.follows_6h), rate = Number(row.views_6h) > 0 ? f / Number(row.views_6h) : 0;
+    var fol = !(f > 0) ? "no new followers" : rate >= 0.0014 ? "new followers ok" : "few new followers";
+    return "First 6 hours: " + watch + ", " + fol;
+  }
+  /* what was not read, on one line: "Not reported: followers, follows_48h (why…)" */
+  function gapLine(keys, why) {
+    var first = String(why[keys[0]] || "").replace(/\s+/g, " ").trim();
+    var line = "Not reported: " + keys.map(function (k) { return String(k).replace(/_/g, " "); }).join(", ") + (first ? " (" + first + ")" : "");
+    if (line.length <= 140) return line;
+    var cut = line.slice(0, 139), sp = cut.lastIndexOf(" ");
+    return (sp > 20 ? cut.slice(0, sp) : cut) + "…" + (first ? ")" : "");
+  }
   function tiktokBlock(row, summary) {
     var gate = gateOf(row);
     var rate = row && row.follows_6h != null && Number(row.views_6h) > 0 ? Number(row.follows_6h) / Number(row.views_6h) : null;
     var viewsDate = pick(summary && summary.viewsDate, row && row.views_date);
     var late = viewsDate && ((summary && summary.lastDay) || (row && row.date)) && viewsDate < ((summary && summary.lastDay) || row.date);
     var h = '<section class="gsec" id="tiktokBox"><h3>TikTok</h3>';
-    h += '<p class="d">+6h views ' + num(row && row.views_6h) + " · avg watch " + (row && row.avg_watch_6h != null ? hours(row.avg_watch_6h) + "s" : miss()) + " · follows " + num(row && row.follows_6h) + " · follows/view " + (rate == null ? miss() : pct(rate)) + "</p>";
-    h += '<p class="d">1 day views ' + num(pick(summary && summary.views, row && row.views)) + " · avg watch " + (row && row.avg_watch != null ? hours(row.avg_watch) + "s" : miss()) + " · follows at 48h " + num(row && row.follows_48h) + "</p>";
-    h += '<p class="d">+6h gate ' + (gate == null ? miss() : '<b class="gate-' + gate + '">' + (gate === "pass" ? "PASS" : "FAIL") + "</b>") + " · pass is avg watch at least 2.5s and follows/view at least 0.14%.</p>";
-    h += "<p class=\"d\">Best of last 7 days " + (row && (row.best_post_link || row.best_post) ? linkOr(row.best_post_link, row.best_post || "link") : miss()) + "</p>";
-    h += "<p class=\"d\">Views date " + (viewsDate ? dayOf(viewsDate) : miss()) + (late ? " · a day late." : "") + "</p>";
+    /* v18, 21 Nov 2026 (Kevin): plain words, watch time to 2 decimals, the views lag said where the views are */
+    h += '<p class="d">First 6 hours: views ' + num(row && row.views_6h) + " · avg watch " + (row && row.avg_watch_6h != null ? secs(row.avg_watch_6h) : miss()) + " · follows " + num(row && row.follows_6h) + " · follows/view " + (rate == null ? miss() : pct(rate)) + "</p>";
+    h += '<p class="d">1 day views ' + num(pick(summary && summary.views, row && row.views)) + (late ? " (for " + dayOf(viewsDate) + ", a day late)" : "") + " · avg watch " + (row && row.avg_watch != null ? secs(row.avg_watch) : miss()) + " · follows at 48h " + num(row && row.follows_48h) + "</p>";
+    h += '<p class="d">' + (gate == null ? "First 6 hours: " + miss() : '<b class="gate-' + gate + '">' + esc(gateWords(row)) + "</b>") + "</p>";
+    h += "<p class=\"d\">Best post, last 7 days " + (row && (row.best_post_link || row.best_post) ? linkOr(row.best_post_link, row.best_post || "link") : miss()) + "</p>";
     var gaps = row && row.gaps && typeof row.gaps === "object" ? Object.keys(row.gaps).filter(function (k) { return row[k] == null || row[k] === ""; }) : [];
-    if (gaps.length) h += "<p class=\"d\">Gaps " + esc(gaps.map(function (k) { return k + ": " + row.gaps[k]; }).join("; ")) + "</p>";
+    if (gaps.length) h += "<p class=\"d\">" + esc(gapLine(gaps, row.gaps)) + "</p>";
     return h + "</section>";
   }
   function youtubeBlock(row, health, summary) {

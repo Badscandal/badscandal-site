@@ -187,10 +187,10 @@ test("bank status: before, after, expiring, expired; bankLine says it in one sen
     accounts: [{ name: "Current", currency: "EUR" }, { name: "Savings", currency: "EUR" }, { name: "Current", currency: "USD" }],
     lastRunAt: "2026-11-12T09:50:00.000Z", lastOkAt: "2026-11-12T09:50:00.000Z", lastError: null, errorKind: "", connectedAt: new Date(NOW - DAY).toISOString(), lastAdded: 2, partial: false, canConnectHere: true });
   assert.ok(!JSON.stringify(st).includes(SID) && !JSON.stringify(st).includes("uid-") && !JSON.stringify(st).includes("Sam Example"), "no session id, no account ids, no holder name");
-  assert.equal(B.bankLine(st, NOW + 60000), "Revolut: read today at 06:50 · 2 payments in · approval ends in 86 days");
-  assert.equal(B.bankLine({ ...st, lastAdded: 1, daysLeft: 1 }, NOW + DAY), "Revolut: read yesterday at 06:50 · 1 payment in · approval ends tomorrow");
-  assert.equal(B.bankLine({ ...st, lastAdded: 0, daysLeft: 0 }, NOW + 3 * DAY), "Revolut: read on 12 Nov at 06:50 · no new payments · approval ends today");
-  assert.equal(B.bankLine({ ...st, lastRunAt: new Date(NOW + DAY).toISOString(), lastError: B.SAY.readerDown }, NOW + DAY), "Revolut: read yesterday at 06:50 · the last read failed · approval ends in 86 days");
+  assert.equal(B.bankLine(st, NOW + 60000), "Revolut: read today at 06:50 SP · 2 payments in · approval ends in 86 days"); /* v18, 21 Nov 2026: the Revolut time says its zone (SP) */
+  assert.equal(B.bankLine({ ...st, lastAdded: 1, daysLeft: 1 }, NOW + DAY), "Revolut: read yesterday at 06:50 SP · 1 payment in · approval ends tomorrow"); /* v18, 21 Nov 2026: the Revolut time says its zone (SP) */
+  assert.equal(B.bankLine({ ...st, lastAdded: 0, daysLeft: 0 }, NOW + 3 * DAY), "Revolut: read on 12 Nov at 06:50 SP · no new payments · approval ends today"); /* v18, 21 Nov 2026: the Revolut time says its zone (SP) */
+  assert.equal(B.bankLine({ ...st, lastRunAt: new Date(NOW + DAY).toISOString(), lastError: B.SAY.readerDown }, NOW + DAY), "Revolut: read yesterday at 06:50 SP · the last read failed · approval ends in 86 days"); /* v18, 21 Nov 2026: the Revolut time says its zone (SP) */
   assert.equal(B.bankLine({ ...st, lastOkAt: null, lastAdded: null }, NOW), "Revolut: not read yet · approval ends in 86 days");
 
   const soon = await B.bankStatus({ bank: await connectedBank({ validUntil: new Date(NOW + 10 * DAY).toISOString() }), env: ENV, now: NOW, canConnectHere: true });
@@ -599,13 +599,13 @@ test("bank status: a run stopped by a cap is not called a full read; the run tha
   assert.deepEqual([a.ok, a.more, a.newPayments], [true, true, 2]);
   const st = await B.bankStatus({ bank, env: ENV, now: NOW });
   assert.deepEqual([st.lastOkAt, st.partial, st.lastAdded], [new Date(NOW - DAY).toISOString(), true, 2], "lastOkAt stays at the last FULL read");
-  assert.equal(B.bankLine(st, NOW), "Revolut: read yesterday at 06:50 · the last read stopped part way, the rest comes at the next read · approval ends in 86 days");
+  assert.equal(B.bankLine(st, NOW), "Revolut: read yesterday at 06:50 SP · the last read stopped part way, the rest comes at the next read · approval ends in 86 days"); /* v18, 21 Nov 2026: the Revolut time says its zone (SP) */
   assert.equal(B.bankLine({ ...st, lastOkAt: null }, NOW), "Revolut: not fully read yet · the last read stopped part way, the rest comes at the next read · approval ends in 86 days");
   const b = await B.syncBank({ bank, desk, env: ENV, now: NOW + 3600000, fetchImpl: three, pagesPerAccount: 2 });
   assert.deepEqual([b.more, b.newPayments, b.checked], [false, 1, true]);
   const st2 = await B.bankStatus({ bank, env: ENV, now: NOW + 3600000 });
   assert.deepEqual([st2.partial, st2.lastAdded], [false, 3]);
-  assert.equal(B.bankLine(st2, NOW + 3600000), "Revolut: read today at 07:50 · 3 payments in · approval ends in 86 days");
+  assert.equal(B.bankLine(st2, NOW + 3600000), "Revolut: read today at 07:50 SP · 3 payments in · approval ends in 86 days"); /* v18, 21 Nov 2026: the Revolut time says its zone (SP) */
 });
 
 test("bank refresh, end to end: only real income counts (refund codes, cashback, an exchange, a top-up, a friend beside a look-alike debit, equal payments, a statement)", async () => {
@@ -747,7 +747,7 @@ test("bank status for /hq?sample=1: made up, after the login, and no store is op
   const j = await r.json();
   assert.equal(r.status, 200);
   assert.deepEqual([j.sample, j.configured, j.connected, j.daysLeft, j.lastAdded, j.accounts.length], [true, true, true, 86, 2, 3]);
-  assert.match(B.bankLine(j, Date.now()), /^Revolut: read (today|yesterday) at 06:50 · 2 payments in · approval ends in 86 days$/);
+  assert.match(B.bankLine(j, Date.now()), /^Revolut: read (today|yesterday) at 06:50 SP · 2 payments in · approval ends in 86 days$/); /* v18, 21 Nov 2026: the Revolut time says its zone (SP) */
   assert.deepEqual(globalThis.__asked, [], "no store was opened for the sample");
 });
 

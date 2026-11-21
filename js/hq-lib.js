@@ -620,7 +620,8 @@
     var from = r.from === "Rates!B1" ? "the month's fixed rate" : (r.from === "ECB average" ? "ECB average for " + monthWords(r.month) + ", so far" : r.from);
     return "Rate: " + r.value + " USD per EUR (" + from + (r.from === "Rates!B1" ? ", " + monthWords(r.month) : (r.from === "ECB average" ? "" : ", " + monthWords(r.month))) + ")";
   }
-  function capMissingLine(cap) { return cap && cap.notRead && cap.notRead.length ? "Not read: " + cap.notRead.join(", ") : ""; }
+  /* v18 (21 Nov 2026, Forge): the same short lines as gapNotes (one Google line, no web addresses) */
+  function capMissingLine(cap) { var g = cap && cap.notRead && cap.notRead.length ? gapNotes(cap.notRead) : []; return g.length ? "Not read: " + g.join(", ") : ""; }
   /* a duty done with a number it couldn't read: done, never red */
   function dutyGapsLine(d) { return d && d.gaps ? "Done, with gaps: " + d.gaps : ""; }
   /* the money coming in: ONLY what was received (16 Nov 2026, Luke: "we should never put pending income only
@@ -720,7 +721,7 @@
     return bits.join(" · ");
   }
   function expectedDue(row) {
-    if (!row || !row.due) return "Due date not known yet";
+    if (!row || !row.due) return "Due date: not reported"; /* v18 (21 Nov 2026, Ledger) */
     var late = row.landedAfter ? " · Landed " + row.landedAfter + " day" + (row.landedAfter === 1 ? "" : "s") + " after the due day" : "";
     return "Due " + day(row.due) + (row.dueNote ? " · " + row.dueNote : "") + late;
   }
@@ -728,7 +729,9 @@
     if (!row) return "";
     var f = [];
     if ((row.flags || []).indexOf("late") >= 0) f.push("Late");
-    if (row.shortBy) f.push((row.shortReason === "unexplained" ? "Short, unexplained " : "Short by ") + money(row.shortBy.amount, row.shortBy.currency));
+    /* v18 (21 Nov 2026, Forge/Ledger): a payment that already says why it is short shows its own note */
+    if (row.shortBy && row.shortNote) f.push("Short " + money(row.shortBy.amount, row.shortBy.currency) + " (the payment's note: " + row.shortNote + ")");
+    else if (row.shortBy) f.push((row.shortReason === "unexplained" ? "Short, unexplained " : "Short by ") + money(row.shortBy.amount, row.shortBy.currency));
     if (!f.length) return row.landed ? "Landed" : "Waiting";
     return f.join(" · ");
   }
@@ -748,14 +751,14 @@
     if (!r || !r.payouts) return ["Not enough data."];
     var lines = [], fees = curList(r.fees);
     if (fees.length) lines.push("Fees: " + fees.join(" + ") + " on " + r.feePayouts + " payout" + (r.feePayouts === 1 ? "" : "s") + ".");
-    if (r.checkLink) lines.push("Check link.");
+    if (r.checkLink) lines.push("More landed in Revolut than was sent: the link between them needs checking."); /* v18 */
     if (r.noFee && !fees.length && !r.checkLink && !r.mixed) lines.push("No fee on the amounts recorded.");
     if (r.mixed) {
       (r.mixedExamples || []).forEach(function (m) { lines.push(partMoney(m.sent) + " sent, " + money(m.landed.amount, m.landed.currency) + " landed."); });
       if (r.rate && r.rate.source) lines.push("Rate " + r.rate.value + " " + r.rate.from + " to " + r.rate.to + ", from " + r.rate.source + ".");
       else lines.push("Exchange: not enough data.");
     }
-    if (r.split === "rule pending") lines.push("Split: rule pending.");
+    if (r.split === "rule pending") lines.push("Split: you haven't confirmed how it is shared yet."); /* v18 */
     if (!lines.length) lines.push("Not enough data.");
     return lines;
   }
@@ -1414,7 +1417,7 @@
     if (ok != null) {
       var d = spStampOf(ok).slice(0, 10), today = spStampOf(now).slice(0, 10);
       var when = d === today ? "today" : d === addDay(today, -1) ? "yesterday" : "on " + Number(d.slice(8, 10)) + " " + MON[Number(d.slice(5, 7)) - 1];
-      parts.push("Revolut: read " + when + " at " + spStampOf(ok).slice(11, 16));
+      parts.push("Revolut: read " + when + " at " + spStampOf(ok).slice(11, 16) + " SP"); /* v18: the zone */
     } else parts.push(st.partial ? "Revolut: not fully read yet" : "Revolut: not read yet");
     if (bankFailed(st)) parts.push("the last read failed");
     else if (st.partial) parts.push("the last read stopped part way, the rest comes at the next read");
@@ -1580,6 +1583,16 @@
     });
     return g;
   }
+  /* v18 (21 Nov 2026, Forge): "0 days" on a wait that started today read like a bug */
+  function waitedWords(n) { return n == null || !isFinite(n) ? "" : n <= 0 ? "today" : n === 1 ? "1 day" : n + " days"; }
+  /* v18 (21 Nov 2026, Forge): "0 Stuck · 14 On track" next to "4 blocked, 6 late on the task list" read as a
+     clash. The summary is about today's duties; the task list is the longer jobs, said apart. */
+  function taskListLine(team) {
+    var b = (team && team.blocked) || 0, l = (team && team.late) || 0, bits = [];
+    if (b) bits.push(b + " blocked");
+    if (l) bits.push(l + " late");
+    return bits.length ? "Today's duties are on track. Longer tasks: " + bits.join(", ") + "." : "Nobody is stuck right now.";
+  }
   function teamCounts(views) {
     var g = teamGroups(views);
     return { stuck: g.stuck.length, quiet: g.quiet.length, onTrack: g.onTrack.length, total: (views || []).length };
@@ -1740,9 +1753,21 @@
     var tone = lines.some(function (x) { return x.tone === "bad"; }) ? "bad" : lines.some(function (x) { return x.tone === "warn"; }) ? "warn" : "ok";
     return { id: id, title: s.title, address: "badscandal.com/" + id, tone: tone, lines: lines };
   }
+  /* v18 (21 Nov 2026, Forge): "RISING +10%" said what it is compared with */
+  function trendPill(s) {
+    if (!s) return null;
+    var n = Number(s.momentum), pc = isFinite(n) ? (n > 0 ? "+" : "") + Math.round(n) + "%" : "";
+    var base = pc ? " vs the 7 days before" : "";
+    if (s.trend === "rising") return { cls: "hot", text: "Rising " + pc + base };
+    if (s.trend === "cooling") return { cls: "warn", text: "Cooling " + pc + base };
+    if (s.trend === "steady") return { cls: "", text: "Steady " + pc + base };
+    return { cls: "", text: "New: not 2 full weeks yet" };
+  }
+  function epvPct(x) { return x == null || !isFinite(Number(x)) ? "not reported" : (Math.round(Number(x) * 10000) / 100).toFixed(2) + "%"; }
   /* L2: one ranked post (netlify/lib/postrank.mjs rankPosts) in the page's words */
   function rankParts(r) {
-    var p1 = function (x) { return x == null ? "?" : (Math.round(x * 1000) / 10).toFixed(1) + "%"; };
+    /* v18 (21 Nov 2026, Forge/Spark): one engagement number everywhere, two decimals (8.97%, not 8.9% here and 8.97% on Growth) */
+    var p1 = function (x) { return x == null ? "?" : epvPct(x); };
     var out = { rate: p1(r.rate) + " engaged", window: r.window === "1 day" ? "At 1 day" : r.window === "lifetime" ? "Lifetime" : "So far",
       views: fmt(r.engaged) + " of " + fmt(r.views) + " views · " + fmt(r.likes) + " likes · " + fmt(r.comments) + " comments",
       deep: "Saves + shares " + p1(r.deep) + " (" + fmt(r.saves) + " saves · " + fmt(r.shares) + " shares)",
@@ -2002,7 +2027,9 @@
     var rows = [];
     (lines || []).forEach(function (line) {
       var m = /^(.*?)\s+(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)\s+(\d{1,2})\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)(?::\s*(.*))?$/.exec(String(line || "").trim());
-      if (m && GAP_MON[m[3]]) rows.push({ platform: m[1], day: Number(m[2]), month: m[3], why: (m[4] || "").trim() || "not reported" });
+      /* v18 (21 Nov 2026, Forge): a web address is not a reason. It is taken out; the words stay. */
+      var why = m ? String(m[4] || "").replace(/\s*(?:at|see|on|via)?\s*https?:\/\/\S+/gi, "").replace(/\s+([,.;])/g, "$1").replace(/[\s:;,.-]+$/, "").trim() : "";
+      if (m && GAP_MON[m[3]]) rows.push({ platform: m[1], day: Number(m[2]), month: m[3], why: why || "not reported" });
     });
     rows.sort(function (a, b) { return a.platform < b.platform ? -1 : a.platform > b.platform ? 1 : a.month < b.month ? -1 : a.month > b.month ? 1 : a.day - b.day; });
     var out = [], cur = null;
@@ -2011,12 +2038,14 @@
       else { if (cur) out.push(cur); cur = { platform: r.platform, month: r.month, from: r.day, to: r.day, why: r.why }; }
     });
     if (cur) out.push(cur);
-    var google = out.filter(function (g) { return /google/i.test(g.platform) && /signed out/i.test(g.why); });
+    /* every Google gap is one line (v18: five "not read" day lines with other words are one too) */
+    var google = out.filter(function (g) { return /google/i.test(g.platform); });
     var rest = out.filter(function (g) { return google.indexOf(g) < 0; });
     var lines = rest.map(function (g) { return g.platform + " " + (g.from === g.to ? g.from : g.from + "-" + g.to) + " " + g.month + ", " + g.why; });
     if (google.length) {
       var first = google.slice().sort(function (a, b) { return a.from - b.from; })[0];
-      lines.unshift("Google not read since " + first.from + " " + first.month + " (signed out)");
+      var signed = google.some(function (g) { return /sign|log ?in|logged out/i.test(g.why); });
+      lines.unshift("Google not read since " + first.from + " " + first.month + (signed ? " (signed out)" : ""));
     }
     return lines;
   }
@@ -2103,7 +2132,9 @@
     if (!d || !d.reported) return { reported: false, title: "Content ideas", empty: (d && d.empty) || "No content ideas yet. Spark sends them once a day. Nothing is posted.", ideas: [], best: "", note: "" };
     var b = d.best || null;
     var eng = b ? (b.likes || 0) + (b.comments || 0) + (b.saves || 0) + (b.shares || 0) : 0;
-    var best = b ? b.title + " · " + b.platform + " · " + b.perView + " per view (" + eng + " engagements, " + b.views + " views)" : "No official post was ranked.";
+    /* v18, 21 Nov 2026: a count not shown is "not reported", never a 0 */
+    var nr = b && b.not_reported && b.not_reported.length ? "; " + b.not_reported.join(", ") + " not reported" : "";
+    var best = b ? b.title + " · " + b.platform + " · " + b.perView + " per view (" + eng + " engagements, " + b.views + " views" + nr + ")" : "No official post was ranked.";
     return { reported: true, title: "Content ideas", best: best, compared: d.compared || "", note: d.note || "Ideas for Nova. Nothing is posted.",
       ideas: (d.ideas || []).map(function (i) { return i.platform + ": " + i.hook + " — " + i.text + " (" + i.format + "). " + i.why; }) };
   }
@@ -2371,6 +2402,27 @@
     });
     return items;
   }
+  /* v18 (21 Nov 2026, Forge): the server's S.dropAccountId and S.plainWords, for the page. An ads id goes
+     with the words and brackets that held it ("signed out at )" / "signed out ()" never again). */
+  function dropAccountId(text) {
+    var t = String(text == null ? "" : text);
+    if (!/\d{3}-\d{3}-\d{4}/.test(t)) return t;
+    t = t.replace(/\s*\(\s*(?:(?:google ads|ads|customer|account|acct|id|no\.?|number|#)\s*)*:?\s*\d{3}-\d{3}-\d{4}\s*\)/gi, "");
+    t = t.replace(/\s*(?:\b(?:at|for|on|of|customer|account|acct|id|no\.?|number)\b\s*|#\s*)*:?\s*\b\d{3}-\d{3}-\d{4}\b/gi, "");
+    t = t.replace(/\(\s*\)|\[\s*\]/g, "");
+    var depth = 0, out = "";
+    for (var i = 0; i < t.length; i++) { var ch = t[i]; if (ch === "(") depth++; else if (ch === ")") { if (!depth) continue; depth--; } out += ch; }
+    return out.replace(/[ \t]{2,}/g, " ").replace(/\s+([,.;:)])/g, "$1").replace(/\(\s+/g, "(").trim();
+  }
+  function plainWords(text) {
+    return String(text == null ? "" : text)
+      .replace(/\s*\(\s*(?:see\s+)?runbook\s+[A-Z0-9]\b\s*\)/gi, "")
+      .replace(/,?\s*(?:as in |per |see )?runbook\s+[A-Z0-9]\b/gi, "")
+      .replace(/meta too until the meta-api-feed brief says live/gi, "HQ records Meta itself")
+      .replace(/\bthe meta-api-feed brief\b/gi, "the Meta feed plan").replace(/\bmeta-api-feed brief\b/gi, "Meta feed plan")
+      .replace(/\b(?:the\s+)?Revolut[- ]once rule\b/gi, "the rule that income counts once, when it lands in Revolut")
+      .replace(/[ \t]{2,}/g, " ").replace(/\s+([,.;])/g, "$1");
+  }
   /* quiet mode: one line per bot, the latest, with the older lines behind it */
   function screenText(text, max) {
     max = max || 280;
@@ -2378,7 +2430,8 @@
     var drop = /\b(my_day|post_update|send_message|read_messages|release_step|release_pack|log_growth|read_growth|record_spend|licence_queue|content_ideas|spotify_upcoming|team_board|luke_short_briefing|needs_you|song_pl|tools_seen|list_version|tools_version|reconnect needed)\b/i;
     var seen = {}, out = [];
     String(text || "").split(/\n+/).forEach(function (line) {
-      var t = line.replace(/\b20\d{2}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?Z?\b/g, " ").replace(/\b(20\d{2}-\d{2}-\d{2})\b/g, function (d) { return day(d) || d; }).replace(/\b\d{3}-\d{3}-\d{4}\b/g, "").replace(/\b([01]?\d|2[0-3]):[0-5]\d\b(?!\s*SP\b)/g, "$& SP").replace(/\bT-\d+\b/g, " ").replace(/\bso I can do\s+(?=\()/gi, "").replace(drop, " ").replace(/\s+/g, " ").replace(/\s+([,.;])/g, "$1").trim();
+      var t = line.replace(/\b20\d{2}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?Z?\b/g, " ").replace(/\b(20\d{2}-\d{2}-\d{2})\b/g, function (d) { return day(d) || d; });
+      t = plainWords(dropAccountId(t)).replace(/\b([01]?\d|2[0-3]):[0-5]\d\b(?!\s*SP\b)/g, "$& SP").replace(/\bT-\d+\b/g, " ").replace(/\bso I can do\s+(?=\()/gi, "").replace(drop, " ").replace(/\s+/g, " ").replace(/\s+([,.;])/g, "$1").trim();
       if (!t || seen[t.toLowerCase()]) return;
       seen[t.toLowerCase()] = 1;
       out.push(t);
@@ -2472,7 +2525,7 @@
     /* the HQ redesign (12 Nov 2026): Search or Ask */
     cmdIndex: cmdIndex, cmdResults: cmdResults,
     /* Team, simpler (13 Nov 2026) */
-    teamGroups: teamGroups, teamCounts: teamCounts, botProblems: botProblems, botNext: botNext,
+    teamGroups: teamGroups, teamCounts: teamCounts, epvPct: epvPct, trendPill: trendPill, waitedWords: waitedWords, taskListLine: taskListLine, botProblems: botProblems, botNext: botNext,
     /* planning releases (14 Nov 2026) */
     PLAN_RULE: PLAN_RULE, PLAN_TIMELINE: PLAN_TIMELINE, suggestDates: suggestDates, planAdvice: planAdvice, calendarMonth: calendarMonth,
     fmt: fmt,
@@ -2480,7 +2533,7 @@
     songPLView: songPLView, songPLHtml: songPLHtml,
     /* phone HQ (18 Nov 2026): Needs you, the release strip, the team dots, the week, money, the spend gauge */
     deskWhen: deskWhen, moneyHead: moneyHead, payFlow: payFlow, spendGauge: spendGauge, gapNotes: gapNotes, decisionCards: decisionCards,
-    releaseFace: releaseFace, teamDots: teamDots, weekAhead: weekAhead, quietFeed: quietFeed, screenText: screenText, pitchSentence: pitchSentence, followerStrip: followerStrip,
+    releaseFace: releaseFace, teamDots: teamDots, weekAhead: weekAhead, quietFeed: quietFeed, screenText: screenText, dropAccountId: dropAccountId, plainWords: plainWords, pitchSentence: pitchSentence, followerStrip: followerStrip,
     mondayPick: mondayPick, lyricsPreview: lyricsPreview,
     /* L5 watchers (18 Nov 2026) */
     routeMailLine: routeMailLine, contentClaimRows: contentClaimRows, contentIdeasCard: contentIdeasCard, phoneWatchers: phoneWatchers,

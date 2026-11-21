@@ -444,7 +444,7 @@ test("send_message still succeeds when the push sweep throws (the HQ apps, 12 No
    with no login (GitHub fetches it), the picture only */
 test("upload_cover through the connector, then the public cover link with no login", async () => {
   await api("seed", { method: "PUT", headers: { authorization: "Bearer " + ENV.STAFF_CLAUDE_KEY }, body: JSON.stringify({ roster: DEFAULT_ROSTER }) });
-  const png = Buffer.alloc(2033); Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]).copy(png, 0); png.writeUInt32BE(13, 8); png.write("IHDR", 12, "latin1"); png.writeUInt32BE(1400, 16); png.writeUInt32BE(1400, 20);
+  const png = Buffer.alloc(2033); Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]).copy(png, 0); png.writeUInt32BE(13, 8); png.write("IHDR", 12, "latin1"); png.writeUInt32BE(3000, 16); png.writeUInt32BE(3000, 20); /* v18, 21 Nov 2026: a cover is a square 3000 x 3000 (was 1400) */
   const up = await tool("upload_cover", { bot: "Webmaster", song: "Made-up Song", image_base64: png.toString("base64") });
   assert.equal(up.isError, false, up.content && up.content[0].text);
   const name = up.data.link.split("/").pop();

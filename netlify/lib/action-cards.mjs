@@ -5,6 +5,7 @@
    "Taps count as Luke's yes" is off until Luke switches it on. Payments and signatures
    always stay with him. Nothing here changes an ad, sends mail, or stores a secret. */
 import * as S from "./staff.mjs";
+import { needCards } from "./need-cards.mjs";
 
 export const CARD_KEY = "action-cards.json";
 export const AUTO_KEY = "auto.json";
@@ -182,7 +183,10 @@ export function needsCount(desk, today, now) {
     const k = x.kind === "message" ? (x.needs === "decision" ? "decision" : x.needs) : x.kind;
     byKind[k] = (byKind[k] || 0) + 1;
   }
-  return { total: items.length, line: needLine(items.length), byKind, items: items.map(({ key, kind, needs, options, id, text, href, from }) => ({ key, kind, ...(needs ? { needs } : {}), ...(options ? { options } : {}), id, text, href, ...(from ? { from } : {}) })) };
+  /* v18 (21 Nov 2026): each item carries its card (title, facts, Yes/No, the email...): netlify/lib/need-cards.mjs */
+  const cards = needCards(items, desk || {}, today);
+  return { total: items.length, line: needLine(items.length), byKind, items: cards.map(({ key, kind, needs, options, id, text, href, from, more, type, title, facts, recommend, yes, no, email, draft, via, to, done }) => ({ key, kind, ...(needs ? { needs } : {}), ...(options ? { options } : {}), id, text, href, ...(from ? { from } : {}),
+    type, title, facts, ...(recommend ? { recommend } : {}), ...(more ? { more } : {}), ...(yes ? { yes } : {}), ...(no ? { no } : {}), ...(email ? { email } : {}), ...(draft ? { draft } : {}), via, ...(to ? { to } : {}), done })) };
 }
 
 function moneyOf(a) {
