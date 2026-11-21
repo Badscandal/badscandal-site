@@ -263,7 +263,7 @@ function viewContext(last3, older, today) {
   const inWin = (list, days) => list.filter((p) => daysBetween(p.day, today) <= days);
   const med = (list) => (list.length >= 4 ? median(list.map((p) => p.views)) : null);
   const med30 = med(inWin(older, 30)), med14 = med(inWin(older, 14));
-  /* v18, 21 Nov 2026 (Steve: 2,055 vs 1,987): the views here are at the series' own age, and say so */
+  /* v18, 21 Nov 2026 (Steve: two view counts that disagreed): the views here are at the series' own age, and say so */
   const age = last3[0] && last3[0].age && last3[0].age !== "recorded" ? ` at ${last3[0].age}` : "";
   return `; views${age} ${last3.map((p) => fmt(p.views)).join(", ")}` +
     (med30 != null ? `; 30-day view median ${fmt(Math.round(med30))}` : "") +

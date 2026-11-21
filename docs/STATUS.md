@@ -2,7 +2,7 @@
 
 **Full picture:** [docs/HQ-FULL-HANDOFF.md](HQ-FULL-HANDOFF.md). It supersedes the "through PR #84 / 40 tools / 716 tests" lines below. Main is through PR #89 (47 tools, `bs-hq-v8`, 745 tests).
 
-**Main is through PR #100 (19 Nov 2026).** 54 tools, 796 tests on Node 24 and 22, cache `bs-hq-v11`. Steve can log a boost. A boost's spend is that post's ad. Disputes are on Songs.
+**21 Nov 2026: HQ v18 (Needs you cards, the bots' re-check fixes).** Cache `bs-hq-v18`, connector 1.18.0, 892 tests. Before it, **main was through PR #100 (19 Nov 2026).** 54 tools, 796 tests on Node 24 and 22, cache `bs-hq-v11`. Steve can log a boost. A boost's spend is that post's ad. Disputes are on Songs.
 
 **Last updated:** 19 Nov 2026, by Cursor. Main is through PR #100 (Steve logs a boost). Earlier the same day: PR #99 (best post), PR #98 (Boosted spend) and PR #97 (Disputes). The blank-screen fix (#83), the phone look (#80), automation phase 1 (#79) and account health (#77) are live with it. Start with `docs/HANDOFF.md`.
 **Tests:** 796, all passing on Node 24 and Node 22. **Connector:** 54 tools (`open_case`, `update_case`, `read_cases`). `log_growth` gained `boosts` on #100. Workspaces added `workspace` on `log_growth`, `record_spend`, `submit_income`, `releases`, `release_step` and on an action card, and `licence` on `release_step` for a Label cover only, so every bot refreshes. The phone look changes no option. Automation changed options on `my_day`, `send_message` and `post_update`. `log_growth` account-health fields are live from #77. Claim fields are on main from #73. The instagram tool's `post` and `song` are on main from #75.
@@ -12,6 +12,7 @@ No money amounts, payer names or account numbers in this file: the repo is publi
 
 | When | PR | What |
 |------|----|------|
+| 21 Nov | v18 | Needs you cards: one short question with Yes / No / Reply. The email (To, CC, Subject, body) opens only on Reply and can be edited. Asks have a reply box and Done (`POST /api/staff/need`, Luke only). T-32 and a step waiting on his yes are on the one list. No Salvation line. The bots' v17 re-check and Forge's 23 items fixed or skipped with a reason (issue #5 comment). Connector 1.18.0. Cache `bs-hq-v18`. 892 tests on Node 24 and 22. |
 | 19 Nov | #100 | Steve logs a boost on `log_growth` (`boosts`: post link, ad id, amount spent, currency, active or paused). Stored on that day's growth row. Not `record_spend`, and not added to the cap. The account day total is not that boost. Still 54 tools. Cache `bs-hq-v11`. |
 | 19 Nov | #99 | A Reel logged only as the day's best post is a boost when the ranking or an ad names it. A ranking spend with no per-ad scope says spend not read since boost started. No new tool. |
 | 19 Nov | #98 | Boosted spend is that post's own ad, or a spend row that names the post. The read time is shown next to it. A read from before the boost says spend not read since boost started. The account day total is not used. Cost per engagement uses that post's likes, comments, saves and shares. A missing side says not reported. `read_growth` returns `boosts`. No new tool. Cache `bs-hq-v11`. |

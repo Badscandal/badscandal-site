@@ -199,6 +199,26 @@ Rules in `netlify/lib/workspaces.mjs` (PR #84, tests in `tests/workspaces.test.m
 - Official BADSCANDAL releases have no licence step.
 - `log_growth` with `workspace` `farm` (account or post) or `label`. `record_spend` with `workspace` `label` is not in the cap. `submit_income` with `workspace` `label` is a label payout.
 
+### Needs you cards (v18, 21 Nov 2026)
+
+- **Building a card.** Each item of `S.waitingOnLuke` gets a card from `netlify/lib/need-cards.mjs` `needCard()`. The fields:
+  - `type`: decision, ask or link.
+  - `title`: one short question, never the raw email and never an id.
+  - `facts`: song, status, waiting, next.
+  - `recommend`.
+  - `yes`/`no`: label, sub and choice.
+  - `email`: to, cc, subject, body (the body keeps its line breaks).
+  - `draft`, `via`, `to`, `done`.
+- **Drawing.** `HQLook.needCardHtml` (`js/hq-look.js`) draws the card. `js/hq-phone.js` sends the taps.
+- **What each `via` sends:**
+  - `message`: `POST /api/staff/message` with `re`, or `/api/staff/resolve` for Done.
+  - `case`: `POST /api/staff/case`.
+  - `card`: `POST /api/staff/card`.
+  - `mark`: `POST /api/staff/need` `{key, to, text, done, choice, needs}`. Luke only. It writes `needs-done.json` and sends a message from Luke to the bot. A marked ask leaves the list. One with a time comes back when the bot says it again later; one without a time stays off for 3 days.
+- **What the tools return.**
+  - needs_you, my_day and team_board rows: `text` = the short question, `card`, `facts`, `recommend`, `yes`, `no`, `has_email`, `done_button`.
+  - luke_briefing keeps `what`/`screen` (rule 6).
+
 ### Needs you (`#today`) — read this before trusting the header
 
 There are **two different sentences** that both contain the words “need you” and “at risk”. They are not the same count. This is the cause of the 18 Nov 03:20 São Paulo screen. The investigation is in section 9. The pieces:
