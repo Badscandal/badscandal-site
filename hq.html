@@ -1824,7 +1824,7 @@ body.ws-on main{margin-left:0;max-width:none}
         </div>
       </div>
       <div class="tile w12" id="healthCard">
-        <div class="head"><div><h3>Meta events health</h3><p class="sub">Our server's copy of each event (Conversions API) and what Meta answered.</p></div><span class="pill" id="hPill">–</span></div>
+        <div class="head"><div><h3>Meta events health</h3><p class="sub">What our server told Meta about each visit and tap, and what Meta answered.</p></div><span class="pill" id="hPill">–</span></div>
         <div class="mstat" id="mstat" style="margin-bottom:12px"><span id="mstatTxt">Meta: no events yet</span></div>
         <div class="lbl" style="margin-bottom:6px">Today</div>
         <div class="trio">
@@ -1839,7 +1839,7 @@ body.ws-on main{margin-left:0;max-width:none}
         <div class="keyrow"><span>Last error</span><b id="hLastErr">–</b></div>
         <p class="note" id="hErrMsg" hidden></p>
         <div class="warnbox" id="hTest" hidden>Test mode is ON: events go to Events Manager → Test events. Delete META_TEST_EVENT_CODE on Netlify when you're done.</div>
-        <p class="note">The browser copy (the Pixel) goes straight from the phone to Meta, so only Events Manager can show it. When both arrive, Meta lists the event as <b>Browser · Server</b> and counts it once.</p>
+        <p class="note">The phone also tells Meta directly. Only Meta's Events Manager shows that copy. Meta counts each visit or tap once.</p>
       </div>
     </div>
   </section>
@@ -1886,7 +1886,7 @@ body.ws-on main{margin-left:0;max-width:none}
       <div class="tile w6"><h3>Meta can see</h3><p class="sub" id="metaSub">Of our counted Spotify taps.</p>
         <div class="mini"><div class="lbl">Sent to Meta</div><div class="big num" id="mSent">–</div></div>
         <div class="stackbar" id="mStack"></div>
-        <div class="keyrow"><span><span class="swatch" style="background:var(--spot)"></span>Sent (Pixel + server)</span><b id="mS">–</b></div>
+        <div class="keyrow"><span><span class="swatch" style="background:var(--spot)"></span>Sent to Meta</span><b id="mS">–</b></div>
         <div class="keyrow"><span><span class="swatch" style="background:var(--grey-mark)"></span>Not sent (no consent, or opted out)</span><b id="mN">–</b></div>
         <div class="keyrow"><span>EU/UK consent: allowed / declined</span><b id="mC">–</b></div>
       </div>

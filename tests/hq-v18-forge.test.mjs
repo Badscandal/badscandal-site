@@ -137,6 +137,73 @@ test("Team says today's duties and the longer tasks apart, so the counts don't c
   assert.doesNotMatch(fs.readFileSync(new URL("../js/hq-staff.js", import.meta.url), "utf8"), /late on the task list/);
 });
 
+test("dates on charts and the Meta card read Fri 13 Nov, and engagement has one form", async () => {
+  await import("../js/hq-chart.js");
+  const C = globalThis.HQChart;
+  const m = C.model([{ d: "2026-11-13", v: 1 }, { d: "2026-11-14", v: 2 }]);
+  assert.match(C.valueAt(m, 0).label, /^Fri 13 Nov/);
+  for (const f of ["../js/hq.js", "../js/hq-pages.js"]) assert.doesNotMatch(fs.readFileSync(new URL(f, import.meta.url), "utf8"), /replace\("-", "\/"\)/, f);
+  assert.equal(L.epvPct(0.0897), "8.97%");
+  assert.equal(L.epvPct(0.089), "8.90%");
+  assert.equal(L.epvPct(null), "not reported");
+});
+
+test("Luke's screens and task text say the desk's shorthand in plain words", () => {
+  const page = fs.readFileSync(new URL("../hq.html", import.meta.url), "utf8");
+  assert.doesNotMatch(page, /Conversions API\)|Browser · Server|Pixel \+ server/);
+  assert.doesNotMatch(fs.readFileSync(new URL("../js/hq-growth.js", import.meta.url), "utf8"), /EPV 24h/);
+  assert.doesNotMatch(fs.readFileSync(new URL("../js/hq-staff.js", import.meta.url), "utf8"), /Desk push<\/h3>/);
+  const t = "Make the Meta system user (runbook B). Forge logs Meta too until the meta-api-feed brief says LIVE. Sheet keeps the Revolut-once rule.";
+  for (const out of [S.plainWords(t), L.plainWords(t), S.freshDuty(t)]) assert.doesNotMatch(out, /runbook|meta-api-feed|Revolut-once/i, out);
+  assert.match(S.lukeLine("Sheet: kept the Revolut-once rule."), /income counts once, when it lands in Revolut/);
+});
+
+test("a site check rewritten from the live board carries the live time, not the old check's", () => {
+  const hq = { team: { duties: { done: 13, total: 13, blocked: 0 } } };
+  const out = S.freshReport({ sp: "2026-11-20 15:35", text: "HQ check: Duties: 11 of 13 done" }, hq, "2026-11-21 12:00");
+  assert.equal(out.sp, "2026-11-21 12:00");
+  assert.match(out.text, /13 of 13/);
+  const same = S.freshReport({ sp: "2026-11-21 09:35", text: "Duties: 13 of 13 done, 0 blocked" }, hq, "2026-11-21 12:00");
+  assert.equal(same.sp, "2026-11-21 09:35");
+});
+
+test("income_status lists money still waiting in PayPal from an earlier month, and says its total is this month's", async () => {
+  const d = memoryDesk();
+  await d.setJSON("inc/2026-09.json", [{ id: "iwait00001", date: "2026-09-29", payer: "Sample Distro", amount: 12.34, currency: "USD", status: "received", account: "PayPal", by: "Ledger", at: "2026-09-29T12:00:00Z" }]);
+  const st = await call(d, "income_status", { bot: "Ledger" });
+  assert.deepEqual(st.waiting_in_wise_or_paypal, []);
+  assert.deepEqual(st.waiting_from_earlier_months.map((x) => x.id), ["iwait00001"]);
+  assert.match(st.in_wise_or_paypal_not_counted_is, /2026-11/);
+});
+
+test("Ads: song-page visits come from the song pages, and a missing cost per engagement says why", () => {
+  assert.equal(V.songVisits({ songs: [{ people: 3 }, { people: 4 }, {}] }), 7);
+  assert.equal(V.songVisits({ songs: [{}] }), null);
+  const pins = V.adsPins({ cap: {}, visits: 7, prevVisits: 5 }, L);
+  assert.equal(pins.visits.label, "7");
+  assert.equal(pins.engagement.label, "not reported");
+  assert.match(pins.engagement.vs, /on Growth/);
+  assert.match(fs.readFileSync(new URL("../js/hq.js", import.meta.url), "utf8"), /HQLook\.songVisits\(ov\)/);
+});
+
+test("a song's Rising pill says what it is compared with", () => {
+  assert.deepEqual(L.trendPill({ trend: "rising", momentum: 10.2 }), { cls: "hot", text: "Rising +10% vs the 7 days before" });
+  assert.equal(L.trendPill({ trend: "cooling", momentum: -4 }).text, "Cooling -4% vs the 7 days before");
+  assert.equal(L.trendPill({ trend: "new" }).text, "New: not 2 full weeks yet");
+  assert.equal(L.trendPill(null), null);
+});
+
+test("a drawing error is not called Offline: only a request with no answer is", () => {
+  const src = fs.readFileSync(new URL("../js/hq.js", import.meta.url), "utf8");
+  const sheetPart = src.slice(src.indexOf("function loadSheet()"), src.indexOf("function offSheet("));
+  const ovPart = src.slice(src.indexOf("function loadOverview()"), src.indexOf("function drawOverview()"));
+  for (const part of [sheetPart, ovPart]) {
+    assert.match(part, /answered = true/);
+    const c = part.indexOf(".catch(function (e)");
+    assert.ok(c > 0 && part.indexOf("if (answered)", c) > c && part.indexOf("if (answered)", c) < part.indexOf('"offline"', c));
+  }
+});
+
 test("Ads lists Google's unread days as one line, with no web addresses", () => {
   const lines = ["Google Sat 14 Nov: signed out", "Google Sun 15 Nov: Luke to sign in at https://example.com/sign-in?x=1",
     "Google Mon 16 Nov: not read", "TikTok Fri 13 Nov: see https://example.com/tt for the code"];

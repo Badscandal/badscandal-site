@@ -1237,7 +1237,10 @@ async function runTool(tool, args, ctx, read) {
         received_this_year: cur(i.receivedYear), received_this_year_note: i.receivedYearNote,
         /* 17 Nov 2026: money in Wise / PayPal is seen, not counted, until it reaches Revolut (link_transfer) */
         in_wise_or_paypal_not_counted: cur(i.holding),
+        in_wise_or_paypal_not_counted_is: `this month (${i.month}) only. Older money still waiting is in waiting_from_earlier_months.`,
         waiting_in_wise_or_paypal: (i.holdingList || []).map((e) => ({ id: e.id, month: e.date.slice(0, 7), line: `${e.date} · ${S.hidePrivate(e.payer)} · ${e.currency} ${e.amount.toFixed(2)} · ${e.account}` })),
+        /* v18 (21 Nov 2026): a Wise or PayPal row from an earlier month that never reached Revolut */
+        waiting_from_earlier_months: (i.holdingOlder || []).map((e) => ({ id: e.id, month: e.date.slice(0, 7), line: `${e.date} · ${S.hidePrivate(e.payer)} · ${e.currency} ${e.amount.toFixed(2)} · ${S.holdingLabel(e)}` })),
         duplicates: i.duplicates.map((x) => `${x.date} · ${x.currency} ${Number(x.amount).toFixed(2)} · "${x.also}" is the same payment as "${x.kept}" (id ${x.id}): counted once`),
         /* batch 4: the music's own money (no salary), what is owed and ready to pay out, statements under the payout line */
         royalties_only_this_month: cur(i.royaltiesOnly), payable_this_month: cur(i.payable), statement_only_this_month: cur(i.statementOnly),

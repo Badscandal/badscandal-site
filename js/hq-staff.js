@@ -210,7 +210,7 @@
     var ask = ui.tapAsk ? '<div class="confirm" role="group"><p>A Yes on a card will count as your yes, except payments and signatures, which you still do yourself. HQ will not change ads.</p><button class="sendbtn" type="button" data-taps="yes"' + (ui.tapBusy ? " disabled" : "") + '>Yes, switch it on</button><button class="copybtn" type="button" data-taps="cancel">Cancel</button></div>' : "";
     el.innerHTML = '<h3 class="lblh">One-tap cards</h3><p>' + esc(a.tapsLine || "") + "</p>" +
       (taps ? '<button class="copybtn" type="button" data-taps="off"' + off() + ">Switch taps off</button>" : '<button class="copybtn" type="button" data-taps="on"' + off() + ">Taps count as my yes</button>") +
-      ask + '<h3 class="lblh">Desk push</h3><p>Empty means off. Paste the https address that bot\'s app gives you. HQ does not invent one. Nova can send you the address. Only you paste it here. Leave the box empty and save to turn that bot off.</p>' +
+      ask + '<h3 class="lblh">Wake a bot\'s app</h3><p>Paste the https address the bot\'s app gives you (Nova can send it). Empty means off.</p>' + /* v18: was "Desk push", five sentences */
       rows + '<p class="ferr" role="alert">' + esc(ui.tapErr) + "</p>";
   }
   var autoEl = $("autoCard");

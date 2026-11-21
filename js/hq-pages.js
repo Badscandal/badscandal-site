@@ -401,7 +401,7 @@
         (r.bot ? '<span class="botTag">' + esc(BOTS[r.bot] || r.bot) + "</span>" : "");
       var where = (r.city ? title(r.city) + ", " : "") + (r.country && r.country !== "xx" ? r.country.toUpperCase() : "?");
       var dev = (DEVICES[r.device] || [title(r.device)])[0] + " · " + (APPS[r.app] || [title(r.app)])[0];
-      var time = r.time.slice(5, 16).replace("-", "/");
+      var time = (window.HQLib ? window.HQLib.day(r.time.slice(0, 10)) : r.time.slice(0, 10)) + " " + r.time.slice(11, 16); /* v18: no US dates */
       var meta = r.meta === true ? " · Meta" : r.meta === false ? " · not to Meta" : "";
       var other = r.other.length ? '<div class="m">also ' + esc(r.other.join(", ")) + "</div>" : "";
       tb += "<tr><td class=\"num\">" + esc(time) + '</td><td><span class="vid">' + esc(r.visitor.slice(0, 4) + "…" + r.visitor.slice(-2)) + "</span>" + ret +

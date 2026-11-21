@@ -2650,6 +2650,9 @@ export function incomeReport(entries, checks, sources, today, older = [], rules 
     expected: money.expected, routes: money.routes,
     entries: [...entries].sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : a.at < b.at ? 1 : -1)).slice(0, 60).map((e) => (isHold(e) ? { ...e, holding: true } : e)),
     holding, holdingList: entries.filter((e) => e.status === "received" && !countsAsReceived(e) && !e.movedTo && e.date.slice(0, 7) === month).sort((a, b) => (a.date < b.date ? 1 : -1)),
+    /* v18 (21 Nov 2026, Forge/Ledger): a Wise or PayPal row from an earlier month that has not moved to Revolut
+       (a September PayPal payment) is still waiting: listed apart, never counted */
+    holdingOlder: entries.filter((e) => e.status === "received" && !countsAsReceived(e) && !e.movedTo && !STATEMENT.test(e.account || "") && /wise|paypal/i.test(e.account || "") && e.date.slice(0, 7) < month).sort((a, b) => (a.date < b.date ? 1 : -1)),
     accounts, sources: src, unknown, problems,
     lastEntryAt: entries.reduce((a, e) => (!a || e.at > a ? e.at : a), null) };
 }
@@ -6269,10 +6272,11 @@ export function unreadSpendLine(lines) {
     return m ? { d: Number(m[1]), mon: m[2].slice(0, 1).toUpperCase() + m[2].slice(1, 3).toLowerCase() } : null;
   }).filter(Boolean).sort((a, b) => a.d - b.d);
   const g = days.length ? `Google not read since ${days[0].d} ${days[0].mon} (signed out)` : (google.length ? "Google not read (signed out)" : "");
-  return [g, ...rest.map((l) => clipWords(l, 80))].filter(Boolean).join("; ");
+  return [g, ...rest.map((l) => clipWords(l.replace(/\s*(?:at|see|on|via)?\s*https?:\/\/\S+/gi, "").trim(), 80))].filter(Boolean).join("; ");
 }
-/* A stored site check that still says an old duty count is replaced with the live board. */
-export function freshReport(report, hq) {
+/* A stored site check that still says an old duty count is replaced with the live board.
+   v18 (21 Nov 2026, Forge): the rewritten line carries the live time (liveAt), not the old check's 15:35. */
+export function freshReport(report, hq, liveAt) {
   if (!report || !report.text) return report;
   const d = hq && hq.team && hq.team.duties;
   if (!d || d.total == null) return report;
@@ -6281,7 +6285,7 @@ export function freshReport(report, hq) {
   if (!m) return report;
   const done = Number(m[1]), total = Number(m[2]), saidBlocked = blocked ? Number(blocked[1]) : null;
   if (done === Number(d.done) && total === Number(d.total) && (saidBlocked == null || saidBlocked === Number(d.blocked))) return report;
-  return { ...report, stale: true, text: `The board shows ${d.done} of ${d.total} duties done, ${d.blocked} blocked.` };
+  return { ...report, stale: true, ...(liveAt ? { sp: liveAt } : {}), text: `The board shows ${d.done} of ${d.total} duties done, ${d.blocked} blocked.` };
 }
 /* Sign-ins, access, a yes Luke still owes, and fan replies only he can send. Notes are not asks. */
 function lukeExtraNeeds(desk) {
@@ -6422,7 +6426,7 @@ export function board(desk, now, hq) {
     contentIdeas: contentIdeasView(desk.contentIdeas),
     connector: { botsOn: desk.config.botsOn, changedAt: desk.config.changedAt, lastUsed: lastSeen ? { bot: lastSeen[0], at: lastSeen[1].at, tool: lastSeen[1].tool } : null,
       connected: staff.filter((w) => w.connected).length, total: staff.length, claudeSeen: desk.seen.Claude ? desk.seen.Claude.at : null },
-    report: freshReport(desk.messages.find((m) => m.from === "HQ" && m.kind === "report") || null, hq),
+    report: freshReport(desk.messages.find((m) => m.from === "HQ" && m.kind === "report") || null, hq, spStamp(now)),
     names: botNames(desk.roster).concat(PEOPLE),
   };
 }

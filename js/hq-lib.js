@@ -1753,9 +1753,21 @@
     var tone = lines.some(function (x) { return x.tone === "bad"; }) ? "bad" : lines.some(function (x) { return x.tone === "warn"; }) ? "warn" : "ok";
     return { id: id, title: s.title, address: "badscandal.com/" + id, tone: tone, lines: lines };
   }
+  /* v18 (21 Nov 2026, Forge): "RISING +10%" said what it is compared with */
+  function trendPill(s) {
+    if (!s) return null;
+    var n = Number(s.momentum), pc = isFinite(n) ? (n > 0 ? "+" : "") + Math.round(n) + "%" : "";
+    var base = pc ? " vs the 7 days before" : "";
+    if (s.trend === "rising") return { cls: "hot", text: "Rising " + pc + base };
+    if (s.trend === "cooling") return { cls: "warn", text: "Cooling " + pc + base };
+    if (s.trend === "steady") return { cls: "", text: "Steady " + pc + base };
+    return { cls: "", text: "New: not 2 full weeks yet" };
+  }
+  function epvPct(x) { return x == null || !isFinite(Number(x)) ? "not reported" : (Math.round(Number(x) * 10000) / 100).toFixed(2) + "%"; }
   /* L2: one ranked post (netlify/lib/postrank.mjs rankPosts) in the page's words */
   function rankParts(r) {
-    var p1 = function (x) { return x == null ? "?" : (Math.round(x * 1000) / 10).toFixed(1) + "%"; };
+    /* v18 (21 Nov 2026, Forge/Spark): one engagement number everywhere, two decimals (8.97%, not 8.9% here and 8.97% on Growth) */
+    var p1 = function (x) { return x == null ? "?" : epvPct(x); };
     var out = { rate: p1(r.rate) + " engaged", window: r.window === "1 day" ? "At 1 day" : r.window === "lifetime" ? "Lifetime" : "So far",
       views: fmt(r.engaged) + " of " + fmt(r.views) + " views · " + fmt(r.likes) + " likes · " + fmt(r.comments) + " comments",
       deep: "Saves + shares " + p1(r.deep) + " (" + fmt(r.saves) + " saves · " + fmt(r.shares) + " shares)",
@@ -2511,7 +2523,7 @@
     /* the HQ redesign (12 Nov 2026): Search or Ask */
     cmdIndex: cmdIndex, cmdResults: cmdResults,
     /* Team, simpler (13 Nov 2026) */
-    teamGroups: teamGroups, teamCounts: teamCounts, waitedWords: waitedWords, taskListLine: taskListLine, botProblems: botProblems, botNext: botNext,
+    teamGroups: teamGroups, teamCounts: teamCounts, epvPct: epvPct, trendPill: trendPill, waitedWords: waitedWords, taskListLine: taskListLine, botProblems: botProblems, botNext: botNext,
     /* planning releases (14 Nov 2026) */
     PLAN_RULE: PLAN_RULE, PLAN_TIMELINE: PLAN_TIMELINE, suggestDates: suggestDates, planAdvice: planAdvice, calendarMonth: calendarMonth,
     fmt: fmt,
