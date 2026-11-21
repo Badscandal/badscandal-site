@@ -813,6 +813,64 @@
     return (p.action === "add" ? "Add " + p.title + " to the releases" : "Make these changes to " + p.title) + (p.send ? " and send it to the team" : "") + ", as " + m.from + " proposed?";
   }
   /* L12 (18 Nov 2026): the Profiles section. view = board.profiles from profilesView. */
+  /* Profiles v2 (21 Nov 2026, Luke). ONE state per image, most urgent first:
+       you   a new image waits for his "Yes, correct"
+       bot   the owner has work: approved and not uploaded, a sized copy ready, or it needs a new shape
+       live  what is on the platform now is recorded
+       none  nothing recorded yet
+     The line under it never invents a day: "Since Thu 1 Oct" only when the day is known. */
+  function profileState(s, owner, cur, wait, ok) {
+    var who = owner && owner !== "Luke" ? owner : "";
+    if (wait) return { key: "you", tone: "you", label: "Needs your yes", line: "Tap Answer to say yes or no" };
+    if (s.status === "rework") return { key: "rework", tone: "bot", label: "Needs a new shape", line: who ? who + " is reworking it" : "It needs reworking" };
+    if (ok) return { key: "approved", tone: "bot", label: "Approved", line: who ? who + " uploads it by hand" : "You upload it by hand" };
+    if (s.status === "ready") return { key: "ready", tone: "bot", label: "Ready to upload", line: who ? who + " uploads it by hand" : "You upload it by hand" };
+    if (cur || s.status === "uploaded") {
+      var d = cur && cur.changed && !/^unknown$/i.test(String(cur.changed)) ? day(cur.changed) : "";
+      return { key: "live", tone: "live", label: "Live", line: d && d !== "unknown" ? "Since " + d : "" };
+    }
+    return { key: "none", tone: "none", label: "Not recorded", line: who ? who + " records what is live" : "You record what is live" };
+  }
+  var IMG_LINK = /^https:\/\/[^\s"'<>]+\.(?:jpg|jpeg|png|webp|gif)(?:[?#][^\s"'<>]*)?$/i;
+  var OWN_FILE = /^\/api\/staff\/profile-file\/(?:master-(?:photo|banner)|slot-[a-z0-9-]+)$/;
+  function profileThumb(s, cur, wait, ok) {
+    var pick = [wait && wait.link, ok && ok.link];
+    if (s.status === "ready" || s.status === "rework") pick.push(s.preview);
+    pick.push(cur && cur.link, s.preview);
+    for (var i = 0; i < pick.length; i++) {
+      var v = String(pick[i] || "");
+      if (OWN_FILE.test(v) || IMG_LINK.test(v)) return v;
+    }
+    return "";
+  }
+  var PROF_RANK = { you: 0, bot: 1, none: 2, live: 3 };
+  /* the strip at the top: one chip per platform (its worst state, its photo) and one line of counts */
+  function profileOverview(blocks) {
+    var plats = (blocks && blocks.platforms) || [];
+    var counts = { you: 0, bot: 0, live: 0, none: 0 }, total = 0;
+    var chips = plats.map(function (p) {
+      var tone = "live", thumb = "";
+      (p.slots || []).forEach(function (s) {
+        var t = (s.state && s.state.tone) || "none";
+        counts[t] = (counts[t] || 0) + 1; total++;
+        if (PROF_RANK[t] < PROF_RANK[tone]) tone = t;
+        if (!thumb && s.circle && s.thumb) thumb = s.thumb;
+      });
+      if (!thumb) (p.slots || []).forEach(function (s) { if (!thumb && s.thumb) thumb = s.thumb; });
+      var words = String(p.platform || "").split(/\s+/).filter(Boolean);
+      var initials = (words.length > 1 ? words[0].charAt(0) + words[1].charAt(0) : String(p.platform || "?").slice(0, words[0] && words[0].length > 2 ? 2 : 1)).toUpperCase();
+      var MARK = { facebook: "FB", instagram: "IG", youtube: "YT", spotify: "SP", apple: "AP", tiktok: "TT", x: "X", soundcloud: "SC", deezer: "DZ", amazon: "AM", tidal: "TD" };
+      if (MARK[p.id]) initials = MARK[p.id];
+      var label = String(p.platform || "").replace(/ (Page|Music)$/, "");
+      return { id: p.id, platform: p.platform, label: label, tone: tone, thumb: thumb, initials: initials, href: "#profiles/" + p.id };
+    });
+    if (!total) return { total: 0, counts: counts, chips: [], line: "No profiles listed." };
+    var bits = [counts.live + " of " + total + " live"];
+    if (counts.you) bits.push(counts.you + (counts.you === 1 ? " needs" : " need") + " your yes");
+    if (counts.bot) bits.push(counts.bot + " with the owner");
+    if (counts.none) bits.push(counts.none + " not recorded");
+    return { total: total, counts: counts, chips: chips, line: bits.join(" · ") };
+  }
   function profileBlocks(view) {
     var note = (view && view.note) || "HQ never logs in and never changes a platform.";
     var platforms = ((view && view.platforms) || []).map(function (p) {
@@ -842,7 +900,11 @@
             circle: !!s.circle,
             exactW: exact ? exact[0] : 0,
             exactH: exact ? exact[1] : 0,
-            detail: s.detail || ""
+            detail: s.detail || "",
+            /* Profiles v2 (21 Nov 2026): one state, a thumbnail, and the link to open */
+            state: profileState(s, owner, cur, wait, ok),
+            thumb: profileThumb(s, cur, wait, ok),
+            openLink: wait ? wait.link : ok ? ok.link : cur ? cur.link : ""
           };
         })
       };
@@ -2503,7 +2565,7 @@
     snapshot: snapshot, changesSince: changesSince, tiles: tiles, summaryText: summaryText, shortStep: shortStep, day: day,
     slug: slug, workerLabel: workerLabel, sortWorkers: sortWorkers, workerView: workerView, dutyWhen: dutyWhen, workerCounts: workerCounts, seenLine: seenLine, connectorLine: connectorLine,
     novaMessage: novaMessage, liveFeed: liveFeed, spWhen: spWhen, waitLabel: waitLabel, needWords: needWords, reportParts: reportParts, siteCheckLine: siteCheckLine, composeNames: composeNames,
-    threadRoot: threadRoot, answerTarget: answerTarget, questionLines: questionLines, questionsLeft: questionsLeft, stepButton: stepButton, formKey: formKey, storeLine: storeLine, storeHistory: storeHistory, capRateLine: capRateLine, capMissingLine: capMissingLine, dutyGapsLine: dutyGapsLine, incomeTotals: incomeTotals, approvalLines: approvalLines, approvalUndo: approvalUndo, warnTone: warnTone, warnGroups: warnGroups, resubmitAsk: resubmitAsk, relStatus: relStatus, relProgress: relProgress, stepGroups: stepGroups, upcomingAsks: upcomingAsks, staffAttention: staffAttention, staffHealth: staffHealth, curList: curList, cadenceWord: cadenceWord, accountLine: accountLine, sourceState: sourceState, payLine: payLine, accountsLine: accountsLine, receivedMonths: receivedMonths, releasePage: releasePage, monthRows: monthRows, mainSources: mainSources, sourceMonthLine: sourceMonthLine, proposalRows: proposalRows, proposalConfirm: proposalConfirm, profileBlocks: profileBlocks,
+    threadRoot: threadRoot, answerTarget: answerTarget, questionLines: questionLines, questionsLeft: questionsLeft, stepButton: stepButton, formKey: formKey, storeLine: storeLine, storeHistory: storeHistory, capRateLine: capRateLine, capMissingLine: capMissingLine, dutyGapsLine: dutyGapsLine, incomeTotals: incomeTotals, approvalLines: approvalLines, approvalUndo: approvalUndo, warnTone: warnTone, warnGroups: warnGroups, resubmitAsk: resubmitAsk, relStatus: relStatus, relProgress: relProgress, stepGroups: stepGroups, upcomingAsks: upcomingAsks, staffAttention: staffAttention, staffHealth: staffHealth, curList: curList, cadenceWord: cadenceWord, accountLine: accountLine, sourceState: sourceState, payLine: payLine, accountsLine: accountsLine, receivedMonths: receivedMonths, releasePage: releasePage, monthRows: monthRows, mainSources: mainSources, sourceMonthLine: sourceMonthLine, proposalRows: proposalRows, proposalConfirm: proposalConfirm, profileBlocks: profileBlocks, profileOverview: profileOverview, profileState: profileState,
     incomeEmpty: incomeEmpty, incomeProblems: incomeProblems, expectedJourney: expectedJourney, expectedDue: expectedDue, expectedFlags: expectedFlags, expectedFlagKind: expectedFlagKind, missingLine: missingLine, learnedLine: learnedLine, routeLines: routeLines,
     /* replies that visibly land + the release pipeline (11 Nov 2026) */
     spStampOf: spStampOf, seenWords: seenWords, sentLine: sentLine, answeredList: answeredList, CLAUDE_ROUNDS: CLAUDE_ROUNDS,
