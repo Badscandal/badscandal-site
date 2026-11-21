@@ -153,8 +153,10 @@ test("Rights links a claim to its case, and the sample desk has one case waiting
   assert.match(html, /href="#songs\/dsampleyt"/);
   assert.match(html, /Slow Burn/);
   const desk = sampleDesk(NOW);
-  const w = S.waitingOnLuke(desk, S.spDay(NOW), NOW).filter((x) => x.kind === "dispute");
-  assert.equal(w.length, 1);
+  /* v18, 21 Nov 2026: the sample also has a case with a draft email (dsamplemail), so Reply shows the email */
+  const all = S.waitingOnLuke(desk, S.spDay(NOW), NOW).filter((x) => x.kind === "dispute");
+  assert.deepEqual(all.map((x) => x.id).sort(), ["dsamplemail", "dsampleyt"]);
+  const w = all.filter((x) => x.id === "dsampleyt");
   assert.equal(w[0].id, "dsampleyt");
   assert.match(w[0].text, /Please release the claim/);
   const one = L.disputeHtml(desk.disputes, { song: "Slow Burn", compact: true });

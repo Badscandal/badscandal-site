@@ -1685,6 +1685,23 @@ body.ws-on main{margin-left:0;max-width:none}
 @media(max-width:640px){
   .htiles,.pg .kpis{grid-template-columns:1fr}
 }
+/* ---------- v18 (21 Nov 2026): Needs you cards: one short question, Yes / No / Reply, the email on Reply ---------- */
+.needcard{margin:0 0 12px;padding:16px;border-radius:18px}
+.needcard .dq{margin:0 0 6px;font-size:18px;line-height:1.3;font-weight:650;color:var(--paper);overflow-wrap:anywhere}
+.needcard .dfacts{margin:0 0 6px;font-size:14px;color:var(--muted);overflow-wrap:anywhere}
+.needcard .drec{margin:0 0 10px;font-size:14px}
+.needcard .drec::before{content:"Recommended: ";color:var(--muted)}
+.needcard .dacts{margin-top:10px}
+.needcard .dacts a.copybtn{display:inline-flex;align-items:center;min-height:48px;padding:0 16px;text-decoration:none}
+.needcard.gone{display:none}
+.nreply{margin-top:12px;display:flex;flex-direction:column;gap:8px}
+.nreply textarea,.nreply input{width:100%;box-sizing:border-box;font:inherit;font-size:16px;color:var(--paper);background:rgba(255,255,255,.05);border:1px solid var(--ink-3);border-radius:12px;padding:10px 12px}
+.nreply textarea{min-height:88px;resize:vertical;white-space:pre-wrap;line-height:1.45}
+.nemail textarea{min-height:200px}
+.nfld{display:flex;flex-direction:column;gap:4px}
+.nfld span{font-size:13px;color:var(--muted)}
+@media(min-width:640px){.nemail .nfld:not(:has(textarea)){flex-direction:row;align-items:center;gap:10px}.nemail .nfld:not(:has(textarea)) span{width:64px;flex:none}}
+.needcard .ferr:empty{display:none}
 </style>
 </head>
 <body>

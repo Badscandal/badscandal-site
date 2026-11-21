@@ -139,7 +139,9 @@ test("Luke's 03:20 screen: one lyrics approval and no cards is 1 need you, every
   assert.equal(tool.open, tool.total, "open is the same count as the cards");
   assert.equal(tool.waiting.length, 1);
   assert.equal(tool.waiting[0].kind, "decision");
-  assert.equal(tool.waiting[0].what, "Verse asked you to decide something");
+  /* v18, 21 Nov 2026: a row says its short question once, in text (no what/screen copies) */
+  assert.equal(tool.waiting[0].what, undefined);
+  assert.ok(tool.waiting[0].text && tool.waiting[0].text.length <= 120);
   assert.equal(tool.quiet_hours, true);
 });
 

@@ -742,12 +742,26 @@ const cur = (o) => Object.entries(o || {}).map(([c, a]) => `${c} ${Number(a).toF
 const recWords = (m) => (Array.isArray(m.recommendations) ? m.recommendations.slice().sort((a, b) => (a.by === "Nova" ? -1 : b.by === "Nova" ? 1 : 0)) : [])
   .map((x) => ` · ${x.by} recommends: ${x.option || x.why}${x.option ? ` (${x.why})` : ""}`).join("");
 /* the same rows for needs_you, my_day, team_board and both briefings */
-function needRows(count, messages) {
+/* luke_briefing keeps its row shape (rule 6: Alfred depends on it). Same items, same order as needRows. */
+function needRowsBriefing(count, messages) {
   const byId = new Map((messages || []).filter((m) => m && m.id).map((m) => [m.id, m]));
   return (count.items || []).map((x) => {
     const m = (x.kind === "message" || x.kind === "handle") ? byId.get(x.id) : null;
     if (!m) return { id: x.id, kind: x.kind, from: x.from || "", text: x.text, what: x.text, screen: S.lukeLine(x.text), ...(x.href ? { href: x.href } : {}) };
     return { ...short(m), kind: x.kind === "handle" ? "handle" : (m.approval && m.approval.what ? m.approval.what + " approval" : m.needs), what: x.text, screen: S.lukeLine(m.text) };
+  });
+}
+/* v18 (21 Nov 2026): one row per card, the same words Luke's card shows. text = the short question (no
+   "what"/"screen" copies of it); the card's facts, recommendation and Yes/No go with it. */
+function needRows(count, messages) {
+  const byId = new Map((messages || []).filter((m) => m && m.id).map((m) => [m.id, m]));
+  return (count.items || []).map((x) => {
+    const m = (x.kind === "message" || x.kind === "handle") ? byId.get(x.id) : null;
+    const card = { text: x.title || x.text, card: x.type, ...(x.facts && Object.keys(x.facts).length ? { facts: x.facts } : {}), ...(x.recommend ? { recommend: x.recommend } : {}),
+      ...(x.yes ? { yes: x.yes.choice } : {}), ...(x.no ? { no: x.no.choice } : {}), ...(x.email ? { has_email: true } : {}), ...(x.done ? { done_button: true } : {}) };
+    if (!m) return { id: x.id, kind: x.kind, from: x.from || x.to || "", ...card, ...(x.href ? { href: x.href } : {}) };
+    const { text: _full, ...rest } = short(m);
+    return { ...rest, kind: x.kind === "handle" ? "handle" : (m.approval && m.approval.what ? m.approval.what + " approval" : m.needs), ...card };
   });
 }
 async function oneNeeds(store, now, ctx, desk, hqAns) {
@@ -756,7 +770,7 @@ async function oneNeeds(store, now, ctx, desk, hqAns) {
   counted.notRead = cap && Array.isArray(cap.notRead) ? cap.notRead : [];
   counted.lukeTasks = (hqAns && hqAns.team && hqAns.team.tasks) || [];
   const count = C.needsCount(counted, S.spDay(now), now);
-  return { count, rows: needRows(count, counted.messages || []) };
+  return { count, rows: needRows(count, counted.messages || []), briefingRows: needRowsBriefing(count, counted.messages || []) };
 }
 const short = (m) => ({ id: m.id, from: m.from, to: m.to, at: m.sp, needs: m.needs, text: m.text, ...(m.options && m.options.length ? { options: m.options } : {}),
   ...(m.questions && m.questions.length ? { questions: m.questions.map((q, i) => ({ n: i + 1, q: q.q, answer: q.answer || "", by: q.by || "" })) } : {}),
@@ -1537,7 +1551,7 @@ async function runTool(tool, args, ctx, read) {
         const link = S.httpsLink(m.link) || (Array.isArray(m.links) ? m.links.map((x) => S.httpsLink(x)).find(Boolean) : "");
         return { id: m.id, needs: m.needs, waiting: S.waitedFor(now - Date.parse(m.at)), since: m.sp, text: S.excerptText(S.hidePrivate(m.text), 160), ...(link ? { link } : {}) };
       });
-      if (me === "Claude") return { reconnect: conn.status, connector: { tools: conn.tools, version: conn.version, reconnect_needed: conn.reconnect_needed }, you: "Claude", today, now: b.now, waiting_on_you: b.waiting.claude.map(short), questions_to_luke: questions("Claude"), card_answers, ...(luke_tap ? { luke_tap } : {}), ...forYou(b.waiting.claude.map((m) => m.id)), waiting_on_luke: luke.rows,
+      if (me === "Claude") return { ...(conn.reconnect_needed ? { reconnect: conn.status } : {}), connector: { tools: conn.tools, version: conn.version, reconnect_needed: conn.reconnect_needed }, you: "Claude", today, now: b.now, waiting_on_you: b.waiting.claude.map(short), questions_to_luke: questions("Claude"), card_answers, ...(luke_tap ? { luke_tap } : {}), ...forYou(b.waiting.claude.map((m) => m.id)), waiting_on_luke: luke.rows,
         releases: rel.filter((v) => S.releaseActive(v) || v.status === "draft").map((v) => `${v.title}: ${v.status === "draft" ? "draft" : v.released ? "released" : "coming"}, ${when(v.date)}, ${v.counts.done} of ${v.counts.total} steps done` + (v.counts.late ? `, ${v.counts.late} late` : "") + (v.counts.blocked ? `, ${v.counts.blocked} blocked` : "") + (v.missing.length ? `; missing: ${v.missing.map((m) => m.short).join(", ")}` : "")),
         unknown_in_spotify: b.sightings.items.filter((x) => x.state === "unknown").map((x) => `${x.title}, ${x.dateWords}`),
         ...(sheetNote ? { note: sheetNote } : {}) };
@@ -1578,7 +1592,7 @@ async function runTool(tool, args, ctx, read) {
       });
       const licenceDay = me === "Licence" ? await W.licenceQueue(store, now) : null;
       const sparkDay = me === "Spark" ? await S.readContentIdeas(store) : null;
-      return { reconnect: conn.status, connector: { tools: conn.tools, version: conn.version, reconnect_needed: conn.reconnect_needed }, you: me, role: w.role, why_you_are_needed: S.freshWhy(me, w.why), today, now_sao_paulo: b.now,
+      return { ...(conn.reconnect_needed ? { reconnect: conn.status } : {}), connector: { tools: conn.tools, version: conn.version, reconnect_needed: conn.reconnect_needed }, you: me, role: w.role, why_you_are_needed: S.freshWhy(me, w.why), today, now_sao_paulo: b.now,
         ...(w.grok ? { grok_bot: w.grok } : {}),
         ...(licenceDay ? { reports_to: "Nova", licence_queue: licenceDay, idle_until: "Luke starts a cover. He writes the covers and keeps the songs." } : {}),
         ...(sparkDay ? { reports_to: "Nova", content_ideas: sparkDay, posts: "Read only. Never post, comment, send a DM, or touch an ad." } : {}),
@@ -1639,7 +1653,7 @@ async function runTool(tool, args, ctx, read) {
       return { today, now_sao_paulo: b.now,
         site_check: b.report ? { at: b.report.sp, text: b.report.text } : "The site has not run its check yet.",
         claude_note: note ? { at: note.sp, text: note.text } : "none",
-        decisions_waiting_on_luke: luke.rows,
+        decisions_waiting_on_luke: luke.briefingRows,
         ad_spend: cap ? { month: cap.month, spent: `${cap.currency} ${cap.spent.toFixed(2)}`, cap: `${cap.currency} ${cap.amount}`, left: `${cap.currency} ${cap.left.toFixed(2)}`, status: cap.status, estimated: cap.estimated } : "not read",
         next_release: next ? { song: next.song, date: next.date, days_to_go: next.daysToGo, late_steps: next.steps.filter((s) => s.late).map((s) => `${s.label} (${s.owner})`),
           ...(hq ? {} : { source: "the desk only: the sheet's Releases tab was not read, so an earlier release there can't be ruled out" }) } : hq ? "none planned" : "not read",

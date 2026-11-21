@@ -15,6 +15,9 @@
    skipped); every amount keeps its own currency; an amount in another currency is an ESTIMATE at
    that month's average ECB rate (netlify/lib/fx.mjs) and is always labelled as one. */
 import { convert } from "./fx.mjs";
+/* v18 (21 Nov 2026, Luke): the "Salvation" line is gone from Atlas's duty, so the duty list and the reminders
+   built from it never say it (the sheet itself is not changed) */
+const noSalvation = (v) => (v == null ? v : String(v).replace(/[^.\n]*\bsalvation\b[^.\n]*\.?/gi, "").replace(/\s{2,}/g, " ").trim());
 
 export const HQ_TABS = ["Growth", "Songs", "Fans", "Releases", "Tasks", "Royalties", "Spend", "Income"];
 export const CAP = { amount: 1000, warn: 750, stop: 900, currency: "USD" };
@@ -336,7 +339,7 @@ export function dutiesReport(tasks, today, nowHM = "", overlay = null) {
         else if (said.status === "blocked") { status = "blocked"; blocker = blocker || said.message; via = "connector"; }
         else if (said.status === "working") working = true;
       }
-      return { id: norm(t.id), owner: ownerName(t.owner) || "?", task: t.task, blocker, status, due,
+      return { id: norm(t.id), owner: ownerName(t.owner) || "?", task: noSalvation(t.task), blocker: noSalvation(blocker), status, due,
         late: status === "todo" && !!due && !!nowHM && nowHM > due, updated: norm(t.updated), ...(via ? { via } : {}), ...(working ? { working } : {}), ...(gaps ? { gaps } : {}) };
     });
   const owners = {};

@@ -623,6 +623,68 @@
     return h;
   }
 
+  /* ---------- v18 (21 Nov 2026): Needs you cards ----------
+     x = one item of board.needs.items, with its card from netlify/lib/need-cards.mjs.
+     decision: the short question, the facts, one-line recommendation, Yes / No / Reply. The email (To, CC,
+     Subject, Body) only opens on Reply and can be edited. ask: a reply box + Send, and Done for an action.
+     link: one button to the screen where it is answered. o = { first, open, draft, sample }. */
+  function needFacts(f) {
+    f = f || {};
+    var bits = [];
+    if (f.song) bits.push(f.song);
+    if (f.status) bits.push(f.status);
+    if (f.waiting) bits.push("Waiting on " + f.waiting);
+    if (f.next) bits.push("Next check " + f.next);
+    return bits.join(" · ");
+  }
+  function needEmailText(e) {
+    if (!e) return "";
+    return ["To: " + (e.to || ""), e.cc ? "CC: " + e.cc : "", "Subject: " + (e.subject || ""), "Body:\n" + (e.body || "")].filter(Boolean).join("\n");
+  }
+  function needBtn(cls, act, key, label, subLabel, dis) {
+    return '<button class="' + cls + '" type="button" data-nact="' + act + '" data-nk="' + esc(key) + '"' + dis + ">" + esc(label) + (subLabel ? "<small>" + esc(subLabel) + "</small>" : "") + "</button>";
+  }
+  function needReplyHtml(x, o, dis) {
+    var k = esc(x.key);
+    var d = o.draft || null;
+    var send = '<div class="dacts">' + needBtn("sendbtn", "send", x.key, "Send", "", dis) + "</div>";
+    if (x.email) {
+      var e = d && typeof d === "object" ? d : x.email;
+      var fld = function (name, label, v) {
+        return '<label class="nfld"><span>' + label + '</span><input type="text" data-nf="' + name + '" data-nk="' + k + '" value="' + esc(v || "") + '" autocomplete="off"></label>';
+      };
+      return '<div class="nreply nemail">' + fld("to", "To", e.to) + fld("cc", "CC", e.cc) + fld("subject", "Subject", e.subject) +
+        '<label class="nfld"><span>Body</span><textarea rows="9" data-nf="body" data-nk="' + k + '">' + esc(e.body || "") + "</textarea></label>" + send + "</div>";
+    }
+    var t = typeof d === "string" ? d : (x.draft || "");
+    return '<div class="nreply"><textarea rows="4" data-nf="text" data-nk="' + k + '" placeholder="Reply" aria-label="Reply">' + esc(t) + "</textarea>" + send + "</div>";
+  }
+  function needCardHtml(x, o) {
+    if (!x) return "";
+    o = o || {};
+    var dis = o.sample ? " disabled" : "";
+    var who = x.from || x.to || "";
+    var head = o.first ? "Do this first" + (who ? " · " + who : "") : who;
+    var h = '<article class="needcard dcard n-' + esc(x.type || "ask") + '" data-nk="' + esc(x.key) + '">';
+    if (head) h += '<p class="dfrom' + (o.first ? " dhead" : "") + '">' + esc(head) + "</p>";
+    h += '<h3 class="dq">' + esc(x.title || x.text || "") + "</h3>";
+    var facts = needFacts(x.facts);
+    if (facts) h += '<p class="dfacts">' + esc(facts) + "</p>";
+    if (x.recommend) h += '<p class="drec">' + esc(x.recommend) + "</p>";
+    if (x.type === "decision") {
+      h += '<div class="dacts">' +
+        (x.yes ? needBtn("sendbtn", "yes", x.key, x.yes.label || "Yes", x.yes.sub, dis) : "") +
+        (x.no ? needBtn("copybtn", "no", x.key, x.no.label || "No", x.no.sub, dis) : "") +
+        needBtn("copybtn", "reply", x.key, o.open ? "Close" : "Reply", "", "") + "</div>";
+      if (o.open) h += needReplyHtml(x, o, dis);
+    } else if (x.type === "link") {
+      h += '<div class="dacts"><a class="copybtn" href="' + esc(x.href || "#today") + '">Open</a></div>';
+    } else {
+      h += needReplyHtml(x, o, dis).replace('<div class="dacts">', '<div class="dacts">' + (x.done ? needBtn("copybtn", "done", x.key, "Done", "", dis) : ""));
+    }
+    return h + '<p class="ferr" data-nerr="' + esc(x.key) + '" role="status"></p></article>';
+  }
+
   var api = {
     homePulse: homePulse, needTotal: needTotal, stampDay: stampDay, milestones: milestones, releaseHero: releaseHero, platformKpis: platformKpis, healthDot: healthDot,
     sparkSvg: sparkSvg, decisionStack: decisionStack, waitingOnYou: waitingOnYou, releaseRows: releaseRows, releaseTimeline: releaseTimeline, readinessBox: readinessBox,
@@ -631,6 +693,7 @@
     bestPost: bestPost, fanCards: fanCards, uploadSlots: uploadSlots, siteRows: siteRows, lyricsDiff: lyricsDiff, lukeSees: lukeSees,
     homeHtml: homeHtml, kpiHtml: kpiHtml, CURRENCIES: CURRENCIES
   };
+  api.needCardHtml = needCardHtml; api.needFacts = needFacts; api.needEmailText = needEmailText; /* v18 */
   root.HQLook = api;
   if (typeof module !== "undefined" && module.exports) module.exports = api;
 })(typeof globalThis !== "undefined" ? globalThis : this);

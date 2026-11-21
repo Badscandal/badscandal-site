@@ -149,7 +149,7 @@
     var decision = "";
     /* one card per item on the shared list. The header count is that list. No second "also waiting" list. */
     if (items) {
-      decision += askHtml(items, allWaiting);
+      decision += askHtml(items);
       if (!items.length) decision += '<p class="dnone">Nothing is waiting on you.</p>';
     }
     decision += healthDots(health);
@@ -168,33 +168,94 @@
     if (ads) ads.innerHTML = gaugeHtml(L.spendGauge(sheet && sheet.money && sheet.money.cap));
   }
 
-  /* One card per item. The first is "Do this first". A decision has Yes and No. Anything else has a reply box.
-     The answer goes back to the bot that asked. */
-  function askHtml(items, messages) {
-    var byId = {};
-    (messages || []).forEach(function (m) { if (m && m.id) byId[m.id] = m; });
+  /* v18 (21 Nov 2026, Luke): one card per item of the ONE list (board.needs.items). A decision is one short
+     question with Yes / No / Reply; the email opens only on Reply and can be edited. An ask has a reply box,
+     plus Done when it is an action. Answers are recorded the way they were before (needCard's "via"). The
+     drawing is HQLook.needCardHtml; what a tap sends is below. Typing survives the 5-minute refresh. */
+  var nOpen = {}, nDraft = {}, nItems = {};
+  function askHtml(items) {
+    var V = window.HQLook;
+    nItems = {};
     return (items || []).map(function (x, i) {
-      if (!x) return "";
-      var m = byId[x.id];
-      var head = i === 0 ? "Do this first" : (x.from || (m && m.from) || "");
-      var headClass = i === 0 ? "dfrom dhead" : "dfrom";
-      var q = x.text || "";
-      var acts = "";
-      if (m && m.needs === "decision" && m.options && m.options.length) {
-        acts = '<div class="dacts">' + m.options.map(function (o) {
-          return '<button class="sendbtn" type="button" data-decide="' + esc(m.id) + '" data-choice="' + esc(o) + '">' + esc(o) + "</button>";
-        }).join("") + "</div>";
-      } else if (x.kind === "card" || x.kind === "yes") {
-        acts = '<div class="dacts"><button class="sendbtn" type="button" data-achoice="yes" data-aid="' + esc(x.id) + '">Yes</button>' +
-          '<button class="copybtn" type="button" data-achoice="no" data-aid="' + esc(x.id) + '">No</button></div>';
-      } else {
-        var who = x.from || (m && m.from) || "";
-        acts = '<form class="needreply" data-reply="' + esc(x.id) + '" data-from="' + esc(who) + '"><input type="text" name="t" maxlength="500" placeholder="Reply" aria-label="Reply" style="font-size:16px">' +
-          '<button type="submit" class="sendbtn">Send</button></form>';
-      }
-      return '<article class="needcard dcard">' + (head ? '<p class="' + headClass + '">' + esc(head) + "</p>" : "") + '<p class="dline">' + esc(q) + "</p>" + acts + "</article>";
+      if (!x || !x.key) return "";
+      nItems[x.key] = x;
+      return V.needCardHtml(x, { first: i === 0, open: !!nOpen[x.key], draft: nDraft[x.key], sample: !!(window.HQ && HQ.sample) });
     }).join("");
   }
+  function nErr(key, text) {
+    var p = document.querySelector('[data-nerr="' + (window.CSS && CSS.escape ? CSS.escape(key) : key) + '"]');
+    if (p) p.textContent = text || "";
+  }
+  function nFields(key) {
+    var x = nItems[key] || {};
+    var sel = function (f) { return document.querySelector('[data-nk="' + (window.CSS && CSS.escape ? CSS.escape(key) : key) + '"][data-nf="' + f + '"]'); };
+    if (x.email) {
+      var e = {};
+      ["to", "cc", "subject", "body"].forEach(function (f) { var el = sel(f); e[f] = el ? String(el.value || "") : ""; });
+      return { email: e, text: window.HQLook.needEmailText(e) };
+    }
+    var t = sel("text");
+    return { text: t ? String(t.value || "").trim() : "" };
+  }
+  /* one tap -> one write, the same endpoints as before v18 */
+  function nSend(x, act, text) {
+    var j = function (path, body) { return HQ.postJSON(path, body); };
+    if (x.via === "message") {
+      if (act === "done") return j("/api/staff/resolve", { id: x.id, note: "done" });
+      var said = act === "yes" ? x.yes.choice : act === "no" ? x.no.choice : text;
+      if (act !== "send" && String(said).trim().length < 2) said = "Answer: " + said;
+      return j("/api/staff/message", { to: x.to, text: said, needs: "none", re: x.id, note: act === "send" ? "" : String((act === "yes" ? x.yes : x.no).choice).slice(0, 240) });
+    }
+    if (x.via === "case") {
+      var c = act === "yes" ? x.yes : act === "no" ? x.no : { choice: "respond" };
+      return j("/api/staff/case", { id: x.id, choice: c.choice, text: act === "send" ? text : (c.text || "") });
+    }
+    if (x.via === "card") return j("/api/staff/card", { id: x.id, choice: act === "send" ? "edit" : act, text: act === "send" ? text : "" });
+    /* mark: a sign-in, access, a task, a fan, a bot waiting on his yes */
+    var body = { key: x.key, to: x.to };
+    if (act === "yes" || act === "no") { body.text = (act === "yes" ? x.yes : x.no).text || (act === "yes" ? "Yes" : "No"); body.choice = act; }
+    else if (act === "done") { body.text = "Done: " + (x.title || x.text || ""); body.choice = "done"; }
+    else if (x.kind === "fan") { body.text = "Reply to the fan on Instagram (" + (x.title || "") + "): " + text; body.needs = "action"; body.choice = "reply"; }
+    else { body.text = text; body.done = x.type === "decision"; body.choice = "reply"; }
+    return j("/api/staff/need", body);
+  }
+  document.addEventListener("input", function (ev) {
+    var el = ev.target;
+    var key = el && el.getAttribute && el.getAttribute("data-nk"), f = el && el.getAttribute && el.getAttribute("data-nf");
+    if (!key || !f) return;
+    if (f === "text") nDraft[key] = String(el.value || "");
+    else { var d = nDraft[key] && typeof nDraft[key] === "object" ? nDraft[key] : Object.assign({}, (nItems[key] || {}).email || {}); d[f] = String(el.value || ""); nDraft[key] = d; }
+  });
+  document.addEventListener("click", function (ev) {
+    var b = ev.target.closest && ev.target.closest("[data-nact]");
+    if (!b || !window.HQ) return;
+    var key = b.getAttribute("data-nk"), act = b.getAttribute("data-nact"), x = nItems[key];
+    if (!x) return;
+    if (act === "reply") {
+      nOpen[key] = !nOpen[key]; drawHome();
+      if (nOpen[key]) { var first = document.querySelector('[data-nk="' + (window.CSS && CSS.escape ? CSS.escape(key) : key) + '"][data-nf]'); if (first) first.focus(); }
+      return;
+    }
+    if (HQ.sample) { nErr(key, "This is the sample: nothing is sent."); return; }
+    var text = "";
+    if (act === "send") {
+      text = nFields(key).text;
+      if (String(text).replace(/^(To|CC|Subject|Body):\s*$/gim, "").trim().length < 2) { nErr(key, "Write the reply first."); return; }
+    }
+    b.disabled = true; nErr(key, "");
+    var card = b.closest && b.closest(".needcard");
+    nSend(x, act, text).then(function (res) {
+      b.disabled = false;
+      if (res && res.s === 200 && res.j && res.j.ok !== false) {
+        if (card) card.classList.add("gone");
+        delete nOpen[key]; delete nDraft[key];
+        try { document.dispatchEvent(new CustomEvent("hq:decided", { detail: { ok: true, id: x.id } })); } catch (e) {}
+        if (window.HQStaff && HQStaff.reload) HQStaff.reload(true);
+        return;
+      }
+      nErr(key, (res && res.j && res.j.error) || "That didn't send. Nothing changed.");
+    }, function () { b.disabled = false; nErr(key, "No connection. Nothing was sent."); });
+  });
 
   function healthDots(health) {
     var dots = (health && health.dots) || [];
@@ -285,19 +346,6 @@
     if (f) { t.src = f; return; }
     var s = document.createElement("span"); s.className = "nothumb"; t.parentNode && t.parentNode.replaceChild(s, t);
   }, true);
-  document.addEventListener("submit", function (ev) {
-    var form = ev.target && ev.target.closest && ev.target.closest(".needreply");
-    if (!form || !window.HQ || HQ.sample) return;
-    ev.preventDefault();
-    var id = form.getAttribute("data-reply") || "", from = form.getAttribute("data-from") || "", input = form.querySelector("input");
-    var text = input ? String(input.value || "").trim() : "";
-    if (text.length < 2 || !from) return;
-    var btn = form.querySelector("button");
-    if (btn) btn.disabled = true;
-    HQ.postJSON("/api/staff/message", { to: from, text: text, needs: "none", re: id }).then(function () {
-      if (window.HQStaff && HQStaff.reload) HQStaff.reload();
-    }, function () { if (btn) btn.disabled = false; });
-  });
   document.addEventListener("click", function (ev) {
     var a = ev.target.closest && ev.target.closest("[data-aopen],[data-achoice],[data-asave]");
     if (a) {

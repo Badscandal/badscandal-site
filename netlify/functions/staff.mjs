@@ -295,6 +295,11 @@ async function api(req, context, path) {
       const item = await S.decideCase(st.desk, now, roster, { by: "Luke", id: a.id, choice: a.choice, text: a.text });
       return json(200, { ok: true, case: S.caseOut(item) });
     }
+    /* v18 (21 Nov 2026): Luke answers a sign-in, access, task, fan or "waiting on your yes" ask from its card */
+    if (path === "need" && req.method === "POST") {
+      if (role !== "luke") return json(403, { error: "Only Luke answers his own asks" });
+      return json(200, await S.markNeedDone(st.desk, now, roster, { by: "Luke", key: a.key, to: a.to, text: a.text, done: a.done, choice: a.choice, needs: a.needs }));
+    }
     if (path === "card" && req.method === "POST") {
       if (role !== "luke") return json(403, { error: "Only Luke answers a card" });
       const card = await C.answerCard(st.desk, now, roster, { by: "Luke", id: a.id, choice: a.choice, text: a.text });

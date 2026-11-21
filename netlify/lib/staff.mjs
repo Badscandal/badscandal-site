@@ -170,7 +170,8 @@ export function freshDuty(text) {
   let t = String(text || "");
   t = t.replace(/meta too until the meta-api-feed brief says live/gi, "HQ records Meta itself");
   t = t.replace(/google\s*\(\s*eur\s*\)/gi, "Google (currency not confirmed)");
-  t = t.replace(/[^.]*salvation card[^.]*\.?/gi, "");
+  /* v18 (21 Nov 2026, Luke): no "Salvation" line anywhere in Atlas's duty or its reminders */
+  t = t.replace(/[^.\n]*\bsalvation\b[^.\n]*\.?/gi, "");
   return t.replace(/\s{2,}/g, " ").replace(/\s+([,.;])/g, "$1").trim();
 }
 export function freshWhy(name, why) {
@@ -6039,10 +6040,11 @@ export async function saveContentIdeas(store, now, a) {
 
 export async function loadDesk(store, now) {
   const [roster, updates, messages, cardsDoc, config, releases, sightings] = await Promise.all([getRoster(store), listUpdates(store, now, 3), listMessages(store, now, 2), readDoc(store, "cards.json", {}), getConfig(store), listReleases(store), getSightings(store)]);
-  const [seen, read, income, closesDoc, profiles, claimsDoc, ideasDoc, disputesDoc] = await Promise.all([getSeen(store, roster), getRead(store, roster), incomeState(store, now), readDoc(store, "closes.json", []), getProfiles(store), readDoc(store, CLAIMS_KEY, { items: [] }), readDoc(store, IDEAS_KEY, {}), readDoc(store, CASES_KEY, { items: [] })]);
+  const [seen, read, income, closesDoc, profiles, claimsDoc, ideasDoc, disputesDoc, doneDoc] = await Promise.all([getSeen(store, roster), getRead(store, roster), incomeState(store, now), readDoc(store, "closes.json", []), getProfiles(store), readDoc(store, CLAIMS_KEY, { items: [] }), readDoc(store, IDEAS_KEY, {}), readDoc(store, CASES_KEY, { items: [] }), readDoc(store, NEED_DONE_KEY, { marks: {} })]);
   const claims = claimsDoc.data && Array.isArray(claimsDoc.data.items) ? { items: claimsDoc.data.items, checked: claimsDoc.data.checked && typeof claimsDoc.data.checked === "object" ? claimsDoc.data.checked : {} } : { items: [], checked: {} };
   const disputes = disputesDoc.data && Array.isArray(disputesDoc.data.items) ? disputesDoc.data.items : [];
-  return { roster, updates, messages, cards: cardsDoc.data || {}, seen, read, income, config, releases, sightings, closes: Array.isArray(closesDoc.data) ? closesDoc.data : [], profiles, claims, disputes, contentIdeas: ideasDoc.data || {} };
+  const needsDone = doneDoc.data && doneDoc.data.marks && typeof doneDoc.data.marks === "object" ? { marks: doneDoc.data.marks } : { marks: {} };
+  return { roster, updates, messages, cards: cardsDoc.data || {}, seen, read, income, config, releases, sightings, closes: Array.isArray(closesDoc.data) ? closesDoc.data : [], profiles, claims, disputes, contentIdeas: ideasDoc.data || {}, needsDone };
 }
 
 /* Has the person a message was sent to READ it? (V6, 11 Nov 2026: from the read markers, read/<name>,
@@ -6223,7 +6225,9 @@ function lukeExtraNeeds(desk) {
   }
   for (const text of desk && desk.notRead || []) if (text) bits.push({ who: "", text: String(text), at: null });
   for (const line of signedOutLines(bits)) {
-    out.push({ key: "sign:" + line.line.toLowerCase(), kind: "signin", id: line.who || line.line, text: line.line, href: "#today", at: null });
+    /* v18: the id is a short slug, never the whole sentence; the answer goes to the bot that said it */
+    const slug = line.line.toLowerCase().replace(/\(.*?\)/g, "").replace(/^sign in to /, "").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40) || "account";
+    out.push({ key: "sign:" + line.line.toLowerCase(), kind: "signin", id: "sign-" + slug, ...(line.who ? { from: line.who } : {}), text: line.line, href: "#today", at: null });
   }
   const seenYes = new Set(), seenAcc = new Set();
   for (const b of bits) {
@@ -6236,7 +6240,20 @@ function lukeExtraNeeds(desk) {
     }
     if (realYes(t) && !seenYes.has(b.who)) {
       seenYes.add(b.who);
-      out.push({ key: "yes:" + b.who, kind: "yes", id: b.who, text: `${b.who} is waiting on your yes: ${clipWords(t, 90)}`, href: "#team", at: b.at });
+      out.push({ key: "yes:" + b.who, kind: "yes", id: b.who, from: b.who, detail: clipWords(t, 200), text: `${b.who} is waiting on your yes: ${clipWords(t, 90)}`, href: "#team", at: b.at });
+    }
+  }
+  /* v18 (21 Nov 2026): a release step blocked on Luke's yes ("Waiting on Luke's Yes, correct for the typo fix")
+     is the same ask as a bot card saying it: one card per bot */
+  for (const r of desk && desk.releases || []) {
+    if (!r || r.status === "cancelled") continue;
+    for (const st of r.steps || []) {
+      const t = String((st && st.note) || "").replace(/\s+/g, " ").trim();
+      if (!st || !["blocked", "working", "todo"].includes(st.status) || !realYes(t)) continue;
+      const who = clean(st.owner, 40);
+      if (!who || seenYes.has(who)) continue;
+      seenYes.add(who);
+      out.push({ key: "yes:" + who, kind: "yes", id: who, from: who, detail: clipWords(t, 200), text: `${who} is waiting on your yes: ${clipWords(t, 90)}`, href: "#releases/" + r.id, at: st.at || null });
     }
   }
   for (const f of desk && desk.needsReply || []) {
@@ -6245,6 +6262,31 @@ function lukeExtraNeeds(desk) {
     out.push({ key: "fan:" + id, kind: "fan", id, text: `A fan on Instagram needs a reply: ${clipWords(f.text || f.quote, 80)}`, href: "#growth", at: f.at || null });
   }
   return out;
+}
+export const NEED_DONE_KEY = "needs-done.json", NEED_DONE_DAYS = 3;
+/* v18 (21 Nov 2026): Luke answers an ask that has no message of its own (a sign-in, Netlify access, a task, a
+   fan, a bot waiting on his yes) on its card. ONE write records the mark (key -> when), then the answer goes to
+   the bot as a message from Luke, so the bot reads it in messages_for_you exactly like any other answer. */
+export async function markNeedDone(store, now, roster, a) {
+  const by = whoIs(a.by, roster, { people: true });
+  if (by !== "Luke") fail("Only Luke answers his own asks. Nothing was saved.", "not_allowed");
+  const key = clean(a.key, 200);
+  if (!/^(sign|acc|yes|fan|t):/.test(key)) fail("key must be the item's key from the Needs you list. Nothing was saved.");
+  const text = cleanText(a.text, 1500);
+  if (text.length < 2) fail("Write the answer. Nothing was saved.");
+  noSecrets(text);
+  const to = whoIs(a.to, roster);
+  const at = new Date(now).toISOString();
+  const done = a.done !== false;
+  if (done) await mutate(store, NEED_DONE_KEY, { marks: {} }, (doc) => {
+    const marks = doc && doc.marks && typeof doc.marks === "object" ? doc.marks : {};
+    const keep = {};
+    for (const [k, v] of Object.entries(marks)) if (v && v.at && Date.parse(at) - Date.parse(v.at) < 30 * 86400000) keep[k] = v;
+    keep[key] = { at, by, choice: clean(a.choice, 20) || "done" };
+    return { replace: { marks: keep }, value: true };
+  });
+  const r = await sendMessage(store, now, roster, { from: "Luke", to, text, needs: a.needs === "action" ? "action" : "none" });
+  return { ok: true, key, done, message: r.message };
 }
 export function waitingOnLuke(desk, today, now = null) {
   const out = [];
@@ -6283,7 +6325,9 @@ export function waitingOnLuke(desk, today, now = null) {
   for (const x of lukeExtraNeeds(desk)) out.push(x);
   /* a blocked T-task whose blocker is a real ask. The old task titles (runbook B, Read Google Ads
      spend, TikTok Campaign A, Site analytics) are not cards: the sign-in and the access line cover them. */
-  const DROP = /runbook\s*b|read google ads spend|tiktok campaign a|site analytics/i;
+  /* v18 (21 Nov 2026, Luke): T-32 (the Meta system user) IS his to do, so "runbook B" no longer drops a task;
+     the words are taken off what he reads */
+  const DROP = /read google ads spend|tiktok campaign a|site analytics/i;
   for (const t of desk.lukeTasks || []) {
     if (!t || !/^T-/i.test(String(t.id || ""))) continue;
     if (!/block|waiting/i.test(String(t.status || ""))) continue;
@@ -6292,13 +6336,24 @@ export function waitingOnLuke(desk, today, now = null) {
     if (!/luke|your yes|system user|you to/i.test(blocker || title)) continue;
     if (/google ads/i.test(blocker) && /sign/i.test(blocker)) continue;
     if (/netlify|viewer access|site analytics/i.test(blocker + " " + title)) continue;
-    const text = lukeLine(blocker || title);
+    const text = lukeLine(blocker || title).replace(/\s*\(?\b(?:see |per |use |in )?runbook\s*b\b\)?[,.;:]?/gi, "").replace(/\s{2,}/g, " ").trim();
     if (!text) continue;
     const owner = clean(t.owner, 40);
     out.push({ key: "t:" + t.id, kind: owner === "Nova" ? "handle" : "task", id: String(t.id), from: owner, text: owner === "Nova" && !/nova needs you/i.test(text) ? "Nova needs you to handle this: " + text : text, href: "#team", at: null });
   }
+  /* v18: an ask Luke marked done (or answered Yes/No) on a card leaves the list. An ask with a time comes back
+     when the bot says it again later; one without a time stays off for NEED_DONE_DAYS. */
+  const marks = (desk.needsDone && desk.needsDone.marks) || {};
+  const nowMs = now == null ? Date.now() : Number(now);
+  const isDone = (x) => {
+    const mk = marks[x.key];
+    if (!mk || !mk.at) return false;
+    if (x.at) return String(x.at) <= String(mk.at);
+    return nowMs - Date.parse(mk.at) < NEED_DONE_DAYS * 86400000;
+  };
   const seen = new Set(), deduped = [];
   for (const x of out) {
+    if (x.kind !== "message" && x.kind !== "handle" && x.kind !== "card" && x.kind !== "dispute" && x.kind !== "spotify" && x.kind !== "account" && isDone(x)) continue;
     const bare = String(x.text || "").toLowerCase().replace(/\b\d{3}-\d{3}-\d{4}\b/g, "").replace(/\s+/g, " ").trim();
     const k = x.kind === "signin" || /^sign in to /.test(bare) ? "signin:" + bare
       : x.kind === "access" || /netlify viewer/.test(bare) ? "access:" + bare
