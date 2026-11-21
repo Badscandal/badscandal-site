@@ -217,11 +217,11 @@ export const TOOLS = [
       option: str("Optional: the option you recommend, exactly as listed on the message."),
       why: str("Why, in one or two sentences (300 characters at most).") }, ["bot", "message_id", "why"]) },
   { name: "preflight", title: "Check a song, a text or a link before it goes out", idempotent: true, readOnly: true,
-    description: "FORGE, DROP, VERSE, WEBMASTER, ATLAS, LAURA (Nova too). Pre-flight checks before anything reaches the stores or the ads. song = every check on that release's pack (the artist name exactly \"badscandal\", all lowercase, in primary/featured artists, producers, split and copyright; the master a WAV; the artwork a JPG or PNG, 3000 x 3000; the Canvas an MP4 or JPG; the song page and every link in the ad plan going to badscandal.com/<song>). text = check the artist name in any text (credits, a description). link = an ad link: it must be https://badscandal.com/<the song> (utm tags are fine), never Feature.fm or a store link. asset = check a file against its platform's rule BEFORE you upload it: cover, canvas, spotify_header, youtube_banner, or a profile photo or banner (the profiles tool lists them). Give what the file shows (width, height, seconds, format, size_mb); anything left out is not checked, and the answer's rule says the whole rule. ok true = nothing to fix. It changes nothing.",
+    description: "FORGE, DROP, VERSE, WEBMASTER, ATLAS, LAURA (Nova too). Pre-flight checks before anything reaches the stores or the ads. song = every check on that release's pack (the artist name is badscandal, one word (capitalisation does not matter), in primary/featured artists, producers, split and copyright; the master a WAV; the artwork a JPG or PNG, 3000 x 3000; the Canvas an MP4 or JPG; the song page and every link in the ad plan going to badscandal.com/<song>). text = check the artist name in any text (credits, a description). link = an ad link: it must be https://badscandal.com/<the song> (utm tags are fine), never Feature.fm or a store link. asset = check a file against its platform's rule BEFORE you upload it: cover, canvas, spotify_header, youtube_banner, or a profile photo or banner (the profiles tool lists them). Give what the file shows (width, height, seconds, format, size_mb); anything left out is not checked, and the answer's rule says the whole rule. ok true = nothing to fix. It changes nothing.",
     inputSchema: obj({ bot: BOT, song: str("Optional: the song's title or id (every check on its pack)."),
       text: str("Optional: any text to check the artist name in."),
       link: str("Optional: an ad link to check (with song, it must go to that song's page). With mode track, a release-day Spotify track link instead."),
-      mode: str("Optional. track = this link is the release-day Spotify track (https://open.spotify.com/track/<id>). ?si= is flagged. Leave it out for an ad link, which must be badscandal.com/<song>."),
+      mode: str("Optional. track = this link is the release-day Spotify track (https://open.spotify.com/track/<id>). ?si= is removed for you. Leave it out for an ad link, which must be badscandal.com/<song>."),
       asset: { type: "string", enum: Object.keys(S.ASSETS), description: "Optional: the kind of file to check against its platform's rule (cover, canvas, a profile photo or a banner)." },
       width: { type: "number", description: "With asset: the file's width in px." },
       height: { type: "number", description: "With asset: the file's height in px." },
@@ -317,16 +317,17 @@ export const TOOLS = [
       followers: str("Followers as shown, for example 1240 or 1,240. YouTube: use subscribers (followers is accepted too). A rounded figure like 1.7k is stored as approximate."), subscribers: str("YouTube: subscribers as shown. Stored as the follower number. 1.7k is approximate."), views: str("Views as shown, including 1.7k or 3.8k. A k or m figure is approximate and shown with a tilde. Not the channel's lifetime total."),
       change: str("Optional. The subscriber or follower change the page itself shows, like +1 or -2. When you send it, HQ keeps it instead of working one out."),
       late_read: { type: "boolean", description: "Optional. true when this count is a live reading, not the closed day. The next day's worked-out change is then approximate." },
+      correct: { type: "boolean", description: "true = fix a wrong count." },
       views_date: str("The day those views are for, YYYY-MM-DD, when they arrive a day late (TikTok)."),
       channel_views: str("YouTube: the channel's lifetime views (the Official Artist Channel total), not the day's views. The page labels this Lifetime channel views."), shorts_views: str("Shorts or Reels views as shown."), watch_hours: str("YouTube: watch hours as shown. Decimals are kept (for example 56.6)."), monthly_listeners: str("Platform Spotify (Atlas): the artist's monthly listeners as shown in Spotify for Artists (17 Nov 2026)."), brazil_listeners: str("Platform Spotify: the monthly listeners in Brazil, as shown (Audience, Location)."), best_post: str("Optional. The day's best post, in a few words."), best_post_link: str("Optional. Its https link. YouTube may send video_id instead."),
       video_id: str("YouTube: the video id when there is no https link. Either this or best_post_link."),
       official_views: str("YouTube: views that day on the official channel. Not the lifetime total."),
       other_views: str("YouTube: views that day on other channels."),
-      views_6h: str("TikTok: views at the +6h snapshot."),
-      follows_6h: str("TikTok: follows from the post at +6h."),
+      views_6h: str("TikTok: views at 6 hours."),
+      follows_6h: str("TikTok: follows from the post at 6 hours."),
       follows_48h: str("TikTok: follows from the post at 48h."),
       avg_watch: str("TikTok: average watch time at 1 day, in seconds, decimals allowed."),
-      avg_watch_6h: str("TikTok: average watch time at +6h, in seconds. The +6h gate passes when this is at least 2.5 and follows_6h / views_6h is at least 0.14%."),
+      avg_watch_6h: str("TikTok: average watch time at 6 hours, in seconds."),
       posts: { type: "array", description: "Optional. The day's posts, one fixed window per column. Each: date, hook, views_24h, views_7d, likes, comments, saves, shares, follows, follows_6h, follows_48h, avg_watch, link or video_id, boosted true or false. Leave a number out when you could not read it. Do not send 0 for a number you did not see.", items: { type: "object" } },
       boosts: { type: "array", description: "Steve. Each: link, ad, spend, currency, status, started, follows, engagements, views, link_clicks, as_of. Cost per follow is spend / follows when follows is above 0.", items: { type: "object", properties: { link: { type: "string" }, ad: { type: "string" }, spend: { type: "number" }, currency: { type: "string" }, status: { type: "string" }, started: { type: "string" }, follows: { type: "number" }, engagements: { type: "number" }, views: { type: "number" }, link_clicks: { type: "number" }, as_of: { type: "string" } } } },
       top_videos: { type: "array", description: "YouTube: the top 3 videos that day. Each: title, views, and link or video_id. 3 at most.", items: { type: "object" } },
@@ -522,9 +523,9 @@ export const TOOLS = [
       slug: str("The address after badscandal.com/, lowercase letters and digits (for example loveyou)."),
       title: str("kind new: the song's title exactly as in the stores."),
       date: str("kind new: the release day, YYYY-MM-DD."),
-      cover: str("kind new: an https link to the cover picture (square JPG or PNG, 1000 pixels or more)."),
+      cover: str("kind new: an https link to the cover picture (a square JPG or PNG, 3000 x 3000)."),
       artists: str("kind new, optional: the artist line when it is not badscandal alone, for example \"Badscandal & Someone\"."),
-      track: str("kind track: https://open.spotify.com/track/<id>. A ?si= on the end is removed."),
+      track: str("kind track: https://open.spotify.com/track/<id>. ?si= is removed for you."),
       isrc: str("kind track, optional: the track's ISRC. If it does not match the pack, the answer says so."),
       why: str("Optional: where this comes from, in one line.") }, ["bot", "kind", "slug"]) },
   /* 16 Nov 2026 (Luke: "let's do webmasters 3 fixes") */
@@ -532,7 +533,7 @@ export const TOOLS = [
     description: "WEBMASTER (read only). Every song_page request of the last two months, newest first, and where it is: waiting on Luke, Luke said no, not sent (and why), sent to GitHub (not live yet), built (going live), not done (GitHub's build stopped: where and why), or live. Plus the home card: what it shows now, and which song the rule says it should show today (a song out in the last 7 days, the newest; else the next song coming out). Call it before asking again, so nothing is asked twice; when should_show differs from now, ask with song_page kind card.",
     inputSchema: obj({ bot: BOT }, ["bot"]) },
   { name: "upload_cover", title: "Put a cover on the desk and get its public link", idempotent: false,
-    description: "WEBMASTER (Nova may for him). For song_page's cover when the picture is not on a public link (a Google Drive file answers with a sign-in page). Send the picture itself as image_base64 (a JPG, PNG or WebP, at least 1000 x 1000, 4 MB at most; 3000 x 3000 JPG is best), or url = a link the site can open without signing in. The answer is a public https://badscandal.com/... link: use it as cover in song_page. Nothing else changes, and Luke still confirms the page.",
+    description: "WEBMASTER (Nova may for him). For song_page's cover when the picture is not on a public link (a Google Drive file answers with a sign-in page). Send the picture itself as image_base64 (a JPG, PNG or WebP, a square 3000 x 3000, 4 MB at most), or url = a link the site can open without signing in. The answer is a public https://badscandal.com/... link: use it as cover in song_page. Nothing else changes, and Luke still confirms the page.",
     inputSchema: obj({ bot: BOT, song: str("Which song the cover is for (its title)."),
       image_base64: str("The picture file itself, base64 (a data: prefix is fine). Or leave it empty and give url."),
       url: str("Instead of image_base64: an https link to the picture that opens without signing in.") }, ["bot", "song"]) },
@@ -688,9 +689,13 @@ const WAIT_OTHER = { approved: "RouteNote to approve the song (Drop's step \"App
 const waitFor = (s) => (s.waitingFor === "spotify-window" ? "Waits until Spotify lists it" : s.waitingFor === "release" && (s.key === "ads" || s.step === "ads") ? WAIT_ADS : s.waitingFor === "spotify" || !s.waitingFor ? WAIT_SPOTIFY : WAIT_OTHER[s.waitingFor] ? WAIT_OTHER[s.waitingFor] : `the step "${(S.RELEASE_STEPS.find((x) => x.key === s.waitingFor) || {}).label || s.waitingFor}"`);
 const SPOT_HOW = "done by your spotify_upcoming report, not by release_step";
 /* a block whose note says it is waiting (for the release day, for Luke) is waiting, not blocked (18 Nov 2026) */
-const stepState = (s) => (!s ? "to do" : s.status === "done" ? "done" : s.status === "skipped" ? "skipped" : (s.waiting || S.blockIsWait(s)) ? "waiting" : s.status === "blocked" ? "blocked" : s.late ? "late" : s.status === "working" ? "working" : "to do");
+/* v18, 21 Nov 2026 (Atlas): a Canvas with no link before the release waits for Luke's link: it is not skipped yet */
+const stepState = (s) => (!s ? "to do" : s.status === "done" ? "done" : s.canvasWait ? "waiting" : s.status === "skipped" ? "skipped" : (s.waiting || S.blockIsWait(s)) ? "waiting" : s.status === "blocked" ? "blocked" : s.late ? "late" : s.status === "working" ? "working" : "to do");
 const when = (d) => (d ? `${S.dayWords(d)} (${d})` : "no date yet");
-const stepOut = (s, pack) => ({ step: s.key, label: s.label, owner: s.owner, due: when(s.due), state: stepState(s), ...(s.note ? { note: s.note } : {}), ...(s.link ? { link: s.link } : {}), ...(s.status === "done" && s.by ? { done_by: s.by } : {}),
+/* v18, 21 Nov 2026 (Atlas, Laura): a Spotify step past its day waits on Spotify: no stale date */
+const SPOTIFY_WHEN = "when Spotify lists it";
+const dueOut = (s) => (s && s.waitingFor === "spotify-window" ? SPOTIFY_WHEN : when(s.due));
+const stepOut = (s, pack) => ({ step: s.key, label: s.label, owner: s.owner, due: dueOut(s), state: stepState(s), ...(s.note ? { note: s.note } : {}), ...(s.link ? { link: s.link } : {}), ...(s.status === "done" && s.by ? { done_by: s.by } : {}),
   ...(s.status === "done" && s.doneOn ? { done_on: when(s.doneOn) } : {}), ...(s.key === "live" && pack && pack.spotifyTrack ? { spotify_track: pack.spotifyTrack } : {}),
   ...(s.waiting ? { waiting_for: waitFor(s) } : {}), ...(s.key === "spotify" && !["done", "skipped"].includes(s.status) ? { how: SPOT_HOW } : {}) });
 /* batch 3: Luke's approvals and the distributor's history, as Atlas, Verse and Drop read them */
@@ -731,7 +736,8 @@ function releaseCard(v, me, chase, mail) {
     warnings: v.warnings, missing: missingForNext(v), steps_done: `${v.counts.done} of ${v.counts.total}`,
     at_the_distributor: v.store.status || v.store.legacy || "not recorded yet",
     moderation: (v.store && v.store.status) || (v.mail && v.mail.status) || "no data yet",
-    routenote_email: mailLine, email_watch: mailLine, inbox: (mail && mail.inbox) || S.ROUTE_NOTE_INBOX,
+    /* v18, 21 Nov 2026 (Atlas, Webmaster): email_watch and inbox are said once, at the top of releases */
+    routenote_email: mailLine,
     ...(v.mail && v.mail.status === "rejected" ? { moderation_draft: { from: S.MODERATION_FROM, cc: S.MODERATION_CC, to: S.MODERATION_TO, note: "HQ does not send this email." } } : {}),
     pitch: pitchOut(v.pitch),
     your_steps: v.steps.filter((s) => s.owner === me).map((s) => stepOut(s, v.pack)), ...(chase ? { all_steps: v.steps.map((s) => stepOut(s, v.pack)) } : {}) };
@@ -826,6 +832,25 @@ export async function settleRead(store, now, me, since, answer, list = null) {
   return left.length;
 }
 /* two auto lines for the same platform on the same day ("YouTube 19 Nov:") are one line */
+/* v18, 21 Nov 2026 (Webmaster: Atlas's line ended "Draft only." after a long audience list): one short line for Luke */
+function forLuke(message) {
+  let t = S.lukeLine(message).replace(/\s*\bDraft only\.?\s*$/i, "").trim();
+  if (t.length <= 200) return t;
+  const cut = t.slice(0, 200);
+  const end = Math.max(cut.lastIndexOf(". "), cut.lastIndexOf("! "), cut.lastIndexOf("? "));
+  return end >= 40 ? cut.slice(0, end + 1) : S.clipWords(t, 200);
+}
+/* v18, 21 Nov 2026 (Laura: an old "Verify it's you" line stayed in the feed): a blocked line goes once the same
+   bot has posted a newer line that is not blocked */
+function pastBlocks(updates) {
+  const moved = new Set();
+  return (updates || []).filter((u) => {
+    const k = String((u && u.bot) || "").toLowerCase();
+    if (u && (u.status === "blocked" || u.status === "error")) return !moved.has(k);
+    moved.add(k);
+    return true;
+  });
+}
 function dedupeGrowthUpdates(lines) {
   const seen = new Set(), out = [];
   for (const line of lines || []) {
@@ -935,7 +960,8 @@ async function runTool(tool, args, ctx, read) {
       const ourAccounts = { handles: v.own.map((h) => "@" + h), count: v.own.length, note: "Comments from these accounts never count: not in the ranking, the fans' list or needs_reply. The connected account is always on it. Only Nova changes it.",
         changes: (v.ownLog || []).map((x) => ({ on: S.spStamp(x.at), by: x.by, what: `${x.action} @${x.handle}`, reason: x.reason })) };
       const calls_left = await callsLeft(oa !== "list");
-      if (oa === "list") return { our_accounts: ourAccounts, own_accounts: ourAccounts.handles, calls_left, note: "Listing our accounts does not use a call. The numbers are below only when you ask for the ranking." };
+      /* v18, 21 Nov 2026 (Steve): one list, our_accounts (own_accounts was the same list again) */
+      if (oa === "list") return { our_accounts: ourAccounts, calls_left, note: "Listing our accounts does not use a call. The numbers are below only when you ask for the ranking." };
       const st = v.status;
       const lineOf = (c) => `${c.at.slice(0, 16).replace("T", " ")} · ${c.user}: ${c.text} (on “${c.postCaption}”)` + (c.id ? ` · comment ${c.id}` : "") + (c.link ? ` · ${c.link}` : "");
       const flags = [];
@@ -959,7 +985,7 @@ async function runTool(tool, args, ctx, read) {
         fan_inbox: { note: "People asking the song's name or where to listen, and people who commented on more than one post. needs_reply true is for Luke: put it in your update for him. Never reply, like, hide or delete a comment.",
           questions: (v.fanInbox ? v.fanInbox.questions : []).map((q) => ({ needs_reply: q.needsReply, kind: q.kind === "listen" ? "where to listen" : q.kind === "use" ? "using the music" : "song name", when: String(q.at || "").slice(0, 16).replace("T", " "), user: q.user, text: q.text, on: q.postCaption, ...(q.id ? { comment: q.id } : {}), ...(q.link ? { link: q.link } : {}), ...(q.needsReply ? {} : { replied_by: q.repliedBy && q.repliedBy.length ? q.repliedBy.join(", ") : "one of our accounts", replied_at: q.repliedAt || "the time was not on the comment" }) })),
           repeat_fans: (v.fanInbox ? v.fanInbox.repeats : []).map((r) => ({ needs_reply: r.needsReply, user: r.user, posts: r.posts, comments: r.comments, latest: r.lastText, on: r.postCaption })) },
-        our_accounts: oa ? ourAccounts : v.own.map((h) => "@" + h), own_accounts: v.own.map((h) => "@" + h),
+        our_accounts: oa ? ourAccounts : v.own.map((h) => "@" + h),
         do_not_reply: IG.HIDDEN_HANDLES.map((h) => "@" + h),
         do_not_reply_note: "These accounts are do-not-reply. Never reply, and never count their comments. @liliancardos and @liliancardosomakeup are on this list.",
         ...(oa && oa !== "add" && oa !== "remove" && oa !== "list" ? { our_accounts_list: ourAccounts } : {}),
@@ -1015,7 +1041,7 @@ async function runTool(tool, args, ctx, read) {
         if (String(args.mode || "") === "track") {
           const t = S.spotifyTrackProblem(args.link);
           if (t.problem) problems.push(`Link: ${t.problem}`);
-          else { checked.push("the Spotify track link"); if (t.si) notes.push(`The ?si= part is a personal share code. Use ${t.clean}.`); }
+          else { checked.push("the Spotify track link"); if (t.si) notes.push(`${S.SI_REMOVED} The clean link: ${t.clean}.`); }
         } else {
           const pr = S.adLinkProblem(args.link, "", own); if (pr) problems.push(`Link: ${pr}`); checked.push(pr ? "the link" : "the link points at badscandal.com/<song>");
         }
@@ -1158,13 +1184,15 @@ async function runTool(tool, args, ctx, read) {
       const prev = me !== "Claude" && args.platform && ctx.hq ? await ctx.hq().then((h) => { const g = h && h.growth ? h.growth.find((p) => String(p.platform).toLowerCase() === String(args.platform).trim().toLowerCase()) : null; return g && g.lastDay ? { date: g.lastDay, followers: g.followers } : null; }).catch(() => null) : null;
       const r = await S.logGrowth(store, now, roster, { by: me, date: args.date, platform: args.platform, account: args.account, followers: args.followers, subscribers: args.subscribers, views: args.views, views_date: args.views_date, channel_views: args.channel_views, shorts_views: args.shorts_views, watch_hours: args.watch_hours, monthly_listeners: args.monthly_listeners, brazil_listeners: args.brazil_listeners, best_post: args.best_post, best_post_link: args.best_post_link,
         video_id: args.video_id, official_views: args.official_views, other_views: args.other_views, views_6h: args.views_6h, follows_6h: args.follows_6h, follows_48h: args.follows_48h, avg_watch: args.avg_watch, avg_watch_6h: args.avg_watch_6h, posts: args.posts, boosts: args.boosts, top_videos: args.top_videos, fan_signals: args.fan_signals, pattern: args.pattern, ad_spend: args.ad_spend, ad_currency: args.ad_currency, paid_views: args.paid_views, organic_views: args.organic_views, ads_read_at: args.ads_read_at,
-        song: args.song, streams: args.streams, listeners: args.listeners, saves: args.saves, playlist_adds: args.playlist_adds, gaps: args.gaps, duty: args.duty, change: args.change, late_read: args.late_read, prev });
+        song: args.song, streams: args.streams, listeners: args.listeners, saves: args.saves, playlist_adds: args.playlist_adds, gaps: args.gaps, duty: args.duty, change: args.change, late_read: args.late_read, correct: args.correct, prev });
       const extra = hasAccountCheck(args) ? await checkOf() : {};
       const fixedWords = r.corrected && r.corrected.length ? r.corrected.map((c) => `${c.date}: ${c.from == null ? "none" : (c.from >= 0 ? "+" : "") + c.from} -> ${(c.to >= 0 ? "+" : "") + c.to}`) : null;
       if (r.duplicate) return { saved: false, duplicate: true, ...(fixedWords ? { changes_fixed: fixedWords } : {}),
         note: "Those numbers were already logged for that day. Nothing was added." + (fixedWords ? " The day-to-day change was worked out again from the day before's total and put right (changes_fixed)." : ""), ...extra };
       return { saved: true, ...(fixedWords ? { changes_fixed: fixedWords } : {}), ...(r.row.change != null && r.row.kind === "growth" ? { change: r.row.change } : {}), ...(r.filled && r.filled.length ? { filled: r.filled } : {}), ...(r.replaced && r.replaced.length ? { corrected: r.replaced } : {}),
-        duty: r.duty, ...(r.gapText ? { gaps: r.gapText } : {}), ...(r.row && r.row.boosts ? { boosts_logged: r.row.boosts.length, boosts: r.row.boosts, note: "Saved on this day's growth row. It is not added to the ad cap. record_spend is not used for this." } : {}), ...(r.row && r.row.channel_views != null ? { channel_views_is: "lifetime total, not the day's views" } : {}), ...(r.row && r.row.official_views != null ? { official_views_is: "views that day on the official channel" } : {}), ...(r.row && r.row.gate_6h ? { gate_6h: r.row.gate_6h } : {}), shown_on: "badscandal.com/hq, Growth and Songs", ...extra };
+        duty: r.duty, ...(r.gapText ? { gaps: r.gapText } : {}), ...(r.row && r.row.boosts ? { boosts_logged: r.row.boosts.length, boosts: r.row.boosts, note: "Saved on this day's growth row. It is not added to the ad cap. record_spend is not used for this." } : {}), ...(r.row && r.row.channel_views != null ? { channel_views_is: "lifetime total, not the day's views" } : {}), ...(r.row && r.row.official_views != null ? { official_views_is: "views that day on the official channel" } : {}), ...(r.row && r.row.gate_6h ? { gate_6h: r.row.gate_6h } : {}),
+        ...(r.row && r.row.live && r.row.live.at === new Date(now).toISOString() && r.row.by !== "HQ" ? { later_read: `Kept beside the day's logged number as a later read (${Object.keys(r.row.live).filter((k) => k !== "at").join(", ")}). The logged day stays as it was. Send correct true only if the logged number was wrong.` } : {}),
+        shown_on: "badscandal.com/hq, Growth and Songs", ...extra };
     }
     case "read_growth": {
       /* The day's best post is a boost when the ranking or an ad names it, even with no posts[] entry. */
@@ -1194,7 +1222,7 @@ async function runTool(tool, args, ctx, read) {
     case "update_case": {
       const r = await S.updateCase(store, now, roster, { ...args, by: me });
       const c = S.caseOut(r.item);
-      return { saved: true, id: c.id, status: c.status, waiting_on: c.waitingOn, next_check: c.nextCheck, decision: c.decision, shown_on: "badscandal.com/hq, Songs" };
+      return { saved: true, id: c.id, status: c.status, waiting_on: c.waitingOn, waiting_since: c.waitingSince || "", next_check: c.nextCheck, decision: c.decision, shown_on: "badscandal.com/hq, Songs" };
     }
     case "read_cases":
       return S.readCases(store, now, { status: args.status, song: args.song, owner: args.owner, needs_luke: args.needs_luke });
@@ -1312,7 +1340,7 @@ async function runTool(tool, args, ctx, read) {
       const nextStep = (v.steps || []).find((s) => s.status !== "done" && s.status !== "skipped" && !s.waiting);
       return { song: v.title, id: v.id, status: v.status === "cancelled" ? "cancelled: do not work on it" : v.status === "draft" ? "draft (not sent to the team yet)" : v.alreadyOut ? "already out (recorded for its deal: no steps)" : v.released ? "released" : "coming",
         release_day: when(v.date), days_to_go: v.daysToGo, where: v.where, deal: dealOut(v.deal), warnings: v.warnings,
-        pack: S.PACK_FIELDS.map((f) => S.packFieldView(f, pack, r.steps, { storeStatus: v.store && v.store.status, nextKey: nextStep && nextStep.key })),
+        pack: S.PACK_FIELDS.map((f) => S.packFieldView(f, pack, r.steps, { storeStatus: v.store && v.store.status, nextKey: nextStep && nextStep.key, released: v.status === "scheduled" && !v.alreadyOut && !!v.date && v.date <= today })),
         missing: missingForNext(v), steps: v.steps.map((s) => stepOut(s, pack)),
         pitch: pitchOut(v.pitch),
         approvals: { pitch: approvalOut(v.approvals.pitch, "pitch"), lyrics: approvalOut(v.approvals.lyrics, "lyrics") },
@@ -1343,9 +1371,11 @@ async function runTool(tool, args, ctx, read) {
       const action = String(args.action || "list").trim().toLowerCase();
       if (action === "list" || !args.action) {
         const view = S.profilesView(await S.getProfiles(store), await S.listMessages(store, now), args.platform || args.platform_filter);
-        return { note: view.note + " You upload a new image by hand only after Luke says yes, then record it.",
+        /* v18, 21 Nov 2026: the note is said once ("The owner uploads…"), no second "You upload…" line */
+        return { note: view.note,
           profiles: view.platforms.map((p) => ({ platform: p.platform, owner: p.owner ? `${p.owner} uploads this` : "no owner yet: Luke uploads this himself",
-            images: p.slots.map((s) => ({ id: s.id, kind: s.kind, rule: s.rule, size: s.sizeLine || "", status: s.statusLine || "",
+            /* v18, 21 Nov 2026 (Atlas, Steve, Laura): a recorded live link reads Live, not Waiting (the page already did) */
+            images: p.slots.map((s) => ({ id: s.id, kind: s.kind, rule: s.rule, size: s.sizeLine || "", status: s.current && s.status === "waiting" ? "Live" : s.statusLine || "",
               current: s.current ? { link: s.current.link, changed: s.current.changed, by: s.current.by } : "not recorded yet",
               waiting_for_luke: s.waiting ? { link: s.waiting.link, message: s.waiting.id } : null,
               said_yes: s.approved ? { link: s.approved.link, upload: `${p.owner || "Luke"} uploads it by hand. HQ does not change the platform.` } : null })) })),
@@ -1413,7 +1443,15 @@ async function runTool(tool, args, ctx, read) {
          sent: the hourly job keeps the report and tells the bot that asked (18 Nov 2026, handoff bug 6) */
       let peek = {};
       try { peek = await S.peekSongBuilds(store, now); } catch { peek = {}; }
-      const list = await S.songPages(store, now, peek);
+      const list0 = await S.songPages(store, now, peek);
+      /* v18, 21 Nov 2026 (Webmaster): each request says where its release step is */
+      const rels = await S.listReleases(store).catch(() => []);
+      const list = list0.map((q) => {
+        const key = q.what.startsWith("Spotify link") ? "live" : q.what.startsWith("new page") ? "page" : "";
+        const r = key ? rels.find((x) => x && x.status !== "cancelled" && (x.id === q.slug || S.songKey(x.title) === q.slug)) : null;
+        const st = r ? (S.releaseView(r, S.spDay(now)).steps || []).find((x) => x.key === key) : null;
+        return st ? { ...q, release_step: `${st.label}: ${stepState(st)}` + (st.status === "done" ? "" : `, due ${dueOut(st)}`) } : { ...q, release_step: key ? "no release on the desk for this song" : "no release step" };
+      });
       const card = S.homeCardNow(), rule = homeCardSong(SONGS, S.spDay(now));
       const fetchFn = ctx.fetch || globalThis.fetch;
       const checkedAt = S.spStamp(now);
@@ -1436,7 +1474,7 @@ async function runTool(tool, args, ctx, read) {
     }
     case "song_page": {
       const r = await S.proposeSongPage(store, now, roster, { by: me, kind: args.kind, slug: args.slug, title: args.title, date: args.date, cover: args.cover, artists: args.artists, track: args.track, isrc: args.isrc, why: args.why });
-      return { asked: true, id: r.message.id, question: r.message.text, ...(r.proposal && r.proposal.isrc_warning ? { warning: r.proposal.isrc_warning } : {}), ...(r.proposal && r.proposal.stripped_si ? { note_link: "Removed ?si= from the Spotify link." } : {}), note: "Nothing is built yet. Luke answers Yes, correct or No; on his yes GitHub builds it (about 2 minutes) and you get a message on the desk." };
+      return { asked: true, id: r.message.id, question: r.message.text, ...(r.proposal && r.proposal.isrc_warning ? { warning: r.proposal.isrc_warning } : {}), ...(r.proposal && r.proposal.stripped_si ? { note_link: S.SI_REMOVED } : {}), note: "Nothing is built yet. Luke answers Yes, correct or No; on his yes GitHub builds it (about 2 minutes) and you get a message on the desk." };
     }
     case "propose_release": {
       const r = await S.proposeRelease(store, now, roster, { by: me, song: args.song, title: args.title, date: args.date, pack: args.pack, send: args.send, why: args.why });
@@ -1532,7 +1570,7 @@ async function runTool(tool, args, ctx, read) {
   };
   const worker = (w) => ({ name: w.name, role: w.role, state: waitingSpotify(w) ? "waiting on Spotify" : w.state, ...(waitingSpotify(w) ? { waiting_on: "Spotify" } : {}), duties: w.duties.map((d) => ({ id: d.id, task: S.freshDuty(d.task), due: d.due || "today", status: d.late ? "late" : d.status, ...(d.blocker ? { blocker: d.blocker } : {}) })),
     last_update: w.last ? `${w.last.at} ${w.last.status}: ${w.last.message}${w.last.link ? " " + w.last.link : ""}` : "none",
-    for_luke: w.last ? `${w.name}: ${S.lukeLine(w.last.message) || "Update posted."}` : "No update yet",
+    for_luke: w.last ? `${w.name}: ${forLuke(w.last.message) || "Update posted."}` : "No update yet",
     working_on: w.card ? w.card.workingOn : "", needs: w.card ? w.card.needs : "",
     open_tasks: w.tasks.length, late_tasks: w.lateTasks, waiting_on_it: w.waiting.length, last_used_the_desk: w.seen ? S.spStamp(Date.parse(w.seen)) : "never" });
   /* everything new for the caller since its last read (S.messagesFor), not repeating what the same answer
@@ -1566,7 +1604,7 @@ async function runTool(tool, args, ctx, read) {
         unknown_in_spotify: b.sightings.items.filter((x) => x.state === "unknown").map((x) => `${x.title}, ${x.dateWords}`),
         ...(sheetNote ? { note: sheetNote } : {}) };
       const w = b.staff.find((x) => x.name === me);
-      const rs = w.releaseSteps.map((s) => ({ song: s.title, step: s.key, label: s.label, due: (s.waiting || S.blockIsWait(s)) ? "when it can start" : when(s.due), state: stepState(s), ...(s.note ? { note: s.note } : {}), ...(s.link ? { link: s.link } : {}),
+      const rs = w.releaseSteps.map((s) => ({ song: s.title, step: s.key, label: s.label, due: s.waitingFor === "spotify-window" ? SPOTIFY_WHEN : (s.waiting || S.blockIsWait(s)) ? "when it can start" : when(s.due), state: stepState(s), ...(s.note ? { note: s.note } : {}), ...(s.link ? { link: s.link } : {}),
         ...(s.spotifyTrack ? { spotify_track: s.spotifyTrack } : {}), ...((s.waiting || S.blockIsWait(s)) ? { waiting_for: s.waiting ? waitFor(s) : (s.note || "the note on this step") } : {}), ...(s.key === "spotify" ? { how: SPOT_HOW } : {}) }));
       /* the soonest step the bot can work on now; a waiting one (including a block that is only a wait) is not today's job */
       const firstRs = w.releaseSteps.find((s) => !s.waiting && !S.blockIsWait(s));
@@ -1645,7 +1683,7 @@ async function runTool(tool, args, ctx, read) {
     case "team_board":
       return { today, now_sao_paulo: b.now, duties: hq ? { done: hq.team.duties.done, total: hq.team.duties.total, late: hq.team.duties.late, blocked: hq.team.duties.blocked } : "not read",
         team: b.staff.map(worker), waiting_on_luke: luke.rows, waiting_on_claude: b.waiting.claude.map(short), waiting_on_bot: b.waiting.claude.map(short), open_messages_for_bots: b.waiting.bots,
-        latest_updates: dedupeGrowthUpdates(b.updates.slice(0, 20).map((u) => `${u.sp} ${u.bot} ${u.status}: ${u.message}${u.link ? " " + u.link : ""}`)),
+        latest_updates: dedupeGrowthUpdates(pastBlocks(b.updates).slice(0, 20).map((u) => `${u.sp} ${u.bot} ${u.status}: ${u.message}${u.link ? " " + u.link : ""}`)),
         latest_for_luke: S.lukeUpdates(b.updates),
         growth: S.growthOnce(await S.listGrowth(store, now, 2)),
         releases: rel.filter(S.releaseActive).map((v) => ({ song: v.title, date: when(v.date), done: `${v.counts.done} of ${v.counts.total}`, late: v.counts.late, blocked: v.counts.blocked,

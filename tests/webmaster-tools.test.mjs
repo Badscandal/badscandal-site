@@ -28,17 +28,18 @@ const png = (w, h, extra = 2000) => { const b = Buffer.alloc(33 + extra); Buffer
 const jpg = (w, h) => Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x04, 0x00, 0x00, 0xff, 0xc0, 0x00, 0x11, 0x08, h >> 8, h & 255, w >> 8, w & 255, 0x03]), Buffer.alloc(1500)]);
 
 /* ---------- 1. the cover on the desk ---------- */
+/* v18, 21 Nov 2026: one cover rule, a square 3000 x 3000 (these used 1400 and 1200, under the old 1000 px floor) */
 test("upload_cover: Webmaster sends the picture, the desk keeps it and answers with a public badscandal.com link", async () => {
   const d = memoryDesk();
-  const r = await call(d, "upload_cover", { bot: "Webmaster", song: "Paper Moon", image_base64: png(1400, 1400).toString("base64") });
+  const r = await call(d, "upload_cover", { bot: "Webmaster", song: "Paper Moon", image_base64: png(3000, 3000).toString("base64") });
   assert.match(r.link, /^https:\/\/badscandal\.com\/api\/staff\/cover\/c[a-z0-9]+\.png$/);
-  assert.deepEqual([r.width, r.height], [1400, 1400]);
+  assert.deepEqual([r.width, r.height], [3000, 3000]);
   const id = r.link.split("/").pop();
   const res = await S.coverResponse(d, id);
   assert.equal(res.status, 200);
   assert.equal(res.headers.get("content-type"), "image/png");
   assert.equal(res.headers.get("x-content-type-options"), "nosniff");
-  assert.deepEqual(Buffer.from(await res.arrayBuffer()), png(1400, 1400));
+  assert.deepEqual(Buffer.from(await res.arrayBuffer()), png(3000, 3000));
   assert.equal((await S.coverResponse(d, "cnope.png")).status, 404);
   assert.equal((await S.coverResponse(d, "../covers.json")).status, 404);
   /* a JPEG's size is read too */
@@ -48,15 +49,15 @@ test("upload_cover: Webmaster sends the picture, the desk keeps it and answers w
 
 test("upload_cover: from a link the site can open (never a sign-in page); what is refused", async () => {
   const d = memoryDesk();
-  const fetchOk = async () => ({ ok: true, status: 200, url: "https://example.com/c.jpg", headers: new Map([["content-length", "1518"]]), arrayBuffer: async () => jpg(1200, 1200) });
+  const fetchOk = async () => ({ ok: true, status: 200, url: "https://example.com/c.jpg", headers: new Map([["content-length", "1518"]]), arrayBuffer: async () => jpg(3000, 3000) });
   const r = await S.uploadCover(d, NOW, R, { by: "Webmaster", song: "Paper Moon", url: "https://example.com/c.jpg" }, fetchOk);
   assert.match(r.link, /\.jpg$/);
   const signIn = async () => ({ ok: true, status: 200, url: "https://accounts.google.com/x", headers: new Map(), arrayBuffer: async () => Buffer.from("<!doctype html><title>Sign in</title>") });
   await fails(S.uploadCover(d, NOW, R, { by: "Webmaster", song: "Paper Moon", url: "https://drive.google.com/file/d/abc/view" }, signIn), /not a JPG, PNG or WebP picture.*sign-in page/);
-  await fails(call(d, "upload_cover", { bot: "Webmaster", song: "Paper Moon", image_base64: png(800, 800).toString("base64") }), /1000 pixels/);
+  await fails(call(d, "upload_cover", { bot: "Webmaster", song: "Paper Moon", image_base64: png(1400, 1400).toString("base64") }), /square 3000 x 3000/);
   await fails(call(d, "upload_cover", { bot: "Webmaster", song: "Paper Moon", image_base64: Buffer.from("hello").toString("base64") }), /not a JPG, PNG or WebP/);
-  await fails(call(d, "upload_cover", { bot: "Webmaster", song: "Paper Moon", image_base64: png(1400, 1400, 4.6 * 1024 * 1024).toString("base64") }), /4 MB/);
-  await fails(call(d, "upload_cover", { bot: "Kevin", song: "Paper Moon", image_base64: png(1400, 1400).toString("base64") }), /Webmaster/);
+  await fails(call(d, "upload_cover", { bot: "Webmaster", song: "Paper Moon", image_base64: png(3000, 3000, 4.6 * 1024 * 1024).toString("base64") }), /4 MB/);
+  await fails(call(d, "upload_cover", { bot: "Kevin", song: "Paper Moon", image_base64: png(3000, 3000).toString("base64") }), /Webmaster/);
   await fails(call(d, "upload_cover", { bot: "Webmaster", song: "Paper Moon" }), /image_base64 or url/);
   await fails(S.uploadCover(d, NOW, R, { by: "Webmaster", song: "Paper Moon", url: "http://example.com/c.jpg" }, fetchOk), /https/);
 });

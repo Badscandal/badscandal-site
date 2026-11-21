@@ -2132,7 +2132,9 @@
     if (!d || !d.reported) return { reported: false, title: "Content ideas", empty: (d && d.empty) || "No content ideas yet. Spark sends them once a day. Nothing is posted.", ideas: [], best: "", note: "" };
     var b = d.best || null;
     var eng = b ? (b.likes || 0) + (b.comments || 0) + (b.saves || 0) + (b.shares || 0) : 0;
-    var best = b ? b.title + " · " + b.platform + " · " + b.perView + " per view (" + eng + " engagements, " + b.views + " views)" : "No official post was ranked.";
+    /* v18, 21 Nov 2026: a count not shown is "not reported", never a 0 */
+    var nr = b && b.not_reported && b.not_reported.length ? "; " + b.not_reported.join(", ") + " not reported" : "";
+    var best = b ? b.title + " · " + b.platform + " · " + b.perView + " per view (" + eng + " engagements, " + b.views + " views" + nr + ")" : "No official post was ranked.";
     return { reported: true, title: "Content ideas", best: best, compared: d.compared || "", note: d.note || "Ideas for Nova. Nothing is posted.",
       ideas: (d.ideas || []).map(function (i) { return i.platform + ": " + i.hook + " — " + i.text + " (" + i.format + "). " + i.why; }) };
   }

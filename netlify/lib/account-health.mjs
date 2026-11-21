@@ -263,7 +263,9 @@ function viewContext(last3, older, today) {
   const inWin = (list, days) => list.filter((p) => daysBetween(p.day, today) <= days);
   const med = (list) => (list.length >= 4 ? median(list.map((p) => p.views)) : null);
   const med30 = med(inWin(older, 30)), med14 = med(inWin(older, 14));
-  return `; views ${last3.map((p) => fmt(p.views)).join(", ")}` +
+  /* v18, 21 Nov 2026 (Steve: 2,055 vs 1,987): the views here are at the series' own age, and say so */
+  const age = last3[0] && last3[0].age && last3[0].age !== "recorded" ? ` at ${last3[0].age}` : "";
+  return `; views${age} ${last3.map((p) => fmt(p.views)).join(", ")}` +
     (med30 != null ? `; 30-day view median ${fmt(Math.round(med30))}` : "") +
     (med14 != null ? `; 14-day view median ${fmt(Math.round(med14))}` : "");
 }
@@ -478,12 +480,25 @@ function guidanceFor(state, signals) {
   if (state === "watch") return "Not enough of this account's own numbers are on the desk to call it healthy. Open Account Status (or the site) and record what it says. Post as normal. Do not delete posts." + hold;
   return "Nothing in the numbers on the desk points to a restriction. Post as normal. Do not delete posts to chase a number." + hold;
 }
+/* v18, 21 Nov 2026 (Spark: TikTok "Not enough data." said nothing): what is missing, in words */
+const GAP_WORDS = { status: "Account Status", reach: "post views", followers: "follower changes", non_follower: "non-follower share", visibility: "a visibility check",
+  listeners: "monthly listeners", monetisation: "monetisation", site: "a site check", claims: "a Content ID check" };
+function gapHeadline(list) {
+  const words = [...new Set(list.filter((s) => s.level === "gap").map((s) => GAP_WORDS[String(s.id).split(":")[0]]).filter(Boolean))];
+  return words.length ? `Not enough data: no ${words.join(", ")} recorded.` : "Not enough data.";
+}
+/* an open Content ID claim is named on the headline even when it costs nothing (v18, 21 Nov 2026, Spark) */
+function claimNote(list) {
+  const open = list.filter((s) => String(s.id).startsWith("claim:") && s.level === "ok");
+  return open.length ? ` ${open.length} Content ID claim${open.length === 1 ? "" : "s"} open, no impact recorded.` : "";
+}
 function judge(signals) {
   const list = signals.filter(Boolean);
   const state = list.some((s) => s.level === "red") ? "red" : list.some((s) => s.level === "watch") ? "watch" : list.some((s) => s.level === "ok") ? "green" : "gap";
   const known = list.some((s) => s.level === "ok" || s.level === "watch" || s.level === "red");
+  const top = list.find((s) => s.level === "red") || list.find((s) => s.level === "watch") || list.find((s) => s.level === "ok" && !String(s.id).startsWith("claim:")) || list.find((s) => s.level === "ok") || list[0] || { text: "Not enough data." };
   return { state, known: state === "green" ? true : known, signals: list, next: state === "red" ? nextFor(list) : "", guidance: guidanceFor(state, list),
-    headline: state === "gap" ? "Not enough data." : (list.find((s) => s.level === "red") || list.find((s) => s.level === "watch") || list.find((s) => s.level === "ok") || list[0] || { text: "Not enough data." }).text };
+    headline: state === "gap" ? gapHeadline(list) : state === "green" ? top.text + (String(top.id || "").startsWith("claim:") ? "" : claimNote(list)) : top.text };
 }
 
 function latestReading(checks, platform, field) {

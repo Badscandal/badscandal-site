@@ -119,7 +119,9 @@ test("adding either account is refused without repeating the name; the instagram
   const res = await callTool(TOOLS.find((t) => t.name === "instagram"), { bot: "Kevin" }, { store: desk, now: NOW, ig: () => st });
   const pub = JSON.stringify({ comments: res.new_comments, needs_reply: res.needs_reply, fan_inbox: res.fan_inbox, ranking: res.ranking }).toLowerCase();
   for (const h of HIDDEN) assert.equal(pub.includes(h), false, h);
-  for (const h of HIDDEN) assert.ok(res.own_accounts.map((x) => x.toLowerCase()).includes("@" + h));
+  /* v18, 21 Nov 2026: one list, our_accounts (own_accounts was the same list twice) */
+  for (const h of HIDDEN) assert.ok(res.our_accounts.map((x) => x.toLowerCase()).includes("@" + h));
+  assert.equal("own_accounts" in res, false);
   assert.equal(res.fan_inbox.questions[0].needs_reply, true);
   assert.equal(res.fan_inbox.questions[0].kind, "where to listen");
   assert.equal(res.fan_inbox.repeat_fans[0].posts, 2);
