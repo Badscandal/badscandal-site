@@ -116,8 +116,11 @@ export function yesTitle(text) {
 export function needCard(x, desk = {}, today = "") {
   const releases = desk.releases || [];
   const base = { type: "ask", title: S.clean(x.text, 120), facts: {}, recommend: "", yes: null, no: null, email: null, draft: "", via: "mark", to: x.from || "", done: false };
-  if (x.kind === "message" || x.kind === "handle") {
-    const m = (desk.messages || []).find((y) => y && y.id === x.id) || {};
+  const msg = (x.kind === "message" || x.kind === "handle") ? (desk.messages || []).find((y) => y && y.id === x.id) : null;
+  /* a Nova task (T-…) is a "handle" with no message of its own: it is answered like a task */
+  if ((x.kind === "handle" && !msg) || x.kind === "task") return { ...base, to: x.from || "Nova", done: true };
+  if (msg) {
+    const m = msg;
     const rel = songIn(m.text, releases);
     const email = emailParts(m.text);
     const recs = Array.isArray(m.recommendations) ? m.recommendations : [];
@@ -174,7 +177,6 @@ export function needCard(x, desk = {}, today = "") {
     const quote = clip(f.text || f.quote || "", 80);
     return { ...base, title: quote ? `A fan on Instagram asks: “${quote}”` : "A fan on Instagram needs a reply", to: "Steve", done: true, facts: facts({ song: f.song || "" }) };
   }
-  if (x.kind === "task") return { ...base, to: x.from || "Nova", done: true };
   return { ...base, type: "link", via: "", to: "" };
 }
 /* the whole list, each item with its card */

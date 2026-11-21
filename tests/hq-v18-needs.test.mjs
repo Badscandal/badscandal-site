@@ -145,6 +145,9 @@ test("T-32 (the Meta system user) is on the list, without runbook words; a step 
   assert.ok(t);
   assert.match(t.title, /Meta system user/);
   assert.doesNotMatch(t.title, /runbook/i);
+  assert.equal(t.via, "mark", "a Nova task has no message: Done and Reply go through /api/staff/need");
+  assert.equal(t.done, true);
+  assert.equal(t.to, "Nova");
   const y = items.find((i) => i.kind === "yes" && i.from === "Drop");
   assert.ok(y);
   assert.equal(y.type, "decision");
