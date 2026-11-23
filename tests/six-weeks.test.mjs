@@ -54,9 +54,12 @@ test("the releases tool gives Nova and Claude six_weeks; other bots don't get it
   assert.equal(nova.six_weeks[0].week, "This week");
   assert.equal((await call("Kevin")).six_weeks, undefined);
 });
-test("Upcoming › Planning draws the six weeks", () => {
+/* 23 Nov 2026 (Luke: "this thing is not necessary because i have the calendar"): the six weeks left
+   Upcoming › Planning, and the Spotify pitches with them. The rule stays: Nova's releases tool uses it. */
+test("Upcoming › Planning no longer draws the six weeks or the Spotify pitches", () => {
   const js = readFileSync(new URL("../js/hq-staff.js", import.meta.url), "utf8");
-  assert.match(js, /L\.sixWeeks\(/);
-  assert.match(js, /The next 6 weeks/);
-  assert.match(readFileSync(new URL("../hq.html", import.meta.url), "utf8"), /\.six-weeks/);
+  assert.doesNotMatch(js, /L\.sixWeeks\(/);
+  assert.doesNotMatch(js, /The next 6 weeks/);
+  assert.doesNotMatch(js, /Spotify pitches/);
+  assert.equal(typeof L.sixWeeks, "function", "the rule is still there");
 });

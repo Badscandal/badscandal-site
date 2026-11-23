@@ -668,8 +668,9 @@ test("v2: the page: the tab is called Upcoming (its address stays #releases), th
   assert.match(page, /<section class="card view" id="releases"><h2>Upcoming<\/h2>/);
   const sec = page.slice(page.indexOf('id="releases"'), page.indexOf('id="money"'));
   /* the overhaul (15 Nov 2026): what is sent ("Coming up") before the drafts; tests/hq-upcoming.test.mjs pins the rest */
-  const order = ['relh">Coming up<', "In the pipeline", "In Spotify for Artists"].map((t) => sec.indexOf(t));
-  assert.ok(order.every((i, n) => i > 0 && (n === 0 || i > order[n - 1])), "Coming up, In the pipeline, In Spotify for Artists: " + order);
+  /* 23 Nov 2026: the last part is "Found in Spotify for Artists", shown only for a song that skipped Upcoming */
+  const order = ['relh">Coming up<', "In the pipeline", "Found in Spotify for Artists"].map((t) => sec.indexOf(t));
+  assert.ok(order.every((i, n) => i > 0 && (n === 0 || i > order[n - 1])), "Coming up, In the pipeline, Found in Spotify for Artists: " + order);
   assert.match(sec, />New song</);
   /* the words Luke reads: the section's own text, and every quoted string in the page's scripts */
   const strings = [staff, readFileSync(new URL("../js/hq-lib.js", import.meta.url), "utf8")].map((src) => (src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/"\/api\/staff\/[^"]*"/g, "").replace(/write\("[^"]*"/g, "")

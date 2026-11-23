@@ -844,7 +844,7 @@
     var l = window.HQLib.releaseLists(null, sheet), ol = window.HQLib.outLine(l.sheetOut.map(function (r) { return { title: r.song, date: r.date }; }));
     $("relDesk").innerHTML = ""; $("relPipe").innerHTML = "";
     $("relOut").innerHTML = ol ? '<p class="routline">' + esc(ol) + ' <a href="#songs">See Songs</a></p>' : "";
-    $("relSpot").innerHTML = '<p class="empty2">This shows once the team\'s desk is read.</p>';
+    $("relSpot").innerHTML = ""; if ($("relSpotWrap")) $("relSpotWrap").hidden = true;
     var deskHas = window.HQStaff && HQStaff.board && (HQStaff.board().releases || []).length;
     $("relList").innerHTML = broken("Releases") ? '<p class="empty">See the note above.</p>' : l.sheetOnly.length ? l.sheetOnly.map(sheetReleaseCard).join("") : (deskHas ? "" : '<p class="empty">Nothing coming in the sheet yet.</p>');
   }

@@ -2,7 +2,13 @@
 
 **Full picture:** [docs/HQ-FULL-HANDOFF.md](HQ-FULL-HANDOFF.md) (18 Nov 2026). It was checked against the code at `9e447e2` (PR #88). If this file disagrees with it, the full file wins. Main is through PR #89: 47 connector tools, service worker `bs-hq-v8`, 745 tests. The paragraphs below still describe the state at PR #84 in places. They are kept as the running log.
 
-**21 Nov 2026: Profiles is upload-driven (PR #110 + this one).** Luke uploads one profile photo and one banner. Each platform's copy is made from them. Green means the platform uses his upload (a copy is ready, or live). Red means an issue. Grey means nothing has been uploaded yet.
+**23 Nov 2026: Upcoming trimmed (this PR; live once Luke says deploy).** Luke: "this will make the upcoming page perfect".
+- **The next 6 weeks** and **Spotify pitches** are gone from Upcoming › Planning (he has the calendar; each song's steps show its pitch). `HQLib.sixWeeks` / `pitchBlock` and the bots' `six_weeks` stay.
+- **In Spotify for Artists** is hidden unless Atlas saw a song there that did not go through Upcoming (or one whose message to Nova must go again). It is then called "Found in Spotify for Artists" and shows only the question (`#relSpotWrap`).
+- **What the distributor said:** each row is the day, one word (Approved / In review / Rejected …) and, only for a rejection, the reason with its brackets and "Action needed:" taken off. Who wrote it and the bot's notes stay on the desk (`HQLib.storeRows`, `storeWhy`). The "At the distributor" line follows the same words.
+- Script hash recomputed; cache name unchanged (no file added or removed). Tests: `tests/hq-upcoming-trim.test.mjs`.
+
+**21 Nov 2026: Profiles is upload-driven (PR #110 + #111, live).** Luke uploads one profile photo and one banner. Each platform's copy is made from them. Green means the platform uses his upload (a copy is ready, or live). Red means an issue. Grey means nothing has been uploaded yet.
 - **What counts as red:** the wrong shape or too small (that platform's bot makes an AI version that looks exactly like his), the platform rejected it, the copy was not saved, or a new image waits for his yes.
 - **A small master is a bot job now,** not a question to Luke. `jobNote` and the `profile_*` tool texts say: make an AI version at the exact size, exactly like his.
 - **The page:** the two uploads, then the strip, then one issue card per red platform with a plain sentence and a reply box. The reply is a message from Luke to that bot ("About the YouTube banner: …"). Below that, every platform folded away.

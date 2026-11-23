@@ -1333,11 +1333,15 @@ a.t-card:hover,button.t-card:hover,#shell a.tile:hover{border-color:var(--accent
 .mrec li+li{margin-top:6px;color:var(--muted)}
 .mopts .copybtn.rec{border-color:var(--accent);color:var(--paper)}
 .rectag{display:inline-block;margin-left:6px;padding:1px 8px;border-radius:999px;background:var(--accent-soft,rgba(165,180,252,.18));color:var(--accent);font-size:13px;font-weight:600}
-/* A5 (17 Nov 2026): the next 6 weeks in Upcoming › Planning */
-.six-weeks{margin-top:14px}
-.six-weeks .sixw{border-top:.5px solid var(--ink-3,#262C3B);padding:10px 0}
-.six-weeks .sixw summary{cursor:pointer;font-weight:600;font-size:16px;min-height:32px;display:flex;align-items:center;gap:8px}
-.six-weeks .sixw summary .lbl{font-weight:400}
+/* 23 Nov 2026: the distributor's history at a glance: day, one word, a reason only for a rejection */
+.slog{list-style:none;margin:8px 0 0;padding:0}
+.slog li{display:grid;grid-template-columns:6.2em 1fr;gap:2px 12px;padding:9px 0;border-top:.5px solid var(--ink-3,#262C3B);font-size:15px;line-height:1.4}
+.slog li:first-child{border-top:0}
+.slog .sl-d{color:var(--muted);white-space:nowrap}
+.slog .sl-w{font-weight:600;color:var(--paper)}
+.slog .sl-w.ok{color:var(--spot)}
+.slog .sl-w.bad{color:var(--red)}
+.slog .sl-y{grid-column:2;color:var(--muted);overflow-wrap:anywhere}
 /* A6 (17 Nov 2026): pre-flight checks on a release card */
 .rpre{margin:8px 0}
 .rpre summary{cursor:pointer;color:var(--amber,#FBBF24);font-weight:600;font-size:15px;min-height:32px;display:flex;align-items:center}
@@ -2026,7 +2030,8 @@ body.ws-on main{margin-left:0;max-width:none}
   </section>
   <!-- Upcoming (11 Nov 2026, v2: the tab's id stays "releases", so #releases and every deep link keep
        working). Three parts: In the pipeline (drafts + the form), Upcoming (sent to the team, not out
-       yet), In Spotify for Artists (what Atlas last saw there). Songs that are out live in Songs. -->
+       yet), and "Found in Spotify for Artists" only when Atlas saw a song there that didn't go through it
+       (23 Nov 2026). Songs that are out live in Songs. -->
   <section class="card view" id="releases"><h2>Upcoming</h2><p class="sub" id="relSub">Your songs on their way out. What needs you is on top; tap a song for every step.</p><div class="sheeterr" id="errReleases" hidden></div>
     <p class="mnote" id="relSample" hidden>This is the sample: the form opens, but saving, sending, changing a date, marking steps and answering are switched off here.</p>
     <!-- the overhaul (15 Nov 2026): what needs Luke first, then the songs as compact cards, then drafts, planning, Spotify for Artists -->
@@ -2047,9 +2052,10 @@ body.ws-on main{margin-left:0;max-width:none}
     <p class="secsub">Good days for the next song, and every release and team step on the calendar.</p>
     <!-- planning (14 Nov 2026): the next good release days, the calendar, how long things take -->
     <div class="relplan" id="relPlan"></div>
-    <h3 class="sech relh" id="releases-spotify">In Spotify for Artists</h3>
-    <p class="secsub">What Atlas last saw there as upcoming. A song that didn't go through the pipeline is a question for you.</p>
-    <div id="relSpot"><div class="ph"></div></div></section>
+    <!-- 23 Nov 2026: only when Atlas saw a song there that didn't go through Upcoming (js/hq-staff.js drawSpotify) -->
+    <div id="relSpotWrap" hidden><h3 class="sech relh" id="releases-spotify">Found in Spotify for Artists</h3>
+    <p class="secsub">Atlas saw this there, but it didn't go through Upcoming. Say what it is.</p>
+    <div id="relSpot"></div></div></section>
   <section class="card view" id="money"><h2>Money</h2><p class="sub">Every amount in the currency it was paid in. Only money that has arrived counts.</p><div class="sheeterr" id="errMoney" hidden></div>
     <h3 class="sech">Money coming in</h3>
     <p class="secsub">Read from Revolut by the site every morning, and sent in by the bots through the connector. Only money that has arrived counts.</p>
@@ -2174,18 +2180,18 @@ body.ws-on main{margin-left:0;max-width:none}
   }, 400);
 })();
 </script>
-<script src="js/crt.js?v=fcf8b857f112" defer></script>
-<script src="js/hq-lib.js?v=fcf8b857f112" defer></script>
-<script src="js/hq-chart.js?v=fcf8b857f112" defer></script>
-<script src="js/hq-growth.js?v=fcf8b857f112" defer></script>
-<script src="js/hq-look.js?v=fcf8b857f112" defer></script>
-<script src="js/hq.js?v=fcf8b857f112" defer></script>
-<script src="js/hq-staff.js?v=fcf8b857f112" defer></script>
-<script src="js/hq-phone.js?v=fcf8b857f112" defer></script>
-<script src="js/hq-shell.js?v=fcf8b857f112" defer></script>
-<script src="js/hq-workspaces.js?v=fcf8b857f112" defer></script>
-<script src="js/hq-app.js?v=fcf8b857f112" defer></script>
-<script src="js/hq-cmd.js?v=fcf8b857f112" defer></script>
-<script src="js/hq-pages.js?v=fcf8b857f112" defer></script>
+<script src="js/crt.js?v=79370b6477bc" defer></script>
+<script src="js/hq-lib.js?v=79370b6477bc" defer></script>
+<script src="js/hq-chart.js?v=79370b6477bc" defer></script>
+<script src="js/hq-growth.js?v=79370b6477bc" defer></script>
+<script src="js/hq-look.js?v=79370b6477bc" defer></script>
+<script src="js/hq.js?v=79370b6477bc" defer></script>
+<script src="js/hq-staff.js?v=79370b6477bc" defer></script>
+<script src="js/hq-phone.js?v=79370b6477bc" defer></script>
+<script src="js/hq-shell.js?v=79370b6477bc" defer></script>
+<script src="js/hq-workspaces.js?v=79370b6477bc" defer></script>
+<script src="js/hq-app.js?v=79370b6477bc" defer></script>
+<script src="js/hq-cmd.js?v=79370b6477bc" defer></script>
+<script src="js/hq-pages.js?v=79370b6477bc" defer></script>
 </body>
 </html>

@@ -196,8 +196,9 @@ test("store_status: a fixed list, kept with history; a rejection needs RouteNote
   const v2 = await view(d, r.id);
   assert.deepEqual(v2.store.history.slice(0, 2).map((h) => [h.status, h.by]), [["approved", "Luke"], ["resubmitted", "Drop"]]);
   assert.ok(!v2.warnings.some((w) => /Rejected/.test(w)), "approved since: no warning");
-  assert.deepEqual(L.storeHistory(v2.store).slice(0, 1), ["Sun 15 Nov · approved (Luke)"]);
-  assert.equal(L.storeLine(v2.store), "At the distributor: approved · since Sun 15 Nov (Luke)");
+  /* 23 Nov 2026 (Luke: "many brackets … simpler to digest when glancing"): one word, the day, no "(who)" */
+  assert.deepEqual(L.storeHistory(v2.store).slice(0, 1), ["Sun 15 Nov · Approved"]);
+  assert.equal(L.storeLine(v2.store), "At the distributor: Approved since Sun 15 Nov");
   assert.equal(tool("store_status").inputSchema.properties.status.enum.length, 8);
 });
 
