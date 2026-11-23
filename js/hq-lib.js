@@ -2380,9 +2380,7 @@
     var badge = "";
     if (cases.length) {
       var lead = cases.slice().sort(function (a, b) { return toneRank(caseColour(b, today, date)) - toneRank(caseColour(a, today, date)); })[0];
-      var who = lead.waitingOn || lead.platform || "the case";
-      if (/^(a human|human)$/i.test(String(who).replace(/\s+since\b.*$/i, "").trim())) who = "Luke";
-      badge = cases.length + " dispute" + (cases.length === 1 ? "" : "s") + " - waiting on " + who;
+      badge = cases.length + " dispute" + (cases.length === 1 ? "" : "s") + " · " + caseWaitWords(lead, true);
     } else if (delay === "red" && rel && rel.counts && rel.counts.blocked) badge = "Release blocked";
     else if (delay === "red") badge = "Check before it goes to the stores";
     else if (delay === "yellow") badge = "A step is late";
@@ -2395,13 +2393,50 @@
       return '<li class="' + cls + '">' + escHtml(s) + "</li>";
     }).join("") + "</ol>";
   }
+  /* 23 Nov 2026 (Luke: "kind of unclear what the issue is"; "waiting on bot: can it say what the bot is waiting
+     for"; "say what exactly was resolved"). The case in plain words: the issue, who has the next move and
+     what it is, and once closed, how it ended. Lines the desk writes by itself ("Status: …", "Opened. …")
+     are not the story, so they are skipped when the bot has not written the issue or the outcome. */
+  var AUTO_CASE_LINE = /^(opened\b|status:|waiting on |not waiting|next check|recommendation updated|proposal updated|song: |issue: |outcome: |luke (confirmed|ignored|wrote))/i;
+  /* newest first, by the day the line is about (a replaced timeline may come oldest first) */
+  function caseStory(c) {
+    var key = function (e) { return String((e && (e.date || e.at)) || ""); };
+    return ((c && c.timeline) || []).filter(function (e) { var t = shown(e && e.text); return t && !AUTO_CASE_LINE.test(t); })
+      .map(function (e, i) { return { e: e, i: i }; }).sort(function (a, b) { return key(b.e) < key(a.e) ? -1 : key(b.e) > key(a.e) ? 1 : a.i - b.i; })
+      .map(function (x) { return x.e; });
+  }
+  function caseIssue(c) {
+    if (shown(c && c.issue)) return shown(c.issue);
+    var lines = caseStory(c).filter(function (e) { return !/^luke$/i.test(shown(e.by)); });
+    return lines.length ? shown(lines[lines.length - 1].text) : ""; /* the oldest line says what started it */
+  }
+  function caseOutcome(c) {
+    if (shown(c && c.outcome)) return shown(c.outcome);
+    if (c && c.status === "ignored") return "You chose to ignore it" + (shown(c.decision && c.decision.text) ? ": " + cutWords(shown(c.decision.text), 120) : "");
+    var lines = caseStory(c).filter(function (e) { return !/^luke$/i.test(shown(e.by)); });
+    if (lines.length) return shown(lines[0].text);
+    return c && c.decision && c.decision.choice === "confirm" ? "You confirmed it was solved" : "Closed";
+  }
+  function cutWords(t, n) { t = String(t || ""); return t.length > n ? t.slice(0, n - 1).replace(/\s+\S*$/, "") + "…" : t; }
+  function caseDay(at) { at = String(at || ""); return isoDay(at) ? day(at) : /^\d{4}-\d{2}-\d{2}T/.test(at) ? day(spStampOf(at).slice(0, 10)) : ""; }
+  /* who has the next move and what it is. short: for the song card's one line */
+  function caseWaitWords(c, short) {
+    var owner = shown(c.owner) || "The bot", raw = shown(c.waitingOn || "").replace(/\s+since\b.*$/i, "").trim();
+    var other = raw && raw.toLowerCase() !== owner.toLowerCase() && !/^(a )?human$|^luke$|^you$/i.test(raw) ? raw : "";
+    var dec = c.decision && c.decision.at ? c.decision : null, on = dec ? caseDay(dec.at) : "";
+    if (c.status === "waiting on Luke") return short ? "needs your decision" : "Needs your decision";
+    if (c.status === "solved - confirm") return short ? "solved: confirm it" : "Solved: confirm it and the case closes";
+    if (c.status === "waiting on them") return (short ? "waiting for " : "Waiting for ") + (other || shown(c.platform) || "them") + " to answer";
+    if (c.status === "waiting on bot") {
+      if (dec && dec.choice === "confirm") return owner + (short ? " is sending what you confirmed" : " has to send what you confirmed" + (on ? " on " + on : ""));
+      if (dec && dec.choice === "respond") return owner + (short ? " is acting on your reply" : " has to act on your reply" + (on ? " of " + on : "") + (shown(dec.text) ? ": “" + cutWords(shown(dec.text), 90) + "”" : ""));
+      return other ? owner + " is waiting for " + other : owner + " is on the next step";
+    }
+    return other ? (short ? "waiting for " : "Waiting for ") + other : owner + " is working on it";
+  }
   function disputeWait(c) {
     if (!c || c.status === "resolved" || c.status === "ignored") return "";
-    var raw = shown(c.waitingOn || "").replace(/\s+since\b.*$/i, "").trim();
-    if (/human/i.test(raw)) raw = "a reply";
-    var who = raw ? "Waiting on " + raw : (c.status === "waiting on Luke" ? "Waiting on Luke" : "Waiting on the next step");
-    var next = c.nextCheck ? ". Next check " + day(c.nextCheck) : "";
-    return who + next;
+    return caseWaitWords(c) + (c.nextCheck ? ". Next check " + day(c.nextCheck) : "");
   }
   function proposalHtml(text) {
     var lines = String(text || "").split(/\n/).map(function (l) { return l.trim(); }).filter(Boolean);
@@ -2427,8 +2462,10 @@
     var tone = caseColour(c, o.today, rel && rel.date);
     var songHref = c.songKey ? "#songs/" + escHtml(c.songKey) : "#songs";
     var head = '<p class="d"><a href="' + songHref + '"><b>' + escHtml(shown(c.song) || "A song") + "</b></a> · " + escHtml(shown(c.platform)) + " · " + escHtml(shown(c.type)) + "</p>";
-    head += '<p class="d">Opened ' + escHtml(day(c.opened) || "not reported") + " · " + escHtml(shown(c.owner)) + " · " + escHtml(c.status || "") + "</p>";
-    if (wait) head += '<p class="d">' + escHtml(wait) + "</p>";
+    var issue = caseIssue(c);
+    head += '<p class="d dissue"><span class="lbl">The issue</span><br>' + escHtml(issue || "Not written yet") + "</p>";
+    if (wait) head += '<p class="d dwait"><b>' + escHtml(wait) + "</b></p>";
+    head += '<p class="d dmeta">Opened ' + escHtml(day(c.opened) || "not reported") + (shown(c.owner) ? " · " + escHtml(shown(c.owner)) + " runs it" : "") + "</p>";
     if (compact) return '<div class="d">' + head + (c.id ? '<p><a href="#songs/' + escHtml(c.id) + '">Open the case</a></p>' : "") + "</div>";
     var rec = shown(c.recommendation);
     var recLine = rec ? String(rec).split(/\n/)[0].replace(/\s+/g, " ").trim() : "";
@@ -2474,12 +2511,17 @@
     });
     if (o.compact) {
       if (!list.length) return "";
-      return '<details class="fold" open><summary>Disputes (' + list.length + ")</summary>" + list.map(function (c) { return disputeCard(c, true, o); }).join("") + "</details>";
+      return '<details class="fold" open><summary>' + (list.length === 1 ? "Dispute" : list.length + " disputes") + "</summary>" + list.map(function (c) { return disputeCard(c, true, o); }).join("") + "</details>";
     }
     var h = '<h3 class="sth">Disputes</h3><p class="sub">Bots run the case. You decide.</p>';
     if (!list.length && !resolved.length) return h + '<p class="empty">No cases yet.</p>';
+    /* 23 Nov 2026: what each one was about and how it ended, not just "resolved" */
     var done = resolved.length ? '<details class="fold"><summary>' + resolved.length + " resolved</summary>" + resolved.map(function (c) {
-      return '<p class="d">' + escHtml(shown(c.song) || "A song") + " · " + escHtml(c.status || "resolved") + "</p>";
+      var when = caseDay(c.closedAt) || caseDay(c.timeline && c.timeline[0] && (c.timeline[0].date || c.timeline[0].at));
+      var issue = caseIssue(c);
+      return '<div class="dres"><p class="d"><b>' + escHtml(shown(c.song) || "A song") + "</b> · " + escHtml(shown(c.platform)) + " · " + escHtml((c.status === "ignored" ? "Ignored" : "Solved") + (when ? " " + when : "")) + "</p>" +
+        (issue ? '<p class="d"><span class="lbl">The issue</span><br>' + escHtml(issue) + "</p>" : "") +
+        '<p class="d"><span class="lbl">How it ended</span><br>' + escHtml(caseOutcome(c)) + "</p></div>";
     }).join("") + "</details>" : "";
     return h + list.map(function (c) { return disputeCard(c, false, o); }).join("") + done;
   }
@@ -2632,7 +2674,7 @@
     snapshot: snapshot, changesSince: changesSince, tiles: tiles, summaryText: summaryText, shortStep: shortStep, day: day,
     slug: slug, workerLabel: workerLabel, sortWorkers: sortWorkers, workerView: workerView, dutyWhen: dutyWhen, workerCounts: workerCounts, seenLine: seenLine, connectorLine: connectorLine,
     novaMessage: novaMessage, liveFeed: liveFeed, spWhen: spWhen, waitLabel: waitLabel, needWords: needWords, reportParts: reportParts, siteCheckLine: siteCheckLine, composeNames: composeNames,
-    threadRoot: threadRoot, answerTarget: answerTarget, questionLines: questionLines, questionsLeft: questionsLeft, stepButton: stepButton, formKey: formKey, storeLine: storeLine, storeHistory: storeHistory, storeRows: storeRows, storeWhy: storeWhy, capRateLine: capRateLine, capMissingLine: capMissingLine, dutyGapsLine: dutyGapsLine, incomeTotals: incomeTotals, approvalLines: approvalLines, approvalUndo: approvalUndo, warnTone: warnTone, warnGroups: warnGroups, resubmitAsk: resubmitAsk, relStatus: relStatus, relProgress: relProgress, stepGroups: stepGroups, upcomingAsks: upcomingAsks, staffAttention: staffAttention, staffHealth: staffHealth, curList: curList, cadenceWord: cadenceWord, accountLine: accountLine, sourceState: sourceState, payLine: payLine, accountsLine: accountsLine, receivedMonths: receivedMonths, releasePage: releasePage, monthRows: monthRows, mainSources: mainSources, sourceMonthLine: sourceMonthLine, proposalRows: proposalRows, proposalConfirm: proposalConfirm, profileBlocks: profileBlocks, profileOverview: profileOverview, profileState: profileState, profileIssueText: profileIssueText,
+    threadRoot: threadRoot, answerTarget: answerTarget, questionLines: questionLines, questionsLeft: questionsLeft, stepButton: stepButton, formKey: formKey, storeLine: storeLine, storeHistory: storeHistory, storeRows: storeRows, storeWhy: storeWhy, capRateLine: capRateLine, capMissingLine: capMissingLine, dutyGapsLine: dutyGapsLine, incomeTotals: incomeTotals, approvalLines: approvalLines, approvalUndo: approvalUndo, warnTone: warnTone, warnGroups: warnGroups, resubmitAsk: resubmitAsk, relStatus: relStatus, relProgress: relProgress, stepGroups: stepGroups, upcomingAsks: upcomingAsks, staffAttention: staffAttention, staffHealth: staffHealth, curList: curList, cadenceWord: cadenceWord, accountLine: accountLine, sourceState: sourceState, payLine: payLine, accountsLine: accountsLine, receivedMonths: receivedMonths, releasePage: releasePage, monthRows: monthRows, mainSources: mainSources, sourceMonthLine: sourceMonthLine, proposalRows: proposalRows, proposalConfirm: proposalConfirm, profileBlocks: profileBlocks, profileOverview: profileOverview, profileState: profileState, profileIssueText: profileIssueText, caseIssue: caseIssue, caseOutcome: caseOutcome, caseWaitWords: caseWaitWords,
     incomeEmpty: incomeEmpty, incomeProblems: incomeProblems, expectedJourney: expectedJourney, expectedDue: expectedDue, expectedFlags: expectedFlags, expectedFlagKind: expectedFlagKind, missingLine: missingLine, learnedLine: learnedLine, routeLines: routeLines,
     /* replies that visibly land + the release pipeline (11 Nov 2026) */
     spStampOf: spStampOf, seenWords: seenWords, sentLine: sentLine, answeredList: answeredList, CLAUDE_ROUNDS: CLAUDE_ROUNDS,

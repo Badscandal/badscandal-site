@@ -1648,6 +1648,20 @@ body.ws-on main{margin-left:0;max-width:none}
   table.posttable td[data-label]::before{content:attr(data-label);display:block;color:var(--muted);font-size:11px;letter-spacing:.04em;text-transform:uppercase}
 }
 .dcase{margin:0 0 12px}
+/* 23 Nov 2026 (Luke: "the full note … it doesn't look selectable"): a pill with a turning chevron */
+.dcase-more{margin-top:12px}
+.dcase-more > summary{display:inline-flex;align-items:center;gap:10px;min-height:44px;padding:0 16px;border:1px solid var(--glass-line,rgba(255,255,255,.16));border-radius:999px;cursor:pointer;font-size:15px;font-weight:600;color:var(--accent);list-style:none;user-select:none}
+.dcase-more > summary::-webkit-details-marker{display:none}
+.dcase-more > summary::after{content:"›";font-size:20px;line-height:1;transition:transform .15s}
+.dcase-more[open] > summary::after{transform:rotate(90deg)}
+.dcase-more > summary:hover{background:rgba(165,180,252,.08)}
+.dcase-more > summary:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+@media (prefers-reduced-motion:reduce){.dcase-more > summary::after{transition:none}}
+.dcase .dissue,.dres .d{overflow-wrap:anywhere}
+.dwait b{font-weight:600;color:var(--paper)}
+.dmeta{color:var(--muted)}
+.dres{padding:10px 0;border-top:.5px solid var(--glass-line,rgba(255,255,255,.12))}
+.dres:first-of-type{border-top:0}
 .dcase textarea{width:100%;min-height:88px;margin:8px 0;font:inherit;color:inherit;background:transparent;border:1px solid var(--ink-3);border-radius:8px;padding:8px}
 .dcase .row{gap:8px;flex-wrap:wrap;margin-top:8px}
 .dcase ul{margin:8px 0;padding-left:18px}
@@ -2180,18 +2194,18 @@ body.ws-on main{margin-left:0;max-width:none}
   }, 400);
 })();
 </script>
-<script src="js/crt.js?v=79370b6477bc" defer></script>
-<script src="js/hq-lib.js?v=79370b6477bc" defer></script>
-<script src="js/hq-chart.js?v=79370b6477bc" defer></script>
-<script src="js/hq-growth.js?v=79370b6477bc" defer></script>
-<script src="js/hq-look.js?v=79370b6477bc" defer></script>
-<script src="js/hq.js?v=79370b6477bc" defer></script>
-<script src="js/hq-staff.js?v=79370b6477bc" defer></script>
-<script src="js/hq-phone.js?v=79370b6477bc" defer></script>
-<script src="js/hq-shell.js?v=79370b6477bc" defer></script>
-<script src="js/hq-workspaces.js?v=79370b6477bc" defer></script>
-<script src="js/hq-app.js?v=79370b6477bc" defer></script>
-<script src="js/hq-cmd.js?v=79370b6477bc" defer></script>
-<script src="js/hq-pages.js?v=79370b6477bc" defer></script>
+<script src="js/crt.js?v=d6d8407f167b" defer></script>
+<script src="js/hq-lib.js?v=d6d8407f167b" defer></script>
+<script src="js/hq-chart.js?v=d6d8407f167b" defer></script>
+<script src="js/hq-growth.js?v=d6d8407f167b" defer></script>
+<script src="js/hq-look.js?v=d6d8407f167b" defer></script>
+<script src="js/hq.js?v=d6d8407f167b" defer></script>
+<script src="js/hq-staff.js?v=d6d8407f167b" defer></script>
+<script src="js/hq-phone.js?v=d6d8407f167b" defer></script>
+<script src="js/hq-shell.js?v=d6d8407f167b" defer></script>
+<script src="js/hq-workspaces.js?v=d6d8407f167b" defer></script>
+<script src="js/hq-app.js?v=d6d8407f167b" defer></script>
+<script src="js/hq-cmd.js?v=d6d8407f167b" defer></script>
+<script src="js/hq-pages.js?v=d6d8407f167b" defer></script>
 </body>
 </html>
