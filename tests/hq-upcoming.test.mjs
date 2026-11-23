@@ -97,10 +97,10 @@ test("upcomingAsks: what on this tab waits on Luke, each with where it goes", ()
   assert.deepEqual(L.upcomingAsks(null, TODAY), []);
 });
 
-test("the page: Needs you, Coming up, In the pipeline, Planning, In Spotify for Artists, in that order", () => {
+test("the page: Needs you, Coming up, In the pipeline, Planning, Found in Spotify for Artists, in that order", () => {
   const page = readFileSync(new URL("../hq.html", import.meta.url), "utf8");
   const sec = page.slice(page.indexOf('id="releases"'), page.indexOf('id="money"'));
-  const order = ['id="relNow"', 'relh">Coming up<', 'relh">In the pipeline<', 'relh">Planning<', '>In Spotify for Artists<'].map((t) => sec.indexOf(t));
+  const order = ['id="relNow"', 'relh">Coming up<', 'relh">In the pipeline<', 'relh">Planning<', '>Found in Spotify for Artists<'].map((t) => sec.indexOf(t));
   assert.ok(order.every((i, n) => i > 0 && (n === 0 || i > order[n - 1])), "order: " + order);
   assert.ok(sec.indexOf('id="relDesk"') > sec.indexOf("Coming up") && sec.indexOf('id="relDesk"') < sec.indexOf("In the pipeline"));
   assert.ok(sec.indexOf('id="relPlan"') > sec.indexOf("Planning<"));

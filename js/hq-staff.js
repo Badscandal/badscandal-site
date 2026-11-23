@@ -86,7 +86,7 @@
     $("msgText").value = ""; counter(); $("msgErr").textContent = ""; $("msgOk").textContent = "";
     $("waitList").innerHTML = $("threadList").innerHTML = $("dutyList").innerHTML = $("incomeBody").innerHTML = '<div class="ph"></div>';
     $("answeredList").innerHTML = ""; $("answeredCard").hidden = true;
-    $("relForm").hidden = true; $("relForm").innerHTML = ""; $("relDesk").innerHTML = $("relOut").innerHTML = $("relPipe").innerHTML = $("relSpot").innerHTML = ""; if ($("relRows")) $("relRows").innerHTML = ""; $("relMsg").textContent = "";
+    $("relForm").hidden = true; $("relForm").innerHTML = ""; $("relDesk").innerHTML = $("relOut").innerHTML = $("relPipe").innerHTML = $("relSpot").innerHTML = ""; if ($("relSpotWrap")) $("relSpotWrap").hidden = true; if ($("relRows")) $("relRows").innerHTML = ""; $("relMsg").textContent = "";
     draw();
   }
   function draw() {
@@ -1095,8 +1095,11 @@
     var line = L.storeLine(v.store), hist = L.storeHistory(v.store);
     if (!line) return "";
     return '<div class="rstore"><p class="rstore-now' + (v.store.status === "rejected" ? " bad" : "") + '">' + esc(line) + "</p>" +
-      (hist.length > 1 ? '<details class="bwhy" data-fold="store:' + esc(v.id) + '"' + (ui.rel.fold["store:" + v.id] ? " open" : "") + "><summary>What the distributor said (" + hist.length + ")</summary><ul class=\"rlog\">" +
-        hist.map(function (h) { return "<li>" + esc(h) + "</li>"; }).join("") + "</ul></details>" : "") + "</div>";
+      /* 23 Nov 2026 (Luke): day, one word, and a reason only for a rejection; no brackets */
+      (hist.length > 1 ? '<details class="bwhy" data-fold="store:' + esc(v.id) + '"' + (ui.rel.fold["store:" + v.id] ? " open" : "") + "><summary>What the distributor said</summary><ul class=\"slog\">" +
+        L.storeRows(v.store).map(function (r) {
+          return '<li><span class="sl-d">' + esc(r.day) + '</span><b class="sl-w' + (r.tone ? " " + r.tone : "") + '">' + esc(r.word) + "</b>" + (r.why ? '<span class="sl-y">' + esc(r.why) + "</span>" : "") + "</li>";
+        }).join("") + "</ul></details>" : "") + "</div>";
   }
   /* Luke's two approvals; he can approve the final lyrics here (the pitch comes from Atlas, as a question
      with its text), and take an approval back. Each asks first. */
@@ -1251,27 +1254,9 @@
     var timeHtml = '<details class="tile plan-time"' + (ui.rel.fold.timeline ? " open" : "") + ' data-fold="timeline"><summary>How long things take, and the team\'s rule</summary><ul class="tl">' +
       L.PLAN_TIMELINE.map(function (x) { return "<li><b>" + esc(x.what) + "</b><span>" + esc(x.time) + "</span></li>"; }).join("") + "</ul>" +
       '<p class="tl-rule"><b>The team\'s rule:</b> Drop sends a song to RouteNote 4 weeks before its release day (3 weeks at the very least), songs come out on Fridays, and there are 2 weeks between two songs: a week as Out now, then a week as the next one. Atlas pitches the day the song shows in Spotify for Artists.</p></details>';
-    /* A5 (17 Nov 2026, Nova): the next 6 weeks, every song's steps, week by week (late ones in this week) */
-    var six = L.sixWeeks(today, rels);
-    var sixHtml = '<section class="tile six-weeks" aria-labelledby="sixTitle"><h3 class="lblh" id="sixTitle">The next 6 weeks</h3><p class="secsub">Every song\'s release day and every open step, week by week. Late steps sit in this week.</p>' +
-      six.map(function (w, i) {
-        return '<details class="sixw"' + ((ui.rel.fold["six:" + w.start] != null ? ui.rel.fold["six:" + w.start] : i < 2) ? " open" : "") + ' data-fold="six:' + esc(w.start) + '"><summary>' + esc(w.label) + ' <span class="lbl">' + (w.items.length ? w.items.length + (w.items.length === 1 ? " thing" : " things") : "nothing due") + "</span></summary>" +
-          (w.items.length ? '<ul class="cal-items">' + w.items.map(function (x) {
-            return x.kind === "release" ? '<li class="r"><a href="#releases/' + esc(safe(x.id)) + '">' + esc(L.day(x.date)) + " · <b>" + esc(x.title) + "</b> comes out" + (x.draft ? " (draft: not sent yet)" : "") + "</a></li>"
-              : '<li class="' + (x.late ? "late" : "") + '"><a href="#releases/' + esc(safe(x.id)) + '">' + esc(L.day(x.date)) + " · <b>" + esc(x.owner) + "</b> · " + esc(x.label) + " · " + esc(x.title) + (x.late ? " · late" : "") + "</a></li>";
-          }).join("") + "</ul>" : '<p class="empty2">Nothing due.</p>') + "</details>";
-      }).join("") + "</section>";
-    var slots = L.pitchBlock(board.pitchSlots || []);
-    var pitchLine = L.pitchSentence(board.pitchSlots || []);
-    var pitchSec = '<section class="tile six-weeks" aria-labelledby="pitchTitle"><h3 class="lblh" id="pitchTitle">Spotify pitches</h3>' +
-      '<p class="secsub">One pitch in two weeks. Spotify needs it at least 7 days before the release. The warning starts two weeks out, while there is still time. HQ only records what Atlas saw. It never pitches.</p>' +
-      (pitchLine ? '<p>' + esc(pitchLine) + "</p>" : "") +
-      (slots.length ? slots.map(function (s) {
-        return '<div class="pslot"><p><b>' + esc(s.title) + "</b>" + (s.when ? " · out " + esc(s.when) : "") + "</p><p>" + esc(s.line) + "</p>" +
-          (s.editorial.length ? "<p>Editorial: " + esc(s.editorial.join(" · ")) + "</p>" : "") +
-          (s.also ? '<p class="rnote">' + esc(s.also) + "</p>" : "") + "</div>";
-      }).join("") : '<p class="empty2">No upcoming or recent song on the pitch list.</p>') + "</section>";
-    el.innerHTML = '<div class="plangrid">' + nextHtml + calHtml + "</div>" + sixHtml + pitchSec + timeHtml;
+    /* 23 Nov 2026 (Luke): the six-week list and the pitch tile are off this tab: the calendar shows the
+       weeks, and each song's steps show its pitch. (L.sixWeeks / L.pitchBlock stay for the bots' tools.) */
+    el.innerHTML = '<div class="plangrid">' + nextHtml + calHtml + "</div>" + timeHtml;
   }
   /* -> true when the desk drew the tab (js/hq.js draws the sheet's list when it didn't) */
   /* the release page (17 Nov 2026): the whole release in one view, on top of Upcoming */
@@ -1386,17 +1371,19 @@
         '<p class="ferr" role="alert">' + esc(ui.spot.err[x.key] || "") + "</p>" : "") +
       (fresh ? (d.fail ? '<p class="ferr" role="alert">' + esc(d.line) + "</p>" : '<p class="landed tsent" role="status"><span>' + esc(d.line) + "</span></p>") : "") + "</li>";
   }
+  /* 23 Nov 2026 (Luke: "remove … in spotify for artists, that's clearly handled in the drop down of steps"):
+     a song in the pipeline shows there through its own steps, so this part shows ONLY a song that did not go
+     through Upcoming (his question), one whose message to Nova has to go again, or an answer just given. */
   function drawSpotify() {
-    var el = $("relSpot"), sv = board && board.sightings;
-    if (!sv) { el.innerHTML = '<p class="empty2">Not read yet.</p>'; return; }
-    var h = L.sightingsHead(sv, Date.now(), board.today), items = sv.items || [];
-    /* a song whose message to Nova couldn't go (retry) is listed first among the rest: Luke has a button there */
-    var ask = items.filter(function (x) { return x.state === "unknown"; }), rest = items.filter(function (x) { return x.state === "retry"; }).concat(items.filter(function (x) { return x.state !== "unknown" && x.state !== "retry"; }));
-    var choices = sv.choices && sv.choices.length ? sv.choices : [];
-    el.innerHTML = '<div class="tile spotcard"><p class="sphead' + (h.attn ? " attn" : "") + '">' + esc(h.text) + "</p>" +
-      (sv.note ? '<p class="sps">' + esc((sv.by || "Atlas") + "’s note: " + sv.note) + "</p>" : "") + (h.empty ? '<p class="sps">' + esc(h.empty) + "</p>" : "") +
+    var el = $("relSpot"), wrap = $("relSpotWrap"), sv = board && board.sightings, items = (sv && sv.items) || [];
+    var fresh = function (x) { var d = ui.spot.done[x.key]; return !!(d && Date.now() - d.at < KEEP_MS); };
+    var ask = items.filter(function (x) { return x.state === "unknown"; });
+    var rest = items.filter(function (x) { return x.state === "retry"; }).concat(items.filter(function (x) { return x.state !== "unknown" && x.state !== "retry" && fresh(x); }));
+    var choices = sv && sv.choices && sv.choices.length ? sv.choices : [];
+    if (wrap) wrap.hidden = !(ask.length || rest.length);
+    el.innerHTML = ask.length || rest.length ? '<div class="tile spotcard">' +
       (ask.length ? '<div class="spasks">' + ask.map(function (x) { return spotQ(x, choices); }).join("") + "</div>" : "") +
-      (rest.length ? '<ul class="splist">' + rest.map(spotRow).join("") + "</ul>" : "") + "</div>";
+      (rest.length ? '<ul class="splist">' + rest.map(spotRow).join("") + "</ul>" : "") + "</div>" : "";
   }
   $("relSpot").addEventListener("input", function (ev) {
     var k = ev.target.getAttribute && ev.target.getAttribute("data-splabel"), S = ui.spot;

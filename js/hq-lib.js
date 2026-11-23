@@ -1111,16 +1111,36 @@
   /* ---------- batch 3 (14 Nov 2026): the distributor's history, Luke's approvals, "ready to resubmit" ---------- */
   /* "At the distributor: rejected · since Sat 14 Nov (Drop) · The artwork has a web address on it"; an old
      free-text status as it was written; "" when nothing is recorded */
+  /* 23 Nov 2026 (Luke: "a lot to see, many brackets … simpler to digest when glancing"): the distributor in
+     plain words. One word for the status, the day, and a reason only when it was rejected. Who wrote it and
+     the bot's notes stay on the desk; nothing in brackets reaches the page. */
+  var STORE_WORDS = { "not uploaded": "Not uploaded", uploaded: "Uploaded", "in moderation": "In review", rejected: "Rejected",
+    resubmitted: "Resubmitted", approved: "Approved", delivered: "Sent to the stores", live: "Live" };
+  function storeWord(s) { s = String(s || ""); return STORE_WORDS[s] || (s ? s.charAt(0).toUpperCase() + s.slice(1) : ""); }
+  /* a reason without its asides: no brackets, no "Action needed:" label, at most one short sentence */
+  function storeWhy(t) {
+    var s = String(t || ""), prev;
+    do { prev = s; s = s.replace(/\s*\([^()]*\)/g, ""); } while (s !== prev);
+    s = s.replace(/[()]/g, "").replace(/^\s*(routenote\s+)?action needed\s*:\s*/i, "").replace(/\s+/g, " ").trim().replace(/[\s.;:,]+$/, "");
+    if (s.length > 140) s = s.slice(0, 139).replace(/\s+\S*$/, "") + "…";
+    return s ? s.charAt(0).toUpperCase() + s.slice(1) : "";
+  }
+  var storeTone = function (s) { return s === "rejected" ? "bad" : s === "approved" || s === "delivered" || s === "live" ? "ok" : ""; };
   function storeLine(st) {
     if (!st) return "";
     if (!st.status) return st.legacy ? "At the distributor: " + st.legacy : "";
-    return "At the distributor: " + st.status + (isDay(st.since) ? " · since " + day(st.since) : "") + (st.by ? " (" + st.by + ")" : "") + (st.reason ? " · " + st.reason : "");
+    var why = st.status === "rejected" ? storeWhy(st.reason) : "";
+    return "At the distributor: " + storeWord(st.status) + (isDay(st.since) ? " since " + day(st.since) : "") + (why ? " · " + why : "");
   }
-  /* the history, newest first: "Sat 14 Nov · rejected: The artwork has a web address on it (Drop)" */
-  function storeHistory(st) {
+  /* the history, newest first: [{day, word, why, tone}] ("Mon 9 Nov", "Rejected", "Proof of rights …", "bad") */
+  function storeRows(st) {
     return (st && st.history || []).map(function (h) {
-      return (isDay(h.on) ? day(h.on) + " · " : "") + h.status + (h.reason ? ": " + h.reason : "") + (h.note ? " (" + h.note + ")" : "") + (h.by ? " (" + h.by + ")" : "");
+      return { day: isDay(h.on) ? day(h.on) : "", word: storeWord(h.status), why: h.status === "rejected" ? storeWhy(h.reason) : "", tone: storeTone(h.status) };
     });
+  }
+  /* the same in one line each: "Mon 9 Nov · Rejected: Proof of rights …" */
+  function storeHistory(st) {
+    return storeRows(st).map(function (r) { return (r.day ? r.day + " · " : "") + r.word + (r.why ? ": " + r.why : ""); });
   }
   /* the two approvals in words: [{key, text, ok, stale, undo}] (ok = approved and still current;
      undo = Take it back may show, and only next to this row). A pitch Atlas sent, with no approval
@@ -2211,7 +2231,7 @@
     var when = v.released && v.daysToGo != null && v.daysToGo >= -6 ? "Out now" : releaseWhen(v.date, today, v.status === "draft");
     var bits = [];
     var store = storeLine(v.store);
-    if (store) bits.push(store.replace(/^At the distributor:\s*/i, "at distributor: "));
+    if (store) bits.push(store.replace(/^At the distributor:\s*(\S)/i, function (m, c) { return "at distributor: " + c.toLowerCase(); }));
     if (v.pack && v.pack.upc) bits.push("UPC " + v.pack.upc);
     if (v.pack && v.pack.isrc) bits.push("ISRC " + v.pack.isrc);
     var wg = warnGroups(v);
@@ -2612,7 +2632,7 @@
     snapshot: snapshot, changesSince: changesSince, tiles: tiles, summaryText: summaryText, shortStep: shortStep, day: day,
     slug: slug, workerLabel: workerLabel, sortWorkers: sortWorkers, workerView: workerView, dutyWhen: dutyWhen, workerCounts: workerCounts, seenLine: seenLine, connectorLine: connectorLine,
     novaMessage: novaMessage, liveFeed: liveFeed, spWhen: spWhen, waitLabel: waitLabel, needWords: needWords, reportParts: reportParts, siteCheckLine: siteCheckLine, composeNames: composeNames,
-    threadRoot: threadRoot, answerTarget: answerTarget, questionLines: questionLines, questionsLeft: questionsLeft, stepButton: stepButton, formKey: formKey, storeLine: storeLine, storeHistory: storeHistory, capRateLine: capRateLine, capMissingLine: capMissingLine, dutyGapsLine: dutyGapsLine, incomeTotals: incomeTotals, approvalLines: approvalLines, approvalUndo: approvalUndo, warnTone: warnTone, warnGroups: warnGroups, resubmitAsk: resubmitAsk, relStatus: relStatus, relProgress: relProgress, stepGroups: stepGroups, upcomingAsks: upcomingAsks, staffAttention: staffAttention, staffHealth: staffHealth, curList: curList, cadenceWord: cadenceWord, accountLine: accountLine, sourceState: sourceState, payLine: payLine, accountsLine: accountsLine, receivedMonths: receivedMonths, releasePage: releasePage, monthRows: monthRows, mainSources: mainSources, sourceMonthLine: sourceMonthLine, proposalRows: proposalRows, proposalConfirm: proposalConfirm, profileBlocks: profileBlocks, profileOverview: profileOverview, profileState: profileState, profileIssueText: profileIssueText,
+    threadRoot: threadRoot, answerTarget: answerTarget, questionLines: questionLines, questionsLeft: questionsLeft, stepButton: stepButton, formKey: formKey, storeLine: storeLine, storeHistory: storeHistory, storeRows: storeRows, storeWhy: storeWhy, capRateLine: capRateLine, capMissingLine: capMissingLine, dutyGapsLine: dutyGapsLine, incomeTotals: incomeTotals, approvalLines: approvalLines, approvalUndo: approvalUndo, warnTone: warnTone, warnGroups: warnGroups, resubmitAsk: resubmitAsk, relStatus: relStatus, relProgress: relProgress, stepGroups: stepGroups, upcomingAsks: upcomingAsks, staffAttention: staffAttention, staffHealth: staffHealth, curList: curList, cadenceWord: cadenceWord, accountLine: accountLine, sourceState: sourceState, payLine: payLine, accountsLine: accountsLine, receivedMonths: receivedMonths, releasePage: releasePage, monthRows: monthRows, mainSources: mainSources, sourceMonthLine: sourceMonthLine, proposalRows: proposalRows, proposalConfirm: proposalConfirm, profileBlocks: profileBlocks, profileOverview: profileOverview, profileState: profileState, profileIssueText: profileIssueText,
     incomeEmpty: incomeEmpty, incomeProblems: incomeProblems, expectedJourney: expectedJourney, expectedDue: expectedDue, expectedFlags: expectedFlags, expectedFlagKind: expectedFlagKind, missingLine: missingLine, learnedLine: learnedLine, routeLines: routeLines,
     /* replies that visibly land + the release pipeline (11 Nov 2026) */
     spStampOf: spStampOf, seenWords: seenWords, sentLine: sentLine, answeredList: answeredList, CLAUDE_ROUNDS: CLAUDE_ROUNDS,
