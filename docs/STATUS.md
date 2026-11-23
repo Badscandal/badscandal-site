@@ -12,7 +12,8 @@ No money amounts, payer names or account numbers in this file: the repo is publi
 
 | When | PR | What |
 |------|----|------|
-| 23 Nov | this PR | Upcoming trimmed: no next-6-weeks list and no Spotify pitches tile; Spotify for Artists shows only a song that skipped Upcoming; the distributor's history is the day, one word, and a reason only for a rejection (no brackets). |
+| 23 Nov | this PR | Songs › Disputes: "The full note" looks tappable; each case says the issue and what the bot has to do next (never "waiting on bot"); Resolved says what each case was about and how it ended. Cases gain `issue` and `outcome` (connector 1.19.0). |
+| 23 Nov | #112 | Upcoming trimmed: no next-6-weeks list and no Spotify pitches tile; Spotify for Artists shows only a song that skipped Upcoming; the distributor's history is the day, one word, and a reason only for a rejection (no brackets). |
 | 21 Nov | #110 + #111 | Profiles: Luke uploads one photo and one banner. Green = the platform uses his upload, red = an issue (the bot makes an AI version exactly like his for a wrong shape or size), with issue cards and a reply to the bot. A small master is a bot job, not a question. |
 | 21 Nov | #108 | Needs you cards: one short question with Yes / No / Reply. The email (To, CC, Subject, body) opens only on Reply and can be edited. Asks have a reply box and Done (`POST /api/staff/need`, Luke only). T-32 and a step waiting on his yes are on the one list. No Salvation line. The bots' v17 re-check and Forge's 23 items fixed or skipped with a reason (issue #5 comment). Connector 1.18.0. Cache `bs-hq-v18`. 892 tests on Node 24 and 22. |
 | 19 Nov | #100 | Steve logs a boost on `log_growth` (`boosts`: post link, ad id, amount spent, currency, active or paused). Stored on that day's growth row. Not `record_spend`, and not added to the cap. The account day total is not that boost. Still 54 tools. Cache `bs-hq-v11`. |

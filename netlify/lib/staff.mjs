@@ -5766,6 +5766,9 @@ export function caseOut(c) {
     opened: c.opened || "", owner: stripSecure(c.owner || ""), status: c.status || "open",
     waitingOn: closed ? "" : waitingName(c.waitingOn || ""), waitingSince: closed ? "" : (c.waitingSince || ""), nextCheck: closed ? "" : (c.nextCheck || ""),
     claimId: c.claimId || "", recommendation: stripSecure(c.recommendation || ""), proposal: stripSecure(c.proposal || ""),
+    /* 23 Nov 2026 (Luke: "kind of unclear what the issue is"; "say what exactly was resolved"): the issue in one
+       sentence, and how it ended once it is closed */
+    issue: stripSecure(c.issue || ""), outcome: stripSecure(c.outcome || ""), closedAt: closed ? (c.closedAt || c.updatedAt || "") : "",
     decision, needsLuke: c.status === "waiting on Luke" || c.status === "solved - confirm",
     timeline: (Array.isArray(c.timeline) ? c.timeline : []).map((e) => ({
       at: e.at || "",
@@ -5815,7 +5818,8 @@ export async function openCase(store, now, roster, a) {
   const recommendation = a.recommendation != null && String(a.recommendation).trim() ? cleanText(a.recommendation, 800) : "";
   const proposal = a.proposal != null && String(a.proposal).trim() ? cleanText(a.proposal, 2000) : "";
   const entry = a.entry != null && String(a.entry).trim() ? clean(a.entry, 300) : "";
-  noSecrets(song, platform, waitingOn, recommendation, proposal, entry);
+  const issue = a.issue != null && String(a.issue).trim() ? clean(a.issue, 240) : "";
+  noSecrets(song, platform, waitingOn, recommendation, proposal, entry, issue);
   const at = new Date(now).toISOString();
   return mutate(store, CASES_KEY, { items: [] }, (doc) => {
     const items = doc && Array.isArray(doc.items) ? doc.items : [];
@@ -5826,7 +5830,7 @@ export async function openCase(store, now, roster, a) {
     const item = {
       id: newId("d", now), song, songKey: songKey(song), platform, type, opened, owner, status,
       waitingOn, waitingSince: waitingOn || status.startsWith("waiting") ? at : "", nextCheck,
-      claimId, recommendation, proposal, decision: null, timeline: [],
+      claimId, recommendation, proposal, issue, outcome: "", decision: null, timeline: [],
       createdAt: at, createdBy: by, updatedAt: at,
     };
     caseTimeline(item, now, by, entry || `Opened. ${type} with ${platform}.`);
@@ -5862,8 +5866,10 @@ export async function updateCase(store, now, roster, a) {
   const entryDate = a.entry_date != null && String(a.entry_date).trim() ? clean(a.entry_date, 10) : "";
   if (entryDate && !entry) fail("entry_date needs the timeline line in entry. Nothing was saved.");
   const hasTimeline = a.timeline != null;
-  if (!status && waitingOn == null && waitingSinceAsked == null && nextCheck == null && recommendation == null && proposal == null && !entry && song == null && !hasTimeline) fail("Say what changed: song, status, waiting_on, waiting_since, next_check, recommendation, proposal, a timeline entry, or timeline. Nothing was saved.");
-  noSecrets(song || "", waitingOn || "", recommendation || "", proposal || "", entry);
+  const issue = a.issue != null ? clean(a.issue, 240) : null;
+  const outcome = a.outcome != null ? clean(a.outcome, 240) : null;
+  if (!status && waitingOn == null && waitingSinceAsked == null && nextCheck == null && recommendation == null && proposal == null && !entry && song == null && !hasTimeline && issue == null && outcome == null) fail("Say what changed: song, status, issue, outcome, waiting_on, waiting_since, next_check, recommendation, proposal, a timeline entry, or timeline. Nothing was saved.");
+  noSecrets(song || "", waitingOn || "", recommendation || "", proposal || "", entry, issue || "", outcome || "");
   const at = new Date(now).toISOString();
   return mutate(store, CASES_KEY, { items: [] }, (doc) => {
     const items = doc && Array.isArray(doc.items) ? doc.items : [];
@@ -5885,11 +5891,14 @@ export async function updateCase(store, now, roster, a) {
     if (nextCheck != null && nextCheck !== (item.nextCheck || "")) { item.nextCheck = nextCheck; bits.push(nextCheck ? "Next check " + nextCheck : "Next check cleared"); }
     if (recommendation != null && recommendation !== (item.recommendation || "")) { item.recommendation = recommendation; bits.push("Recommendation updated"); }
     if (proposal != null && proposal !== (item.proposal || "")) { item.proposal = proposal; bits.push("Proposal updated"); }
+    if (issue != null && issue !== (item.issue || "")) { item.issue = issue; bits.push("Issue: " + issue); }
+    if (outcome != null && outcome !== (item.outcome || "")) { item.outcome = outcome; bits.push("Outcome: " + outcome); }
     if (item.status === "resolved" || item.status === "ignored") {
       item.waitingOn = "";
       item.waitingSince = "";
       item.nextCheck = "";
-    }
+      if (!item.closedAt) item.closedAt = at;
+    } else item.closedAt = "";
     item.updatedAt = at;
     if (hasTimeline) item.timeline = replaceTimeline(a.timeline, now, by);
     if (entry) caseTimeline(item, now, by, entry, entryDate);
@@ -5921,6 +5930,7 @@ export async function decideCase(store, now, roster, a) {
       item.waitingOn = "";
       item.waitingSince = "";
       item.nextCheck = "";
+      item.closedAt = at;
     } else {
       item.waitingOn = item.owner;
       item.waitingSince = at;

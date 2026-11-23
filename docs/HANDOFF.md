@@ -2,7 +2,13 @@
 
 **Full picture:** [docs/HQ-FULL-HANDOFF.md](HQ-FULL-HANDOFF.md) (18 Nov 2026). It was checked against the code at `9e447e2` (PR #88). If this file disagrees with it, the full file wins. Main is through PR #89: 47 connector tools, service worker `bs-hq-v8`, 745 tests. The paragraphs below still describe the state at PR #84 in places. They are kept as the running log.
 
-**23 Nov 2026: Upcoming trimmed (this PR; live once Luke says deploy).** Luke: "this will make the upcoming page perfect".
+**23 Nov 2026: Songs › Disputes in plain words (this PR, on Luke's "push it all").**
+- **The full note** is a pill with a turning chevron, so it looks tappable.
+- **Each case says the issue** ("The issue", from the case's new `issue` field; else the oldest real timeline line; else "Not written yet") and **who has the next move**, in words (`HQLib.caseWaitWords`): "Needs your decision", "Waiting for RouteNote to answer", "Drop has to send what you confirmed on Sun 22 Nov", "Drop has to act on your reply of …: “…”". The raw "waiting on bot" never shows. The song card's line is "1 dispute · Drop is sending what you confirmed".
+- **Resolved** lists each case with the day it closed, the issue and "How it ended" (the new `outcome` field; else the bot's last real line).
+- Connector: `open_case` takes `issue`; `update_case` takes `issue` and `outcome`; `read_cases` returns them and `closedAt`. Version 1.19.0: the bots refresh. Tests: `tests/hq-songs-disputes.test.mjs`.
+
+**23 Nov 2026: Upcoming trimmed (PR #112, live).** Luke: "this will make the upcoming page perfect".
 - **The next 6 weeks** and **Spotify pitches** are gone from Upcoming › Planning (he has the calendar; each song's steps show its pitch). `HQLib.sixWeeks` / `pitchBlock` and the bots' `six_weeks` stay.
 - **In Spotify for Artists** is hidden unless Atlas saw a song there that did not go through Upcoming (or one whose message to Nova must go again). It is then called "Found in Spotify for Artists" and shows only the question (`#relSpotWrap`).
 - **What the distributor said:** each row is the day, one word (Approved / In review / Rejected …) and, only for a rejection, the reason with its brackets and "Action needed:" taken off. Who wrote it and the bot's notes stay on the desk (`HQLib.storeRows`, `storeWhy`). The "At the distributor" line follows the same words.

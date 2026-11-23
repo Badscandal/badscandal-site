@@ -137,7 +137,7 @@ test("waiting on Luke is a Needs you item, and the phone line carries the start 
   assert.match(html, /Disputes/);
   assert.match(html, /Recommendation/);
   assert.match(html, /Please release the claim/);
-  assert.match(html, /Waiting on Luke/);
+  assert.match(html, /Needs your decision/); /* 23 Nov 2026: plain words for who has the next move */
   assert.match(html, /data-case-do="confirm"/);
   assert.match(html, /data-case-do="ignore"/);
   assert.match(html, /data-case-do="respond"/);
@@ -227,7 +227,7 @@ test("case colour and the song badge follow the worst open case", () => {
   assert.equal(L.caseProgress({ status: "solved - confirm", timeline: [] }).step, "solved");
   const mark = L.songMark({ items: [them, done] }, "Northwind", today, []);
   assert.equal(mark.tone, "yellow");
-  assert.equal(mark.badge, "1 dispute - waiting on RouteNote");
+  assert.equal(mark.badge, "1 dispute · waiting for RouteNote to answer"); /* 23 Nov 2026 */
   const worse = L.songMark({ items: [them, luke] }, "Northwind", today, []);
   assert.equal(worse.tone, "red");
   const blocked = L.songMark({ items: [] }, "Northwind", today, [{ title: "Northwind", status: "scheduled", date: "2026-12-01", counts: { blocked: 1 }, preflight: [] }]);
@@ -264,7 +264,7 @@ test("the opening bot can rename a song and replace the timeline with event date
   assert.doesNotMatch(read.cases[0].proposal, /secure value/);
   assert.match(read.cases[0].proposal, /Please release the claim/);
   const html = L.disputeHtml(read.cases, { today: "2026-11-19" });
-  assert.match(html, /Waiting on Luke/);
+  assert.match(html, /Needs your decision/); /* 23 Nov 2026: plain words for who has the next move */
   assert.doesNotMatch(html, /A human/);
   assert.doesNotMatch(html, /secure value/);
   assert.match(html, /12 Nov/);
