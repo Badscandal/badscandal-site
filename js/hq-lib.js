@@ -306,7 +306,7 @@
   function tiles(o) {
     var sheet = o.sheet, ov = o.ov, out = [];
     if (ov) {
-      var vs = ov.range === "today" ? "vs yesterday by now" : "vs the " + plural(ov.days, "day") + " before";
+      var vs = ov.range === "today" ? "vs yesterday by now" : ov.range === "all" ? "all time" : "vs the " + plural(ov.days, "day") + " before";
       var cur = metaCur(ov), ser = ov.series || [];
       var sumOf = function (f) { return ser.reduce(function (n, x) { return n + (f(x) || 0); }, 0); };
       var taps = sumOf(function (x) { return x.taps; });

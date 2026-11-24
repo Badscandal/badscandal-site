@@ -7,15 +7,10 @@
   var L = window.HQLib;
   var $ = function (id) { return document.getElementById(id); };
   var esc = function (s) { return window.HQ ? HQ.esc(s) : String(s == null ? "" : s); };
-  var QUIET = "bs_hq_quiet", LATER = "bs_hq_later";
+  /* 24 Nov 2026 (Luke): "remove the night quiet thing that's pointless": no button, nothing hidden at night */
+  var LATER = "bs_hq_later";
   var openCard = "", editing = "";
 
-  function quietOn() { try { return localStorage.getItem(QUIET) !== "0"; } catch (e) { return true; } }
-  function applyQuiet() {
-    document.body.classList.toggle("quiet", quietOn());
-    var b = $("quietBtn");
-    if (b) { b.setAttribute("aria-pressed", quietOn() ? "true" : "false"); b.title = "Holds non-urgent cards until morning"; b.textContent = quietOn() ? "Night quiet" : "Night quiet off"; }
-  }
   function snoozed(id) {
     try { var o = JSON.parse(localStorage.getItem(LATER) || "{}"); return o[id] && o[id] > Date.now(); } catch (e) { return false; }
   }
@@ -334,7 +329,7 @@
     }).join("") + "</div>" : "";
   }
 
-  function draw() { applyQuiet(); drawHome(); drawWeek(); drawTeam(); }
+  function draw() { drawHome(); drawWeek(); drawTeam(); }
 
   document.addEventListener("hq:refreshed", draw);
   /* a post picture whose Instagram link has expired: the song's cover, else a plain tile (18 Nov 2026) */
@@ -360,14 +355,8 @@
       if (a.getAttribute("data-achoice") === "yes" || a.getAttribute("data-achoice") === "no") sendChoice(id, a.getAttribute("data-achoice"));
       return;
     }
-    var t = ev.target.closest && ev.target.closest("[data-expand],[data-wallet],[data-snooze],[data-dot],[data-source],.gapbtn,#quietBtn");
+    var t = ev.target.closest && ev.target.closest("[data-expand],[data-wallet],[data-snooze],[data-dot],[data-source],.gapbtn");
     if (!t) return;
-    if (t.id === "quietBtn") {
-      try { localStorage.setItem(QUIET, quietOn() ? "0" : "1"); } catch (e) {}
-      applyQuiet();
-      if (window.HQ && HQ.drawFeed && window.HQStaff && HQStaff.board && HQStaff.board()) HQ.drawFeed(L.liveFeed(HQStaff.board(), HQ.sheet()), HQStaff.board().today);
-      return;
-    }
     if (t.hasAttribute("data-wallet")) {
       var card = t.closest(".wallet");
       openId = card && card.getAttribute("data-card") === openId ? "" : (card ? card.getAttribute("data-card") : "");
@@ -398,8 +387,6 @@
     if (card) { card.classList.add("pin"); card.open = true; card.hidden = false; card.scrollIntoView({ block: "nearest" }); }
     if (location.hash !== "#team") location.hash = "#team";
   });
-  document.addEventListener("DOMContentLoaded", applyQuiet);
-  applyQuiet();
 
   function toast(msg) {
     var t = $("lookToast");

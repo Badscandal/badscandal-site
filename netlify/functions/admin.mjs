@@ -2,7 +2,7 @@
 
    POST /api/admin/login    {password} -> session cookie (netlify/lib/session.mjs)
    POST /api/admin/logout   clears it
-   GET  /api/admin/data     ?link=<song slug|home>&range=today|7d|30d|custom[&from=&to=][&bots=1]  -> dashboard JSON
+   GET  /api/admin/data     ?link=<song slug|home>&range=today|7d|30d|all|custom[&from=&to=][&bots=1]  -> dashboard JSON
                             (+ Meta spend / cost per tap when META_ADS_TOKEN is set; read-only)
    GET  /api/admin/csv      same query -> every visit in the range as a CSV download
    GET  /api/admin/overview ?range=…  -> every song at once for /hq's Today, Songs and Ads (11 Nov 2026):
@@ -198,6 +198,8 @@ async function overview(env, r, now) {
   const sum = (f) => per.reduce((n, s) => n + (f(s) || 0), 0);
   const yesterday = { d: yday, people: sum((s) => s.y.people), taps: sum((s) => s.y.taps), spend: null, cpt: null, currency: "" };
   const prev = { days: r.prev.length, visits: sum((s) => s.pv.visits), people: sum((s) => s.pv.people), taps: sum((s) => s.pv.taps), spend: null };
+  /* "All time" has no period before it: nothing to compare, so the page shows no change (24 Nov 2026) */
+  if (r.range === "all") { prev.visits = null; prev.people = null; prev.taps = null; }
   const series = r.days.map((d) => ({ d, taps: sum((s) => (s.days[d] || {}).t), people: sum((s) => (s.days[d] || {}).u), spend: null }));
   const recent = { days: d8.map((d) => ({ d, taps: sum((s) => (s.rec[d] || {}).t), people: sum((s) => (s.rec[d] || {}).u), spend: null })), ads7: [] };
   let spend = { connected: false };
@@ -220,7 +222,7 @@ async function overview(env, r, now) {
       const cur = (got.rows.find((x) => x.currency) || {}).currency || "";
       yesterday.spend = r2(byDay[yday] || 0); yesterday.currency = cur;
       yesterday.cpt = yesterday.taps && yesterday.spend ? yesterday.spend / yesterday.taps : null;
-      prev.spend = r2(r.prev.reduce((n, d) => n + (byDay[d] || 0), 0)); prev.currency = cur;
+      prev.spend = r.range === "all" ? null : r2(r.prev.reduce((n, d) => n + (byDay[d] || 0), 0)); prev.currency = cur;
       for (const x of series) x.spend = r2(byDay[x.d] || 0);
       for (const x of recent.days) x.spend = r2(byDay[x.d] || 0);
       /* every ad over the last 7 finished days, with its people-only taps and its song */

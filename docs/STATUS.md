@@ -12,6 +12,7 @@ No money amounts, payer names or account numbers in this file: the repo is publi
 
 | When | PR | What |
 |------|----|------|
+| 24 Nov | this PR | Header: Sources is one clean pill; the range has All time instead of This month; Night quiet removed. |
 | 24 Nov | #116 | Public site font: SF Pro (system stack) for titles, body and labels; the wordmark and stream number stay Archivo. HQ untouched. |
 | 24 Nov | #115 | HQ hands its stored money to badscandal books: `GET /api/staff/money-export` (Luke's login only, read only), one JSON file to import on the books site. |
 | 24 Nov | #114 | Rights and Money removed from HQ (Revolut reader, income tools and pages gone; ads and spend stay); Claude off the desk (rounds switched off, no new notes to Claude); Disputes off the bar, Songs on the phone bar in Money's place. Connector 1.20.0, 43 tools. |

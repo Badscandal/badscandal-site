@@ -31,6 +31,10 @@ export function defaultLink(now = Date.now()) {
 
 export const TZ = "America/Sao_Paulo";
 export const MAX_DAYS = 120;
+/* "All time" (24 Nov 2026, Luke: "we should have an option for all time ... instead of this month because 30 days
+   is already the month"): every day since the visit counter started. No period before it to compare with. */
+export const ALL_FROM = "2026-10-11";
+const ALL_MAX_DAYS = 800;
 export const STORES = ["spotify", "apple", "youtube", "deezer", "amazon", "soundcloud", "instagram", "tiktok", "email"];
 
 const dayFmt = new Intl.DateTimeFormat("en-CA", { timeZone: TZ, year: "numeric", month: "2-digit", day: "2-digit" });
@@ -52,15 +56,16 @@ export function addDays(day, n) {
   return d.toISOString().slice(0, 10);
 }
 
-function span(from, to) {
+function span(from, to, max = MAX_DAYS) {
   const out = [];
-  for (let d = from; d <= to && out.length < MAX_DAYS; d = addDays(d, 1)) out.push(d);
+  for (let d = from; d <= to && out.length < max; d = addDays(d, 1)) out.push(d);
   return out;
 }
 
-/* range: today | 7d | 30d | custom (+ from/to as YYYY-MM-DD). Returns São Paulo days. */
+/* range: today | 7d | 30d | all | custom (+ from/to as YYYY-MM-DD). Returns São Paulo days. */
 export function resolveRange(q, now = Date.now()) {
   const today = spDay(now);
+  if (q.range === "all") return { range: "all", days: span(ALL_FROM < today ? ALL_FROM : today, today, ALL_MAX_DAYS), prev: [] };
   const n = { today: 1, "7d": 7, "30d": 30 }[q.range];
   let days;
   if (n) days = span(addDays(today, 1 - n), today);

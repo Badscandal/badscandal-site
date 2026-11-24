@@ -95,10 +95,10 @@
   var state = { range: "7d", from: "", to: "" };
   try {
     var saved = JSON.parse(localStorage.getItem("bs_admin_view") || "{}");
-    if (/^(today|7d|30d)$/.test(saved.range)) state.range = saved.range;
-    if (saved.range === "month") { state.range = "custom"; state.to = spToday(); state.from = state.to.slice(0, 8) + "01"; }
+    /* 24 Nov 2026 (Luke): "All time" replaced "This month" (30 days is already the month); a saved "month" opens on 30 days */
+    if (/^(today|7d|30d|all)$/.test(saved.range)) state.range = saved.range;
+    if (saved.range === "month") state.range = "30d";
   } catch (e) {}
-  function isMonth() { var t = spToday(); return state.range === "custom" && state.to === t && state.from === t.slice(0, 8) + "01"; }
   function rangeQuery() {
     var q = new URLSearchParams({ range: state.range });
     if (state.range === "custom") { if (state.from) q.set("from", state.from); if (state.to) q.set("to", state.to); }
@@ -106,15 +106,14 @@
     return q;
   }
   function syncRangeSelects() {
-    var v = isMonth() ? "month" : state.range;
+    var v = state.range;
     [].forEach.call(document.querySelectorAll("[data-range]"), function (s) { s.value = v; });
     var c = $("rangeCustom");
     if (c) { c.hidden = v !== "custom"; if (state.from) $("rFrom").value = state.from; if (state.to) $("rTo").value = state.to; }
   }
-  /* range: today | 7d | 30d | month | custom (from, to) */
+  /* range: today | 7d | 30d | all | custom (from, to) */
   function setRange(range, from, to) {
-    if (range === "month") { to = spToday(); from = to.slice(0, 8) + "01"; }
-    state.range = range === "month" ? "custom" : range; state.from = from || state.from; state.to = to || state.to;
+    state.range = range; state.from = from || state.from; state.to = to || state.to;
     try { var v = JSON.parse(localStorage.getItem("bs_admin_view") || "{}"); v.range = range; localStorage.setItem("bs_admin_view", JSON.stringify(v)); } catch (e) {}
     syncRangeSelects();
     loadOverview();
@@ -362,7 +361,8 @@
     var rows = window.HQLib.healthRows(o);
     var st = window.HQLib.healthState(rows);
     $("hDot").className = "hdot " + st;
-    if ($("hWord")) $("hWord").textContent = st === "ok" ? "OK" : st === "bad" ? "Check" : "Partial";
+    /* one line in the pill (24 Nov 2026): "Sources OK" / "Check sources" / "Sources partly read" */
+    if ($("hWord")) $("hWord").textContent = st === "ok" ? "Sources OK" : st === "bad" ? "Check sources" : "Sources partly read";
     $("healthBtn").setAttribute("aria-label", "Data health: " + (st === "bad" ? "something needs attention" : st === "ok" ? "all fine" : "not everything read yet"));
     $("healthRows").innerHTML = rows.map(function (r) {
       return '<li class="' + r.state + '"><i class="' + r.state + '" aria-hidden="true"></i><b>' + esc(r.label) + "</b><span>" + esc(r.text) + "</span></li>";
