@@ -13,18 +13,6 @@
      ember = emphasis: prices, link hover, the one thing to look at
    Repointing these keeps that layering intact in greyscale.
    ============================================================ */
-/* SF Pro, self-hosted for non-Apple devices (Latin + Latin Ext-A subset,
-   made with pyftsubset from Luke's licensed SF Pro OTFs, 24 Nov 2026). */
-@font-face{font-family:'SF Pro Display Web';src:url(/assets/fonts/sf-pro-display-regular.woff2) format('woff2');font-weight:400;font-style:normal;font-display:swap}
-@font-face{font-family:'SF Pro Display Web';src:url(/assets/fonts/sf-pro-display-regularitalic.woff2) format('woff2');font-weight:400;font-style:italic;font-display:swap}
-@font-face{font-family:'SF Pro Display Web';src:url(/assets/fonts/sf-pro-display-medium.woff2) format('woff2');font-weight:500;font-style:normal;font-display:swap}
-@font-face{font-family:'SF Pro Display Web';src:url(/assets/fonts/sf-pro-display-semibold.woff2) format('woff2');font-weight:600;font-style:normal;font-display:swap}
-@font-face{font-family:'SF Pro Display Web';src:url(/assets/fonts/sf-pro-display-bold.woff2) format('woff2');font-weight:700;font-style:normal;font-display:swap}
-@font-face{font-family:'SF Pro Text Web';src:url(/assets/fonts/sf-pro-text-regular.woff2) format('woff2');font-weight:400;font-style:normal;font-display:swap}
-@font-face{font-family:'SF Pro Text Web';src:url(/assets/fonts/sf-pro-text-regularitalic.woff2) format('woff2');font-weight:400;font-style:italic;font-display:swap}
-@font-face{font-family:'SF Pro Text Web';src:url(/assets/fonts/sf-pro-text-medium.woff2) format('woff2');font-weight:500;font-style:normal;font-display:swap}
-@font-face{font-family:'SF Pro Text Web';src:url(/assets/fonts/sf-pro-text-semibold.woff2) format('woff2');font-weight:600;font-style:normal;font-display:swap}
-@font-face{font-family:'SF Pro Text Web';src:url(/assets/fonts/sf-pro-text-bold.woff2) format('woff2');font-weight:700;font-style:normal;font-display:swap}
 :root{
   --ink:#050505;
   --ink-2:#0C0C0C;
@@ -40,15 +28,12 @@
   --maroon:#7A7A7A;
   --maxw:1280px;
   --pad:clamp(18px,4vw,56px);
-  /* System A / Film Print. Archivo (wdth 125 / wght 900) is the
-     wordmark + big display ONLY; everything else is SF Pro (24 Nov 2026,
-     Luke's call, Luke holds the licence): titles, body, slates/labels/dates.
-     Apple devices use their built-in SF Pro (-apple-system, nothing
-     downloads); every other device gets the self-hosted Latin subset in
-     assets/fonts (@font-face above :root). */
-  --font-display:-apple-system,BlinkMacSystemFont,'SF Pro Display Web','SF Pro Display',system-ui,'Helvetica Neue',Helvetica,Arial,sans-serif;
-  --font-body:-apple-system,BlinkMacSystemFont,'SF Pro Text Web','SF Pro Text',system-ui,'Helvetica Neue',Helvetica,Arial,sans-serif;
-  --font-mono:var(--font-body);
+  /* System A / Film Print — locked. Archivo (wdth 125 / wght 900) is the
+     wordmark + big display ONLY; Instrument Serif carries titles;
+     Figtree is everything you read; DM Mono is slates/labels/dates. */
+  --font-display:'Instrument Serif',Georgia,'Times New Roman',serif;
+  --font-body:'Figtree',-apple-system,Helvetica,Arial,sans-serif;
+  --font-mono:'DM Mono',ui-monospace,Menlo,monospace;
   --font-mark:'Archivo',Helvetica,Arial,sans-serif;
   --ease:cubic-bezier(.22,.9,.24,1);
 }
@@ -63,7 +48,8 @@ a:hover{color:var(--ember)}
 a:focus-visible,button:focus-visible,summary:focus-visible{
   outline:2px solid var(--blaze);outline-offset:3px}
 b,strong{font-weight:600;color:var(--white)}
-/* Display line-height sits loose (~1.1–1.25) on purpose. */
+/* Instrument Serif ships one weight (400) — asking for 700 would only
+   faux-bold it. Display line-height sits loose (~1.1–1.25) on purpose. */
 h1,h2,h3{font-family:var(--font-display);font-weight:400;color:var(--paper);
   letter-spacing:-.01em;line-height:1.18}
 /* headline signature: exactly ONE word per headline gets the true italic */
@@ -1323,7 +1309,7 @@ video::-webkit-media-controls-panel{display:none !important}
 .rel-body{padding:26px 22px 30px;text-align:center}
 .rel-body .tag{margin-bottom:10px}
 .rel-title{font-family:var(--font-display);font-weight:400;
-  font-size:clamp(36px,7vw,60px);line-height:1.05;letter-spacing:-.02em}
+  font-size:clamp(36px,7vw,60px);line-height:1;letter-spacing:-.01em}
 .rel-body .buy-btn{margin-top:22px}
 .rel-links{margin-top:20px;display:flex;justify-content:center;flex-wrap:wrap;gap:8px 22px;
   font-family:var(--font-mono);font-weight:400;font-size:11px;letter-spacing:.12em;
@@ -1406,7 +1392,7 @@ body.upcoming .rel-links{display:none} /* not out yet: no store rows (10 Nov 202
   border-radius:999px; /* pills, like the buttons */
   transition:border-color .3s ease,transform .3s var(--ease),background .3s ease}
 .lk-row:hover{border-color:var(--uv);background:rgba(var(--ink-rgb),.8);transform:translateY(-3px)}
-.lk-row .p{font-family:var(--font-display);font-weight:400;font-size:clamp(20px,2.2vw,25px);text-transform:lowercase}
+.lk-row .p{font-family:var(--font-display);font-weight:400;font-size:clamp(20px,2.2vw,25px)}
 /* the number */
 .streams{text-align:center}
 .streams .tag{margin-bottom:10px}
