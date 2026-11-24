@@ -12,8 +12,7 @@ No money amounts, payer names or account numbers in this file: the repo is publi
 
 | When | PR | What |
 |------|----|------|
-| 24 Nov | #116 | Public site font: SF Pro (system stack) for titles, body and labels; the wordmark and stream number stay Archivo. HQ untouched. |
-| 24 Nov | #115 | HQ hands its stored money to badscandal books: `GET /api/staff/money-export` (Luke's login only, read only), one JSON file to import on the books site. |
+| 24 Nov | this PR | HQ hands its stored money to badscandal books: `GET /api/staff/money-export` (Luke's login only, read only), one JSON file to import on the books site. |
 | 24 Nov | #114 | Rights and Money removed from HQ (Revolut reader, income tools and pages gone; ads and spend stay); Claude off the desk (rounds switched off, no new notes to Claude); Disputes off the bar, Songs on the phone bar in Money's place. Connector 1.20.0, 43 tools. |
 | 23 Nov | #113 | Songs › Disputes: "The full note" looks tappable; each case says the issue and what the bot has to do next (never "waiting on bot"); Resolved says what each case was about and how it ended. Cases gain `issue` and `outcome` (connector 1.19.0). |
 | 23 Nov | #112 | Upcoming trimmed: no next-6-weeks list and no Spotify pitches tile; Spotify for Artists shows only a song that skipped Upcoming; the distributor's history is the day, one word, and a reason only for a rejection (no brackets). |
