@@ -64,17 +64,6 @@ test("my_day lists this bot's open questions to Luke and how long each has waite
   assert.match(day.questions_to_luke[0].text, /Which cover/);
 });
 
-test("income_problems names each unsorted payment by id and date", async () => {
-  const d = memoryDesk();
-  const a = await S.submitIncome(d, NOW, S.DEFAULT_ROSTER, { bot: "HQ", payer: "Made-up Friend", amount: 12, currency: "EUR", account: "Revolut", date: "2026-11-09", status: "unsorted", reference: "tx-polish" });
-  const inc = await S.incomeState(d, NOW);
-  /* 18 Nov 2026: PR #69 names the unsorted payment in the problem line itself (id, day, amount).
-     The older one-line count is gone. my_day still adds "id (date)" on that line for Ledger. */
-  assert.ok(inc.problems.some((p) => /nobody has sorted/.test(p) && p.includes(a.entry.id)), "the problem line names the payment");
-  const day = await call(d, "my_day", { bot: "Ledger" });
-  assert.match(day.income_problems.join("\n"), new RegExp(a.entry.id + " \\(2026-11-09\\)"));
-});
-
 test("Atlas's stale duty text is rewritten: monthly listeners are a field, and there is no Salvation card", async () => {
   const hq = async () => ({ team: { duties: { done: 0, total: 1, late: 0, blocked: 0, byOwner: [{ owner: "Atlas", items: [{ id: "D-atlas-1", task: "Log Spotify monthly listeners in note. Salvation card.", status: "todo", late: false, due: "09:15", blocker: "" }] }] }, tasks: [] } });
   const day = await call(memoryDesk(), "my_day", { bot: "Atlas" }, { hq });

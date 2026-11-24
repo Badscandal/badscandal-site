@@ -160,6 +160,7 @@ test("Content ID claims are only what Laura records, and the panel never invents
   const full = rows.rows.find((x) => x.claim === "Sample claim");
   assert.equal(full.claimant, "Sample Channel");
   assert.equal(full.impact, "one video flagged");
-  assert.equal(TOOLS.length, 55, "account_health, needs_you, song_pl (18 Nov 2026 night test) + profile_jobs, profile_master, profile_rework, profile_uploaded (PR #87)");
+  /* 24 Nov 2026, Luke: money removed from HQ: the eleven income tools went, 55 -> 44 */ 
+  assert.equal(TOOLS.length, 44, "account_health, needs_you, song_pl (18 Nov 2026 night test) + profile_jobs, profile_master, profile_rework, profile_uploaded (PR #87)");
   assert.ok(TOOLS.find((t) => t.name === "log_growth").inputSchema.properties.claim);
 });

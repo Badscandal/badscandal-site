@@ -15,7 +15,6 @@ const ORIGIN = "https://badscandal.com";
 
 const wdFmt = new Intl.DateTimeFormat("en-US", { timeZone: "America/Sao_Paulo", weekday: "short" });
 export const spWeekday = (ts) => wdFmt.format(ts);
-const prevMonth = (m) => { const y = Number(m.slice(0, 4)), n = Number(m.slice(5, 7)); return n === 1 ? `${y - 1}-12` : `${y}-${String(n - 1).padStart(2, "0")}`; };
 const untilNoon = (day) => { const [y, m, d] = day.split("-").map(Number); return new Date(Date.UTC(y, m - 1, d + 1, 15, 0, 0)).toISOString(); };
 
 export function artistOpen() { return `https://open.spotify.com/artist/${ARTIST_ID}`; }
@@ -315,36 +314,8 @@ export async function runReleaseWatch(store, now, roster, o) {
   return { wrote: wrote.length > 0, ids: wrote };
 }
 
-export async function runMonthJob(store, now, roster, o) {
-  const day = S.spDay(now);
-  if (!day.endsWith("-01")) return { wrote: false, skipped: "not the 1st" };
-  const month = prevMonth(day.slice(0, 7));
-  const state = await getState(store);
-  const prev = state.month && state.month.month === month ? state.month : {};
-  if (prev.cardId || prev.closed) return { wrote: false, skipped: "done" };
-  const closed = await S.getMonthClose(store, month);
-  if (closed) {
-    await putState(store, (d) => { d.month = { month, closed: true }; return d; });
-    return { wrote: false, skipped: "already closed" };
-  }
-  const check = o.monthCheck ? await o.monthCheck(month) : await S.monthCheck(store, now, { month });
-  if (!check.ready) {
-    if (prev.noted) return { wrote: false, skipped: "already noted" };
-    await putState(store, (d) => { d.month = { month, noted: true }; return d; });
-    const n = (check.toSort || []).length, w = (check.waiting || []).length;
-    await say(store, now, roster, o.fetch, { to: "Ledger", needs: "action", key: "month-wait:" + month, text: `${month} is not ready to close: ${n} to sort, ${w} still in Wise or PayPal. HQ did not close it.` });
-    return { wrote: true, ready: false };
-  }
-  const card = await C.saveCard(store, now, roster, {
-    by: "HQ", owner: "Ledger", kind: "month", dedupe_key: "close-" + month, action: "close the month",
-    text: `Close ${month}?`,
-    preview: `Close ${month}? month_check says it is ready. Yes asks Ledger to close it. HQ does not move money.`,
-    deadline: day, expires_at: untilNoon(day), money_at_risk: false,
-  });
-  await putState(store, (d) => { d.month = { month, cardId: card.id }; return d; });
-  return { wrote: true, ready: true, cardId: card.id };
-}
-
+/* runMonthJob (the 1st-of-the-month close card for Ledger) is gone: 24 Nov 2026, Luke: "lets fully remove the
+   money section". Old state.month records stay in the job state, unread. */
 export async function runMonday(store, now, roster, o) {
   const day = S.spDay(now);
   if (spWeekday(now) !== "Mon" || S.spHM(now) < "09:00") return { wrote: false, skipped: "not Monday morning" };
@@ -390,7 +361,6 @@ export async function runAuto(o) {
   if (o.fetch) await step("site", () => runSiteCheck(store, now, roster, o));
   await step("cap", () => runCapCheck(store, now, roster, o));
   if (o.fetch) await step("release", () => runReleaseWatch(store, now, roster, o));
-  await step("month", () => runMonthJob(store, now, roster, o));
   await step("monday", () => runMonday(store, now, roster, o));
   return out;
 }

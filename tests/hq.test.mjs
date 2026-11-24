@@ -55,9 +55,11 @@ test("hq: the sample builds every section and is clearly sample data", () => {
   assert.equal(mdsb.steps.length, STEPS.length); assert.equal(mdsb.late, 1); assert.equal(mdsb.steps[2].late, true);
   assert.equal(m.next.song, "Me Dá Seu Body");
   assert.equal(m.team.forLuke.length, 1); assert.equal(m.team.blocked, 1);
+  /* 24 Nov 2026, Luke: money removed from HQ. A month carries its ad spend only: no income, pending or royalties */
   const nov = m.money.months.find((x) => x.month === "2026-11");
-  assert.deepEqual(nov.pending, { Production: { USD: 1300 } }, "pending money is never counted as received");
-  assert.equal(nov.income["Self-releases"].EUR, 112.01);
+  assert.ok(nov && nov.spend.Meta, "the month's ad spend is still there");
+  assert.equal(nov.income, undefined); assert.equal(nov.pending, undefined); assert.equal(nov.royalties, undefined);
+  assert.equal(m.songPL, undefined);
 });
 
 test("hq sheet reader: read-only scope, signed JWT, token never in a URL, clear errors", async () => {

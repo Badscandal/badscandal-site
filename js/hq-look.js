@@ -5,7 +5,6 @@
    come from growth rows and the messages waiting on Luke. */
 (function (root) {
   "use strict";
-  var CURRENCIES = ["USD", "EUR", "GBP"];
   var PLATFORMS = ["TikTok", "Instagram", "YouTube", "Spotify"];
   var MARKS = [1000, 10000, 100000, 1000000, 10000000, 100000000];
   var TIMELINE = [
@@ -394,76 +393,8 @@
     }) };
   }
 
-  function sumCurrency(entries, cur, pred) {
-    var n = 0, any = false;
-    (entries || []).forEach(function (e) {
-      if (!e || e.currency !== cur || !pred(e)) return;
-      var a = num(e.amount);
-      if (a == null) return;
-      any = true; n += a;
-    });
-    return any ? Math.round(n * 100) / 100 : null;
-  }
-  function landedEntry(e) {
-    return e && e.status === "received" && !e.movedTo && !e.holding && /revolut/i.test(String(e.account || "")) && e.status !== "transfer";
-  }
-  function pendingEntry(e) {
-    return e && !e.paidBy && !e.movedTo && /^(payable|pending|statement only)$/.test(String(e.status || ""));
-  }
-  /* Wise or PayPal money that has not reached Revolut. It is waiting, never received. */
-  function holdingEntry(e) {
-    if (!e || e.movedTo || e.paidBy || landedEntry(e) || pendingEntry(e)) return false;
-    return !!(e.holding || /wise|paypal/i.test(String(e.account || "")));
-  }
-  /* One card per currency. Landed is the only received total. Pending is never added in. */
-  function moneyCards(o, L) {
-    o = o || {};
-    var inc = o.income, entries = o.entries || [], month = o.month || (inc && inc.month) || "";
-    var booked = inc && inc.receivedByMonth && month && inc.receivedByMonth[month];
-    var received = booked || (inc && inc.received) || null;
-    if (!inc) {
-      return { reported: false, cards: CURRENCIES.map(function (c) { return { currency: c, landed: null, pending: null, landedText: "not reported", pendingText: "not reported" }; }) };
-    }
-    return { reported: true, month: month, cards: CURRENCIES.map(function (c) {
-      var fromEntries = entries.length ? sumCurrency(entries, c, function (e) { return (!month || String(e.date || "").slice(0, 7) === month) && landedEntry(e); }) : null;
-      var bookedKey = !!(booked && Object.prototype.hasOwnProperty.call(booked, c) && num(booked[c]) != null);
-      var hasKey = !!(received && Object.prototype.hasOwnProperty.call(received, c) && num(received[c]) != null);
-      /* the connector's month total wins when it is there. A re-sum of the rows can miss a landed payment. */
-      var landed = bookedKey ? num(booked[c]) : (fromEntries != null ? fromEntries : (hasKey ? num(received[c]) : (received ? 0 : null)));
-      var pendingListed = num(inc.payable && inc.payable[c]);
-      var pendingExtra = entries.length ? sumCurrency(entries, c, function (e) { return (!month || String(e.date || "").slice(0, 7) === month) && e.status === "statement only" && !e.paidBy; }) : null;
-      var holdSum = entries.length ? sumCurrency(entries, c, function (e) { return (!month || String(e.date || "").slice(0, 7) === month) && holdingEntry(e); }) : null;
-      var places = [];
-      (entries || []).forEach(function (e) {
-        if (!e || e.currency !== c || !holdingEntry(e)) return;
-        if (month && String(e.date || "").slice(0, 7) !== month) return;
-        var place = /paypal/i.test(String(e.account || "")) ? "PayPal" : /wise/i.test(String(e.account || "")) ? "Wise" : (e.account || "");
-        if (place && places.indexOf(place) < 0) places.push(place);
-      });
-      var pendingKnown = !!(inc.payable || entries.length);
-      var pending = !pendingKnown && pendingListed == null && pendingExtra == null && holdSum == null ? null : (pendingListed || 0) + (pendingExtra || 0) + (holdSum || 0);
-      var where = places.length ? " in " + places.join(" and ") : "";
-      return {
-        currency: c,
-        landed: landed,
-        pending: pending,
-        landedText: landed == null ? "not reported" : landed === 0 ? "Nothing received" : money(landed, c, L),
-        pendingText: pending == null ? "not reported" : pending === 0 ? "nothing" : money(pending, c, L) + where
-      };
-    }) };
-  }
-  /* v18 (21 Nov 2026, Forge/Ledger): the chip said "2 still to sort" (every month read) while that month had
-     none and the box listed this month only. The chip counts the month on screen; older ones are listed. */
-  function unsortedIn(inc, month) {
-    return ((inc && inc.unsorted) || []).filter(function (e) { return e && String(e.date || "").slice(0, 7) === month; }).length;
-  }
-  function toSortSplit(inc) {
-    var month = (inc && inc.month) || "", all = (inc && inc.unsorted) || [];
-    var mine = Array.isArray(inc && inc.unsortedMonth) ? inc.unsortedMonth : all.filter(function (e) { return String(e.date || "").slice(0, 7) === month; });
-    var ids = {};
-    mine.forEach(function (e) { ids[e.id] = 1; });
-    return { month: mine, older: all.filter(function (e) { return e && !ids[e.id] && String(e.date || "").slice(0, 7) < month; }) };
-  }
+  /* 24 Nov 2026, Luke: "lets fully remove the money section": moneyCards, monthChip, unsortedIn, toSortSplit,
+     whyPayments, splitOff, plainStatus and paymentBucket went with Money. */
   /* v18 (21 Nov 2026, Forge): the overview has no top-level people count, so "Song-page visits" always said
      not reported. It is the sum of the song pages' people (people only, as the Pages tab counts). */
   function songVisits(ov) {
@@ -471,57 +402,6 @@
     ((ov && ov.songs) || []).forEach(function (s) { var v = num(s && s.people); if (v != null) { any = true; n += v; } });
     return any ? n : null;
   }
-  function monthChip(o) {
-    o = o || {};
-    var month = o.month || "";
-    var closed = (o.closes || []).some(function (c) { return c && c.month === month; });
-    if (closed) return { status: "closed", text: "Closed", reason: "" };
-    var unsorted = num(o.unsorted) || 0;
-    var pending = !!o.pending;
-    if (o.ready === true && !unsorted) return { status: "ready", text: "Ready", reason: "" };
-    if (unsorted) return { status: "open", text: "Open", reason: unsorted + " payment" + (unsorted === 1 ? "" : "s") + " still to sort" };
-    if (pending) return { status: "provisional", text: "Provisional", reason: "Money is still on a statement or not in Revolut yet" };
-    return { status: "open", text: "Open", reason: "This month is not closed" };
-  }
-  function whyPayments(entries, currency, month) {
-    return (entries || []).filter(function (e) {
-      return e && e.currency === currency && (!month || String(e.date || "").slice(0, 7) === month) && landedEntry(e);
-    }).map(function (e) {
-      return { payer: e.payer || "Payer not named", amount: e.amount, currency: e.currency, date: e.date || "", evidence: https(e.evidence || e.link || (e.links && e.links[0])) };
-    });
-  }
-  function splitOff(e) {
-    if (!e || !Array.isArray(e.splits) || !e.splits.length || num(e.amount) == null) return false;
-    var sum = 0, ok = true;
-    e.splits.forEach(function (s) { var n = num(typeof s === "number" ? s : (s && (s.amount != null ? s.amount : s.value))); if (n == null) ok = false; else sum += n; });
-    if (!ok) return false;
-    return Math.abs(Math.round(sum * 100) - Math.round(num(e.amount) * 100)) > 0;
-  }
-  function plainStatus(text) {
-    var t = String(text || "");
-    var map = {
-      "Moved to Revolut": "Already counted in Revolut",
-      "Statement only (not payable yet)": "On a statement, not owed yet",
-      "Pending (not received yet)": "On a statement",
-      "Payable (not received yet)": "Owed, not in Revolut yet",
-      "Paid (see the received payment)": "Paid out",
-      "To sort": "Waiting for you to sort",
-      "Received": "Received"
-    };
-    if (map[t]) return map[t];
-    if (/^In .+counts when it reaches Revolut$/.test(t)) return "On the way. It counts when it reaches Revolut.";
-    return t.replace(/\bpaid_by\b/gi, "the payment").replace(/\bsettled\b/gi, "received");
-  }
-  /* Wise/PayPal rows that only confirm a Revolut payment, statement-only rows, and own transfers stay out of the main list. */
-  function paymentBucket(e) {
-    if (!e) return "hide";
-    if (e.movedTo) return "confirming";
-    if (e.holding && !/revolut/i.test(String(e.account || ""))) return "statement";
-    if (e.status === "statement only") return "statement";
-    if (e.status === "transfer" || e.own) return "transfer";
-    return "main";
-  }
-
   function bestPost(ranking, songs) {
     var ranked = (ranking && ranking.ranked) || [];
     var r = ranked.filter(function (p) { return p && num(p.views) != null && p.views >= 1000; })[0];
@@ -708,9 +588,9 @@
     homePulse: homePulse, needTotal: needTotal, stampDay: stampDay, milestones: milestones, releaseHero: releaseHero, platformKpis: platformKpis, healthDot: healthDot,
     sparkSvg: sparkSvg, decisionStack: decisionStack, waitingOnYou: waitingOnYou, releaseRows: releaseRows, releaseTimeline: releaseTimeline, readinessBox: readinessBox,
     lyricsState: lyricsState, adsPins: adsPins, runningNow: runningNow, creativePlot: creativePlot,
-    moneyCards: moneyCards, monthChip: monthChip, songVisits: songVisits, unsortedIn: unsortedIn, toSortSplit: toSortSplit, whyPayments: whyPayments, splitOff: splitOff, plainStatus: plainStatus, paymentBucket: paymentBucket,
+    songVisits: songVisits,
     bestPost: bestPost, fanCards: fanCards, uploadSlots: uploadSlots, siteRows: siteRows, lyricsDiff: lyricsDiff, lukeSees: lukeSees,
-    homeHtml: homeHtml, kpiHtml: kpiHtml, CURRENCIES: CURRENCIES
+    homeHtml: homeHtml, kpiHtml: kpiHtml
   };
   api.needCardHtml = needCardHtml; api.needFacts = needFacts; api.needEmailText = needEmailText; /* v18 */
   root.HQLook = api;

@@ -1,9 +1,9 @@
 /* BADSCANDAL HQ: the one dashboard (11 Nov 2026; /admin, /admin.html and /stats 301 here).
    This file: the login (the same /api/admin/login password, cookie and lockout as /admin had), the
-   sheet side (/api/hq/data: Today, Growth, Fans, Releases, Money, Team, the combined cap) and the
+   sheet side (/api/hq/data: Today, Growth, Fans, Releases, Team, the combined cap) and the
    all-songs page side (/api/admin/overview: Today's yesterday, Songs, Ads). The Pages section is
    js/hq-pages.js (/api/admin/data), which uses window.HQ from here.
-   The staff desk (/api/staff/board: Team's bot cards, Messages, "Money coming in") is js/hq-staff.js.
+   The staff desk (/api/staff/board: Team's bot cards, Messages) is js/hq-staff.js.
    Speed: the answers are asked for at the same time and each section is drawn the moment its own
    answer arrives, Today first. ?sample=1 = made-up numbers everywhere, under the SAMPLE banner.
    The page still can't change an ad, a post, the sheet or any money. The ONLY things it writes
@@ -312,10 +312,9 @@
   function offSheet(msg) {
     sheet = null;
     $("sheetOff").hidden = false; $("sheetOffMsg").textContent = msg;
-    ["errToday", "errSongs", "errGrowth", "errFans", "errReleases", "errMoney", "errTeam"].forEach(function (id) { $(id).hidden = true; });
+    ["errToday", "errSongs", "errGrowth", "errFans", "errReleases", "errTeam"].forEach(function (id) { $(id).hidden = true; });
     $("growthList").innerHTML = $("relList").innerHTML = '<p class="empty">This fills in once the sheet is connected.</p>';
-    ["fanTable", "moneyTable", "teamTable", "taskTable"].forEach(function (id) { setTable(id, ""); });
-    $("moneyDetail").innerHTML = "";
+    ["fanTable", "teamTable", "taskTable"].forEach(function (id) { setTable(id, ""); });
     $("teamSub").textContent = "";
     drawLive();
     drawSongs(); drawCapCard();
@@ -360,7 +359,6 @@
   /* ---------- Data health: Sheet, Meta, page counter, exchange rate (one dot in the header) ---------- */
   function drawDataHealth() {
     var H = window.HQStaff, o = { sheet: sheet, sheetProblem: sheetProblem, ov: ov, board: staffBoard(), boardProblem: H ? H.problem() : "" };
-    if (H) { o.bank = H.bank(); o.bankProblem = H.bankProblem(); } /* the Revolut row (11 Nov 2026) */
     var rows = window.HQLib.healthRows(o);
     var st = window.HQLib.healthState(rows);
     $("hDot").className = "hdot " + st;
@@ -372,8 +370,9 @@
   }
 
   /* ---------- sheet errors: say so instead of looking empty ---------- */
-  var TAB_SECTIONS = { Growth: ["errGrowth"], Songs: ["errSongs"], Royalties: ["errSongs", "errMoney"], Fans: ["errFans"],
-    Releases: ["errReleases", "errToday"], Tasks: ["errTeam", "errToday"], Spend: ["errMoney", "errAds"], Income: ["errMoney"] };
+  /* 24 Nov 2026, Luke: "lets fully remove the money section": no Royalties or Income tab, no Money section */
+  var TAB_SECTIONS = { Growth: ["errGrowth"], Songs: ["errSongs"], Fans: ["errFans"],
+    Releases: ["errReleases", "errToday"], Tasks: ["errTeam", "errToday"], Spend: ["errAds"] };
   function drawSheetErrors() {
     var msgs = {};
     var errs = (sheet && sheet.sheetErrors) || {};
@@ -383,7 +382,7 @@
         : tab + " can't be read: the sheet shows an error (" + e.first + "). Fix the tab in the sheet and it comes back here.";
       (TAB_SECTIONS[tab] || []).forEach(function (id) { (msgs[id] = msgs[id] || []).push(line); });
     });
-    ["errToday", "errSongs", "errAds", "errGrowth", "errFans", "errReleases", "errMoney", "errTeam"].forEach(function (id) {
+    ["errToday", "errSongs", "errAds", "errGrowth", "errFans", "errReleases", "errTeam"].forEach(function (id) {
       $(id).hidden = !msgs[id]; $(id).textContent = (msgs[id] || []).join(" ");
     });
   }
@@ -391,7 +390,7 @@
 
   function drawSheet() {
     drawSheetErrors();
-    drawToday(); drawBriefing(); drawSongs(); drawCapCard(); drawGrowth(); drawFans(); drawReleases(); drawMoney(); drawTeam(); drawDataHealth();
+    drawToday(); drawBriefing(); drawSongs(); drawCapCard(); drawGrowth(); drawFans(); drawReleases(); drawTeam(); drawDataHealth();
   }
 
   /* ---------- Today ---------- */
@@ -446,7 +445,7 @@
     var chk = board && board.report ? L.siteCheckLine(board.report, board.today) : "";
     $("siteCheck").hidden = !chk;
     if (chk) { $("siteCheck").textContent = chk + " ›"; $("siteCheck").setAttribute("href", "#messages/" + String(board.report.id || "").replace(/[^a-z0-9]/gi, "")); }
-    var att = L.attention({ sheet: sheet, ov: ov, board: board, bank: window.HQStaff ? window.HQStaff.bank() : null }), br = L.briefing({ sheet: sheet, ov: ov, attention: att }), ti = L.tiles({ sheet: sheet, ov: ov });
+    var att = L.attention({ sheet: sheet, ov: ov, board: board }), br = L.briefing({ sheet: sheet, ov: ov, attention: att }), ti = L.tiles({ sheet: sheet, ov: ov });
     var lead = br.slice(0, 1), rest = br.slice(1);
     $("brief").innerHTML = lead.map(function (x) { return "<p>" + esc(x) + "</p>"; }).join("") +
       (rest.length ? '<details class="fold"><summary>The rest of the note</summary>' + rest.map(function (x) { return "<p>" + esc(x) + "</p>"; }).join("") + "</details>" : "");
@@ -539,7 +538,7 @@
     var desk = staffBoard();
     box.innerHTML = HQLib.disputeHtml(desk && desk.disputes, { today: (sheet && sheet.today) || spToday(), releases: (desk && desk.releases) || [] });
   }
-  /* ---------- Songs: the sheet's Spotify numbers + our page + Meta + royalties, one card each ---------- */
+  /* ---------- Songs: the sheet's Spotify numbers + our page + Meta, one card each ---------- */
   function drawSongs() {
     drawDisputes();
     var bySheet = {}, order = [];
@@ -550,8 +549,6 @@
     if (ov && ov.spend && ov.spend.connected && !ov.spend.error) ov.spend.songs.forEach(function (s) { spendBy[adKey(s.title)] = s; });
     var cur = ov && ov.spend ? ov.spend.currency : "";
     var rangeTxt = !ov ? "" : ov.range === "today" ? "today" : ov.range === "custom" ? ov.days + " days" : "last " + ov.days + " days";
-    var plBy = {};
-    if (sheet && sheet.songPL) L.songPLView(sheet.songPL).songs.forEach(function (x) { plBy[adKey(x.song)] = x; });
     /* A8 (17 Nov 2026, Atlas): the artist's Spotify monthly listeners and Brazil's share, with their trend */
     var al = L.artistLines(sheet && sheet.artist);
     $("artistCard").innerHTML = al ? '<div class="tile"><div class="row"><h3>Spotify monthly listeners</h3><span class="lbl">the artist, all songs</span></div><div class="big num">' + esc(al.big) + '</div><div class="d">' + esc(al.sub) + "</div>" + spark(sheet.artist.series, { label: "Monthly listeners", totals: false }) + "</div>" : "";
@@ -583,9 +580,8 @@
       else more += '<div class="kv" style="margin-top:8px"><span>Our page · ' + esc(rangeTxt || "…") + "</span><b>" + (p ? fmt(p.visits) + " visits · " + fmt(p.people) + " people" : "–") + "</b></div>" +
         '<div class="kv"><span>Real Spotify taps</span><b>' + (p ? fmt(p.taps) : "–") + "</b></div>" +
         '<div class="kv"><span>Meta spend · per tap</span><b>' + (sp ? esc(money(sp.spend, cur)) + " · " + esc(money(sp.cpt, cur)) : ov && ov.spend && !ov.spend.connected ? "not connected" : "–") + "</b></div>";
-      more += '<div class="kv"><span>Royalties so far</span><b>' + (s ? esc(amounts(s.royalties)) : "–") + "</b></div>" +
-        (plBy[k] ? '<div class="kv"><span>Ad spend for this song</span><b>' + esc(plBy[k].adSpend) + "</b></div>" : "") +
-        (rw ? '<div class="kv"><span>' + esc(rw.label) + "</span><b>" + esc(rw.line) + "</b></div>" : "");
+      /* 24 Nov 2026, Luke: money is no longer on HQ: no "Royalties so far" and no per-song profit here */
+      more += (rw ? '<div class="kv"><span>' + esc(rw.label) + "</span><b>" + esc(rw.line) + "</b></div>" : "");
       var panel = window.HQLib && HQLib.disputeHtml ? HQLib.disputeHtml((staffBoard() || {}).disputes, { song: name, compact: true, today: (sheet && sheet.today) || spToday(), releases: ((staffBoard() || {}).releases) || [] }) : "";
       return out + (panel || "") + '<details class="fold"><summary>Numbers</summary>' + more + "</details></div>";
     }).join("");
@@ -809,7 +805,7 @@
     }, function () { igBusy = false; igMsg = "No connection. Try again."; drawInstagram(); });
   });
 
-  /* ---------- Growth, Fans, Releases, Money, Team (the sheet) ---------- */
+  /* ---------- Growth, Fans, Releases, Team (the sheet) ---------- */
   function drawIdeas() { /* Spark's cards are inside the Growth page, one list with the posts. */ }
   function drawGrowth() {
     if (!sheet || !$("growthMain") || !L.growthHtml) return;
@@ -862,18 +858,6 @@
         (s.skipped ? "not ours" : s.done ? "done" : s.waiting && !s.late ? esc((s.waitingFor === "spotify-window" || s.waitingText === "waiting on Spotify") ? "Waits until Spotify lists it, about 7 days before release" : (s.waitingText || "waiting")) : esc(day(s.due)) + (s.late ? " · late" : "")) + "</span></li>"; }).join("") + "</ul>" +
       (r.notes ? '<div class="d" style="margin-top:8px">' + esc(r.notes) + "</div>" : "") +
       '<button class="rel-btn" type="button" data-release="' + esc(r.song) + '">See what\'s missing ›</button></div>';
-  }
-  /* month by month: just the month and what was received (16 Nov 2026, Luke) */
-  function drawMoney() {
-    var incomeBad = broken("Income"), rows = HQLib.monthRows(sheet.money.months);
-    var box = $("songPL");
-    var view = sheet.songPL ? L.songPLView(sheet.songPL) : null;
-    if (view) view.songs = view.songs.filter(function (s) { return s.moneyIn !== "nothing recorded" || s.adSpend !== "not linked to a song"; });
-    if (box) box.innerHTML = view && view.songs.length ? L.songPLHtml(view) : '<p class="empty2">No song is linked yet.</p>';
-    setTable("moneyTable", rows.length ? "<tr><th>Month</th><th class='r'>Received</th></tr>" + rows.map(function (r) {
-      return "<tr><td><b>" + esc(r.label) + "</b></td><td class='r'>" + (incomeBad ? "can't be read" : esc(r.amount)) + "</td></tr>";
-    }).join("") : '<tr><td class="empty">' + (incomeBad ? "See the note above." : "No income rows yet.") + "</td></tr>");
-    $("moneyDetail").innerHTML = "";
   }
   var TASK_WORD = { todo: "To do", doing: "Doing", blocked: "Blocked", waiting: "Waiting", review: "In review" }; /* sentence case: no shouting pills */
   function drawTeam() {

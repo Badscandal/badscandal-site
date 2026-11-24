@@ -22,7 +22,7 @@
      (no site.css, no main.js). Login here: the same password, cookie and lockout as before
      (/api/admin/login). Sheet side: js/hq.js + /api/hq/data. Page-visit side: js/hq.js (Today, Songs,
      Ads via /api/admin/overview) + js/hq-pages.js (Pages via /api/admin/data). The staff desk (Team's bot
-     cards, Messages, "Money coming in"): js/hq-staff.js + /api/staff/board. The page still can't change
+     cards, Messages): js/hq-staff.js + /api/staff/board. The page still can't change
      ads, posts, sheets or money: the ONLY things it writes are Luke's own messages on the board, the
      bots' key switch and the release pipeline on the team's desk (11 Nov 2026). ?sample=1 = made-up
      numbers, and nothing is written there. -->
@@ -98,7 +98,7 @@ td.r,th.r{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
 .btn{background:var(--paper);color:var(--ink);border:0;border-radius:999px;padding:11px 18px;font-weight:700;font-size:14px;cursor:pointer}
 .navbtn{flex:none;background:transparent;border:1px solid var(--ink-3);border-radius:999px;padding:7px 11px;font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);cursor:pointer;text-decoration:none}
 @media(min-width:900px){.chips{width:auto}.top-in{flex-wrap:nowrap}.when{order:3}}
-/* phones: the wide tables (fans, money, team) become one small card per row, each value
+/* phones: the wide tables (fans, team) become one small card per row, each value
    labelled from the table's header row (js/hq.js stack()), so nothing hides off the right edge */
 @media(max-width:719px){
 .scroll table.stack{min-width:0}
@@ -569,7 +569,7 @@ body{background:transparent}
 }
 @media (prefers-reduced-motion:reduce){.ph,.iconbtn.spin svg{animation:none}}
 
-/* ================= The staff desk (11 Nov 2026): Team as the workers section, Messages, money coming in =================
+/* ================= The staff desk (11 Nov 2026): Team as the workers section, Messages =================
    Same glass, same tokens. Red (--red / --red-deep) still means only "needs attention"; nothing new is
    green. Every size here is 13px or more; every control is 44px tall; inputs are 16px so iOS never zooms. */
 .boot{margin:0;padding:40vh 24px 0;text-align:center;font-size:15px;color:var(--muted)}
@@ -703,104 +703,14 @@ textarea.fld{min-height:112px;resize:vertical}
 /* Today: the site's own check, one quiet line */
 .sitecheck{display:inline-flex;align-items:center;min-height:44px;margin:-6px 0 8px;font-size:15px;color:var(--uv);text-decoration:none}
 .sitecheck:hover{color:var(--paper)}
-/* Money coming in */
-.acct{display:grid;gap:10px;grid-template-columns:minmax(0,1fr);margin:0 0 12px}
-@media(min-width:600px){.acct{grid-template-columns:repeat(auto-fit,minmax(200px,1fr))}}
-#shell .acct .tile{padding:14px 16px;border-radius:16px}
-.acct .an{margin:0;font-size:16px;font-weight:700}
-.acct .al{margin:3px 0 0;font-size:14px;color:var(--uv);overflow-wrap:anywhere}
-.acct .al.need{color:var(--paper)}
-#shell .acct .tile.attn-t{border:1px solid var(--red)}
-.acct .attn-t .an + .al{color:var(--red);font-weight:600} /* the line right under the name (was :first-of-type, which never matched: the name is a p too) */
-.inmonth{display:grid;gap:10px;grid-template-columns:repeat(2,minmax(0,1fr));margin:0 0 12px}
-.inmonth.one{grid-template-columns:minmax(0,1fr)}
-.rmhead{display:flex;align-items:center;justify-content:space-between;gap:10px}
-.rmnav{display:flex;gap:8px}.rmnav .copybtn{min-width:44px;min-height:44px;padding:0 12px;font-size:20px}
-.t-big{margin:4px 0 0;font-size:28px;font-weight:700;color:var(--paper)}.t-big.empty3{font-size:18px;color:var(--muted);font-weight:500}
-.srcmain{display:grid;gap:10px;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));margin:0 0 12px}
-.srcm .an{margin:0;font-weight:700;color:var(--paper)}.srcm .al{margin:6px 0 0;color:var(--muted)}
-#shell .srcm.got{border:1px solid var(--spot)}.srcm.got .al{color:var(--spot);font-weight:600}
-#shell .srcm.late{border:1px solid var(--red)}.srcm.late .al{color:var(--red);font-weight:600}
-.srcother summary{cursor:pointer;color:var(--muted);min-height:44px;display:flex;align-items:center}
-.inmonth .t-lbl{margin-bottom:6px}
-.inmonth .t-hint{margin:6px 0 0;font-size:13px;color:var(--muted)}
-.inmonth .amt{margin:0;font-size:24px;line-height:1.25;font-weight:700;letter-spacing:-.01em;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
-.inmonth .amt.none{font-size:16px;font-weight:500;color:var(--muted)}
-@media(max-width:419px){.inmonth .amt{font-size:20px}}
-/* per song (L4): one compact card, stores and ads folded */
-#songPL{display:flex;flex-direction:column;gap:10px}
-.pltop{display:flex;justify-content:space-between;align-items:baseline;gap:12px}
-.pltop h3{margin:0;font-size:16px;overflow-wrap:anywhere}
-.pl .when{font-size:13px;color:var(--muted);white-space:nowrap}
-.plres{margin:8px 0 0;font-size:14px;color:var(--paper)}
-.plnote{margin:6px 0 0;font-size:13px;color:var(--muted)}
-.pl summary{display:flex;align-items:center;min-height:44px;cursor:pointer;font-size:14px;color:var(--uv)}
-.plrow{margin:0;padding:6px 0;border-top:1px solid var(--ink-3);font-size:14px;color:var(--paper);overflow-wrap:anywhere}
-.inprob{list-style:none;margin:0;padding:0}
-.inprob li{display:flex;gap:12px;align-items:baseline;padding:8px 0;border-top:.5px solid var(--glass-line);font-size:15px;color:var(--paper);overflow-wrap:anywhere}
-.inprob li:first-child{border-top:0;padding-top:0}
-.inprob li:last-child{padding-bottom:0}
-.inprob li::before{content:"";flex:none;width:9px;height:9px;border-radius:50%;background:var(--red);transform:translateY(-1px)}
+/* 24 Nov 2026, Luke: "lets fully remove the money section". Money coming in, To sort, Revolut, per song and the
+   income sheet went with it. Kept: the tile numbers' size (this rule also sized Today's big numbers) and the
+   table and button rules other sections share. */
+.t-big{margin:4px 0 0;font-size:28px;font-weight:700;color:var(--paper)}
 #shell td .attn{font-weight:600}
-#team td small,#money td small{display:block;margin-top:2px;color:var(--muted)}
+#team td small{display:block;margin-top:2px;color:var(--muted)}
 #shell td small.need{display:block;color:var(--paper);margin-top:2px}
-/* the latest payments: a table on wide screens, two short lines per payment on a phone */
-.paylist{list-style:none;margin:0;padding:0}
-.paylist li{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 12px;padding:12px 0;border-top:.5px solid var(--glass-line);font-size:15px}
-.paylist li:first-child{border-top:0;padding-top:2px}
-.paylist li:last-child{padding-bottom:2px}
-.paylist b{font-weight:600;color:var(--paper);overflow-wrap:anywhere}
-.paylist .pa{text-align:right;font-weight:700;color:var(--paper);font-variant-numeric:tabular-nums;white-space:nowrap}
-.paylist .pm{font-size:14px;color:var(--muted);overflow-wrap:anywhere}
-.paylist .ps{text-align:right;font-size:14px;color:var(--uv);white-space:nowrap}
-.paylist .pn{grid-column:1/-1;font-size:14px;color:var(--uv);overflow-wrap:anywhere}
-.expect,.routes{list-style:none;margin:8px 0 0;padding:0}
-.erow,.rrow{display:flex;flex-direction:column;gap:2px;padding:12px 0;border-top:.5px solid var(--glass-line)}
-.erow:first-child,.rrow:first-child{border-top:0;padding-top:2px}
-.erow .et{display:flex;justify-content:space-between;gap:12px;align-items:baseline}
-.erow .en,.rrow .en{font-weight:600;color:var(--paper);overflow-wrap:anywhere}
-.erow .ea{font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap}
-.erow .ej,.erow .el,.rrow .rl{font-size:14px;color:var(--uv);overflow-wrap:anywhere}
-.erow .ef{font-size:14px;font-weight:600;color:var(--red)}
-.erow .ef.wait{color:var(--uv);font-weight:500}
-@media(min-width:720px){.paylist{display:none}}
-@media(max-width:719px){.paywide{display:none}}
 #shell .more-row{display:block;margin:12px auto 0;min-height:44px;padding:0 18px}
-/* Revolut (the bank reader, 11 Nov 2026): its tile spans the row of account tiles; "To sort" below the
-   month's totals. Red only when Luke has to act (the approval gone or ending: .attn-t). */
-.acct .bank{grid-column:1/-1}
-.acct .bank .al{font-size:15px;line-height:1.45}
-.acct .bank .al.bacc{color:var(--muted);font-size:14px}
-.acct .bank .conn-acts{margin-top:12px}
-.acct .bank .rdone{margin:12px 0 0}
-.rdone.bad{border:1px solid var(--red)}
-.acct .bank .bnote{display:block;margin:10px 0 0}
-.paylist .pa.nc,#payTable td.nc b{color:var(--muted);font-weight:500}
-.tosort{margin:0 0 12px}
-.tosort .t-lbl{margin:0 0 4px}
-.tosort .tsub{margin:0 0 10px;font-size:14px;line-height:1.45;color:var(--uv)}
-.tosort .tsub:last-child{margin:12px 0 0}
-.tosort .mnote{margin:0 0 10px}
-.sortlist{list-style:none;margin:0;padding:0}
-.sortlist > li{padding:14px 0;border-top:.5px solid var(--glass-line)}
-.sortlist > li:first-child{border-top:0;padding-top:4px}
-.sortlist > li:last-child{padding-bottom:2px}
-.sortlist > li.landed{padding:14px 0}
-.sortlist > li.landed:first-child{padding-top:4px}
-.srow{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 12px;align-items:baseline;font-size:15px}
-.srow b{font-weight:600;color:var(--paper);overflow-wrap:anywhere}
-.srow .pm{display:block;margin-top:2px;font-size:14px;color:var(--muted)}
-.srow .pa{font-weight:700;color:var(--paper);font-variant-numeric:tabular-nums;white-space:nowrap}
-.sacts{display:flex;flex-wrap:wrap;gap:10px;margin-top:12px}
-.sortlist .confirm{margin-top:12px}
-.sortlist .confirm .sq{margin:0 0 12px;color:var(--uv)}
-.sortlist .ferr{margin-top:10px}
-.stypes{display:grid;gap:8px;grid-template-columns:repeat(2,minmax(0,1fr));margin:0 0 12px}
-@media(min-width:600px){.stypes{grid-template-columns:repeat(3,minmax(0,1fr))}}
-.stypes .copybtn{width:100%;padding:0 10px;font-size:15px}
-.stypes .copybtn[aria-pressed="true"]{background:var(--paper);color:var(--ink);border-color:var(--paper)}
-/* "It's the pending … statement": the first answer, across the whole row, its words wrap */
-.stypes .copybtn.stmt{grid-column:1/-1;padding:10px 16px;line-height:1.35;text-align:left;border-radius:22px}
 @media (prefers-reduced-motion:reduce){.bwhy summary::after{transition:none}}
 
 /* ================= Replies that visibly land + the release pipeline (11 Nov 2026) =================
@@ -1345,9 +1255,6 @@ a.t-card:hover,button.t-card:hover,#shell a.tile:hover{border-color:var(--accent
 /* A6 (17 Nov 2026): pre-flight checks on a release card */
 .rpre{margin:8px 0}
 .rpre summary{cursor:pointer;color:var(--amber,#FBBF24);font-weight:600;font-size:15px;min-height:32px;display:flex;align-items:center}
-/* A7 (17 Nov 2026): a closed month under "Received in" */
-.t-closed{margin:8px 0 0;font-size:14px;color:var(--spot,#1ED760)}
-.t-closed a{color:var(--accent)}
 /* A8 (17 Nov 2026): Spotify monthly listeners on Songs */
 #artistCard .tile{margin-bottom:16px}
 #artistCard .spark{max-width:520px}
@@ -1459,11 +1366,7 @@ a.t-card:hover,button.t-card:hover,#shell a.tile:hover{border-color:var(--accent
 .dotbtn.grey i{background:#5c6370}.dotbtn.bad i{background:var(--red)}.dotbtn.on i{background:#3DDC97}
 body.quiet .botrow.is-done{display:none}
 body.quiet .botrow.is-done.pin{display:block}
-.flow{list-style:none;margin:8px 0 0;padding:0;display:flex;flex-direction:column;gap:6px}
-.flow li{display:flex;justify-content:space-between;gap:8px;font-size:14px}
-.flow .miss{color:var(--red)}
 .t-side{margin:4px 0;font-size:14px;color:var(--muted)}
-.paybtn{all:unset;display:block;width:100%;min-height:44px;cursor:pointer}
 .rstrip{display:grid;grid-template-columns:92px minmax(0,1fr);gap:12px;align-items:start}
 .rcover{grid-column:1;grid-row:1;width:92px;height:92px;object-fit:cover;border-radius:12px;background:#111}
 .rface{grid-column:2;grid-row:1;min-width:0}
@@ -1533,11 +1436,11 @@ body.ws-on main{margin-left:0;max-width:none}
 .kb.up{color:#052e16;background:#86efac}
 .kb.dn{color:#450a0a;background:#fca5a5}
 .kb.flat{color:var(--ink);background:var(--uv)}
-.hdot,.pdot,.sdot{width:10px;height:10px;border-radius:50%;display:inline-block}
+.hdot,.sdot{width:10px;height:10px;border-radius:50%;display:inline-block}
 .hdot.ok,.sdot.ok{background:var(--spot)}
-.hdot.bad,.sdot.bad,.pdot.bad{background:var(--red)}
+.hdot.bad,.sdot.bad{background:var(--red)}
 .hdot.off,.sdot.off{background:var(--muted)}
-.hdot.wait,.sdot.wait,.pdot.wait{background:#60a5fa}
+.hdot.wait,.sdot.wait{background:#60a5fa}
 .sparkline{width:120px;height:36px;display:block}
 .sparkline .prev{fill:none;stroke:var(--uv);stroke-dasharray:2 3;stroke-width:1.5}
 .sparkline .now{fill:none;stroke:var(--paper);stroke-width:1.5}
@@ -1569,7 +1472,7 @@ body.ws-on main{margin-left:0;max-width:none}
 #shell button.whybtn,#shell button.ghost:not(.on),#shell button.more-btn,#shell button.chip:not(.on),label.profup{
   -webkit-appearance:none;appearance:none;background-color:#1a1d27;color:#f2f2f2;border:1px solid rgba(255,255,255,.28)}
 #shell button.whybtn{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:0 14px;border-radius:999px;font:600 15px/1.2 var(--sans,sans-serif);cursor:pointer}
-#shell button.dotbtn,#shell button.linkbtn,#shell button.paybtn,#shell button.whead,#shell button.rel-btn{
+#shell button.dotbtn,#shell button.linkbtn,#shell button.whead,#shell button.rel-btn{
   -webkit-appearance:none;appearance:none;background-color:transparent}
 .profmasters{display:grid;gap:12px;margin:0 0 16px}
 @media(min-width:800px){.profmasters{grid-template-columns:1fr 1fr}}
@@ -2070,16 +1973,6 @@ body.ws-on main{margin-left:0;max-width:none}
     <div id="relSpotWrap" hidden><h3 class="sech relh" id="releases-spotify">Found in Spotify for Artists</h3>
     <p class="secsub">Atlas saw this there, but it didn't go through Upcoming. Say what it is.</p>
     <div id="relSpot"></div></div></section>
-  <section class="card view" id="money"><h2>Money</h2><p class="sub">Every amount in the currency it was paid in. Only money that has arrived counts.</p><div class="sheeterr" id="errMoney" hidden></div>
-    <h3 class="sech">Money coming in</h3>
-    <p class="secsub">Read from Revolut by the site every morning, and sent in by the bots through the connector. Only money that has arrived counts.</p>
-    <div id="incomeBody"><div class="ph big"></div><div class="ph"></div></div>
-    <details class="look-more" id="songFold"><summary>Per song</summary>
-    <p class="secsub">Royalties recorded for a song, next to ad spend that names that song. Shown once a song is actually linked.</p>
-    <div id="songPL"></div></details>
-    <details class="look-more" id="sheetFold"><summary>The income sheet</summary>
-    <p class="secsub">What was received each month, from the income sheet. The received cards above are the total.</p>
-    <div class="tile"><div class="scroll"><table class="stack" id="moneyTable"></table></div></div><div id="moneyDetail"></div></details></section>
   <section class="card view" id="team"><h2>Team</h2><p class="sub" id="teamSub"></p><div class="sheeterr" id="errTeam" hidden></div>
     <p class="note2" id="liveNote" hidden></p>
     <div id="teamStrip"></div>

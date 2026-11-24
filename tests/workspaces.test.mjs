@@ -35,7 +35,8 @@ test("the switch, the farm note and Add genre are on the page", () => {
   assert.match(read("js/hq-workspaces.js"), /not set up/);
   assert.match(read("js/hq-workspaces.js"), /class="dhead"/);
   assert.match(read("js/hq-workspaces.js"), /data-wschoice/);
-  assert.equal(TOOLS.length, 55, "content_ideas (Spark) + licence_queue, plus account_health, needs_you, song_pl (18 Nov 2026 night test) + profile_jobs, profile_master, profile_rework, profile_uploaded (PR #87)");
+  /* 24 Nov 2026, Luke: money removed from HQ: the eleven income tools went, 55 -> 44 */ 
+  assert.equal(TOOLS.length, 44, "content_ideas (Spark) + licence_queue, plus account_health, needs_you, song_pl (18 Nov 2026 night test) + profile_jobs, profile_master, profile_rework, profile_uploaded (PR #87)");
   const step = tool("release_step");
   assert.ok(step.inputSchema.properties.step.enum.includes("licence"));
   assert.ok(step.inputSchema.properties.step.enum.includes("upload"));
@@ -52,7 +53,8 @@ test("official releases keep their steps and have no licence step", async () => 
   assert.deepEqual((await S.listReleases(d)).map((r) => r.id), ["keep"]);
 });
 
-test("Label starts with UK garage, one alias, a playlist placeholder and ROI pending", async () => {
+test("Label starts with UK garage, one alias and a playlist placeholder", async () => {
+  /* 24 Nov 2026, Luke: money removed from HQ: the Label ROI (it needed payouts) is gone */
   const d = memoryDesk();
   const v = await W.view(d, NOW, "label");
   assert.deepEqual(v.genres.map((g) => g.name), ["UK garage"]);
@@ -62,7 +64,7 @@ test("Label starts with UK garage, one alias, a playlist placeholder and ROI pen
   assert.equal(v.genres[0].playlist.url, "");
   assert.equal(v.genres[0].playlist.owner_bot, "");
   assert.equal(v.genres[0].playlist.status, "not set up");
-  assert.equal(v.genres[0].stats.roi, "pending");
+  assert.equal(v.genres[0].stats.roi, undefined);
   await W.addGenre(d, NOW, { by: "Luke", name: "Drum and bass" });
   const v2 = await W.view(d, NOW, "label");
   assert.deepEqual(v2.genres.map((g) => g.name), ["UK garage", "Drum and bass"]);
@@ -129,11 +131,11 @@ test("licence is before upload, only Licence or Nova can mark it, and upload sta
   await rejects(W.workspaceAct(d, NOW, { by: "Luke", action: "mark_licence", step: "licence" }), /Only the Licence bot or Nova/);
 });
 
-test("farm posts and label spend and payouts stay out of the official numbers", async () => {
+test("farm posts and label spend stay out of the official numbers", async () => {
+  /* 24 Nov 2026, Luke: money removed from HQ. Label payouts, the ROI and the income check went; spend stays */
   const d = memoryDesk();
   const growthBefore = await S.listGrowth(d, NOW);
   const spendBefore = await S.listSpend(d, NOW);
-  const incomeBefore = JSON.stringify((await S.incomeState(d, NOW)).received);
   await call(d, "log_growth", { bot: "Steve", date: "2026-11-17", workspace: "farm", farm: "account", platform: "TikTok", handle: "northwind.wav", niche: "covers", songs: "Northwind", owner: "Nova", page_status: "active" });
   await call(d, "log_growth", { bot: "Kevin", date: "2026-11-17", workspace: "farm", farm: "post", platform: "TikTok", handle: "northwind.wav", song: "Northwind", content_type: "clip", views: "1200", likes: "40", post_link: "https://example.com/farm" });
   const farm = await W.view(d, NOW, "farm");
@@ -144,13 +146,11 @@ test("farm posts and label spend and payouts stay out of the official numbers", 
   assert.equal(farm.accounts[0].status, "active");
   const spend = await call(d, "record_spend", { bot: "Forge", workspace: "label", platform: "Meta", genre: "UK garage", date: "2026-11-17", amount: 10, currency: "USD" });
   assert.match(spend.note, /Not counted in the USD 1,000 cap/);
-  assert.equal((await W.view(d, NOW, "label")).genres[0].stats.roi, "pending");
-  await call(d, "submit_income", { bot: "Ledger", workspace: "label", genre: "UK garage", date: "2026-11-17", payer: "Northwind", amount: 4, currency: "USD", account: "Statement only" });
   const stats = (await W.view(d, NOW, "label")).genres[0].stats;
-  assert.equal(stats.roi, "0.40");
+  assert.deepEqual(stats.spend, [{ currency: "USD", amount: 10 }]);
+  assert.equal("roi" in stats || "payout" in stats, false);
   assert.deepEqual(await S.listGrowth(d, NOW), growthBefore);
   assert.deepEqual(await S.listSpend(d, NOW), spendBefore);
-  assert.equal(JSON.stringify((await S.incomeState(d, NOW)).received), incomeBefore);
   await rejects(call(d, "record_spend", { bot: "Forge", platform: "Meta", genre: "UK garage", date: "2026-11-17", amount: 1, currency: "USD" }), /not in the USD 1,000 cap/);
 });
 

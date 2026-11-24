@@ -15,7 +15,6 @@ import * as P from "./profile-images.mjs";
 import * as W from "./workspaces.mjs";
 import * as IG from "./instagram.mjs";
 import { rankLine, rankPosts } from "./postrank.mjs";
-import { songProfit } from "./hq.mjs";
 import "../../js/hq-lib.js";
 
 const str = (description, extra = {}) => ({ type: "string", description, ...extra });
@@ -32,7 +31,7 @@ const INSTRUCTION_LINES = [
   [null, "Asking Luke several things at once? Put each one in questions (2 to 6): each gets its own answer, and the message stays open until all are answered. A message to Luke about another bot names it in about, so the answer reaches that bot too."],
   [null, "Disputes: RouteNote moderation, YouTube Content ID, a takedown, a distributor issue or a copyright dispute is a case. Open it with open_case, update it with update_case, and read Luke's decision with read_cases. You never set his decision. When the status is waiting on bot, do what he confirmed or wrote, then update the case. A Content ID claim is escalated with claim_id from read_claims. The claim stays on the Rights page. HQ does not send the email or file the dispute."],
   [null, "Releases: when Luke sends a new song to the team, your steps and their dates appear in my_day. Read everything about the song with release_pack, mark ONLY your own steps with release_step (done only when it is really done), and fill the fields you are responsible for with release_fill."],
-  [null, "Social Farm and Label stay off the BADSCANDAL numbers, the ad cap and the official accounts. Farm: log_growth with workspace farm (account or post). Label streams: log_growth with workspace label. Label spend: record_spend with workspace label (never the USD 1,000 cap). Label payouts: submit_income with workspace label. A Label cover is pack, then licence, then Drop's upload, then Atlas's pitch. The licence step shows waiting on licence until it is licensed, with a proof link. release_step step licence, workspace label: only the Licence bot (bot \"Licence\") or Nova can mark it, and only after Luke has said yes for that song. Fields: esl_order_number, licence_pdf_url, drive_folder_url, original_title, original_writers, original_publisher, status (todo, ordered_waiting_luke, paid, licensed, flagged) and flag_reason. The Licence bot reads its queue and marks one done with licence_queue and a proof link. Drop's upload stays blocked until the licence is licensed. HQ never pays a licence."],
+  [null, "Social Farm and Label stay off the BADSCANDAL numbers, the ad cap and the official accounts. Farm: log_growth with workspace farm (account or post). Label streams: log_growth with workspace label. Label spend: record_spend with workspace label (never the USD 1,000 cap). A Label cover is pack, then licence, then Drop's upload, then Atlas's pitch. The licence step shows waiting on licence until it is licensed, with a proof link. release_step step licence, workspace label: only the Licence bot (bot \"Licence\") or Nova can mark it, and only after Luke has said yes for that song. Fields: esl_order_number, licence_pdf_url, drive_folder_url, original_title, original_writers, original_publisher, status (todo, ordered_waiting_luke, paid, licensed, flagged) and flag_reason. The Licence bot reads its queue and marks one done with licence_queue and a proof link. Drop's upload stays blocked until the licence is licensed. HQ never pays a licence."],
   ["Licence", "Licence: you are idle until Luke starts a cover. He writes the covers himself and keeps the songs. When a pack is ready, and before Drop uploads it to RouteNote, get the mechanical licence through Easy Song Licensing. Save the licence, the song and the assets to Google Drive. Read the queue with licence_queue. Mark one licensed only with a proof link, and only after Luke has said yes for that song. You report to Nova only. Never pay. HQ does not take payment."],
   ["Spark", "Spark: once a day around 10:00 São Paulo, rank BADSCANDAL's recent official posts on Instagram, TikTok and YouTube by engagement per view ((likes + comments + saves + shares) / views). Compare them with outlier posts by similar artists. Send Nova 3 to 5 content ideas with content_ideas: each idea has a hook, the on-screen text, a format, a platform and why. You report to Nova only. Never post, comment, send a DM, or touch an ad. HQ does not post them."],
   ["Atlas", "Atlas, every day: open Spotify for Artists, Music, Upcoming, and report everything listed there with spotify_upcoming (an empty list when nothing is). The Spotify pitch waits until the song shows there."],
@@ -42,8 +41,6 @@ const INSTRUCTION_LINES = [
   /* A8 + B3 (17 Nov 2026) */
   ["Atlas", "Atlas: with your daily numbers, log the artist's Spotify monthly listeners and the Brazil listeners: log_growth platform Spotify, monthly_listeners and brazil_listeners (as shown in Spotify for Artists)."],
   ["Forge", "Forge: HQ records Meta's spend itself every hour from Meta (read-only), one row a day, so record_spend is for Google and TikTok; record Meta only when Luke asks or the dashboard says Meta couldn't be read."],
-  /* A7 (17 Nov 2026): the locked month close */
-  ["Ledger Sheet", "Ledger and Sheet: once month_check says last month is ready, close it with close_month and add the evidence links (the statements, the sheet). After that, any change in that month shows as a change since closing: say why in fix_payment's reason."],
   /* A6 (17 Nov 2026): pre-flight checks */
   ["Forge Drop Verse Webmaster", "Before anything goes to the stores or into an ad, run preflight: the artist name is badscandal, one word (capitalisation does not matter), the primary artist is Badscandal and matches Spotify artist 29kaubgb6Esvwu0idVndGy, ads and links go to https://badscandal.com/<song>, the master is a WAV, the artwork a JPG or PNG 3000 x 3000. Fix what it lists first."],
   ["Atlas Laura Webmaster", "Before you upload a Spotify Canvas, a Spotify header image, a YouTube banner or a cover, run preflight with asset (canvas, spotify_header, youtube_banner or cover) and the file's width, height, seconds, format and size_mb: it checks them against that platform's rule. Fix what it lists first."],
@@ -73,22 +70,14 @@ const INSTRUCTION_LINES = [
   ["Steve Atlas Kevin Laura", "Steve, Atlas, Kevin, Laura: log each day's numbers with log_growth (one call per platform or song); a number you could not read goes in gaps with why, and your duty counts as done with gaps. post_update takes gaps too: one missing number is never a reason for blocked."],
   ["Forge", "Forge: record each platform's daily spend with record_spend (not_read with why when you could not read it). The month's total against the cap is the one record_spend and the dashboard give, at the team's fixed rate: never add it up yourself."],
   ["Forge", "Forge: when a day's spend is for one song, name it on record_spend (song). Leave song out for an account total: HQ says not linked to a song. Never guess a song from a campaign name, and never record the same money as both."],
-  /* 16 Nov 2026 (Luke): Revolut is the main bank; Wise and PayPal money ends up there */
-  /* ONE entry per payment (17 Nov 2026, Luke: "money is not double counted ... revolut is the main entry") */
-  ["Ledger Sheet", "Income is counted once, when it lands in Revolut (Luke's main bank, read by the site every morning), in the month it lands. Money in Wise or PayPal is only for confirming who paid: log it there as usual (account Wise or PayPal); it shows as \"in PayPal\" and counts nowhere. When it moves on to Revolut, tie the Revolut payment to what it carried with link_transfer (from = the Wise / PayPal payment ids; one transfer may carry several): the Revolut payment then counts, with their source and category. PayPal usually converts to EUR on the way: the amount or currency need not match; the Revolut amount is what counts. Never mark money as income twice, and never as income in Wise or PayPal."],
-  ["Ledger Sheet", "Ledger and Sheet: per-song profit is in income_status (per_song) and on Money. Name the song, and the store when you know it, on a royalty payment only when that payment is for that one song. If it covers more than one, leave the song out: HQ says not linked to a song. Never guess which song."],
-  ["Ledger Sheet", "On the 1st of every month (and whenever Luke asks), run month_check for the month before: it lists what is still to sort, Revolut credits from Luke's own accounts not yet linked, and money still waiting in Wise or PayPal. Clear each one, ask Luke about what you can't, and tell Nova when it says ready."],
-  /* 17 Nov 2026 (Luke: "they should just ask me what the income is in the money account if they're not sure") */
-  ["Ledger Sheet", "Ledger and Sheet: when you are not sure what a payment in the money account is (who paid, which source, income or not), ask Luke with ONE send_message (needs decision): name the payer, the day and the amount. Never guess. A payment counts in the month it arrived: if its day is wrong, fix it with fix_payment date (any month)."],
-  ["Ledger Sheet", "Ledger: a wage Luke moves in himself every month from another bank of his shows as his own transfer: sort it as received, category Salary, with its source (Luke tells you which source it is)."],
-  ["Ledger Sheet", "Ledger: Luke's main income sources are highlighted on Money every month: mark each with income_source main true and due_day (the day of the month it usually pays by); add one the desk doesn't have with create true. Only received money counts: a main source turns green when its money is received, red once its day has passed without it."],
-  ["Ledger Sheet", "Ledger and Sheet: keep your income sources current with income_source (where the money lands, state, reason; clear needs_luke when it no longer stands), and correct a payment with fix_payment (with the reason). Statuses: statement only (not payable yet) and payable (owed, ready to pay out)."],
-  /* L1 + L9 (18 Nov 2026): expected money and what a payout route cost. No new tool. */
-  ["Ledger Sheet", "Ledger and Sheet: income_status lists expected_money (each statement, the day it is due, and whether it is short, late or missing) and payout_routes (what the exchange and the fees cost, from the amounts already recorded). File every statement with submit_income (statement only, payable or pending). When a received payment pays a statement, set paid_by. When money moves from Wise or PayPal into Revolut, use link_transfer. If a route says not enough data, do not guess a rate or a fee. HQ never moves money."],
+  /* 24 Nov 2026, Luke: "leave a note for the bots telling them to stop checking all things related to money and delete any
+     tasks related to money". Ledger and Sheet stay on the team; Luke gives them new work. */
+  [null, "HQ no longer handles money: no income, payments, Revolut or income sheet. Ad spend stays (record_spend and the USD 1,000 cap)."],
+  ["Ledger Sheet", "Ledger and Sheet: HQ no longer handles money (Luke, 24 Nov 2026). Stop checking income, payments, Revolut and the income sheet. Delete your money tasks. Ask Luke for your new task."],
   /* batch 5 (15 Nov 2026) */
   [null, "A duty you finish before Nova has put today's duty rows on the board still counts: post_update with status done as usual, and it is marked done once the row appears."],
-  ["Nova", "Nova: reset today's duty rows at 07:00 São Paulo, before Ledger's 07:30 run, so every bot finds its row."],
-  ["Alfred", "Alfred: for a short message use luke_short_briefing (the cap, income, the top 3 decisions by deadline, every sign-in Luke has to do); luke_briefing is the full one."],
+  ["Nova", "Nova: reset today's duty rows at 07:00 São Paulo, before the team's morning runs, so every bot finds its row."],
+  ["Alfred", "Alfred: for a short message use luke_short_briefing (the cap, the top 3 decisions by deadline, every sign-in Luke has to do); luke_briefing is the full one."],
   /* the pipeline, 15 Nov 2026 (Luke) */
   [null, "The artist name is badscandal, one word, everywhere: store details, featuring, copyright lines, captions, messages. Capitalisation does not matter."],
   ["Forge Webmaster", "Forge and Webmaster: every ad links to the song's own page, badscandal.com/<song>, which carries the Meta pixel (HQ's Pages shows who clicked and what it cost); never straight to Spotify."],
@@ -102,7 +91,7 @@ const INSTRUCTION_LINES = [
   ["Webmaster", "Webmaster: check song_pages first (what happened to each request, and which song the home card should show today); a cover that isn't on a public link goes up with upload_cover; the home card changes with song_page kind card, Luke confirming."],
   ["Webmaster Nova", "Webmaster: song pages are made with song_page (kind new: address, title, day, cover link; kind track: the Spotify link on release day). Luke confirms, then GitHub builds and checks the page: never Luke's Mac, never by hand."],
   [null, "my_day's connector line says how many tools the desk has and the version of their list. Pass tools_seen (the number your app lists) and, if you have them, tool_names. Reconnect only when the count or the names differ. A version difference by itself is not a reconnect. The version is also on the connector when you connect."],
-  [null, "Nova's yes counts as Luke's, as long as Luke told Nova yes himself: Nova records it with record_luke_answer (Luke's exact words), and it reaches you as Luke's answer, via Nova. Never for money (income, payments, ad spend): only Luke answers those."],
+  [null, "Nova's yes counts as Luke's, as long as Luke told Nova yes himself: Nova records it with record_luke_answer (Luke's exact words), and it reaches you as Luke's answer, via Nova. Never for money (ad spend): only Luke answers those."],
   [null, "A finished action Luke can tap is a card: send_message with card {kind, text, dedupe_key, action, owner, recipient, amount, currency, link, preview, deadline, expires_at, waiting_on, money_at_risk, ticket}. The same dedupe_key is never posted twice. Read his answer in my_day (card_answers): choice, time and the card version. An edit after a Yes is a new version and needs a new Yes. The card is done only when you post_update with card (the id) and proof_message, proof_ref or proof_link. Until Luke switches on \"taps count as Luke's yes\", a Yes is recorded and you still confirm with him. Payments and signatures always say Luke does this himself. Only a money_at_risk card may reach him between 23:00 and 08:00 São Paulo. Ads and the Monday pick: HQ never changes an ad and never chooses an amount."],
   ["Drop", "Drop: before you distribute, resubmit, or reply to a moderation note, call my_day with luke_tap (the card id or dedupe_key, the version, and the action). Go ahead only when it says yes and gives the time he tapped. A tap while \"taps count as Luke's yes\" is off does not let you proceed. Payments and signatures are never yours to send."],
 ];
@@ -206,7 +195,7 @@ export const TOOLS = [
           workspace: str("Leave this out for BADSCANDAL. farm or label puts the card on that workspace's Needs you. It is not on the BADSCANDAL Needs you."),
         }, additionalProperties: false } }, ["bot", "to", "text"]) },
   { name: "record_luke_answer", title: "Record Luke's answer from Alfred's or Nova's chat",
-    description: "ALFRED, or NOVA. When Luke answers a message that waits on him in your chat (not on the dashboard), record it here so the bot that asked gets it. NOVA: only when Luke himself told you the answer (never your own yes, never another bot's word), and never about money: a message from Ledger, Sheet or Forge (income, payments, ad spend) is refused; Luke answers those on the dashboard or to Alfred. reply_to = the message's id, luke_said = Luke's EXACT words, copied as he wrote them (never your summary). For a decision, also put the option he picked in option (exactly as listed). For a message with numbered questions, put each answer in answers. It is saved as Luke's answer, marked \"via Alfred\" or \"via Nova\", and closes the message the way Luke's own answer would.",
+    description: "ALFRED, or NOVA. When Luke answers a message that waits on him in your chat (not on the dashboard), record it here so the bot that asked gets it. NOVA: only when Luke himself told you the answer (never your own yes, never another bot's word), and never about money: a message from Forge (ad spend) is refused; Luke answers those on the dashboard or to Alfred. reply_to = the message's id, luke_said = Luke's EXACT words, copied as he wrote them (never your summary). For a decision, also put the option he picked in option (exactly as listed). For a message with numbered questions, put each answer in answers. It is saved as Luke's answer, marked \"via Alfred\" or \"via Nova\", and closes the message the way Luke's own answer would.",
     inputSchema: obj({ bot: BOT, reply_to: str("The id of the message Luke answered (it starts with m)."),
       luke_said: str("Luke's exact words from your chat (1,500 characters at most)."),
       option: str("Only for a decision with options: the option Luke picked, exactly as listed."),
@@ -228,10 +217,6 @@ export const TOOLS = [
       seconds: { type: "number", description: "With asset canvas: the video's length in seconds." },
       format: str("With asset: the file type, e.g. mp4, mov, jpg, png."),
       size_mb: { type: "number", description: "With asset: the file's size in MB." } }, ["bot"]) },
-  { name: "close_month", title: "Close a finished month (lock its income)", idempotent: true,
-    description: "LEDGER, SHEET (Nova too). When month_check says a finished month is ready (nothing to sort, nothing waiting in Wise or PayPal), close it: HQ keeps a snapshot of every payment that counts in that month, what was received, and your evidence links (the statements, the sheet). It closes once; calling it again changes nothing. Later changes in that month are still allowed but listed old -> new under closed.changes_since in month_check, and in the CSV Luke downloads.",
-    inputSchema: obj({ bot: BOT, month: str("The month to close, YYYY-MM (a month that has ended)."),
-      evidence: { type: "array", items: { type: "string" }, description: "Up to 10 https links that back it up: statements, the sheet, a folder." } }, ["bot", "month"]) },
   { name: "instagram", title: "The Instagram account's numbers, read by HQ itself", idempotent: true,
     description: "STEVE, KEVIN, FORGE (Nova too). Since 17 Nov 2026 HQ reads the badscandal Instagram account itself through Meta's official API (read-only), so nobody opens Instagram in a browser for numbers again (that got the account locked). Gives: connected or not (and why), followers, the newest posts with their numbers at 6 hours, a day and a week (views, reach, likes, saves, shares), the newest comments, the followers' top countries, the RANKING (which posts engage best per view, with the ads that boosted them and the cost per engagement), and the FAN INBOX: comments asking the song's name or where to listen (needs_reply true when nobody of ours has answered: that is for Luke) and repeat fans (the same account on more than one post). Never reply, like, hide or delete a comment. HQ also logs the day's Instagram followers on the desk by itself. Not read-only: a fresh read can use one of the 3 Meta reads an hour, and post + song or our_accounts add/remove save on the desk.",
     inputSchema: obj({ bot: BOT,
@@ -255,51 +240,12 @@ export const TOOLS = [
       from: str('Only messages from this name (a bot, "Luke" or "Claude").'),
       to: str('Only messages to this name, or "all".'),
       about: str("Only messages from OR to this name."),
-      search: str('Only messages whose text has all these words, for example "11 Nov income". Capitals and accents do not matter.'),
+      search: str('Only messages whose text has all these words, for example "11 Nov pitch". Capitals and accents do not matter.'),
       id: str("The id of ONE message (it starts with m): returns that message in full, whatever its age."),
       count_only: { type: "boolean", description: 'true = only say whether anything new came for you since you last read, and how many (no messages, and it does not count as reading).' } }, ["bot"]) },
   { name: "resolve_message", title: "Mark a message as handled", idempotent: true,
     description: "Close a message that was waiting on you (needs: action or reply) once you have done what it asked. Say in note what you did. A decision waiting on Luke can only be closed by Luke.",
     inputSchema: obj({ bot: BOT, id: str("The id of the message (it starts with m)."), note: str("One line: what you did.") }, ["bot", "id"]) },
-  { name: "submit_income", title: "Submit one payment", idempotent: true,
-    description: "Record ONE payment of income, exactly as the account or the statement shows it. Call it once per payment, every day, for every new credit in Wise and PayPal and every statement email. Sending the same payment twice is safe: it is not counted twice. A statement whose money you have not seen arrive is status pending; send it again as received when the credit shows. Money moved between Luke's own accounts is status transfer, never income. Never convert a currency. Never submit an amount you could not see.",
-    inputSchema: obj({ bot: BOT,
-      date: str("The day the money arrived (or the statement date if pending), YYYY-MM-DD."),
-      payer: str('Who paid, exactly as shown (for example the label, distributor or company name).'),
-      amount: { type: "number", description: "The amount as paid, for example 112.01. Positive. Not converted." },
-      currency: str("Three-letter code of the currency it was paid in: EUR, USD, GBP, BRL..."),
-      account: str('Where it landed: "Wise", "PayPal", "Revolut", "Bank", or "Statement only" when you only saw a statement.'),
-      status: str("received | pending | transfer | statement only | payable. Default received. statement only = a statement under the payout line (not owed yet); payable = owed to us and ready to pay out.", { enum: S.INCOME_STATUS.filter((x) => x !== "unsorted") }),
-      category: str("Self-releases | Label deals | Publishing | Production | Salary | Other. Default Other.", { enum: S.CATEGORIES }),
-      reference: str("The payment's own reference or transaction id from the account, if it shows one. This is what stops double counting. Not an account number."),
-      period: str('Optional. What the payment covers, for example "2026-Q3" or "Sep 2026".'),
-      note: str("Optional. One line of anything Luke should know about this payment."),
-      song: str("Optional. The song this payment is for, only when the whole payment is for that one song. Leave it out when it covers more than one: HQ says not linked to a song. Never guess."),
-      store: str("Optional, with song. The store this payment is for (Spotify, Apple Music...). Leave it out when you don't know, or when it covers more than one store."),
-      workspace: str("Leave this out for BADSCANDAL income. label = a Label statement. It is not BADSCANDAL income and HQ does not move the money."),
-      genre: str("Label only. The genre this payout is for."),
-      alias: str("Label only. The alias, when the payout is for one alias.") }, ["bot", "date", "payer", "amount", "currency", "account"]) },
-  /* batch 4 (15 Nov 2026) */
-  { name: "fix_payment", title: "Fix a payment already on the desk",
-    description: "Correct ONE payment you (or another bot) already submitted: a wrong amount, currency, payer, status (for example a transfer that is really income), category (for example a salary filed as Publishing), account, reference, note, or day within its month. Find its id and month under your_payments in income_status. Only the bot that submitted it, Ledger, Sheet or Nova fix it. Say what was wrong in reason. Only the fields you send change; the old values are kept with your reason.",
-    inputSchema: obj({ bot: BOT, id: str("The payment's id (it starts with i), from income_status."), month: str("Its month, YYYY-MM, from income_status."),
-      reason: str("What was wrong, in one line."), date: str("Optional. The day the money really arrived, YYYY-MM-DD (any month: a payment counts in the month it arrived, and moves there)."), payer: str("Optional. The right payer."),
-      amount: { type: "number", description: "Optional. The right amount." }, currency: str("Optional. The right three-letter currency."),
-      status: str("Optional. received | pending | transfer | statement only | payable", { enum: S.INCOME_STATUS.filter((x) => x !== "unsorted") }),
-      source: str("Optional. The income source this payment is (its name or id): ties it to that source on Money."),
-      paid_by: str("Optional, only on a statement (pending, payable or statement only): the id of the RECEIVED payment that paid it (from payments), even if its amount or currency differs. The statement then counts nowhere; the money counts once, as received."),
-      category: str("Optional.", { enum: S.CATEGORIES }), account: str("Optional. Where it landed."), reference: str("Optional. The payment's own transaction id."), note: str("Optional. One line."),
-      song: str("Optional. The song, only when this payment is for that one song. Send an empty song to clear it. Never guess."),
-      store: str("Optional, with song. The store. Send an empty store to clear it.") }, ["bot", "id", "month", "reason"]) },
-  { name: "income_source", title: "Update an income source you look after",
-    description: "For the bot that owns an income source (Ledger, Sheet; Nova may too): say where its money lands (accounts: one or several, for example RouteNote's two PayPal accounts), whether it is active, blocked (with the reason) or not tracked, its category, and clear a needs_luke ask that no longer stands (send it empty). Only what you send changes. Luke sees it on the dashboard, Money.",
-    inputSchema: obj({ bot: BOT, source: str("The source's name or id, as income_status lists it."),
-      accounts: { type: "array", items: { type: "string" }, description: 'Where its money lands, 1 to 4 accounts, for example ["PayPal", "Wise"].' },
-      state: str("active | blocked | unknown | not_tracked", { enum: S.SOURCE_STATE }), reason: str("Why it is blocked (required with blocked), or empty to clear."),
-      category: str("Optional.", { enum: S.CATEGORIES }), needs_luke: str('What only Luke can do for it; send "" (empty) when nothing is needed any more.'),
-      main: { type: "boolean", description: "true = one of Luke's main income sources: highlighted on Money every month (green when its money came, red once its day has passed)." },
-      due_day: { type: "integer", description: "The day of the month it usually pays by (1 to 31). After it, a main monthly source with nothing received turns red." },
-      create: { type: "boolean", description: "true = add a source the desk doesn't have yet: its name in source, with its category (and main, due_day, accounts)." } }, ["bot", "source"]) },
   { name: "record_spend", title: "Record a day's ad spend",
     description: "FORGE (Nova may do it for him): ONE platform's spend for ONE day, exactly as the ad account shows it, in the account's own currency (never converted). 0 for a day with no ads. If you could not read it, send not_read with why (for example \"signed out\") instead of an amount: the dashboard lists it as missing and marks the month's total estimated. Sending the same day again with a new amount corrects it. The answer is the month so far against the USD 1,000 cap, worked out on the site with the team's fixed monthly rate: use that figure, never your own sum. song: only when this amount is for one song. Leave it out for the account total. Never guess a song from the campaign name, and never record the same money both ways.",
     inputSchema: obj({ bot: BOT, platform: str("Meta | Google | TikTok", { enum: S.SPEND_PLATFORMS }), account: str("The ad account's name as shown."),
@@ -385,37 +331,15 @@ export const TOOLS = [
   { name: "read_growth", title: "Read growth rows", readOnly: true,
     description: "STEVE, ATLAS, KEVIN, LAURA (Nova too): the growth rows already on the desk. Read only. Filter with platform, date or song. A missing number was not logged. It is not zero. channel_views is the lifetime total. views is that day's views. YouTube's count is subscribers. TikTok fan_signals are on the TikTok rows. boosts lists a post Steve logged as boosted. how_to_log_a_boost says what to send: link, ad, spend, currency, status.",
     inputSchema: obj({ bot: BOT, platform: str("Optional. TikTok, Instagram, YouTube or Spotify."), date: str("Optional. One day, YYYY-MM-DD."), song: str("Optional. A song title, for the Songs rows.") }, ["bot"]) },
-  { name: "income_check", title: "Say an account was checked",
-    description: 'Call this once per account, every day, after you looked at it, EVEN WHEN NOTHING IS NEW. It is how the dashboard tells "checked, nothing came in" from "nobody looked". new_payments is how many new payments you found (each one also goes through submit_income).',
-    inputSchema: obj({ bot: BOT, account: str('The account you checked: "Wise", "PayPal", "Statement emails", "RouteNote"...'),
-      new_payments: { type: "integer", description: "How many new payments you found today. 0 if none.", minimum: 0 },
-      note: str('Optional. For example "could not sign in: needs Luke\'s code" (then also post_update with status blocked).') }, ["bot", "account", "new_payments"]) },
-  /* 17 Nov 2026 (Luke): one entry per payment, Revolut */
-  { name: "link_transfer", title: "Tie a Revolut payment to the Wise / PayPal money it carried", idempotent: false,
-    description: "LEDGER (Sheet, Nova). Money counts once, when it lands in Revolut. When Luke moves money from PayPal or Wise into Revolut, give the Revolut payment's id and month (from payments, account Revolut) and from = the id(s) of the Wise / PayPal payment(s) it carried. The Revolut payment becomes received, with their source and category; they become \"moved to Revolut\" and count nowhere. The amount or currency may differ (PayPal usually converts to EUR; fees): the Revolut amount is what counts.",
-    inputSchema: obj({ bot: BOT, revolut_id: str("The Revolut payment's id."), month: str("The Revolut payment's month, YYYY-MM."),
-      from: { type: "array", items: { type: "string" }, description: "The id(s) of the Wise / PayPal payment(s) this Revolut money carried." },
-      note: str("Optional: one line.") }, ["bot", "revolut_id", "month", "from"]) },
-  { name: "month_check", title: "Is a month's income right?", readOnly: true,
-    description: "LEDGER (Sheet, Nova), on the 1st of every month for the month before (and whenever asked): what is received (Revolut only), what is still to sort, which Revolut credits came from Luke's own PayPal / Wise and still need link_transfer, which own transfers to check, and what is still waiting in Wise / PayPal. ready = nothing is in the way.",
-    inputSchema: obj({ bot: BOT, month: str("YYYY-MM (default: this month).") }, ["bot"]) },
-  /* 16 Nov 2026 (Ledger): every payment, with its id */
-  { name: "payments", title: "Every payment of a month, with its id", readOnly: true,
-    description: "LEDGER and SHEET (Nova too): every payment on the desk for ONE month, newest first, each with its id (for sort_payment and fix_payment), date, payer, amount, currency, status, category, source, account and who added it, HQ's Revolut rows included. received is the counted total (Revolut only, the same figure as income_status and month_check). counted is a read-only export of those rows (landing date, account, statement, payable, received, evidence, split, ledger month and landing month). changed_since returns only rows touched since that time. Filter with account (\"Revolut\"), source (its name or id: payments tied to it or whose payer matches it), payer (words in the name) and status. status received means counted in Revolut. limit 1 to 200 (100); total says how many there are, and more says what was left out. HQ never writes to the Google Sheet.",
-    inputSchema: obj({ bot: BOT, month: str("YYYY-MM (default: this month)."), account: str("Optional: Revolut, Wise, PayPal..."), source: str("Optional: a source's name or id."),
-      payer: str("Optional: words in the payer's name."), status: str("Optional: received | pending | payable | statement only | transfer | unsorted | settled"), changed_since: str("Optional. A time, for example 2026-11-01T00:00:00Z. Only payments touched since then."), limit: { type: "integer", description: "1 to 200 (default 100)." } }, ["bot"]) },
-  { name: "income_status", title: "Income so far and what is missing", readOnly: true,
-    description: "For a month or an account, or every payment with its id, use payments. This month's income as logged (received and pending, per currency, never mixed), the newest payments, every known source of income with when it last paid, which accounts were checked today, and the list of problems (not checked, overdue, blocked, a payer nobody has named). Also expected_money (each statement, its due day, and short, late or missing) and payout_routes (what the exchange and the fees cost, from amounts already recorded; not enough data when a rate would have to be guessed). Do not guess a rate or an amount. Use it before the daily check and before reporting to Luke.",
-    inputSchema: obj({ bot: BOT }, ["bot"]) },
   { name: "team_board", title: "The whole team right now", readOnly: true,
     description: "Every bot with today's duties (done, to do, late, blocked), its latest update, what it says it is working on, what is waiting on it, and when it last used this desk; every release with its late steps and warnings, and what Spotify for Artists showed in Atlas's last report. For Nova's standup, the 12:00 chase and the 21:00 wrap-up.",
     inputSchema: obj({ bot: BOT }, ["bot"]) },
   { name: "luke_briefing", title: "What Luke needs to hear", readOnly: true,
-    description: "For Alfred's 10:00 message and for alerts. For Alfred it also gives every new message for him since his last read (messages_for_you). Returns the site's latest check (three times a day), Claude's latest note for Luke, every decision waiting on Luke with its options, ad spend against the monthly cap (one figure only, as of the time in this answer), the next release and what is late, the songs Spotify for Artists shows as upcoming that are not in the pipeline (Luke has to say what they are), income logged this month, and which bots have not logged. Report it; do not add numbers of your own.",
+    description: "For Alfred's 10:00 message and for alerts. For Alfred it also gives every new message for him since his last read (messages_for_you). Returns the site's latest check (three times a day), Claude's latest note for Luke, every decision waiting on Luke with its options, ad spend against the monthly cap (one figure only, as of the time in this answer), the next release and what is late, the songs Spotify for Artists shows as upcoming that are not in the pipeline (Luke has to say what they are), and which bots have not logged. Money is no longer on HQ: income_this_month only says so. Report it; do not add numbers of your own.",
     inputSchema: obj({ bot: BOT }, ["bot"]) },
   /* batch 5 (15 Nov 2026): Alfred's SHORT briefing, a separate tool so luke_briefing stays exactly as it is */
   { name: "luke_short_briefing", title: "Luke's short briefing", readOnly: true,
-    description: "For a SHORT message to Luke (Alfred). Four things, ready to say: ad spend against the monthly cap (with the rate and what was not read), income this month, the top 3 decisions waiting on Luke by deadline (the soonest first; how many more), and ONE list of everything that needs Luke to sign in (codes, logins, signed-out accounts). It hands over no messages: luke_briefing is the full one. Say it as given; \"not read\" is never 0.",
+    description: "For a SHORT message to Luke (Alfred). Three things, ready to say: ad spend against the monthly cap (with the rate and what was not read), the top 3 decisions waiting on Luke by deadline (the soonest first; how many more), and ONE list of everything that needs Luke to sign in (codes, logins, signed-out accounts). It hands over no messages: luke_briefing is the full one. Say it as given; \"not read\" is never 0.",
     inputSchema: obj({ bot: BOT }, ["bot"]) },
   { name: "set_my_card", title: "Say what I am working on", idempotent: true,
     description: "Update your card on the dashboard's Team page. working_on is optional: leave it out to keep what you last said, so you can clear only a blocker (blockers \"\"). needs is what you need and from whom. A blocker not said again for 48 hours is shown as old and drops off the headline: send it again if it still stands.",
@@ -589,21 +513,9 @@ export const TOOLS = [
   { name: "needs_you", title: "What needs Luke right now (the count on his phone)", readOnly: true,
     description: "Read only. What is waiting on Luke, counted the way his phone and his app badge count it: total = messages waiting on him (decisions, lyrics and pitch approvals, replies, actions) + Spotify for Artists songs only he can name + his open Yes/No/Edit cards (open; in quiet hours most wait in held_until_morning) + accounts whose health is red. waiting lists each one. Alerts like a late step are not in total. Nothing is changed. Use this to see what is waiting before you ask again.",
     inputSchema: obj({ bot: BOT }, ["bot"]) },
-  { name: "song_pl", title: "Per-song profit", readOnly: true,
-    description: "Read only. Per-song money in, ad spend and the result, from records already on the desk. Ledger, Sheet, Forge and Nova. A figure that was not recorded stays missing. Nothing is written.",
-    inputSchema: obj({ bot: BOT }, ["bot"]) },
   { name: "read_guide", title: "Read the staff guide", readOnly: true,
-    description: "The written guide to this desk: who does what, the daily times, how to log income, how messages work, the rules that never bend. Read it once when you are first connected, and again whenever Nova says it changed.",
+    description: "The written guide to this desk: who does what, the daily times, how messages work, the rules that never bend. Read it once when you are first connected, and again whenever Nova says it changed.",
     inputSchema: obj({ bot: BOT }, ["bot"]) },
-  { name: "sort_payment", title: "Say what a Revolut payment is", idempotent: true,
-    description: 'For Ledger (Sheet and Nova may too). The site reads Luke\'s personal Revolut every morning and puts every incoming payment on the desk. One it could not place has the status "unsorted": it is in the account, and nobody has said what it is, so it counts as nothing yet. Use this to say what ONE such payment is: received (it is income: give its category) or transfer (not income: Luke moving his own money, a refund, a gift, a friend paying him back). Find the id and month in income_status under "unsorted". Sort it ONLY when it is clear from the payer (a label, a distributor, a publisher, a known client = received; Luke\'s own name or his own account = transfer). When it is not clear, leave it unsorted and ask Luke with ONE send_message, needs decision, naming the payer, the date and the amount. Never guess. If income_status shows a pending_match for it (a statement already logged as pending, same amount and currency) and you are sure it is that statement\'s money, sort it as received with pending_id = that statement\'s id: the statement becomes received and this row goes, so the money is never counted twice. You can also correct a payment the site sorted itself; what Luke or another person decided cannot be changed here.',
-    inputSchema: obj({ bot: BOT, id: str("The payment's id from income_status (it starts with i)."), month: str("The month it is filed under, YYYY-MM (the first 7 characters of its date)."),
-      status: str("received | transfer", { enum: ["received", "transfer"] }), category: str("Only with received: Self-releases | Label deals | Publishing | Production | Salary | Other.", { enum: S.CATEGORIES }),
-      pending_id: str("Optional, only with received: the id of the pending statement this payment is the money of (income_status: pending_match). The statement keeps its own category."),
-      source: str("Optional: the income source this payment is (its name or id from income_status), so that source shows as received on Money."),
-      note: str("Optional: one line, for example where the money came from (\"from Sample Label via Wise\")."),
-      song: str("Optional, only with received, and only when this payment is for one song. Never guess."),
-      store: str("Optional, with song. The store this payment is for.") }, ["bot", "id", "status"]) },
   { name: "profile_jobs", title: "List profile images that need a new shape", readOnly: true,
     description: "ATLAS (Spotify, Apple Music, SoundCloud, Deezer, Amazon Music, TIDAL), LAURA (YouTube), KEVIN (TikTok), STEVE (Facebook). Nova sees every job. A job exists when Luke's master is the wrong shape or too small. Make an AI version of it at the exact size, exactly like his (nothing cropped or changed), then profile_rework. HQ never logs in and never sends a file to a platform. Reading this list changes nothing: HQ's hourly check tells Luke about a job open more than a day.",
     inputSchema: obj({ bot: BOT }, ["bot"]) },
@@ -626,9 +538,9 @@ export const TOOLS = [
       note: str("With rejected: what the platform said, in its words.") }, ["bot", "slot"]) },
 ];
 
-/* Luke, 11 Nov 2026: "let them see my full revolut personal income to be able to actually see the
-   income". So the bots see EVERY incoming Revolut payment on the desk (sorted or not, transfers too),
-   and Ledger, Sheet and Nova can say what an unsorted one is. Nothing extra is Claude-only. */
+/* Nothing is Claude-only. (24 Nov 2026, Luke: "lets fully remove the money section": the income tools
+   submit_income, fix_payment, income_source, income_check, link_transfer, month_check, payments,
+   income_status, close_month, song_pl and sort_payment are gone; git history keeps them.) */
 export const CLAUDE_TOOLS = [];
 
 /* Each bot's own tools (batch 5, 15 Nov 2026: the whole list was ~40 KB on every run, mostly income tools
@@ -636,17 +548,14 @@ export const CLAUDE_TOOLS = [];
    address /mcp/<bot> (or /mcp?bot=<bot>) lists only that bot's. Nova runs the team and gets everything;
    a name not on the team gets everything too, so a typo never hides a tool. Who may CALL a tool is still
    decided by the desk (staff.mjs), not by this list. */
-const INCOME_TEAM = ["Ledger", "Sheet"];
-/* the bots whose questions to Luke are about money (income, payments, ad spend): Nova never answers those */
-const MONEY_ASKERS = ["Ledger", "Sheet", "Forge"];
+/* the bots whose questions to Luke are about money (ad spend): Nova never answers those. 24 Nov 2026: income
+   is gone from HQ, so Ledger and Sheet are no longer money askers. */
+const MONEY_ASKERS = ["Forge"];
 export const TOOL_USERS = {
   record_luke_answer: ["Alfred", "Nova"], luke_briefing: ["Alfred"], luke_short_briefing: ["Alfred"],
-  submit_income: INCOME_TEAM, fix_payment: INCOME_TEAM, income_source: INCOME_TEAM, income_check: INCOME_TEAM, sort_payment: INCOME_TEAM,
-  income_status: [...INCOME_TEAM, "Alfred"], payments: INCOME_TEAM, link_transfer: INCOME_TEAM, month_check: INCOME_TEAM, close_month: INCOME_TEAM,
   record_spend: ["Forge"], log_growth: ["Steve", "Atlas", "Kevin", "Laura"],
   read_growth: ["Steve", "Atlas", "Kevin", "Laura"], read_claims: ["Laura"],
   account_health: ["Steve", "Kevin", "Laura", "Atlas", "Drop", "Webmaster"],
-  song_pl: ["Ledger", "Sheet", "Forge"],
   store_status: ["Drop"], spotify_upcoming: ["Atlas"], pitch_log: ["Atlas"], song_page: ["Webmaster"], roster_card: ["Nova"], recommend: ["Nova"], preflight: ["Forge", "Drop", "Verse", "Webmaster", "Atlas", "Laura"], instagram: ["Steve", "Kevin", "Forge"], song_pages: ["Webmaster"], upload_cover: ["Webmaster"],
   profiles: ["Atlas", "Laura", "Steve", "Kevin"],
   profile_jobs: ["Atlas", "Laura", "Steve", "Kevin"], profile_master: ["Atlas", "Laura", "Steve", "Kevin"],
@@ -746,7 +655,10 @@ function releaseCard(v, me, chase, mail) {
     your_steps: v.steps.filter((s) => s.owner === me).map((s) => stepOut(s, v.pack)), ...(chase ? { all_steps: v.steps.map((s) => stepOut(s, v.pack)) } : {}) };
 }
 
-const cur = (o) => Object.entries(o || {}).map(([c, a]) => `${c} ${Number(a).toFixed(2)}`).join(" + ") || "nothing logged";
+/* 24 Nov 2026, Luke: "lets fully remove the money section ... We can fully ignore the money section". */
+const NO_MONEY = "Money is no longer on HQ.";
+const MONEY_STOP_BOTS = ["Ledger", "Sheet"];
+const MONEY_STOP = "HQ no longer handles money. Stop checking income, payments, Revolut and the income sheet. Delete your money tasks. Ask Luke for your new task.";
 /* the recommendations on a decision, for Alfred's SHORT briefing only (A3, 17 Nov 2026); luke_briefing stays as it is */
 const recWords = (m) => (Array.isArray(m.recommendations) ? m.recommendations.slice().sort((a, b) => (a.by === "Nova" ? -1 : b.by === "Nova" ? 1 : 0)) : [])
   .map((x) => ` · ${x.by} recommends: ${x.option || x.why}${x.option ? ` (${x.why})` : ""}`).join("");
@@ -787,23 +699,6 @@ const short = (m) => ({ id: m.id, from: m.from, to: m.to, at: m.sp, needs: m.nee
   ...(m.re ? { reply_to: m.re } : {}), ...(m.resolved ? { handled_by: m.resolved.by, handled_note: m.resolved.note } : {}) });
 
 /* ctx: { store, now, role: "bot" | "claude", hq: async () => the dashboard answer or null } */
-/* per-song profit for Ledger (L4). The page's answer when the sheet was read; otherwise the desk
-   alone, and it says the sheet was not read. No new tool: this is a field of income_status. */
-async function perSongAnswer(store, now, hq) {
-  let pl = hq && hq.songPL, sheet = "";
-  if (!pl) {
-    const [deskPL, rel, spend] = await Promise.all([S.listPLPayments(store, now), S.listReleases(store).catch(() => []), S.listSpend(store, now)]);
-    pl = songProfit({ royalties: [], payments: deskPL.counted, spend, releases: (rel || []).filter((r) => r && r.status !== "cancelled").map((r) => ({ song: r.title, date: r.date })), notReceived: deskPL.notReceived, holding: deskPL.holding });
-    sheet = "Recorded royalties from the sheet were not read just now.";
-  }
-  const v = globalThis.HQLib.songPLView(pl);
-  return {
-    ...(sheet ? { sheet } : {}),
-    songs: v.songs.map((s) => ({ song: s.song, release_day: s.dateLine, money_in: s.moneyIn, by_store: s.stores, ad_spend: s.adSpend, result: s.result, ...(s.note ? { note: s.note } : {}), ...(s.ads.length ? { ads: s.ads } : {}) })),
-    not_linked_to_a_song: { royalties: v.unlinked.royalties || "none", payments: v.unlinked.payments || "none", ad_spend: v.unlinked.spend || "none", ...(v.unlinked.note ? { note: v.unlinked.note } : {}) },
-    how: v.how,
-  };
-}
 async function pingSafe(store, now, names, item) {
   try { await pingNames(store, now, names, item); } catch { /* a missed ping never fails the desk write */ }
 }
@@ -1000,12 +895,6 @@ async function runTool(tool, args, ctx, read) {
       }
       return answer;
     }
-    case "close_month": {
-      const r = await S.closeMonth(store, now, roster, { by: me, month: args.month, evidence: args.evidence });
-      const c = r.close;
-      return { closed: true, ...(r.already ? { already: true } : {}), month: c.month, line: S.closeLine(c), received: Object.keys(c.received).sort().map((k) => `${k} ${Number(c.received[k]).toFixed(2)}`).join(" + ") || "nothing",
-        payments: c.count, evidence: c.evidence, note: r.already ? `It was already closed by ${c.by}: nothing changed.` : "Closed. Later changes in this month show in month_check (closed.changes_since) and in Luke's CSV." };
-    }
     case "preflight": {
       const has = (k) => args[k] != null && String(args[k]).trim() !== "";
       if (!has("song") && !has("text") && !has("link") && !has("asset")) throw new S.StaffError("Give song, text, link or asset to check.");
@@ -1108,26 +997,6 @@ async function runTool(tool, args, ctx, read) {
       const owner = open && open.find((x) => String(x.id || "").toUpperCase() === String(t.id).toUpperCase());
       await pingSafe(store, now, [owner && owner.owner], { kind: "task", id: t.id });
       return { saved: true, task: t.id, status: t.status, ...(t.title ? { title: t.title } : {}), ...(t.note ? { note: t.note } : {}), shown_on: t.status === "done" || t.status === "cancelled" ? "badscandal.com/hq, Team: taken off the open tasks" : "badscandal.com/hq, Team" };
-    }
-    case "submit_income": {
-      if (String(args.workspace || "").trim().toLowerCase() === "label") return W.recordPayout(store, now, { ...args, by: me });
-      const r = await S.submitIncome(store, now, roster, { ...args, bot: me });
-      const e = r.entry;
-      return { saved: r.added || r.updated, duplicate: !r.added && !r.updated, updated: r.updated, id: e.id,
-        recorded: `${e.arrived || e.date} · ${e.payer} · ${e.currency} ${e.amount.toFixed(2)} · ${e.status} · ${e.account} · ${e.category}` + (e.arrived && e.arrived !== e.date ? ` (statement of ${e.date})` : ""),
-        note: r.added ? "Recorded." : r.updated ? "This payment was already on the desk; its status was updated." : "This payment was already on the desk. Nothing was added twice." };
-    }
-    case "fix_payment": {
-      const r = await S.fixIncome(store, now, roster, { by: me, id: args.id, month: args.month, reason: args.reason, date: args.date, payer: args.payer, amount: args.amount, currency: args.currency,
-        status: args.status, category: args.category, account: args.account, reference: args.reference, note: args.note, source: args.source, paid_by: args.paid_by, song: args.song, store: args.store });
-      const e = r.entry;
-      return { saved: r.fixed.length > 0, fixed: r.fixed, ...(r.movedTo ? { moved_to: r.movedTo } : {}), ...(r.fixed.length ? {} : { note: "Nothing was different: nothing changed." }),
-        now: `${e.arrived || e.date} · ${e.payer} · ${e.currency} ${e.amount.toFixed(2)} · ${e.status} · ${e.account} · ${e.category}` };
-    }
-    case "income_source": {
-      const src = await S.editSource(store, now, roster, { by: me, source: args.source, accounts: args.accounts, state: args.state, reason: args.reason, category: args.category, needs_luke: args.needs_luke, main: args.main, due_day: args.due_day, create: args.create });
-      return { saved: true, source: src.name, id: src.id, lands_in: src.lands, state: src.state, ...(src.blocker ? { reason: src.blocker } : {}), category: src.category, needs_luke: src.needsLuke || "nothing",
-        main: !!src.main, ...(src.dueDay ? { due_day: src.dueDay } : {}), shown_on: "badscandal.com/hq, Money" };
     }
     case "record_spend": {
       {
@@ -1232,87 +1101,6 @@ async function runTool(tool, args, ctx, read) {
     case "delete_case": {
       const r = await S.deleteCase(store, now, roster, { ...args, by: me });
       return { deleted: true, id: r.id, song: r.song, platform: r.platform, note: "The TEST case is gone." };
-    }
-    case "income_check": {
-      const c = await S.incomeCheck(store, now, roster, { ...args, bot: me });
-      return { saved: true, account: c.account, day: c.day, new_payments: c.new, note: c.new > 0 ? "Now make sure each of those payments went through submit_income." : "Recorded as checked, nothing new." };
-    }
-    case "link_transfer": {
-      const r = await S.linkTransfer(store, now, roster, { by: me, revolut_id: args.revolut_id, month: args.month, from: args.from, note: args.note });
-      return { saved: true, linked: r.linked, counted: `${r.entry.currency} ${Number(r.entry.amount).toFixed(2)}`, source: r.entry.source || "", category: r.entry.category, note: r.entry.note,
-        ...(r.remainder != null ? { remainder: r.remainder } : {}), ...(r.remainder_note ? { remainder_note: r.remainder_note } : {}), ...(r.sources ? { sources: r.sources } : {}) };
-    }
-    case "month_check": {
-      const c = await S.monthCheck(store, now, { month: args.month });
-      const money = (o) => Object.keys(o).sort().map((k) => `${k} ${Number(o[k]).toFixed(2)}`).join(" + ") || "nothing";
-      const line = (e) => `${(e.date || "").slice(0, 7)} · ${e.date} · ${S.hidePrivate(e.payer)} · ${e.currency} ${Number(e.amount).toFixed(2)} · ${e.account} (id ${e.id})`;
-      const label = new Date(c.month + "-15T12:00:00Z").toLocaleDateString("en-GB", { month: "long", year: "numeric", timeZone: "UTC" });
-      return { month: c.month, ready: c.ready, received: money(c.received),
-        counts_in: "the month the money landed in Revolut",
-        to_sort: c.toSort.map((e) => line(e) + (c.fromOwn(e) ? ` · from your own ${c.fromOwn(e).name}: link it with link_transfer` : " · sort it, or ask Luke")),
-        waiting_in_wise_or_paypal: c.waiting.map((e) => line(e) + " · when it reaches Revolut, link it"),
-        own_transfers_to_check: c.ownTransfers.map((e) => line(e) + " · " + S.transferWords(e)),
-        ...(c.statementLater && c.statementLater.length ? { statement_landed_later: c.statementLater.map((e) => `statement ${(e.statement || e.date || "").slice(0, 7)}, landed ${e.date}: counts in ${(e.date || "").slice(0, 7)}`) } : {}),
-        ...(c.suggestions && c.suggestions.length ? { possible_revolut_matches: c.suggestions.map((s) => { const rows = (s.ids || [s.id]).map((id) => c.waiting.find((x) => x.id === id)).filter(Boolean); const who = rows.map((w) => `${S.hidePrivate(w.payer)} ${w.currency} ${w.amount} (id ${w.id})`).join(" + "); return `${who} may match ${s.matches.map((m) => `${m.date} ${m.currency} ${m.amount} (id ${m.id})`).join(" or ")}. ${s.confirm || "Confirm with one link_transfer call. Nothing is linked until you do."}`; }) } : {}),
-        verdict: c.ready ? `${label} is right: received ${money(c.received)} (Revolut).` : `${label} is not right yet: ${c.toSort.length} to sort, ${c.waiting.length} waiting in Wise or PayPal.`,
-        /* A7 (17 Nov 2026): a closed month says so, with every change since (old -> new) */
-        ...(await S.monthCloseView(store, now, c.month).then((v) => v ? { closed: { line: S.closeLine(v), evidence: v.evidence, changes_since: S.closeChangeLines(v.changes) } }
-          : c.ready && c.month < today.slice(0, 7) ? { close_it: "It is ready: close it with close_month (add evidence links: the statements or the sheet)." } : {})) };
-    }
-    case "payments": {
-      const r = await S.listPayments(store, now, { month: args.month, account: args.account, source: args.source, payer: args.payer, status: args.status, limit: args.limit, changed_since: args.changed_since });
-      return { month: r.month, total: r.total, received: cur(r.received), received_note: r.received_note, writes_to_sheet: false,
-        counted: r.counted, payments: r.payments.map((e) => { const o = S.payOut(e, r.month, r.lookup); return { id: e.id, statement_month: o.statement_month, landed_month: o.landed_month, counts_in: o.counts_in, date: o.date, payer: o.payer, amount: e.amount, currency: e.currency, status: o.status,
-        category: e.category, source: e.source || "", account: o.account, added_by: e.by, counted: o.counted, ...(e.song ? { song: e.song } : {}), ...(e.store ? { store: e.store } : {}), ...(o.counts_note ? { counts_note: o.counts_note } : {}), ...(o.note ? { note: o.note } : {}), ...(o.paid_by ? { paid_by: o.paid_by } : {}), ...(o.moved_to ? { moved_to: o.moved_to } : {}) }; }),
-        ...(r.total > r.payments.length ? { more: `${r.total - r.payments.length} more: narrow it (account, source, payer, status) or raise limit` } : {}) };
-    }
-    case "income_status": {
-      const i = await S.incomeState(store, now);
-      const hqAns = ctx.hq ? await ctx.hq().catch(() => null) : null;
-      const per_song = await perSongAnswer(store, now, hqAns);
-      const sourceName = (s) => (/tipalti/i.test(s.name) && /create|e-?check/i.test(s.name) ? "Create Music" : s.name);
-      const line = (s) => ({ name: sourceName(s), id: s.id, category: s.category, lands_in: s.lands || "", expected: s.cadence, owner: s.owner, state: s.verdict, why: s.why,
-        last_payment: s.last ? `${s.last.date} ${s.last.currency} ${s.last.amount.toFixed(2)} (${s.last.status})` : "none logged",
-        this_month: Object.keys(s.monthTotal || {}).length ? cur(s.monthTotal) : (Object.keys(s.monthWaiting || {}).length ? `${cur(s.monthWaiting)} in Wise or PayPal, not received` : "nothing logged"), ...(s.needsLuke ? { needs_luke: s.needsLuke } : {}),
-        /* round 2: each account of a source paid into several (RouteNote's two) */
-        ...(s.byAccount ? { by_account: s.byAccount.map((a) => `${a.account}: ` + (a.last ? `${a.last.date} ${a.last.currency} ${a.last.amount.toFixed(2)} (${a.last.status})` : "none logged")) } : {}) });
-      return { month: i.month, received_this_month: cur(i.received), pending_this_month: cur(i.pendingOnly), payments_logged_this_month: i.count,
-        /* round 3 (16 Nov 2026, Luke: "we should never put pending income only what is received") */
-        not_income_yet: "pending, payable and statement-only money is listed apart and never added to income: only received money is income",
-        received_this_year: cur(i.receivedYear), received_this_year_note: i.receivedYearNote,
-        /* 17 Nov 2026: money in Wise / PayPal is seen, not counted, until it reaches Revolut (link_transfer) */
-        in_wise_or_paypal_not_counted: cur(i.holding),
-        in_wise_or_paypal_not_counted_is: `this month (${i.month}) only. Older money still waiting is in waiting_from_earlier_months.`,
-        waiting_in_wise_or_paypal: (i.holdingList || []).map((e) => ({ id: e.id, month: e.date.slice(0, 7), line: `${e.date} · ${S.hidePrivate(e.payer)} · ${e.currency} ${e.amount.toFixed(2)} · ${e.account}` })),
-        /* v18 (21 Nov 2026): a Wise or PayPal row from an earlier month that never reached Revolut */
-        waiting_from_earlier_months: (i.holdingOlder || []).map((e) => ({ id: e.id, month: e.date.slice(0, 7), line: `${e.date} · ${S.hidePrivate(e.payer)} · ${e.currency} ${e.amount.toFixed(2)} · ${S.holdingLabel(e)}` })),
-        duplicates: i.duplicates.map((x) => `${x.date} · ${x.currency} ${Number(x.amount).toFixed(2)} · "${x.also}" is the same payment as "${x.kept}" (id ${x.id}): counted once`),
-        /* batch 4: the music's own money (no salary), what is owed and ready to pay out, statements under the payout line */
-        royalties_only_this_month: cur(i.royaltiesOnly), payable_this_month: cur(i.payable), statement_only_this_month: cur(i.statementOnly),
-        accounts: i.accounts.map((a) => ({ name: a.name, owner: a.owner, checked_today: a.lastLook === today, last_checked: a.lastLook || "never", state: a.verdict })),
-        sources: i.sources.map(line), problems: i.problems,
-        /* what you submitted yourself, with the id and month fix_payment needs */
-        your_payments: i.entries.filter((e) => e.by === me).slice(0, 15).map((e) => ({ id: e.id, month: (e.statement || e.date).slice(0, 7), line: `${e.date} · ${e.payer} · ${e.currency} ${e.amount.toFixed(2)} · ${e.status} · ${e.account} · ${e.category}` })),
-        newest_payments: i.entries.slice(0, 15).map((e) => { const o = S.payOut(e, i.month, i.entries); return `${o.date} · ${o.payer} · ${e.currency} ${e.amount.toFixed(2)} · ${o.status} · ${o.account} · by ${e.by} (id ${e.id})`; }),
-        ...(i.count > 15 ? { more_payments: `${i.count - 15} more this month: use payments (month ${i.month}) to see every one, with its id` } : {}),
-        /* in the account, not yet said what they are: counted as nothing until sorted (tool sort_payment) */
-        unsorted: i.unsorted.map((e) => ({ id: e.id, month: e.date.slice(0, 7), line: `${e.date} · ${e.payer} · ${e.currency} ${e.amount.toFixed(2)} · ${e.account}`,
-          ...(e.pendingMatch ? { pending_match: { id: e.pendingMatch.id, line: `${e.pendingMatch.date} · ${e.pendingMatch.payer} · ${e.pendingMatch.currency} ${e.pendingMatch.amount.toFixed(2)} · pending` } } : {}) })),
-        /* L1 + L9 (18 Nov 2026). Amounts already on the desk only. A missing rate is "not enough data", never a guess. */
-        expected_money: { summary: i.expected.summary.text, late: i.expected.summary.late, short: i.expected.summary.short, missing: i.expected.summary.missing,
-          rows: i.expected.rows.slice(0, 30).map((r) => ({ id: r.id, source: r.source || r.payer, amount: `${r.currency} ${Number(r.amount).toFixed(2)}`, due: r.due || "not known yet", due_from: r.dueNote || "not known yet",
-            status: r.status, flags: r.flags.length ? r.flags : (r.open ? ["waiting"] : ["landed"]), ...(r.shortBy ? { short_by: `${r.shortBy.currency} ${r.shortBy.amount.toFixed(2)}${r.shortReason === "unexplained" ? " short, unexplained" : ""}` } : {}),
-            statement: r.statement.date, payable: r.payable || r.payableState, paid: r.paid ? r.paid.date : (r.missingLink ? "the payment isn't in the months read" : "not there yet"),
-            landed: r.landed ? r.landed.date : "not there yet", days: r.days })),
-          missing_sources: i.expected.missing.map((m) => ({ source: m.source, due: m.due, why: m.why })),
-          learned: i.expected.learned.filter((x) => x.enough).map((x) => ({ source: x.source, pay_day: x.day, from_payments: x.payments })),
-          not_enough_to_learn: i.expected.learned.filter((x) => !x.enough).map((x) => ({ source: x.source, payments: x.payments, why: x.why })) },
-        payout_routes: (i.routes || []).map((r) => ({ route: r.name, payouts: r.payouts, cost: S.routeCostText(r) })),
-        per_song };
-    }
-    case "sort_payment": {
-      const e = await S.sortIncome(store, now, roster, { by: me, id: args.id, month: args.month, status: args.status, category: args.category, pending_id: args.pending_id, source: args.source, note: args.note, song: args.song, store: args.store });
-      return { saved: true, id: e.id, status: e.status, category: e.category, recorded: `${e.arrived || e.date} · ${e.payer} · ${e.currency} ${e.amount.toFixed(2)} · ${e.status}` };
     }
     case "set_my_card": {
       if (me === "Claude") throw new S.StaffError("Cards are for the bots.");
@@ -1510,22 +1298,13 @@ async function runTool(tool, args, ctx, read) {
         ...(desk.health ? {} : { accounts_note: "Account health could not be read just now: red accounts are not in total." }),
         note: "Read only. total is the number on Luke's phone. Nothing was changed." };
     }
-    case "song_pl": {
-      const hqAns = ctx.hq ? await ctx.hq().catch(() => null) : null;
-      const pl = await perSongAnswer(store, now, hqAns);
-      return { read_only: true, wrote: false, ...pl, note: "Read only. A figure that was not recorded stays missing. Nothing was written." };
-    }
     case "read_guide": {
       const g = await S.getGuide(store);
       /* the live rules win over a stored guide from 12 Nov (18 Nov 2026 night test). The stored text is not rewritten. */
       const live = `The connector has ${TOOLS.length} tools right now: ${TOOLS.map((t) => t.name).join(", ")}. Where the guide below says otherwise, this line and the tools' own descriptions are right.`;
       const current = [
-        "CURRENT MONEY RULES (these win over any older date in the guide below):",
-        "Income counts once, when it lands in Revolut, in the month it lands. A Wise or PayPal row that moved to Revolut is not counted again. Only received money in Revolut is income.",
-        "Money in Wise is waiting in Wise. Money in PayPal is waiting in PayPal. Neither is received until link_transfer ties it to the Revolut credit that carried it.",
-        "A statement that is still payable is settled the same way payments settles it: paid_by. It then shows as settled, not still payable.",
-        "expected_money lists each statement. payout_routes shows Exchange and fees from amounts already recorded. A gap with no source is short, unexplained, never a fee. A split with no rule Luke confirmed says rule pending. close_month needs an evidence link (https). A remainder of 1.00 or less after every Revolut leg of one Wise or PayPal payment is left in Wise or PayPal, not a fee.",
-        "A payment counts in the month it arrived. HQ never moves money and never writes to the Google Sheet.",
+        /* 24 Nov 2026, Luke: money is no longer on HQ. This line wins over the money rules in an older stored guide. */
+        "CURRENT MONEY RULE (it wins over any older date in the guide below): HQ no longer handles money. No income, payments, Revolut or income sheet. Stop checking them and delete money tasks. Ad spend stays: record_spend and the USD 1,000 cap.",
         "GROWTH (19 Nov 2026). Daily numbers are logged on the desk with log_growth and read back with read_growth. They are not written into a Google Sheet. YouTube's count is subscribers, not followers. watch_hours may be a decimal (56.6). A YouTube video may be a video id when there is no https link. official_views and other_views are that day's views. channel_views is the lifetime total. TikTok fan signals go in fan_signals (handle, quote, link), the same idea as the Instagram fan inbox. Content ID claims are on the Rights page: read them with read_claims. Laura marks the day checked with log_growth claims_checked true. A missing number is left out. The page says not reported. Do not send a zero you did not see.",
         `RouteNote mail is read from ${S.ROUTE_NOTE_INBOX} (Lilian's mail is forwarded there). A draft to a moderation team is From ${S.MODERATION_FROM}, CC ${S.MODERATION_CC}. HQ does not send the email.`,
       ].join("\n");
@@ -1590,14 +1369,6 @@ async function runTool(tool, args, ctx, read) {
       const conn = connectorStatus(TOOLS, args); /* the bots share ONE connector: their app lists every tool */
       const card_answers = await C.answersFor(store, me);
       const luke_tap = args.luke_tap && typeof args.luke_tap === "object" ? await C.checkTap(store, args.luke_tap, now) : null;
-      /* ids and dates of unsorted payments (18 Nov 2026). luke_briefing keeps the short count. */
-      const incomeProblems = (inc) => (inc && inc.problems || []).map((p) => {
-        const base = String(p).replace(/\s*\(id [^)]+\)/gi, "").replace(/\s{2,}/g, " ").trim();
-        if (!/nobody has sorted/.test(base) || !(inc.unsorted || []).length) return base;
-        const listed = inc.unsorted.slice(0, 12).map((e) => `${e.id} (${e.date})`).join(", ");
-        const more = inc.unsortedCount > 12 ? ` (+${inc.unsortedCount - 12} more)` : "";
-        return `${base}: ${listed}${more}`;
-      });
       const questions = (from) => desk.messages.filter((m) => S.isOpen(m) && m.to === "Luke" && m.from === from).map((m) => {
         const link = S.httpsLink(m.link) || (Array.isArray(m.links) ? m.links.map((x) => S.httpsLink(x)).find(Boolean) : "");
         return { id: m.id, needs: m.needs, waiting: S.waitedFor(now - Date.parse(m.at)), since: m.sp, text: S.excerptText(S.hidePrivate(m.text), 160), ...(link ? { link } : {}) };
@@ -1619,7 +1390,6 @@ async function runTool(tool, args, ctx, read) {
       /* the spotify step is done by the daily report, never by release_step (11 Nov 2026, review) */
       const spotNext = firstRs && firstRs.key === "spotify";
       const nextRel = rel.find((v) => v.date && v.date >= today);
-      const revolutLive = ((desk.income && desk.income.entries) || []).some((e) => /revolut/i.test(e.account || ""));
       let igConnected = false;
       try { if (ctx.ig) { const st = await ctx.ig().get("state.json"); igConnected = !!(st && (st.lastOkAt || st.username)); } } catch {}
       const knownDuty = INSTRUCTION_LINES.map(([, text]) => text);
@@ -1630,7 +1400,7 @@ async function runTool(tool, args, ctx, read) {
       const dutyTask = (task) => (me === "Atlas" && /monthly listeners in note|salvation/i.test(task || "")
         ? "Log yesterday's Spotify numbers for every released song, plus monthly listeners and Brazil listeners in their own fields (monthly_listeners and brazil_listeners)."
         : uncut(task));
-      const clearBlock = (text) => S.blockerForDuty("", S.freshBlocker(text, { igConnected, revolutLive, ...lyricOpt }), titles);
+      const clearBlock = (text) => S.blockerForDuty("", S.freshBlocker(text, { igConnected, ...lyricOpt }), titles);
       const shownBlocker = clearBlock(w.blockers);
       const signedBits = [];
       for (const person of b.staff) for (const bit of [person.blockers, person.card && person.card.needs, person.card && person.card.workingOn]) if (bit) signedBits.push({ who: person.name, text: bit });
@@ -1638,7 +1408,7 @@ async function runTool(tool, args, ctx, read) {
       const signedOut = S.signedOutLines(signedBits).filter((x) => x.who === me).map((x) => x.line);
       const backIn = S.signedInAgain(signedBits); /* v18: T-30's "TikTok Ads sign-in" when TikTok is back */
       const duties = w.duties.filter((d) => !S.staleTask(d)).map((d) => {
-        const blocker = S.blockerForDuty(d.task, S.freshBlocker(d.blocker, { igConnected, revolutLive, ...lyricOpt }), titles);
+        const blocker = S.blockerForDuty(d.task, S.freshBlocker(d.blocker, { igConnected, ...lyricOpt }), titles);
         const status = d.late ? "late" : (d.status === "blocked" && !blocker ? "todo" : d.status);
         return { id: d.id, task: dutyTask(d.task), due: d.due || "today", status, ...(blocker ? { blocker } : {}) };
       });
@@ -1660,7 +1430,7 @@ async function runTool(tool, args, ctx, read) {
           if (!w.last) return "none yet";
           let line = `${w.last.at} ${w.last.status}: ${w.last.message}${w.last.link ? " " + w.last.link : ""}`;
           if (w.last.status === "blocked") {
-            const fresh = S.freshBlocker(w.last.message, { igConnected, revolutLive, ...lyricOpt });
+            const fresh = S.freshBlocker(w.last.message, { igConnected, ...lyricOpt });
             const cardClear = w.card && !String(w.card.blockers || "").trim() && w.card.oldBlockers;
             if (fresh === "" || cardClear) line += " (stale: that blocker was resolved)";
           }
@@ -1668,9 +1438,9 @@ async function runTool(tool, args, ctx, read) {
         })(),
         ...(shownBlocker && !w.blockersStale ? { your_known_blockers: shownBlocker, your_known_blockers_how: 'If this no longer stands in your way, clear it: set_my_card with blockers "" (empty). working_on can be left out. If it changed, send the new words in blockers.' } : {}),
         ...(shownBlocker && w.blockersStale ? { your_known_blockers_old: "old, still true? " + shownBlocker, your_known_blockers_how: 'This blocker is more than 48 hours old, so it is off the headline. If it still stands, send it again with set_my_card (blockers). If it does not, send blockers "".' } : {}),
-        ...(/^(ledger|sheet|nova|alfred)$/i.test(me) ? { income_problems: incomeProblems(b.income) } : {}),
-        /* L1 + L9: Ledger and Sheet see the summary at the start of the day. The full rows are in income_status. luke_briefing is unchanged. */
-        ...(me === "Ledger" || me === "Sheet" ? { expected_money: b.income.expected ? b.income.expected.summary.text : "not read", payout_routes: S.routeSummary(b.income.routes) } : {}),
+        /* 24 Nov 2026, Luke: "leave a note for the bots telling them to stop checking all things related to money and
+           delete any tasks related to money". Ledger and Sheet get it at the start of every run until Luke gives them new work. */
+        ...(MONEY_STOP_BOTS.includes(me) ? { money_stopped: MONEY_STOP } : {}),
         /* L5: Verse, on a release day only. Not a sheet duty, and not the lyrics. */
         ...(me === "Verse" ? { lyrics_duty: rel.filter((v) => v.status === "scheduled" && v.daysToGo != null && v.daysToGo >= 0 && v.daysToGo <= 14).map((v) => `${v.title}: submit the approved lyrics on Musixmatch when the song shows there. A song not on Musixmatch yet is not a block.`) } : {}),
         release_steps: rs, rules: RULES,
@@ -1714,8 +1484,10 @@ async function runTool(tool, args, ctx, read) {
           ...(hq ? {} : { source: "the desk only: the sheet's Releases tab was not read, so an earlier release there can't be ruled out" }) } : hq ? "none planned" : "not read",
         unknown_in_spotify: b.sightings.items.filter((x) => x.state === "unknown").map((x) => `${x.title}, ${x.dateWords}`),
         ...(me === "Alfred" ? forYou([]) : {}), /* Alfred's call marks his messages read: they are handed to him here */
-        /* v18 (21 Nov 2026, Luke's spec): the same keys; a problem no longer carries a payment id */
-        income_this_month: { received: cur(b.income.received), pending: cur(b.income.pendingOnly), payable: cur(b.income.payable), problems: b.income.problems.map(S.lukeProblem) },
+        /* v18 (21 Nov 2026, Luke's spec): the same keys. 24 Nov 2026, Luke: "lets fully remove the money section".
+           Rule 6 (Alfred depends on luke_briefing) keeps the SHAPE: the key, an object with the same four fields,
+           three strings and a list. The strings now say money is no longer on HQ and the list is empty. */
+        income_this_month: { received: NO_MONEY, pending: NO_MONEY, payable: NO_MONEY, problems: [] },
         duties_not_done: hq ? quiet : "not read",
         how_to_report: "One message, 8 lines at most. Numbers exactly as given here, with their currency. \"not read\" is said as not read, never as 0. Decisions: say the question and the options.", ...(sheetNote ? { note: sheetNote } : {}) };
     }
@@ -1728,10 +1500,6 @@ async function runTool(tool, args, ctx, read) {
         (cap.rateUsed ? `; EUR at ${cap.rateUsed.value} (${rateFrom})` : "") +
         (cap.estimated || unread ? `; estimated${unread ? ": " + unread : ""}` : "")
         : "not read: the team's sheet could not be read just now";
-      const inc = b.income;
-      /* received only (16 Nov 2026, Luke); Ledger's problems by name, not a count */
-      /* v18 (21 Nov 2026): said short and whole, never cut with "…", no payment ids or payer names */
-      const income = S.shortIncomeLine(inc, cur);
       /* a decision's deadline: an approval -> that step's day; "ready to resubmit" -> the release day */
       const due = (m) => {
         const id = m.approval ? m.approval.id : m.ask === "resubmit" ? m.release : null;
@@ -1791,7 +1559,8 @@ async function runTool(tool, args, ctx, read) {
         plainSign.push(t);
       }
       const need = luke.count;
-      return { today, now_sao_paulo: b.now, ad_spend, income, decisions,
+      /* 24 Nov 2026, Luke: money is no longer on HQ, so the short briefing has no income line any more */
+      return { today, now_sao_paulo: b.now, ad_spend, decisions,
         ...(asks.length > 3 ? { more_decisions: `${asks.length - 3} more waiting on Luke: see the dashboard` } : {}),
         needs_luke_sign_in: plainSign.length ? plainSign : ["nothing"],
         needs_you: need.total,

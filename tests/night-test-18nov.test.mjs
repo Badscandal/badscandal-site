@@ -15,8 +15,6 @@ const R = S.DEFAULT_ROSTER;
 const tool = (n) => TOOLS.find((t) => t.name === n);
 const call = (d, name, args, o = {}) => callTool(tool(name), args, { store: d, now: o.now || NOW, role: "bot", hq: o.hq || (async () => null) });
 const FULL = { kind: "Self-release", wav: "https://example.com/m.wav", artwork: "https://example.com/c.jpg", language: "Portuguese", explicit: "no", genre: "Dance", writers: "Sample Writer: music and lyrics", copyright: "℗ 2026 Sample · © 2026 Sample" };
-const pay = (over) => ({ history: [], reference: "", period: "", source: "", note: "", by: "Ledger", at: "2026-11-01T15:00:00Z", category: "Other", ...over });
-const src = (id, name) => ({ id, name, kind: "payer", category: "Other", currency: "EUR", lands: "", cadence: "monthly", owner: "Ledger", state: "active", match: [name.toLowerCase()], how: "", blocker: "", needsLuke: "" });
 
 test("reconnect is the count or the names, never a version bump on its own", () => {
   const same = connectorStatus(TOOLS, { tools_seen: TOOLS.length, list_version: "00000000", tools_version: "ffffffff" });
@@ -25,7 +23,8 @@ test("reconnect is the count or the names, never a version bump on its own", () 
   const names = connectorStatus(TOOLS, { tools_seen: TOOLS.length, tool_names: ["my_day", "not_a_tool"] });
   assert.equal(names.reconnect_needed, true);
   assert.match(names.status, /reconnect needed/);
-  assert.equal(TOOLS.filter((t) => ["account_health", "needs_you", "song_pl"].includes(t.name)).length, 3);
+  /* 24 Nov 2026, Luke: money removed from HQ: song_pl went; account_health and needs_you stay */
+  assert.equal(TOOLS.filter((t) => ["account_health", "needs_you", "song_pl"].includes(t.name)).length, 2);
 });
 
 test("the connector says the tools version when a bot connects", async () => {
@@ -183,9 +182,8 @@ test("the three read-only tools write nothing", async () => {
   const needs = await call(d, "needs_you", { bot: "Nova" });
   assert.equal(needs.read_only, true);
   assert.equal(needs.open, 0);
-  const pl = await call(d, "song_pl", { bot: "Ledger" });
-  assert.equal(pl.read_only, true);
-  assert.equal(pl.wrote, false);
+  /* 24 Nov 2026, Luke: money removed from HQ: song_pl (the third read-only tool) is gone */
+  assert.equal(TOOLS.some((t) => t.name === "song_pl"), false);
 });
 
 test("a sign-in drops the ads account number and keeps each day", async () => {
@@ -210,47 +208,16 @@ test("empty brackets do not survive a signed-out line", () => {
   assert.equal(day.includes("()"), false);
 });
 
-test("several Revolut legs of one Wise payment are not a fee", () => {
-  const wise = pay({ id: "iwiseleg001", date: "2026-11-02", payer: "Harbour Audio", amount: 4388.43, currency: "EUR", status: "received", account: "Wise", source: "harbour" });
-  const a = pay({ id: "irevleg0001", date: "2026-11-03", payer: "Harbour Audio", amount: 1000, currency: "EUR", status: "received", account: "Revolut", from: ["iwiseleg001"], source: "harbour" });
-  const b = pay({ id: "irevleg0002", date: "2026-11-03", payer: "Harbour Audio", amount: 1388, currency: "EUR", status: "received", account: "Revolut", source: "harbour" });
-  const c = pay({ id: "irevleg0003", date: "2026-11-04", payer: "Harbour Audio", amount: 2000, currency: "EUR", status: "received", account: "Revolut", source: "harbour" });
-  const route = S.routeCosts([wise, a, b, c], [src("harbour", "Harbour Audio")])[0];
-  assert.equal(route.fees.EUR, undefined);
-  assert.match(S.routeCostText(route), /left in Wise or PayPal, not a fee/);
-});
-
-test("a statement paid_by is settled, and a note drops a claim the desk already has", () => {
-  const stmt = pay({ id: "istmtsettle", date: "2026-11-02", payer: "Harbour Audio", amount: 40, currency: "EUR", status: "payable", account: "Statement only", paidBy: "irevsettle1" });
-  const rev = pay({ id: "irevsettle1", date: "2026-11-10", payer: "Harbour Audio", amount: 40, currency: "EUR", status: "received", account: "Revolut" });
-  const row = S.moneyExpectations([stmt, rev], [src("harbour", "Harbour Audio")], TODAY).expected.rows.find((r) => r.id === "istmtsettle");
-  assert.equal(row.open, false);
-  assert.equal(row.flags.includes("late"), false);
-  const noted = pay({ id: "irevnote001", date: "2026-11-12", payer: "Harbour Audio", amount: 40, currency: "EUR", status: "received", account: "Revolut", note: "The USD 12.00 statement isn't on the desk." });
-  const other = pay({ id: "istmtusd001", date: "2026-11-01", payer: "Harbour Audio", amount: 12, currency: "USD", status: "statement only", account: "Statement only" });
-  assert.equal(/on the desk/i.test(S.displayNote(noted, [noted, other])), false);
-  assert.match(S.displayNote(pay({ ...noted, note: "card 4242424242424242" }), []), /\[hidden\]/);
-});
-
-test("month_check lists a Wise transfer and skips a pocket transfer", async () => {
-  const d = memoryDesk();
-  await d.setJSON("inc/2026-11.json", [
-    pay({ id: "itranswise1", date: "2026-11-04", payer: "From Wise", amount: 10, currency: "EUR", status: "transfer", account: "Revolut", by: "HQ" }),
-    pay({ id: "itranspock1", date: "2026-11-04", payer: "Pocket move", amount: 10, currency: "EUR", status: "transfer", account: "Revolut", by: "HQ" }),
-  ]);
-  const check = await S.monthCheck(d, NOW, { month: "2026-11" });
-  assert.ok(check.ownTransfers.some((e) => e.id === "itranswise1"));
-  assert.equal(check.ownTransfers.some((e) => e.id === "itranspock1"), false);
-});
-
-test("the guide leads with the current money rules", async () => {
+test("the guide leads with the current money rule", async () => {
+  /* 24 Nov 2026, Luke: money removed from HQ. The money rules are now one line: HQ no longer handles money. */
   const d = memoryDesk();
   await d.setJSON("guide.json", { text: "STAFF GUIDE from 12 Nov. eighteen tools. Income is whatever the sheet said.", at: "2026-11-12T12:00:00Z" });
   const g = await call(d, "read_guide", { bot: "Ledger" });
-  assert.match(g, /^CURRENT MONEY RULES/);
-  assert.match(g, /waiting in Wise/);
+  assert.match(g, /^CURRENT MONEY RULE/);
+  assert.match(g, /HQ no longer handles money/);
+  assert.doesNotMatch(g, /waiting in Wise|link_transfer/);
   assert.match(g, /luke@badscandal.com/);
-  assert.ok(g.indexOf("CURRENT MONEY RULES") < g.indexOf("12 Nov") || g.indexOf("CURRENT MONEY RULES") < g.indexOf("stored"));
+  assert.ok(g.indexOf("CURRENT MONEY RULE") < g.indexOf("12 Nov") || g.indexOf("CURRENT MONEY RULE") < g.indexOf("stored"));
 });
 
 test("a spend row matches the post that names the song, and the organic line is said", () => {

@@ -5,7 +5,7 @@ import { readFileSync } from "node:fs";
 import * as S from "../netlify/lib/staff.mjs";
 import * as C from "../netlify/lib/action-cards.mjs";
 import { pingBot, pingBody } from "../netlify/lib/desk-push.mjs";
-import { capFromRows, mondayDraft, mondayText, pageProblems, listenProblems, readOembed, whoseTrack, runSiteCheck, runCapCheck, runReleaseWatch, runMonthJob, runMonday, judgeRelease } from "../netlify/lib/hq-jobs.mjs";
+import { capFromRows, mondayDraft, mondayText, pageProblems, listenProblems, readOembed, whoseTrack, runSiteCheck, runCapCheck, runReleaseWatch, runMonday, judgeRelease } from "../netlify/lib/hq-jobs.mjs";
 import { memoryDesk } from "../netlify/lib/staff-sample.mjs";
 import { callTool, TOOLS } from "../netlify/lib/staff-tools.mjs";
 
@@ -16,7 +16,8 @@ const call = (d, name, args, now = NOW) => callTool(tool(name), args, { store: d
 const roster = S.DEFAULT_ROSTER;
 
 test("the connector stays at 49 tools", () => {
-  assert.equal(TOOLS.length, 55); /* content_ideas (Spark) + account_health, needs_you, song_pl (18 Nov 2026 night test) + profile_jobs, profile_master, profile_rework, profile_uploaded (PR #87) */
+  /* 24 Nov 2026, Luke: money removed from HQ: the eleven income tools went, 55 -> 44; the month-close job went too */
+  assert.equal(TOOLS.length, 44); /* content_ideas (Spark) + account_health, needs_you, song_pl (18 Nov 2026 night test) + profile_jobs, profile_master, profile_rework, profile_uploaded (PR #87) */
   assert.ok(tool("my_day").inputSchema.properties.luke_tap);
   assert.ok(tool("send_message").inputSchema.properties.card);
   assert.ok(tool("post_update").inputSchema.properties.card);
@@ -200,23 +201,6 @@ test("release day proposes our track and flags a different profile", async () =>
   assert.ok(msgs.some((m) => m.to === "Forge" && /Wait for his yes/.test(m.text)));
   const again = await runReleaseWatch(d, NOW + 60000, roster, { fetch, releases: rel });
   assert.deepEqual(again.ids, []);
-});
-
-test("the 1st asks Luke to close the month only when month_check is ready", async () => {
-  const d = memoryDesk();
-  const first = Date.parse("2026-12-01T03:30:00Z");
-  const waiting = await runMonthJob(d, first, roster, { monthCheck: async () => ({ ready: false, toSort: [{}], waiting: [{ id: "w" }] }) });
-  assert.equal(waiting.ready, false);
-  const msgs = await S.listMessages(d, first, 1);
-  assert.equal(msgs[0].to, "Ledger");
-  assert.match(msgs[0].text, /1 to sort, 1 still/);
-  assert.equal(JSON.stringify(msgs).includes("payer"), false);
-  const ready = await runMonthJob(d, first + 1000, roster, { monthCheck: async () => ({ ready: true, toSort: [], waiting: [] }) });
-  assert.equal(ready.ready, true);
-  const card = (await C.answersFor(d, "Ledger"))[0];
-  assert.match(card.text, /^Close 2026-11\?$/);
-  const skip = await runMonthJob(d, Date.parse("2026-11-18T15:00:00Z"), roster, {});
-  assert.equal(skip.skipped, "not the 1st");
 });
 
 test("the Monday draft names a post and no amount", async () => {

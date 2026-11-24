@@ -1,5 +1,7 @@
 /* HQ workspaces (18 Nov 2026): Social Farm and Label, kept off the BADSCANDAL numbers.
-   Farm pages and posts, and Label covers, spend, streams and payouts, live under ws/ only.
+   Farm pages and posts, and Label covers, spend and streams, live under ws/ only.
+   (24 Nov 2026, Luke: money is no longer on HQ. Label payouts and the ROI went; old ws/label/payouts.json
+   rows stay in the store, unread.)
    Nothing here writes grow/, spend/, inc/ or releases.json, and nothing here pays anyone.
    Official releases never gain a licence step. Label covers do: pack, then licence, then upload, then pitch. */
 import * as C from "./action-cards.mjs";
@@ -25,11 +27,10 @@ const KEY = {
   accounts: "ws/farm/accounts.json", posts: "ws/farm/posts.json",
   genres: "ws/label/genres.json", aliases: "ws/label/aliases.json",
   releases: "ws/label/releases.json", spend: "ws/label/spend.json", stats: "ws/label/stats.json",
-  payouts: "ws/label/payouts.json", research: "ws/label/research.json", trends: "ws/label/trends.json",
+  research: "ws/label/research.json", trends: "ws/label/trends.json",
 };
 const FARM_WHO = ["Steve", "Kevin", "Laura", "Nova", "Claude", "Luke"];
 const SPEND_WHO = ["Forge", "Nova", "Claude", "Luke"];
-const PAY_WHO = ["Ledger", "Sheet", "Nova", "Claude", "Luke"];
 const STREAM_WHO = ["Atlas", "Nova", "Claude", "Luke"];
 const UPLOAD_WHO = ["Drop", "Nova", "Claude", "Luke"];
 const PACK_WHO = ["Nova", "Claude", "Luke"];
@@ -82,13 +83,6 @@ function byCurrency(rows) {
   const m = new Map();
   for (const r of rows) if (r && r.amount != null && r.currency) m.set(r.currency, Math.round(((m.get(r.currency) || 0) + Number(r.amount)) * 100) / 100);
   return [...m.entries()].map(([currency, amount]) => ({ currency, amount }));
-}
-function roiOf(spend, payouts) {
-  /* a statement has to be recorded before a return exists; no rate is invented */
-  if (!payouts.length) return "pending";
-  const s = byCurrency(spend), p = byCurrency(payouts);
-  if (s.length !== 1 || p.length !== 1 || s[0].currency !== p[0].currency || !s[0].amount) return "pending";
-  return (p[0].amount / s[0].amount).toFixed(2);
 }
 function playlistPlaceholder(genreId) {
   return { genreId, name: "", url: "", owner_bot: "", status: "not set up" };
@@ -426,7 +420,7 @@ export function presentRelease(r, aliases, today) {
 }
 function releaseCard(r, aliases, today) { return presentRelease(r, aliases, today); }
 
-/* ---------- numbers that never enter the BADSCANDAL cap or income ---------- */
+/* ---------- numbers that never enter the BADSCANDAL cap ---------- */
 export async function recordSpend(store, now, a) {
   allow(a.by, SPEND_WHO, "record Label ad spend");
   const genre = await genreOf(store, a.genre);
@@ -437,20 +431,6 @@ export async function recordSpend(store, now, a) {
   const row = { id: S.newId("ls", now), genreId: genre.id, aliasId: a.alias ? slug(a.alias) : "", platform: text(a.platform, 40, "Platform"), date: dayOf(a.date || S.spDay(now), "Date"), amount, currency: currency || "", not_read: text(a.not_read, 120, "Not read"), by: a.by, at: new Date(now).toISOString() };
   await S.mutate(store, KEY.spend, [], (list) => { list.unshift(row); list.splice(400); return { value: row }; });
   return { saved: true, workspace: "label", genre: genre.name, ...(amount == null ? {} : { amount: `${row.currency} ${amount.toFixed(2)}` }), note: "Recorded on the Label workspace. Not counted in the USD 1,000 cap.", shown_on: "badscandal.com/hq, Label" };
-}
-export async function recordPayout(store, now, a) {
-  allow(a.by, PAY_WHO, "record a Label payout");
-  noPayment({ card: a.card, iban: a.iban, cvv: a.cvv });
-  const genre = await genreOf(store, a.genre);
-  const amount = S.amountOf(a.amount);
-  if (amount == null || amount < 0) fail("The amount could not be read. Nothing was saved.");
-  const currency = String(a.currency || "").trim().toUpperCase();
-  if (!/^[A-Z]{3}$/.test(currency)) fail("Currency is the three-letter code it was paid in.");
-  const payer = text(a.payer, 80, "Payer");
-  if (payer.length < 2) fail("Who paid? Nothing was saved.");
-  const row = { id: S.newId("lp", now), genreId: genre.id, aliasId: a.alias ? slug(a.alias) : "", payer, amount, currency, date: dayOf(a.date || S.spDay(now), "Date"), by: a.by, at: new Date(now).toISOString() };
-  await S.mutate(store, KEY.payouts, [], (list) => { list.unshift(row); list.splice(200); return { value: row }; });
-  return { saved: true, workspace: "label", genre: genre.name, recorded: `${row.date} · ${payer} · ${currency} ${amount.toFixed(2)}`, note: "Recorded as a Label statement. It is not BADSCANDAL income. HQ did not move the money.", shown_on: "badscandal.com/hq, Label" };
 }
 export async function recordStreams(store, now, a) {
   allow(a.by, STREAM_WHO, "record Label streams");
@@ -487,10 +467,9 @@ export async function addTrend(store, now, a) {
 }
 
 /* ---------- what the page draws ---------- */
-function genreBlock(g, aliases, releases, spend, stats, payouts, trends, today) {
+function genreBlock(g, aliases, releases, spend, stats, trends, today) {
   const mine = releases.filter((r) => r.genreId === g.id && r.status !== "cancelled");
   const sp = spend.filter((r) => r.genreId === g.id && r.amount != null);
-  const py = payouts.filter((r) => r.genreId === g.id);
   const st = stats.filter((r) => r.genreId === g.id && r.streams != null);
   const als = aliases.filter((a) => a.genreId === g.id);
   return {
@@ -503,8 +482,6 @@ function genreBlock(g, aliases, releases, spend, stats, payouts, trends, today) 
       releases: mine.length,
       spend: sp.length ? byCurrency(sp) : "not reported",
       streams: st.length ? st.reduce((n, r) => n + r.streams, 0) : "not reported",
-      payout: py.length ? byCurrency(py) : "not reported",
-      roi: roiOf(sp, py),
     },
   };
 }
@@ -522,11 +499,11 @@ export async function view(store, now, which) {
       accounts, posts: posts.slice(0, 40), rollups: rollups(accounts, posts),
       recording: "This only records a page that already exists. HQ does not create accounts, log in, post, or invent engagement." };
   }
-  const [genresRaw, aliasesRaw, releases, spend, stats, payouts, research, trends] = await Promise.all([
-    readList(store, KEY.genres), readList(store, KEY.aliases), readList(store, KEY.releases), readList(store, KEY.spend), readList(store, KEY.stats), readList(store, KEY.payouts), readList(store, KEY.research), readList(store, KEY.trends)]);
+  const [genresRaw, aliasesRaw, releases, spend, stats, research, trends] = await Promise.all([
+    readList(store, KEY.genres), readList(store, KEY.aliases), readList(store, KEY.releases), readList(store, KEY.spend), readList(store, KEY.stats), readList(store, KEY.research), readList(store, KEY.trends)]);
   const genres = genresShown(genresRaw);
   const aliases = aliasesShown(genres, aliasesRaw);
-  const blocks = genres.map((g) => genreBlock(g, aliases, releases, spend, stats, payouts, trends, today));
+  const blocks = genres.map((g) => genreBlock(g, aliases, releases, spend, stats, trends, today));
   const needs = [];
   for (const g of blocks) {
     if (g.aliases.some((a) => a.main && !a.name)) needs.push({ id: g.id, text: `${g.name}: the main alias has no name yet.` });
@@ -536,7 +513,7 @@ export async function view(store, now, which) {
     }
   }
   return { ok: true, workspace: "label", needs, auto: await C.workspaceNeeds(store, now, "label"), numbers: { genres: blocks.length, releases: releases.filter((r) => r.status !== "cancelled").length },
-    team: [{ name: "Licence", role: "On the BADSCANDAL roster. Easy Song Licensing after the pack is ready, then the Drive folder. Reports to Nova only." }, { name: "Nova", role: "Release pack, then records Luke's yes for each cover" }, { name: "Drop", role: "RouteNote upload, after the licence is licensed" }, { name: "Atlas", role: "Pitch, once the alias has Spotify for Artists" }, { name: "Forge", role: "Label ad spend, off the BADSCANDAL cap" }, { name: "Ledger", role: "Label payouts, when a statement arrives" }],
+    team: [{ name: "Licence", role: "On the BADSCANDAL roster. Easy Song Licensing after the pack is ready, then the Drive folder. Reports to Nova only." }, { name: "Nova", role: "Release pack, then records Luke's yes for each cover" }, { name: "Drop", role: "RouteNote upload, after the licence is licensed" }, { name: "Atlas", role: "Pitch, once the alias has Spotify for Artists" }, { name: "Forge", role: "Label ad spend, off the BADSCANDAL cap" }],
     genres: blocks, research: research.slice(0, 20),
     payments: "HQ does not take or send payment." };
 }
@@ -563,7 +540,7 @@ export function sampleWorkspace(which, now) {
     payments: "HQ does not take or send payment.", research: [],
     genres: [{ id: "ukgarage", name: "UK garage", status: "active", aliases: [clone(SEED_ALIAS)], playlist: playlistPlaceholder("ukgarage"),
       releases: [{ id: "ukgarage-northwindcover", title: "Northwind Cover", date: "2026-12-18", kind: "cover", steps, licence: lic, uploadBlocked: true, assets: { audio: "", artwork: "", canvas: "" } }],
-      trends: [], stats: { releases: 1, spend: "not reported", streams: "not reported", payout: "not reported", roi: "pending" } }] };
+      trends: [], stats: { releases: 1, spend: "not reported", streams: "not reported" } }] };
 }
 export async function workspaceAct(store, now, a) {
   const by = a.by || "Luke";

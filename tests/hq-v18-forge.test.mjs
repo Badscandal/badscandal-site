@@ -44,24 +44,8 @@ test("the short briefing's sign-in line has no empty brackets, and a sign-in tha
   assert.doesNotMatch(lines, /TikTok/);
 });
 
-test("the short briefing's income line is never cut with an ellipsis and shows no payment ids or payers", () => {
-  const inc = {
-    received: { EUR: 10 },
-    unsortedCount: 2,
-    problems: [
-      "Payments nobody has sorted: 2026-10 · 2026-10-02 · Made Up Payer · EUR 31.00 (id iabcdefgh01); 2026-10 · 2026-10-03 · Made Up Payer · EUR 9.00 (id iabcdefgh02)",
-      "Sample Distro: overdue. It usually pays by the 5th, and nothing came this month (last payment 2026-09-29 USD 12.34, waiting in PayPal)",
-    ],
-  };
-  const line = S.shortIncomeLine(inc, (o) => Object.entries(o).map(([c, a]) => `${c} ${a.toFixed(2)}`).join(" + "));
-  assert.doesNotMatch(line, /…|\.\.\./);
-  assert.doesNotMatch(line, /iabcdefgh0|Made Up Payer|\(id /);
-  assert.match(line, /2 payments to sort/);
-  assert.match(line, /Sample Distro: overdue/);
-  assert.match(line, /^Received EUR 10\.00 this month/);
-});
-
-test("luke_briefing keeps its keys; its income problems lose payment ids, and ad_spend says Google was not read", async () => {
+test("luke_briefing keeps its keys, and ad_spend says Google was not read", async () => {
+  /* 24 Nov 2026, Luke: money removed from HQ. The income-problem half (lukeProblem) went with the income lines. */
   const d = memoryDesk();
   const cap = { month: "2026-11", currency: "USD", spent: 12.5, amount: 1000, left: 987.5, status: "ok", estimated: true,
     notRead: ["Google Sat 14 Nov: signed out", "Google Sun 15 Nov: signed out", "Google Mon 16 Nov: Luke to sign in at https://example.com/x"] };
@@ -70,7 +54,7 @@ test("luke_briefing keeps its keys; its income problems lose payment ids, and ad
   assert.deepEqual(Object.keys(brief.ad_spend).slice(0, 6), ["month", "spent", "cap", "left", "status", "estimated"]);
   assert.match(brief.ad_spend.not_read, /^Google not read since 14 Nov/);
   assert.doesNotMatch(brief.ad_spend.not_read, /https?:/);
-  assert.equal(S.lukeProblem("Payments nobody has sorted: 2026-10 · Made Up Payer · EUR 31.00 (id iabcdefgh01)"), "Payments nobody has sorted: 2026-10 · Made Up Payer · EUR 31.00");
+  assert.deepEqual(brief.income_this_month, { received: "Money is no longer on HQ.", pending: "Money is no longer on HQ.", payable: "Money is no longer on HQ.", problems: [] });
 });
 
 test("read_guide says how many tools there are now, not an old count or version", async () => {
@@ -92,34 +76,6 @@ test("a task blocker that waits on a sign-in the desk says is back gets a check 
   assert.ok(t, "the task stays: the restart still waits on Luke");
   assert.match(t.blocker_check || "", /TikTok is signed in again/);
   assert.match(t.blocker_check || "", /task_update/);
-});
-
-test("Money: the month chip counts that month's payments to sort, and older ones get their own list", () => {
-  const inc = { month: "2026-11", unsortedMonth: [], unsorted: [{ id: "a", date: "2026-10-02" }, { id: "b", date: "2026-09-30" }] };
-  const split = V.toSortSplit(inc);
-  assert.deepEqual(split.month.map((e) => e.id), []);
-  assert.deepEqual(split.older.map((e) => e.id), ["a", "b"]);
-  assert.equal(V.unsortedIn(inc, "2026-11"), 0);
-  assert.equal(V.unsortedIn(inc, "2026-10"), 1);
-  const staff = fs.readFileSync(new URL("../js/hq-staff.js", import.meta.url), "utf8");
-  assert.match(staff, /V\.unsortedIn\(inc, monthKey\)/);
-  assert.match(staff, /From earlier months/);
-});
-
-test("Money says route, split, due-date and short lines in plain words, with the payment's own note", () => {
-  assert.deepEqual(L.routeLines({ payouts: 1, checkLink: 1, split: "rule pending" }), ["More landed in Revolut than was sent: the link between them needs checking.", "Split: you haven't confirmed how it is shared yet."]);
-  assert.equal(L.expectedDue({}), "Due date: not reported");
-  assert.equal(L.expectedFlags({ shortBy: { amount: 2, currency: "USD" }, shortReason: "unexplained", shortNote: "fee or short payment, not checked" }),
-    "Short USD 2.00 (the payment's note: fee or short payment, not checked)");
-  assert.equal(L.expectedFlags({ shortBy: { amount: 2, currency: "USD" }, shortReason: "unexplained" }), "Short, unexplained USD 2.00");
-  const rows = S.moneyExpectations([
-    { id: "st1", date: "2026-11-02", payer: "Sample Distro", amount: 12, currency: "USD", status: "payable", statement: "2026-11-02", paidBy: "rv1" },
-    { id: "rv1", date: "2026-11-05", payer: "Sample Distro", amount: 10, currency: "USD", status: "received", account: "Revolut", note: "fee or short payment, not checked" },
-  ], [{ id: "distro", name: "Sample Distro", kind: "payer", match: ["sample distro"], cadence: "monthly" }], "2026-11-21").expected.rows;
-  const r = rows.find((x) => x.id === "st1");
-  assert.ok(r && r.shortBy, JSON.stringify(rows));
-  assert.equal(r.shortNote, "fee or short payment, not checked");
-  assert.match(L.bankLine({ configured: true, connected: true, lastRunAt: "2026-11-21T09:50:00Z", lastOkAt: "2026-11-21T09:50:00Z", lastAdded: 0, daysLeft: 80, validUntil: "2027-02-01T00:00:00Z" }, NOW), /06:50 SP/);
 });
 
 test("a wait that started today says today, never 0 days", () => {
@@ -153,9 +109,9 @@ test("Luke's screens and task text say the desk's shorthand in plain words", () 
   assert.doesNotMatch(page, /Conversions API\)|Browser · Server|Pixel \+ server/);
   assert.doesNotMatch(fs.readFileSync(new URL("../js/hq-growth.js", import.meta.url), "utf8"), /EPV 24h/);
   assert.doesNotMatch(fs.readFileSync(new URL("../js/hq-staff.js", import.meta.url), "utf8"), /Desk push<\/h3>/);
-  const t = "Make the Meta system user (runbook B). Forge logs Meta too until the meta-api-feed brief says LIVE. Sheet keeps the Revolut-once rule.";
-  for (const out of [S.plainWords(t), L.plainWords(t), S.freshDuty(t)]) assert.doesNotMatch(out, /runbook|meta-api-feed|Revolut-once/i, out);
-  assert.match(S.lukeLine("Sheet: kept the Revolut-once rule."), /income counts once, when it lands in Revolut/);
+  /* 24 Nov 2026, Luke: money removed from HQ. The "Revolut-once rule" rewrite went with the money rules. */
+  const t = "Make the Meta system user (runbook B). Forge logs Meta too until the meta-api-feed brief says LIVE.";
+  for (const out of [S.plainWords(t), L.plainWords(t), S.freshDuty(t)]) assert.doesNotMatch(out, /runbook|meta-api-feed/i, out);
 });
 
 test("a site check rewritten from the live board carries the live time, not the old check's", () => {
@@ -165,15 +121,6 @@ test("a site check rewritten from the live board carries the live time, not the 
   assert.match(out.text, /13 of 13/);
   const same = S.freshReport({ sp: "2026-11-21 09:35", text: "Duties: 13 of 13 done, 0 blocked" }, hq, "2026-11-21 12:00");
   assert.equal(same.sp, "2026-11-21 09:35");
-});
-
-test("income_status lists money still waiting in PayPal from an earlier month, and says its total is this month's", async () => {
-  const d = memoryDesk();
-  await d.setJSON("inc/2026-09.json", [{ id: "iwait00001", date: "2026-09-29", payer: "Sample Distro", amount: 12.34, currency: "USD", status: "received", account: "PayPal", by: "Ledger", at: "2026-09-29T12:00:00Z" }]);
-  const st = await call(d, "income_status", { bot: "Ledger" });
-  assert.deepEqual(st.waiting_in_wise_or_paypal, []);
-  assert.deepEqual(st.waiting_from_earlier_months.map((x) => x.id), ["iwait00001"]);
-  assert.match(st.in_wise_or_paypal_not_counted_is, /2026-11/);
 });
 
 test("Ads: song-page visits come from the song pages, and a missing cost per engagement says why", () => {
