@@ -13,18 +13,21 @@ const ENV = { ADMIN_KEY: "correct horse", STAFF_BOT_KEY: "bot-key-for-tests-0123
 globalThis.Netlify = { env: { get: (k) => ENV[k] } };
 const NOW = Date.parse("2026-11-24T15:00:00Z");
 
-test("the export holds every month of payments and checks, the sources and the closed months, and nothing else", async () => {
+test("the export holds every month of payments and checks, the sources, source edits, split rules and closed months, and nothing else", async () => {
   const d = memoryDesk();
   await d.setJSON("inc/2026-10.json", [{ id: "p1", payer: "Sample Label", amount: 10, currency: "EUR", status: "received" }]);
   await d.setJSON("inc/2026-11.json", []);
   await d.setJSON("chk/2026-11.json", [{ account: "Wise", day: "2026-11-20" }]);
   await d.setJSON("sources.json", [{ id: "s1", name: "Sample Label" }]);
   await d.setJSON("closes.json", []);
+  await d.setJSON("close/2026-10.json", { month: "2026-10" });
+  await d.setJSON("srcedit.json", {});
+  await d.setJSON("splits.json", {});
   await d.setJSON("roster.json", [{ name: "Nova" }]);
   await d.setJSON("msg/2026-11.json", [{ id: "m1", text: "not money" }]);
   const before = JSON.stringify(await d.get("inc/2026-10.json", { type: "json" }));
   const out = await exportMoney(d, NOW);
-  assert.deepEqual(Object.keys(out.docs).sort(), ["chk/2026-11.json", "closes.json", "inc/2026-10.json", "inc/2026-11.json", "sources.json"]);
+  assert.deepEqual(Object.keys(out.docs).sort(), ["chk/2026-11.json", "close/2026-10.json", "closes.json", "inc/2026-10.json", "inc/2026-11.json", "sources.json", "splits.json", "srcedit.json"]);
   assert.equal(out.docs["inc/2026-10.json"][0].payer, "Sample Label");
   assert.equal(out.exportedAt, "2026-11-24T15:00:00.000Z");
   assert.equal(JSON.stringify(await d.get("inc/2026-10.json", { type: "json" })), before, "nothing is changed");
