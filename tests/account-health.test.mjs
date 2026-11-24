@@ -219,22 +219,8 @@ test("a visibility check and an account-status flag use only what was recorded",
   assert.match(sig(acc({}, "tiktok"), "status").text, /Not enough data/);
 });
 
-test("Content ID claims are the ones already on the desk, and a blank stays not reported", () => {
-  const open = acc({ claims: [{ claim: "Another sample claim", date: day(3), by: "Laura" }] }, "youtube");
-  const row = sig(open, "claim");
-  assert.equal(row.level, "watch");
-  assert.match(row.text, /not reported/);
-  assert.match(row.text, /Another sample claim/);
-  assert.match(row.source, /Content ID claims/);
-  const hard = acc({ claims: [{ claim: "Sample claim", claimant: "Sample Channel", impact: "video removed", date: day(4), by: "Laura" }] }, "youtube");
-  assert.equal(sig(hard, "claim").level, "red");
-  assert.match(sig(hard, "claim").text, /Sample Channel/);
-  const none = acc({ claims: [] }, "youtube");
-  assert.equal(sig(none, "claims").level, "gap");
-  assert.match(sig(none, "claims").text, /does not mean there is none/);
-});
 
-test("YouTube health is Studio only: claims, strikes and monetisation, not a post median", () => {
+test("YouTube health is Studio only: strikes and monetisation, not a post median", () => {
   const weak = [[1, 100], [2, 100], [3, 100], [5, 2000], [7, 2000], [9, 2000], [12, 2000], [16, 2000], [20, 2000]];
   const postsOnly = acc({ checks: [{ type: "reading", platform: "youtube", date: day(1), by: "Laura", posts: posts(weak) }] }, "youtube");
   assert.equal(sig(postsOnly, "reach"), undefined);
@@ -264,7 +250,7 @@ test("an Instagram connection problem does not paint the account, and a failed s
   assert.equal(/hunter2|token/.test(stopped.text), false);
   let fetched = 0;
   const store = { get: async () => { throw new Error("unread"); }, fetch: async () => { fetched += 1; } };
-  const report = await loadReport({ store: memoryDesk(), ig: store, now: NOW, claims: [], builds: [] });
+  const report = await loadReport({ store: memoryDesk(), ig: store, now: NOW, builds: [] });
   assert.equal(fetched, 0);
   const reach = report.accounts.find((a) => a.id === "instagram").signals.find((s) => s.id === "reach");
   assert.equal(reach.level, "gap");
@@ -301,7 +287,8 @@ test("the site is red when Webmaster records it down, and a failed song-page bui
 });
 
 test("log_growth records a status check without follower numbers, and the wrong bot is refused", async () => {
-  assert.equal(TOOLS.length, 55); /* content_ideas (Spark) + account_health, needs_you, song_pl (18 Nov 2026 night test) + profile_jobs, profile_master, profile_rework, profile_uploaded (PR #87) */
+  /* 24 Nov 2026, Luke: money removed from HQ: the eleven income tools went, 55 -> 44 */ 
+  assert.equal(TOOLS.length, 43); /* 24 Nov 2026: read_claims gone with Rights, money tools gone, 55 -> 43; content_ideas (Spark) + account_health, needs_you, song_pl (18 Nov 2026 night test) + profile_jobs, profile_master, profile_rework, profile_uploaded (PR #87) */
   assert.ok(tool("log_growth").inputSchema.properties.account_status);
   assert.match(INSTRUCTIONS, /Account health/);
   const d = memoryDesk();
@@ -313,10 +300,8 @@ test("log_growth records a status check without follower numbers, and the wrong 
   assert.match(warn.account_check, /artificial-streams/);
   assert.equal((await S.listGrowth(d, NOW, 1)).length, 0, "a check does not mark a growth duty");
   await assert.rejects(call(d, "log_growth", { bot: "Kevin", date: TODAY, platform: "TikTok", account_status: "clear", status_note: "password: hunter2" }), /password|key/i);
-  const claim = await call(d, "log_growth", { bot: "Laura", date: day(1), claim: "Sample claim" });
-  assert.equal(claim.saved, true);
-  assert.equal(claim.account_check, undefined);
-  const both = await call(d, "log_growth", { bot: "Laura", date: day(2), claim: "Another sample claim", platform: "YouTube", account_status: "clear" });
+  /* 24 Nov 2026: Content ID claims are gone (the Rights page was removed); a YouTube status check still saves */
+  const both = await call(d, "log_growth", { bot: "Laura", date: day(2), platform: "YouTube", account_status: "clear" });
   assert.equal(both.saved, true);
   assert.match(both.account_check, /clear/);
   const kevin = await call(d, "log_growth", {
@@ -324,7 +309,7 @@ test("log_growth records a status check without follower numbers, and the wrong 
     recent_posts: posts([[1, 200], [2, 200], [3, 200], [5, 2000], [7, 2000], [9, 2000], [12, 2000]]),
   });
   assert.equal(kevin.saved, true);
-  const report = await loadReport({ store: d, ig: null, now: NOW, claims: (await S.loadDesk(d, NOW)).claims, builds: [] });
+  const report = await loadReport({ store: d, ig: null, now: NOW, builds: [] });
   assert.equal(report.accounts.find((a) => a.id === "tiktok").state, "red");
   const again = await call(d, "log_growth", { bot: "Kevin", date: TODAY, platform: "TikTok", account_status: "clear" });
   assert.equal(again.duplicate, true);

@@ -91,37 +91,6 @@ test("staff: messages wait on someone until answered; only Luke settles a decisi
   await fails(S.sendMessage(d, NOW, R, { from: "Nova", to: "Luke", text: "x y", re: "m123" }), /id of the message/);
 });
 
-test("staff: one payment is recorded once; pending becomes received; nothing is converted or guessed", async () => {
-  const d = memoryDesk();
-  const pay = { bot: "Ledger", date: "2026-11-10", payer: "Northlight Records", amount: "112,01", currency: "eur", account: "Statement only", status: "pending", category: "label deals" };
-  const a = await S.submitIncome(d, NOW, R, pay);
-  assert.equal(a.added, true); assert.deepEqual([a.entry.amount, a.entry.currency, a.entry.category, a.entry.by], [112.01, "EUR", "Label deals", "Ledger"]);
-  assert.deepEqual((await S.submitIncome(d, NOW + 1, R, pay)).added, false, "the same payment again is not added twice");
-  const up = await S.submitIncome(d, NOW + 2, R, { ...pay, status: "received" });
-  assert.deepEqual([up.added, up.updated, up.entry.status, up.entry.history.length], [false, true, "received", 1]);
-  await S.submitIncome(d, NOW + 3, R, { bot: "Ledger", date: "2026-11-11", payer: "Own account", amount: 500, currency: "EUR", account: "Wise", status: "transfer" });
-  await S.submitIncome(d, NOW + 4, R, { bot: "Ledger", date: "2026-11-11", payer: "Sample Distro", amount: 104.04, currency: "USD", account: "PayPal", reference: "TX-1" });
-  assert.equal((await S.submitIncome(d, NOW + 5, R, { bot: "Ledger", date: "2026-11-12", payer: "Sample Distro Inc", amount: 104.04, currency: "USD", account: "PayPal", reference: "tx-1" })).added, false, "same reference = same payment");
-  for (const [bad, re] of [[{ amount: "not read" }, /positive number/], [{ amount: 0 }, /positive number/], [{ amount: -5 }, /positive number/], [{ amount: "1.234" }, /positive number/], [{ date: "2026-02-31" }, /YYYY-MM-DD/], [{ currency: "euros" }, /three-letter/], [{ date: "10/11/2026" }, /YYYY-MM-DD/], [{ date: "2027-01-01" }, /future/], [{ payer: "" }, /payer is empty/], [{ account: "" }, /account is empty/], [{ category: "Gifts" }, /category must be/], [{ status: "paid" }, /status must be/], [{ bot: "Bob" }, /not a name/], [{ note: "IBAN IE29 AIBK 9311 5212 3456 78" }, /bank account/]])
-    await fails(S.submitIncome(d, NOW, R, { ...pay, ...bad }), re);
-  await S.incomeCheck(d, NOW, R, { bot: "Ledger", account: "Wise", new_payments: 0 });
-  await fails(S.incomeCheck(d, NOW, R, { bot: "Ledger", account: "Wise", new_payments: -1 }), /how many/);
-  await S.setSources(d, [{ id: "wise", name: "Wise", kind: "account", owner: "Ledger", cadence: "daily", state: "active" }, { id: "paypal", name: "PayPal", kind: "account", owner: "Ledger", cadence: "daily", state: "active" },
-    { id: "revolut", name: "Revolut", kind: "account", state: "blocked", blocker: "Not connected" }, { id: "northlight", name: "Northlight Records", category: "Label deals", cadence: "monthly", state: "active" },
-    { id: "pub", name: "Sample Publishing", category: "Publishing", cadence: "quarterly", state: "active" }, { id: "plug", name: "Plug-in sales", state: "not_tracked" }]);
-  const i = await S.incomeState(d, NOW);
-  /* 18 Nov 2026: received means Revolut. The statement is still "Statement only", and the PayPal row has not moved, so neither is income. */
-  assert.deepEqual(i.received, {}, "currencies are never mixed; the transfer is not income; nothing here has reached Revolut (18 Nov 2026)");
-  assert.deepEqual(i.holding, { EUR: 112.01, USD: 104.04 }, "the statement marked received, and the PayPal money, are seen and not counted");
-  assert.deepEqual(i.pending, {});
-  const v = Object.fromEntries(i.accounts.concat(i.sources).map((s) => [s.id, s.verdict]));
-  assert.deepEqual(v, { wise: "ok", paypal: "ok", revolut: "blocked", northlight: "ok", pub: "never", plug: "not_tracked" });
-  assert.deepEqual(i.unknown, ["Sample Distro"], "a payer nobody has named is pointed out");
-  assert.ok(i.problems.some((p) => /Revolut: blocked/.test(p)) && i.problems.some((p) => /New payer/.test(p)));
-  const tomorrow = await S.incomeState(d, NOW + 2 * 86400000);
-  assert.equal(tomorrow.accounts.find((a) => a.id === "wise").verdict, "overdue", "an account nobody looked at is said out loud");
-});
-
 test("staff: the roster, the sources and the guide are checked before they are stored", async () => {
   const d = memoryDesk();
   assert.equal((await S.getRoster(d)).length, S.DEFAULT_ROSTER.length, "the built-in team until the real roster is loaded");
@@ -175,41 +144,10 @@ test("staff: a write the store did not really make is never reported as saved", 
   await assert.rejects(S.getRoster(d), /store down/);
 });
 
-test("staff: one payment stays one payment, whichever way the bot sends it", async () => {
+test("staff: open messages survive the month; the newest word decides", async () => {
+  /* 24 Nov 2026, Luke: money removed from HQ ("lets fully remove the money section"): the "checked today"
+     part of this test checked an income account and went with it */
   const d = memoryDesk();
-  const base = { bot: "Ledger", payer: "Northlight Records", amount: 112.01, currency: "EUR", category: "Label deals" };
-  /* statement on the 3rd (pending), the money on the 9th: the same payment arriving */
-  await S.submitIncome(d, NOW, R, { ...base, date: "2026-11-03", account: "Statement only", status: "pending" });
-  const landed = await S.submitIncome(d, NOW + 1, R, { ...base, date: "2026-11-09", account: "Wise", status: "received", reference: "TX-77" });
-  assert.deepEqual([landed.added, landed.updated, landed.entry.status, landed.entry.arrived, landed.entry.account, landed.entry.reference], [false, true, "received", "2026-11-09", "Wise", "TX-77"]);
-  /* the statement email read again must not push it back to pending, nor add a second one */
-  const reread = await S.submitIncome(d, NOW + 2, R, { ...base, date: "2026-11-03", account: "Statement only", status: "pending" });
-  assert.deepEqual([reread.added, reread.updated, reread.entry.status], [false, false, "received"]);
-  /* first without its reference, then with it: still one */
-  await S.submitIncome(d, NOW + 3, R, { bot: "Ledger", date: "2026-11-10", payer: "Sample Distro", amount: 50, currency: "USD", account: "PayPal" });
-  const withRef = await S.submitIncome(d, NOW + 4, R, { bot: "Ledger", date: "2026-11-10", payer: "Sample Distro", amount: 50, currency: "USD", account: "PayPal", reference: "PP-1" });
-  assert.deepEqual([withRef.added, withRef.updated, withRef.entry.reference], [false, true, "PP-1"]);
-  /* two real payments of the same size on one day, each with its own reference: two */
-  assert.equal((await S.submitIncome(d, NOW + 5, R, { bot: "Ledger", date: "2026-11-10", payer: "Sample Distro", amount: 50, currency: "USD", account: "PayPal", reference: "PP-2" })).added, true);
-  /* a pending statement from last month whose money lands this month counts THIS month, once */
-  await S.submitIncome(d, NOW + 6, R, { ...base, amount: 80, date: "2026-10-28", account: "Statement only", status: "pending" });
-  await S.submitIncome(d, NOW + 7, R, { ...base, amount: 80, date: "2026-11-11", account: "Wise", status: "received" });
-  const i = await S.incomeState(d, NOW);
-  /* 18 Nov 2026: these landings are Wise and PayPal, so they are holding until Revolut. The dedupe (four payments, one statement date) is unchanged. */
-  assert.deepEqual(i.received, {}); assert.deepEqual(i.holding, { EUR: 192.01, USD: 100 }); assert.deepEqual(i.pending, {});
-  assert.equal(i.entries.length, 4, "four payments, not seven");
-  assert.equal(i.entries.find((e) => e.amount === 80).statement, "2026-10-28");
-  assert.equal(S.secretIn("AB12CDEF3456GH789", { reference: true }), "");
-  assert.equal((await S.submitIncome(d, NOW + 8, R, { bot: "Ledger", date: "2026-11-11", payer: "Sample Distro", amount: 7, currency: "USD", account: "PayPal", reference: "AB12CDEF3456GH789" })).added, true, "a PayPal-style transaction id is accepted");
-});
-
-test("staff: 'checked today' is a São Paulo day; open messages survive the month; the newest word decides", async () => {
-  const d = memoryDesk();
-  await S.setSources(d, [{ id: "wise", name: "Wise", kind: "account", owner: "Ledger", cadence: "daily", state: "active" }]);
-  const late = Date.parse("2026-11-12T00:30:00Z"); /* 21:30 on the 11th in São Paulo, already the 12th in UTC */
-  await S.submitIncome(d, late, R, { bot: "Ledger", date: "2026-11-11", payer: "Someone", amount: 5, currency: "EUR", account: "Wise" });
-  assert.equal((await S.incomeState(d, late)).accounts[0].verdict, "ok");
-  assert.equal((await S.incomeState(d, Date.parse("2026-11-12T15:00:00Z"))).accounts[0].verdict, "due", "logged last night is not 'checked today'");
   /* a decision asked on 30 Sep is still waiting on Luke in November */
   const sep = Date.parse("2026-09-30T15:00:00Z");
   const q = (await S.sendMessage(d, sep, R, { from: "Nova", to: "Luke", text: "Old question?", needs: "decision", options: ["a", "b"] })).message;
@@ -271,84 +209,4 @@ test("staff: an answer to an answer stays in its thread; a bot that only writes 
   const bd = S.board(await S.loadDesk(d, NOW), NOW, hq);
   const steve = bd.staff.find((w) => w.name === "Steve");
   assert.equal(steve.last.message, "Instagram row written: 13,509 followers"); assert.equal(steve.state, "done"); assert.equal(bd.updates.length, 1);
-});
-
-test("staff: an 'unsorted' payment (seen in the bank, not yet said what it is) is in no total until someone sorts it", async () => {
-  const d = memoryDesk();
-  const base = { bot: "HQ", payer: "Made-up Friend", currency: "EUR", account: "Revolut", note: "Read from Revolut" };
-  const a = await S.submitIncome(d, NOW, R, { ...base, date: "2026-11-09", amount: 40, status: "unsorted", reference: "tx-a" });
-  await S.submitIncome(d, NOW + 1, R, { ...base, date: "2026-11-10", amount: 15, status: "unsorted", reference: "tx-b", payer: "Unknown Co" });
-  await S.submitIncome(d, NOW + 2, R, { ...base, date: "2026-11-10", amount: 100, status: "received", reference: "tx-c", payer: "Northlight Records", category: "Label deals" });
-  let i = await S.incomeState(d, NOW);
-  assert.deepEqual([i.received, i.pending, i.byCategory], [{ EUR: 100 }, {}, { "Label deals": { EUR: 100 } }], "unsorted counts in neither received nor pending");
-  assert.deepEqual(i.unsorted.map((e) => e.reference), ["tx-b", "tx-a"], "newest first"); assert.equal(i.unsortedCount, 2);
-  assert.match(i.problems.join(" "), /Payments nobody has sorted: 2026-11 · 2026-11-10 · Unknown Co · EUR 15/); /* 18 Nov 2026 */
-  assert.ok(!i.unknown.includes("Made-up Friend"), "an unsorted payer is not also listed as a new payer");
-  /* the same payment again as unsorted changes nothing; a later decided submit of it may sort it */
-  assert.equal((await S.submitIncome(d, NOW + 3, R, { ...base, date: "2026-11-09", amount: 40, status: "unsorted", reference: "tx-a" })).updated, false);
-  const up = await S.submitIncome(d, NOW + 4, R, { ...base, date: "2026-11-09", amount: 40, status: "received", reference: "tx-a", category: "Production" });
-  assert.deepEqual([up.updated, up.entry.status, up.entry.category, up.entry.history.at(-1).from], [true, "received", "Production", "unsorted"]);
-  const back = await S.submitIncome(d, NOW + 5, R, { ...base, date: "2026-11-09", amount: 40, status: "unsorted", reference: "tx-a" });
-  assert.deepEqual([back.updated, back.entry.status], [false, "received"], "a later 'unsorted' never overwrites a decided status");
-  /* sortIncome: Luke says the other one is not income */
-  const b = (await S.incomeState(d, NOW)).unsorted[0];
-  await fails(S.sortIncome(d, NOW, R, { by: "Steve", id: b.id, month: "2026-11", status: "transfer" }), /can sort/);
-  await fails(S.sortIncome(d, NOW, R, { by: "Luke", id: b.id, month: "2026-11", status: "received" }), /category must be/);
-  await fails(S.sortIncome(d, NOW, R, { by: "Luke", id: b.id, month: "2026-11", status: "pending" }), /status must be/);
-  await fails(S.sortIncome(d, NOW, R, { by: "Luke", id: "i" + "0".repeat(12), month: "2026-11", status: "transfer" }), /no payment/);
-  const sorted = await S.sortIncome(d, NOW + 6, R, { by: "luke", id: b.id, month: "2026-11", status: "transfer" });
-  assert.deepEqual([sorted.status, sorted.history.at(-1)], ["transfer", { at: new Date(NOW + 6).toISOString(), by: "Luke", from: "unsorted", to: "transfer" }]);
-  await fails(S.sortIncome(d, NOW, R, { by: "Luke", id: b.id, month: "2026-11", status: "received", category: "Other" }), /already sorted/);
-  i = await S.incomeState(d, NOW);
-  assert.deepEqual([i.unsortedCount, i.unsorted, i.received], [0, [], { EUR: 140 }]);
-  assert.ok(!i.problems.some((p) => /nobody has sorted/.test(p)));
-  /* without a month it looks in this month and the three before */
-  const c = await S.submitIncome(d, NOW + 7, R, { ...base, date: "2026-09-20", amount: 9, status: "unsorted", reference: "tx-d" });
-  assert.equal((await S.sortIncome(d, NOW + 8, R, { by: "Claude", id: c.entry.id, status: "received", category: "other" })).category, "Other");
-  assert.equal(a.entry.category, "Other");
-});
-
-test("staff: sorting a payment as the money of a statement logged as pending upgrades THAT statement; the money is never in Received AND Pending", async () => {
-  const d = memoryDesk();
-  const hq = { bot: "HQ", currency: "EUR", account: "Revolut", note: "Read from Revolut", status: "unsorted" };
-  const st = (await S.submitIncome(d, NOW, R, { bot: "Ledger", date: "2026-11-02", payer: "Northlight Records", amount: 112.01, currency: "EUR", account: "Statement only", status: "pending", category: "Label deals" })).entry;
-  const cr = (await S.submitIncome(d, NOW, R, { ...hq, date: "2026-11-10", payer: "NLR Payments BV", amount: 112.01, reference: "tx-nlr" })).entry;
-  let i = await S.incomeState(d, NOW);
-  assert.deepEqual(i.unsorted[0].pendingMatch, { id: st.id, payer: "Northlight Records", amount: 112.01, currency: "EUR", date: "2026-11-02" }, "the page and the bots are offered the statement");
-  /* the wrong way round is refused: with "transfer", with a statement for another amount */
-  await fails(S.sortIncome(d, NOW, R, { by: "Luke", id: cr.id, month: "2026-11", status: "transfer", pending_id: st.id }), /pending_id goes only with status received/);
-  const other = (await S.submitIncome(d, NOW, R, { bot: "Ledger", date: "2026-11-01", payer: "Sample Publishing", amount: 50, currency: "EUR", account: "Statement only", status: "pending", category: "Publishing" })).entry;
-  await fails(S.sortIncome(d, NOW, R, { by: "Luke", id: cr.id, month: "2026-11", status: "received", pending_id: other.id }), /not this payment/);
-  /* Luke: "It's the pending Northlight Records statement" (no category: the statement keeps its own) */
-  const up = await S.sortIncome(d, NOW + 1, R, { by: "Luke", id: cr.id, month: "2026-11", status: "received", pending_id: st.id });
-  assert.deepEqual([up.id, up.status, up.arrived, up.account, up.reference, up.category, up.history.at(-1).merged], [st.id, "received", "2026-11-10", "Revolut", "tx-nlr", "Label deals", cr.id]);
-  i = await S.incomeState(d, NOW);
-  assert.deepEqual([i.received, i.pending, i.unsortedCount], [{ EUR: 112.01 }, { EUR: 50 }, 0], "received once, no longer pending, and the unsorted row is gone");
-  assert.equal(i.entries.filter((e) => e.amount === 112.01).length, 1);
-  assert.ok((await S.incomeState(d, NOW + 40 * 86400000)).problems.includes("1 pending payment older than 30 days"), "only the other statement: Northlight's is not 'pending older than 30 days'");
-  await fails(S.sortIncome(d, NOW + 2, R, { by: "Luke", id: cr.id, month: "2026-11", status: "received", pending_id: st.id }), /no payment/);
-  /* a statement in an earlier month (two files), with its own reference: the credit's id is kept as bankRef */
-  const st2 = (await S.submitIncome(d, NOW, R, { bot: "Ledger", date: "2026-10-28", payer: "Northlight Records", amount: 75, currency: "EUR", account: "Statement only", status: "pending", category: "Label deals", reference: "ST-9" })).entry;
-  const cr2 = (await S.submitIncome(d, NOW, R, { ...hq, date: "2026-11-03", payer: "NLR Payments BV", amount: 75, reference: "tx-nlr-2" })).entry;
-  const up2 = await S.sortIncome(d, NOW + 3, R, { by: "Ledger", id: cr2.id, status: "received", pending_id: st2.id });
-  assert.deepEqual([up2.status, up2.reference, up2.bankRef, up2.arrived], ["received", "ST-9", "tx-nlr-2", "2026-11-03"]);
-  i = await S.incomeState(d, NOW);
-  assert.deepEqual([i.received, i.pending, i.unsortedCount], [{ EUR: 187.01 }, { EUR: 50 }, 0]);
-});
-
-test("staff: an unsorted payment stays in 'To sort' for a year (not four months), and says so before it drops off", async () => {
-  const d = memoryDesk();
-  const hq = { bot: "HQ", payer: "Made-up Friend", currency: "EUR", account: "Revolut", status: "unsorted" };
-  const july = (await S.submitIncome(d, NOW, R, { ...hq, date: "2026-07-15", amount: 30, reference: "tx-jul" })).entry;
-  const dec = (await S.submitIncome(d, NOW, R, { ...hq, date: "2025-12-20", amount: 20, reference: "tx-dec" })).entry;
-  let i = await S.incomeState(d, NOW);
-  assert.deepEqual([i.unsortedCount, i.unsorted.map((e) => e.id)], [2, [july.id, dec.id]]);
-  assert.equal((i.problems.join(" ").match(/\(id /g) || []).length, 2); /* 18 Nov 2026 */
-  assert.ok(i.problems.includes('1 unsorted payment from Dec 2025 drops off "To sort" when this month ends: sort it before then'));
-  assert.deepEqual([i.received, i.entries.length], [{}, 0], "the older months are read for 'To sort' only");
-  /* sort_payment without a month finds it too */
-  assert.equal((await S.sortIncome(d, NOW, R, { by: "Ledger", id: july.id, status: "transfer" })).status, "transfer");
-  assert.equal((await S.sortIncome(d, NOW, R, { by: "Ledger", id: dec.id, status: "received", category: "Other" })).status, "received");
-  i = await S.incomeState(d, NOW);
-  assert.deepEqual([i.unsortedCount, i.problems.filter((p) => /sort/.test(p))], [0, []]);
 });

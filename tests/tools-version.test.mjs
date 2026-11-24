@@ -17,14 +17,11 @@ test("my_day says how many tools the desk has and the list's version; a new opti
   assert.equal(md.connector.reconnect_needed, false);
   assert.equal(JSON.stringify(md).split("reconnect needed").length - 1, 0);
   const v1 = toolsVersion(TOOLS);
-  const more = TOOLS.map((t) => (t.name === "fix_payment" ? { ...t, inputSchema: { ...t.inputSchema, properties: { ...t.inputSchema.properties, made_up: { type: "string" } } } } : t));
+  /* 24 Nov 2026, Luke: money removed from HQ: fix_payment is gone, so the made-up option goes on record_spend */
+  const more = TOOLS.map((t) => (t.name === "record_spend" ? { ...t, inputSchema: { ...t.inputSchema, properties: { ...t.inputSchema.properties, made_up: { type: "string" } } } } : t));
   assert.notEqual(toolsVersion(more), v1, "an added option is a new version");
   const nested = TOOLS.map((t) => t.name === "log_growth" ? { ...t, inputSchema: { ...t.inputSchema, properties: { ...t.inputSchema.properties, boosts: { type: "array", items: { type: "object", properties: { link: { type: "string" }, extra_field: { type: "number" } } } } } } } : t);
   assert.notEqual(toolsVersion(nested), v1, "a nested field is a new version");
   assert.equal(toolsVersion(TOOLS), v1, "the same list, the same version");
   assert.match(INSTRUCTIONS, /connector.*version/);
-});
-
-test("income_status points to payments for a month or an account", () => {
-  assert.match(TOOLS.find((t) => t.name === "income_status").description, /payments/);
 });

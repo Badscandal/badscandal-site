@@ -1,4 +1,4 @@
-/* Growth page and Rights page (19 Nov 2026).
+/* Growth page (19 Nov 2026; the Rights page went on 24 Nov 2026).
    One list of posts feeds the week card and the tables, at one age per column.
    A missing number is "not reported". Nothing here invents a zero. */
 (function (g) {
@@ -121,11 +121,6 @@
     var state = level && DOT[level] ? level : "gap";
     return '<a class="gdot ' + esc(state) + '" href="#growth"><i></i><span>' + esc(word) + ": " + esc(DOT[state]) + "</span></a>";
   }
-  function blocks(c) {
-    if (!c) return false;
-    if (String(c.strike || "").toLowerCase() === "yes") return true;
-    return /block|mute|remov|taken down|age-restrict/i.test([c.status, c.impact, c.reach_effect, c.claim_type].join(" "));
-  }
   function headline(p, row) {
     var id = platId(p && p.platform);
     var unit = unitOf(id);
@@ -220,7 +215,6 @@
     var acc = accountOf(health, "youtube");
     var status = signal(acc, "status");
     var money = signal(acc, "monetisation");
-    var claim = (acc && acc.signals || []).filter(function (s) { return s && String(s.id).indexOf("claim") === 0 && s.level === "red"; });
     var href = videoHref(row || {});
     var h = '<section class="gsec" id="youtubeBox"><h3>YouTube</h3>';
     var asShown = function (n, field) { var s = row && row.shown && row.shown[field]; return s ? esc("~" + s) : num(n); };
@@ -239,8 +233,8 @@
       }).join("") + "</ol>";
     }
     h += '<p class="d">Account status ' + (status && status.level !== "gap" ? esc(status.text) : miss()) + "</p>";
-    h += '<p class="d">Studio · monetisation ' + (money && money.level !== "gap" ? esc(money.text) : miss()) + " · claims " + (claim.length ? esc(claim.map(function (s) { return s.text; }).join(" ")) : miss()) + "</p>";
-    h += '<p class="sub">YouTube on Needs you uses Studio (claims, strikes, monetisation). Post engagement is not the health dot here.</p>';
+    h += '<p class="d">Studio · monetisation ' + (money && money.level !== "gap" ? esc(money.text) : miss()) + "</p>";
+    h += '<p class="sub">YouTube on Needs you uses Studio (strikes, monetisation). Post engagement is not the health dot here.</p>';
     return h + "</section>";
   }
   function titleKey(s) {
@@ -455,29 +449,12 @@
       var p = byId[id] || { platform: LABEL[id] || id, followers: null, day: null, d7: null, d28: null, gapDays: null };
       return headline(p, latestRow(rows, id));
     }).join("") + "</div><p class=\"sub\">YouTube says subscribers. A gap day is a day with no reading between the first log and the latest.</p></section>";
-    var blocking = ((input.claims && input.claims.items) || []).filter(blocks);
-    var badge = blocking.length ? '<p><a class="claimbadge" href="#rights">' + blocking.length + " Content ID claim" + (blocking.length === 1 ? "" : "s") + " blocking or muting a video</a></p>" : "";
-    return heads + badge + weekCard(posts, pattern && pattern.pattern) +
+    return heads + weekCard(posts, pattern && pattern.pattern) +
       order.filter(function (id) { return LABEL[id] && id !== "spotify"; }).map(function (id) { return table(id, posts); }).join("") +
       tiktokBlock(latestRow(rows, "tiktok"), byId.tiktok) + youtubeBlock(latestRow(rows, "youtube"), input.health, byId.youtube) +
       healthRow(input.health) + boosted(rows, posts, input.ranking) + ideasHtml(input.ideas) + countdowns(input.releases);
   }
   function cell(label, html) { return '<td data-label="' + esc(label) + '">' + html + "</td>"; }
-  function field(v) { return v != null && String(v).trim() !== "" ? String(v) : ""; }
-  function claimsHtml(claims, today) {
-    var items = !claims ? [] : (Array.isArray(claims) ? claims : (claims.items || []));
-    var checked = claims && claims.checked && today ? claims.checked[today] : null;
-    var h = "<!-- licence_queue stays with the Label bot, not on this table --><p class=\"d\">Checked " + (checked ? dayOf(today) : miss()) + "</p>";
-    if (!items.length) return h + '<p class="d">No Content ID claim has been recorded.</p>';
-    h += '<div class="scroll"><table class="posttable"><tr><th>Song</th><th>Claimant</th><th>Status</th><th>Action</th></tr>';
-    items.forEach(function (c) {
-      var title = field(c.song) || field(c.claim) || miss();
-      var when = dayOf(c.first_seen) || dayOf(c.last_checked);
-      var status = shown(c.status) + (when && when !== miss() ? " · " + when : "");
-      h += "<tr>" + cell("Song", title) + cell("Claimant", shown(c.claimant)) + cell("Status", status) + cell("Action", shown(c.action)) + "</tr>";
-    });
-    return h + "</table></div>";
-  }
   function tiktokFans(rows) {
     var out = [];
     (rows || []).forEach(function (r) {
@@ -489,7 +466,5 @@
   L.growthPosts = collectPosts;
   L.growthEpv = epv;
   L.growthHtml = growthHtml;
-  L.claimsHtml = claimsHtml;
   L.tiktokFans = tiktokFans;
-  L.claimBlocks = blocks;
 })(typeof globalThis !== "undefined" ? globalThis : this);

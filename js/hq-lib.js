@@ -64,8 +64,6 @@
     }
     /* Connector + Site check (the staff desk): only when the caller has asked for the board */
     if ("board" in o || o.boardProblem) rows = rows.concat(staffHealth(o.board, o.boardProblem, now));
-    /* Revolut (the bank reader): only when the caller has asked for its state */
-    if ("bank" in o || o.bankProblem) rows.push(bankHealth(o.bank, o.bankProblem, now));
     return rows;
   }
   /* "YYYY-MM-DD HH:MM" São Paulo (UTC-3, no summer time since 2019) -> ms */
@@ -122,7 +120,8 @@
     /* 16 Nov 2026 (Luke): YouTube on the release day; the ads made with Luke after it */
     "YouTube video scheduled for the release day": "video", "Ads made with Luke, after the release": "ads with Luke", "Spotify Canvas uploaded": "Spotify Canvas" };
   function shortStep(label) { return SHORT[label] || String(label || "").toLowerCase(); }
-  var TAB_HREF = { Growth: "#growth", Songs: "#songs", Royalties: "#money", Fans: "#growth/fans", Releases: "#releases", Tasks: "#team", Spend: "#money", Income: "#money" };
+  /* 24 Nov 2026, Luke: "lets fully remove the money section". No Royalties or Income tab; Spend errors open Ads. */
+  var TAB_HREF = { Growth: "#growth", Songs: "#songs", Fans: "#growth/fans", Releases: "#releases", Tasks: "#team", Spend: "#ads" };
   function metaCur(ov) { return (ov && ((ov.yesterday && ov.yesterday.currency) || (ov.spend && ov.spend.currency))) || "USD"; }
 
   /* "Needs attention": every rule is here. Each item: { key, text, href }.
@@ -136,9 +135,8 @@
      - yesterday: spend with 0 taps (USD 10+), or cost per tap more than double the middle value
        (median) of the 7 days before (needs 3+ of those days with taps)
      - the sheet's Meta spend disagreeing with Meta (by more than 1.00 on a day)
-     - from the staff desk (o.board, see staffAttention()): messages waiting on Luke, income problems,
-       the bots' connector switched off
-     - Revolut (o.bank + o.board, see bankAttention()): payments to sort, the approval gone or ending */
+     - from the staff desk (o.board, see staffAttention()): messages waiting on Luke, the bots' connector
+       switched off (income and Revolut went on 24 Nov 2026: money is no longer on HQ) */
   function attention(o) {
     var sheet = o.sheet, ov = o.ov, out = [];
     if (sheet) {
@@ -191,7 +189,7 @@
     out = cap.concat(releaseAttention(sheet, o.board), out.filter(function (x) { return x.key !== "cap"; }));
     /* the staff desk: messages waiting on Luke go first (he can act on them now), and with them a song in
        Spotify for Artists only he can say what it is (review, 11 Nov 2026: it sat ninth of ten); the rest after */
-    var st = staffAttention(o.board, o.bank).concat(bankAttention(o.bank, o.board)), first = function (x) { return x.key === "msgs" || x.key === "spotify"; };
+    var st = staffAttention(o.board), first = function (x) { return x.key === "msgs" || x.key === "spotify"; };
     return st.filter(first).concat(out, st.filter(function (x) { return !first(x); }));
   }
 
@@ -212,7 +210,7 @@
   /* why the login appeared, said on the login form; rec = { at, why: "button" | "401", what } kept on this
      device (bs_hq_signout). Older than a day: nothing */
   var SIGNOUT_WHAT = { "/api/hq/data": "the sheet numbers", "/api/admin/overview": "the page numbers", "/api/admin/data": "the Pages numbers",
-    "/api/staff/board": "the team's desk", "/api/staff/fields": "the release form", "/api/staff/release": "a release", "/api/bank/status": "Revolut's state" };
+    "/api/staff/board": "the team's desk", "/api/staff/fields": "the release form", "/api/staff/release": "a release" };
   function signoutWords(rec, now) {
     if (!rec || !rec.at || !(now - rec.at < 86400000) || now < rec.at) return "";
     var hm = new Date(rec.at).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: "America/Sao_Paulo" });
@@ -527,12 +525,11 @@
     var when = spWhen(report.sp, today);
     return "Site check" + (when ? " " + when : "") + ": " + checkResult(report);
   }
-  /* who Luke can write to: Nova first, then Claude, every other bot, then everyone */
+  /* who Luke can write to: Nova first, every other bot, then everyone (24 Nov 2026: Claude is off the desk) */
   function composeNames(names) {
     var bots = (names || []).filter(function (n) { return ["Luke", "Claude", "HQ"].indexOf(n) < 0; });
     var out = [];
     if (bots.indexOf("Nova") >= 0) out.push({ value: "Nova", label: "Nova" });
-    out.push({ value: "Claude", label: "Claude" });
     bots.forEach(function (n) { if (n !== "Nova") out.push({ value: n, label: n }); });
     out.push({ value: "all", label: "Everyone" });
     return out;
@@ -570,18 +567,15 @@
   }
 
   /* ---- Today ---- */
-  /* "Needs attention" from the staff desk: messages waiting on Luke, income problems (3 at most,
-     then "+N more"), the bots' connector switched off. */
-  function staffAttention(board, bank) {
+  /* "Needs attention" from the staff desk: messages waiting on Luke, the bots' connector switched off.
+     24 Nov 2026, Luke: "lets fully remove the money section": no income problems any more. */
+  function staffAttention(board) {
     if (!board) return [];
     var out = [], n = ((board.waiting && board.waiting.luke) || []).length;
     if (n) out.push({ key: "msgs", text: n === 1 ? "1 message is waiting on you" : n + " messages are waiting on you", href: "#messages" });
     /* v2: a song Spotify for Artists shows that never went through the pipeline is a question for Luke */
     var su = board.sightings && board.sightings.unknown;
     if (su) out.push({ key: "spotify", text: su === 1 ? "Spotify for Artists shows 1 song that didn't go through the pipeline: say what it is" : "Spotify for Artists shows " + su + " songs that didn't go through the pipeline: say what they are", href: "#releases/spotify" });
-    var p = incomeProblems(board.income, bank);
-    p.slice(0, 3).forEach(function (x, i) { out.push({ key: "income:" + i, text: "Income: " + x, href: "#money" }); });
-    if (p.length > 3) out.push({ key: "income:more", text: "Income: +" + (p.length - 3) + " more", href: "#money" });
     if (board.connector && board.connector.botsOn === false) out.push({ key: "connector", text: "The bots' connector is switched off", href: "#team" });
     return out;
   }
@@ -607,10 +601,7 @@
     return rows;
   }
 
-  /* ---- Money coming in ---- */
-  /* { USD: 104.04, EUR: 112.01 } -> ["USD 104.04", "EUR 112.01"]: each currency as given, never added, never converted */
-  function curList(o) { return Object.keys(o || {}).sort().map(function (c) { return money(o[c], c); }); }
-  /* ---------- batch 4 (15 Nov 2026): money ---------- */
+  /* ---------- batch 4 (15 Nov 2026): the cap's rate and its gaps ---------- */
   var MONTHS_L = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
   function monthWords(m) { return /^\d{4}-\d{2}$/.test(m || "") ? MONTHS_L[Number(m.slice(5, 7)) - 1] + " " + m.slice(0, 4) : ""; }
   /* the cap's rate in words: the team's fixed one, or the ECB average so far (which moves) */
@@ -624,145 +615,6 @@
   function capMissingLine(cap) { var g = cap && cap.notRead && cap.notRead.length ? gapNotes(cap.notRead) : []; return g.length ? "Not read: " + g.join(", ") : ""; }
   /* a duty done with a number it couldn't read: done, never red */
   function dutyGapsLine(d) { return d && d.gaps ? "Done, with gaps: " + d.gaps : ""; }
-  /* the money coming in: ONLY what was received (16 Nov 2026, Luke: "we should never put pending income only
-     what is received"), and the music's own share of it (no salary). Pending, payable and statements are
-     listed as payments, never added up as income. */
-  function incomeTotals(i) {
-    var row = function (label, o, hint) { var l = curList(o); return { label: label, text: l.length ? l.join(" + ") : "nothing", empty: !l.length, hint: hint }; };
-    return [row("Received", i && i.received, "")]; /* one total (16 Nov 2026, Luke: "better to just have one received") */
-  }
-  /* ---------- Money, simpler (16 Nov 2026, Luke) ---------- */
-  var MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
-  var monthLabel = function (m) { return MONTHS[Number(String(m).slice(5, 7)) - 1] + " " + String(m).slice(0, 4); };
-  var ordinal = function (n) { var t = n % 100, u = n % 10; return n + (t >= 11 && t <= 13 ? "th" : u === 1 ? "st" : u === 2 ? "nd" : u === 3 ? "rd" : "th"); };
-  /* received per month, newest first, this month always there: [{month, label, lines}] */
-  function receivedMonths(inc, current) {
-    var by = (inc && inc.receivedByMonth) || {}, ms = Object.keys(by);
-    if (current && ms.indexOf(current) < 0) ms.push(current);
-    return ms.sort().reverse().map(function (m) { return { month: m, label: monthLabel(m), lines: curList(by[m]) }; });
-  }
-  /* the sheet's month by month, just the month and what was received */
-  function monthRows(months) {
-    return (months || []).map(function (m) {
-      var tot = {};
-      Object.keys(m.income || {}).forEach(function (k) { var o = m.income[k] || {}; Object.keys(o).forEach(function (c) { tot[c] = Math.round(((tot[c] || 0) + Number(o[c])) * 100) / 100; }); });
-      var l = curList(tot);
-      return { month: m.month, label: monthLabel(m.month), amount: l.length ? l.join(" + ") : "nothing received" };
-    });
-  }
-  /* the main income sources, in their order (accounts never) */
-  function mainSources(list) { return (list || []).filter(function (s) { return s.main && s.kind !== "account"; }); }
-  /* one line per source for this month: received (green), not received past its day (red), or what to expect */
-  function sourceMonthLine(s) {
-    var t = s && s.thisMonth;
-    if (!t) return "";
-    if (t.state === "received") return "Received " + curList(t.amount).join(" + ") + (t.date ? " · " + day(t.date) : "");
-    if (t.state === "late") return "Not received: it usually pays by the " + ordinal(t.dueDay);
-    return t.dueDay ? "Expected by the " + ordinal(t.dueDay) : "Not received yet this month";
-  }
-  var CADENCE = { daily: "Every day", monthly: "Every month", quarterly: "Every 3 months", irregular: "Irregular" };
-  function cadenceWord(c) { return CADENCE[c] || "Irregular"; }
-  /* an account tile: "checked today by Ledger · 0 new" / "not checked today". attn only for never / overdue / blocked */
-  function accountLine(a, today) {
-    var v = a.verdict, c = a.checked;
-    if (v === "blocked") return { text: "blocked: " + (a.blocker || a.why || "no reason given"), attn: true };
-    if (v === "not_tracked") return { text: "nobody is checking this yet", attn: false };
-    if (v === "never") return { text: "never checked through the connector", attn: true };
-    if (v === "overdue") return { text: "not checked since " + day(a.lastLook), attn: true };
-    if (v === "due") return { text: "not checked today" + (a.lastLook ? " · last look " + day(a.lastLook) : ""), attn: false };
-    if (c && c.day === today) return { text: "checked today by " + c.by + " · " + c.new + " new", attn: false };
-    return { text: "a payment was logged today", attn: false };
-  }
-  /* a source's state in plain words. attn for overdue / blocked */
-  function sourceState(s) {
-    var v = s.verdict;
-    if (v === "ok") return { text: "Up to date", attn: false };
-    if (v === "overdue") return { text: "Overdue", attn: true };
-    if (v === "never") return { text: "Nothing logged yet", attn: false };
-    if (v === "quiet") return { text: "Nothing yet (irregular)", attn: false };
-    if (v === "blocked") return { text: "Blocked: " + (s.blocker || s.why || "no reason given"), attn: true };
-    if (v === "not_tracked") return { text: "Nobody is logging this yet", attn: false };
-    return { text: "Not read", attn: false };
-  }
-  /* what to look at, as the desk found it; a payer nobody has named yet is said in our own words
-     ("New payer not on the list: …") instead of the desk's line about it. bank = Revolut's state
-     (GET /api/bank/status): once the reader is set up, the desk's own lines about its "Revolut" account
-     ("Revolut: blocked. …", "Revolut: not checked today") go, because the Revolut tile, bankAttention
-     and Data health say Revolut's state from the reader itself */
-  function incomeProblems(inc, bank) {
-    /* the desk's "N payments in Revolut that nobody has sorted yet" has its own block ("To sort") and
-       its own line on Today (bankAttention), so it is not said a third time here */
-    var reader = !!(bank && bank.configured);
-    /* "Payments nobody has sorted: 2026-11 · … (id …)" is the bots' list (ids for sort_payment); the page has the
-       "To sort" block for it (18 Nov 2026: Luke's Money showed the ids) */
-    var out = ((inc && inc.problems) || []).filter(function (p) { return !/^New payer\(s\) not on the list/.test(p) && !/ that nobody has sorted yet$/.test(p) && !/^Payments nobody has sorted: /.test(p) && !(reader && /^Revolut:/i.test(p)); });
-    var u = (inc && inc.unknown) || [];
-    if (u.length) out.push((u.length === 1 ? "New payer not on the list: " : "New payers not on the list: ") + u.join(", "));
-    /* L1 (18 Nov 2026): one line, from the expected-money summary. The desk's own problems are unchanged,
-       so Alfred's briefing does not grow a new sentence. */
-    var ex = inc && inc.expected && inc.expected.summary;
-    if (ex && (ex.late || ex.short || ex.missing)) out.push("Expected money: " + ex.text);
-    return out;
-  }
-  /* "Payable 5 Nov, 3 days" / "the same day" / "" when that step was not recorded */
-  function stepSpan(n) { return n == null ? "" : n === 0 ? ", the same day" : ", " + n + " day" + (n === 1 ? "" : "s"); }
-  /* One statement's path, in words. A step with no recorded day is said as not there yet, or not recorded. */
-  function expectedJourney(row) {
-    if (!row) return "";
-    var s = row.statement || {}, bits = ["Statement " + (s.date ? day(s.date) : "not recorded")];
-    if (row.payableState === "date" && row.payable) bits.push("Payable " + day(row.payable) + stepSpan(row.days && row.days.payable));
-    else if (row.payableState === "not_yet") bits.push("Payable: not there yet");
-    else bits.push("Payable: not recorded");
-    if (row.paid && row.paid.date) bits.push("Paid " + day(row.paid.date) + stepSpan(row.days && row.days.paid));
-    else if (row.missingLink) bits.push("Paid: the payment isn't in the months read");
-    else bits.push("Paid: not there yet");
-    if (row.landed && row.landed.date) bits.push("Landed " + day(row.landed.date) + stepSpan(row.days && row.days.landed));
-    else bits.push("Landed: not there yet");
-    return bits.join(" · ");
-  }
-  function expectedDue(row) {
-    if (!row || !row.due) return "Due date: not reported"; /* v18 (21 Nov 2026, Ledger) */
-    var late = row.landedAfter ? " · Landed " + row.landedAfter + " day" + (row.landedAfter === 1 ? "" : "s") + " after the due day" : "";
-    return "Due " + day(row.due) + (row.dueNote ? " · " + row.dueNote : "") + late;
-  }
-  function expectedFlags(row) {
-    if (!row) return "";
-    var f = [];
-    if ((row.flags || []).indexOf("late") >= 0) f.push("Late");
-    /* v18 (21 Nov 2026, Forge/Ledger): a payment that already says why it is short shows its own note */
-    if (row.shortBy && row.shortNote) f.push("Short " + money(row.shortBy.amount, row.shortBy.currency) + " (the payment's note: " + row.shortNote + ")");
-    else if (row.shortBy) f.push((row.shortReason === "unexplained" ? "Short, unexplained " : "Short by ") + money(row.shortBy.amount, row.shortBy.currency));
-    if (!f.length) return row.landed ? "Landed" : "Waiting";
-    return f.join(" · ");
-  }
-  function expectedFlagKind(row) {
-    var f = (row && row.flags) || [];
-    if (f.indexOf("late") >= 0 || f.indexOf("short") >= 0) return "bad";
-    return row && row.landed ? "landed" : "wait";
-  }
-  function missingLine(m) { return m ? m.source + ": no statement and nothing received. It usually pays by the " + ordinal(m.dueDay) + "." : ""; }
-  function learnedLine(s) {
-    if (!s || !s.enough || s.day == null) return "";
-    return s.source + " usually pays around the " + ordinal(s.day) + " (from " + s.payments + " payment" + (s.payments === 1 ? "" : "s") + ").";
-  }
-  function partMoney(parts) { return (parts || []).map(function (p) { return money(p.amount, p.currency); }).join(" + "); }
-  /* What a payout route cost. A fee needs a source. A currency change keeps a recorded rate or says not enough data. */
-  function routeLines(r) {
-    if (!r || !r.payouts) return ["Not enough data."];
-    var lines = [], fees = curList(r.fees);
-    if (fees.length) lines.push("Fees: " + fees.join(" + ") + " on " + r.feePayouts + " payout" + (r.feePayouts === 1 ? "" : "s") + ".");
-    if (r.checkLink) lines.push("More landed in Revolut than was sent: the link between them needs checking."); /* v18 */
-    if (r.noFee && !fees.length && !r.checkLink && !r.mixed) lines.push("No fee on the amounts recorded.");
-    if (r.mixed) {
-      (r.mixedExamples || []).forEach(function (m) { lines.push(partMoney(m.sent) + " sent, " + money(m.landed.amount, m.landed.currency) + " landed."); });
-      if (r.rate && r.rate.source) lines.push("Rate " + r.rate.value + " " + r.rate.from + " to " + r.rate.to + ", from " + r.rate.source + ".");
-      else lines.push("Exchange: not enough data.");
-    }
-    if (r.split === "rule pending") lines.push("Split: you haven't confirmed how it is shared yet."); /* v18 */
-    if (!lines.length) lines.push("Not enough data.");
-    return lines;
-  }
-  /* "Mon 9 Nov · USD 104.04 · received" */
   /* ---------- the release page (17 Nov 2026, Nova for Luke): the whole release in one view ----------
      checklist: the files, every step that applies, the final lyrics (not for a song released before HQ), the ad plan;
      ready when every item is. fields: every field with its state (filled / missing / needed later / optional / not
@@ -965,17 +817,6 @@
         banner: masters.banner && masters.banner.line ? masters.banner.line : ""
       } };
   }
-  function payLine(p) { return p ? day(p.date) + " · " + money(p.amount, p.currency) + " · " + p.status : "none logged yet"; }
-  /* a source paid into several accounts (round 2, Luke: "hq should show the second routenote account"):
-     "PayPal (account A): USD 640.12 payable, Wed 30 Sep · PayPal (account B): nothing logged yet" */
-  function accountsLine(s) {
-    return ((s && s.byAccount) || []).map(function (a) {
-      return a.account + ": " + (a.last ? money(a.last.amount, a.last.currency) + " " + a.last.status + ", " + day(a.last.date) : "nothing logged yet");
-    }).join(" · ");
-  }
-  /* nothing submitted and no list of sources yet */
-  function incomeEmpty(inc) { return !inc || (!inc.count && !(inc.sources || []).length && !(inc.entries || []).length); }
-
   /* ================= Replies that visibly land (11 Nov 2026) =================
      Luke: "when i reply to a message right now nothing happens let's make that clearer that i've
      replied". So: the item leaves "Waiting on you" at once, a line says where it went and when, and
@@ -1003,7 +844,6 @@
     if (!sp) return "not reported";
     return spWhen(sp, today) || "not reported";
   }
-  var CLAUDE_ROUNDS = "Claude reads the desk at 09:40, 15:40 and 21:40.";
   /* the small mark on a message: "Read by Nova 17:10" / "Not read yet" (v2, 11 Nov 2026: READ, from the
      desk's read markers, which only the tools that hand a bot its messages write; no longer "the bot used
      the desk"). A note to everyone: "Read by 7 of 12" (x.read = { by, of }). null when nobody can read it
@@ -1017,7 +857,7 @@
     }
     if (x.seen == null) return null;
     if (x.seen) { var w = spWhen(spStampOf(x.seenAt), today); return { seen: true, text: "Read by " + x.to + (w ? " " + w : ""), note: "" }; }
-    return { seen: false, text: "Not read yet", note: x.to === "Claude" ? CLAUDE_ROUNDS : "" };
+    return { seen: false, text: "Not read yet", note: "" };
   }
   /* the line that takes the place of what Luke just answered. kind: reply | option | done | message */
   function sentLine(kind, to, at, choice) {
@@ -1025,7 +865,7 @@
     if (kind === "option") out = "Your answer “" + choice + "” went to " + who + " at " + hm + ".";
     else if (kind === "done") out = "Marked as done at " + hm + ". " + who + " sees it on the desk.";
     else out = "Sent to " + who + " at " + hm + ".";
-    return to === "Claude" ? out + " " + CLAUDE_ROUNDS : out;
+    return out;
   }
   /* "You answered": the board's list (board.answered), each with what was asked, what Luke said and
      whether the bot has seen it. An answer to a message deep in a thread is filed by the desk under
@@ -1514,168 +1354,6 @@
     return told ? "Answered at " + hm + ". Nova was asked to find out who delivered " + title + "." : "Your answer is saved, but the message to Nova couldn't go. Press “Send it to Nova again”.";
   }
 
-  /* ================= Revolut: the bank reader on the page (11 Nov 2026) =================
-     GET /api/bank/status (netlify/functions/bank.mjs) says where the reader is; the payments it could
-     not place are on the desk as "unsorted" (board.income.unsorted): in no total until someone sorts
-     them (POST /api/staff/sort). Luke's words, never the reader's: "to sort", "your own transfer". */
-  var MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-  var addDay = function (d, n) { return new Date(Date.parse(d + "T12:00:00Z") + n * 86400000).toISOString().slice(0, 10); };
-  var PREVIEW = "Connecting Revolut only works on badscandal.com itself, not on a preview.";
-  /* the six kinds of income a payment can be sorted as (the desk's CATEGORIES) */
-  var SORT_TYPES = ["Self-releases", "Label deals", "Publishing", "Production", "Salary", "Other"];
-  /* A failure that names Netlify settings (the private key, the application id, the bank's name) is
-     for Claude and the logs; Luke is told what to do instead. kind = the server's errorKind (status,
-     sync) or kind (connect): key | refused | no_bank. The words are checked too, in case a sentence
-     that names a setting ever comes without its kind. */
-  var SETTINGS_WORDS = "Revolut's settings on Netlify need fixing: ask Claude.";
-  function bankSays(kind, text) {
-    if (kind === "key" || kind === "refused" || kind === "no_bank" || /ENABLE_BANKING_|\bPEM\b|base64|redeploy/i.test(String(text || ""))) return SETTINGS_WORDS;
-    return text || "";
-  }
-  function endsWords(n) { return n === 0 ? "approval ends today" : n === 1 ? "approval ends tomorrow" : "approval ends in " + n + " days"; }
-  /* the reader's last read failed: an error, and no full read since it */
-  function bankFailed(st) { var ok = t(st && st.lastOkAt), run = t(st && st.lastRunAt); return !!(st && st.lastError && (ok == null || (run != null && run > ok))); }
-  /* The one sentence (the server's bankLine, netlify/lib/bank.mjs, word for word; São Paulo times):
-     "Revolut: read today at 06:50 · 2 payments in · approval ends in 86 days" */
-  function bankLine(st, now) {
-    now = now || Date.now();
-    if (!st || !st.configured) return "The site is missing its Revolut settings";
-    if (st.needsApproval) return "Revolut has to be approved again";
-    if (!st.connected) return "Revolut is not connected";
-    var parts = [], ok = t(st.lastOkAt);
-    if (ok != null) {
-      var d = spStampOf(ok).slice(0, 10), today = spStampOf(now).slice(0, 10);
-      var when = d === today ? "today" : d === addDay(today, -1) ? "yesterday" : "on " + Number(d.slice(8, 10)) + " " + MON[Number(d.slice(5, 7)) - 1];
-      parts.push("Revolut: read " + when + " at " + spStampOf(ok).slice(11, 16) + " SP"); /* v18: the zone */
-    } else parts.push(st.partial ? "Revolut: not fully read yet" : "Revolut: not read yet");
-    if (bankFailed(st)) parts.push("the last read failed");
-    else if (st.partial) parts.push("the last read stopped part way, the rest comes at the next read");
-    else if (ok != null && typeof st.lastAdded === "number" && isFinite(st.lastAdded)) parts.push(st.lastAdded === 0 ? "no new payments" : st.lastAdded + " payment" + (st.lastAdded === 1 ? "" : "s") + " in");
-    parts.push(endsWords(st.daysLeft));
-    return parts.join(" · ");
-  }
-  /* What the Revolut tile shows: the line, the accounts it reads, the reader's own sentence when the
-     last read failed, and which buttons: connect | approve | sync | disconnect (the first is the main
-     one). attn when Luke has to act: approval gone, or 14 days or fewer left. note = why there is no
-     Connect button (only the live site can connect) or what is missing. */
-  function bankView(st, now) {
-    var v = { line: bankLine(st, now), attn: false, accounts: [], error: "", note: "", buttons: [] };
-    if (!st) return v;
-    v.accounts = (st.accounts || []).map(function (a) { return [a.name, a.currency].filter(Boolean).join(" · ") + (a.last4 ? " ••" + a.last4 : ""); }).filter(Boolean);
-    if (!st.configured) { v.note = "Connecting needs the Revolut settings on Netlify first."; return v; }
-    var here = !!st.canConnectHere;
-    if (st.needsApproval) { v.attn = true; v.buttons = here ? ["approve", "disconnect"] : ["disconnect"]; }
-    else if (!st.connected) v.buttons = here ? ["connect"] : [];
-    else {
-      v.attn = !!st.expiring;
-      v.buttons = (st.expiring && here ? ["approve"] : []).concat("sync", "disconnect");
-      if (bankFailed(st)) v.error = bankSays(st.errorKind, st.lastError);
-    }
-    if (!here && (st.needsApproval || !st.connected || st.expiring)) v.note = PREVIEW;
-    return v;
-  }
-  var BANK_BUTTON = { connect: "Connect Revolut", approve: "Approve again", sync: "Read now", disconnect: "Disconnect" };
-  function bankButton(k) { return BANK_BUTTON[k] || ""; }
-  /* The bank sends Luke back to /hq?bank=connected|failed|device#money. -> { kind, line, search (the
-     address without the flag, for history.replaceState), had } */
-  var FLAG_LINE = { connected: "Revolut is connected. The first read is running.", failed: "That didn't connect. Press the Revolut button below to try again.",
-    device: "Finish on the device you started on, or start again here with the Revolut button below." };
-  function bankFlag(search) {
-    var parts = String(search || "").replace(/^\?/, "").split("&").filter(Boolean), kind = "", had = false;
-    parts = parts.filter(function (p) { var m = /^bank=(.*)$/.exec(p); if (!m) return true; had = true; if (FLAG_LINE[m[1]]) kind = m[1]; return false; });
-    return { kind: kind, line: FLAG_LINE[kind] || "", search: parts.length ? "?" + parts.join("&") : "", had: had };
-  }
-  /* Once Revolut's state is known: what is left of the ?bank= flag, and whether to read at once.
-     "connected" is said only while Revolut IS connected, and reads by itself only once, and only when
-     the connection is under 10 minutes old (an old link, a bookmark or the address bar's memory of
-     /hq?bank=connected never starts a read). -> { flag (null = say nothing), sync } */
-  var AUTO_READ_MS = 10 * 60000;
-  function bankFlagAfter(flag, st, now) {
-    now = now || Date.now();
-    if (!flag || !st || flag.kind !== "connected") return { flag: flag || null, sync: false };
-    if (!st.connected) return { flag: null, sync: false };
-    var at = t(st.connectedAt), fresh = at != null && now - at >= -60000 && now - at < AUTO_READ_MS;
-    if (!fresh) return { flag: null, sync: false };
-    return { flag: { kind: flag.kind, line: flag.line, auto: false }, sync: !!flag.auto };
-  }
-  /* "Read now" came back (the sync summary). -> { ok, text } */
-  function syncWords(s, at) {
-    if (!s || typeof s !== "object") return { ok: false, text: "Couldn't read Revolut just now. Try again." };
-    if (!s.ok || s.error) return { ok: false, text: bankSays(s.errorKind, s.error) || "Couldn't read Revolut just now. Try again." };
-    var n = s.newPayments || 0, hm = spStampOf(at).slice(11, 16);
-    return { ok: true, text: "Read at " + hm + ": " + (n ? n + " new payment" + (n === 1 ? "" : "s") + " came in" : "nothing new came in") + (s.more ? ". The rest comes at the next read." : ".") };
-  }
-  /* a payment's state in "Latest payments": counted = it is in the totals. "Your own transfer" only for
-     what the bank reader itself found to be his own money (by HQ, never changed since); anything else
-     marked as a transfer (sorted as "Not income", or a bot's refund or gift) is "Not income". */
-  function payStatus(e) {
-    var s = e && e.status;
-    if (e && e.paidBy && (s === "pending" || s === "payable" || s === "statement only")) return { text: "Paid (see the received payment)", counted: false }; /* 16 Nov 2026 */
-    /* one entry per payment (17 Nov 2026): Wise / PayPal money counts when it reaches Revolut */
-    if (e && e.movedTo) return { text: "Moved to Revolut", counted: false };
-    if (e && (e.holding || (s === "received" && e.account && !/revolut/i.test(e.account) && !/^statement/i.test(e.account)))) {
-      var where = /wise/i.test(e.account || "") ? "Wise" : /paypal/i.test(e.account || "") ? "PayPal" : (e.account || "that account");
-      return { text: "Waiting in " + where, counted: false };
-    }
-    if (s === "unsorted") return { text: "To sort", counted: false };
-    if (s === "transfer") return { text: e.by === "HQ" && !(e.history || []).length ? "Your own transfer" : "Not income", counted: false };
-    /* batch 4: a statement under the payout line counts nowhere yet; payable is owed to us */
-    if (s === "statement only") return { text: "Statement only (not payable yet)", counted: false };
-    /* not received yet: never counted as income (Luke, 16 Nov 2026) */
-    if (s === "payable") return { text: "Payable (not received yet)", counted: false };
-    if (s === "pending") return { text: "Pending (not received yet)", counted: false };
-    s = String(s || ""); return { text: s.charAt(0).toUpperCase() + s.slice(1), counted: true };
-  }
-  /* the inline question before a payment is sorted (it can't be changed on the page afterwards) */
-  function sortQuestion(e, status, category) {
-    var what = e.payer + "'s " + money(e.amount, e.currency) + " (" + day(e.date) + ")";
-    return status === "received" ? "Sort " + what + " as income (" + category + ")? It counts as money coming in from then on, and can't be changed here."
-      : "Sort " + what + " as not income? Your own money, a refund, a gift: it never counts in the totals, and can't be changed here.";
-  }
-  function sortedLine(status, category) { return status === "received" ? "Sorted as income (" + category + ")" : "Sorted as not income"; }
-  /* The payment is the money of a statement already logged as pending (the desk offers it as
-     e.pendingMatch): the answer, the question before it goes, and the line in its place afterwards */
-  function pendingWhat(p) { return p.payer + " statement (" + money(p.amount, p.currency) + ", " + day(p.date) + ")"; }
-  function pendingAnswer(e) { var p = e && e.pendingMatch; return p ? "It's the pending " + pendingWhat(p) : ""; }
-  function pendingQuestion(e) {
-    var p = e.pendingMatch;
-    return "Is " + e.payer + "'s " + money(e.amount, e.currency) + " (" + day(e.date) + ") the money of the pending " + pendingWhat(p) + "? The statement becomes received on " + day(e.date) + ", it leaves Pending, and this payment is counted once, as that statement. It can't be changed here.";
-  }
-  function pendingSorted(p) { return "Sorted as the " + p.payer + " statement: received"; }
-  /* "2 payments in Revolut to sort" */
-  function toSortWords(inc) {
-    var list = (inc && inc.unsortedMonth) || (inc && inc.unsorted) || [], n = list.length;
-    if (!n) return "";
-    var where = list.map(function (e) { return e.account; }).filter(function (a, i, all) { return a && all.indexOf(a) === i; });
-    return n + " payment" + (n === 1 ? "" : "s") + " in " + (where.length ? joinWords(where) : "the accounts") + " to sort";
-  }
-  /* Today's "Needs attention" from the reader: payments to sort, and the approval (gone, or 14 days or
-     fewer left). Every item opens Money. */
-  function bankAttention(st, board) {
-    var out = [], ts = toSortWords(board && board.income);
-    if (ts) out.push({ key: "tosort", text: ts, href: "#money" });
-    if (st && st.configured && st.needsApproval) out.push({ key: "bank", text: "Revolut has to be approved again", href: "#money" });
-    else if (st && st.configured && st.connected && st.expiring) out.push({ key: "bank", text: "Revolut's " + endsWords(st.daysLeft), href: "#money" });
-    return out;
-  }
-  /* Data health: the "Revolut" row. It reads every morning at 06:50 (09:50 UTC); more than 26 hours
-     without a full read means a morning was missed. */
-  function bankHealth(st, problem, now) {
-    now = now || Date.now();
-    var R = function (state, text) { return { key: "revolut", label: "Revolut", state: state, text: text }; };
-    if (!st) return problem ? R("bad", problem) : R("off", "Not read yet");
-    if (!st.configured) return R("off", "Not set up: the site is missing its Revolut settings");
-    if (st.needsApproval) return R("bad", "Has to be approved again (Money)");
-    if (!st.connected) return R("off", "Not connected");
-    var ok = t(st.lastOkAt);
-    if (bankFailed(st)) return R("bad", "The last read failed: " + bankSays(st.errorKind, st.lastError));
-    if (st.expiring) return R("bad", (ok != null ? "Read " + ago(now - ok) + " · " : "") + endsWords(st.daysLeft));
-    if (st.partial) return R("off", "The last read stopped part way: the rest comes at the next read");
-    if (ok == null) return R("off", "Not read yet: it reads every morning at 06:50");
-    if (now - ok > 26 * 3600000) return R("bad", "Last full read " + ago(now - ok) + ": it reads every morning at 06:50");
-    return R("ok", "Read " + ago(now - ok) + " · " + endsWords(st.daysLeft));
-  }
-
   /* ---------- the HQ apps (12 Nov 2026) ---------- */
   /* #releases/new opens the empty song form, then the address goes back to #releases, so the same
      address (the iPhone's "New release", the Mac's ⌘N) works again the next time */
@@ -1949,8 +1627,6 @@
     if (a.lastDay) bits.push("logged " + day(a.lastDay));
     return { big: fmt(a.monthly), sub: bits.join(" · ") };
   }
-  /* A7 (17 Nov 2026): a closed month, under "Received in <Month>" */
-  function closedLine(c) { return c && c.by && c.at ? "Closed by " + c.by + " on " + day(new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(c.at))) : ""; }
   /* A6 (17 Nov 2026): the release's pre-flight list, one line on the card ("" when there is nothing) */
   function preflightLine(v) { var n = ((v && v.preflight) || []).length; return n ? "Check before it goes to the stores: " + n + (n === 1 ? " thing" : " things") : ""; }
   function calendarMonth(ym, releases, today) {
@@ -1980,88 +1656,15 @@
     return { ym: ym, title: MONTHS[mo - 1] + " " + y, prev: prev, next: next, weeks: weeks };
   }
 
-  /* ---------- Per-song profit (L4, 18 Nov 2026) ----------
-     Money in is royalties recorded for that song (per store). Ad spend counts only when the row
-     names the song. A payment counts for a song only when it names the song. Anything else is
-     "not linked to a song". Currencies are never added. A single figure across currencies is an
-     estimate at each month's average rate, and only when every rate is there. */
-  function songPLList(o) {
-    var keys = Object.keys(o || {}).filter(function (c) { return o[c] != null && isFinite(Number(o[c])); }).sort();
-    return keys.length ? keys.map(function (c) { return money(Number(o[c]), c); }).join(" + ") : "";
-  }
-  function songPLView(pl) {
-    if (!pl || !pl.songs) return null;
-    var songs = pl.songs.map(function (s) {
-      var moneyIn = songPLList(s.in) || "nothing recorded";
-      var adSpend = s.out ? (songPLList(s.out) || "nothing recorded") : "not linked to a song";
-      var result;
-      if (!s.out) result = "No result: ad spend is not linked to a song.";
-      else if (!songPLList(s.in)) result = "Ad spend only: " + songPLList(s.out) + ". No royalties recorded for this song.";
-      else if (s.nets && Object.keys(s.nets).length === 1) result = songPLList(s.nets);
-      else if (s.estimate && s.estimate.recorded && s.estimate.eur != null) result = songPLList(s.in) + " in, " + songPLList(s.out) + " out. About " + money(s.estimate.eur, "EUR") + " (a rate that was recorded: " + s.estimate.source + ").";
-      else if (s.out && songPLList(s.in) && Object.keys(s.nets || {}).length > 1) result = songPLList(s.in) + " in, " + songPLList(s.out) + " out. No estimate: a rate is missing.";
-      else result = songPLList(s.in) + " in, " + songPLList(s.out) + " out.";
-      var note = "";
-      if (s.inFrom === "payments") note = "From payments that name this song.";
-      if (s.landed && songPLList(s.landed)) note = "Landed payments for this song are not added (" + songPLList(s.landed) + "): they may be the same money as the royalties.";
-      return {
-        song: s.song, date: s.date || "", dateLine: s.date ? day(s.date) : "No release date recorded",
-        moneyIn: moneyIn, adSpend: adSpend, result: result,
-        stores: (s.stores || []).map(function (st) { return (st.store ? st.store : "Store not named") + " · " + songPLList(st.amounts); }),
-        ads: (s.platforms || []).map(function (p) { return (p.platform || "Ad") + " · " + songPLList(p.amounts); }),
-        note: note,
-      };
-    });
-    var u = pl.unlinked || {}, notes = [];
-    var named = songs.some(function (s) { return s.adSpend !== "not linked to a song"; });
-    if (named && songPLList(u.spend && u.spend.amounts)) notes.push("Ad spend that names a song is on that song. This is the rest. They are not added together.");
-    var waitN = (pl.holding || 0) + (pl.notReceived || 0);
-    if (waitN) notes.push((waitN === 1 ? "1 payment is waiting" : waitN + " payments are waiting") + " (not received yet, or still in Wise or PayPal), so they are not counted until they reach Revolut.");
-    return {
-      how: "Money in is the royalties recorded for that song, per store. Ad spend counts only when it names the song. A payment counts for a song only when it names the song. Anything else is not linked to a song. Currencies stay separate. A single figure across currencies is shown only when a rate was recorded for that money, with where the rate came from.",
-      songs: songs,
-      unlinked: {
-        label: "not linked to a song",
-        royalties: songPLList(u.royalties && u.royalties.amounts),
-        royaltyStores: ((u.royalties && u.royalties.stores) || []).map(function (st) { return (st.store || "Store not named") + " · " + songPLList(st.amounts); }),
-        payments: songPLList(u.payments && u.payments.amounts),
-        spend: songPLList(u.spend && u.spend.amounts),
-        spendFrom: (u.spend && u.spend.from) || "",
-        spendTo: (u.spend && u.spend.to) || "",
-        spendPlatforms: ((u.spend && u.spend.platforms) || []).map(function (p) { return (p.platform || "Ad") + " · " + songPLList(p.amounts); }),
-        note: [notes.join(" "), (u.spend && (u.spend.from || u.spend.to) ? "Unlinked ad spend " + (u.spend.from || "") + (u.spend.to && u.spend.to !== u.spend.from ? " to " + u.spend.to : "") + ". Not the monthly cap." : "")].filter(Boolean).join(" "),
-      },
-    };
-  }
-  function songPLEsc(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); }
-  function songPLHtml(v) {
-    if (!v) return "";
-    var kv = function (a, b) { return '<div class="kv"><span>' + songPLEsc(a) + "</span><b>" + songPLEsc(b) + "</b></div>"; };
-    var fold = function (lines) { return lines.length ? '<details><summary>Details</summary>' + lines.map(function (line) { return '<p class="plrow">' + songPLEsc(line) + "</p>"; }).join("") + "</details>" : ""; };
-    var songs = v.songs.map(function (s) {
-      return '<article class="tile pl"><div class="pltop"><h3>' + songPLEsc(s.song) + '</h3><span class="when">' + songPLEsc(s.dateLine) + "</span></div>" +
-        kv("Money in", s.moneyIn) + kv("Ad spend", s.adSpend) +
-        '<p class="plres">' + songPLEsc(s.result) + "</p>" +
-        (s.note ? '<p class="plnote">' + songPLEsc(s.note) + "</p>" : "") + fold(s.stores.concat(s.ads)) + "</article>";
-    }).join("");
-    var u = v.unlinked, rows = "";
-    if (u.royalties) rows += kv("Royalties", u.royalties);
-    if (u.payments) rows += kv("Payments", u.payments);
-    if (u.spend) rows += kv("Ad spend", u.spend);
-    return songs + '<article class="tile pl"><div class="pltop"><h3>Not linked to a song</h3></div>' +
-      (rows || '<p class="plnote">Nothing is waiting here.</p>') +
-      (u.note ? '<p class="plnote">' + songPLEsc(u.note) + "</p>" : "") + fold((u.royaltyStores || []).concat(u.spendPlatforms || [])) + "</article>";
-  }
-
   /* ---------- "Search or Ask" (the HQ redesign, 12 Nov 2026) ----------
      One bar (⌘K, or the magnifier) that jumps anywhere. cmdIndex builds the list from what the page has
      already loaded (o.board = the staff board, o.songs = [{name, id}] as Songs draws them); cmdResults
      picks the best matches for what was typed: accents and capitals don't count, a match at the start
      beats one inside, and nothing typed shows what waits on Luke first. */
-  var CMD_TABS = [["today", "Today", "home briefing start"], ["songs", "Songs", "spotify streams tracks"], ["ads", "Ads", "meta cap spend cost tap"], ["rights", "Rights", "content id claims licence"],
+  var CMD_TABS = [["today", "Today", "home briefing start"], ["songs", "Songs", "spotify streams tracks disputes"], ["ads", "Ads", "meta cap spend cost tap"],
     ["pages", "Pages", "visits page counter people"], ["growth", "Growth & Fans", "followers instagram tiktok fans"], ["growth/fans", "Fans", "fans forming comments dms"],
     ["profiles", "Profiles", "profile photo banner header cover"],
-    ["releases", "Upcoming", "releases pipeline new song"], ["money", "Money", "income revolut payments royalties"], ["team", "Team", "bots duties staff"],
+    ["releases", "Upcoming", "releases pipeline new song"], ["team", "Team", "bots duties staff"],
     ["messages", "Messages", "inbox questions board"]];
   function cmdNorm(v) { var s = String(v == null ? "" : v); try { s = s.normalize("NFD").replace(/[\u0300-\u036f]/g, ""); } catch (e) {} return s.toLowerCase().replace(/\s+/g, " ").trim(); }
   function cmdIndex(o) {
@@ -2114,41 +1717,6 @@
   /* ================= Phone HQ (18 Nov 2026) =================
      Every number below is taken from data the page already has. A missing one is "not reported"
      or an empty list. Nothing here writes, pauses an ad, or invents an amount. */
-
-  /* Received this month is Revolut-landed only (the desk already leaves Wise/PayPal and moved
-     money out of `received`). Payable and waiting stay on their own lines and are never added in. */
-  function moneyHead(inc) {
-    return { received: curList(inc && inc.received), payable: curList(inc && inc.payable), waiting: curList(inc && inc.holding) };
-  }
-  function walletName(a) { return /paypal/i.test(String(a || "")) ? "PayPal" : /wise/i.test(String(a || "")) ? "Wise" : ""; }
-  function revolutName(a) { return /revolut/i.test(String(a || "")); }
-  /* statement, then the Wise/PayPal payer, then landed at Revolut. A step we cannot see is missing (red). */
-  function payFlow(e, entries) {
-    e = e || {}; entries = entries || [];
-    var byId = {};
-    entries.forEach(function (x) { if (x && x.id) byId[x.id] = x; });
-    var miss = function (key, label) { return { key: key, label: label, date: "", text: "missing", missing: true }; };
-    var hit = function (key, label, date, extra) {
-      return { key: key, label: label, date: date || "", text: (date ? day(date) : "date not reported") + (extra ? " · " + extra : ""), missing: !date };
-    };
-    var statement;
-    if (e.statement) statement = hit("statement", "Statement", e.statement, e.payer || "");
-    else if (e.paidBy && byId[e.paidBy]) statement = hit("statement", "Statement", byId[e.paidBy].statement || byId[e.paidBy].date, byId[e.paidBy].payer || "");
-    else if (/statement only|pending|payable/i.test(String(e.status || ""))) statement = hit("statement", "Statement", e.date, e.payer || "");
-    else {
-      var back = entries.filter(function (x) { return x && x.paidBy && x.paidBy === e.id; })[0];
-      statement = back ? hit("statement", "Statement", back.statement || back.date, back.payer || "") : miss("statement", "Statement");
-    }
-    var payer, carried = entries.filter(function (x) { return x && e.id && x.movedTo === e.id; })[0];
-    if (walletName(e.account)) payer = hit("payer", walletName(e.account), e.date, e.payer || "");
-    else if (carried && walletName(carried.account)) payer = hit("payer", walletName(carried.account), carried.date, carried.payer || "");
-    else payer = miss("payer", "Wise / PayPal");
-    var landed;
-    if (revolutName(e.account) && e.status === "received" && !e.movedTo) landed = hit("landed", "Landed at Revolut", e.date, "");
-    else if (e.movedTo && byId[e.movedTo] && revolutName(byId[e.movedTo].account)) landed = hit("landed", "Landed at Revolut", byId[e.movedTo].date, "");
-    else landed = miss("landed", "Landed at Revolut");
-    return [statement, payer, landed];
-  }
 
   /* "Google Fri 14 Nov: signed out" (the cap's notRead lines) -> "Google 14-16 Nov, signed out" */
   var GAP_MON = { Jan: 1, Feb: 2, Mar: 3, Apr: 4, May: 5, Jun: 6, Jul: 7, Aug: 8, Sep: 9, Oct: 10, Nov: 11, Dec: 12 };
@@ -2254,7 +1822,6 @@
     else if (mail.status === "rejected") bits.push("reason not reported");
     return bits.join(" · ");
   }
-  /* What YouTube showed, as Laura recorded it. An empty list is none recorded, never a made-up claim. */
   /* Spark's daily ideas. The best post is the official one with the highest engagement per view. Nothing is posted. */
   function contentIdeasCard(doc) {
     var d = doc && doc.reported != null ? doc : null;
@@ -2266,13 +1833,6 @@
     var best = b ? b.title + " · " + b.platform + " · " + b.perView + " per view (" + eng + " engagements, " + b.views + " views" + nr + ")" : "No official post was ranked.";
     return { reported: true, title: "Content ideas", best: best, compared: d.compared || "", note: d.note || "Ideas for Nova. Nothing is posted.",
       ideas: (d.ideas || []).map(function (i) { return i.platform + ": " + i.hook + " — " + i.text + " (" + i.format + "). " + i.why; }) };
-  }
-  function contentClaimRows(claims) {
-    var list = !claims ? [] : (Array.isArray(claims) ? claims : (claims.items || []));
-    if (!list.length) return { reported: false, rows: [], empty: "No Content ID claim has been recorded." };
-    return { reported: true, empty: "", rows: list.map(function (c) {
-      return { claim: c.claim || "not reported", claimant: c.claimant ? c.claimant : "not reported", impact: c.impact ? c.impact : "not reported", date: c.date ? day(c.date) : "not reported" };
-    }) };
   }
   /* Phone home: one dot per official account. Red is the only state that needs Luke.
      A watch that is only missing numbers shows as a gap, so "not enough data" is not a warning. */
@@ -2525,21 +2085,6 @@
     }).join("") + "</details>" : "";
     return h + list.map(function (c) { return disputeCard(c, false, o); }).join("") + done;
   }
-  /* Rights keeps the claim. A case that names its id gets a link. */
-  function claimCaseLinks(claims, cases) {
-    var items = !claims ? [] : (Array.isArray(claims) ? claims : (claims.items || []));
-    var list = Array.isArray(cases) ? cases : ((cases && cases.items) || []);
-    var h = "";
-    items.forEach(function (c) {
-      var id = c && (c.key || c.id);
-      if (!id) return;
-      var hit = list.find(function (x) { return x && x.claimId === id && x.status !== "resolved" && x.status !== "ignored"; }) || list.find(function (x) { return x && x.claimId === id; });
-      if (!hit || !hit.id) return;
-      h += '<p class="d"><a href="#songs/' + escHtml(hit.id) + '">Case for ' + escHtml(c.song || c.claim || "this claim") + "</a></p>";
-    });
-    return h;
-  }
-
   function teamDots(workers) {
     return (workers || []).map(function (w) {
       var tone = w.state === "blocked" || w.state === "late" ? "bad" : (w.state === "done" || w.state === "idle" || w.state === "paused") ? "grey" : "on";
@@ -2591,7 +2136,6 @@
       .replace(/,?\s*(?:as in |per |see )?runbook\s+[A-Z0-9]\b/gi, "")
       .replace(/meta too until the meta-api-feed brief says live/gi, "HQ records Meta itself")
       .replace(/\bthe meta-api-feed brief\b/gi, "the Meta feed plan").replace(/\bmeta-api-feed brief\b/gi, "Meta feed plan")
-      .replace(/\b(?:the\s+)?Revolut[- ]once rule\b/gi, "the rule that income counts once, when it lands in Revolut")
       .replace(/[ \t]{2,}/g, " ").replace(/\s+([,.;])/g, "$1");
   }
   /* quiet mode: one line per bot, the latest, with the older lines behind it */
@@ -2670,14 +2214,13 @@
   }
 
 
-  return { rankParts: rankParts, songTile: songTile, igStatusLine: igStatusLine, igPostNumbers: igPostNumbers, fanKindWord: fanKindWord, fanFlagWord: fanFlagWord, FAN_INTRO: FAN_INTRO, FAN_EMPTY: FAN_EMPTY, FAN_ASK: FAN_ASK, FAN_BACK: FAN_BACK, artistLines: artistLines, closedLine: closedLine, preflightLine: preflightLine, sixWeeks: sixWeeks, pitchBlock: pitchBlock, recommendLines: recommendLines, recommendedOption: recommendedOption, releaseTrouble: releaseTrouble, navPad: navPad, signoutWords: signoutWords, growthWhen: growthWhen, ago: ago, spMs: spMs, releaseWords: releaseWords, releaseDetail: releaseDetail, healthRows: healthRows, healthState: healthState, median: median, change: change, money: money, attention: attention, briefing: briefing,
+  return { rankParts: rankParts, songTile: songTile, igStatusLine: igStatusLine, igPostNumbers: igPostNumbers, fanKindWord: fanKindWord, fanFlagWord: fanFlagWord, FAN_INTRO: FAN_INTRO, FAN_EMPTY: FAN_EMPTY, FAN_ASK: FAN_ASK, FAN_BACK: FAN_BACK, artistLines: artistLines, preflightLine: preflightLine, sixWeeks: sixWeeks, pitchBlock: pitchBlock, recommendLines: recommendLines, recommendedOption: recommendedOption, releaseTrouble: releaseTrouble, navPad: navPad, signoutWords: signoutWords, growthWhen: growthWhen, ago: ago, spMs: spMs, releaseWords: releaseWords, releaseDetail: releaseDetail, healthRows: healthRows, healthState: healthState, median: median, change: change, money: money, attention: attention, briefing: briefing,
     snapshot: snapshot, changesSince: changesSince, tiles: tiles, summaryText: summaryText, shortStep: shortStep, day: day,
     slug: slug, workerLabel: workerLabel, sortWorkers: sortWorkers, workerView: workerView, dutyWhen: dutyWhen, workerCounts: workerCounts, seenLine: seenLine, connectorLine: connectorLine,
     novaMessage: novaMessage, liveFeed: liveFeed, spWhen: spWhen, waitLabel: waitLabel, needWords: needWords, reportParts: reportParts, siteCheckLine: siteCheckLine, composeNames: composeNames,
-    threadRoot: threadRoot, answerTarget: answerTarget, questionLines: questionLines, questionsLeft: questionsLeft, stepButton: stepButton, formKey: formKey, storeLine: storeLine, storeHistory: storeHistory, storeRows: storeRows, storeWhy: storeWhy, capRateLine: capRateLine, capMissingLine: capMissingLine, dutyGapsLine: dutyGapsLine, incomeTotals: incomeTotals, approvalLines: approvalLines, approvalUndo: approvalUndo, warnTone: warnTone, warnGroups: warnGroups, resubmitAsk: resubmitAsk, relStatus: relStatus, relProgress: relProgress, stepGroups: stepGroups, upcomingAsks: upcomingAsks, staffAttention: staffAttention, staffHealth: staffHealth, curList: curList, cadenceWord: cadenceWord, accountLine: accountLine, sourceState: sourceState, payLine: payLine, accountsLine: accountsLine, receivedMonths: receivedMonths, releasePage: releasePage, monthRows: monthRows, mainSources: mainSources, sourceMonthLine: sourceMonthLine, proposalRows: proposalRows, proposalConfirm: proposalConfirm, profileBlocks: profileBlocks, profileOverview: profileOverview, profileState: profileState, profileIssueText: profileIssueText, caseIssue: caseIssue, caseOutcome: caseOutcome, caseWaitWords: caseWaitWords,
-    incomeEmpty: incomeEmpty, incomeProblems: incomeProblems, expectedJourney: expectedJourney, expectedDue: expectedDue, expectedFlags: expectedFlags, expectedFlagKind: expectedFlagKind, missingLine: missingLine, learnedLine: learnedLine, routeLines: routeLines,
+    threadRoot: threadRoot, answerTarget: answerTarget, questionLines: questionLines, questionsLeft: questionsLeft, stepButton: stepButton, formKey: formKey, storeLine: storeLine, storeHistory: storeHistory, storeRows: storeRows, storeWhy: storeWhy, capRateLine: capRateLine, capMissingLine: capMissingLine, dutyGapsLine: dutyGapsLine, approvalLines: approvalLines, approvalUndo: approvalUndo, warnTone: warnTone, warnGroups: warnGroups, resubmitAsk: resubmitAsk, relStatus: relStatus, relProgress: relProgress, stepGroups: stepGroups, upcomingAsks: upcomingAsks, staffAttention: staffAttention, staffHealth: staffHealth, releasePage: releasePage, proposalRows: proposalRows, proposalConfirm: proposalConfirm, profileBlocks: profileBlocks, profileOverview: profileOverview, profileState: profileState, profileIssueText: profileIssueText, caseIssue: caseIssue, caseOutcome: caseOutcome, caseWaitWords: caseWaitWords,
     /* replies that visibly land + the release pipeline (11 Nov 2026) */
-    spStampOf: spStampOf, seenWords: seenWords, sentLine: sentLine, answeredList: answeredList, CLAUDE_ROUNDS: CLAUDE_ROUNDS,
+    spStampOf: spStampOf, seenWords: seenWords, sentLine: sentLine, answeredList: answeredList,
     formGroups: formGroups, releaseDayNote: releaseDayNote, releaseWhen: releaseWhen, stepState: stepState, missingWords: missingWords, packLine: packLine, missingSentence: missingSentence,
     packChanges: packChanges, fillWho: fillWho, relPill: relPill, releaseLists: releaseLists, stepsSummary: stepsSummary,
     sendQuestion: sendQuestion, moveQuestion: moveQuestion, cancelQuestion: cancelQuestion,
@@ -2686,11 +2229,6 @@
     fieldShown: fieldShown, fieldRequired: fieldRequired, needWord: needWord, upcomingPill: upcomingPill, whereLine: whereLine,
     releaseAttention: releaseAttention, sentNote: sentNote, sightingsHead: sightingsHead, sightRow: sightRow, sightQuestion: sightQuestion,
     sightConfirm: sightConfirm, sightDone: sightDone,
-    /* the Revolut reader (11 Nov 2026) */
-    bankLine: bankLine, bankView: bankView, bankButton: bankButton, bankFlag: bankFlag, syncWords: syncWords, payStatus: payStatus, sortQuestion: sortQuestion,
-    sortedLine: sortedLine, toSortWords: toSortWords, bankAttention: bankAttention, bankHealth: bankHealth, SORT_TYPES: SORT_TYPES,
-    /* after the review of 12 Nov 2026 */
-    bankSays: bankSays, bankFlagAfter: bankFlagAfter, pendingAnswer: pendingAnswer, pendingQuestion: pendingQuestion, pendingSorted: pendingSorted,
     /* the HQ apps (12 Nov 2026) */
     newReleaseRoute: newReleaseRoute, waitWords: waitWords, appRegisterBody: appRegisterBody,
     /* the HQ redesign (12 Nov 2026): Search or Ask */
@@ -2700,16 +2238,14 @@
     /* planning releases (14 Nov 2026) */
     PLAN_RULE: PLAN_RULE, PLAN_TIMELINE: PLAN_TIMELINE, suggestDates: suggestDates, planAdvice: planAdvice, calendarMonth: calendarMonth,
     fmt: fmt,
-    /* per-song profit (L4, 18 Nov 2026) */
-    songPLView: songPLView, songPLHtml: songPLHtml,
-    /* phone HQ (18 Nov 2026): Needs you, the release strip, the team dots, the week, money, the spend gauge */
-    deskWhen: deskWhen, moneyHead: moneyHead, payFlow: payFlow, spendGauge: spendGauge, gapNotes: gapNotes, decisionCards: decisionCards,
+    /* phone HQ (18 Nov 2026): Needs you, the release strip, the team dots, the week, the spend gauge */
+    deskWhen: deskWhen, spendGauge: spendGauge, gapNotes: gapNotes, decisionCards: decisionCards,
     releaseFace: releaseFace, teamDots: teamDots, weekAhead: weekAhead, quietFeed: quietFeed, screenText: screenText, dropAccountId: dropAccountId, plainWords: plainWords, pitchSentence: pitchSentence, followerStrip: followerStrip,
     mondayPick: mondayPick, lyricsPreview: lyricsPreview,
     /* L5 watchers (18 Nov 2026) */
-    routeMailLine: routeMailLine, contentClaimRows: contentClaimRows, contentIdeasCard: contentIdeasCard, phoneWatchers: phoneWatchers,
-    /* disputes (19 Nov 2026): cases live on Songs; a claim on Rights links across */
-    disputeHtml: disputeHtml, claimCaseLinks: claimCaseLinks, caseProgress: caseProgress, caseColour: caseColour, songMark: songMark,
+    routeMailLine: routeMailLine, contentIdeasCard: contentIdeasCard, phoneWatchers: phoneWatchers,
+    /* disputes (19 Nov 2026): cases live on Songs */
+    disputeHtml: disputeHtml, caseProgress: caseProgress, caseColour: caseColour, songMark: songMark,
     /* account health (18 Nov 2026) */
     accountHealthHome: accountHealthHome };
 });

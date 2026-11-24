@@ -135,7 +135,7 @@
         "<h3>Playlist</h3><p>Name: " + esc(pl.name || "not set") + "</p><p>Link: " + esc(pl.url || "not set") + "</p><p>Owner: " + esc(pl.owner_bot || "not set") + '</p><p>Status: ' + esc(pl.status) + "</p><p>A playlist bot will fill this later. It is not set up.</p>" +
         "<h3>Covers</h3>" + rel +
         '<form data-act="create_release"><input type="hidden" name="genre" value="' + esc(g.name) + '">' + field("Cover title", "title", "text") + field("Release day", "date", "date") + go("Add cover") + '<p class="ferr" hidden></p></form>' +
-        "<h3>Numbers</h3><p>Releases: " + esc(st.releases) + "</p><p>Spend: " + esc(money(st.spend)) + "</p><p>Streams: " + esc(st.streams) + "</p><p>Payout: " + esc(money(st.payout)) + "</p><p>ROI: " + esc(st.roi) + "</p>" +
+        "<h3>Numbers</h3><p>Releases: " + esc(st.releases) + "</p><p>Spend: " + esc(money(st.spend)) + "</p><p>Streams: " + esc(st.streams) + "</p>" +
         ((g.trends || []).length ? "<h3>Trends</h3><ul>" + g.trends.map(function (t) { return "<li>" + esc(t.date) + " · " + esc(t.direction) + " · " + esc(t.note || "") + "</li>"; }).join("") + "</ul>" : "<h3>Trends</h3><p>No trend recorded yet. Add a source, a date and whether it is rising or falling.</p>") +
         "</section>";
     }).join("");

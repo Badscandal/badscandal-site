@@ -127,7 +127,8 @@ test("song_pages reads the builds itself, but only the hourly check keeps and te
   await S.checkSongBuilds(d, NOW + 6 * MIN, R);
   assert.equal((await toWebmaster(d, NOW + 6 * MIN)).filter((m) => /^Not done:/.test(m.text)).length, 1);
 });
-test("a build that worked: no Not done; other tests failing afterwards go to Claude, once", async (t) => {
+/* 24 Nov 2026: Claude is off the desk, so the note goes to Nova */
+test("a build that worked: no Not done; other tests failing afterwards go to Nova, once", async (t) => {
   const d = memoryDesk(), reports = {};
   const id = await sent(d, reports, t);
   reports[id] = { msg: id, slug: "papermoon", kind: "new", ok: true, others: "2 other tests failed after it went live (they don't stop song pages): bank: a made-up test; bank: another", run: RUN, at: new Date(NOW).toISOString() };
@@ -135,7 +136,7 @@ test("a build that worked: no Not done; other tests failing afterwards go to Cla
   await S.checkSongBuilds(d, NOW + 6 * MIN, R);
   const all = await S.listMessages(d, NOW + 6 * MIN);
   assert.equal(all.filter((m) => /^Not done:/.test(m.text)).length, 0);
-  const toClaude = all.filter((m) => m.to === "Claude" && m.from === "HQ");
+  const toClaude = all.filter((m) => m.to === "Nova" && m.from === "HQ");
   assert.equal(toClaude.length, 1);
   assert.match(toClaude[0].text, /papermoon went live, but 2 other tests failed after it went live/);
   const st = (await S.songPages(d, NOW + 6 * MIN))[0].state;

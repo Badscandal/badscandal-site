@@ -5,9 +5,9 @@
 
      updates   the bots' running log (same shape as the sheet's Updates tab; the two are merged)
      messages  one board for Luke, Claude and every bot (needs: none | reply | action | decision)
-     income    one record per payment, submitted daily, plus "I checked <account>, nothing new"
      roster    who each bot is, why it is needed, what it does every day
-     sources   every place money comes from, so a missing one is visible
+               (24 Nov 2026, Luke: money is no longer on HQ. The old income records stay in the store,
+               unread: nothing here reads, shows or deletes them)
      cards     what each bot says it is working on; seen/<bot>.json = its last call
      releases  the release pipeline (11 Nov 2026): one pack per song with everything every bot needs
                (the WAV, the artwork, the lyrics, the RouteNote details, whose release it is) and its
@@ -35,38 +35,33 @@ export const homeCardNow = homeCardPublished;
 export const TZ = "America/Sao_Paulo";
 export const UPDATE_STATUS = ["done", "working", "blocked", "error", "info"];
 export const NEEDS = ["none", "reply", "action", "decision"];
-export const CATEGORIES = ["Self-releases", "Label deals", "Publishing", "Production", "Salary", "Other"];
-/* unsorted (bank reader, 11 Nov 2026): seen in an account, nobody has said what it is yet; counts in neither received nor pending */
-/* batch 4 (15 Nov 2026): "statement only" = a statement, not payable yet (under the payout line), counted
-   nowhere yet; "payable" = owed to us and ready to be paid out, counted with pending ("owed to us") */
-export const INCOME_STATUS = ["received", "pending", "transfer", "statement only", "payable", "unsorted"];
-/* a statement whose money hasn't arrived yet: when it lands, the same payment turns received */
-export const OWED = ["pending", "payable", "statement only"];
-export const CADENCE = ["daily", "monthly", "quarterly", "irregular"];
-export const SOURCE_STATE = ["active", "blocked", "unknown", "not_tracked"];
+/* 24 Nov 2026, Luke: "lets fully remove the money section". The income categories, statuses and sources
+   went with it (git history keeps them for the badscandal books site). */
 export const PEOPLE = ["Luke", "Claude", "HQ"]; /* not bots; HQ = the site's own check (three times a day since 11 Nov 2026) */
 /* nobody needs more than this in a day; past it something is looping, and the answer is "stop" */
-export const LIMITS = { updatesPerBotPerDay: 60, messagesPerSenderPerDay: 40, messagesPerMonth: 1500, paymentsPerMonth: 3000, checksPerBotPerDay: 40, releases: 60, releaseLog: 30 };
+export const LIMITS = { updatesPerBotPerDay: 60, messagesPerSenderPerDay: 40, messagesPerMonth: 1500, releases: 60, releaseLog: 30 };
 
 /* The team as the repo may show it: names and one public line each. The full roster (why each bot
    is needed, its tools, its times) is seeded into the store and replaces this. */
 export const DEFAULT_ROSTER = [
   { name: "Nova", role: "Chief of staff", duty: "Runs the team's day and the task board", time: "07:00",
-    why: "Without Nova nobody resets the day's duties, chases what is missing or writes the evening wrap-up. She is Claude's contact and the one who passes instructions to every other bot.",
+    why: "Without Nova nobody resets the day's duties, chases what is missing or writes the evening wrap-up. She is the one who passes instructions to every other bot.",
     schedule: [{ time: "07:00", what: "Reset today's duties on the task board, each with its time (before Ledger's 07:30 run)" }, { time: "08:00", what: "Read new briefs and the messages on the desk" }, { time: "09:00", what: "Standup: logged, or the blocker" },
       { time: "09:45", what: "Check the month's ad spend against the cap" }, { time: "12:00", what: "Chase anything missing" }, { time: "21:00", what: "Wrap-up: mark what slipped, write the daily report" }, { time: "Sunday", what: "Weekly numbers and the weekly report" }],
     writes: "The task board and the release timeline; the daily report" },
   { name: "Alfred", role: "Luke's assistant", duty: "One message to Luke a day, plus urgent alerts", time: "10:00",
-    why: "The only voice that reaches Luke, once a day, so no other bot has to interrupt him. Carries the site's check, Claude's note and anything that needs Luke's yes.",
-    schedule: [{ time: "10:00", what: "The daily message: ad spend against the cap, income, what needs Luke, who didn't log, the next release" }, { time: "any time", what: "Alert at USD 750, at USD 900 and above USD 1,000 of ad spend" }],
+    why: "The only voice that reaches Luke, once a day, so no other bot has to interrupt him. Carries the site's check and anything that needs Luke's yes.",
+    schedule: [{ time: "10:00", what: "The daily message: ad spend against the cap, what needs Luke, who didn't log, the next release" }, { time: "any time", what: "Alert at USD 750, at USD 900 and above USD 1,000 of ad spend" }],
     writes: "Nothing: Alfred reports, he doesn't log" },
-  { name: "Ledger", role: "Income", duty: "Logs every new payment", time: "07:30",
-    why: "Sees every payment the day it lands, royalties included (Ledger owns them since 11 Nov 2026), so income is never found weeks later and nothing is missed or counted twice.",
-    schedule: [{ time: "07:30", what: "Check every money account and the statement emails; submit each new payment; say each account was checked" }, { time: "5th", what: "Monthly income report, royalties per song and per store included" }, { time: "20th", what: "Chase every pending payment" }],
-    writes: "Payments on the desk; rows for the income sheet" },
-  { name: "Sheet", role: "Income sheet", duty: "Keeps the income sheet complete", time: "08:00",
-    why: "Keeps the books tidy: every payment Ledger found has its source, category, currency, amount and status, so the monthly totals can be trusted.",
-    schedule: [{ time: "08:00", what: "Confirm the income sheet is complete for yesterday" }], writes: "The income sheet" },
+  /* 24 Nov 2026, Luke: "lets fully remove the money section ... Move the money site to the badscandal books
+     site". Ledger and Sheet stay on the team; Luke gives them new work later. No duty time, so the site's
+     check never lists them as quiet. */
+  { name: "Ledger", role: "Waiting for new work", duty: "No money work: HQ no longer handles money. Ask Luke for your new task.", time: "",
+    why: "On the team. Luke gives Ledger new work soon. HQ no longer handles money, so there is nothing to check until then.",
+    schedule: [], writes: "Nothing until Luke gives the new task" },
+  { name: "Sheet", role: "Waiting for new work", duty: "No money work: HQ no longer handles money. Ask Luke for your new task.", time: "",
+    why: "On the team. Luke gives Sheet new work soon. HQ no longer handles money, so there is nothing to check until then.",
+    schedule: [], writes: "Nothing until Luke gives the new task" },
   { name: "Steve", role: "Instagram", duty: "Daily growth and best post", time: "09:10",
     why: "Instagram is where the fans are found first. Steve ties each day's growth to the post that caused it.",
     schedule: [{ time: "09:10", what: "Followers, change, views, best post and its link" }], writes: "The Growth tab" },
@@ -192,7 +187,6 @@ export function freshBlocker(text, o = {}) {
   const t = String(text || "");
   if (!t) return "";
   if (o.igConnected && /instagram/i.test(t) && /log\s*in|sign[\s-]*in|browser|locked/i.test(t)) return "";
-  if (o.revolutLive && /revolut can'?t be read|revolut (is )?not connected/i.test(t)) return "";
   /* 18 Nov 2026: a lyrics blocker clears once that song's lyrics are in the pack or waiting on Luke's yes */
   if (/lyric/i.test(t)) {
     const ready = [...(o.lyricsReady || []), ...(o.lyricsPending || [])];
@@ -263,47 +257,7 @@ export function plainWords(text) {
     .replace(/,?\s*(?:as in |per |see )?runbook\s+[A-Z0-9]\b/gi, "")
     .replace(/meta too until the meta-api-feed brief says live/gi, "HQ records Meta itself")
     .replace(/\bthe meta-api-feed brief\b/gi, "the Meta feed plan").replace(/\bmeta-api-feed brief\b/gi, "Meta feed plan")
-    .replace(/\b(?:the\s+)?Revolut[- ]once rule\b/gi, "the rule that income counts once, when it lands in Revolut")
     .replace(/[ \t]{2,}/g, " ").replace(/\s+([,.;])/g, "$1");
-}
-/* v18 (21 Nov 2026): one income problem for Luke (luke_briefing): no payment ids. The words are kept. */
-export function lukeProblem(p) {
-  return String(p == null ? "" : p).replace(/\s*\(id [^)]*\)/gi, "").replace(/\s*\bid\s+i[0-9a-z]{8,16}\b/g, "").replace(/[ \t]{2,}/g, " ").replace(/\s+([,.;])/g, "$1").trim();
-}
-/* v18 (21 Nov 2026, Spark and Forge): luke_short_briefing's income line. It was cut at 70 characters with
-   "…" and carried payer names and payment ids. Now each problem is said short and whole: the unsorted
-   list is a count, an overdue source keeps its first sentence, nothing is cut mid-way. */
-export function shortIncomeLine(inc, cur) {
-  const problems = (inc && inc.problems) || [];
-  const short = (p) => {
-    const t = lukeProblem(p);
-    if (/^Payments nobody has sorted:/i.test(t)) {
-      const n = Number.isFinite(inc && inc.unsortedCount) ? inc.unsortedCount : t.split("; ").length;
-      return `${n} payment${n === 1 ? "" : "s"} to sort`;
-    }
-    if (/logged twice under two payer names/i.test(t)) return t.split(":")[0];
-    if (/^New payer\(s\)/i.test(t)) return "New payers not on the list of sources";
-    const first = t.split(/(?<=\.)\s/)[0].replace(/\.$/, "");
-    return first.length <= 90 ? first : first.split(/[(,;]/)[0].trim();
-  };
-  const bits = problems.slice(0, 3).map(short).filter(Boolean);
-  return `Received ${cur((inc && inc.received) || {})} this month` + (bits.length ? `; for Ledger: ${bits.join("; ")}` + (problems.length > 3 ? ` (+${problems.length - 3} more)` : "") : "");
-}
-/* A note for a tool. Card and top-up digits are already hidden. A sentence that says a statement
-   is not on the desk is dropped when a statement of that amount is in the months already read.
-   The stored row is not rewritten (18 Nov 2026 night test). */
-export function displayNote(e, pool) {
-  let n = hidePrivate(e && e.note);
-  if (!/isn'?t on the desk|is not on the desk|not on the desk/i.test(n)) return n;
-  const rows = Array.isArray(pool) ? pool : [];
-  const mentioned = [...n.matchAll(/\b([A-Z]{3})\s*([\d,]+\.\d{2})\b/g)];
-  const hit = mentioned.some((m) => {
-    const amt = Number(m[2].replace(/,/g, ""));
-    return rows.some((s) => s && s.id !== e.id && s.currency === m[1] && Math.abs(Number(s.amount) - amt) < 0.02 && (OWED.includes(s.status) || s.status === "statement only" || s.statement));
-  }) || rows.some((s) => s && s.id !== e.id && s.currency === e.currency && Math.abs(Number(s.amount) - Number(e.amount)) < 0.02 && (OWED.includes(s.status) || s.status === "statement only"));
-  if (!hit) return n;
-  n = n.replace(/[^.]*\b(?:isn'?t|is not|not) on the desk\b[^.]*\.?/gi, "").replace(/\s{2,}/g, " ").trim();
-  return n;
 }
 /* Cut at a word (or a line), and turn a stored "\n" into a real line break. */
 export function excerptText(v, max = 160) {
@@ -316,13 +270,6 @@ export function excerptText(v, max = 160) {
   const flat = t.replace(/\s+/g, " ");
   const next = flat.indexOf(" ");
   return (next < 0 ? flat : flat.slice(0, next)) + "…";
-}
-/* Wise and PayPal are not received until the money lands in Revolut (18 Nov 2026 night test). */
-export function holdingLabel(e) {
-  const acc = String(e && e.account || "");
-  if (/wise/i.test(acc)) return "waiting in Wise";
-  if (/paypal/i.test(acc)) return "waiting in PayPal";
-  return acc ? `in ${acc}, not received` : "not received";
 }
 export const httpsLink = (v) => { const s = clean(v, 400); return /^https:\/\/[^\s"'<>]+$/.test(s) ? s : ""; };
 
@@ -592,6 +539,10 @@ const msgKey = (month) => `msg/${month}.json`;
 export async function sendMessage(store, now, roster, a) {
   const from = whoIs(a.from, roster, { people: true });
   const to = low(a.to) === "all" || low(a.to) === "everyone" || low(a.to) === "team" ? "all" : whoIs(a.to, roster, { people: true });
+  /* 24 Nov 2026 (Luke): "remove claudes api tasks he is no longer required ... the entire dashboard HQ will be
+     handled by the bots". Claude no longer takes work on the desk: a new note for Claude goes to Nova.
+     An answer to one of Claude's old messages still lands in its thread. */
+  if (to === "Claude" && from !== "Claude" && !(a.re != null && String(a.re).trim())) fail("Claude is no longer on the desk. Write to Nova instead. Nothing was sent.", "not_allowed");
   if ((from === "Licence" || from === "Spark") && to !== "Nova") fail(`${from} reports to Nova only. Put Nova in to. Nothing was sent.`, "not_allowed");
   const text = cleanText(a.text, 1500);
   if (text.length < 2) fail("text is empty");
@@ -606,7 +557,7 @@ export async function sendMessage(store, now, roster, a) {
      "Correct" closed Verse's 4 questions, 3 of them unanswered) */
   const qs = Array.isArray(a.questions) ? a.questions.map((q) => clean(q, 300)).filter(Boolean) : [];
   if (Array.isArray(a.questions) && a.questions.length) {
-    if (to === "all") fail("Questions need one name in to (Luke, Claude or a bot), not all.");
+    if (to === "all") fail("Questions need one name in to (Luke or a bot), not all.");
     if (qs.length < 2 || qs.length > 6) fail("questions must be 2 to 6 questions. One question goes in text.");
     if (options.length) fail("Use options for ONE question, or questions for several, not both.");
     if (from !== "HQ") noSecrets(qs.join("\n"));
@@ -1384,7 +1335,8 @@ export function waitedFor(ms) {
   return `${d} day${d === 1 ? "" : "s"}`;
 }
 /* what is waiting on one name, oldest first */
-export const waitingOn = (messages, name) => messages.filter((m) => isOpen(m) && low(m.to) === low(name)).sort((a, b) => (a.at < b.at ? -1 : 1));
+/* 24 Nov 2026 (Luke): Claude is off the desk, so an old question from Claude no longer waits on Luke */
+export const waitingOn = (messages, name) => messages.filter((m) => isOpen(m) && low(m.to) === low(name) && !(low(name) === "luke" && m.from === "Claude")).sort((a, b) => (a.at < b.at ? -1 : 1));
 export function threads(messages) {
   /* a thread = a first message and EVERY answer under it, however deep the answers were chained
      (an answer to an answer must not vanish from the board) */
@@ -1395,1294 +1347,6 @@ export function threads(messages) {
   return messages.filter((m) => rootOf(m) === m).map((m) => ({ ...m, replies: (replies[m.id] || []).sort((a, b) => (a.at < b.at ? -1 : 1)) }));
 }
 
-/* ---------- income: one record per payment, and "checked, nothing new" ---------- */
-const incKey = (month) => `inc/${month}.json`;
-const chkKey = (month) => `chk/${month}.json`;
-/* a payer's name without punctuation or a company ending: "Sample Holdings LLC" = "Sample Holdings" (round 2,
-   15 Nov 2026, Luke: "merge the duplicate payers but money should be counted once") */
-const COMPANY_END = /\s+(llc|ltd|limited|inc|incorporated|corp|corporation|co|company|gmbh|sa|sl|ltda|eireli|me|plc|pty|bv|srl)$/;
-export function payerName(p) {
-  let n = low(p).normalize("NFKD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, " ").trim();
-  for (let i = 0; i < 3 && COMPANY_END.test(n); i++) n = n.replace(COMPANY_END, "").trim();
-  return n;
-}
-/* one payer = the same name as above. Two DIFFERENT names are never merged, even under one source: a
-   label paying "via" another company is its own payer (Luke, 15 Nov 2026: one such pair "should be separate") */
-const STATEMENT = /^statement/i;
-const sameMoney = (x, e) => x.amount === e.amount && x.currency === e.currency && payerName(x.payer) === payerName(e.payer);
-/* Is x the payment e? Same account + reference; or the same day, payer and amount, unless both carry
-   a reference and the references differ (two real payments of the same size on one day). */
-export function samePayment(x, e) {
-  if (x.reference && e.reference) return low(x.account) === low(e.account) && low(x.reference) === low(e.reference);
-  return x.date === e.date && sameMoney(x, e);
-}
-export const dedupeKey = (e) => (e.reference ? low(e.account) + "|ref|" + low(e.reference) : [e.date, low(e.payer), e.amount, e.currency].join("|"));
-export async function submitIncome(store, now, roster, a) {
-  const by = whoIs(a.bot, roster, { people: true });
-  const date = clean(a.date, 10);
-  if (!DAY.test(date) || Number.isNaN(Date.parse(date + "T12:00:00Z")) || new Date(date + "T12:00:00Z").toISOString().slice(0, 10) !== date) fail("date must be the day the money arrived (or the statement date), as YYYY-MM-DD");
-  if (date > addDays(spDay(now), 1)) fail("date is in the future");
-  const payer = clean(a.payer, 80);
-  if (payer.length < 2) fail("payer is empty. Write who paid, exactly as the account or statement shows it.");
-  const amount = amountOf(a.amount);
-  if (amount == null || amount <= 0) fail('amount must be a positive number, written like 112.01 (a point for the cents, no thousands separator). If you could not see the amount, do not submit: post an update with status "blocked" instead.');
-  const currency = clean(a.currency, 12).toUpperCase();
-  if (!/^[A-Z]{3}$/.test(currency)) fail("currency must be the three-letter code the money was paid in (EUR, USD, GBP, BRL...). Never convert.");
-  const status = low(a.status) || "received";
-  if (!INCOME_STATUS.includes(status)) fail(`status must be one of: ${INCOME_STATUS.join(", ")}`);
-  if (status === "unsorted" && by !== "HQ") fail("status must be received, pending, transfer, statement only or payable"); /* only the bank reader files a payment as unsorted */
-  const category = CATEGORIES.find((c) => low(c) === low(a.category)) || (a.category ? null : "Other");
-  if (!category) fail(`category must be one of: ${CATEGORIES.join(", ")}`);
-  const account = clean(a.account, 40);
-  if (!account) fail("account is empty. Write where the money landed (Wise, PayPal, Revolut, Bank) or \"Statement only\" if you only saw a statement.");
-  const song = clean(a.song, 120), storeName = clean(a.store, 80);
-  if (storeName && !song) fail("A store needs the song it belongs to. Or leave both out: the payment is not linked to a song.");
-  noSecrets(song, storeName);
-  const e = { id: newId("i", now), at: new Date(now).toISOString(), by, date, payer, amount, currency, status, category, account,
-    reference: clean(a.reference, 80), period: clean(a.period, 40), source: clean(a.source, 40), note: clean(a.note, 240), ...(song ? { song } : {}), ...(storeName ? { store: storeName } : {}) };
-  noSecrets(e.payer, e.note, e.period);
-  { const what = secretIn(e.reference, { reference: true }); if (what) fail(`reference looks like ${what}. It must be the payment's own transaction id, nothing else.`, "secret"); }
-
-  /* A statement logged as pending, whose money now shows on a LATER day: that is the same payment
-     arriving, not a second one. Look for one pending entry with the same payer, amount and currency
-     in this month and the three before, and turn it into received (it keeps its statement date and
-     gains the day it arrived, which is the day it counts on). */
-  if (status === "received") {
-    /* pending_id (the bank reader): THAT statement, chosen by the caller, and no other */
-    const pid = clean(a.pending_id, 20);
-    let m = date.slice(0, 7);
-    for (let i = 0; i < 4; i++, m = prevMonth(m)) {
-      const hit = await mutate(store, incKey(m), [], (list) => {
-        if (list.some((x) => samePayment(x, e))) return { skip: true, value: null }; /* the exact payment is there: the normal path below handles it */
-        const old = pid ? list.find((x) => x.id === pid && OWED.includes(x.status) && x.amount === e.amount && x.currency === e.currency && x.date <= date)
-          : list.find((x) => OWED.includes(x.status) && sameMoney(x, e) && x.date <= date && !(x.reference && e.reference && low(x.reference) !== low(e.reference)));
-        if (!old) return { skip: true, value: null };
-        old.history = (old.history || []).concat({ at: e.at, by, from: old.status, to: "received" }).slice(-10);
-        old.status = "received"; old.arrived = date; old.account = account; old.updatedAt = e.at;
-        /* a statement keeps its own reference; the account's transaction id is kept beside it */
-        if (e.reference && !old.reference) old.reference = e.reference;
-        else if (e.reference && low(old.reference) !== low(e.reference)) old.bankRef = e.reference;
-        if (e.note) old.note = e.note;
-        return { value: { entry: old, added: false, updated: true } };
-      });
-      if (hit) return hit;
-      if (i === 0) { const cur = await readDoc(store, incKey(m), []); if ((cur.data || []).some((x) => samePayment(x, e))) break; }
-    }
-  }
-  return mutate(store, incKey(date.slice(0, 7)), [], (list) => {
-    const old = list.find((x) => samePayment(x, e));
-    if (old) {
-      /* the same payment again: never added twice. It may gain its reference; pending may become
-         received; received never goes back to pending (a statement email read again). */
-      const gainsRef = !!e.reference && !old.reference;
-      const moves = old.status !== e.status && !(old.status === "received" && OWED.includes(e.status)) && e.status !== "unsorted"; /* a later "unsorted" never overwrites a decided status */
-      if (!moves && !gainsRef && !(e.note && e.note !== old.note)) return { skip: true, value: { entry: old, added: false, updated: false } };
-      if (moves && old.status === "unsorted" && by !== "HQ" && !SORTERS.includes(by)) fail("That payment is unsorted. Only Ledger, Sheet, Nova, Claude or Luke say what it is, with the tool sort_payment. Nothing was changed.", "not_allowed");
-      if (moves) { if (old.status === "unsorted") old.category = e.category; old.history = (old.history || []).concat({ at: e.at, by, from: old.status, to: e.status }).slice(-10); old.status = e.status; }
-      if (gainsRef) old.reference = e.reference;
-      if (e.note) old.note = e.note;
-      old.updatedAt = e.at;
-      return { value: { entry: old, added: false, updated: true } };
-    }
-    if (list.length >= LIMITS.paymentsPerMonth) fail("This month's list of payments is full. Tell Claude.", "limit");
-    list.push(e);
-    return { value: { entry: e, added: true, updated: false } };
-  });
-}
-export async function incomeCheck(store, now, roster, a) {
-  const by = whoIs(a.bot, roster, { people: true });
-  const account = clean(a.account, 40);
-  if (!account) fail("account is empty (Wise, PayPal, ...)");
-  const n = Number(a.new_payments);
-  if (!Number.isInteger(n) || n < 0 || n > 500) fail("new_payments must be how many new payments you found (0 if none)");
-  const note = clean(a.note, 240);
-  noSecrets(note);
-  const c = { at: new Date(now).toISOString(), day: spDay(now), by, account, new: n, note };
-  await mutate(store, chkKey(c.day.slice(0, 7)), [], (list) => {
-    if (list.filter((x) => x.by === by && x.day === c.day).length >= LIMITS.checksPerBotPerDay) fail(`${by} has already recorded ${LIMITS.checksPerBotPerDay} checks today, which is the limit. Something is repeating: stop, and tell Nova.`, "limit");
-    list.push(c);
-    return { value: c };
-  });
-  return c;
-}
-/* Who may say what an "unsorted" payment is: income (with its category) or not income (a transfer).
-   Luke and Claude, and the three bots whose job is the money: Ledger, Sheet and Nova (Luke, 11 Nov
-   2026: the bots see his full Revolut income, so the income bot can sort it).
-   What the bank reader itself decided (its last word is HQ's: "transfer" from an own-transfer rule,
-   "received" from a known source) can be corrected too; what a person or a bot decided stays. */
-export const SORTERS = ["Luke", "Claude", "Ledger", "Sheet", "Nova"];
-/* how many months of payments "To sort" looks back over (this month and the 11 before): an unsorted
-   payment stays on the list, in the count and in income_status for a year, not just four months */
-export const UNSORTED_MONTHS = 12;
-const PAY_ID = /^i[0-9a-z]{8,16}$/;
-/* Is the statement p (pending) the money of the credit e? Same amount and currency, dated on or before
-   it, in its month or the three before (the rule the bank reader's own upgrade uses). */
-const pendingFits = (p, e) => OWED.includes(p.status) && p.amount === e.amount && p.currency === e.currency && p.date <= e.date && monthsBack(e.date.slice(0, 7), 4).includes(String(p.date).slice(0, 7));
-const monthsBack = (m, n) => { const out = []; for (let i = 0; i < n; i++, m = prevMonth(m)) out.push(m); return out; };
-/* one payment logged twice under two payer names counts once. Kept: a decided status before an
-   unsorted one, else the first logged. The list stays in its original order. */
-const PAY_RANK = { received: 0, payable: 1, pending: 2, "statement only": 3, transfer: 4, unsorted: 5 };
-export function uniquePayments(entries) {
-  const twice = [], kept = [];
-  const order = [...entries].sort((a, b) => (PAY_RANK[a.status] ?? 6) - (PAY_RANK[b.status] ?? 6) || ((a.at || "") < (b.at || "") ? -1 : (a.at || "") > (b.at || "") ? 1 : 0));
-  for (const e of order) { const k = kept.find((x) => samePayment(x, e)); if (k) twice.push([k, e]); else kept.push(e); }
-  return { entries: twice.length ? entries.filter((e) => kept.includes(e)) : entries, twice };
-}
-/* a.pending_id (with status received): the payment is the money of THAT statement, logged earlier as
-   pending. The statement is upgraded as the bank reader's own upgrade does it (received, arrived = the
-   credit's day, the credit's id kept as its reference or bankRef) and the unsorted row is taken off the
-   desk, so the money is counted once, as received, and never also as pending. */
-export async function sortIncome(store, now, roster, a) {
-  const by = whoIs(a.by, roster, { people: true });
-  if (!SORTERS.includes(by)) fail(`Only ${SORTERS.join(", ")} can sort a payment.`, "not_allowed");
-  const id = clean(a.id, 20);
-  if (!PAY_ID.test(id)) fail("id must be the payment's id (it starts with i)");
-  const status = low(a.status);
-  if (!["received", "transfer"].includes(status)) fail('status must be "received" (it is income) or "transfer" (not income)');
-  const pid = a.pending_id == null || a.pending_id === "" ? "" : clean(a.pending_id, 20);
-  if (pid && (status !== "received" || !PAY_ID.test(pid))) fail("pending_id goes only with status received, and must be the pending statement's id (it starts with i)");
-  const category = status === "received" ? CATEGORIES.find((c) => low(c) === low(a.category)) : null;
-  if (status === "received" && !category && !pid) fail(`category must be one of: ${CATEGORIES.join(", ")}`);
-  /* source + note (16 Nov 2026): tie a Revolut row to the source it is (a wage Luke moves in from another bank of
-     his, money from a payer via Wise or PayPal), so that source turns green on Money */
-  let srcId = "";
-  if (a.source != null && String(a.source).trim()) {
-    const k = low(clean(a.source, 60)), list = await getSources(store), hit = list.find((x) => x.kind !== "account" && (x.id === k || low(x.name) === k));
-    if (!hit) fail(`There is no income source called "${clean(a.source, 60)}". The sources are: ${list.filter((x) => x.kind !== "account").map((x) => `${x.name} (${x.id})`).join(", ")}.`);
-    srcId = hit.id;
-  }
-  const sortNote = a.note != null ? clean(a.note, 240) : "";
-  const song = a.song == null || String(a.song).trim() === "" ? "" : clean(a.song, 120);
-  const storeName = a.store == null || String(a.store).trim() === "" ? "" : clean(a.store, 80);
-  if ((song || storeName) && status !== "received") fail("A transfer is not a song's royalties. Leave the song out.");
-  if (storeName && !song) fail("A store needs the song it belongs to. Or leave both out: the payment is not linked to a song.");
-  noSecrets(sortNote, song, storeName);
-  let months = [clean(a.month, 7)];
-  if (!/^\d{4}-\d{2}$/.test(months[0])) months = monthsBack(spDay(now).slice(0, 7), UNSORTED_MONTHS);
-  const sortable = (e) => {
-    const lastBy = (e.history || []).length ? e.history[e.history.length - 1].by : e.by;
-    if (e.status !== "unsorted" && lastBy !== "HQ") fail(`That payment is already sorted (${e.status}). Nothing was changed.`, "not_allowed");
-    if (e.status === "pending") fail("That payment is still pending. Nothing was changed.", "not_allowed");
-  };
-  for (const m of months) {
-    if (pid) {
-      const cur = ((await readDoc(store, incKey(m), [])).data || []).find((x) => x.id === id);
-      if (!cur) continue;
-      sortable(cur);
-      return mergePending(store, now, by, cur, m, pid);
-    }
-    const hit = await mutate(store, incKey(m), [], (list) => {
-      const e = list.find((x) => x.id === id);
-      if (!e) return { skip: true, value: null };
-      sortable(e);
-      const at = new Date(now).toISOString();
-      e.history = (e.history || []).concat({ at, by, from: e.status, to: status }).slice(-10);
-      e.status = status; if (category) e.category = category; if (srcId) e.source = srcId; if (sortNote) e.note = sortNote; if (song) e.song = song; if (storeName) e.store = storeName; e.updatedAt = at;
-      return { value: e };
-    });
-    if (hit) return hit;
-  }
-  fail("There is no payment with that id", "not_found");
-}
-async function mergePending(store, now, by, e, month, pid) {
-  const at = new Date(now).toISOString(), ref = e.reference || "";
-  const drop = (list) => { const i = list.findIndex((x) => x.id === e.id); if (i >= 0) list.splice(i, 1); return i >= 0; };
-  let up = null;
-  for (const m of monthsBack(e.date.slice(0, 7), 4)) {
-    up = await mutate(store, incKey(m), [], (list) => {
-      const p = list.find((x) => x.id === pid);
-      if (!p) return { skip: true, value: null };
-      /* done already (a second press, or a first one cut off before the row went): only the row goes */
-      const done = p.status === "received" && !!ref && (low(p.reference) === low(ref) || low(p.bankRef) === low(ref));
-      if (!done) {
-        if (p.status !== "pending") fail(`That statement is not pending any more (${p.status}). Nothing was changed.`, "not_allowed");
-        if (!pendingFits(p, e)) fail("That statement is not this payment: the amount, the currency or the day doesn't fit. Nothing was changed.", "not_allowed");
-        p.history = (p.history || []).concat({ at, by, from: "pending", to: "received", merged: e.id }).slice(-10);
-        p.status = "received"; p.arrived = e.date; p.account = e.account; p.updatedAt = at;
-        if (ref && !p.reference) p.reference = ref;
-        else if (ref && low(p.reference) !== low(ref)) p.bankRef = ref; /* how the bank reader knows it when it reads the payment again */
-      }
-      if (m === month) drop(list); /* the same month: one write does both */
-      return { value: p };
-    });
-    if (up) break;
-  }
-  if (!up) fail("There is no pending statement with that id", "not_found");
-  if (month !== up.date.slice(0, 7)) await mutate(store, incKey(month), [], (list) => (drop(list) ? { value: null } : { skip: true, value: null }));
-  return up;
-}
-/* batch 4 (15 Nov 2026): a payment already on the desk, corrected by the bot that submitted it (or Ledger,
-   Sheet, Nova, Claude, Luke), within its own month, with the reason kept beside what changed */
-const FIX_FIELDS = ["date", "payer", "amount", "currency", "status", "category", "account", "reference", "note", "source", "paidBy", "song", "store"];
-export const ROYALTY_CATS = ["Self-releases", "Label deals", "Publishing"];
-/* royalty payments for the per-song view (L4). Only received music money that counts (Revolut, not
-   holding, not already moved). A song is used only when the payment names one. */
-export function plPayments(entries, sources) {
-  const isHold = holdingOf(sources);
-  const mapped = (entries || []).filter(Boolean).map((e) => (e.arrived && e.arrived !== e.date ? { ...e, statement: e.date, date: e.arrived } : e));
-  const { entries: list } = uniquePayments(mapped);
-  const counted = [];
-  let notReceived = 0, holding = 0;
-  for (const e of list) {
-    if (!ROYALTY_CATS.includes(e.category)) continue;
-    if (e.status === "transfer" || e.status === "unsorted") continue;
-    if (e.paidBy && OWED.includes(e.status)) continue;
-    if (e.movedTo) continue;
-    if (isHold(e) || (/paypal|wise/i.test(String(e.account || "")) && !/revolut/i.test(String(e.account || "")) && e.status === "received")) { holding++; continue; }
-    if (e.status !== "received") { notReceived++; continue; }
-    const month = String(e.date || "").slice(0, 7);
-    counted.push({ month: /^\d{4}-\d{2}$/.test(month) ? month : "", song: e.song || "", store: e.store || "", amount: e.amount, currency: e.currency });
-  }
-  return { counted, notReceived, holding };
-}
-export async function fixIncome(store, now, roster, a) {
-  const by = whoIs(a.by, roster, { people: true });
-  const id = clean(a.id, 20), month = clean(a.month, 7);
-  if (!/^\d{4}-\d{2}$/.test(month)) fail("month must be the payment's month, YYYY-MM, as income_status lists it under your_payments.");
-  const reason = clean(a.reason, 240);
-  if (reason.length < 3) fail("reason is empty: say in one line what was wrong. Nothing was changed.");
-  noSecrets(reason);
-  const want = {};
-  /* the day it arrived, in ANY month (17 Nov 2026, Luke: "the month should count when the payment arrives"): a
-     payment whose real day is in another month moves there (same id, counted once) */
-  if (a.date != null && String(a.date).trim()) { const d = clean(a.date, 10); if (!DAY.test(d) || Number.isNaN(Date.parse(d + "T12:00:00Z"))) fail("date must be YYYY-MM-DD."); if (d > spDay(now)) fail(`date is in the future (${d}). Nothing was changed.`); want.date = d; }
-  if (a.payer != null && String(a.payer).trim()) want.payer = clean(a.payer, 80);
-  if (a.amount != null && String(a.amount).trim()) { const n = amountOf(a.amount); if (n == null || n <= 0) fail("amount must be a positive number, written like 112.01."); want.amount = n; }
-  if (a.currency != null && String(a.currency).trim()) { const c = clean(a.currency, 12).toUpperCase(); if (!/^[A-Z]{3}$/.test(c)) fail("currency must be the three-letter code the money was paid in."); want.currency = c; }
-  if (a.status != null && String(a.status).trim()) { const st = low(a.status); if (!INCOME_STATUS.includes(st) || st === "unsorted") fail(`status must be one of: ${INCOME_STATUS.filter((x) => x !== "unsorted").join(", ")}.`); want.status = st; }
-  if (a.category != null && String(a.category).trim()) { const c = CATEGORIES.find((x) => low(x) === low(a.category)); if (!c) fail(`category must be one of: ${CATEGORIES.join(", ")}.`); want.category = c; }
-  if (a.account != null && String(a.account).trim()) want.account = clean(a.account, 40);
-  if (a.reference != null) want.reference = clean(a.reference, 80);
-  if (a.note != null) want.note = clean(a.note, 240);
-  if (a.song != null) want.song = clean(a.song, 120);
-  if (a.store != null) want.store = clean(a.store, 80);
-  if ("song" in want || "store" in want) noSecrets(want.song || "", want.store || "");
-  /* source (16 Nov 2026, Ledger): tie ANY payment to its income source, HQ's Revolut rows included */
-  if (a.source != null && String(a.source).trim()) {
-    const k = low(clean(a.source, 60)), list = await getSources(store), hit = list.find((x) => x.kind !== "account" && (x.id === k || low(x.name) === k));
-    if (!hit) fail(`There is no income source called "${clean(a.source, 60)}". The sources are: ${list.filter((x) => x.kind !== "account").map((x) => `${x.name} (${x.id})`).join(", ")}.`);
-    want.source = hit.id;
-  }
-  noSecrets(want.payer || "", want.note || "");
-  if (want.reference) { const what = secretIn(want.reference, { reference: true }); if (what) fail(`reference looks like ${what}. It must be the payment's own transaction id, nothing else.`, "secret"); }
-  /* paid_by (16 Nov 2026, Ledger): a statement filed as pending / payable / statement only is settled by the
-     received payment that paid it, whatever its amount or currency (USD 1,300 statement, USD 1,280 received; a
-     USD statement paid in EUR). The statement then counts nowhere; the money counts once, as received. */
-  if (a.paid_by != null && String(a.paid_by).trim()) {
-    const pid = clean(a.paid_by, 20);
-    let target = null;
-    for (const m of monthsBack(spDay(now).slice(0, 7), UNSORTED_MONTHS)) { target = ((await readDoc(store, incKey(m), [])).data || []).find((x) => x.id === pid); if (target) break; }
-    if (!target) fail(`There is no received payment with the id "${pid}". Find it with payments.`, "not_found");
-    if (target.status !== "received") fail(`${pid} is not a received payment (it is ${target.status}): a statement is settled by the money that arrived.`);
-    want.paidBy = pid;
-  }
-  const at = new Date(now).toISOString();
-  /* a statement already paid keeps its own (statement) date and gets the day it arrived instead */
-  const moveTo = want.date && want.date.slice(0, 7) !== month ? want.date.slice(0, 7) : "";
-  const res = await mutate(store, incKey(month), [], (list) => {
-    const e = list.find((x) => x.id === id);
-    if (!e) fail(`There is no payment with the id "${id}" in ${month}. Find it with payments.`, "not_found");
-    if (e.by !== by && !SORTERS.includes(by)) fail(`That payment was submitted by ${e.by}: only ${e.by}, Ledger, Sheet, Nova, Claude or Luke fix it. Tell ${e.by}.`, "not_allowed");
-    if (e.status === "unsorted") fail("That payment is unsorted: say what it is with sort_payment, not fix_payment.", "not_allowed");
-    if (want.paidBy && !OWED.includes(e.status)) fail(`Only a statement (pending, payable or statement only) can be marked paid with paid_by; this payment is ${e.status}.`, "not_allowed");
-    const songNext = "song" in want ? want.song : (e.song || "");
-    const storeNext = "store" in want ? want.store : (e.store || "");
-    if (storeNext && !songNext) fail("A store needs the song it belongs to. Clear the store, or name the song. Nothing was changed.");
-    const changed = {};
-    for (const k of FIX_FIELDS) if (k in want && (e[k] ?? "") !== want[k]) changed[k] = [e[k] ?? "", want[k]];
-    if (!Object.keys(changed).length) return { skip: true, value: { entry: e, fixed: [] } };
-    if (moveTo && e.arrived) { delete changed.date; changed.arrived = [e.arrived, want.date]; } /* merged statement: its arrival day moves, it stays filed */
-    for (const k of Object.keys(changed)) e[k] = k === "arrived" ? want.date : want[k];
-    e.fixes = (e.fixes || []).concat({ at, by, reason, changed }).slice(-10);
-    e.updatedAt = at;
-    /* to another month: written there first, then taken out of here, so it is never lost (and never twice: the
-       new month skips an id it already has) */
-    return { value: { entry: e, fixed: Object.keys(changed), move: !!(moveTo && changed.date) } };
-  });
-  if (!res.move) return res;
-  await mutate(store, incKey(moveTo), [], (list) => {
-    if (list.some((x) => x.id === id)) return { skip: true, value: null };
-    list.push(res.entry);
-    return { value: res.entry };
-  });
-  await mutate(store, incKey(month), [], (list) => {
-    const i = list.findIndex((x) => x.id === id);
-    if (i < 0) return { skip: true, value: null };
-    list.splice(i, 1);
-    return { value: true };
-  });
-  return { ...res, movedTo: moveTo };
-}
-export async function getSources(store) {
-  const [{ data }, ed] = await Promise.all([readDoc(store, "sources.json", []), readDoc(store, "srcedit.json", {})]);
-  const edits = ed.data && typeof ed.data === "object" ? ed.data : {};
-  /* the bots' own edits (batch 4) on top of the private seed: a re-seed never wipes them */
-  const seed = Array.isArray(data) ? data : [];
-  /* a source the seed doesn't have, added by Ledger with income_source create (16 Nov 2026) */
-  const made = Object.entries(edits).filter(([id, e]) => e && e.created && !seed.some((x) => x.id === id))
-    .map(([id, e]) => ({ id, name: e.name, kind: "payer", category: e.category || "Other", currency: "", lands: "", cadence: "monthly", owner: e.by || "Ledger", state: "active", match: [low(e.name)], how: "", blocker: "", needsLuke: "" }));
-  return seed.concat(made).map((s) => {
-    const e = edits[s.id];
-    if (!e) return s;
-    const { by, at, created, name, ...f } = e;
-    const out = { ...s, ...f, editedBy: by, editedAt: at };
-    /* 18 Nov 2026: lands is this source's own accounts. Another source's name is not an account. */
-    if (Array.isArray(f.accounts) && f.accounts.length) {
-      const others = seed.concat(made).filter((x) => x.kind !== "account" && x.id !== s.id);
-      const own = f.accounts.filter((a) => !others.some((p) => srcMatches(p, a)));
-      out.lands = (own.length ? own : f.accounts).join(" + ");
-    }
-    return out;
-  });
-}
-/* link_transfer (17 Nov 2026): the Revolut credit that carried money from Wise / PayPal is tied to the payment(s) it
-   carried: it becomes received (counted once) with their source and category; they are "moved to Revolut" (counted
-   nowhere). One transfer may carry several payments; fees and exchange are fine (the Revolut amount is what counts). */
-export async function linkTransfer(store, now, roster, a) {
-  const by = whoIs(a.by, roster, { people: true });
-  if (!SORTERS.includes(by)) fail("Linking money moved into Revolut is Ledger's (Sheet and Nova may too). Tell Ledger.", "not_allowed");
-  const rid = clean(a.revolut_id, 20), month = clean(a.month, 7);
-  if (!PAY_ID.test(rid)) fail("revolut_id must be the Revolut payment's id (from payments, account Revolut).");
-  if (!/^\d{4}-\d{2}$/.test(month)) fail("month must be the Revolut payment's month, YYYY-MM.");
-  const from = (Array.isArray(a.from) ? a.from : String(a.from || "").split(/[ ,]+/)).map((x) => clean(x, 20)).filter(Boolean);
-  if (!from.length || from.length > 20) fail("from must be the id(s) of the Wise or PayPal payment(s) this Revolut money carried (1 to 20).");
-  const sources = await getSources(store), isHold = holdingOf(sources);
-  const note = clean(a.note, 240); noSecrets(note);
-  const rev = ((await readDoc(store, incKey(month), [])).data || []).find((x) => x.id === rid);
-  if (!rev) fail(`There is no payment with the id "${rid}" in ${month}. Find it with payments (account Revolut).`, "not_found");
-  if (!isMainAccount(rev.account)) fail(`${rid} is not a Revolut payment (it landed in ${rev.account}): link_transfer ties the Revolut payment to what it carried.`);
-  if (rev.from && rev.from.length) fail(`${rid} is already linked to ${rev.from.join(", ")}.`, "exists");
-  if (!["received", "unsorted", "transfer"].includes(rev.status)) fail(`${rid} is ${rev.status}: only money that arrived in Revolut can be linked.`);
-  /* find every "from" payment in the last 12 months */
-  const found = [];
-  for (const id of from) {
-    let hit = null, hm = null;
-    for (const m of monthsBack(spDay(now).slice(0, 7), UNSORTED_MONTHS)) { hit = ((await readDoc(store, incKey(m), [])).data || []).find((x) => x.id === id); if (hit) { hm = m; break; } }
-    if (!hit) fail(`There is no payment with the id "${id}". Find it with payments.`, "not_found");
-    if (hit.movedTo) fail(`${id} is already moved to Revolut (${hit.movedTo}).`, "exists");
-    if (!isHold(hit)) fail(`${id} is not money received in Wise or PayPal (it is ${hit.status} in ${hit.account}).`);
-    found.push({ e: hit, m: hm });
-  }
-  const at = new Date(now).toISOString();
-  for (const m of [...new Set(found.map((x) => x.m))]) {
-    await mutate(store, incKey(m), [], (list) => {
-      for (const x of list) if (from.includes(x.id)) { x.movedTo = rid; x.history = (x.history || []).concat({ at, by, from: "received", to: "moved to Revolut", rev: rid }).slice(-10); x.updatedAt = at; }
-      return { value: true };
-    });
-  }
-  const first = found[0].e;
-  const out = await mutate(store, incKey(month), [], (list) => {
-    const r = list.find((x) => x.id === rid);
-    if (!r) fail("The Revolut payment is gone. Nothing was linked.", "not_found");
-    r.history = (r.history || []).concat({ at, by, from: r.status, to: "received", linked: from }).slice(-10);
-    r.status = "received"; r.from = from; r.category = first.category || r.category;
-    if (first.source || sources.find((s) => s.kind !== "account" && srcMatches(s, first.payer))) r.source = first.source || sources.find((s) => s.kind !== "account" && srcMatches(s, first.payer)).id;
-    r.note = note || `From ${[...new Set(found.map((x) => x.e.account))].join(" + ")}: ${[...new Set(found.map((x) => x.e.payer))].join(", ")}`;
-    r.updatedAt = at;
-    return { value: r };
-  });
-  const sameCur = found.every((x) => x.e.currency === out.currency);
-  const sum = found.reduce((n, x) => n + Number(x.e.amount), 0);
-  const remainder = sameCur ? round(Number(out.amount) - sum) : null;
-  return { entry: out, linked: found.length, remainder, sources: [...new Set(found.map((x) => x.e.source).filter(Boolean))],
-    remainder_note: sameCur ? (Math.abs(remainder) < 0.01 ? "The Revolut credit matches these payments." : `${remainder} ${out.currency} of the Revolut credit is not tied to these rows.`) : "Currencies differ: the Revolut amount is what counts. What is left in Wise or PayPal is not subtracted." };
-}
-/* month_check (17 Nov 2026, Luke: income "checked from the first day to the last day of the month"): what is still in
-   the way of a right month: payments still to sort, Revolut credits from Luke's own accounts not yet linked, money
-   still waiting in Wise / PayPal. ready = nothing is. */
-export async function monthCheck(store, now, a = {}) {
-  const month = a.month == null || String(a.month).trim() === "" ? spDay(now).slice(0, 7) : clean(a.month, 7);
-  if (!/^\d{4}-\d{2}$/.test(month)) fail("month must be YYYY-MM.");
-  const sources = await getSources(store), isHold = holdingOf(sources), own = sources.filter((s) => s.kind === "account" && !isMainAccount(s.name));
-  const raw = ((await readDoc(store, incKey(month), [])).data || []).filter(Boolean);
-  const nextM = month.slice(5, 7) === "12" ? `${Number(month.slice(0, 4)) + 1}-01` : `${month.slice(0, 4)}-${String(Number(month.slice(5, 7)) + 1).padStart(2, "0")}`;
-  const nextRaw = ((await readDoc(store, incKey(nextM), [])).data || []).filter(Boolean);
-  const landed = (e) => (e.arrived && e.arrived !== e.date ? { ...e, statement: e.date, date: e.arrived } : e);
-  const pool = raw.concat(nextRaw).map(landed).filter((e) => !isShadow(e, raw.concat(nextRaw).map(landed)));
-  const list = pool.filter((e) => e.date.slice(0, 7) === month);
-  const statementLater = raw.map(landed).filter((e) => e.statement && e.date.slice(0, 7) !== month);
-  const received = {};
-  for (const e of list) if (countsAsReceived(e)) received[e.currency] = round((received[e.currency] || 0) + e.amount);
-  const fromOwn = (e) => own.find((s) => srcMatches(s, e.payer));
-  const toSort = list.filter((e) => e.status === "unsorted");
-  const waiting = list.filter((e) => isHold(e) || (e.status === "received" && !e.movedTo && !countsAsReceived(e) && !STATEMENT.test(e.account)));
-  /* only Wise or PayPal candidates. Joint-account, pocket and top-up transfers are not in this list
-     (18 Nov 2026 night test). */
-  const ownTransfers = list.filter((e) => e.status === "transfer" && isMainAccount(e.account) && !(e.from && e.from.length) && e.by === "HQ" && !(e.history || []).length
-    && (/wise|paypal|pay pal/.test(low(`${e.payer} ${e.note} ${e.account}`)) || /\bfx\b|exchange|conversion/.test(low(`${e.payer} ${e.note} ${e.category}`))) && !/joint|pocket|top-?up|topup|savings|vault/.test(low(`${e.payer} ${e.note}`)));
-  const revolut = pool.filter((e) => isMainAccount(e.account) && !(e.from && e.from.length) && e.status !== "transfer");
-  const nearDay = (a, b) => !isDay(a) || !isDay(b) || Math.abs(daysBetween(a, b)) <= 2;
-  const suggestions = [];
-  const seenSug = new Set();
-  const pushSug = (ids, hit) => {
-    const key = ids.slice().sort().join("+") + ">" + hit.id;
-    if (seenSug.has(key)) return;
-    seenSug.add(key);
-    suggestions.push({ id: ids[0], ids, matches: [{ id: hit.id, date: hit.date, amount: hit.amount, currency: hit.currency }],
-      confirm: "Confirm with one link_transfer call. Nothing is linked until you do." });
-  };
-  for (const rev of revolut) {
-    const cands = waiting.filter((w) => w.currency === rev.currency && nearDay(w.date, rev.date) && w.id !== rev.id).slice(0, 8);
-    for (const w of cands) if (Math.abs(Number(w.amount) - Number(rev.amount)) < 0.02) pushSug([w.id], rev);
-    const pick = (start, need, acc) => {
-      if (acc.length === need) {
-        const sum = acc.reduce((n, w) => n + Number(w.amount), 0);
-        if (Math.abs(sum - Number(rev.amount)) < 0.02) pushSug(acc.map((w) => w.id), rev);
-        return;
-      }
-      for (let i = start; i < cands.length; i++) pick(i + 1, need, acc.concat(cands[i]));
-    };
-    for (let n = 2; n <= Math.min(4, cands.length); n++) pick(0, n, []);
-  }
-  const waitingBy = {}, waitingWhere = {};
-  for (const e of waiting) {
-    waitingBy[e.currency] = round((waitingBy[e.currency] || 0) + Number(e.amount || 0));
-    const place = /paypal/i.test(`${e.account} ${e.payer}`) ? "PayPal" : /wise/i.test(`${e.account} ${e.payer}`) ? "Wise" : (e.account || "not in Revolut");
-    (waitingWhere[e.currency] || (waitingWhere[e.currency] = new Set())).add(place);
-  }
-  /* an own transfer (an FX row HQ already marked) is listed, and it does not block the month */
-  const ready = !toSort.length && !waiting.length;
-  const bits = [];
-  if (toSort.length) bits.push(toSort.length + " to sort");
-  if (waiting.length) bits.push(waiting.length + " waiting");
-  const reason = ready ? "ready" : bits.join(", ");
-  return { month, received, toSort, waiting, waiting_count: waiting.length, waiting_by_currency: waitingBy,
-    waiting_where: Object.fromEntries(Object.entries(waitingWhere).map(([k, s]) => [k, [...s].join(" and ")])),
-    ownTransfers, fromOwn, statementLater, suggestions, ready, reason, verdict: reason };
-}
-/* ---------- the locked month close (A7, 17 Nov 2026, Ledger, Sheet) ----------
-   When month_check says a finished month is ready, close_month freezes it: close/<month>.json = { month, at, by,
-   received (per currency), count, rows (every payment that counts in that month: id, date, payer, amount, currency,
-   status, category, source, account, reference), evidence (https links) }, and one line in closes.json (the index
-   the board reads). A month closes once. Nothing is blocked afterwards: monthCloseView compares the month as it is
-   now with the snapshot, so every later change shows old -> new (with the fix's who and why when there is one). */
-export const CLOSERS = ["Ledger", "Sheet", "Nova", "Claude", "Luke"];
-const closeKey = (m) => `close/${m}.json`;
-const SNAP = ["date", "payer", "amount", "currency", "status", "category", "source", "account", "reference"];
-const snapRow = (e) => Object.fromEntries([["id", e.id], ...SNAP.map((k) => [k, e[k] == null ? "" : e[k]])]);
-async function monthRows(store, month) {
-  return ((await readDoc(store, incKey(month), [])).data || []).filter(Boolean)
-    .map((e) => (e.arrived && e.arrived !== e.date ? { ...e, date: e.arrived } : e)).filter((e) => e.date.slice(0, 7) === month);
-}
-export async function getMonthClose(store, month) { const { data } = await readDoc(store, closeKey(month), null); return data && data.month ? data : null; }
-const moneyWords = (o) => Object.keys(o || {}).sort().map((k) => `${k} ${Number(o[k]).toFixed(2)}`).join(" + ") || "nothing";
-export async function closeMonth(store, now, roster, a) {
-  const by = whoIs(a.by, roster, { people: true });
-  if (!CLOSERS.includes(by)) fail("A month is closed by Ledger, Sheet or Nova (or Luke). Tell Ledger.", "not_allowed");
-  const month = clean(a.month, 7);
-  if (!/^\d{4}-\d{2}$/.test(month)) fail("month must be YYYY-MM, for example 2026-11.");
-  if (month >= spDay(now).slice(0, 7)) fail(`${month} hasn't ended yet: a month is closed once it is over (on the 1st or later).`);
-  const ev = (Array.isArray(a.evidence) ? a.evidence : a.evidence ? [a.evidence] : []).map((x) => clean(x, 300)).filter(Boolean);
-  if (ev.some((x) => !/^https:\/\//.test(x))) fail("evidence must be https links (a statement, a sheet, a screenshot folder).");
-  if (ev.length > 10) fail("At most 10 evidence links.");
-  noSecrets(ev.join("\n"));
-  const was = await getMonthClose(store, month);
-  if (was) return { already: true, close: was };
-  const c = await monthCheck(store, now, { month });
-  if (!c.ready) fail(`${month} isn't ready to close: ${c.toSort.length} to sort, ${c.waiting.length} waiting in Wise or PayPal. Run month_check and sort them first.`);
-  /* 18 Nov 2026 (Sheet): a ready month still needs an evidence link. */
-  if (!ev.length) fail("Add an evidence link (https) before closing the month.");
-  const rows = (await monthRows(store, month)).map(snapRow).sort((x, y) => (x.date < y.date ? -1 : x.date > y.date ? 1 : x.id < y.id ? -1 : 1));
-  const doc = { month, at: new Date(now).toISOString(), by, received: c.received, count: rows.length, rows, evidence: ev };
-  let first = false;
-  await mutate(store, closeKey(month), null, (cur) => { if (cur && cur.month) return { skip: true, value: null }; first = true; return { replace: doc, value: doc }; });
-  if (!first) return { already: true, close: await getMonthClose(store, month) };
-  await mutate(store, "closes.json", [], (list) => {
-    const l = Array.isArray(list) ? list.filter((x) => x.month !== month) : [];
-    l.push({ month, at: doc.at, by, received: doc.received, count: doc.count });
-    l.sort((x, y) => (x.month < y.month ? 1 : -1));
-    return { replace: l.slice(0, 24), value: true };
-  });
-  return { already: false, close: doc };
-}
-/* the closed month now vs its snapshot: [{ kind: added|removed|changed, id, row (now, or as closed), fields: {f: [old, new]}, by, why }] */
-export async function monthCloseView(store, now, month) {
-  const close = await getMonthClose(store, month);
-  if (!close) return null;
-  const nowRows = await monthRows(store, month), byId = new Map(nowRows.map((e) => [e.id, e])), snap = new Map(close.rows.map((r) => [r.id, r]));
-  const changes = [];
-  for (const r of close.rows) {
-    const e = byId.get(r.id);
-    if (!e) { changes.push({ kind: "removed", id: r.id, row: r }); continue; }
-    const cur = snapRow(e), fields = {};
-    for (const k of SNAP) if (String(cur[k]) !== String(r[k])) fields[k] = [r[k], cur[k]];
-    if (Object.keys(fields).length) { const fx = (e.fixes || []).filter((f) => f.at > close.at).slice(-1)[0]; changes.push({ kind: "changed", id: r.id, row: cur, fields, ...(fx ? { by: fx.by, why: fx.reason } : {}) }); }
-  }
-  for (const e of nowRows) if (!snap.has(e.id)) changes.push({ kind: "added", id: e.id, row: snapRow(e), by: e.by || "" });
-  return { ...close, changes };
-}
-const rowWords = (r) => `${r.date} · ${r.payer} · ${r.currency} ${Number(r.amount).toFixed(2)} · ${r.status}`;
-export function closeChangeLines(changes) {
-  return (changes || []).map((c) => c.kind === "added" ? `Added after closing: ${rowWords(c.row)}${c.by ? ` (by ${c.by})` : ""}`
-    : c.kind === "removed" ? `Gone since closing (moved to another month, or merged): ${rowWords(c.row)}`
-    : `Changed ${rowWords(c.row)}: ` + Object.entries(c.fields).map(([k, [o, n]]) => `${k} ${k === "amount" ? Number(o).toFixed(2) : o || "(empty)"} → ${k === "amount" ? Number(n).toFixed(2) : n || "(empty)"}`).join(", ") + (c.by ? ` (${c.by}: ${c.why})` : ""));
-}
-/* a CSV cell: quoted, and a leading = + - @ made harmless for spreadsheets */
-export function csvCell(v) { let t = String(v == null ? "" : v); if (/^[=+\-@]/.test(t)) t = "'" + t; return /[",\n']/.test(t) ? `"${t.replace(/"/g, '""')}"` : t; }
-export function closeCsv(v) {
-  const L = [["month", "closed_at", "closed_by", "received", "evidence"].join(","), [v.month, v.at, v.by, moneyWords(v.received), (v.evidence || []).join(" ")].map(csvCell).join(","), "",
-    ["id", ...SNAP].join(","), ...v.rows.map((r) => [r.id, ...SNAP.map((k) => r[k])].map(csvCell).join(","))];
-  L.push("", "change,detail");
-  for (const [i, line] of closeChangeLines(v.changes).entries()) L.push([v.changes[i].kind, line].map(csvCell).join(","));
-  return L.join("\n") + "\n";
-}
-export const closeLine = (c) => `Closed by ${c.by} on ${dayWords(spDay(Date.parse(c.at)))}: ${moneyWords(c.received)} received, ${c.count} payment${c.count === 1 ? "" : "s"}`;
-
-/* Every payment of one month, for Ledger (16 Nov 2026: income_status showed the 15 newest, without ids for HQ's
-   Revolut rows, so they could never be sorted or fixed). Filters: account, source (its id or name: the payments
-   tied to it or whose payer matches it), payer (words in the name), status. Newest first; limit 1..200 (100). */
-/* a second feed of the same credit: a near amount (1,575.11 and 1,575.71) or the same amount asked
-   again as a transfer. Shown once. Nothing is deleted and no amount is changed (18 Nov 2026). */
-function shadowPair(a, b) {
-  if (!a || !b || a.id === b.id) return false;
-  if (low(a.account) !== low(b.account) || a.currency !== b.currency) return false;
-  if (!isDay(a.date) || !isDay(b.date) || Math.abs(daysBetween(a.date, b.date)) > 2) return false;
-  const d = Math.abs(Number(a.amount) - Number(b.amount));
-  if (d > 0 && d <= 1) return true;
-  const weak = (e) => e.status === "transfer";
-  return d === 0 && ((a.status === "received" && weak(b)) || (b.status === "received" && weak(a)));
-}
-const payRank = (e) => (e.status === "received" && (e.source || (e.from && e.from.length)) ? 0 : e.status === "received" ? 1 : e.status === "payable" || e.status === "pending" ? 2 : 3);
-export function isShadow(e, list) {
-  return (list || []).some((x) => shadowPair(x, e) && (payRank(x) < payRank(e) || (payRank(x) === payRank(e) && (x.at || "") < (e.at || ""))));
-}
-/* what a payment looks like in a tool: labels only, the stored row is not rewritten.
-   18 Nov 2026: received means it landed in Revolut. Wise and PayPal say where they sit. A settled statement
-   says settled. Both months are shown; which month the money belongs to is not decided here. */
-export function displayPayer(e) {
-  const blob = `${e && e.payer} ${e && e.source} ${e && e.note}`;
-  if (/tipalti/i.test(blob) && /create|e-?check/i.test(blob)) return "Create Music";
-  return hidePrivate(e && e.payer);
-}
-export function payOut(e, month, pool) {
-  const paid = e.paidBy || e.paid_by || "";
-  const landed = isDay(e.arrived) ? e.arrived : e.date;
-  const statement = e.statement && isDay(e.statement) ? e.statement : e.date;
-  const counted = countsAsReceived(e);
-  let status = e.status;
-  if (e.movedTo) status = "moved to Revolut";
-  else if (paid && (OWED.includes(e.status) || e.status === "pending")) status = "settled";
-  else if (e.status === "received" && !counted && !STATEMENT.test(e.account || "")) status = holdingLabel(e);
-  const payer = displayPayer(e);
-  return { id: e.id, month: month || (landed || e.date || "").slice(0, 7), date: landed, statement_month: String(statement).slice(0, 7),
-    landed_month: String(landed).slice(0, 7), counts_in: counted ? String(landed).slice(0, 7) : "",
-    counts_note: e.movedTo ? "Moved to Revolut: not counted. The Revolut row is the one that counts." : counted ? "Counts in the month it landed in Revolut." : "Not counted. Received means it landed in Revolut.",
-    payer, amount: e.amount, currency: e.currency, status, category: e.category, source: e.source || "", account: hidePrivate(e.account), added_by: e.by, counted,
-    ...(e.note ? { note: displayNote(e, pool) } : {}), ...(paid ? { paid_by: paid } : {}), ...(e.movedTo ? { moved_to: e.movedTo } : {}) };
-}
-export function transferWords(e) {
-  const t = low(`${e && e.payer} ${e && e.note}`);
-  if (/joint/.test(t)) return "joint account: say if this is income";
-  if (/fx|exchange|converted/.test(t)) return "FX exchange: not income unless Luke says so";
-  if (/pocket|top-?up|topup/.test(t)) return "pocket top-up: not income";
-  return "your own transfer: if it came from PayPal or Wise, link it with link_transfer";
-}
-export async function listPayments(store, now, a = {}) {
-  const month = a.month == null || String(a.month).trim() === "" ? spDay(now).slice(0, 7) : clean(a.month, 7);
-  if (!/^\d{4}-\d{2}$/.test(month)) fail("month must be YYYY-MM, for example 2026-11.");
-  const limit = a.limit == null ? 100 : Math.max(1, Math.min(200, Math.floor(Number(a.limit)) || 100));
-  const landedMonth = (e) => (isDay(e && e.arrived) ? e.arrived : (e && e.date) || "").slice(0, 7);
-  const prev = prevMonth(month);
-  let list = ((await readDoc(store, incKey(month), [])).data || []).filter(Boolean);
-  const earlier = ((await readDoc(store, incKey(prev), [])).data || []).filter((e) => e && landedMonth(e) === month && landedMonth(e) !== (e.date || "").slice(0, 7));
-  list = list.filter((e) => !isDay(e.arrived) || landedMonth(e) === month).concat(earlier);
-  list = list.filter((e) => !isShadow(e, list));
-  if (a.account != null && String(a.account).trim()) { const k = low(a.account); list = list.filter((e) => low(e.account).includes(k)); }
-  if (a.source != null && String(a.source).trim()) {
-    const k = low(clean(a.source, 60)), src = (await getSources(store)).find((x) => x.id === k || low(x.name) === k);
-    if (!src) fail(`There is no income source called "${clean(a.source, 60)}".`);
-    list = list.filter((e) => low(e.source) === src.id || (!e.source && srcMatches(src, e.payer)));
-  }
-  if (a.payer != null && String(a.payer).trim()) { const words = low(a.payer).split(/\s+/).filter(Boolean); list = list.filter((e) => words.every((w) => low(e.payer).includes(w))); }
-  const monthRows = list.slice();
-  if (a.status != null && String(a.status).trim()) {
-    const st = low(a.status);
-    /* 18 Nov 2026: status received means counted in Revolut, the same rows income_status adds up */
-    list = list.filter((e) => st === "moved to revolut" ? !!e.movedTo : st === "received" ? countsAsReceived(e) : st === "settled" ? !!(e.paidBy && (OWED.includes(e.status) || e.status === "pending")) : !e.movedTo && e.status === st);
-  }
-  if (a.changed_since != null && String(a.changed_since).trim()) {
-    const since = Date.parse(String(a.changed_since));
-    if (Number.isNaN(since)) fail("changed_since must be a time, for example 2026-11-01T00:00:00Z.");
-    list = list.filter((e) => Date.parse(e.updatedAt || e.at || 0) >= since);
-  }
-  list.sort((x, y) => (x.date < y.date ? 1 : x.date > y.date ? -1 : (x.at || "") < (y.at || "") ? 1 : -1));
-  const received = {};
-  for (const e of monthRows) if (countsAsReceived(e)) received[e.currency] = round((received[e.currency] || 0) + e.amount);
-  const evidenceOf = (e) => { const m = String(`${e && e.note || ""} ${e && e.reference || ""}`).match(/https:\/\/[^\s"'<>]+/); return m ? m[0] : ""; };
-  const byId = new Map(list.map((e) => [e.id, e]));
-  const idsIn = (e) => {
-    const ids = [];
-    if (e.paidBy) ids.push(e.paidBy);
-    if (Array.isArray(e.from)) ids.push(...e.from);
-    for (const m of String(e.note || "").matchAll(/\b(i[a-z0-9]{6,})\b/g)) ids.push(m[1]);
-    return [...new Set(ids)];
-  };
-  const counted = list.filter(countsAsReceived).map((e) => {
-    const o = payOut(e, month, list);
-    const linked = idsIn(e).map((id) => byId.get(id)).find((row) => row && row.id !== e.id && (OWED.includes(row.status) || row.status === "statement only" || row.paidBy || (row.statement && isDay(row.statement))));
-    const statementDay = (linked && isDay(linked.statement || linked.date) && (OWED.includes(linked.status) || linked.status === "statement only" || linked.paidBy) ? (linked.statement && isDay(linked.statement) ? linked.statement : linked.date) : "") || (e.statement && isDay(e.statement) ? e.statement : "");
-    const payableDay = linked && (linked.status === "payable" || (linked.history || []).some((h) => h.from === "payable" || h.to === "payable")) ? (linked.date || "") : (e.status === "payable" ? (e.date || "") : "");
-    return { id: e.id, landing_date: o.date, account: o.account, statement: statementDay, payable: payableDay, received: "received",
-      evidence: evidenceOf(e) || evidenceOf(linked), split: Array.isArray(e.from) ? e.from.slice() : [], ledger_month: o.statement_month, landed_month: o.landed_month };
-  });
-  return { month, total: list.length, payments: list.slice(0, limit), lookup: list, received, counted,
-    received_note: "Revolut only. The same total as income_status and month_check. Statement month and landing month are both shown; which month a payment belongs to is Ledger's to say.",
-    writes_to_sheet: false };
-}
-/* After a full Revolut read (16 Nov 2026, Ledger: Revolut still said "blocked" / "not connected" after the site had
-   read it): the Revolut account source is active again with no blocker or ask, and so is a payer source that was
-   blocked only for want of Revolut. Kept in srcedit.json by "HQ"; a source changes once. -> ids changed */
-export async function afterBankRead(store, now) {
-  const list = await getSources(store);
-  const fix = list.filter((s) => (s.kind === "account" && /revolut/i.test(s.name) && (s.state === "blocked" || s.needsLuke || s.blocker)) ||
-    (s.kind !== "account" && s.state === "blocked" && /revolut/i.test(s.blocker || "")));
-  if (!fix.length) return [];
-  const at = new Date(now).toISOString();
-  await mutate(store, "srcedit.json", {}, (doc) => {
-    const d = doc && typeof doc === "object" && !Array.isArray(doc) ? doc : {};
-    for (const s of fix) d[s.id] = { ...(d[s.id] || {}), state: "active", blocker: "", ...(s.kind === "account" ? { needsLuke: "" } : {}), by: "HQ", at };
-    return { replace: d, value: true };
-  });
-  return fix.map((s) => s.id);
-}
-/* batch 4 (15 Nov 2026): the bot that owns a source (or Ledger, Sheet, Nova, Claude, Luke) says where its
-   money lands (one or several accounts), its state and why, its category, and clears a "needs Luke" that
-   no longer stands. Kept in srcedit.json, on top of the seed. */
-export const SOURCE_EDITORS = ["Ledger", "Sheet", "Nova", "Claude", "Luke"];
-export async function editSource(store, now, roster, a) {
-  const by = whoIs(a.by, roster, { people: true });
-  const want = low(clean(a.source, 60));
-  const list = await getSources(store);
-  let s = list.find((x) => x.id === want || low(x.name) === want);
-  /* create (16 Nov 2026): a main source the desk doesn't have yet, added by Ledger, Sheet or Nova */
-  const create = a.create === true;
-  if (create && s) fail(`${s.name} is already a source: change it without create. Nothing was saved.`, "exists");
-  if (!s && !create) fail(`There is no income source called "${clean(a.source, 60)}". The sources are: ${list.map((x) => x.name).join(", ") || "none yet"}. To add a new one, send create: true with its name in source and its category.`);
-  if (create) {
-    if (!SOURCE_EDITORS.includes(by)) fail("Only Ledger, Sheet or Nova add a source. Tell Ledger.", "not_allowed");
-    const name = clean(a.source, 60);
-    if (name.length < 2) fail("Give the new source's name in source. Nothing was saved.");
-    noSecrets(name);
-    const id = songKey(name).slice(0, 30) || "s" + Number(now).toString(36);
-    if (list.some((x) => x.id === id)) fail(`There is already a source with the id "${id}". Nothing was saved.`, "exists");
-    s = { id, name, owner: by, created: true };
-  }
-  if (!SOURCE_EDITORS.includes(by) && by !== s.owner) fail(`${s.name} is edited by its owner (${s.owner || "nobody named"}), Ledger, Sheet or Nova. If something about it is wrong, tell ${s.owner || "Ledger"}.`, "not_allowed");
-  const f = {};
-  if (a.state != null && String(a.state).trim() !== "") {
-    const st = low(a.state).replace(/[ -]/g, "_");
-    if (!SOURCE_STATE.includes(st)) fail(`state must be one of: ${SOURCE_STATE.join(", ")}. Nothing was saved.`);
-    f.state = st;
-  }
-  if (a.reason != null) f.blocker = clean(a.reason, 200);
-  if (f.state === "blocked" && (f.blocker || "").length < 3) fail("A blocked source needs its reason: say what is in the way and who can fix it. Nothing was saved.");
-  if (f.state && f.state !== "blocked" && a.reason == null) f.blocker = "";
-  if (a.needs_luke != null) f.needsLuke = clean(a.needs_luke, 200);
-  if (a.category != null && String(a.category).trim() !== "") {
-    const c = CATEGORIES.find((x) => low(x) === low(a.category));
-    if (!c) fail(`category must be one of: ${CATEGORIES.join(", ")}.`);
-    f.category = c;
-  }
-  if (a.accounts != null) {
-    const acc = (Array.isArray(a.accounts) ? a.accounts : [a.accounts]).map((x) => clean(x, 40)).filter(Boolean);
-    if (!acc.length || acc.length > 4) fail("accounts must be 1 to 4 account names, for example [\"PayPal\", \"Wise\"].");
-    f.accounts = acc;
-  } else if (a.lands != null && clean(a.lands, 40)) f.accounts = [clean(a.lands, 40)];
-  /* main + due_day (16 Nov 2026, Luke): the main sources are highlighted on Money every month, green once
-     their money has come, red once the day they usually pay by has passed */
-  if (a.main != null) f.main = a.main === true || low(a.main) === "true";
-  if (a.due_day != null && String(a.due_day).trim() !== "") {
-    const n = Number(a.due_day);
-    if (!Number.isInteger(n) || n < 1 || n > 31) fail("due_day must be the day of the month it usually pays by, 1 to 31. Nothing was saved.");
-    f.dueDay = n;
-  }
-  if (s.created) { f.created = true; f.name = s.name; if (!f.category) f.category = "Other"; }
-  if (!Object.keys(f).length) fail("Nothing to change: give state, reason, accounts, category, needs_luke, main or due_day.");
-  noSecrets(JSON.stringify(f));
-  const at = new Date(now).toISOString();
-  await mutate(store, "srcedit.json", {}, (doc) => {
-    const d = doc && typeof doc === "object" && !Array.isArray(doc) ? doc : {};
-    d[s.id] = { ...(d[s.id] || {}), ...f, by, at };
-    return { replace: d, value: d[s.id] };
-  });
-  return (await getSources(store)).find((x) => x.id === s.id);
-}
-export function setSources(store, list) {
-  if (!Array.isArray(list) || list.length > 80) fail("sources must be a list (80 at most)");
-  const seen = new Set();
-  const out = list.map((s) => {
-    const id = low(s && s.id).replace(/[^a-z0-9-]/g, "");
-    if (!id || seen.has(id)) fail("every source needs its own short id (letters, digits, dashes)");
-    seen.add(id);
-    noSecrets(JSON.stringify(s));
-    return { id, name: clean(s.name, 60), kind: s.kind === "account" ? "account" : "payer", match: (Array.isArray(s.match) ? s.match : []).slice(0, 8).map((x) => low(x)).filter(Boolean),
-      category: CATEGORIES.find((c) => low(c) === low(s.category)) || "Other", currency: clean(s.currency, 12).toUpperCase(), lands: clean(s.lands, 40),
-      cadence: CADENCE.includes(s.cadence) ? s.cadence : "irregular", owner: clean(s.owner, 40), how: clean(s.how, 160),
-      state: SOURCE_STATE.includes(s.state) ? s.state : "unknown", blocker: clean(s.blocker, 200), needsLuke: clean(s.needsLuke, 200) };
-  });
-  return store.setJSON("sources.json", out).then(() => out);
-}
-const srcMatches = (s, text) => { const t = low(text); return !!t && [low(s.name), s.id, ...(s.match || [])].filter(Boolean).some((k) => t.includes(k)); };
-const DUE_DAYS = { daily: 2, monthly: 45, quarterly: 110 };
-
-/* The picture of the money coming in. entries: this month + last (+ any older passed in). older: the
-   months before those (up to UNSORTED_MONTHS in all), read ONLY for "To sort" (unsorted payments and
-   the statement each may be).
-   -> { month, received:{CUR:n}, pending:{CUR:n}, entries (newest 60), accounts:[...], sources:[...], problems:[...],
-        unsorted (newest 40, each with pendingMatch {id, payer, amount, currency, date} when ONE payer's
-        pending statement fits it), unsortedCount } */
-/* ONE entry per payment (17 Nov 2026, Luke: "money is not double counted ... wise and paypal are only mainly used to
-   confirm and check revolut is the main entry"): income counts once, when it lands in Revolut. A received payment
-   logged in another of Luke's own accounts (Wise, PayPal: the account sources) is HOLDING: seen, counted nowhere,
-   until link_transfer ties it to the Revolut credit that carried it (movedTo). */
-export const isMainAccount = (acc) => /revolut/i.test(String(acc || ""));
-/* 18 Nov 2026: the one counting rule. Received means it landed in Revolut. Wise, PayPal and a settled
-   statement are not counted. payments, month_check, income_status and the briefings all use this. */
-export function countsAsReceived(e) {
-  return !!e && e.status === "received" && !e.movedTo && isMainAccount(e.account) && !STATEMENT.test(e.account || "") && !(e.paidBy && OWED.includes(e.status));
-}
-
-/* ---------- Expected money (L1) and what a payout route cost (L9), 18 Nov 2026 ----------
-   Built on the records already on the desk. A statement (statement only / payable / pending, or one
-   later tied with paid_by or turned into the payment that arrived) IS the expected row. Its due date
-   comes from the source's due day when Ledger set one on a monthly source, else from the gap between
-   earlier statements and the day they landed, else from the day of the month the money usually arrives.
-   Nothing here is guessed: too few payments, or pay days too far apart, is "not known" / "not enough".
-   Short = the same currency arrived for less than the statement. Late = the due day passed and the
-   money has not landed in Revolut. Missing = a monthly source's pay day passed with no statement and
-   nothing received. The route cost is sent minus landed, and only when both amounts were recorded in
-   the same currency. A different currency is "not enough data": no rate is invented. */
-const LEARN_LAG_MIN = 2, LEARN_LAG_SPREAD = 21, LEARN_DAY_MIN = 3, LEARN_DAY_SPREAD = 10, RECENT_LANDED = 62;
-const ordinalN = (n) => { const t = n % 100, u = n % 10; return n + (t >= 11 && t <= 13 ? "th" : u === 1 ? "st" : u === 2 ? "nd" : u === 3 ? "rd" : "th"); };
-const medianInt = (list) => { const a = list.slice().sort((x, y) => x - y), m = Math.floor(a.length / 2); return a.length % 2 ? a[m] : Math.round((a[m - 1] + a[m]) / 2); };
-const monthLen = (ym) => new Date(Date.UTC(Number(ym.slice(0, 4)), Number(ym.slice(5, 7)), 0)).getUTCDate();
-const clampDay = (ym, dayNum) => ym + "-" + String(Math.min(Math.max(1, dayNum), monthLen(ym))).padStart(2, "0");
-const nextYm = (ym) => { const y = Number(ym.slice(0, 4)), n = Number(ym.slice(5, 7)); return n === 12 ? `${y + 1}-01` : `${y}-${String(n + 1).padStart(2, "0")}`; };
-const onOrAfter = (from, dayNum) => { const inM = clampDay(from.slice(0, 7), dayNum); return inM >= from ? inM : clampDay(nextYm(from.slice(0, 7)), dayNum); };
-const spanDays = (a, b) => { if (!a || !b || !DAY.test(a) || !DAY.test(b)) return null; const n = daysBetween(a, b); return n < 0 ? null : n; };
-const normPay = (e) => { if (!e || typeof e !== "object") return null; return e.arrived && e.arrived !== e.date ? { ...e, statement: e.statement || e.date, date: e.arrived } : { ...e }; };
-const wasStatement = (e) => !!(e && (OWED.includes(e.status) || e.paidBy || e.statement || (e.history || []).some((h) => OWED.includes(h.from) || OWED.includes(h.to))));
-/* Longest match, not the first. "Sample Distro one" must not be swallowed by "Sample Distro" (18 Nov 2026). */
-const payerSource = (e, sources) => {
-  if (!e) return null;
-  const payers = (sources || []).filter((x) => x.kind !== "account");
-  if (e.source) { const s = payers.find((x) => x.id === e.source); if (s) return s; }
-  let best = null, n = 0;
-  const blob = low(e.payer || "");
-  for (const s of payers) {
-    for (const k of [s.name, s.id, ...(s.match || [])].map((x) => low(x)).filter((k) => k && k.length >= 3)) {
-      if (blob.includes(k) && k.length > n) { best = s; n = k.length; }
-    }
-  }
-  return best;
-};
-const histDay = (h) => { if (!h || !h.at) return null; const t = Date.parse(h.at); if (Number.isNaN(t)) return null; const d = spDay(t); return DAY.test(d) ? d : null; };
-function payableOf(e, statementDate) {
-  const hit = (e.history || []).find((h) => h.to === "payable");
-  if (hit) { const d = histDay(hit); return d ? { state: "date", date: d } : { state: "not_recorded", date: null }; }
-  if (e.status === "payable" || (e.history || []).some((h) => h.from === "payable")) return { state: "date", date: statementDate };
-  if (e.status === "statement only") return { state: "not_yet", date: null };
-  return { state: "not_recorded", date: null };
-}
-function moneyEnd(e, byId) {
-  const target = e.paidBy ? byId.get(e.paidBy) : null;
-  const holder = target || (e.status === "received" ? e : null);
-  if (!holder) return { paid: null, landed: null, missingLink: !!(e.paidBy && !target) };
-  const paid = { date: holder.date, amount: holder.amount, currency: holder.currency, account: holder.account };
-  if (isMainAccount(holder.account)) return { paid, landed: { date: holder.date, amount: holder.amount, currency: holder.currency }, missingLink: false };
-  const rev = holder.movedTo ? byId.get(holder.movedTo) : null;
-  if (rev && isMainAccount(rev.account)) return { paid, landed: { date: rev.date, amount: rev.amount, currency: rev.currency }, missingLink: false };
-  return { paid, landed: null, missingLink: false };
-}
-const viaOf = (froms) => { const v = []; for (const f of froms) { if (!f || !f.account || isMainAccount(f.account) || STATEMENT.test(f.account)) continue; if (!v.includes(f.account)) v.push(f.account); } return v.sort(); };
-const routeSourceName = (occ, sources) => {
-  const names = [];
-  const add = (e) => { if (!e) return; const s = payerSource(e, sources), name = s ? s.name : e.payer; if (name && !names.includes(name)) names.push(name); };
-  add(occ.stmt);
-  if (!names.length) for (const f of occ.froms) add(f);
-  if (!names.length) add(occ.rev);
-  return names.join(" + ") || "Unknown payer";
-};
-function priceRoute(occ) {
-  const revs = (occ.revs && occ.revs.length ? occ.revs : occ.rev ? [occ.rev] : []).filter((r) => r && r.amount != null && r.currency);
-  if (!revs.length) return { incomplete: true };
-  const known = (occ.froms || []).filter((f) => f && f.amount != null && f.currency);
-  if ((occ.froms || []).some((f) => !f)) return { incomplete: true };
-  const stmts = (occ.stmts && occ.stmts.length ? occ.stmts : occ.stmt ? [occ.stmt] : []).filter((s) => s && s.amount != null && s.currency && !known.some((f) => f.id === s.id));
-  const sumBy = (list) => { const by = {}; for (const f of list) by[f.currency] = round((by[f.currency] || 0) + Number(f.amount)); return by; };
-  const linkBy = sumBy(known), revBy = sumBy(revs), revCur = Object.keys(revBy);
-  if (revCur.length !== 1) return { incomplete: true };
-  const cur = revCur[0];
-  let landedAmt = revBy[cur];
-  const linkSame = linkBy[cur];
-  /* a credit that only stored one of several links: the links are the transfer, so they are all counted */
-  if (known.length > 1 && linkSame != null && landedAmt + 0.02 < linkSame && known.some((f) => f.currency === cur && Math.abs(Number(f.amount) - landedAmt) < 0.02)) landedAmt = linkSame;
-  const stmtAmt = round(stmts.filter((s) => s.currency === cur).reduce((n, s) => n + Number(s.amount), 0));
-  const sentAmt = stmtAmt > 0 ? stmtAmt : (linkSame != null ? linkSame : null);
-  const sentParts = stmtAmt > 0 ? [{ currency: cur, amount: stmtAmt }] : Object.keys(linkBy).sort().map((c) => ({ currency: c, amount: linkBy[c] }));
-  if (!sentParts.length || sentAmt == null && sentParts.length === 1 && sentParts[0].currency !== cur) return sentParts.length ? { incomplete: false, mixed: true, fee: null, currency: "", sent: sentParts, landed: { currency: cur, amount: round(landedAmt) } } : { incomplete: true };
-  const landed = { currency: cur, amount: round(landedAmt) };
-  if (sentParts.length === 1 && sentParts[0].currency === cur) {
-    const sent = round(sentAmt != null ? sentAmt : sentParts[0].amount);
-    if (landed.amount > sent + 0.02) return { incomplete: false, mixed: false, checkLink: true, fee: null, currency: cur, sent: [{ currency: cur, amount: sent }], landed };
-    return { incomplete: false, mixed: false, fee: round(sent - landed.amount), currency: cur, sent: [{ currency: cur, amount: sent }], landed };
-  }
-  return { incomplete: false, mixed: true, fee: null, currency: "", sent: sentParts, landed };
-}
-function learnDay(list) {
-  if (!list || list.length < LEARN_DAY_MIN) return { day: null, payments: list ? list.length : 0, enough: false, why: "not enough payments yet" };
-  const s = list.slice().sort((a, b) => a - b);
-  if (s[s.length - 1] - s[0] > LEARN_DAY_SPREAD) return { day: null, payments: list.length, enough: false, why: "the pay days are too spread out to name one" };
-  return { day: medianInt(list), payments: list.length, enough: true, why: "" };
-}
-function learnLag(list) {
-  if (!list || list.length < LEARN_LAG_MIN) return null;
-  const s = list.slice().sort((a, b) => a - b);
-  if (s[s.length - 1] - s[0] > LEARN_LAG_SPREAD) return null;
-  return { days: medianInt(list), payments: list.length };
-}
-const EXCHANGE_ROW = /exchanged?\s+(?:to|from)\s+[a-z]{3}\b/i;
-/* A rate only when Revolut itself recorded the exchange. One row, within a day, or there is no rate. */
-function exchangeRate(occ, pool) {
-  const rev = occ.rev;
-  if (!rev || !isDay(rev.date)) return null;
-  const hits = (pool || []).filter((e) => e && e.status === "transfer" && isMainAccount(e.account) && EXCHANGE_ROW.test(`${e.payer || ""} ${e.note || ""}`) && isDay(e.date) && Math.abs(daysBetween(e.date, rev.date)) <= 1);
-  if (hits.length !== 1) return null;
-  const row = hits[0];
-  const foreign = (occ.froms || []).find((f) => f && f.currency && f.currency !== row.currency && f.amount);
-  if (!foreign) return null;
-  const value = round(Number(row.amount) / Number(foreign.amount));
-  if (!value) return null;
-  return { value, from: foreign.currency, to: row.currency, source: "Revolut exchange row", at: row.date, id: row.id };
-}
-function splitWord(occ, sources, rules) {
-  const ids = new Set();
-  for (const e of [occ.stmt, ...(occ.froms || []), occ.rev]) { const s = payerSource(e, sources); if (s) ids.add(s.id); }
-  if (ids.size < 2) return "";
-  const ok = (id) => (rules || []).some((r) => r && (r.source === id || r.sourceId === id) && r.confirmed_by && (r.date || r.confirmed));
-  return [...ids].every(ok) ? "confirmed" : "rule pending";
-}
-/* One Wise or PayPal payment split across several Revolut credits. The stored link may name only the
-   first leg. Other unlinked Revolut credits of the same currency, within 5 days, that sum to the
-   holding amount (within 1.00 left behind) are counted here. Nothing is rewritten (18 Nov 2026 night test). */
-function attachLegs(occ, pool, used) {
-  const hold = (occ.froms || []).filter((f) => f && !isMainAccount(f.account) && !STATEMENT.test(f.account || "") && f.currency === occ.rev.currency);
-  if (hold.length !== 1 || !occ.rev) return;
-  const sent = Number(hold[0].amount);
-  const have = (occ.revs && occ.revs.length ? occ.revs : [occ.rev]).reduce((n, r) => n + Number(r.amount), 0);
-  if (!(sent > have + 1)) return;
-  const need = round(sent - have);
-  const cands = pool.filter((e) => e && e.id !== occ.rev.id && !used.has(e.id) && isMainAccount(e.account) && e.currency === occ.rev.currency
-    && (e.status === "received" || e.status === "transfer") && !(e.from && e.from.length) && !e.movedTo
-    && isDay(e.date) && isDay(occ.rev.date) && Math.abs(daysBetween(e.date, occ.rev.date)) <= 5
-    && !/pocket|joint|top-?up|topup|savings|vault/.test(low(`${e.payer} ${e.note}`))).slice(0, 10);
-  let best = null;
-  const walk = (i, acc, sum) => {
-    const gap = round(need - sum);
-    if (acc.length && gap >= -0.02 && gap <= 1) {
-      if (!best || gap < best.gap - 0.001 || (Math.abs(gap - best.gap) < 0.001 && acc.length < best.acc.length)) best = { acc: acc.slice(), gap };
-    }
-    if (acc.length >= 4 || sum > need + 0.02) return;
-    for (let k = i; k < cands.length; k++) walk(k + 1, acc.concat(cands[k]), sum + Number(cands[k].amount));
-  };
-  walk(0, [], 0);
-  if (!best) return;
-  occ.revs = (occ.revs && occ.revs.length ? occ.revs : [occ.rev]).concat(best.acc);
-  occ.extraLegs = true;
-  for (const e of best.acc) used.add(e.id);
-}
-/* What each payout route cost, from amounts already on the desk. routes: [{ name, source, via, payouts,
-   fees, feePayouts, extra, extraPayouts, noFee, mixed, mixedExamples, incomplete }] */
-export function routeCosts(entries, sources, rules) {
-  const pool = []; const seen = new Set();
-  for (const raw of entries || []) { const e = normPay(raw); if (!e || !e.id || seen.has(e.id)) continue; seen.add(e.id); pool.push(e); }
-  const byId = new Map(pool.map((e) => [e.id, e]));
-  const occs = []; const seenRev = new Set();
-  const push = (rev, froms, stmt) => {
-    if (!rev || seenRev.has(rev.id)) { const o = occs.find((x) => rev && x.rev.id === rev.id); if (o && stmt && !o.stmt) o.stmt = stmt; if (o) for (const f of froms) if (f && !o.froms.some((x) => x && x.id === f.id)) o.froms.push(f); return; }
-    seenRev.add(rev.id); occs.push({ rev, revs: [rev], froms: froms.slice(), stmt, stmts: stmt ? [stmt] : [], via: viaOf(froms) });
-  };
-  for (const rev of pool) {
-    if (!isMainAccount(rev.account) || !Array.isArray(rev.from) || !rev.from.length) continue;
-    const froms = rev.from.map((id) => byId.get(id) || null);
-    for (const e of pool) if (e.movedTo === rev.id && !rev.from.includes(e.id)) froms.push(e);
-    const ids = new Set(froms.filter(Boolean).map((f) => f.id).concat(rev.from));
-    const linked = pool.find((e) => wasStatement(e) && e.paidBy && (ids.has(e.paidBy) || e.paidBy === rev.id) && !ids.has(e.id));
-    push(rev, froms, linked || froms.find((f) => f && wasStatement(f)) || null);
-  }
-  for (const e of pool) {
-    if (!wasStatement(e) || !e.paidBy) continue;
-    const target = byId.get(e.paidBy);
-    if (!target) continue;
-    if (isMainAccount(target.account)) push(target, [], e);
-    else if (target.movedTo && byId.get(target.movedTo) && isMainAccount(byId.get(target.movedTo).account)) push(byId.get(target.movedTo), [target], e);
-  }
-  for (const e of pool) {
-    if (!wasStatement(e) || e.paidBy || !e.movedTo) continue;
-    const rev = byId.get(e.movedTo);
-    if (rev && isMainAccount(rev.account)) push(rev, [e], e);
-  }
-  const usedLegs = new Set(occs.map((o) => o.rev && o.rev.id).filter(Boolean));
-  for (const occ of occs) attachLegs(occ, pool, usedLegs);
-  const groups = new Map();
-  for (const occ of occs) {
-    occ.via = viaOf(occ.froms);
-    const source = routeSourceName(occ, sources), via = occ.via, key = source + "|" + via.join("+");
-    const g = groups.get(key) || { name: via.length ? `${source} via ${via.join(" and ")} into Revolut` : `${source} into Revolut`, source, via, payouts: 0, fees: {}, feePayouts: 0, extra: {}, extraPayouts: 0, noFee: 0, mixed: 0, mixedExamples: [], incomplete: 0, checkLink: 0 };
-    g.payouts++;
-    const named = !!(payerSource(occ.stmt, sources) || (occ.froms || []).some((f) => payerSource(f, sources)) || payerSource(occ.rev, sources));
-    const p = priceRoute(occ);
-    if (p.incomplete) g.incomplete++;
-    else {
-      if (p.mixed) {
-        g.mixed++;
-        if (g.mixedExamples.length < 3) g.mixedExamples.push({ sent: p.sent, landed: p.landed });
-        const rate = exchangeRate(occ, pool);
-        if (rate && !g.rate) g.rate = rate;
-      }
-      /* a fee needs a named source AND a hop that explains it. Anything else is not a fee.
-         A remainder of 1.00 or less after every Revolut leg is money left in Wise or PayPal, not a fee. */
-      if (p.checkLink) g.checkLink++;
-      else if (occ.extraLegs && p.fee > 0 && p.fee <= 1 && p.currency) {
-        g.left = g.left || {}; g.left[p.currency] = round((g.left[p.currency] || 0) + p.fee); g.noFee++;
-      }
-      else if (p.fee > 0 && named && via.length) { g.fees[p.currency] = round((g.fees[p.currency] || 0) + p.fee); g.feePayouts++; }
-      else if (p.fee === 0) g.noFee++;
-    }
-    const word = splitWord(occ, sources, rules);
-    if (word === "rule pending") g.split = "rule pending";
-    else if (word === "confirmed" && g.split !== "rule pending") g.split = "confirmed";
-    groups.set(key, g);
-  }
-  return [...groups.values()].sort((a, b) => (a.name < b.name ? -1 : 1));
-}
-const moneyBits = (o) => Object.keys(o || {}).sort().map((c) => `${c} ${Number(o[c]).toFixed(2)}`);
-const sentBits = (parts) => (parts || []).map((p) => `${p.currency} ${Number(p.amount).toFixed(2)}`).join(" + ");
-/* One sentence for the bots. A same-currency gap with a source and a hop is a fee. A gap with no
-   source is not a fee. Landed above sent is a check, not a negative fee. A currency change keeps a
-   rate only when Revolut recorded one. */
-export function routeCostText(r) {
-  if (!r || !r.payouts) return "Not enough data.";
-  const bits = [];
-  const fees = moneyBits(r.fees);
-  if (fees.length) bits.push(`Fees: ${fees.join(" + ")} on ${r.feePayouts} payout${r.feePayouts === 1 ? "" : "s"}`);
-  const left = moneyBits(r.left);
-  if (left.length) bits.push(`${left.join(" + ")} left in Wise or PayPal, not a fee`);
-  if (r.checkLink) bits.push("More landed in Revolut than was sent: check which payments link_transfer tied together"); /* v18 (21 Nov 2026, Forge) */
-  if (r.noFee && !fees.length && !r.checkLink && !r.mixed) bits.push("No fee on the amounts recorded");
-  if (r.mixed) {
-    for (const m of r.mixedExamples || []) bits.push(`${sentBits(m.sent)} sent, ${m.landed.currency} ${Number(m.landed.amount).toFixed(2)} landed`);
-    if (r.rate && r.rate.source) bits.push(`Rate ${Number(r.rate.value)} ${r.rate.from} to ${r.rate.to}, from ${r.rate.source}`);
-    else bits.push("Exchange: not enough data");
-  }
-  if (r.split === "rule pending") bits.push("Split: rule pending");
-  if (!bits.length) bits.push("Not enough data");
-  return bits.join(". ") + ".";
-}
-export function routeSummary(routes) {
-  if (!routes || !routes.length) return "Not enough data yet. Tie what was sent to what landed in Revolut, then income_status shows the cost. Do not guess a rate.";
-  const thin = routes.filter((r) => r.mixed || (r.incomplete && !Object.keys(r.fees || {}).length)).length;
-  return `${routes.length} payout route${routes.length === 1 ? "" : "s"}` + (thin ? `, ${thin} with not enough data for the exchange` : "") + ". Read payout_routes in income_status. Do not guess a rate.";
-}
-/* expected: { rows, missing, learned, summary }. Every figure comes from a recorded amount or date. */
-export function moneyExpectations(entries, sources, today, rules) {
-  const all = []; const seen = new Set();
-  for (const raw of entries || []) { const e = normPay(raw); if (!e || !e.id || seen.has(e.id)) continue; seen.add(e.id); all.push(e); }
-  /* a shadow copy of the same credit (PR #69) is not a second statement or a second route */
-  const pool = all.filter((e) => !isShadow(e, all));
-  const byId = new Map(pool.map((e) => [e.id, e]));
-  const arrivals = new Map(), lagLists = new Map();
-  const journeys = [];
-  for (const e of pool) {
-    /* the pay day is learned from Revolut landings only, and not from another source's account (18 Nov 2026) */
-    if (e.status === "received" && isMainAccount(e.account) && DAY.test(e.date || "")) {
-      const s = payerSource(e, sources);
-      const other = Array.isArray(e.from) && e.from.some((id) => { const f = byId.get(id); const o = payerSource(f, sources); return o && s && o.id !== s.id; });
-      if (s && !other) { const a = arrivals.get(s.id) || []; a.push(Number(e.date.slice(8, 10))); arrivals.set(s.id, a); }
-    }
-    if (!wasStatement(e)) continue;
-    const statementDate = DAY.test(e.statement || "") ? e.statement : (DAY.test(e.date || "") ? e.date : "");
-    if (!statementDate) continue;
-    const end = moneyEnd(e, byId);
-    let payable = payableOf(e, statementDate);
-    if ((end.landed || end.paid) && payable.state === "not_yet") payable = { state: "not_recorded", date: null };
-    journeys.push({ e, statementDate, payable, ...end });
-    if (end.landed && DAY.test(end.landed.date)) {
-      const gap = daysBetween(statementDate, end.landed.date);
-      const s = payerSource(e, sources);
-      if (s && gap >= 0) { const a = lagLists.get(s.id) || []; a.push(gap); lagLists.set(s.id, a); }
-    }
-  }
-  const learnedDay = new Map(), learned = [];
-  for (const s of sources || []) {
-    if (!s || s.kind === "account") continue;
-    const days = arrivals.get(s.id);
-    if (!days) continue;
-    const got = learnDay(days);
-    learnedDay.set(s.id, got);
-    learned.push({ sourceId: s.id, source: s.name, day: got.day, payments: got.payments, enough: got.enough, ...(got.why ? { why: got.why } : {}) });
-  }
-  const learnedLag = new Map();
-  for (const [id, list] of lagLists) { const g = learnLag(list); if (g) learnedLag.set(id, g); }
-  const rows = [];
-  for (const j of journeys) {
-    const e = j.e, src = payerSource(e, sources);
-    const monthlyDue = src && Number.isInteger(src.dueDay) && (src.cadence || "monthly") === "monthly" ? src.dueDay : null;
-    const lag = src ? learnedLag.get(src.id) : null;
-    const dayL = src ? learnedDay.get(src.id) : null;
-    let due = null, dueFrom = "", dueNote = "";
-    if (monthlyDue) {
-      due = onOrAfter(j.statementDate, monthlyDue); dueFrom = "set";
-      dueNote = `the day this source pays by (the ${ordinalN(monthlyDue)})`;
-      if (lag && Math.abs(lag.days - daysBetween(j.statementDate, due)) > 7) dueNote += `. Earlier payments landed about ${lag.days} days after the statement`;
-    } else if (lag) { due = addDays(j.statementDate, lag.days); dueFrom = "lag"; dueNote = `about ${lag.days} days after the statement, from ${lag.payments} earlier payments`; }
-    else if (dayL && dayL.day) { due = onOrAfter(j.statementDate, dayL.day); dueFrom = "day"; dueNote = `usually around the ${ordinalN(dayL.day)}, from ${dayL.payments} payments`; }
-    /* short only when a different recorded amount, in the same currency, is below the statement */
-    const other = j.landed && j.landed.currency === e.currency ? j.landed : (j.paid && j.paid.currency === e.currency && j.paid.amount !== e.amount ? j.paid : null);
-    const gap = other ? round(e.amount - other.amount) : 0;
-    const viaHop = !!(j.paid && j.paid.account && !isMainAccount(j.paid.account) && !STATEMENT.test(j.paid.account) && j.landed);
-    /* the route already shows this gap as a fee, so it is not also short (18 Nov 2026) */
-    const feeGap = gap > 0 && !!src && viaHop;
-    const shortBy = gap > 0 && !feeGap ? { amount: gap, currency: e.currency } : null;
-    const settled = !!(e.paidBy && (OWED.includes(e.status) || e.status === "pending"));
-    const flags = [];
-    if (!j.landed && !settled && due && due < today) flags.push("late");
-    if (shortBy) flags.push("short");
-    const age = j.landed && DAY.test(j.landed.date) ? daysBetween(j.landed.date, today) : null;
-    if (j.landed && !shortBy && age != null && age > RECENT_LANDED) continue;
-    const payableDate = j.payable.state === "date" ? j.payable.date : null;
-    /* v18 (21 Nov 2026, Forge): a payment that already notes why it is short (a bot wrote "fee or short
-       payment, not checked") carries that note, so the screen shows it instead of only "unexplained" */
-    const noteOf = (x) => { const n = x && typeof x.note === "string" ? hidePrivate(x.note) : ""; return /short|fee/i.test(n) ? clipWords(n, 90) : ""; };
-    const holderE = e.paidBy ? byId.get(e.paidBy) : null;
-    const shortNote = shortBy ? (noteOf(e) || noteOf(holderE) || noteOf(holderE && holderE.movedTo ? byId.get(holderE.movedTo) : null)) : "";
-    rows.push({
-      id: e.id, payer: hidePrivate(e.payer), source: src ? src.name : "", sourceId: src ? src.id : "", amount: e.amount, currency: e.currency, status: j.landed ? "received" : settled ? "settled" : e.status,
-      ...(shortBy && (!src || !viaHop) ? { shortReason: "unexplained" } : {}), ...(shortNote ? { shortNote } : {}),
-      due, dueFrom, dueNote, flags, shortBy, open: !j.landed && !settled, missingLink: j.missingLink,
-      statement: { date: j.statementDate, amount: e.amount, currency: e.currency },
-      payable: payableDate, payableState: j.payable.state,
-      paid: j.paid, landed: j.landed,
-      days: { payable: spanDays(j.statementDate, payableDate), paid: spanDays(payableDate, j.paid && j.paid.date), landed: spanDays(j.paid && j.paid.date, j.landed && j.landed.date) },
-      landedAfter: j.landed && due && j.landed.date > due ? daysBetween(due, j.landed.date) : null,
-    });
-  }
-  const rank = (r) => (r.flags.includes("late") ? 0 : r.flags.includes("short") ? 1 : r.open ? 2 : 3);
-  rows.sort((a, b) => rank(a) - rank(b) || ((a.due || "9") < (b.due || "9") ? -1 : (a.due || "9") > (b.due || "9") ? 1 : 0) || (a.statement.date < b.statement.date ? -1 : 1));
-  const shown = rows.slice(0, 40);
-  const missing = [];
-  for (const s of sources || []) {
-    if (!s || s.kind === "account" || s.cadence !== "monthly" || s.state === "not_tracked" || s.state === "blocked") continue;
-    const dayN = Number.isInteger(s.dueDay) ? s.dueDay : (learnedDay.get(s.id) && learnedDay.get(s.id).day);
-    if (!dayN) continue;
-    const due = clampDay(today.slice(0, 7), dayN);
-    if (due >= today) continue;
-    const month = today.slice(0, 7);
-    const hit = pool.some((e) => {
-      const ps = payerSource(e, sources);
-      if (!ps || ps.id !== s.id || e.status === "transfer" || e.status === "unsorted" || (Array.isArray(e.from) && e.from.length)) return false;
-      if (wasStatement(e) && OWED.includes(e.status) && !e.paidBy) return true;
-      if (e.status === "received" && !e.movedTo && String(e.date).slice(0, 7) === month) return true;
-      if (wasStatement(e) && String(e.statement || e.date).slice(0, 7) === month) return true;
-      return false;
-    });
-    if (hit) continue;
-    missing.push({ sourceId: s.id, source: s.name, due, dueDay: dayN, why: `No statement and nothing received. It usually pays by the ${ordinalN(dayN)}.` });
-  }
-  missing.sort((a, b) => (a.source < b.source ? -1 : 1));
-  const summary = { late: shown.filter((r) => r.flags.includes("late")).length, short: shown.filter((r) => r.flags.includes("short")).length, missing: missing.length, text: "" };
-  const parts = [];
-  if (summary.late) parts.push(`${summary.late} late`);
-  if (summary.short) parts.push(`${summary.short} short`);
-  if (summary.missing) parts.push(`${summary.missing} missing`);
-  summary.text = parts.length ? parts.join(", ") : "nothing to flag";
-  return { expected: { rows: shown, missing, learned, summary }, routes: routeCosts(pool, sources, rules) };
-}
-
-export function holdingOf(sources) {
-  const own = (sources || []).filter((s) => s.kind === "account" && !isMainAccount(s.name));
-  return (e) => !!e && e.status === "received" && !e.movedTo && !isMainAccount(e.account) && own.some((s) => srcMatches(s, e.account));
-}
-export function incomeReport(entries, checks, sources, today, older = [], rules = []) {
-  const isHold = holdingOf(sources);
-  const month = today.slice(0, 7);
-  const add = (o, cur, a) => { o[cur] = round((o[cur] || 0) + a); };
-  const received = {}, pending = {}, byCat = {}, payable = {}, statementOnly = {}, royaltiesOnly = {}, pendingOnly = {}, holding = {};
-  /* a payment counts on the day it arrived (a pending statement that later landed keeps both dates) */
-  entries = entries.map((e) => (e.arrived && e.arrived !== e.date ? { ...e, statement: e.date, date: e.arrived } : e));
-  /* round 2: one payment logged twice under two names of its payer (before the desk knew they were one)
-     counts once. Kept: a decided status before an unsorted one, else the first logged. */
-  const uniq = uniquePayments(entries);
-  entries = uniq.entries.filter((e) => !isShadow(e, uniq.entries));
-  const twice = uniq.twice;
-  for (const e of entries) {
-    if (e.date.slice(0, 7) !== month || e.status === "transfer" || e.status === "unsorted") continue;
-    if (e.paidBy && OWED.includes(e.status)) continue; /* a statement settled by a received payment counts nowhere */
-    if (e.movedTo) continue; /* moved on to Revolut: the Revolut payment is the one that counts */
-    if (e.status === "received" && !countsAsReceived(e)) { add(holding, e.currency, e.amount); continue; } /* still in Wise / PayPal: seen, not counted */
-    /* batch 4: a statement under the payout line counts nowhere yet; payable is owed (with pending) */
-    if (e.status === "statement only") { add(statementOnly, e.currency, e.amount); continue; }
-    add(e.status === "pending" || e.status === "payable" ? pending : received, e.currency, e.amount);
-    if (e.status === "payable") add(payable, e.currency, e.amount);
-    if (e.status === "pending") add(pendingOnly, e.currency, e.amount); /* pending without the payable (round 3) */
-    if (countsAsReceived(e)) add(byCat[e.category] || (byCat[e.category] = {}), e.currency, e.amount);
-    /* the music's own money (16 Nov 2026, Ledger: a production buyout is not a royalty): self-releases, label deals, publishing */
-    if (countsAsReceived(e) && ROYALTY_CATS.includes(e.category)) add(royaltiesOnly, e.currency, e.amount);
-  }
-  const lastCheck = {};
-  for (const c of checks) { const k = low(c.account); if (!lastCheck[k] || c.at > lastCheck[k].at) lastCheck[k] = c; }
-  const byIdAll = new Map(entries.concat(older || []).map((e) => [e.id, e]));
-  const payLabel = (e) => e.movedTo ? "moved to Revolut" : (e.paidBy && (OWED.includes(e.status) || e.status === "pending") ? "settled" : (e.status === "received" && !countsAsReceived(e) ? holdingLabel(e) : e.status));
-  /* a combined Revolut credit is split across the sources of its links. One source still sees the whole credit. */
-  const viewRows = (s) => {
-    if (s.kind === "account") return entries.filter((e) => low(e.account) === low(s.name) || srcMatches(s, e.account));
-    const out = [], seen = new Set();
-    const add = (row) => { if (row && row.id && !seen.has(row.id)) { seen.add(row.id); out.push(row); } };
-    for (const e of entries) {
-      if (isMainAccount(e.account) && Array.isArray(e.from) && e.from.length > 1) {
-        const links = e.from.map((id) => byIdAll.get(id)).filter(Boolean);
-        const owners = [...new Set(links.map((f) => { const p = payerSource(f, sources); return p && p.id; }).filter(Boolean))];
-        if (owners.length > 1) {
-          if (owners.includes(s.id)) for (const f of links) { const p = payerSource(f, sources); if (p && p.id === s.id && f.currency === e.currency) add({ ...e, id: e.id + ":" + f.id, amount: f.amount, currency: f.currency, payer: f.payer, source: s.id, status: "received" }); }
-          continue;
-        }
-      }
-      if (e.movedTo && byIdAll.has(e.movedTo)) {
-        /* the last payment is the day it landed in Revolut, the same row income_status shows (18 Nov 2026 night test) */
-        const rev = byIdAll.get(e.movedTo);
-        const owner = e.source ? sources.find((x) => x.kind !== "account" && x.id === e.source) : payerSource(e, sources);
-        const split = rev && Array.isArray(rev.from) && rev.from.length > 1;
-        if (!split && owner && owner.id === s.id && rev && isMainAccount(rev.account)) add({ ...rev, source: owner.id, payer: rev.payer || e.payer });
-        continue;
-      }
-      const owner = e.source ? sources.find((x) => x.kind !== "account" && x.id === e.source) : payerSource(e, sources);
-      if (owner && owner.id === s.id) add(e);
-    }
-    return out;
-  };
-  const list = sources.map((s) => {
-    /* a payment tied to a source counts for that source only; the payer's name decides only when it is tied to none
-       (17 Nov 2026: a payment tied to CREATE still showed under the payout service its payer is named after) */
-    const mine = viewRows(s);
-    /* one last payment for the source line and for income_problems: a real receipt, newest day,
-       not a statement and not a row that already moved (18 Nov 2026 night test) */
-    const realPay = (e) => e && e.status !== "transfer" && e.status !== "unsorted" && !e.movedTo && !STATEMENT.test(e.account || "") && !(e.paidBy && OWED.includes(e.status)) && e.status !== "statement only";
-    const real = mine.filter(realPay);
-    /* A Revolut receipt is the last payment, even when a later statement date is on the desk. */
-    const landed = mine.filter((e) => countsAsReceived(e));
-    const last = (landed.length ? landed : real.length ? real : mine).reduce((a, e) => (!a || e.date > a.date ? e : a), null);
-    const chk = s.kind === "account" ? lastCheck[low(s.name)] || Object.values(lastCheck).find((c) => srcMatches(s, c.account)) || null : null;
-    const lastLogged = mine.reduce((a, e) => (!a || e.at > a ? e.at : a), null); /* the last time anything was logged for it, as a São Paulo day */
-    const lastLook = [lastLogged && spDay(Date.parse(lastLogged)), chk && chk.day].filter(Boolean).sort().pop() || null;
-    const monthTotal = {}, monthWaiting = {};
-    for (const e of mine) if (e.date.slice(0, 7) === month && countsAsReceived(e)) add(monthTotal, e.currency, e.amount);
-    for (const e of mine) if (e.date.slice(0, 7) === month && e.status === "received" && !countsAsReceived(e) && !e.movedTo) add(monthWaiting, e.currency, e.amount);
-    /* this month, received only (16 Nov 2026, Luke): received = green; a MONTHLY source past the day it usually
-       pays by with nothing = late (red); otherwise waiting (not highlighted, as every month starts) */
-    const got = mine.filter((e) => countsAsReceived(e) && e.date.slice(0, 7) === month);
-    const gotAmt = {};
-    for (const e of got) add(gotAmt, e.currency, e.amount);
-    const dueDay = Number.isInteger(s.dueDay) ? s.dueDay : null;
-    const thisMonth = s.kind === "account" ? null : { state: got.length ? "received" : dueDay && (s.cadence || "monthly") === "monthly" && Number(today.slice(8, 10)) > dueDay ? "late" : "waiting",
-      amount: got.length ? gotAmt : null, date: got.length ? got.map((e) => e.date).sort().pop() : null, dueDay };
-    let verdict = "ok", why = "";
-    if (s.state === "not_tracked") { verdict = "not_tracked"; why = "Nobody is logging this yet"; }
-    else if (s.state === "blocked") { verdict = "blocked"; why = s.blocker || "Blocked"; }
-    else if (s.kind === "account") {
-      if (!lastLook) { verdict = "never"; why = "Never checked through the connector"; }
-      else if (lastLook < today) { verdict = daysBetween(lastLook, today) > 1 ? "overdue" : "due"; why = `Last checked ${lastLook}`; }
-    } else if (!last) { verdict = s.cadence === "irregular" ? "quiet" : "never"; why = "No payment logged yet"; }
-    else if (DUE_DAYS[s.cadence] && daysBetween(last.date, today) > DUE_DAYS[s.cadence]) { verdict = "overdue"; why = `Last payment ${last.date}; expected ${s.cadence}`; }
-    /* round 2 (Luke: "hq should show the second routenote account"): a source paid into several accounts
-       shows each one, with its last payment (the seed's accounts first, then any other seen on a payment) */
-    const accts = [...(s.kind !== "account" && Array.isArray(s.accounts) ? s.accounts : [])];
-    if (accts.length) for (const e of mine) if (e.account && !STATEMENT.test(e.account) && !accts.some((a) => payerName(a) === payerName(e.account))) accts.push(e.account);
-    const byAccount = accts.length > 1 ? accts.map((acc) => {
-      const l = mine.filter((e) => payerName(e.account) === payerName(acc) && e.status !== "transfer" && e.status !== "unsorted").reduce((a, e) => (!a || e.date > a.date ? e : a), null);
-      return { account: acc, last: l ? { date: l.date, amount: l.amount, currency: l.currency, status: payLabel(l) } : null };
-    }) : null;
-    const seenAcc = [...new Set(mine.map((e) => e.account).filter((a) => a && !STATEMENT.test(a)))];
-    const lands = s.lands || (s.kind !== "account" && seenAcc.length === 1 ? seenAcc[0] : "");
-    return { id: s.id, name: s.name, kind: s.kind, category: s.category, currency: s.currency, lands, ...(s.accounts ? { accounts: s.accounts } : {}), ...(byAccount ? { byAccount } : {}), ...(s.editedBy ? { editedBy: s.editedBy, editedAt: s.editedAt } : {}),
-      cadence: s.cadence, owner: s.owner, how: s.how, state: s.state, ...(s.main ? { main: true } : {}), ...(thisMonth ? { thisMonth } : {}),
-      blocker: s.blocker, needsLuke: s.needsLuke, last: last ? { date: last.date, amount: last.amount, currency: last.currency, status: payLabel(last) } : null,
-      checked: chk ? { day: chk.day, by: chk.by, new: chk.new } : null, lastLook, monthTotal, monthWaiting, verdict, why };
-  });
-  /* payments whose payer matches no known source: a new source nobody has named yet */
-  const payers = sources.filter((s) => s.kind !== "account");
-  /* Luke's own money accounts (PayPal, Wise…: the account sources) are never a "new payer" (16 Nov 2026) */
-  const ownAccts = sources.filter((s) => s.kind === "account");
-  const unknown = [...new Set(entries.filter((e) => e.status !== "transfer" && e.status !== "unsorted" && !payers.some((s) => low(e.source) === s.id || srcMatches(s, e.payer)) && !ownAccts.some((s) => srcMatches(s, e.payer))).map((e) => e.payer))].slice(0, 20);
-  const revolutLive = entries.some((e) => isMainAccount(e.account));
-  if (revolutLive) for (const a of list) if (a.kind === "account" && /revolut/i.test(a.name) && (a.verdict === "blocked" || /not connected|can't be read/i.test(a.why || ""))) { a.verdict = "ok"; a.why = "Revolut rows are arriving"; a.blocker = ""; }
-  const accounts = list.filter((s) => s.kind === "account"), src = list.filter((s) => s.kind !== "account");
-  const problems = [];
-  for (const a of accounts) if (["never", "overdue", "due"].includes(a.verdict)) problems.push(`${a.name}: not checked today${a.owner ? " (" + a.owner + ")" : ""}`);
-  for (const s of src) if (s.verdict === "overdue") problems.push(`${s.name}: ${s.why}`);
-  for (const s of list) if (s.verdict === "blocked") problems.push(`${s.name}: blocked. ${s.blocker}`.trim());
-  if (unknown.length) problems.push(`New payer(s) not on the list of sources: ${unknown.join(", ")}`);
-  if (twice.length) problems.push(`${twice.length === 1 ? "1 payment was" : twice.length + " payments were"} logged twice under two payer names, counted once: ${twice.slice(0, 5).map(([k, e]) => `${k.payer} = ${e.payer} (${e.currency} ${e.amount}, ${e.date})`).join("; ")}`);
-  const oldPending = entries.filter((e) => (e.status === "pending" || e.status === "payable") && !e.paidBy && daysBetween(e.date, today) > 30).length;
-  if (oldPending) problems.push(`${oldPending} pending payment${oldPending === 1 ? "" : "s"} older than 30 days`);
-  /* seen in an account (the bank reader), not yet said what it is: listed apart, in no total */
-  const pool = entries.concat(older || []);
-  const unsortedAll = pool.filter((e) => e.status === "unsorted").sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : a.at < b.at ? 1 : -1));
-  const unsorted = unsortedAll;
-  const unsortedMonth = unsortedAll.filter((e) => e.date.slice(0, 7) === month);
-  if (unsorted.length) problems.push(`Payments nobody has sorted: ${unsorted.slice(0, 8).map((e) => `${e.date.slice(0, 7)} · ${e.date} · ${hidePrivate(e.payer)} · ${e.currency} ${e.amount} (id ${e.id})`).join("; ")}`);
-  /* the oldest month "To sort" reads: what is still unsorted there drops off the list when this month ends */
-  const edge = monthsBack(month, UNSORTED_MONTHS).pop(), leaving = unsorted.filter((e) => e.date.slice(0, 7) <= edge).length;
-  if (leaving) problems.push(`${leaving} unsorted payment${leaving === 1 ? "" : "s"} from ${MONTH[Number(edge.slice(5, 7)) - 1]} ${edge.slice(0, 4)} drop${leaving === 1 ? "s" : ""} off "To sort" when this month ends: sort ${leaving === 1 ? "it" : "them"} before then`);
-  /* the money of a statement logged as pending? Offered only when every statement that fits is the same payer's (the oldest is taken, as the bank reader does) */
-  const pend = pool.filter((p) => OWED.includes(p.status) && !p.paidBy);
-  const withMatch = (e) => {
-    const fit = pend.filter((p) => pendingFits(p, e)).sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
-    if (!fit.length || new Set(fit.map((p) => low(p.payer))).size > 1) return e;
-    const p = fit[0];
-    return { ...e, pendingMatch: { id: p.id, payer: p.payer, amount: p.amount, currency: p.currency, date: p.date } };
-  };
-  /* this year, received only, per currency (round 3, Sheet: to check against the ledger), every month read */
-  const receivedYear = {}, yr = today.slice(0, 4), seenY = [];
-  for (const e of entries.concat((older || []).map((x) => (x.arrived && x.arrived !== x.date ? { ...x, date: x.arrived } : x)))) {
-    if (!countsAsReceived(e) || e.date.slice(0, 4) !== yr || seenY.some((x) => samePayment(x, e))) continue;
-    seenY.push(e); add(receivedYear, e.currency, e.amount);
-  }
-  /* received per month, every month read (12), each payment once: "this month and the ones before" */
-  const receivedByMonth = {}, seenM = [];
-  for (const e of entries.concat((older || []).map((x) => (x.arrived && x.arrived !== x.date ? { ...x, date: x.arrived } : x)))) {
-    if (!countsAsReceived(e) || seenM.some((x) => samePayment(x, e))) continue;
-    seenM.push(e); add(receivedByMonth[e.date.slice(0, 7)] || (receivedByMonth[e.date.slice(0, 7)] = {}), e.currency, e.amount);
-  }
-  const duplicates = twice.map(([k, e]) => ({ kept: k.payer, also: e.payer, amount: e.amount, currency: e.currency, date: e.date, id: e.id }));
-  const seenId = new Set(entries.map((e) => e && e.id));
-  const money = moneyExpectations(entries.concat((older || []).filter((e) => e && !seenId.has(e.id))), sources, today, rules);
-  return { month, received, pending, payable, statementOnly, royaltiesOnly, pendingOnly, receivedYear,
-    receivedYearNote: `Revolut only. Received money that landed in Revolut in ${yr}${seenY.length ? `, from ${seenY.map((e) => e.date.slice(0, 7)).sort()[0]} to ${seenY.map((e) => e.date.slice(0, 7)).sort().pop()}` : ""}. This is the months on the desk, not a promise that every month of the year was read. Wise and PayPal are not in this total, and a row that has moved to Revolut is not counted again. GBP is in the total only when a Revolut row is in GBP.`,
-    receivedByMonth, duplicates, byCategory: byCat, count: entries.filter((e) => e.date.slice(0, 7) === month).length, unsorted: unsorted.slice(0, 40).map(withMatch), unsortedCount: unsorted.length, unsortedMonth: unsortedMonth.map(withMatch),
-    expected: money.expected, routes: money.routes,
-    entries: [...entries].sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : a.at < b.at ? 1 : -1)).slice(0, 60).map((e) => (isHold(e) ? { ...e, holding: true } : e)),
-    holding, holdingList: entries.filter((e) => e.status === "received" && !countsAsReceived(e) && !e.movedTo && e.date.slice(0, 7) === month).sort((a, b) => (a.date < b.date ? 1 : -1)),
-    /* v18 (21 Nov 2026, Forge/Ledger): a Wise or PayPal row from an earlier month that has not moved to Revolut
-       (a September PayPal payment) is still waiting: listed apart, never counted */
-    holdingOlder: entries.filter((e) => e.status === "received" && !countsAsReceived(e) && !e.movedTo && !STATEMENT.test(e.account || "") && /wise|paypal/i.test(e.account || "") && e.date.slice(0, 7) < month).sort((a, b) => (a.date < b.date ? 1 : -1)),
-    accounts, sources: src, unknown, problems,
-    lastEntryAt: entries.reduce((a, e) => (!a || e.at > a ? e.at : a), null) };
-}
-export async function incomeState(store, now) {
-  /* this month and the three before for the totals, the sources and the list; a year for "To sort" */
-  const today = spDay(now), months = monthsBack(today.slice(0, 7), UNSORTED_MONTHS);
-  const [inc, chk, sources, splits] = await Promise.all([
-    Promise.all(months.map((k) => readDoc(store, incKey(k), []))), Promise.all(months.slice(0, 2).map((k) => readDoc(store, chkKey(k), []))), getSources(store), readDoc(store, "splits.json", [])]);
-  const flat = (docs) => docs.flatMap((d) => (Array.isArray(d.data) ? d.data : []));
-  const rules = (Array.isArray(splits.data) ? splits.data : []).filter((r) => r && r.confirmed_by && (r.date || r.confirmed));
-  return incomeReport(flat(inc.slice(0, 4)), flat(chk), sources, today, flat(inc.slice(4)), rules);
-}
-/* royalty payments across the year the desk keeps, for the per-song view (L4) */
-export async function listPLPayments(store, now) {
-  const months = monthsBack(spDay(now).slice(0, 7), UNSORTED_MONTHS);
-  const [docs, sources] = await Promise.all([Promise.all(months.map((m) => readDoc(store, incKey(m), []))), getSources(store)]);
-  return plPayments(docs.flatMap((d) => (Array.isArray(d.data) ? d.data : [])), sources);
-}
 
 /* ---------- batch 4 (15 Nov 2026): ad spend and growth numbers the bots log on the desk ----------
    The site can't write the team's sheets; these rows live on the desk and HQ reads them WITH the sheet's
@@ -4447,8 +3111,9 @@ export async function checkSongBuilds(store, now, roster) {
     try {
       if (!build.ok) await sendMessage(store, now, roster, { from: "HQ", to: m.from, needs: "none", re: m.id,
         text: `Not done: ${what} did not go live. GitHub's build stopped at "${build.step}": ${build.reason.replace(/[.\s]+$/, "")}. Nothing was published, so the site is as it was. Fix what it says, then ask again with song_page.` + (build.run ? ` Run: ${build.run}` : "") });
-      else if (build.others) await sendMessage(store, now, roster, { from: "HQ", to: "Claude", needs: "none",
-        text: `${where} went live, but ${build.others.replace(/^(\d+ other tests? failed|Other tests failed)/, (w) => w.charAt(0).toLowerCase() + w.slice(1))}. Fix them in the code.` + (build.run ? ` Run: ${build.run}` : "") });
+      /* 24 Nov 2026: Claude is off the desk, so this note goes to Nova for Luke's next session on the site */
+      else if (build.others) await sendMessage(store, now, roster, { from: "HQ", to: "Nova", needs: "none",
+        text: `${where} went live, but ${build.others.replace(/^(\d+ other tests? failed|Other tests failed)/, (w) => w.charAt(0).toLowerCase() + w.slice(1))}. Nothing is broken on the page. Tell Luke, so the code gets fixed the next time he works on the site.` + (build.run ? ` Run: ${build.run}` : "") });
     } catch {}
   }));
   return found;
@@ -5344,10 +4009,9 @@ function cardNow(card, today) {
   return out;
 }
 /* ---------- L5 watchers (18 Nov 2026) ----------
-   RouteNote mail, Verse's release-day note, and Content ID claims. Nothing here sends email, changes an
+   RouteNote mail and Verse's release-day note. Nothing here sends email, changes an
    ad, or invents a status. The mailbox is not connected: the Google key only reads the sheet. */
 
-const CLAIMS_KEY = "claims.json";
 const MAIL_PHRASES = [
   ["action required", "rejected"], ["action needed", "rejected"], ["needs action", "rejected"],
   ["has been rejected", "rejected"], ["was rejected", "rejected"], ["release rejected", "rejected"], ["not approved", "rejected"],
@@ -5498,195 +4162,12 @@ export async function verseReleaseDay(store, now, roster) {
   return out;
 }
 
-/* One claim is one record: video id + claimant + type, with no date (19 Nov 2026). A daily check updates
-   last_checked and keeps the earliest first_seen. Older date-keyed rows for the same claim fold in. */
-export function claimStableKey(c) {
-  const video = (c && (c.video_id || ytIdOf(c.video))) || "";
-  const claimant = songKey((c && c.claimant) || "");
-  const type = songKey((c && c.claim_type) || "");
-  if (video) return `${video}|${claimant}|${type}`;
-  return `${songKey((c && c.claim) || "")}|${claimant}|${type}`;
-}
-export function mergeClaimItems(items) {
-  const list = Array.isArray(items) ? items : (items && Array.isArray(items.items) ? items.items : []);
-  const groups = new Map();
-  const order = [];
-  for (const c of list) {
-    if (!c || typeof c !== "object") continue;
-    const key = claimStableKey(c);
-    if (!groups.has(key)) { groups.set(key, []); order.push(key); }
-    groups.get(key).push(c);
-  }
-  return order.map((key) => {
-    const g = groups.get(key);
-    const byFirst = g.slice().sort((a, b) => String(a.first_seen || a.date || "").localeCompare(String(b.first_seen || b.date || "")));
-    const byLast = g.slice().sort((a, b) => String(a.last_checked || a.date || "").localeCompare(String(b.last_checked || b.date || "")));
-    const first = byFirst[0], last = byLast[byLast.length - 1];
-    const aliases = [...new Set(g.flatMap((x) => [x.key, ...(Array.isArray(x.aliases) ? x.aliases : [])]).filter((k) => k && k !== key))];
-    const out = {};
-    for (const x of byLast) for (const [k, v] of Object.entries(x)) {
-      if (v == null || String(v).trim() === "" || k === "key" || k === "aliases") continue;
-      out[k] = v;
-    }
-    out.key = key;
-    out.by = first.by || out.by || "";
-    out.at = first.at || out.at || "";
-    out.date = first.date || first.first_seen || "";
-    out.first_seen = first.first_seen || first.date || "";
-    out.last_checked = last.last_checked || last.date || first.date || "";
-    if (aliases.length) out.aliases = aliases;
-    return out;
-  });
-}
-/* Content ID claims. Laura records what YouTube showed. A blank claimant or impact stays blank: the page
-   says not reported. The same video, claimant and type is stored once. A later call fills a blank field. */
-function claimFields(a) {
-  const out = {};
-  const song = clean(a.song, 120);
-  if (song) out.song = song;
-  const video = a.video != null ? String(a.video).trim() : "";
-  if (video) {
-    if (/^https:\/\//i.test(video)) {
-      const l = httpsLink(video);
-      if (!l) fail("video must be an https link or a YouTube video id.");
-      out.video = l;
-    } else {
-      const id = ytIdOf(video);
-      if (!id) fail("video must be an https link or a YouTube video id.");
-      out.video_id = id;
-    }
-  }
-  if (a.video_id != null && String(a.video_id).trim() && !out.video_id) {
-    const id = ytIdOf(a.video_id);
-    if (!id) fail("video_id must be a YouTube video id.");
-    out.video_id = id;
-  }
-  for (const [k, max] of [["claim_type", 80], ["status", 40], ["reach_effect", 240], ["money_effect", 240], ["action", 240]]) {
-    const v = clean(a[k], max);
-    if (v) out[k] = v;
-  }
-  if (a.strike != null && String(a.strike).trim()) {
-    const s = low(a.strike);
-    if (s !== "yes" && s !== "no") fail("strike must be yes or no, as YouTube showed.");
-    out.strike = s;
-  }
-  const owner = clean(a.owner, 40);
-  if (owner) out.owner = owner;
-  return out;
-}
-export async function recordContentClaim(store, now, roster, a) {
-  const by = whoIs(a.by, roster, { people: true });
-  if (!["Laura", "Nova", "Claude", "Luke"].includes(by)) fail("Content ID claims are Laura's to record (Nova may record one for her). Nothing was saved.", "not_allowed");
-  const claim = clean(a.claim, 200);
-  if (claim.length < 2) fail("claim is the claim YouTube showed, in a few words. Nothing was saved.");
-  const date = clean(a.date, 10);
-  if (!isDay(date)) fail("date is the day YouTube showed the claim, YYYY-MM-DD. Nothing was saved.");
-  if (date > spDay(now)) fail("That day is still in the future. Nothing was saved.");
-  const claimant = a.claimant != null && String(a.claimant).trim() ? clean(a.claimant, 120) : "";
-  const impact = a.impact != null && String(a.impact).trim() ? clean(a.impact, 240) : "";
-  const more = claimFields(a);
-  noSecrets(claim, claimant, impact, more.song || "", more.action || "", more.reach_effect || "", more.money_effect || "");
-  const key = claimStableKey({ claim, claimant, ...more });
-  const today = spDay(now);
-  return mutate(store, CLAIMS_KEY, { items: [], checked: {} }, (doc) => {
-    const checked = doc && doc.checked && typeof doc.checked === "object" ? doc.checked : {};
-    if (!doc || typeof doc !== "object" || Array.isArray(doc)) return { replace: { items: [], checked }, value: { saved: false, duplicate: false } };
-    const items = mergeClaimItems(doc.items);
-    const prev = items.find((x) => {
-      if (!x) return false;
-      if (x.key === key || (x.aliases || []).includes(key)) return true;
-      if (songKey(x.claim) !== songKey(claim) || songKey(x.claimant || "") !== songKey(claimant)) return false;
-      const theirs = songKey(x.claim_type || ""), ours = songKey(more.claim_type || "");
-      return !ours || !theirs || ours === theirs;
-    });
-    if (prev) {
-      const filled = [];
-      for (const [k, v] of Object.entries({ claimant, impact, ...more })) {
-        if (!v) continue;
-        if (prev[k] == null || prev[k] === "") { prev[k] = v; filled.push(k); }
-      }
-      if (date < (prev.first_seen || prev.date || date)) { prev.first_seen = date; prev.date = date; filled.push("first_seen"); }
-      const moved = prev.last_checked !== today;
-      const nextKey = claimStableKey({ ...prev, claim, claimant, ...more });
-      if (nextKey !== prev.key) {
-        prev.aliases = [...new Set([...(prev.aliases || []), prev.key])].filter((k) => k && k !== nextKey);
-        prev.key = nextKey;
-        filled.push("key");
-      }
-      if (!filled.length && !moved && items.length === (doc.items || []).length) return { skip: true, value: { saved: false, duplicate: true, item: prev } };
-      prev.last_checked = today;
-      doc.items = items;
-      return { value: { saved: true, duplicate: false, updated: true, item: prev } };
-    }
-    const item = { key, claim, claimant, impact, date, by, at: new Date(now).toISOString(), first_seen: date, last_checked: today, owner: more.owner || "Laura", ...more };
-    doc.items = [item, ...items].slice(0, 80);
-    if (!doc.checked) doc.checked = checked;
-    return { value: { saved: true, duplicate: false, item } };
-  });
-}
-/* Laura's daily claims checklist. It does not invent a claim and it does not mark one resolved. */
-export async function markClaimsChecked(store, now, roster, a) {
-  const by = whoIs(a.by, roster, { people: true });
-  if (!["Laura", "Nova", "Claude", "Luke"].includes(by)) fail("The claims checklist is Laura's. Nothing was saved.", "not_allowed");
-  const day = spDay(now);
-  return mutate(store, CLAIMS_KEY, { items: [], checked: {} }, (doc) => {
-    const items = mergeClaimItems(doc && Array.isArray(doc.items) ? doc.items : []);
-    const checked = doc && doc.checked && typeof doc.checked === "object" && !Array.isArray(doc.checked) ? doc.checked : {};
-    checked[day] = { by, at: new Date(now).toISOString() };
-    return { replace: { items, checked }, value: { saved: true, day, by, at: checked[day].at } };
-  });
-}
-async function retargetClaimCases(store, items) {
-  const map = new Map();
-  for (const c of items || []) for (const a of c.aliases || []) if (a && a !== c.key) map.set(a, c.key);
-  if (!map.size) return;
-  await mutate(store, CASES_KEY, { items: [] }, (doc) => {
-    const list = doc && Array.isArray(doc.items) ? doc.items : [];
-    let n = 0;
-    for (const c of list) if (c && map.has(c.claimId)) { c.claimId = map.get(c.claimId); n++; }
-    return n ? { value: n } : { skip: true, value: 0 };
-  });
-}
-const nrClaim = (v) => (v != null && String(v).trim() !== "" ? v : "not reported");
-/* a date baked into the claim id is not the day the claim was first seen */
-export function claimFirstSeen(c) {
-  const idDay = (String(c && c.key || "").match(/(20\d{2}-\d{2}-\d{2})/) || [])[1] || "";
-  if (c && c.first_seen && c.first_seen !== idDay) return c.first_seen;
-  if (c && c.first_seen && !idDay) return c.first_seen;
-  if (c && !c.first_seen && c.date && c.date !== idDay) return c.date;
-  return "";
-}
-export async function readClaims(store, now) {
-  const { data } = await readDoc(store, CLAIMS_KEY, { items: [], checked: {} });
-  const raw = data && Array.isArray(data.items) ? data.items : [];
-  const items = mergeClaimItems(raw);
-  if (JSON.stringify(items) !== JSON.stringify(raw)) {
-    const checked0 = data && data.checked && typeof data.checked === "object" ? data.checked : {};
-    await mutate(store, CLAIMS_KEY, { items: [], checked: {} }, () => ({ replace: { items, checked: checked0 }, value: true }));
-  }
-  await retargetClaimCases(store, items);
-  const checked = data && data.checked && typeof data.checked === "object" ? data.checked : {};
-  const day = spDay(now), today = checked[day] || null;
-  return {
-    read_only: true, wrote: false, day,
-    checked_today: !!today, checked_by: today ? today.by : "not reported", checked_at: today ? today.at : "not reported",
-    claims: items.map((c) => ({
-      id: c.key || "",
-      song: nrClaim(c.song), claim: c.claim || "not reported", claimant: nrClaim(c.claimant),
-      video: nrClaim(c.video || c.video_id), claim_type: nrClaim(c.claim_type), status: nrClaim(c.status),
-      reach_effect: nrClaim(c.reach_effect || c.impact), money_effect: nrClaim(c.money_effect),
-      strike: nrClaim(c.strike), action: nrClaim(c.action), owner: nrClaim(c.owner),
-      first_seen: nrClaim(claimFirstSeen(c)), last_checked: nrClaim(c.last_checked),
-      date: c.date || "not reported", impact: nrClaim(c.impact),
-    })),
-    note: "Read only. A missing field is not reported, not zero. id is the claim id: pass it as claim_id to open_case to escalate that claim into a dispute. Laura marks the day with log_growth, claims_checked true. HQ never invents a claim.",
-  };
-}
+/* Content ID claims and the Rights page were removed on 24 Nov 2026 (Luke: "fully remove the rights section
+   totally unnecessary"). claims.json is left as it was; nothing reads it now. */
 
 /* ---------- Disputes (19 Nov 2026) ----------
    Bots run the case (RouteNote moderation, Content ID, a takedown, a distributor, a copyright dispute).
-   Luke is the only one who decides. A bot cannot write his decision. A Content ID claim is escalated
-   by its id (claims.json key); the Rights page keeps the claim and links to the case. */
+   Luke is the only one who decides. A bot cannot write his decision. */
 const CASES_KEY = "disputes.json";
 export const CASE_STATUS = ["open", "waiting on them", "waiting on Luke", "waiting on bot", "solved - confirm", "resolved", "ignored"];
 const CASE_TYPES = {
@@ -5765,7 +4246,7 @@ export function caseOut(c) {
     id: c.id, song: stripSecure(c.song || ""), songKey: c.songKey || songKey(c.song), platform: stripSecure(c.platform || ""), type: stripSecure(c.type || ""),
     opened: c.opened || "", owner: stripSecure(c.owner || ""), status: c.status || "open",
     waitingOn: closed ? "" : waitingName(c.waitingOn || ""), waitingSince: closed ? "" : (c.waitingSince || ""), nextCheck: closed ? "" : (c.nextCheck || ""),
-    claimId: c.claimId || "", recommendation: stripSecure(c.recommendation || ""), proposal: stripSecure(c.proposal || ""),
+    recommendation: stripSecure(c.recommendation || ""), proposal: stripSecure(c.proposal || ""),
     /* 23 Nov 2026 (Luke: "kind of unclear what the issue is"; "say what exactly was resolved"): the issue in one
        sentence, and how it ended once it is closed */
     issue: stripSecure(c.issue || ""), outcome: stripSecure(c.outcome || ""), closedAt: closed ? (c.closedAt || c.updatedAt || "") : "",
@@ -5792,20 +4273,11 @@ export async function openCase(store, now, roster, a) {
   let owner = a.owner != null && String(a.owner).trim() ? whoIs(a.owner, roster) : (PEOPLE.includes(by) ? "" : by);
   if (!owner) fail("owner is the bot who carries this case. Nothing was saved.");
   if (owner !== by && !caseManagers(by)) fail(`That case would be ${owner}'s. Only ${owner} (or Nova) opens it. Nothing was saved.`, "not_allowed");
-  let claimId = a.claim_id != null && String(a.claim_id).trim() ? clean(a.claim_id, 200) : "";
-  let claim = null;
-  if (claimId) {
-    const { data } = await readDoc(store, CLAIMS_KEY, { items: [] });
-    const items = mergeClaimItems(data && data.items);
-    claim = items.find((c) => c && (c.key === claimId || (c.aliases || []).includes(claimId))) || null;
-    if (claim) claimId = claim.key;
-    if (!claim) fail("No Content ID claim has that id. Read them with read_claims, then pass that id as claim_id. Nothing was opened.");
-  }
-  const song = clean(a.song, 120) || (claim && clean(claim.song, 120)) || "";
+  const song = clean(a.song, 120);
   if (song.length < 2) fail("song is the song's title. Nothing was saved.");
-  const platform = clean(a.platform, 60) || (claim ? "YouTube" : "");
+  const platform = clean(a.platform, 60);
   if (platform.length < 2) fail("platform is who the case is with, for example RouteNote, YouTube or Spotify. Nothing was saved.");
-  const type = a.type != null && String(a.type).trim() ? caseTypeOf(a.type) : (claim ? "Content ID claim" : "");
+  const type = a.type != null && String(a.type).trim() ? caseTypeOf(a.type) : "";
   if (!type) fail("type must be moderation, Content ID claim, dispute, takedown or other. Nothing was saved.");
   const opened = a.opened != null && String(a.opened).trim() ? clean(a.opened, 10) : spDay(now);
   if (!caseDay(opened)) fail("opened is the day the case started, YYYY-MM-DD. Nothing was saved.");
@@ -5823,14 +4295,10 @@ export async function openCase(store, now, roster, a) {
   const at = new Date(now).toISOString();
   return mutate(store, CASES_KEY, { items: [] }, (doc) => {
     const items = doc && Array.isArray(doc.items) ? doc.items : [];
-    if (claimId) {
-      const prev = items.find((x) => x && x.claimId === claimId && x.status !== "resolved" && x.status !== "ignored");
-      if (prev) return { skip: true, value: { saved: false, duplicate: true, item: prev } };
-    }
     const item = {
       id: newId("d", now), song, songKey: songKey(song), platform, type, opened, owner, status,
       waitingOn, waitingSince: waitingOn || status.startsWith("waiting") ? at : "", nextCheck,
-      claimId, recommendation, proposal, issue, outcome: "", decision: null, timeline: [],
+      recommendation, proposal, issue, outcome: "", decision: null, timeline: [],
       createdAt: at, createdBy: by, updatedAt: at,
     };
     caseTimeline(item, now, by, entry || `Opened. ${type} with ${platform}.`);
@@ -6167,11 +4635,10 @@ export async function saveContentIdeas(store, now, a) {
 
 export async function loadDesk(store, now) {
   const [roster, updates, messages, cardsDoc, config, releases, sightings] = await Promise.all([getRoster(store), listUpdates(store, now, 3), listMessages(store, now, 2), readDoc(store, "cards.json", {}), getConfig(store), listReleases(store), getSightings(store)]);
-  const [seen, read, income, closesDoc, profiles, claimsDoc, ideasDoc, disputesDoc, doneDoc] = await Promise.all([getSeen(store, roster), getRead(store, roster), incomeState(store, now), readDoc(store, "closes.json", []), getProfiles(store), readDoc(store, CLAIMS_KEY, { items: [] }), readDoc(store, IDEAS_KEY, {}), readDoc(store, CASES_KEY, { items: [] }), readDoc(store, NEED_DONE_KEY, { marks: {} })]);
-  const claims = claimsDoc.data && Array.isArray(claimsDoc.data.items) ? { items: claimsDoc.data.items, checked: claimsDoc.data.checked && typeof claimsDoc.data.checked === "object" ? claimsDoc.data.checked : {} } : { items: [], checked: {} };
+  const [seen, read, profiles, ideasDoc, disputesDoc, doneDoc] = await Promise.all([getSeen(store, roster), getRead(store, roster), getProfiles(store), readDoc(store, IDEAS_KEY, {}), readDoc(store, CASES_KEY, { items: [] }), readDoc(store, NEED_DONE_KEY, { marks: {} })]);
   const disputes = disputesDoc.data && Array.isArray(disputesDoc.data.items) ? disputesDoc.data.items : [];
   const needsDone = doneDoc.data && doneDoc.data.marks && typeof doneDoc.data.marks === "object" ? { marks: doneDoc.data.marks } : { marks: {} };
-  return { roster, updates, messages, cards: cardsDoc.data || {}, seen, read, income, config, releases, sightings, closes: Array.isArray(closesDoc.data) ? closesDoc.data : [], profiles, claims, disputes, contentIdeas: ideasDoc.data || {}, needsDone };
+  return { roster, updates, messages, cards: cardsDoc.data || {}, seen, read, config, releases, sightings, profiles, disputes, contentIdeas: ideasDoc.data || {}, needsDone };
 }
 
 /* Has the person a message was sent to READ it? (V6, 11 Nov 2026: from the read markers, read/<name>,
@@ -6544,11 +5011,8 @@ export function board(desk, now, hq) {
     profiles: profilesView(desk.profiles || {}, desk.messages || []), /* L12 */
     sightings: sightingsView(desk.sightings || null, desk.releases || [], today, now),
     waiting: { luke: waitingOn(desk.messages, "Luke"), claude: waitingOn(desk.messages, "Claude"), bots: desk.messages.filter((m) => isOpen(m) && !PEOPLE.includes(m.to)).length },
-    income: desk.income,
-    closes: desk.closes || [], /* A7, 17 Nov 2026: the closed months (closes.json) */
-    /* L5: RouteNote's inbox is not connected until Luke signs it in. Claims are only what Laura recorded. */
+    /* L5: RouteNote's inbox is not connected until Luke signs it in. */
     mail: routeNoteMailSource(),
-    claims: desk.claims && Array.isArray(desk.claims.items) ? { items: desk.claims.items.slice(0, 80), checked: desk.claims.checked && typeof desk.claims.checked === "object" ? desk.claims.checked : {} } : { items: [], checked: {} },
     disputes: { items: (Array.isArray(desk.disputes) ? desk.disputes : []).slice(0, 80).map(caseOut) },
     contentIdeas: contentIdeasView(desk.contentIdeas),
     connector: { botsOn: desk.config.botsOn, changedAt: desk.config.changedAt, lastUsed: lastSeen ? { bot: lastSeen[0], at: lastSeen[1].at, tool: lastSeen[1].tool } : null,
@@ -6590,11 +5054,7 @@ export function checkReport({ desk, hq, hqState, now }) {
   const never = b.staff.filter((w) => !w.connected).map((w) => w.name);
   if (never.length && never.length < b.staff.length) problems.push(`Never used the connector: ${never.join(", ")}`);
   if (never.length === b.staff.length) problems.push("No bot has used the connector yet");
-  /* 2. money in */
-  const inc = b.income;
-  const cur = (o) => Object.entries(o).map(([c, a]) => `${c} ${a.toFixed(2)}`).join(" + ") || "nothing yet";
-  lines.push(`Income received this month: ${cur(inc.received)}`); /* received only (Luke, 16 Nov 2026) */
-  for (const p of inc.problems) problems.push("Income: " + p);
+  /* 2. money in: gone (24 Nov 2026, Luke: "fully remove the money section"). Ad spend is still checked below. */
   /* 3. messages waiting */
   const age = (m) => Math.floor((now - Date.parse(m.at)) / 3600000);
   if (b.waiting.luke.length) problems.push(`${b.waiting.luke.length} waiting on Luke (oldest ${age(b.waiting.luke[0])} h): "${b.waiting.luke[0].text.slice(0, 90)}"`);

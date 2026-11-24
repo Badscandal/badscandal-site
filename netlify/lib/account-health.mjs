@@ -84,7 +84,7 @@ function refuse(by, platform, who) {
   throw new S.StaffError(`${ACCOUNTS.find((a) => a.id === platform).label} checks of this kind are recorded by ${who}. Nothing was saved.`, "not_allowed");
 }
 
-/* One status-page check, or a warning Atlas or Drop actually saw. A claim stays on recordContentClaim. */
+/* One status-page check, or a warning Atlas or Drop actually saw. */
 export async function recordAccountCheck(store, now, roster, a) {
   const by = S.whoIs(a.by || a.bot, roster, { people: true });
   const platform = platformId(a.platform);
@@ -409,30 +409,8 @@ function monetisationSignal(reading, today) {
   return sig("monetisation", "red", `Monetisation was recorded off, on ${reading.date}.`, source, reading.date);
 }
 
-function claimSignals(claims, today) {
-  const folded = S.mergeClaimItems(claims);
-  const list = folded.filter((c) => {
-    if (!c || !c.claim) return false;
-    const when = isDay(c.last_checked) ? c.last_checked : c.date;
-    return isDay(when) && daysBetween(when, today) >= 0 && daysBetween(when, today) <= 90;
-  });
-  if (!list.length) return [gap("claims", "no Content ID claim has been recorded in the last 90 days. That does not mean there is none. Laura records one when YouTube shows one.", "Content ID claims on the desk")];
-  return list.map((c) => {
-    const blob = [c.impact, c.status, c.reach_effect, c.money_effect].filter(Boolean).join(" ");
-    const hard = String(c.strike || "").toLowerCase() === "yes" || /block|mute|removed|ineligible|restrict|taken down|age-restrict|strike/i.test(blob);
-    const quiet = /no impact|no reach|no money|^none$/i.test(String(c.impact || ""));
-    const own = /our label|own label|our own label/i.test(String(c.claimant || ""));
-    const costs = /money|reach|demonet|lost|copyright strike/i.test(blob) && !quiet;
-    const level = hard ? "red" : ((quiet || own) && !costs ? "ok" : "watch");
-    const who = c.claimant ? c.claimant : "not reported";
-    const impact = c.impact ? c.impact : "not reported";
-    const seen = c.first_seen && c.first_seen !== c.date ? `, first seen ${c.first_seen}` : "";
-    return sig("claim:" + (c.key || c.date + ":" + c.claim), level,
-      `Content ID claim recorded by ${c.by || "Laura"} on ${c.last_checked || c.date}${seen}: "${c.claim}". Claimant: ${who}. Impact: ${impact}.`,
-      "Content ID claims on the desk", c.at || c.date);
-  });
-}
-
+/* Content ID claims were removed with the Rights page (24 Nov 2026, Luke). YouTube's dot is Account Status
+   and monetisation. */
 function listenerSignal(rows) {
   const list = (rows || []).filter((r) => r && isDay(r.date) && num(r.monthly_listeners) != null).sort((a, b) => (a.date < b.date ? -1 : 1));
   const by = new Map();
@@ -459,11 +437,10 @@ const NEXT = {
   listeners: "Open Spotify for Artists and record the listeners and any warning on the screen. Do not buy streams.",
   moved: "Open Spotify for Artists and confirm which profile the track is on. Tell Luke what you see. Do not move it from here.",
   artificial: "Open the artificial-streams warning and record the exact line. Do not buy streams. Luke decides any reply.",
-  claim: "Open the Content ID claim and record who claimed it and the impact, if YouTube shows them. Do not delete the video and do not appeal from here.",
   site: "Open badscandal.com and record what the page shows, and the time. Do not change DNS or passwords from here.",
 };
 function nextFor(signals) {
-  const rank = ["status", "artificial", "moved", "reach", "visibility", "listeners", "claim", "non_follower", "followers", "site", "builds"];
+  const rank = ["status", "artificial", "moved", "reach", "visibility", "listeners", "non_follower", "followers", "site", "builds"];
   const reds = (signals || []).filter((s) => s.level === "red");
   if (!reds.length) return "";
   reds.sort((a, b) => rank.indexOf(a.id.split(":")[0]) - rank.indexOf(b.id.split(":")[0]));
@@ -482,23 +459,18 @@ function guidanceFor(state, signals) {
 }
 /* v18, 21 Nov 2026 (Spark: TikTok "Not enough data." said nothing): what is missing, in words */
 const GAP_WORDS = { status: "Account Status", reach: "post views", followers: "follower changes", non_follower: "non-follower share", visibility: "a visibility check",
-  listeners: "monthly listeners", monetisation: "monetisation", site: "a site check", claims: "a Content ID check" };
+  listeners: "monthly listeners", monetisation: "monetisation", site: "a site check" };
 function gapHeadline(list) {
   const words = [...new Set(list.filter((s) => s.level === "gap").map((s) => GAP_WORDS[String(s.id).split(":")[0]]).filter(Boolean))];
   return words.length ? `Not enough data: no ${words.join(", ")} recorded.` : "Not enough data.";
-}
-/* an open Content ID claim is named on the headline even when it costs nothing (v18, 21 Nov 2026, Spark) */
-function claimNote(list) {
-  const open = list.filter((s) => String(s.id).startsWith("claim:") && s.level === "ok");
-  return open.length ? ` ${open.length} Content ID claim${open.length === 1 ? "" : "s"} open, no impact recorded.` : "";
 }
 function judge(signals) {
   const list = signals.filter(Boolean);
   const state = list.some((s) => s.level === "red") ? "red" : list.some((s) => s.level === "watch") ? "watch" : list.some((s) => s.level === "ok") ? "green" : "gap";
   const known = list.some((s) => s.level === "ok" || s.level === "watch" || s.level === "red");
-  const top = list.find((s) => s.level === "red") || list.find((s) => s.level === "watch") || list.find((s) => s.level === "ok" && !String(s.id).startsWith("claim:")) || list.find((s) => s.level === "ok") || list[0] || { text: "Not enough data." };
+  const top = list.find((s) => s.level === "red") || list.find((s) => s.level === "watch") || list.find((s) => s.level === "ok") || list[0] || { text: "Not enough data." };
   return { state, known: state === "green" ? true : known, signals: list, next: state === "red" ? nextFor(list) : "", guidance: guidanceFor(state, list),
-    headline: state === "gap" ? gapHeadline(list) : state === "green" ? top.text + (String(top.id || "").startsWith("claim:") ? "" : claimNote(list)) : top.text };
+    headline: state === "gap" ? gapHeadline(list) : top.text };
 }
 
 function latestReading(checks, platform, field) {
@@ -600,7 +572,6 @@ export function evaluate(input) {
   const growth = input && input.growth || [];
   const checks = input && input.checks || [];
   const igPosts = input && input.igUnread ? null : (input && input.igPosts || []);
-  const claims = input && input.claims || [];
   const builds = input && input.builds || [];
   const accounts = ACCOUNTS.map((a) => {
     const id = a.id;
@@ -614,9 +585,8 @@ export function evaluate(input) {
       if (bad.length) signals.push(sig("builds", "watch", bad.slice(0, 3).map((b) => `${b.what || "A song page"}: ${b.state}`).join(" "), "song page builds already on the desk", bad[0].asked || ""));
       else if ((builds || []).some((b) => b && b.state === "live")) signals.push(sig("builds", "ok", "The latest song-page record on the desk is live.", "song page builds already on the desk", ""));
     } else if (id === "youtube") {
-      /* Studio only: Account Status (strikes), Content ID claims, monetisation. Not post-engagement medians. */
+      /* Studio only: Account Status (strikes) and monetisation. Not post-engagement medians. */
       signals.push(statusSignal(latestReading(checks, id, "account_status"), today));
-      signals.push(...claimSignals(claims, today));
       signals.push(monetisationSignal(latestReading(checks, id, "monetisation"), today));
     } else {
       const g = growthRows(growth, id);
@@ -698,7 +668,7 @@ export async function deliverHealth(store, now, roster, report, prev) {
   return { sent, snapshot: next };
 }
 
-export async function loadReport({ store, ig, now, claims, builds, igUnread }) {
+export async function loadReport({ store, ig, now, builds, igUnread }) {
   const growth = await S.listGrowth(store, now, 3);
   const checks = await listChecks(store);
   let igPosts = [], igState = null, unread = !!igUnread;
@@ -709,14 +679,13 @@ export async function loadReport({ store, ig, now, claims, builds, igUnread }) {
     } catch { unread = true; igPosts = []; }
     try { igState = await ig.get("state.json", { type: "json" }); } catch { igState = null; }
   }
-  const claimItems = Array.isArray(claims) ? claims : (claims && claims.items) || [];
-  return evaluate({ now, growth, checks, igPosts, igUnread: unread, igState, claims: claimItems, builds: builds || [] });
+  return evaluate({ now, growth, checks, igPosts, igUnread: unread, igState, builds: builds || [] });
 }
 
 export async function runAccountHealth({ desk, ig, now, roster, builds }) {
   const loaded = await S.loadDesk(desk, now);
   const pages = builds != null ? builds : await S.songPages(desk, now).catch(() => []);
-  const report = await loadReport({ store: desk, ig, now, claims: loaded.claims, builds: pages });
+  const report = await loadReport({ store: desk, ig, now, builds: pages });
   const prevDoc = await S.readDoc(desk, LAST_KEY, null);
   const prev = prevDoc.data && prevDoc.data.accounts ? prevDoc.data : null;
   const delivered = await deliverHealth(desk, now, roster || loaded.roster, report, prev);
@@ -747,5 +716,5 @@ export function sampleReport(now) {
     { type: "reading", platform: "site", date: day(0), by: "Webmaster", at: day(0), site_ok: "yes" },
   ];
   /* the made-up Instagram posts share one engagement rate, so the sample stays green */
-  return evaluate({ now, growth, checks, igPosts, igState: { lastOkAt: now - 3600000, errorKind: "", pausedUntil: now + DAY_MS }, claims: [], builds: [{ what: "new page: Sample Song", state: "live" }] });
+  return evaluate({ now, growth, checks, igPosts, igState: { lastOkAt: now - 3600000, errorKind: "", pausedUntil: now + DAY_MS }, builds: [{ what: "new page: Sample Song", state: "live" }] });
 }

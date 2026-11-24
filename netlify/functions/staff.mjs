@@ -3,16 +3,15 @@
 
      POST /mcp                 the connector the bots add in their app ("Remote HTTPS", one header:
                                Authorization: Bearer <key>). Claude Code connects the same way.
-     GET  /api/staff/board     everything /hq shows about the team, the messages and the money in
+     GET  /api/staff/board     everything /hq shows about the team and the messages (no money since 24 Nov 2026)
      POST /api/staff/message   Luke (or Claude) writes on the board        { to, text, needs, re, options, note }
                                (-> settled: did the answer close the message it answers; note = Luke's pick)
      POST /api/staff/resolve   …or settles a message                        { id, note }
-     POST /api/staff/sort      Luke (or Claude) says what a Revolut payment is { id, month, status: received|transfer, category, pending_id? }
      POST /api/staff/config    Luke switches the bots' key off / on         { botsOn }
      POST /api/staff/card      Luke answers an action card                  { id, choice: yes|no|edit, text? }
      POST /api/staff/case      Luke decides a dispute case                   { id, choice: confirm|ignore|respond, text? }
      POST /api/staff/auto      Luke only: taps count as his yes, or one bot's webhook { tapsCountAsYes?, webhook?: { bot, url } }
-     PUT  /api/staff/seed      Claude loads the roster, the income sources and the guide
+     PUT  /api/staff/seed      Claude loads the roster and the guide (income sources: ignored since 24 Nov 2026)
      POST /api/staff/release         a release pack: start a draft or change one { id?, title, date, pack }
      POST /api/staff/release/send    …send it to the team (steps get dates)       { id }
      POST /api/staff/release/date    …move its release day                         { id, date }
@@ -198,14 +197,7 @@ async function api(req, context, path) {
   const now = Date.now();
   const me = role === "luke" ? "Luke" : "Claude";
 
-  /* A7 (17 Nov 2026): a closed month as a CSV: the snapshot, then every change since (Luke or Claude) */
-  if (path === "month-close.csv" && req.method === "GET") {
-    if (sample) return new Response("This is the sample: there is no closed month.\n", { status: 404, headers: { "content-type": "text/plain; charset=utf-8", "cache-control": "no-store" } });
-    const m = String(url.searchParams.get("month") || "");
-    const v = /^\d{4}-\d{2}$/.test(m) ? await S.monthCloseView(stores(context).desk, now, m) : null;
-    if (!v) return json(404, { error: "That month has not been closed." });
-    return new Response(S.closeCsv(v), { status: 200, headers: { "content-type": "text/csv; charset=utf-8", "content-disposition": `attachment; filename="income-${m}-closed.csv"`, "cache-control": "no-store", "x-content-type-options": "nosniff" } });
-  }
+  /* 24 Nov 2026, Luke: "lets fully remove the money section". GET month-close.csv and POST sort are gone. */
   if (path === "fields" && req.method === "GET") return json(200, { today: S.spDay(now), packFields: S.packFieldsOut(), releaseSteps: S.releaseStepsOut() });
   if (path === "board" && req.method === "GET") {
     if (sample) return json(200, { sample: true, ...sampleBoard(now), auto: C.sampleAuto(now), accountHealth: sampleReport(now), needs: C.needsCount(await sampleNeedsDesk(now), S.spDay(now), now) });
@@ -220,7 +212,7 @@ async function api(req, context, path) {
     const pageBuilds = await S.songPages(st.desk, now).catch(() => []);
     const auto = await C.boardAuto(st.desk, now, desk).catch(() => null);
     /* account health reads the desk and the stored Instagram copy. A failure here must not blank the board. */
-    const accountHealth = await loadReport({ store: st.desk, ig: igStore(context), now, claims: desk.claims, builds: pageBuilds }).catch(() => null);
+    const accountHealth = await loadReport({ store: st.desk, ig: igStore(context), now, builds: pageBuilds }).catch(() => null);
     /* the ONE Needs you count (C.needsCount): the phone's line and the needs_you tool say the same number */
     const counted = await needsDesk(st.desk, now, { desk, auto, report: accountHealth, ig: igStore(context) });
     const cap = hqAns && hqAns.money && hqAns.money.cap;
@@ -284,8 +276,6 @@ async function api(req, context, path) {
       const r = await S.answerSighting(st.desk, now, roster, { by: me, key: a.key, answer: a.answer, label: a.label, note: a.note, id: a.id });
       return json(200, { ok: true, answer: r.answer, release: r.release ? S.releaseView(r.release, S.spDay(now), { sightings: r.sightings }) : null, told: !!(r.told || r.sending), sightings: r.sightings });
     }
-    if (path === "sort" && req.method === "POST")
-      return json(200, { ok: true, entry: await S.sortIncome(st.desk, now, roster, { by: me, id: a.id, month: a.month, status: a.status, category: a.category, pending_id: a.pending_id }) });
     if (path === "config" && req.method === "POST") {
       if (role !== "luke") return json(403, { error: "Only Luke switches the bots' key" });
       return json(200, { ok: true, config: await S.setConfig(st.desk, now, { botsOn: a.botsOn }) });
@@ -315,7 +305,7 @@ async function api(req, context, path) {
     if (path === "seed" && req.method === "PUT") {
       const done = [];
       if (a.roster) { await S.setRoster(st.desk, a.roster); done.push("roster"); }
-      if (a.sources) { await S.setSources(st.desk, a.sources); done.push("sources"); }
+      /* a seed's income sources are ignored since 24 Nov 2026 (money is no longer on HQ); the stored list is not touched */
       if (typeof a.guide === "string") { await S.setGuide(st.desk, now, a.guide); done.push("guide"); }
       return json(200, { ok: true, done });
     }

@@ -170,30 +170,6 @@ test("lyrics Luke says yes to in a proposal are the approved lyrics", async () =
 });
 
 /* ---------- received only (Luke) ---------- */
-test("money: only what is received is income; payable and pending are never added to it", async () => {
-  const d = memoryDesk();
-  /* 18 Nov 2026: the received payment lands in Revolut. PayPal is not income until it does. */
-  const sub = (o) => S.submitIncome(d, NOW, R, { bot: "Ledger", date: "2026-11-10", currency: "USD", category: "Self-releases", account: "Revolut", ...o });
-  await sub({ payer: "Sample Distro", amount: "100", status: "received" });
-  await sub({ payer: "Sample Collecting", amount: "200", status: "payable", account: "Statement only" });
-  await sub({ payer: "Sample Label", amount: "300", status: "pending", account: "Statement only" });
-  const st = await call(d, "income_status", { bot: "Ledger" });
-  assert.equal(st.received_this_month, "USD 100.00");
-  assert.equal(st.pending_this_month, "USD 300.00", "pending only: the payable is not in it twice");
-  assert.equal(st.payable_this_month, "USD 200.00");
-  assert.match(st.not_income_yet, /never added to income/);
-  assert.ok(Array.isArray(st.duplicates));
-  assert.deepEqual(st.received_this_year, "USD 100.00");
-  /* Luke's page: Received, and the music's own share; nothing owed */
-  const b = await S.board(await S.loadDesk(d, NOW), NOW, null);
-  assert.deepEqual(L.incomeTotals(b.income).map((t) => t.label), ["Received"]); /* one total (16 Nov 2026) */
-  assert.equal(L.payStatus({ status: "payable", by: "Ledger" }).counted, false);
-  /* the short briefing and the site check: received only */
-  const sb = await call(d, "luke_short_briefing", { bot: "Alfred" });
-  assert.match(sb.income, /^Received USD 100\.00/);
-  assert.doesNotMatch(sb.income, /owed|pending|payable/i);
-  assert.doesNotMatch(S.checkReport({ desk: await S.loadDesk(d, NOW), hq: null, hqState: null, now: NOW }).text, /pending/i);
-});
 
 /* ---------- my_day, task_update, the short briefing ---------- */
 test("my_day: your last update even when the shared log is full of everyone else's", async () => {

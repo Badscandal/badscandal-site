@@ -10,10 +10,10 @@
 import { fetchMonthAverage } from "./fx.mjs";
 import { readTabs } from "./gsheets.mjs";
 import { hqModel, HQ_TABS } from "./hq.mjs";
-import { sampleMeta, sampleSheets, samplePLPayments } from "./hq-sample.mjs";
+import { sampleMeta, sampleSheets } from "./hq-sample.mjs";
 import { EXPIRED_CODE, keyHealth, readKeyHealth, readMeta } from "./metaread.mjs";
 import { DEFAULT_ACCOUNT } from "./metaspend.mjs";
-import { dutyOverlay, getSightings, getTaskOverlay, listGrowth, listPLPayments, listReleases, listSpend, listUpdates, releaseView, spDay, spHM } from "./staff.mjs";
+import { dutyOverlay, getSightings, getTaskOverlay, listGrowth, listReleases, listSpend, listUpdates, releaseView, spDay, spHM } from "./staff.mjs";
 import { sampleReleases, sampleSightings } from "./staff-sample.mjs";
 
 /* the sheet is read at most every 2 minutes so the bots' live updates show quickly; one batch read
@@ -60,7 +60,7 @@ async function metaForHq(cache, today, env) {
 
 const monthsIn = (sheets, today) => {
   const set = new Set([today.slice(0, 7)]);
-  for (const tab of ["Spend", "Income", "Royalties"]) for (const r of (sheets[tab] || []).slice(1)) {
+  for (const tab of ["Spend"]) for (const r of (sheets[tab] || []).slice(1)) {
     const m = String(r[0] || "").slice(0, 7);
     if (/^\d{4}-\d{2}$/.test(m)) set.add(m);
   }
@@ -75,10 +75,10 @@ const live = (list, today, sightings) => list.filter((r) => r && r.status !== "c
 async function staffSide(desk, now) {
   if (!desk) return null;
   try {
-    const [updates, releases, sightings, taskOverlay, spend, growth, plPayments] = await Promise.all([listUpdates(desk, now, 3), listReleases(desk).catch(() => []), getSightings(desk).catch(() => undefined), getTaskOverlay(desk).catch(() => null),
-      listSpend(desk, now).catch(() => []), listGrowth(desk, now).catch(() => []), listPLPayments(desk, now).catch(() => null)]);
+    const [updates, releases, sightings, taskOverlay, spend, growth] = await Promise.all([listUpdates(desk, now, 3), listReleases(desk).catch(() => []), getSightings(desk).catch(() => undefined), getTaskOverlay(desk).catch(() => null),
+      listSpend(desk, now).catch(() => []), listGrowth(desk, now).catch(() => [])]);
     /* undefined = the report could not be read: the sheet's late pitch is then left as the sheet says */
-    return { updates, overlay: dutyOverlay(updates, spDay(now)), taskOverlay, releases: live(releases, spDay(now), sightings || null), now, spend, growth, ...(plPayments ? { plPayments } : {}), ...(sightings === undefined ? {} : { sightings }) };
+    return { updates, overlay: dutyOverlay(updates, spDay(now)), taskOverlay, releases: live(releases, spDay(now), sightings || null), now, spend, growth, ...(sightings === undefined ? {} : { sightings }) };
   } catch { return null; }
 }
 
@@ -90,7 +90,7 @@ export async function loadHq({ cache, desk = null, env, now = Date.now(), sample
     const sheets = sampleSheets(today, now);
     const r = await rates(cache, monthsIn(sheets, today), today, fetchImpl);
     /* the made-up desk releases join the made-up sheet, so the sample shows one list as the real page does */
-    return { connected: true, sample: true, ...hqModel(sheets, today, r.fx, sampleMeta(sheets, today), spHM(now), { releases: live(sampleReleases(now), today, sampleSightings(now)), sightings: sampleSightings(now), now, plPayments: samplePLPayments(today) }), health: healthFor(now - 4 * 60000, r, today),
+    return { connected: true, sample: true, ...hqModel(sheets, today, r.fx, sampleMeta(sheets, today), spHM(now), { releases: live(sampleReleases(now), today, sampleSightings(now)), sightings: sampleSightings(now), now }), health: healthFor(now - 4 * 60000, r, today),
       metaKey: { state: "ok", text: "Meta key: reading OK, last read 12 min ago (sample)" }, generated: new Date(now).toISOString() };
   }
   let got = null;

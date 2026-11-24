@@ -81,54 +81,6 @@ test("a proposal keeps its line breaks, and waiting_since is not a timeline line
   assert.ok(saved.item.waitingSince);
 });
 
-test("the received card uses the connector total, and Wise or PayPal stays on the way", () => {
-  const cards = V.moneyCards({
-    income: { month: "2026-10", receivedByMonth: { "2026-10": { EUR: 9855.48 } }, payable: {} },
-    entries: [
-      { status: "received", account: "Revolut", currency: "EUR", amount: 100, date: "2026-10-02" },
-      { status: "received", account: "Wise", currency: "EUR", amount: 3052.04, date: "2026-10-04" },
-      { status: "received", account: "PayPal", currency: "USD", amount: 9.76, date: "2026-10-04" },
-    ],
-    month: "2026-10",
-  });
-  const eur = cards.cards.find((c) => c.currency === "EUR");
-  const usd = cards.cards.find((c) => c.currency === "USD");
-  assert.equal(eur.landed, 9855.48);
-  assert.match(eur.pendingText, /3,?052\.04/);
-  assert.match(eur.pendingText, /Wise/);
-  assert.notEqual(usd.landed, 9.76);
-  assert.match(usd.pendingText, /PayPal/);
-});
-
-test("a payment that reached Revolut on a later day is not overdue from the earlier wallet date", async () => {
-  const d = memoryDesk();
-  await d.setJSON("sources.json", [{ id: "store", name: "Sample Store", kind: "payer", category: "Royalties", cadence: "monthly", state: "active", match: ["sample store"] }]);
-  await d.setJSON("inc/2026-10.json", [
-    { id: "w1", date: "2026-10-01", payer: "Sample Store", amount: 40, currency: "EUR", status: "received", account: "Wise", source: "store", movedTo: "r1", by: "Ledger" },
-    { id: "r1", date: "2026-10-30", payer: "Sample Store", amount: 40, currency: "EUR", status: "received", account: "Revolut", source: "store", by: "Ledger" },
-  ]);
-  const inc = await S.incomeState(d, NOW);
-  const src = inc.sources.find((s) => s.id === "store");
-  assert.equal(src.last.date, "2026-10-30");
-  assert.notEqual(src.verdict, "overdue");
-});
-
-test("month_check names what is in the way, or says ready", async () => {
-  const d = memoryDesk();
-  await d.setJSON("sources.json", []);
-  await d.setJSON("inc/2026-10.json", [
-    { id: "u1", date: "2026-10-03", payer: "Sample", amount: 3, currency: "EUR", status: "unsorted", account: "Revolut", by: "HQ" },
-  ]);
-  const blocked = await S.monthCheck(d, NOW, { month: "2026-10" });
-  assert.equal(blocked.ready, false);
-  assert.match(blocked.reason, /1 to sort/);
-  assert.equal(blocked.waiting_count, 0);
-  await d.setJSON("inc/2026-09.json", []);
-  const clear = await S.monthCheck(d, NOW, { month: "2026-09" });
-  assert.equal(clear.ready, true);
-  assert.equal(clear.reason, "ready");
-});
-
 test("a logged growth day stays fixed when HQ reads it again, and a boost has a cost per follow", async () => {
   const d = memoryDesk();
   const roster = R.concat([{ name: "HQ", role: "site" }]);

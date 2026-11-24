@@ -49,26 +49,6 @@ test("TikTok gate uses the +6h numbers and is not reported when one is missing",
   assert.equal(read.rows[0].views_6h, null);
 });
 
-test("Content ID claims keep the old row and add the Rights fields, and Laura can mark the day", async () => {
-  const d = memoryDesk();
-  const saved = await call(d, "log_growth", { bot: "Laura", date: "2026-11-18", claim: "Sample claim", claimant: "Sample Channel", impact: "video muted", song_claim: "Northwind", video: "abcdefghijk", strike: "yes", claim_type: "audio", status: "muted" });
-  assert.equal(saved.saved, true);
-  assert.match(saved.shown_on, /Rights/);
-  const again = await call(d, "log_growth", { bot: "Laura", date: "2026-11-18", claim: "Sample claim", claimant: "Sample Channel", impact: "video muted" });
-  assert.equal(again.duplicate, true);
-  const day = await call(d, "log_growth", { bot: "Laura", date: "2026-11-19", claims_checked: true });
-  assert.equal(day.checked_today, true);
-  const read = await call(d, "read_claims", { bot: "Laura" });
-  assert.equal(read.checked_today, true);
-  assert.equal(read.claims[0].song, "Northwind");
-  assert.equal(read.claims[0].strike, "yes");
-  assert.equal(read.claims[0].money_effect, "not reported");
-  const html = L.claimsHtml((await S.loadDesk(d, NOW)).claims, "2026-11-19");
-  assert.match(html, /Northwind/);
-  assert.match(html, /not reported/);
-  assert.match(html, /licence_queue/);
-  assert.doesNotMatch(html, />0</);
-});
 
 test("the week card and the post table share one engagement-per-view figure", () => {
   const posts = [
@@ -91,13 +71,6 @@ test("the week card and the post table share one engagement-per-view figure", ()
   assert.doesNotMatch(bare, /<div class="big num">0</);
 });
 
-test("a blocking claim is a badge, and a quiet claim is not", () => {
-  const on = L.growthHtml({ claims: { items: [{ claim: "Sample", strike: "yes", status: "muted" }] }, platforms: [], rows: [] });
-  assert.match(on, /claimbadge/);
-  assert.match(on, /href="#rights"/);
-  const off = L.growthHtml({ claims: { items: [{ claim: "Sample", strike: "no", status: "active" }] }, platforms: [], rows: [] });
-  assert.doesNotMatch(off, /claimbadge/);
-});
 
 test("team_board lists a platform once per day", async () => {
   const d = memoryDesk();
@@ -129,7 +102,7 @@ test("the guide bots read no longer tells them to write Growth into Sheets", asy
   const g = await call(d, "read_guide", { bot: "Laura" });
   const text = typeof g === "string" ? g : g.guide || g.text || JSON.stringify(g);
   assert.match(text, /read_growth/);
-  assert.match(text, /read_claims/);
+  assert.doesNotMatch(text, /read_claims/); /* 24 Nov 2026: the Rights page and its claims are gone */
   assert.match(text, /not written into a Google Sheet/);
   assert.doesNotMatch(text, /you still write your numbers into the Google Sheets/i);
 });
@@ -363,26 +336,6 @@ test("a rounded Studio view is kept as approximate, and Studio's own subscriber 
   await assert.rejects(call(d, "log_growth", { bot: "Atlas", platform: "Spotify", date: "2026-11-18", monthly_listeners: "about 41k" }), (e) => /never an estimate/.test(e.message));
 });
 
-test("a Content ID claim keeps one id, and the health note says it once", async () => {
-  const d = memoryDesk();
-  const video = "fOkECq4AIKU";
-  await d.setJSON("claims.json", { items: ["2026-11-17", "2026-11-18", "2026-11-19"].map((date) => ({
-    key: `touchme|samplechannel|${date}`, claim: "Touch Me", claimant: "Sample Channel", video_id: video, claim_type: "audio",
-    date, first_seen: date, last_checked: date, by: "Laura", impact: "one video flagged",
-  })), checked: {} });
-  const read = await call(d, "read_claims", { bot: "Laura" });
-  assert.equal(read.claims.length, 1);
-  assert.equal(read.claims[0].id, video + "|samplechannel|audio");
-  assert.equal(read.claims[0].first_seen, "2026-11-17");
-  assert.equal(read.claims[0].last_checked, "2026-11-19");
-  const again = await call(d, "log_growth", { bot: "Laura", date: "2026-11-19", claim: "Touch Me", claimant: "Sample Channel", video_id: video, claim_type: "audio", impact: "one video flagged" });
-  assert.equal(again.duplicate, true);
-  const report = evaluate({ now: NOW, claims: (await S.loadDesk(d, NOW)).claims });
-  const yt = report.accounts.find((a) => a.id === "youtube");
-  const notes = yt.signals.filter((s) => String(s.id).startsWith("claim:"));
-  assert.equal(notes.length, 1);
-  assert.equal((notes[0].text.match(/Touch Me/g) || []).length, 1);
-});
 
 test("my_day keeps the full duty text beside the short one", async () => {
   const d = memoryDesk();

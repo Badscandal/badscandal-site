@@ -49,14 +49,7 @@ export function sampleSheets(today, now = Date.now()) {
     ["D-forge-1", "Forge", "Log yesterday's ad spend per platform", today + " 09:30", "done", "", today],
     ["D-forge-2", "Forge", "Check the monthly ad cap", today + " 23:30", "todo", "", today],
     ["D-atlas-0", "Atlas", "Log Spotify numbers (yesterday's duty)", day(today, 1), "done", "", day(today, 1)]];
-  const Royalties = [["month", "song", "store", "streams", "amount", "currency", "logged_by"],
-    [prev, "Love You", "Spotify", "61000", "152.40", "EUR", "Drop"], [prev, "Love You", "Apple Music", "9000", "41.10", "EUR", "Drop"],
-    [m, "Touch Me", "Spotify", "14000", "38.20", "EUR", "Drop"], [m, "", "Deezer", "100", "3.50", "EUR", "Drop"]];
-  const Income = [["month", "source", "category", "amount", "currency", "status"],
-    [prev, "inGrooves", "Royalties (label deals)", "1137.39", "USD", "received"], [prev, "SoundCloud", "Royalties (label deals)", "104.04", "USD", "received"],
-    [prev, "RouteNote", "Self-releases", "193.50", "EUR", "received"], [prev, "Jeff", "Production", "4388.43", "EUR", "received"],
-    [m, "RouteNote", "Self-releases", "112.01", "EUR", "received"], [m, "Liu Holdings", "Afro house salary", "1753.42", "EUR", "received"],
-    [m, "Cheerful Music", "Production", "1300.00", "USD", "pending"]];
+  /* the Royalties and Income tabs are gone (24 Nov 2026, Luke: "lets fully remove the money section") */
   /* the bots' live log (made up), newest a few minutes ago */
   const ago = (min) => spStamp(now - min * 60000);
   const Updates = [["time", "bot", "status", "message", "link"],
@@ -69,20 +62,7 @@ export function sampleSheets(today, now = Date.now()) {
     [ago(190), "Drop", "done", "Me Dá Seu Body: RouteNote status still In Review", ""]];
   /* the team's fixed monthly rate (batch 4, 15 Nov 2026): MADE UP for the sample */
   const Rates = [["EUR to USD, this month (sample, made up)", "1.08"]];
-  return { Growth, Songs, Fans, Releases, Tasks, Royalties, Spend, Income, Updates, Rates };
-}
-
-/* MADE-UP payments for the per-song view (L4). One names a song (so it is not added on top of that
-   song's recorded royalties) and one does not (it stays "not linked to a song"). */
-export function samplePLPayments(today) {
-  const m = today.slice(0, 7);
-  return {
-    counted: [
-      { month: m, song: "Touch Me", store: "Spotify", amount: 20, currency: "EUR" },
-      { month: m, song: "", store: "", amount: 15, currency: "USD" },
-    ],
-    notReceived: 1, holding: 1,
-  };
+  return { Growth, Songs, Fans, Releases, Tasks, Spend, Updates, Rates };
 }
 
 /* A MADE-UP Meta read for /hq?sample=1 (11 Nov 2026): Meta's "own" numbers = the sample sheet's Meta

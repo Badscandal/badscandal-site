@@ -170,82 +170,13 @@ test("log_growth for songs (Atlas); who may log; numbers are never guessed", asy
   await fails(S.logGrowth(d, NOW, R, { by: "Kevin", date: "2026-11-16", platform: "TikTok", followers: "1" }), /future/);
 });
 
-/* ---------- 5. owner-editable income sources ---------- */
-const SOURCES = [{ id: "tipalti", name: "Tipalti", kind: "payer", category: "Self-releases", currency: "USD", lands: "PayPal", owner: "Ledger", state: "blocked", blocker: "Needs Luke's login code", needsLuke: "Send the Tipalti login code" },
-  { id: "routenote", name: "RouteNote", kind: "payer", category: "Self-releases", currency: "USD", lands: "PayPal", owner: "Ledger", state: "active" }];
-test("income_source: the owning bot says where the money lands (several accounts), its state and why; a re-seed keeps it", async () => {
-  const d = memoryDesk();
-  await S.setSources(d, SOURCES);
-  const r = await call(d, "income_source", { bot: "Ledger", source: "Tipalti", state: "active", reason: "", needs_luke: "", accounts: ["PayPal", "Wise"], category: "Self-releases" });
-  assert.equal(r.saved, true);
-  const src = (await S.getSources(d)).find((s) => s.id === "tipalti");
-  assert.deepEqual([src.state, src.blocker, src.needsLuke, src.accounts, src.lands, src.editedBy], ["active", "", "", ["PayPal", "Wise"], "PayPal + Wise", "Ledger"]);
-  /* RouteNote has two accounts */
-  await call(d, "income_source", { bot: "Sheet", source: "routenote", accounts: ["PayPal (badscandal)", "PayPal (badscandaladmin)"] });
-  assert.equal((await S.getSources(d)).find((s) => s.id === "routenote").lands, "PayPal (badscandal) + PayPal (badscandaladmin)");
-  /* the old "needs Luke" ask is gone from what everyone reads */
-  const st = await call(d, "income_status", { bot: "Nova" });
-  assert.equal(st.sources.find((s) => s.name === "Tipalti").needs_luke, undefined);
-  /* the private seed loaded again: the bots' edits stay on top */
-  await S.setSources(d, SOURCES);
-  assert.equal((await S.getSources(d)).find((s) => s.id === "tipalti").state, "active");
-  await fails(S.editSource(d, NOW, R, { by: "Kevin", source: "tipalti", state: "active" }), /Ledger/);
-  await fails(S.editSource(d, NOW, R, { by: "Ledger", source: "nope", state: "active" }), /no income source called "nope"/);
-  await fails(S.editSource(d, NOW, R, { by: "Ledger", source: "tipalti", state: "fine" }), /state must be one of/);
-  await fails(S.editSource(d, NOW, R, { by: "Ledger", source: "tipalti", state: "blocked" }), /reason/);
-});
+/* ---------- 5-8 (income sources, a payment fixed, statement only and payable) went on 24 Nov 2026: money removed from HQ ---------- */
 
-/* ---------- 6 + 7 + 8. a payment fixed; statement only and payable; royalties without salary ---------- */
-test("fix_payment: the bot that submitted it (or a sorter) fixes it, with the reason kept", async () => {
-  const d = memoryDesk();
-  /* 18 Nov 2026: received means Revolut, so the fixed payment lands there and the total still counts it */
-  const sub = await S.submitIncome(d, NOW, R, { bot: "Ledger", date: "2026-11-10", payer: "Sample Music Group", amount: "473.07", currency: "USD", status: "transfer", account: "Revolut" });
-  const r = await call(d, "fix_payment", { bot: "Ledger", id: sub.entry.id, month: "2026-11", status: "received", category: "Label deals", reason: "It is royalties from the label, not a transfer" });
-  assert.deepEqual([r.saved, r.fixed], [true, ["status", "category"]]);
-  const e = (await S.incomeState(d, NOW)).entries.find((x) => x.id === sub.entry.id);
-  assert.deepEqual([e.status, e.category, e.fixes[0].by, e.fixes[0].reason], ["received", "Label deals", "Ledger", "It is royalties from the label, not a transfer"]);
-  assert.deepEqual(e.fixes[0].changed, { status: ["transfer", "received"], category: ["Other", "Label deals"] });
-  assert.deepEqual((await S.incomeState(d, NOW)).received, { USD: 473.07 });
-  await fails(S.fixIncome(d, NOW, R, { by: "Kevin", id: sub.entry.id, month: "2026-11", amount: "1", reason: "x is wrong" }), /Ledger/);
-  /* 17 Nov 2026 (Luke): a payment counts in the month it arrived; another month is allowed (it moves), the future is not */
-  await fails(S.fixIncome(d, NOW, R, { by: "Ledger", id: sub.entry.id, month: "2026-11", date: "2026-12-30", reason: "a day still to come" }), /future/);
-  await fails(S.fixIncome(d, NOW, R, { by: "Ledger", id: sub.entry.id, month: "2026-11", amount: "500" }), /reason/);
-  await fails(S.fixIncome(d, NOW, R, { by: "Ledger", id: "i0000000000000", month: "2026-11", amount: "500", reason: "typo" }), /no payment/);
-  /* the bot sees its own payments, with the id and month to fix them */
-  const st = await call(d, "income_status", { bot: "Ledger" });
-  assert.deepEqual(st.your_payments[0].id, sub.entry.id);
-  assert.equal(st.your_payments[0].month, "2026-11");
-});
-
-test("statement only and payable: owed money is payable, a statement below the payout line counts nowhere yet; royalties leave out salary", async () => {
-  assert.deepEqual(S.INCOME_STATUS.slice(0, 5), ["received", "pending", "transfer", "statement only", "payable"]);
-  const d = memoryDesk();
-  /* 18 Nov 2026: a received row counts only in Revolut. Wise no longer stands in for received. */
-  const add = (payer, amount, status, category = "Self-releases") => S.submitIncome(d, NOW, R, { bot: "Ledger", date: "2026-11-10", payer, amount, currency: "USD", status, account: status === "received" ? "Revolut" : "Statement only", category });
-  await add("Sample Distro", "1507.31", "payable");
-  await add("Sample Publisher", "31.07", "statement only", "Publishing");
-  await add("Sample Label", "200", "received", "Label deals");
-  await add("Sample Holdings", "1000", "received", "Salary");
-  const i = await S.incomeState(d, NOW);
-  assert.deepEqual([i.pending, i.payable, i.statementOnly], [{ USD: 1507.31 }, { USD: 1507.31 }, { USD: 31.07 }]);
-  assert.deepEqual([i.received, i.royaltiesOnly], [{ USD: 1200 }, { USD: 200 }]);
-  const st = await call(d, "income_status", { bot: "Ledger" });
-  assert.equal(st.royalties_only_this_month, "USD 200.00");
-  assert.equal(st.payable_this_month, "USD 1507.31");
-  assert.equal(st.statement_only_this_month, "USD 31.07");
-  /* the statement's money arriving later turns it received, like a pending one */
-  await S.submitIncome(d, NOW + DAY, R, { bot: "Ledger", date: "2026-11-15", payer: "Sample Distro", amount: "1507.31", currency: "USD", status: "received", account: "Revolut", category: "Self-releases" });
-  const i2 = await S.incomeState(d, NOW + DAY);
-  assert.deepEqual([i2.payable, i2.received], [{}, { USD: 2707.31 }]);
-  /* 16 Nov 2026 (Luke): "never put pending income only what is received" */
-  assert.deepEqual(L.incomeTotals(i2).map((x) => x.label), ["Received"]); /* one total (16 Nov 2026) */
-});
-
-/* ---------- the connector ---------- */
 test("the connector: at least 25 tools; the new rules in INSTRUCTIONS; luke_briefing keeps its shape", async () => {
   assert.ok(TOOLS.length >= 25);
-  for (const n of ["log_growth", "record_spend", "income_source", "fix_payment"]) assert.ok(tool(n), n);
-  assert.deepEqual(tool("submit_income").inputSchema.properties.status.enum, ["received", "pending", "transfer", "statement only", "payable"]);
+  /* 24 Nov 2026, Luke: money removed from HQ. income_source, fix_payment and submit_income are gone; record_spend stays */
+  for (const n of ["log_growth", "record_spend"]) assert.ok(tool(n), n);
+  for (const n of ["income_source", "fix_payment", "submit_income"]) assert.equal(tool(n), undefined, n);
   assert.match(INSTRUCTIONS, /log_growth/);
   assert.match(INSTRUCTIONS, /record_spend/);
   assert.match(INSTRUCTIONS, /gaps/);

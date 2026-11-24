@@ -7,9 +7,10 @@
      Fans      date | platform | handle | signal | quote | post_link | logged_by | profile_link | about | how_to_engage
      Releases  song | slug | release_date | status | isrc | upc | T-28 files | T-21 submitted | T-14 pitched | T-10 lyrics | T-7 video + page | ads_ready | notes
      Tasks     id | owner | task | deadline | status | blocker | updated
-     Royalties month | song | store | streams | amount | currency | logged_by
      Spend     date | platform | campaign | spend | currency            (the Ads Tracker's Daily log)
-     Income    month | source | category | amount | currency | status   (from the Luke Income Sheet)
+
+   (24 Nov 2026, Luke: "lets fully remove the money section". The Royalties and Income tabs are no longer
+   read; the sheet itself is not changed. Spend and the ad cap stay.)
 
    Rules kept here: numbers that are missing stay missing (never guessed, "not read" rows are
    skipped); every amount keeps its own currency; an amount in another currency is an ESTIMATE at
@@ -19,7 +20,7 @@ import { convert } from "./fx.mjs";
    built from it never say it (the sheet itself is not changed) */
 const noSalvation = (v) => (v == null ? v : String(v).replace(/[^.\n]*\bsalvation\b[^.\n]*\.?/gi, "").replace(/\s{2,}/g, " ").trim());
 
-export const HQ_TABS = ["Growth", "Songs", "Fans", "Releases", "Tasks", "Royalties", "Spend", "Income"];
+export const HQ_TABS = ["Growth", "Songs", "Fans", "Releases", "Tasks", "Spend"];
 export const CAP = { amount: 1000, warn: 750, stop: 900, currency: "USD" };
 /* the release timeline, in days before release (Fridays; two songs a month is the goal) */
 export const STEPS = [
@@ -28,7 +29,7 @@ export const STEPS = [
   { key: "t-14 pitched", days: 14, label: "Spotify pitch sent", owner: "Atlas" },
   { key: "t-10 lyrics", days: 10, label: "Lyrics ready", owner: "Verse" },
   { key: "t-7 video + page", days: 7, label: "Video scheduled, song page live", owner: "Laura + Webmaster" },
-  { key: "ads_ready", days: 1, label: "Ad drafts ready", owner: "Claude + Forge" },
+  { key: "ads_ready", days: 1, label: "Ad drafts ready", owner: "Forge" }, /* 24 Nov 2026: Claude is off the desk */
 ];
 
 const norm = (s) => String(s == null ? "" : s).trim();
@@ -91,19 +92,12 @@ const sum = (a) => a.reduce((x, y) => x + y, 0);
 const done = (cell) => /done|yes|sent|live|ready|✓|✔|scheduled|approved/i.test(norm(cell)) && !/not |no\b|late|waiting/i.test(norm(cell));
 
 /* ---------- songs: daily Spotify numbers and momentum (the number Luke cares about most) ---------- */
-export function songsReport(rows, royalties, releases, today) {
+export function songsReport(rows, releases, today) {
   const by = {};
   for (const r of rows) {
     if (!DAY.test(r.date) || !r.song) continue;
     const streams = num(r.spotify_streams);
     (by[r.song] || (by[r.song] = [])).push({ d: r.date, streams, listeners: num(r.spotify_listeners), saves: num(r.saves), adds: num(r.playlist_adds) });
-  }
-  const earned = {};
-  for (const r of royalties) {
-    const a = num(r.amount);
-    if (a == null || !r.song) continue;
-    const e = earned[r.song] || (earned[r.song] = {});
-    e[r.currency || "?"] = round((e[r.currency || "?"] || 0) + a);
   }
   return Object.entries(by).map(([song, days]) => {
     days.sort((a, b) => (a.d < b.d ? -1 : 1));
@@ -135,7 +129,6 @@ export function songsReport(rows, royalties, releases, today) {
       total: sum(read.map((x) => x.streams)),
       series: read.slice(-30).map((x) => ({ d: x.d, v: x.streams })),
       listenersSeries: read.filter((x) => x.listeners != null).slice(-30).map((x) => ({ d: x.d, v: x.listeners })),
-      royalties: earned[song] || {},
     };
   }).sort((a, b) => (b.week || 0) - (a.week || 0));
 }
@@ -439,11 +432,11 @@ export function mergeDeskSpend(rows, desk) {
   return { rows: out, notRead };
 }
 
-/* ---------- money: spend and income per month, the combined cap ---------- */
+/* ---------- money: ad spend per month and the combined cap (income left HQ on 24 Nov 2026) ---------- */
 /* fx: { "2026-11": {USD, GBP, ...} } monthly averages (units per 1 EUR). */
-export function moneyReport(spend, income, royalties, today, fx = {}, o = {}) {
+export function moneyReport(spend, today, fx = {}, o = {}) {
   const months = {};
-  const M = (m) => months[m] || (months[m] = { month: m, spend: {}, income: {}, pending: {}, royalties: {} });
+  const M = (m) => months[m] || (months[m] = { month: m, spend: {} });
   const add = (o, k, cur, a) => { const x = o[k] || (o[k] = {}); x[cur] = round((x[cur] || 0) + a); };
   const days = {};
   for (const r of spend) {
@@ -452,17 +445,6 @@ export function moneyReport(spend, income, royalties, today, fx = {}, o = {}) {
     const cur = (r.currency || "USD").toUpperCase(), p = r.platform || "?";
     add(M(d.slice(0, 7)).spend, p, cur, a);
     if (d.slice(0, 7) === today.slice(0, 7)) { const x = days[d] || (days[d] = {}); x[cur] = round((x[cur] || 0) + a); }
-  }
-  for (const r of income) {
-    const a = num(r.amount), m = (r.month || "").slice(0, 7);
-    if (a == null || !/^\d{4}-\d{2}$/.test(m)) continue;
-    const cur = (r.currency || "?").toUpperCase(), cat = r.category || r.source || "Other";
-    add(/pending|owed|payable/i.test(r.status) ? M(m).pending : M(m).income, cat, cur, a);
-  }
-  for (const r of royalties) {
-    const a = num(r.amount), m = (r.month || "").slice(0, 7);
-    if (a == null || !/^\d{4}-\d{2}$/.test(m)) continue;
-    add(M(m).royalties, r.song || "?", (r.currency || "?").toUpperCase(), a);
   }
   /* estimate a {cat: {cur: amount}} block in one currency at that month's average rate */
   const est = (block, m, to) => {
@@ -473,8 +455,8 @@ export function moneyReport(spend, income, royalties, today, fx = {}, o = {}) {
     return { amount: round(t), missing };
   };
   const list = Object.values(months).sort((a, b) => (a.month < b.month ? 1 : -1)).map((m) => {
-    const s = est(m.spend, m.month, "EUR"), i = est(m.income, m.month, "EUR");
-    return { ...m, rate: (fx[m.month] || {}).USD || null, spendEur: s, incomeEur: i, netEur: s.missing || i.missing ? null : round(i.amount - s.amount) };
+    const s = est(m.spend, m.month, "EUR");
+    return { ...m, rate: (fx[m.month] || {}).USD || null, spendEur: s };
   });
   /* the cap: Meta + Google + TikTok this month, all counted in USD. EUR at the sheet's FIXED rate (batch 4,
      15 Nov 2026), else at the month's ECB average so far (then the figure is an estimate, and says why) */
@@ -591,118 +573,7 @@ export function artistReport(rows) {
     brazil, brazilShare: brazil != null && monthly ? Math.round((brazil / monthly) * 100) : null,
     series: read.slice(-60).map((x) => ({ d: x.date, v: num(x.monthly_listeners) })), brazilSeries: read.filter((x) => num(x.brazil_listeners) != null).slice(-60).map((x) => ({ d: x.date, v: num(x.brazil_listeners) })) };
 }
-/* Per-song profit (L4, 18 Nov 2026). Money in is royalties that name the song, per store.
-   A payment counts for a song only when it names the song. Ad spend counts only when the row's
-   song is set: a campaign name is never read as a song. Rows with no song are "not linked to a song"
-   and are not added into any song. Recorded royalties and landed payments for the same song are
-   not added together (they may be the same money): the royalties are money in, and the payments
-   are listed beside them. A result across currencies is an estimate at each row's month rate,
-   and only when every rate is there. Missing amounts stay missing. */
-export function songProfit({ royalties = [], payments = [], spend = [], releases = [], fx = {}, notReceived = 0, holding = 0 } = {}) {
-  const songs = new Map();
-  const unRoy = [], unPay = [], unSpend = [];
-  const idOf = (name) => {
-    const title = norm(name);
-    if (!title) return "";
-    const k = songKey(title);
-    return k || (ownWords(title) ? "*" + ownWords(title) : "");
-  };
-  const slot = (name, asRelease) => {
-    const title = norm(name);
-    const id = idOf(title);
-    if (!id) return null;
-    let s = songs.get(id);
-    if (!s) { s = { song: title, fromRelease: false, date: null, roy: [], pay: [], sp: [] }; songs.set(id, s); }
-    if (asRelease && !s.fromRelease) { s.song = title; s.fromRelease = true; }
-    return s;
-  };
-  const addAmt = (bucket, cur, a) => { const c = (cur || "?").toUpperCase(); bucket[c] = round((bucket[c] || 0) + a); };
-  const rowAmt = (v) => (typeof v === "number" ? (Number.isFinite(v) ? v : null) : num(v));
-  const monthOf = (v) => { const m = norm(v).slice(0, 7); return /^\d{4}-\d{2}$/.test(m) ? m : ""; };
-  for (const r of releases || []) {
-    const s = slot(r && (r.song || r.title), true);
-    const date = norm(r && (r.date || r.release_date)).slice(0, 10);
-    if (s && !s.date && DAY.test(date)) s.date = date;
-  }
-  for (const r of royalties || []) {
-    const a = rowAmt(r && r.amount);
-    if (a == null) continue;
-    const item = { store: norm(r.store), amount: a, currency: (r.currency || "?").toUpperCase(), month: monthOf(r.month), ...(r.rate && r.rate.source ? { rate: r.rate } : {}) };
-    const s = slot(r.song, false);
-    (s ? s.roy : unRoy).push(item);
-  }
-  for (const r of payments || []) {
-    const a = rowAmt(r && r.amount);
-    if (a == null) continue;
-    const item = { store: norm(r.store), amount: a, currency: (r.currency || "?").toUpperCase(), month: monthOf(r.month || r.date) };
-    const s = slot(r.song, false);
-    (s ? s.pay : unPay).push(item);
-  }
-  for (const r of spend || []) {
-    if (!r) continue;
-    const raw = r.spend != null && String(r.spend).trim() !== "" ? r.spend : r.amount;
-    const a = rowAmt(raw);
-    const date = norm(r.date).slice(0, 10);
-    if (a == null || !DAY.test(date)) continue; /* a campaign name is never a song, even when it matches one */
-    const item = { platform: norm(r.platform) || "?", amount: a, currency: (r.currency || "?").toUpperCase(), month: date.slice(0, 7), ...(r.rate && r.rate.source ? { rate: r.rate } : {}) };
-    const s = slot(r.song, false);
-    (s ? s.sp : unSpend).push(item);
-  }
-  const sumRows = (rows) => { const o = {}; for (const r of rows) addAmt(o, r.currency, r.amount); return o; };
-  const has = (o) => Object.keys(o).length > 0;
-  const grouped = (rows, field) => {
-    const list = [];
-    for (const r of rows) {
-      const name = norm(r[field]);
-      const k = field === "store" ? name.toLowerCase() : key(name);
-      let g = list.find((x) => x.key === k);
-      if (!g) { g = { key: k, name, amounts: {} }; list.push(g); }
-      addAmt(g.amounts, r.currency, r.amount);
-    }
-    return list.map((g) => ({ [field]: g.name, amounts: g.amounts }));
-  };
-  /* 18 Nov 2026: a month's average rate is not a rate for this song. A combined figure exists only when
-     every row carries a rate that was recorded, and where it came from. */
-  const recorded = (r) => (r && r.rate && r.rate.source && Number(r.rate.value) > 0 ? r.rate : null);
-  const estimateOf = (inRows, outRows) => {
-    const rows = inRows.concat(outRows);
-    if (!rows.length || rows.some((r) => r.currency !== "EUR" && !recorded(r))) return null;
-    let inn = 0, out = 0, source = "";
-    for (const r of inRows) { const rate = recorded(r); inn += r.currency === "EUR" ? r.amount : r.amount / rate.value; source = source || (rate && rate.source); }
-    for (const r of outRows) { const rate = recorded(r); out += r.currency === "EUR" ? r.amount : r.amount / rate.value; source = source || (rate && rate.source); }
-    return { eur: round(inn - out), missing: false, recorded: true, source: source || "recorded" };
-  };
-  const list = [...songs.values()].map((s) => {
-    const recorded = sumRows(s.roy), landed = sumRows(s.pay);
-    const out = s.sp.length ? sumRows(s.sp) : null;
-    const inFrom = has(recorded) ? "royalties" : has(landed) ? "payments" : "none";
-    const inn = inFrom === "royalties" ? recorded : inFrom === "payments" ? landed : {};
-    const inRows = inFrom === "royalties" ? s.roy : inFrom === "payments" ? s.pay : [];
-    let nets = null;
-    if (out) { nets = {}; for (const c of new Set([...Object.keys(inn), ...Object.keys(out)])) nets[c] = round((inn[c] || 0) - (out[c] || 0)); }
-    const mixed = out && new Set([...Object.keys(inn), ...Object.keys(out)]).size > 1;
-    return {
-      song: s.song, date: s.date, in: inn, inFrom,
-      stores: grouped(inFrom === "payments" ? s.pay : s.roy, "store"),
-      landed: inFrom === "royalties" && has(landed) ? landed : null,
-      out, platforms: out ? grouped(s.sp, "platform") : [], nets,
-      estimate: mixed ? estimateOf(inRows, s.sp) : null,
-    };
-  }).sort((a, b) => (a.date && b.date && a.date !== b.date ? (a.date < b.date ? 1 : -1) : a.date !== b.date ? (a.date ? -1 : 1) : a.song.localeCompare(b.song)));
-  return {
-    songs: list,
-    unlinked: {
-      royalties: { amounts: sumRows(unRoy), count: unRoy.length, stores: grouped(unRoy, "store") },
-      payments: { amounts: sumRows(unPay), count: unPay.length },
-      spend: { amounts: sumRows(unSpend), count: unSpend.length, platforms: grouped(unSpend, "platform"),
-        from: unSpend.length ? unSpend.map((r) => String(r.month || r.date || "").slice(0, 7)).filter(Boolean).sort()[0] : "",
-        to: unSpend.length ? unSpend.map((r) => String(r.month || r.date || "").slice(0, 7)).filter(Boolean).sort().pop() : "",
-        note: "Not the monthly ad cap. This is spend that names no song." },
-    },
-    notReceived: notReceived || 0, holding: holding || 0,
-  };
-}
-
+/* Per-song profit (songProfit, L4) is gone: 24 Nov 2026, Luke: "lets fully remove the money section". */
 export function hqModel(sheets, today, fx = {}, meta, nowHM = "", staff = null) {
   const t = Object.fromEntries(HQ_TABS.map((n) => [n, rowsToObjects(sheets[n])]));
   /* batch 4: Forge's desk rows over the sheet's; Meta's own read over both (metaSpend) */
@@ -718,7 +589,7 @@ export function hqModel(sheets, today, fx = {}, meta, nowHM = "", staff = null) 
   const deskReleases = staff && Array.isArray(staff.releases) ? staff.releases : [];
   /* a song's release date: the desk's first (it is the one the team works to), then the sheet's */
   const relDates = deskReleases.filter((v) => v.status === "scheduled" && v.date).map((v) => ({ song: v.title, release_date: v.date }));
-  const songs = songsReport(t.Songs, t.Royalties, relDates.concat(t.Releases), today);
+  const songs = songsReport(t.Songs, relDates.concat(t.Releases), today);
   /* whose song it is (V3, 11 Nov 2026): the desk release with the same name (a sent one before a draft),
      null when the desk has no record of it */
   for (const s of songs) {
@@ -729,21 +600,13 @@ export function hqModel(sheets, today, fx = {}, meta, nowHM = "", staff = null) 
   const growth = growthReport(t.Growth, today);
   const fans = fansReport(t.Fans);
   const releases = mergeReleases(releasesReport(t.Releases, today), deskReleases, today, staff && "sightings" in staff ? staff.sightings : undefined, staff && staff.now != null ? staff.now : undefined);
-  const team = teamReport(t.Tasks, [t.Growth, t.Songs, t.Fans, t.Royalties], today, staff ? staff.taskOverlay || null : null);
-  const money = { ...moneyReport(t.Spend, t.Income, t.Royalties, today, fx, { fixed: fixedRate(sheets.Rates), notRead }), metaSource: ms.source };
-  /* song-linked rows are kept from before Meta's account total replaces them, so a song Forge named
-     is not lost, and it is not added to that account total (L4) */
-  const spendForPL = dk.rows.filter((r) => norm(r.song)).concat(t.Spend.filter((r) => !norm(r.song)));
-  const plPay = staff && staff.plPayments;
-  const plReleases = deskReleases.filter((v) => v && v.status !== "cancelled" && v.title).map((v) => ({ song: v.title, date: v.date || "" }))
-    .concat(t.Releases.filter((r) => r.song).map((r) => ({ song: r.song, date: r.release_date || "" })));
-  const songPL = songProfit({ royalties: t.Royalties, payments: plPay && Array.isArray(plPay.counted) ? plPay.counted : [], spend: spendForPL, releases: plReleases, fx,
-    notReceived: plPay && plPay.notReceived || 0, holding: plPay && plPay.holding || 0 });
+  const team = teamReport(t.Tasks, [t.Growth, t.Songs, t.Fans], today, staff ? staff.taskOverlay || null : null);
+  const money = { ...moneyReport(t.Spend, today, fx, { fixed: fixedRate(sheets.Rates), notRead }), metaSource: ms.source };
   const empty = HQ_TABS.filter((n) => !t[n].length);
   team.duties = dutiesReport(t.Tasks, today, nowHM, staff ? staff.overlay : null);
   const sheetUpdates = sheets.Updates == null ? null : rowsToObjects(sheets.Updates);
   team.live = liveReport(sheetUpdates == null && !staff ? null : mergeUpdates(sheetUpdates, staff ? staff.updates : []));
-  return { today, songs, growth, fans, releases, team, money, songPL, empty, sheetErrors: sheetErrors(sheets), artist: artistReport(staff && staff.growth),
+  return { today, songs, growth, fans, releases, team, money, empty, sheetErrors: sheetErrors(sheets), artist: artistReport(staff && staff.growth),
     growthDetail: staff && Array.isArray(staff.growth) ? staff.growth.filter((r) => r && r.kind !== "song") : [],
     next: releases.find((r) => r.date && r.date >= today) || null };
 }

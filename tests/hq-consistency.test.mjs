@@ -5,7 +5,6 @@ import * as S from "../netlify/lib/staff.mjs";
 import { memoryDesk } from "../netlify/lib/staff-sample.mjs";
 import { needsCount } from "../netlify/lib/action-cards.mjs";
 import { callTool, TOOLS } from "../netlify/lib/staff-tools.mjs";
-import { songProfit } from "../netlify/lib/hq.mjs";
 import { evaluate } from "../netlify/lib/account-health.mjs";
 import { needsDesk } from "../netlify/lib/needs.mjs";
 
@@ -148,16 +147,6 @@ test("HQ does not overwrite a bot's growth reading, and 1.7k is a number", async
   assert.equal(second.replaced && second.replaced.includes("followers"), false);
 });
 
-test("unlinked ad spend carries its months and is not the cap", () => {
-  const pl = songProfit({ spend: [
-    { date: "2026-09-02", platform: "Meta", amount: 10, currency: "USD", song: "" },
-    { date: "2026-11-02", platform: "Meta", amount: 5, currency: "USD", song: "" },
-  ] });
-  assert.equal(pl.unlinked.spend.from, "2026-09");
-  assert.equal(pl.unlinked.spend.to, "2026-11");
-  assert.match(pl.unlinked.spend.note, /Not the monthly ad cap/);
-});
-
 test("a no-impact claim is not Watch, and a blank account is not enough data", () => {
   const quiet = evaluate({ now: NOW, claims: [{ claim: "A quiet claim", claimant: "our own label", impact: "no impact", date: "2026-11-18", by: "Laura", last_checked: "2026-11-18" }] });
   const yt = quiet.accounts.find((a) => a.id === "youtube");
@@ -166,25 +155,6 @@ test("a no-impact claim is not Watch, and a blank account is not enough data", (
   const tt = blank.accounts.find((a) => a.id === "tiktok");
   assert.equal(tt.state, "gap");
   assert.match(tt.headline, /Not enough data/);
-});
-
-test("month_check lists an FX transfer and still says ready", async () => {
-  const d = memoryDesk();
-  await d.setJSON("inc/2026-10.json", [{ id: "fx1", date: "2026-10-20", payer: "FX conversion", amount: 10, currency: "EUR", status: "transfer", account: "Revolut", by: "HQ", category: "FX" }]);
-  const check = await S.monthCheck(d, NOW, { month: "2026-10" });
-  assert.ok(check.ownTransfers.some((e) => e.id === "fx1"));
-  assert.equal(check.ready, true);
-  assert.equal(check.reason, "ready");
-});
-
-test("to sort shows this month only", async () => {
-  const d = memoryDesk();
-  await d.setJSON("sources.json", []);
-  await d.setJSON("inc/2026-11.json", [{ id: "n1", date: "2026-11-04", payer: "Sample", amount: 3, currency: "EUR", status: "unsorted", account: "Revolut", by: "HQ" }]);
-  await d.setJSON("inc/2026-09.json", [{ id: "s1", date: "2026-09-04", payer: "Sample", amount: 3, currency: "EUR", status: "unsorted", account: "Revolut", by: "HQ" }]);
-  const inc = await S.incomeState(d, NOW);
-  assert.deepEqual(inc.unsortedMonth.map((e) => e.id), ["n1"]);
-  assert.ok(inc.unsorted.length >= 1);
 });
 
 test("needs you includes a fan question stored on Instagram", async () => {
@@ -218,18 +188,3 @@ test("Luke's line drops tool names, reconnect notes and repeated lines", () => {
   assert.equal(/T\d{2}:\d{2}/.test(one[1]), false);
 });
 
-test("a pitched song has no later deadline, and PayPal waiting counts as holding", async () => {
-  const d = memoryDesk();
-  await d.setJSON("inc/2026-11.json", [
-    { id: "p1", date: "2026-11-04", payer: "Sample", amount: 10, currency: "USD", status: "received", account: "PayPal", category: "Self-releases", by: "Ledger" },
-  ]);
-  const inc = await S.incomeState(d, NOW);
-  const pl = S.plPayments(inc.entries, []);
-  assert.equal(pl.holding, 1);
-  assert.equal(pl.counted.length, 0);
-});
-
-test("first seen is not taken from a date inside the claim id", () => {
-  assert.equal(S.claimFirstSeen({ key: "2026-11-01-sample", date: "2026-11-01", first_seen: "2026-11-01" }), "");
-  assert.equal(S.claimFirstSeen({ key: "sample", first_seen: "2026-11-17" }), "2026-11-17");
-});

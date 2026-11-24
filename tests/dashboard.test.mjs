@@ -39,8 +39,10 @@ test("/admin, /admin.html and /stats are permanent, forced redirects to /hq; rob
   assert.match(h, /^\/hq\n  X-Robots-Tag: noindex, nofollow\n  X-Frame-Options: DENY/m);
   const page = readFileSync(new URL("../hq.html", import.meta.url), "utf8");
   /* Growth and Fans are one page since 12 Nov 2026 (Luke: "growth and fans can be on the same page") */
-  for (const id of ["loginForm", "today", "songs", "ads", "pages", "growth", "growth-fans", "releases", "money", "team"]) assert.match(page, new RegExp('id="' + id + '"'), id);
-  const order = ["today", "songs", "ads", "pages", "growth", "releases", "money", "team"].map((s) => page.indexOf('href="#' + s + '"'));
+  /* 24 Nov 2026, Luke: money removed from HQ ("lets fully remove the money section"): no #money section any more */
+  for (const id of ["loginForm", "today", "songs", "ads", "pages", "growth", "growth-fans", "releases", "team"]) assert.match(page, new RegExp('id="' + id + '"'), id);
+  assert.doesNotMatch(page, /<section[^>]*id="money"/);
+  const order = ["today", "songs", "ads", "pages", "growth", "releases", "team"].map((s) => page.indexOf('href="#' + s + '"'));
   assert.deepEqual([...order].sort((a, b) => a - b), order, "the chip nav is in Luke's order");
 });
 
@@ -119,10 +121,12 @@ test("every existing endpoint still answers as before", async () => {
 
 /* ---------- the sheet ---------- */
 test("sheet errors are reported per tab, never shown as empty", () => {
-  const e = sheetErrors({ Income: [["#REF!"]], Fans: [["date", "handle"], ["2026-11-10", "#N/A"], ["2026-11-10", "@x"]], Growth: [["date"], ["2026-11-10"]], Spend: [["date", "spend"], ["2026-11-10", "#ERROR!"]] });
-  assert.deepEqual(e, { Fans: { cells: 1, first: "#N/A", readable: 1 }, Spend: { cells: 1, first: "#ERROR!", readable: 0 }, Income: { cells: 1, first: "#REF!", readable: 0 } });
-  const m = hqModel({ Income: [["#REF!"]] }, "2026-11-11", {});
-  assert.deepEqual(m.sheetErrors.Income, { cells: 1, first: "#REF!", readable: 0 }, "today's real case: Income is #REF!");
+  /* 24 Nov 2026, Luke: money removed from HQ. The Income tab is no longer read, so its #REF! is not reported;
+     the same case is checked on the Tasks tab */
+  const e = sheetErrors({ Income: [["#REF!"]], Tasks: [["#REF!"]], Fans: [["date", "handle"], ["2026-11-10", "#N/A"], ["2026-11-10", "@x"]], Growth: [["date"], ["2026-11-10"]], Spend: [["date", "spend"], ["2026-11-10", "#ERROR!"]] });
+  assert.deepEqual(e, { Fans: { cells: 1, first: "#N/A", readable: 1 }, Tasks: { cells: 1, first: "#REF!", readable: 0 }, Spend: { cells: 1, first: "#ERROR!", readable: 0 } });
+  const m = hqModel({ Tasks: [["#REF!"]] }, "2026-11-11", {});
+  assert.deepEqual(m.sheetErrors.Tasks, { cells: 1, first: "#REF!", readable: 0 }, "a tab that shows #REF! is said");
   assert.deepEqual(sheetErrors(sampleSheets("2026-11-11")), {}, "the sample is clean");
 });
 

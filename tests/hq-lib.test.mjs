@@ -165,6 +165,6 @@ test("Growth and Fans are one page (Luke, 12 Nov 2026); #fans still lands on the
   const growth = page.slice(page.indexOf('<section class="card view" id="growth"'), page.indexOf("</section>", page.indexOf('id="growth-fans"')));
   for (const id of ["growthList", "growth-fans", "fansSub", "errFans", "fanTable"]) assert.match(growth, new RegExp('id="' + id + '"'), id + " is on the Growth & Fans page");
   assert.equal((page.match(/data-tab="growth"[^]*?<span>([^<]+)<\/span>/g) || []).map((x) => x.match(/<span>([^<]+)<\/span>$/)[1]).join(","), "Growth &amp; Fans,Growth &amp; Fans", "rail and More sheet");
-  assert.match(shell, /ALIAS = \{ fans: "growth\/fans" \}/, "old #fans links and bookmarks go to #growth/fans");
+  assert.match(shell, /ALIAS = \{ fans: "growth\/fans",/, "old #fans links and bookmarks go to #growth/fans");
   assert.equal(L.cmdResults(L.cmdIndex({}), "fans")[0].href, "#growth/fans");
 });

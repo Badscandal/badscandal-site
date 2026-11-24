@@ -14,7 +14,7 @@ import assert from "node:assert/strict";
 import { registerHooks } from "node:module";
 import * as S from "../netlify/lib/staff.mjs";
 import { memoryDesk } from "../netlify/lib/staff-sample.mjs";
-import { callTool, TOOLS, INSTRUCTIONS, toolsFor, instructionsFor } from "../netlify/lib/staff-tools.mjs";
+import { callTool, TOOLS, INSTRUCTIONS, TOOL_USERS, toolsFor, instructionsFor } from "../netlify/lib/staff-tools.mjs";
 import { toolList } from "../netlify/lib/mcp.mjs";
 import { dutiesReport } from "../netlify/lib/hq.mjs";
 
@@ -35,29 +35,36 @@ const R = S.DEFAULT_ROSTER;
 const tool = (n) => TOOLS.find((t) => t.name === n);
 const call = (d, name, args, o = {}) => callTool(tool(name), args, { store: d, now: o.now || NOW, role: o.role || "bot", hq: o.hq || (async () => null) });
 const names = (list) => list.map((t) => t.name);
-const INCOME = ["submit_income", "fix_payment", "income_source", "income_check", "sort_payment"];
+/* 24 Nov 2026, Luke: money removed from HQ. These income tools are gone from the connector for everyone. */
+const INCOME = ["submit_income", "fix_payment", "income_source", "income_check", "sort_payment", "income_status", "payments", "link_transfer", "month_check", "close_month", "song_pl"];
 
 /* ---------- 1. each bot gets only its own tools ---------- */
 test("toolsFor: a bot gets the shared tools plus its own; the shared list stays whole", () => {
   const kevin = names(toolsFor("Kevin", R));
   for (const t of ["my_day", "post_update", "send_message", "read_messages", "resolve_message", "task_update", "set_my_card", "read_guide", "releases", "release_pack", "release_step", "log_growth"]) assert.ok(kevin.includes(t), "Kevin has " + t);
-  for (const t of [...INCOME, "income_status", "record_spend", "store_status", "spotify_upcoming", "luke_briefing", "luke_short_briefing", "record_luke_answer"]) assert.ok(!kevin.includes(t), "Kevin does not get " + t);
+  for (const t of [...INCOME, "record_spend", "store_status", "spotify_upcoming", "luke_briefing", "luke_short_briefing", "record_luke_answer"]) assert.ok(!kevin.includes(t), "Kevin does not get " + t);
   const ledger = names(toolsFor("ledger", R));
-  for (const t of [...INCOME, "income_status"]) assert.ok(ledger.includes(t), "Ledger has " + t);
+  /* 24 Nov 2026: Ledger keeps the shared tools; no income tool exists any more */
+  for (const t of INCOME) assert.ok(!ledger.includes(t) && !names(TOOLS).includes(t), "nobody has " + t);
   assert.ok(!ledger.includes("log_growth") && !ledger.includes("record_spend"));
   assert.ok(names(toolsFor("Forge", R)).includes("record_spend"));
   assert.ok(names(toolsFor("Drop", R)).includes("store_status"));
   assert.ok(names(toolsFor("Atlas", R)).includes("spotify_upcoming") && names(toolsFor("Atlas", R)).includes("log_growth"));
   const alfred = names(toolsFor("Alfred", R));
-  for (const t of ["luke_briefing", "luke_short_briefing", "record_luke_answer", "income_status", "team_board"]) assert.ok(alfred.includes(t), "Alfred has " + t);
+  for (const t of ["luke_briefing", "luke_short_briefing", "record_luke_answer", "team_board"]) assert.ok(alfred.includes(t), "Alfred has " + t);
   /* Nova runs the team: everything */
   assert.deepEqual(names(toolsFor("Nova", R)), names(TOOLS));
   /* nobody named, or a name not on the team: the whole list, as before */
   assert.deepEqual(names(toolsFor("", R)), names(TOOLS));
   assert.deepEqual(names(toolsFor("sse", R)), names(TOOLS));
-  /* the point: Kevin's list is less than 60% of the whole one */
+  /* the point (batch 5): the social bots don't carry the other bots' tools. It was "Kevin's list is under 60% of
+     the whole one", but 24 Nov 2026 (Luke: money removed from HQ) the eleven income tools left the whole list,
+     which Kevin never had, so the share grew while Kevin's own list stayed the same. Now measured directly:
+     Kevin gets no tool that is kept for other bots, and his list stays under a size budget in bytes. */
+  for (const [t, users] of Object.entries(TOOL_USERS)) if (!users.includes("Kevin")) assert.ok(!kevin.includes(t), "Kevin does not get " + t + " (it is " + users.join(", ") + "'s)");
   const size = (l) => JSON.stringify(toolList(l)).length;
-  assert.ok(size(toolsFor("Kevin", R)) < 0.6 * size(TOOLS), `${size(toolsFor("Kevin", R))} vs ${size(TOOLS)}`);
+  assert.ok(size(toolsFor("Kevin", R)) < 75000, `Kevin's list is ${size(toolsFor("Kevin", R))} bytes (budget 75000)`);
+  assert.ok(size(toolsFor("Kevin", R)) < size(TOOLS), "and smaller than the whole list");
   /* the order stays the shared list's order */
   assert.deepEqual(kevin, names(TOOLS).filter((n) => kevin.includes(n)));
 });
@@ -145,7 +152,8 @@ test("the site check names the reset time from Nova's card", async () => {
 test("role text: Drop has no royalties (Ledger has), Forge logs Meta too, Webmaster's report never says pre-save, one time each", () => {
   const card = (n) => JSON.stringify(R.find((b) => b.name === n));
   assert.doesNotMatch(card("Drop"), /royalt/i);
-  assert.match(card("Ledger"), /royalt/i);
+  /* 24 Nov 2026, Luke: money removed from HQ: Ledger's built-in card no longer mentions royalties either */
+  assert.doesNotMatch(card("Ledger"), /royalt/i);
   assert.match(card("Forge"), /Meta, Google and TikTok/);
   assert.doesNotMatch(card("Webmaster"), /pre-save|feature\.fm/i);
   assert.doesNotMatch(card("Webmaster"), /09:10/);
@@ -177,7 +185,7 @@ const capHq = async () => ({ team: { duties: { today: TODAY, total: 1, done: 0, 
   money: { cap: { month: "2026-11", currency: "USD", spent: 512.3, amount: 1000, left: 487.7, status: "ok", estimated: true, estimatedWhy: ["TikTok Fri 13 Nov: signed out"], notRead: ["TikTok Fri 13 Nov: signed out"], rateUsed: { value: 1.08, from: "Rates!B1", month: "2026-11" } } },
   next: null });
 
-test("luke_short_briefing: the cap, income, the top 3 decisions by deadline, and one list of sign-ins", async () => {
+test("luke_short_briefing: the cap, the top 3 decisions by deadline, and one list of sign-ins", async () => {
   const d = memoryDesk();
   const soon = await sent(d, "Night Drive", "2026-11-27");
   const later = await sent(d, "Slow Fade", "2026-12-18");
@@ -198,7 +206,7 @@ test("luke_short_briefing: the cap, income, the top 3 decisions by deadline, and
   assert.match(b.ad_spend, /USD 512\.30 of USD 1000/);
   assert.match(b.ad_spend, /estimated/);
   assert.match(b.ad_spend, /TikTok Fri 13 Nov: signed out/);
-  assert.ok(typeof b.income === "string" && /Received/.test(b.income));
+  assert.equal(b.income, undefined, "24 Nov 2026, Luke: money removed from HQ: no income line any more");
   assert.equal(b.decisions.length, 3);
   assert.match(b.decisions[0], /Night Drive/, "the soonest deadline first: Night Drive's resubmit (27 Nov)");
   assert.match(b.decisions[0], /27 Nov/);
