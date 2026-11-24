@@ -193,7 +193,7 @@
 
   function delta(cur, prev, isRate) {
     if (noAdSpend()) return "";
-    if (cur == null || prev == null) return "";
+    if (cur == null || prev == null || data.range === "all") return ""; /* All time has no period before it */
     var vs = "<em> vs " + (data.range === "today" ? "yesterday by this time" : "previous " + (data.days === 1 ? "day" : data.days + " days")) + "</em>";
     if (isRate) {
       var pts = (cur - prev) * 100;
