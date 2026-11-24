@@ -287,7 +287,7 @@ table.stack td:first-child::before,table.stack td.empty::before{content:none}
 /* phones: the cost-per-tap tables fit the screen (no hidden columns), the big trio numbers fit */
 .pg .scroll table.mt{min-width:0}
 @media(max-width:599px){.pg .mt td:first-child{white-space:normal;max-width:none;overflow-wrap:anywhere}.pg .mt td,.pg .mt th{padding:7px 4px}
-  .pg #spendCard .trio{grid-template-columns:minmax(0,1fr)}.pg .trio .big{font-size:20px}}
+  .pg .trio .big{font-size:20px}}
 @media (prefers-reduced-motion:reduce){*{scroll-behavior:auto !important}}
 /* ================= The new look (11 Nov 2026, Step 0: shell + Today) =================
    Black base, bigger and calmer type (nothing under 13 px on a phone), more air, fewer words.
@@ -1690,6 +1690,25 @@ body.ws-on main{margin-left:0;max-width:none}
 .pf-all>summary::after{content:"Show";margin-left:auto;font-weight:500;font-size:13px;color:var(--muted)}
 .pf-all[open]>summary::after{content:"Hide"}
 .pf-all[open]{padding-bottom:14px}
+/* Ads per song (24 Nov 2026) */
+#adsTotal .big{font-size:40px;line-height:1.1;margin:4px 0 6px}
+.adscap{margin-top:14px;padding-top:12px;border-top:1px solid var(--ink-3)}
+.adscap .bar{margin:8px 0 6px}
+.adscap.warn #capSpent2,.adscap.stop #capSpent2,.adscap.over #capSpent2{color:var(--red)}
+.adsong{border-top:1px solid var(--ink-3)}
+.adsong:first-child{border-top:0}
+.adsong>summary{list-style:none;display:flex;align-items:center;gap:12px;min-height:56px;padding:8px 2px;cursor:pointer}
+.adsong>summary::-webkit-details-marker{display:none}
+.adsong>summary .t{flex:1;min-width:0;font-weight:650;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.adsong>summary .a{font-variant-numeric:tabular-nums;white-space:nowrap}
+.adsong>summary::after{content:"\203A";font-size:22px;color:var(--muted);transition:transform .2s}
+.adsong[open]>summary::after{transform:rotate(90deg)}
+.adsong .body{padding:0 2px 14px}
+.adsong .keyrow b.ret{font:inherit;font-weight:500;color:var(--muted);background:none;border:0;padding:0;letter-spacing:0;text-transform:none}
+.adsong .ads{margin:8px 0 0;padding:0;list-style:none}
+.adsong .ads li{font-size:14px;color:var(--muted);padding:2px 0}
+.adsong.unl>summary .t{color:var(--muted)}
+@media (prefers-reduced-motion: reduce){.adsong>summary::after{transition:none}}
 </style>
 </head>
 <body>
@@ -1795,37 +1814,24 @@ body.ws-on main{margin-left:0;max-width:none}
   </section>
 
   <section class="card view pg" id="ads">
-    <div class="row"><div><h2>Ads</h2><p class="sub">The monthly cap, what the ads cost per real Spotify tap, and whether Meta gets our events. Read-only: nothing here changes an ad.</p></div></div>
+    <div class="row"><div><h2>Ads</h2><p class="sub">Total ad spend, then each song. Meta events health at the bottom. Read-only: nothing here changes an ad.</p></div></div>
     <div class="sheeterr" id="errAds" hidden></div>
     <div class="pgrid">
-      <div class="tile w12" id="adsPins"></div>
-      <div class="tile w12" id="adsGauge"></div>
-      <div class="tile w12" id="capCard">
-        <div class="head"><div><h3>Monthly ad cap · all platforms</h3><p class="sub">Meta + Google + TikTok against USD 1,000. Warn at 750, every ad off at 900. Display only: this page never pauses anything.</p></div><span class="lbl" id="capMonth2"></span></div>
-        <div class="cap-row"><div class="big num" id="capSpent2">–</div><div class="lbl" id="capLeft"></div></div>
-        <div class="bar" aria-hidden="true"><i id="capFill2"></i><b id="capWarn2"></b><b id="capStop2"></b></div>
-        <div class="cap-ax"><span>0</span><span>750 warn · 900 everything off · 1,000</span></div>
-        <p class="d" id="capMsg" style="margin:10px 0 0"></p>
-        <p class="d" id="capMeta" style="margin:8px 0 0"></p>
-        <div class="metaonly"><div class="lbl">Meta only · the whole ad account</div><p class="d" id="capMetaOnly" style="margin:6px 0 0"><span class="ph"></span></p></div>
-      </div>
-      <div class="tile w12" id="spendCard">
-        <div class="head"><div><h3>Cost per real Spotify tap</h3><p class="sub" id="spSub">Meta ad spend (read-only) against people's Spotify taps on our pages.</p></div><span class="lbl" id="spCur"></span></div>
-        <p class="empty" id="spOff"><span class="ph"></span></p>
-        <div id="spOn" hidden>
-          <div class="trio">
-            <div class="mini"><div class="lbl">Spend</div><div class="big num" id="spSpend">–</div></div>
-            <div class="mini"><div class="lbl">Real Spotify taps</div><div class="big num" id="spTaps">–</div></div>
-            <div class="mini"><div class="lbl">Cost per tap</div><div class="big num" id="spCpt">–</div></div>
-          </div>
-          <div id="spChart"></div>
-          <div class="sp-cols">
-            <div><div class="lbl" style="margin:14px 0 4px">By ad</div><div class="scroll"><table class="mt" id="spAds"></table></div></div>
-            <div><div class="lbl" style="margin:14px 0 4px">By song</div><div class="scroll"><table class="mt" id="spSongs"></table></div></div>
-            <div><div class="lbl" style="margin:14px 0 4px">By day, all songs</div><div class="scroll"><table class="mt" id="spAll"></table></div></div>
-          </div>
-          <p class="note" id="spNote"></p>
+      <!-- 24 Nov 2026 (Luke): "it shows up at the top the total ad spend and then i can click per song and in each song it
+           says the spend on that song for ads and then the return ... the meta events health at the bottom" -->
+      <div class="tile w12" id="adsTotal">
+        <div class="head"><div><h3>Total ad spend</h3><p class="sub" id="adsRange">Meta, Google and TikTok</p></div></div>
+        <div class="big num" id="adsTotalNum">–</div>
+        <p class="d" id="adsPlat"></p>
+        <div class="adscap" id="adsCap">
+          <div class="keyrow"><span id="capMonth2">This month</span><b id="capSpent2">–</b></div>
+          <div class="bar" aria-hidden="true"><i id="capFill2"></i><b id="capWarn2"></b><b id="capStop2"></b></div>
+          <p class="d" id="capMsg"></p>
         </div>
+      </div>
+      <div class="tile w12" id="adsSongs">
+        <div class="head"><div><h3>Per song</h3><p class="sub">Tap a song to see what its ads cost. The return comes later.</p></div></div>
+        <div id="adsSongList"><div class="ph"></div><div class="ph"></div></div>
       </div>
       <div class="tile w12" id="healthCard">
         <div class="head"><div><h3>Meta events health</h3><p class="sub">What our server told Meta about each visit and tap, and what Meta answered.</p></div><span class="pill" id="hPill">–</span></div>
@@ -2091,18 +2097,18 @@ body.ws-on main{margin-left:0;max-width:none}
   }, 400);
 })();
 </script>
-<script src="js/crt.js?v=62a451a8ab71" defer></script>
-<script src="js/hq-lib.js?v=62a451a8ab71" defer></script>
-<script src="js/hq-chart.js?v=62a451a8ab71" defer></script>
-<script src="js/hq-growth.js?v=62a451a8ab71" defer></script>
-<script src="js/hq-look.js?v=62a451a8ab71" defer></script>
-<script src="js/hq.js?v=62a451a8ab71" defer></script>
-<script src="js/hq-staff.js?v=62a451a8ab71" defer></script>
-<script src="js/hq-phone.js?v=62a451a8ab71" defer></script>
-<script src="js/hq-shell.js?v=62a451a8ab71" defer></script>
-<script src="js/hq-workspaces.js?v=62a451a8ab71" defer></script>
-<script src="js/hq-app.js?v=62a451a8ab71" defer></script>
-<script src="js/hq-cmd.js?v=62a451a8ab71" defer></script>
-<script src="js/hq-pages.js?v=62a451a8ab71" defer></script>
+<script src="js/crt.js?v=1e558409c67e" defer></script>
+<script src="js/hq-lib.js?v=1e558409c67e" defer></script>
+<script src="js/hq-chart.js?v=1e558409c67e" defer></script>
+<script src="js/hq-growth.js?v=1e558409c67e" defer></script>
+<script src="js/hq-look.js?v=1e558409c67e" defer></script>
+<script src="js/hq.js?v=1e558409c67e" defer></script>
+<script src="js/hq-staff.js?v=1e558409c67e" defer></script>
+<script src="js/hq-phone.js?v=1e558409c67e" defer></script>
+<script src="js/hq-shell.js?v=1e558409c67e" defer></script>
+<script src="js/hq-workspaces.js?v=1e558409c67e" defer></script>
+<script src="js/hq-app.js?v=1e558409c67e" defer></script>
+<script src="js/hq-cmd.js?v=1e558409c67e" defer></script>
+<script src="js/hq-pages.js?v=1e558409c67e" defer></script>
 </body>
 </html>

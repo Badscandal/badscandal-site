@@ -316,7 +316,7 @@
     ["fanTable", "teamTable", "taskTable"].forEach(function (id) { setTable(id, ""); });
     $("teamSub").textContent = "";
     drawLive();
-    drawSongs(); drawCapCard();
+    drawSongs(); drawAdsTop();
     if (window.HQStaff) window.HQStaff.drawReleases(); /* the desk's releases don't need the sheet */
   }
   $("showSample").addEventListener("click", function () { location.search = "?sample=1"; });
@@ -390,7 +390,7 @@
 
   function drawSheet() {
     drawSheetErrors();
-    drawToday(); drawBriefing(); drawSongs(); drawCapCard(); drawGrowth(); drawFans(); drawReleases(); drawTeam(); drawDataHealth();
+    drawToday(); drawBriefing(); drawSongs(); drawAdsTop(); drawGrowth(); drawFans(); drawReleases(); drawTeam(); drawDataHealth();
   }
 
   /* ---------- Today ---------- */
@@ -588,108 +588,50 @@
   }
 
   /* ---------- Ads: ONE cap card (combined, Meta-only under it), cost per tap, events health ---------- */
-  function drawCapCard() {
-    var card = $("capCard");
-    if (!sheet) {
-      card.className = "tile w12";
-      $("capSpent2").textContent = "–"; $("capLeft").textContent = ""; $("capMonth2").textContent = "";
-      $("capMsg").textContent = "The combined cap (Meta + Google + TikTok) needs the sheet. Meta alone is below.";
-      $("capMeta").innerHTML = "";
-      drawMetaOnly(); return;
+  /* ---------- Ads (24 Nov 2026, Luke): the total at the top, then per song (tap for its spend and, later, its
+     return), Meta events health at the bottom. The rule is HQLib.adsBySong; this only draws. ---------- */
+  function drawAdsTop() {
+    if (!$("adsTotal")) return;
+    var rows = (sheet && sheet.money && sheet.money.rows) || [];
+    var v = L.adsBySong({ ov: ov, rows: rows });
+    $("adsRange").textContent = (v.rangeWords ? v.rangeWords + " · " : "") + "Meta, Google and TikTok. Each amount in its own currency.";
+    $("adsTotalNum").textContent = v.ready ? v.totalLine : "–";
+    $("adsPlat").textContent = !v.ready ? "Loading…" : v.platforms.length ? v.platforms.map(function (p) { return p.platform + " " + p.line; }).join(" · ") : "No ad spend in this period.";
+    /* the month against the USD 1,000 cap (the bots' rule), small under the total */
+    var capBox = $("adsCap");
+    if (!sheet || !sheet.money || !sheet.money.cap) { capBox.className = "adscap"; $("capSpent2").textContent = "–"; $("capMonth2").textContent = "This month"; $("capMsg").textContent = "The monthly cap needs the team's sheet."; }
+    else {
+      var c = sheet.money.cap;
+      capBox.className = "adscap " + c.status;
+      $("capMonth2").textContent = monthName(c.month) + " · against the cap";
+      $("capSpent2").textContent = money(c.spent, c.currency) + " of " + money(c.amount, c.currency) + " · " + c.pct + "%";
+      paintBar(c, "capFill2", "capWarn2", "capStop2");
+      $("capMsg").textContent = capMessage(c) + (c.estimated ? " The total is an estimate." : "");
     }
-    var c = sheet.money.cap;
-    card.className = "tile w12 " + c.status;
-    $("capMonth2").textContent = monthName(c.month);
-    $("capSpent2").innerHTML = esc(money(c.spent, c.currency)) + " <small>of " + esc(money(c.amount, c.currency)) + " · " + c.pct + "%</small>";
-    $("capLeft").textContent = c.left >= 0 ? money(c.left, c.currency) + " left" : money(-c.left, c.currency) + " over";
-    paintBar(c, "capFill2", "capWarn2", "capStop2");
-    var msg = capMessage(c);
-    /* batch 4 (15 Nov 2026): one figure, at the team's fixed rate; it says which rate, what is missing, and why it
-       is an estimate when it is one */
-    if (Object.keys(c.native || {}).some(function (k) { return k !== c.currency; })) msg += " Billed: " + amounts(c.native) + ".";
-    var rl = window.HQLib.capRateLine(c), ml = window.HQLib.capMissingLine(c);
-    if (rl) msg += " " + rl + ".";
-    if (ml) msg += " " + ml + ".";
-    if (c.estimated) {
-      var why = window.HQLib.gapNotes(c.notRead && c.notRead.length ? c.notRead : (c.estimatedWhy || []));
-      /* v18 (21 Nov 2026): the unread days are said once (capMissingLine above) */
-      msg += ml ? " The total is an estimate." : why.length ? " Estimated: " + why.join("; ") + "." : " Estimated while a platform is unread.";
-    }
-    if (c.lastDay) msg += " Last day logged: " + day(c.lastDay) + ".";
-    $("capMsg").textContent = msg;
-    var src = sheet.money.metaSource, plat = c.byPlatform || {};
-    var parts = Object.keys(plat).map(function (p) { return esc(p) + " " + esc(amounts(plat[p])); }).join(" · ");
-    $("capMeta").innerHTML = (parts ? "This month: " + parts + ". " : "") + (!src ? "" : src.from === "meta"
-      ? "Meta counted from Meta itself; Google and TikTok from the sheet." + (src.mismatch.length ? src.mismatch.map(function (x) { return "<br>" + esc(day(x.d)) + ": Meta " + esc(money(x.meta, x.currency)) + ' · <b class="says">sheet says ' + esc(money(x.sheet, x.currency)) + "</b>"; }).join("") : "")
-      : '<b class="says">Meta\'s own numbers couldn\'t be read' + (src.expired ? " (the Meta key has expired)" : "") + ", so Meta comes from the sheet.</b> Reason: " + esc(src.reason));
-    drawMetaOnly();
-  }
-  function drawMetaOnly() {
-    var k = ov && ov.cap, el = $("capMetaOnly");
-    if (!ov) { el.textContent = "Loading…"; return; }
-    if (!k || !k.connected) { el.textContent = "Meta spend not connected (META_ADS_TOKEN on Netlify)."; return; }
-    if (k.error) { el.textContent = "Couldn't read Meta: " + k.error; return; }
-    var cc = k.capCurrency;
-    if (k.status === "currency") { el.textContent = money(k.spent, k.currency) + " this month. The ad account bills in " + k.currency + ", the cap is in " + cc + ", so it isn't compared."; return; }
-    var t = money(k.spent, cc) + " this month (" + k.pct + "% of the cap on its own).";
-    if (k.perDay > 0) t += " Last days' pace " + money(k.perDay, cc) + "/day" + (k.stopDay ? ": the " + money(k.stop, cc) + " line around day " + k.stopDay + "." : ".");
-    if (k.fx) t += " About " + money(k.fx.eur, "EUR") + " at this month's average rate.";
-    t += " The ad account's days. Read " + (k.fetched ? k.fetched.slice(11, 16) + " SP" : "") + ", refreshed hourly.";
-    el.textContent = t;
-  }
-  function mtable(el, head, rows) {
-    el.innerHTML = rows.length ? "<tr>" + head.map(function (h) { return "<th>" + esc(h) + "</th>"; }).join("") + "</tr>" +
-      rows.map(function (r) { return "<tr>" + r.map(function (c, i) { return "<td>" + (i === 0 ? c : i === 3 ? "<b>" + esc(c) + "</b>" : esc(c)) + "</td>"; }).join("") + "</tr>"; }).join("")
-      : '<tr><td class="empty">Nothing in this period.</td></tr>';
+    var box = $("adsSongList");
+    if (!v.ready) { box.innerHTML = '<div class="ph"></div><div class="ph"></div>'; return; }
+    var open = {};
+    [].forEach.call(box.querySelectorAll("details[open]"), function (d) { open[d.id] = true; });
+    var kv = function (k, val, cls) { return '<div class="keyrow"><span>' + esc(k) + "</span><b" + (cls ? ' class="' + cls + '"' : "") + ">" + esc(val) + "</b></div>"; };
+    var item = function (s, unl) {
+      var id = "ads-" + (unl ? "unlinked" : s.key.replace(/[^a-z0-9-]/g, ""));
+      var h = '<details class="adsong' + (unl ? " unl" : "") + '" id="' + id + '"' + (open[id] ? " open" : "") + "><summary><span class=\"t\">" + esc(unl ? "Not linked to a song" : s.title) + '</span><span class="a num">' + esc(s.line) + "</span></summary><div class=\"body\">";
+      h += kv("Ad spend", s.line);
+      if (s.platforms.length > 1 || (s.platforms[0] && s.platforms[0].platform !== "Meta")) h += '<p class="d">' + esc(s.platforms.map(function (p) { return p.platform + " " + p.line; }).join(" · ")) + "</p>";
+      if (unl) return h + '<p class="d">Spend that no ad or row ties to one song (an ad without the song in its name that nobody has visited from yet, or a day logged without a song).</p></div></details>';
+      h += kv("Real Spotify taps", fmt(s.taps)) + kv("Cost per tap", s.cpt);
+      h += kv("Return", s.returnLine, "ret");
+      if (s.ads.length) h += '<ul class="ads">' + s.ads.map(function (a) { return "<li>" + esc(a.name) + " · " + esc(a.line) + "</li>"; }).join("") + "</ul>";
+      return h + "</div></details>";
+    };
+    var h = v.songs.map(function (s) { return item(s, false); }).join("") + (v.unlinked ? item(v.unlinked, true) : "");
+    if (v.empty) h = '<p class="empty2">No ad spend in this period.</p>';
+    if (v.metaNote) h += '<p class="note">' + esc(v.metaNote) + "</p>";
+    box.innerHTML = h;
   }
   function drawAds() {
-    drawCapCard();
-    drawLookAds();
-    var sp = ov.spend;
-    if (!sp || !sp.connected || sp.error) {
-      $("spOn").hidden = true; $("spOff").hidden = false; $("spCur").textContent = "";
-      if ($("spChart")) $("spChart").innerHTML = "";
-      $("spOff").textContent = sp && sp.error ? "Couldn't read Meta spend: " + sp.error : "Meta spend not connected. To connect it, add META_ADS_TOKEN on Netlify (a read-only ads token).";
-    } else {
-      var c = sp.currency, taps = sp.songs.reduce(function (n, s) { return n + s.taps; }, 0), spent = sp.songs.reduce(function (n, s) { return n + s.spend; }, 0) + (sp.unmatched || 0);
-      $("spOff").hidden = true; $("spOn").hidden = false;
-      $("spCur").textContent = c ? "in " + c : "";
-      $("spSub").textContent = "Meta ad spend (read-only) against people's Spotify taps, " + (ov.range === "today" ? "today" : "last " + ov.days + " days") + ".";
-      $("spSpend").textContent = money(spent, c); $("spTaps").textContent = fmt(taps); $("spCpt").textContent = money(taps ? spent / taps : null, c);
-      var spChart = $("spChart");
-      if (spChart && window.HQChart) spChart.innerHTML = HQChart.html((sp.days || []).map(function (r) { return { d: r.d, v: r.spend }; }), { label: "Ad spend per day", totals: true, currency: c || "" });
-      var H = ["Spend", "Taps", "Per tap"];
-      mtable($("spAds"), ["Ad"].concat(H), sp.ads.map(function (a) { return [esc(a.ad) + "<small>" + esc(a.song) + "</small>", money(a.spend, c), fmt(a.taps), money(a.cpt, c)]; }));
-      mtable($("spSongs"), ["Song"].concat(H), sp.songs.map(function (r) { return [esc(r.title), money(r.spend, c), fmt(r.taps), money(r.cpt, c)]; }));
-      mtable($("spAll"), ["Day"].concat(H), sp.days.slice().reverse().map(function (r) { return [esc(day(r.d)), money(r.spend, c), fmt(r.taps), money(r.cpt, c)]; }));
-      $("spNote").textContent = "Spend is in the ad account's currency (" + (c || "?") + "), never converted; Meta's days are the ad account's days. Taps are real people only. " +
-        (sp.unmatched ? money(sp.unmatched, c) + " of spend couldn't be matched to a song (an ad nobody has visited from yet, without a song name in it). " : "") +
-        "Read from Meta " + (sp.fetched ? sp.fetched.slice(11, 16) + " SP" : "") + ", refreshed hourly.";
-    }
+    drawAdsTop();
     drawHealth();
-  }
-  function drawLookAds() {
-    var box = $("adsPins");
-    if (!box || !window.HQLook) return;
-    var cap = (sheet && sheet.money && sheet.money.cap) || {};
-    var pins = HQLook.adsPins({ cap: cap, yesterday: ov && ov.yesterday, visits: HQLook.songVisits(ov), prevVisits: ov && ov.prev && ov.prev.people }, L); /* v18: the song pages' people */
-    var ads = (ov && ov.spend && ov.spend.ads) || [];
-    var run = HQLook.runningNow(ads);
-    var plot = HQLook.creativePlot(ads);
-    var card = function (title, body, vs, source) {
-      return '<article class="adpin"><p class="kl">' + esc(title) + '</p><p class="kn num">' + esc(body) + '</p><p class="kt">' + esc(vs || "") + '</p><button type="button" class="whybtn" data-source="' + esc(source || title) + '">Source</button></article>';
-    };
-    var h = '<div class="adpins">' +
-      card("This month", pins.cap.label, pins.cap.missing.join(" · "), pins.cap.source) +
-      card("Yesterday", pins.yesterday.label, pins.yesterday.vs, pins.yesterday.source) +
-      card("Cost per engagement", pins.engagement.label, pins.engagement.vs, pins.engagement.source) +
-      card("Song-page visits", pins.visits.label, pins.visits.vs, pins.visits.source) + "</div>";
-    h += '<p class="d">' + esc(run.reported ? run.rows.map(function (r) { return r.name + ": " + (r.on ? "yes" : "no"); }).join(" · ") : run.line) + "</p>";
-    if (!plot.reported) h += '<p class="d">' + esc(plot.line) + "</p>";
-    else h += '<div class="matrix" aria-label="Spend against engagements">' + plot.points.map(function (p) {
-      return '<i class="' + (p.over ? "over" : "") + '" style="left:' + p.x + "%;top:" + p.y + '%" title="' + esc(p.name + (p.fatigue ? " · cost rising" : "")) + '"></i>';
-    }).join("") + "</div>";
-    box.innerHTML = h;
   }
   function drawHealth() {
     var h = ov.health, last = h && h.last, el = $("mstat");
