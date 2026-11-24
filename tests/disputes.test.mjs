@@ -15,7 +15,8 @@ const call = (d, name, args, now = NOW, role = "bot") => callTool(TOOLS.find((t)
 const fails = (p, re) => assert.rejects(p, (e) => e.name === "StaffError" && re.test(e.message));
 
 test("the connector lists open_case, update_case and read_cases, and Licence and Spark do not get them", () => {
-  assert.equal(TOOLS.length, 55); /* + open_case, update_case, read_cases, delete_case (19 Nov 2026) */
+  /* 24 Nov 2026, Luke: money removed from HQ: the eleven income tools went, 55 -> 44 */ 
+  assert.equal(TOOLS.length, 43); /* 24 Nov 2026: read_claims gone with Rights, money tools gone, 55 -> 43; + open_case, update_case, read_cases, delete_case (19 Nov 2026) */
   for (const n of ["open_case", "update_case", "read_cases", "delete_case"]) assert.ok(TOOLS.some((t) => t.name === n), n);
   assert.equal(TOOLS.find((t) => t.name === "read_cases").readOnly, true);
   const laura = toolsFor("Laura", R).map((t) => t.name);

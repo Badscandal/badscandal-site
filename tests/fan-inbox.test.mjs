@@ -127,7 +127,8 @@ test("adding either account is refused without repeating the name; the instagram
   assert.equal(res.fan_inbox.repeat_fans[0].posts, 2);
   assert.match(res.fan_inbox.note, /Luke/);
   assert.match(res.fan_inbox.note, /[Nn]ever reply/);
-  assert.equal(TOOLS.length, 55, "account_health, needs_you, song_pl (18 Nov 2026 night test) + profile_jobs, profile_master, profile_rework, profile_uploaded (PR #87)");
+  /* 24 Nov 2026, Luke: money removed from HQ: the eleven income tools went, 55 -> 44 */ 
+  assert.equal(TOOLS.length, 43, "24 Nov 2026: read_claims and the money tools gone; account_health, needs_you, song_pl (18 Nov 2026 night test) + profile_jobs, profile_master, profile_rework, profile_uploaded (PR #87)");
   assert.match(TOOLS.find((t) => t.name === "instagram").description, /fan inbox/i);
   assert.match(INSTRUCTIONS, /fan_inbox/);
   const src = readFileSync(new URL("../netlify/lib/instagram.mjs", import.meta.url), "utf8");

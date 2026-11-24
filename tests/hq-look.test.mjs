@@ -110,63 +110,6 @@ test("ad tiles name a missing account and never invent a cost per engagement", (
   assert.equal(V.runningNow([{ ad: "A" }]).reported, false);
 });
 
-test("one received card per currency, and only landed money counts", () => {
-  const cards = V.moneyCards({
-    income: { month: "2026-11", received: { USD: 40 }, payable: { EUR: 10 } },
-    entries: [
-      { status: "received", account: "Revolut", currency: "USD", amount: 40, date: "2026-11-02" },
-      { status: "statement only", currency: "USD", amount: 5, date: "2026-11-03" }
-    ],
-    month: "2026-11"
-  });
-  assert.deepEqual(cards.cards.map((c) => c.currency), ["USD", "EUR", "GBP"]);
-  const usd = cards.cards[0], eur = cards.cards[1], gbp = cards.cards[2];
-  assert.equal(usd.landed, 40);
-  assert.equal(usd.pending, 5);
-  assert.equal(eur.landedText, "Nothing received");
-  assert.equal(eur.pending, 10);
-  assert.equal(gbp.landedText, "Nothing received");
-  assert.equal(gbp.pendingText, "nothing");
-  const unread = V.moneyCards({});
-  assert.ok(unread.cards.every((c) => c.landedText === "not reported"));
-});
-
-test("the month chip says why it is not closed", () => {
-  assert.equal(V.monthChip({ month: "2026-11", closes: [{ month: "2026-11" }] }).status, "closed");
-  const open = V.monthChip({ month: "2026-11", unsorted: 2 });
-  assert.equal(open.status, "open");
-  assert.match(open.reason, /2 payments still to sort/);
-  assert.equal(V.monthChip({ month: "2026-11", pending: true }).status, "provisional");
-  assert.equal(V.monthChip({ month: "2026-11", ready: true }).status, "ready");
-  assert.notEqual(V.monthChip({ month: "2026-11" }).status, "ready");
-});
-
-test("why this number lists landed Revolut payments and https evidence only", () => {
-  const rows = V.whyPayments([
-    { status: "received", account: "Revolut", currency: "USD", amount: 40, date: "2026-11-02", payer: "Sample Label", evidence: "https://example.com/a" },
-    { status: "received", account: "Revolut", currency: "USD", amount: 9, date: "2026-11-02", payer: "Sample Label", evidence: "javascript:alert(1)" },
-    { status: "received", account: "Wise", currency: "USD", amount: 40, date: "2026-11-02", payer: "Sample Label", movedTo: "r1" },
-    { status: "payable", account: "Revolut", currency: "USD", amount: 3, date: "2026-11-02", payer: "Sample Label" }
-  ], "USD", "2026-11");
-  assert.equal(rows.length, 2);
-  assert.equal(rows[0].evidence, "https://example.com/a");
-  assert.equal(rows[1].evidence, "");
-});
-
-test("a split that does not add up is flagged, and words stay plain", () => {
-  assert.equal(V.splitOff({ amount: 40, splits: [10, 20] }), true);
-  assert.equal(V.splitOff({ amount: 30, splits: [10, 20] }), false);
-  assert.equal(V.splitOff({ amount: 40 }), false);
-  assert.equal(V.plainStatus("Moved to Revolut"), "Already counted in Revolut");
-  assert.equal(V.plainStatus("Statement only (not payable yet)"), "On a statement, not owed yet");
-  assert.equal(V.plainStatus("To sort"), "Waiting for you to sort");
-  assert.match(V.plainStatus("In Wise. It counts when it reaches Revolut"), /On the way/);
-  assert.equal(V.paymentBucket({ movedTo: "r1" }), "confirming");
-  assert.equal(V.paymentBucket({ status: "statement only" }), "statement");
-  assert.equal(V.paymentBucket({ status: "transfer" }), "transfer");
-  assert.equal(V.paymentBucket({ status: "received", account: "Revolut" }), "main");
-});
-
 test("the best post skips anything under 1,000 views and does not use the caption as the title", () => {
   const low = V.bestPost({ ranked: [{ views: 400, caption: "buy this now", rate: 0.2 }] }, []);
   assert.equal(low.reported, false);

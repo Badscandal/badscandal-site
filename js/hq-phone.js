@@ -138,7 +138,7 @@
     var auto = board && board.auto;
     var health = L.accountHealthHome ? L.accountHealthHome(board && board.accountHealth) : { dots: [], needs: [] };
     var risk = [];
-    try { risk = L.attention({ sheet: sheet, ov: ov, board: board, bank: window.HQStaff && HQStaff.bank ? HQStaff.bank() : null }); } catch (e) { risk = []; }
+    try { risk = L.attention({ sheet: sheet, ov: ov, board: board }); } catch (e) { risk = []; }
     /* ONE count (18 Nov 2026): the server's board.needs.total, the same number the needs_you tool gives. A card
        snoozed on this phone still counts: it is still waiting on Luke. */
     var count = board && board.needs && typeof board.needs.total === "number" ? board.needs.total : V.needTotal({ messages: allWaiting, sightings: board && board.sightings, auto: auto, healthNeeds: health.needs }).total;

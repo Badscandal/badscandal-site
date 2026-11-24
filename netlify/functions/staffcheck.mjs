@@ -2,7 +2,7 @@
    São Paulo (12:35, 18:35 and 00:35 UTC). Five minutes before each of Claude's three rounds (09:40,
    15:40, 21:40); the morning one is also before Alfred's 10:00 message, the evening one after Nova's
    21:00 wrap-up. It looks at what a person would otherwise check tab by tab: today's duties, who has
-   said nothing, whether every money account was checked, messages nobody answered, the sheet, the
+   said nothing, messages nobody answered (money accounts: no longer, since 24 Nov 2026), the sheet, the
    Meta key, the cap, the next release, and the release pipeline (late or blocked steps, a pack field
    a step needs within 3 days, and since 11 Nov 2026 evening the warnings that say what lateness means:
    not in Spotify for Artists yet, too late for a pitch, out today without the Spotify link, sent

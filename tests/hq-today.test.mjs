@@ -54,7 +54,8 @@ test("briefing: no spend yesterday, a cap warning, everything on time", () => {
 });
 
 test("needs attention: every rule, each with its place to go", () => {
-  const sheet = sheetOf({ Income: [["#REF!"]] });
+  /* 24 Nov 2026, Luke: money removed from HQ. The Income tab is no longer read; a sheet error is checked on Fans, which goes to Growth & Fans */
+  const sheet = sheetOf({ Fans: [["#REF!"]] });
   sheet.money.cap = { ...sheet.money.cap, status: "stop", spent: 910 };
   const ov = ovOf({
     metaKey: { state: "expired", text: "The Meta key has expired: make a new one" },
@@ -65,7 +66,7 @@ test("needs attention: every rule, each with its place to go", () => {
   const by = (k) => a.filter((x) => x.key.startsWith(k));
   assert.match(by("cap")[0].text, /past 900/); assert.equal(by("cap")[0].href, "#ads");
   assert.equal(by("late:")[0].text, "The Spotify pitch for Me Dá Seu Body is late (Atlas, due Tue 10 Nov)"); assert.equal(by("late:")[0].href, "#releases");
-  assert.equal(by("sheet:Income")[0].href, "#money");
+  assert.equal(by("sheet:Fans")[0].href, "#growth/fans");
   assert.equal(by("key")[0].text, "The Meta key has expired: make a new one"); assert.equal(by("key")[0].href, "#health");
   assert.deepEqual(by("ad:").map((x) => x.text), ["“TM EU - clip 3” spent USD 17.50 in 7 days with no real Spotify taps"], "only USD 10+ with 0 taps");
   assert.equal(by("cpt")[0].text, "Cost per tap yesterday was USD 3.00, more than double the usual USD 1.00");

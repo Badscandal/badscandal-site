@@ -18,26 +18,6 @@ test("a broken date says not reported, and a real one still reads as a day", () 
   assert.equal(L.deskWhen("Invalid Date", "2026-11-18"), "not reported");
 });
 
-test("received, payable and waiting are three lines and never one total", () => {
-  const h = L.moneyHead({ received: { USD: 40, EUR: 10 }, payable: { USD: 5 }, holding: { EUR: 7 } });
-  assert.equal(h.received.length, 2);
-  assert.deepEqual(h.payable, [L.money(5, "USD")]);
-  assert.deepEqual(h.waiting, [L.money(7, "EUR")]);
-  assert.equal(L.moneyHead({}).received.length, 0);
-  const landed = { id: "r", date: "2026-11-18", statement: "2026-11-02", account: "Revolut", status: "received", payer: "Sample Label", amount: 40, currency: "USD" };
-  const wise = { id: "w", date: "2026-11-01", account: "Wise", status: "received", movedTo: "r", payer: "Sample Label", amount: 40, currency: "USD" };
-  const flow = L.payFlow(landed, [landed, wise]);
-  assert.deepEqual(flow.map((s) => s.missing), [false, false, false]);
-  assert.equal(flow[0].label, "Statement");
-  assert.equal(flow[1].label, "Wise");
-  assert.equal(flow[2].label, "Landed at Revolut");
-  const held = L.payFlow({ id: "h", date: "2026-11-10", account: "PayPal", status: "received", payer: "Sample Label" }, []);
-  assert.equal(held[0].missing, true, "no statement");
-  assert.equal(held[1].missing, false);
-  assert.equal(held[2].missing, true, "not at Revolut yet");
-  assert.equal(held[2].text, "missing");
-});
-
 test("the spend gauge is the cap, split by platform, with unread days named and no controls", () => {
   assert.equal(L.spendGauge(null).reported, false);
   assert.equal(L.spendGauge(null).label, "not reported");

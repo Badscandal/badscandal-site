@@ -34,7 +34,8 @@ test("stale duty lines and closed sign-in tasks are rewritten on read", () => {
   assert.match(S.freshDuty("Record Meta too until the meta-api-feed brief says LIVE, and Google (EUR)"), /HQ records Meta itself/);
   assert.match(S.freshDuty("Record Meta too until the meta-api-feed brief says LIVE, and Google (EUR)"), /currency not confirmed/);
   assert.equal(S.freshWhy("Drop", "reports what each song earned"), "Gets each self-release into the stores on time.");
-  assert.equal(S.freshBlocker("Revolut can't be read", { revolutLive: true }), "");
+  /* 24 Nov 2026, Luke: money removed from HQ. The Revolut blocker rule went with the Revolut reader. */
+  assert.equal(S.freshBlocker("Instagram log in needed", { igConnected: true }), "");
   /* 18 Nov 2026: a sign-in task follows the live signed-out list, so this line is not always stale */
   assert.equal(S.staleTask({ id: "T-30", task: "Forge's TikTok Ads sign-in" }), false);
   assert.equal(S.signInOpen({ id: "T-30", task: "Forge's TikTok Ads sign-in" }, "Forge: TikTok Ads signed out"), true);
@@ -101,34 +102,18 @@ test("open messages are only the caller's", async () => {
   assert.equal(open.messages.some((m) => /question for Luke/.test(m.text)), false);
 });
 
-test("a moved Wise row is not counted, and a near-duplicate credit is one row", async () => {
+test("a guide that says eighteen tools is rewritten", async () => {
+  /* 24 Nov 2026, Luke: money removed from HQ. The payable/pending half of this test went with the income tools;
+     luke_briefing's income_this_month now only says money is no longer on HQ. */
   const d = memoryDesk();
-  await S.setSources(d, [
-    { id: "revolut", name: "Revolut", kind: "account", owner: "HQ", cadence: "daily", state: "active" },
-    { id: "wise", name: "Wise", kind: "account", owner: "Ledger", cadence: "daily", state: "active" }]);
-  const wise = await S.submitIncome(d, NOW, R, { bot: "Ledger", date: "2026-11-02", payer: "Sample Distro", amount: "100.00", currency: "EUR", account: "Wise", status: "received", category: "Other" });
-  const rev = await S.submitIncome(d, NOW, R, { bot: "Ledger", date: "2026-11-03", payer: "Sample Distro", amount: "100.00", currency: "EUR", account: "Revolut", status: "received", category: "Other" });
-  await S.linkTransfer(d, NOW, R, { by: "Ledger", revolut_id: rev.entry.id, month: "2026-11", from: [wise.entry.id] });
-  const list = await S.listPayments(d, NOW, { month: "2026-11" });
-  const moved = list.payments.find((e) => e.id === wise.entry.id);
-  assert.equal(S.payOut(moved).status, "moved to Revolut");
-  assert.equal(S.payOut(moved).counted, false);
-  const shadow = await S.submitIncome(d, NOW, R, { bot: "HQ", date: "2026-11-03", payer: "Sample Distro", amount: "100.40", currency: "EUR", account: "Revolut", status: "unsorted", category: "Other" });
-  const again = await S.listPayments(d, NOW, { month: "2026-11" });
-  assert.equal(again.payments.some((e) => e.id === shadow.entry.id), false);
-});
-
-test("payable is not called pending, and a guide that says eighteen tools is rewritten", async () => {
-  const d = memoryDesk();
-  await S.submitIncome(d, NOW, R, { bot: "Ledger", date: "2026-11-04", payer: "Sample Label", amount: "20", currency: "EUR", account: "Revolut", status: "payable", category: "Other" });
   const brief = await call(d, "luke_briefing", { bot: "Alfred" });
-  assert.equal(brief.income_this_month.pending, "nothing logged");
-  assert.equal(brief.income_this_month.payable, "EUR 20.00");
+  assert.equal(brief.income_this_month.pending, "Money is no longer on HQ.");
+  assert.equal(brief.income_this_month.payable, "Money is no longer on HQ.");
   await d.setJSON("guide.json", { text: "There are eighteen tools. Start with my_day.", at: "2026-11-11T00:00:00Z" });
   const g = await call(d, "read_guide", { bot: "Ledger" });
   assert.match(g, new RegExp(`${TOOLS.length} tools`));
   assert.doesNotMatch(g, /eighteen tools/);
-  assert.match(g, /counts once/);
+  assert.match(g, /HQ no longer handles money/); /* 24 Nov 2026: the money rules line says money left HQ */
 });
 
 test("several spend days land in one call, and a lyric-like reply stays pending", async () => {

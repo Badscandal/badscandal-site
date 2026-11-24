@@ -457,15 +457,17 @@ test("releases: the site's check gives one line per release for late steps and i
   assert.equal(late.length, 4, "one line per release");
   assert.match(late[0], /^\w+ Song: \d steps late: upload \(Drop, due Wed 4 Nov\), approved \(Drop, due Wed 4 Nov\), page \(Webmaster, due Thu 5 Nov\)/, "the Spotify step and the pitch are said with what they mean, not as late");
   assert.ok(rep.text.length <= 1500, String(rep.text.length));
-  assert.match(rep.text, /\nRunning:\n- /, "the Running section survives");
+  /* 24 Nov 2026, Luke: money removed from HQ. The always-there "Income received" running line is gone, so with
+     nothing else running the section is just its heading; it still survives the cut */
+  assert.match(rep.text, /\nRunning:/, "the Running section survives");
   /* the text is cut by whole lines and says how many are left out */
   const many = Array.from({ length: 40 }, (_, i) => `Song ${i}: something long enough to fill the message quickly, line number ${i} of forty`);
-  const t = S.reportText("HQ check, today morning: 40 things to look at", many, ["Income logged this month: nothing yet received", "Second running line"]);
+  const t = S.reportText("HQ check, today morning: 40 things to look at", many, ["First running line", "Second running line"]);
   assert.ok(t.length <= 1500);
   const lines = t.split("\n");
   assert.match(lines.find((l) => /more on \/hq$/.test(l)), /^- \+\d+ more on \/hq$/);
   for (const l of lines.filter((x) => /^- Song/.test(x))) assert.match(l, /of forty$/, "never cut mid-line");
-  assert.ok(lines.includes("Running:") && lines.includes("- Income logged this month: nothing yet received"));
+  assert.ok(lines.includes("Running:") && lines.includes("- First running line"));
 });
 
 test("releases: the board sends no lyrics and no change log (a refresh stays small); the page asks for one whole release", async () => {

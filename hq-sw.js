@@ -7,7 +7,7 @@
    Script urls carry ?v= (one content hash of the HQ scripts, including hq-look.js and hq-workspaces.js).
    The cache key is the full url, so a new page can never be paired with an older script. */
 var CACHE = "bs-hq-v18"; /* v18 (21 Nov 2026): Needs you as decision and ask cards, the bots' re-check fixes. v17: Needs you cards, dispute cards, money. */
-var V = "d6d8407f167b";
+var V = "0e83a72080c6";
 var SHELL = ["/hq",
   "/js/crt.js?v=" + V,
   "/js/hq-lib.js?v=" + V,

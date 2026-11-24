@@ -15,7 +15,7 @@ import { toolsVersion } from "./staff-tools.mjs";
 
 export const LEGACY = ["2025-11-25", "2025-06-18", "2025-03-26", "2024-11-05"];
 export const MODERN = "2026-07-28";
-export const SERVER = { name: "badscandal-hq", title: "badscandal HQ", version: "1.19.0" }; /* 23 Nov 2026: cases gain issue and outcome (v18 batch was 1.18.0) */
+export const SERVER = { name: "badscandal-hq", title: "badscandal HQ", version: "1.20.0" }; /* 24 Nov 2026: Rights, money tools and Claude taken off the desk (1.19.0: cases gain issue and outcome) */
 /* protocol version stays 1.0.0. The tool list's fingerprint is extra, so a bot sees it on connect
    (18 Nov 2026 night test). A version-only change is not a reconnect. */
 function serverInfo(deps) {

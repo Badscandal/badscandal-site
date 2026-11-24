@@ -29,19 +29,6 @@ export function memoryDesk() {
 
 const ROSTER = S.DEFAULT_ROSTER.map((b) => ({ access: "", blockers: b.name === "Kevin" ? "TikTok asks for Luke's phone code on a new sign-in" : "", ...b }));
 
-const SOURCES = [
-  { id: "wise", name: "Wise", kind: "account", owner: "Ledger", cadence: "daily", state: "active", how: "read-only connection" },
-  { id: "paypal", name: "PayPal", kind: "account", owner: "Ledger", cadence: "daily", state: "active", how: "read-only connection" },
-  { id: "northlight", name: "Northlight Records", kind: "payer", category: "Label deals", currency: "EUR", lands: "Wise", cadence: "monthly", owner: "Ledger", state: "active", match: ["northlight"], main: true, dueDay: 10 },
-  { id: "distro", name: "Sample Distro", kind: "payer", category: "Self-releases", currency: "USD", lands: "PayPal", cadence: "monthly", owner: "Drop", state: "active", match: ["sample distro"], main: true, dueDay: 5 },
-  { id: "publisher", name: "Sample Publishing", kind: "payer", category: "Publishing", currency: "USD", lands: "Wise", cadence: "quarterly", owner: "Ledger", state: "active", match: ["sample publishing"], main: true, dueDay: 28 },
-  /* the bank reader (11 Nov 2026): the site itself reads this one every morning */
-  { id: "revolut", name: "Revolut", kind: "account", owner: "HQ", cadence: "daily", state: "active", how: "read-only, read by the site every morning" },
-  { id: "plugin", name: "Plug-in sales", kind: "payer", category: "Other", currency: "USD", lands: "PayPal", cadence: "monthly", owner: "", state: "not_tracked" },
-  /* L1 (18 Nov 2026): a monthly source with a pay day and nothing filed, so Expected can show "missing". Made up. */
-  { id: "label", name: "Sample Label", kind: "payer", category: "Label deals", currency: "EUR", lands: "Wise", cadence: "monthly", owner: "Ledger", state: "active", match: ["sample label"], main: true, dueDay: 3 },
-];
-
 /* MADE-UP releases for the pipeline (11 Nov 2026; V2-V5 the same evening). Four, one of each kind:
    - Survivors: a draft in the pipeline, required fields missing;
    - Me Dá Seu Body: an upcoming self-release 13 days out, with warnings: a blocked step, no lyrics yet,
@@ -109,15 +96,15 @@ export function sampleDesk(now = Date.now()) {
   const today = S.spDay(now), ago = (min) => now - min * 60000;
   const d = (back) => new Date(Date.parse(today + "T12:00:00Z") - back * 86400000).toISOString().slice(0, 10);
   const U = (min, bot, status, message, duty = "") => ({ id: "u" + min, at: new Date(ago(min)).toISOString(), sp: S.spStamp(ago(min)), bot, status, message, link: "", duty });
-  const updates = [U(6, "Ledger", "done", "Wise and PayPal checked: 1 new payment (USD 104.04)"), U(33, "Atlas", "working", "Reading Spotify for Artists for Touch Me"), U(58, "Nova", "info", "Duties reset for today; 2 briefs read")];
+  const updates = [U(6, "Forge", "done", "Yesterday's Meta, Google and TikTok spend recorded"), U(33, "Atlas", "working", "Reading Spotify for Artists for Touch Me"), U(58, "Nova", "info", "Duties reset for today; 2 briefs read")];
   const M = (min, id, from, to, text, needs = "none", extra = {}) => ({ id, at: new Date(ago(min)).toISOString(), sp: S.spStamp(ago(min)), from, to, text, needs, re: "", options: [], kind: "note", resolved: null, ...extra });
   const messages = [
-    M(12, "msample0001a", "HQ", "Luke", "HQ check, " + today + " morning: 3 things to look at\n\nNeeds a look:\n- Kevin is blocked: TikTok login expired\n- Laura is late (due 00:30): Log YouTube subscribers\n- Income: 2 payments in Revolut that nobody has sorted yet\n\nRunning:\n- Duties: 3 of 6 done, 1 late, 1 blocked\n- Income logged this month: USD 104.04 + EUR 112.01 received", "none", { kind: "report" }),
+    M(12, "msample0001a", "HQ", "Luke", "HQ check, " + today + " morning: 3 things to look at\n\nNeeds a look:\n- Kevin is blocked: TikTok login expired\n- Laura is late (due 00:30): Log YouTube subscribers\n- Atlas has not reported what is upcoming in Spotify for Artists yet\n\nRunning:\n- Duties: 3 of 6 done, 1 late, 1 blocked", "none", { kind: "report" }),
     M(40, "msample0002a", "Kevin", "Luke", "TikTok signed me out. I need the 6-digit code TikTok sends to your phone, typed into the secure form (not here).", "action"),
     M(95, "msample0003a", "Nova", "Luke", "Survivors on Fri 11 Dec? Files have to reach Drop by Fri 13 Nov.", "decision", { options: ["Yes, Fri 11 Dec", "Move it to January", "Not this one"],
       recommendations: [{ by: "Nova", option: "Move it to January", why: "Fri 11 Dec is only 6 days after Slow Burn and in the slow holiday weeks: a January Friday gives the pitch time (made up).", at: new Date(ago(90)).toISOString() }] }),
-    M(130, "msample0004a", "Claude", "Nova", "Ledger's Northlight row for this month is still pending. Ask Ledger to check the statement email again at 12:00.", "action"),
-    M(125, "msample0005a", "Nova", "Claude", "Asked. Ledger will post an update when it has looked.", "none", { re: "msample0004a" }),
+    M(130, "msample0004a", "Claude", "Nova", "Laura's YouTube row for yesterday is still missing. Ask Laura to log it at 12:00.", "action"),
+    M(125, "msample0005a", "Nova", "Claude", "Asked. Laura will post an update when it has looked.", "none", { re: "msample0004a" }),
     M(300, "msample0006a", "Claude", "all", "From today every bot starts its run with my_day and finishes with post_update. The guide is in read_guide.", "none"),
     /* two things Luke already answered (the "You answered" block): Atlas has looked since, Drop not yet */
     M(200, "msample0007a", "Atlas", "Luke", "OK to pitch Me Dá Seu Body as Dance / House?", "decision", { options: ["Yes", "Pick another genre"], resolved: { by: "Luke", at: new Date(ago(150)).toISOString(), note: "Yes" } }),
@@ -139,29 +126,7 @@ export function sampleDesk(now = Date.now()) {
         changes: [{ label: "Platform", from: "", to: "YouTube" }, { label: "Image", from: "", to: "Banner" }, { label: "New image", from: "", to: "https://example.com/sample/yt-banner.jpg" }, { label: "Rule", from: "", to: "YouTube channel banner" }, { label: "Checked", from: "", to: "2560 x 1440, jpg, 2 MB: nothing to fix" }] } }),
   ];
   messages.sort((a, b) => (a.at < b.at ? 1 : -1)); /* newest first, as the real desk lists them */
-  const E = (back, payer, amount, currency, status, account, category, by = "Ledger") => ({ id: "i" + back + payer.length, at: new Date(ago(back * 1440 + 90)).toISOString(), by, date: d(back), payer, amount, currency, status, category, account, reference: "", period: "", source: "", note: "" });
-  const entries = [E(0, "Sample Distro", 104.04, "USD", "received", "PayPal", "Self-releases"), E(2, "Northlight Records", 112.01, "EUR", "pending", "Statement only", "Label deals"),
-    E(9, "Sample Publishing", 420.5, "USD", "received", "Revolut", "Publishing"), E(34, "Northlight Records", 96.4, "EUR", "received", "Wise", "Label deals"), E(36, "Sample Distro", 88.1, "USD", "received", "PayPal", "Self-releases"),
-    /* batch 4 (15 Nov 2026): owed and ready to pay out, and a statement still under the payout line (made up) */
-    E(3, "Sample Collecting Society", 61.2, "USD", "payable", "Statement only", "Publishing"), E(4, "Sample Small Store", 7.35, "USD", "statement only", "Statement only", "Self-releases")];
-  /* MADE-UP rows as the Revolut reader files them (by HQ): two it could not place ("to sort", in no
-     total) and one of Luke's own transfers between his accounts (never income) */
-  const R = (back, payer, amount, status) => ({ ...E(back, payer, amount, "EUR", status, "Revolut", "Other", "HQ"), id: "irevsample" + back + payer.length + "x" + amount, reference: "sample-tx-" + back + payer.length + "x" + amount, note: "Read from Revolut" });
-  entries.push(R(0, "A. Example", 60, "unsorted"), R(1, "Made-up Studio Ltd", 350, "unsorted"), R(1, "Own savings pocket", 200, "transfer"));
-  /* L1 + L9 (18 Nov 2026), made up. One statement still open (due on the source's pay day). One statement
-     of USD 110 paid as USD 104.04 in PayPal and USD 100 in Revolut, so the route's fee is the gap.
-     One Wise payout in EUR that landed in USD, so the exchange is "not enough data". */
-  const pp = entries.find((e) => e.payer === "Sample Distro" && e.amount === 104.04);
-  pp.id = "isamplepp01"; pp.source = "distro"; pp.movedTo = "isamplerev01";
-  const wise = entries.find((e) => e.payer === "Northlight Records" && e.account === "Wise");
-  wise.id = "isamplewise1"; wise.source = "northlight"; wise.movedTo = "isamplerev02";
-  entries.push(
-    { id: "isamplerev01", at: pp.at, by: "Ledger", date: today, payer: "Sample Distro", amount: 100, currency: "USD", status: "received", category: "Self-releases", account: "Revolut", reference: "", period: "", source: "distro", note: "From PayPal", from: ["isamplepp01"] },
-    { id: "isamplestmt1", at: new Date(ago(20 * 1440)).toISOString(), by: "Ledger", date: d(20), payer: "Sample Distro", amount: 110, currency: "USD", status: "pending", category: "Self-releases", account: "Statement only", reference: "", period: "", source: "distro", note: "", paidBy: "isamplepp01" },
-    { id: "isamplestmt2", at: new Date(ago(8 * 1440)).toISOString(), by: "Ledger", date: today.slice(0, 7) + "-01", payer: "Sample Distro", amount: 40, currency: "USD", status: "statement only", category: "Self-releases", account: "Statement only", reference: "", period: "", source: "distro", note: "" },
-    { id: "isamplerev02", at: wise.at, by: "Ledger", date: wise.date, payer: "Northlight Records", amount: 100, currency: "USD", status: "received", category: "Label deals", account: "Revolut", reference: "", period: "", source: "northlight", note: "From Wise", from: ["isamplewise1"] });
-  const checks = [{ at: new Date(ago(6)).toISOString(), day: today, by: "Ledger", account: "Wise", new: 0, note: "" }, { at: new Date(ago(6)).toISOString(), day: today, by: "Ledger", account: "PayPal", new: 1, note: "" },
-    { at: new Date(ago(200)).toISOString(), day: today, by: "HQ", account: "Revolut", new: 2, note: "" }];
+  /* the made-up payments, sources and the Revolut sample are gone (24 Nov 2026, Luke: "lets fully remove the money section") */
   const seen = Object.fromEntries(["Ledger", "Atlas", "Nova", "Steve", "Forge", "Drop"].map((n, i) => [n, { at: new Date(ago(6 + i * 27)).toISOString(), tool: "post_update" }]));
   seen.Claude = { at: new Date(ago(130)).toISOString(), tool: "send_message" };
   /* read markers (V6): the same six read their messages when they last came (my_day); so Luke's answer
@@ -169,7 +134,7 @@ export function sampleDesk(now = Date.now()) {
      "Read by 6 of 14" */
   const read = Object.fromEntries(Object.entries(seen).filter(([n]) => n !== "Claude").map(([n, v]) => [n, { at: v.at }]));
   return { roster: ROSTER, updates, messages, cards: { atlas: { workingOn: "Backfilling Touch Me's daily rows to release day", needs: "", at: new Date(ago(200)).toISOString() }, kevin: { workingOn: "TikTok banner", needs: "Luke's phone code for TikTok", at: new Date(ago(400)).toISOString() } },
-    seen, income: S.incomeReport(entries, checks, SOURCES.map((s) => ({ match: [], category: "Other", currency: "", lands: "", how: "", blocker: "", needsLuke: "", ...s })), today), config: { botsOn: true, changedAt: null },
+    seen, config: { botsOn: true, changedAt: null },
     releases: sampleReleases(now), read, sightings: sampleSightings(now),
     /* one case waiting on Luke (Needs you) and one RouteNote case the bot is still running. Made up. */
     disputes: [
@@ -186,17 +151,6 @@ export function sampleDesk(now = Date.now()) {
       "instagram-photo": { current: { link: "https://example.com/sample/ig-now.jpg", changed: d(20), by: "Steve", at: new Date(ago(20 * 1440)).toISOString() },
         approved: { link: "https://example.com/sample/ig-next.jpg", by: "Steve", at: new Date(ago(30)).toISOString(), msg: "msampleprof1" } },
     } } };
-}
-
-/* MADE-UP state of the Revolut reader for /hq?sample=1 (GET /api/bank/status?sample=1): connected,
-   read this morning at 06:50 São Paulo (09:50 UTC), 2 payments in, the approval good for 86 more days.
-   The account names are invented; nothing is opened or asked of any bank. */
-export function sampleBankStatus(now = Date.now()) {
-  const d = new Date(now), at = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 9, 50);
-  const read = new Date(at <= now ? at : at - 86400000).toISOString();
-  return { configured: true, connected: true, needsApproval: false, aspsp: "Revolut", validUntil: new Date(now + 86.5 * 86400000).toISOString(), daysLeft: 86, expiring: false,
-    accounts: [{ name: "Current", currency: "EUR", last4: "0001" }, { name: "Savings", currency: "EUR", last4: "0002" }, { name: "Current", currency: "USD", last4: "0003" }], /* made up */
-    lastRunAt: read, lastOkAt: read, lastError: null, lastAdded: 2, partial: false, canConnectHere: true };
 }
 
 export function sampleBoard(now = Date.now()) {
