@@ -55,6 +55,7 @@ import * as S from "../lib/staff.mjs";
 import * as P from "../lib/profile-images.mjs";
 import * as W from "../lib/workspaces.mjs";
 import { sampleBoard, sampleReleases, sampleSightings } from "../lib/staff-sample.mjs";
+import { exportMoney } from "../lib/money-export.mjs";
 import { callTool, CLAUDE_TOOLS, INSTRUCTIONS, TOOLS, toolsFor, instructionsFor } from "../lib/staff-tools.mjs";
 
 const NO_STORE = { "Cache-Control": "no-store", "X-Robots-Tag": "noindex, nofollow" };
@@ -198,6 +199,14 @@ async function api(req, context, path) {
   const me = role === "luke" ? "Luke" : "Claude";
 
   /* 24 Nov 2026, Luke: "lets fully remove the money section". GET month-close.csv and POST sort are gone. */
+  /* 24 Nov 2026: the one-time move to badscandal books. Luke's login only (not Claude's key), never the sample. */
+  if (path === "money-export" && req.method === "GET") {
+    if (role !== "luke") return json(403, { error: "Only Luke downloads the money export" });
+    if (sample) return json(404, { error: "Not in the sample" });
+    const out = await exportMoney(stores(context).desk, now);
+    return new Response(JSON.stringify(out), { status: 200, headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store",
+      "content-disposition": `attachment; filename="hq-money-export-${S.spDay(now)}.json"` } });
+  }
   if (path === "fields" && req.method === "GET") return json(200, { today: S.spDay(now), packFields: S.packFieldsOut(), releaseSteps: S.releaseStepsOut() });
   if (path === "board" && req.method === "GET") {
     if (sample) return json(200, { sample: true, ...sampleBoard(now), auto: C.sampleAuto(now), accountHealth: sampleReport(now), needs: C.needsCount(await sampleNeedsDesk(now), S.spDay(now), now) });
