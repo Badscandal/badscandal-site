@@ -28,12 +28,15 @@
   --maroon:#7A7A7A;
   --maxw:1280px;
   --pad:clamp(18px,4vw,56px);
-  /* System A / Film Print — locked. Archivo (wdth 125 / wght 900) is the
-     wordmark + big display ONLY; Instrument Serif carries titles;
-     Figtree is everything you read; DM Mono is slates/labels/dates. */
-  --font-display:'Instrument Serif',Georgia,'Times New Roman',serif;
-  --font-body:'Figtree',-apple-system,Helvetica,Arial,sans-serif;
-  --font-mono:'DM Mono',ui-monospace,Menlo,monospace;
+  /* System A / Film Print. Archivo (wdth 125 / wght 900) is the
+     wordmark + big display ONLY; everything else is SF Pro (24 Nov 2026,
+     Luke's call): titles, body, slates/labels/dates. SF Pro can't be
+     web-hosted (Apple licence), so it comes from the device: Apple
+     devices get real SF Pro; others fall back to their own system face. */
+  --font-sf:-apple-system,BlinkMacSystemFont,'SF Pro Display','SF Pro Text',system-ui,'Helvetica Neue',Helvetica,Arial,sans-serif;
+  --font-display:var(--font-sf);
+  --font-body:var(--font-sf);
+  --font-mono:var(--font-sf);
   --font-mark:'Archivo',Helvetica,Arial,sans-serif;
   --ease:cubic-bezier(.22,.9,.24,1);
 }
@@ -48,8 +51,7 @@ a:hover{color:var(--ember)}
 a:focus-visible,button:focus-visible,summary:focus-visible{
   outline:2px solid var(--blaze);outline-offset:3px}
 b,strong{font-weight:600;color:var(--white)}
-/* Instrument Serif ships one weight (400) — asking for 700 would only
-   faux-bold it. Display line-height sits loose (~1.1–1.25) on purpose. */
+/* Display line-height sits loose (~1.1–1.25) on purpose. */
 h1,h2,h3{font-family:var(--font-display);font-weight:400;color:var(--paper);
   letter-spacing:-.01em;line-height:1.18}
 /* headline signature: exactly ONE word per headline gets the true italic */
@@ -1309,7 +1311,7 @@ video::-webkit-media-controls-panel{display:none !important}
 .rel-body{padding:26px 22px 30px;text-align:center}
 .rel-body .tag{margin-bottom:10px}
 .rel-title{font-family:var(--font-display);font-weight:400;
-  font-size:clamp(36px,7vw,60px);line-height:1;letter-spacing:-.01em}
+  font-size:clamp(36px,7vw,60px);line-height:1.05;letter-spacing:-.02em}
 .rel-body .buy-btn{margin-top:22px}
 .rel-links{margin-top:20px;display:flex;justify-content:center;flex-wrap:wrap;gap:8px 22px;
   font-family:var(--font-mono);font-weight:400;font-size:11px;letter-spacing:.12em;
