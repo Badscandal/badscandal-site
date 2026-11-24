@@ -1631,7 +1631,7 @@ body.ws-on main{margin-left:0;max-width:none}
 .pf-chip span.pf-n{max-width:76px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--muted)}
 .pf-av{position:relative;display:grid;place-items:center;width:52px;height:52px;border-radius:50%;background:#1a1d27;color:var(--paper);font:700 15px/1 var(--sans);overflow:hidden;box-shadow:0 0 0 2px #0B0D12,0 0 0 4px var(--ptone,#5a5f6e)}
 .pf-av img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
-.pf-t-ok{--ptone:#3DDC97}.pf-t-issue{--ptone:var(--red)}.pf-t-none{--ptone:#5a5f6e}
+.pf-t-ok{--ptone:#3DDC97}.pf-t-warn{--ptone:var(--amber,#FBBF24)}.pf-t-bad{--ptone:var(--red)}.pf-t-none{--ptone:#5a5f6e}
 .profmasters-fold{margin:0 0 16px;border:1px solid var(--glass-line,var(--ink-3));border-radius:16px;padding:0 14px}
 .profmasters-fold>summary{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 12px;min-height:48px;padding:12px 0;cursor:pointer;list-style:none}
 .profmasters-fold>summary::-webkit-details-marker{display:none}
@@ -1654,7 +1654,11 @@ body.ws-on main{margin-left:0;max-width:none}
 .pf-kind small{font-weight:500;font-size:13px;color:var(--muted)}
 .pf-state{display:inline-flex;align-items:center;gap:6px;margin:6px 0 0;font-size:14px;font-weight:600}
 .pf-state i{width:8px;height:8px;border-radius:50%;background:var(--ptone,#5a5f6e)}
-.pf-state.pf-t-issue{color:var(--red)}.pf-state.pf-t-ok{color:#3DDC97}
+.pf-state.pf-t-bad,.pf-headline.pf-t-bad{color:var(--red)}.pf-state.pf-t-warn,.pf-headline.pf-t-warn{color:var(--amber,#FBBF24)}.pf-state.pf-t-ok,.pf-headline.pf-t-ok{color:#3DDC97}
+.pf-head p.pf-headline{margin:2px 0 0;font-size:15px;font-weight:650;overflow-wrap:anywhere}
+.pf-head>div{min-width:0}
+.pf-state{align-items:flex-start}.pf-state i{flex:none;margin-top:.4em}
+.pf-info{min-width:0}.pf-line{overflow-wrap:anywhere}
 .pf-line{margin:2px 0 0;font-size:14px;color:var(--muted)}
 .pf-acts{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
 .pf-acts a{display:inline-flex;align-items:center;min-height:44px;padding:0 14px;border-radius:999px;border:1px solid var(--ink-3);text-decoration:none;font-size:14px;font-weight:600}
@@ -1666,16 +1670,19 @@ body.ws-on main{margin-left:0;max-width:none}
 .pf-thumb.empty{background:transparent;box-shadow:none;border:1.5px dashed var(--ptone,#5a5f6e)}
 .pf-thumb.pf-wide.empty{aspect-ratio:auto !important;height:56px;max-width:260px}
 .pf-thumb span{font-size:12px;color:var(--muted)}
-/* 21 Nov 2026: uploads first, issue cards, every platform folded */
+/* 21 Nov 2026: uploads first, every platform folded. 24 Nov 2026: the issue cards and their reply box are gone (Luke
+   sorts problems out in the bot's own chat); each card carries Try again and Open <platform> */
 #profMasters{margin:0 0 16px}
 #profMasters .profprev{margin:0 0 10px}
-.pf-issue{margin:0 0 12px;box-shadow:inset 3px 0 0 var(--red)}
-.pf-issue .pf-item{margin:10px 0 0}
-.pf-issue .pf-itext{margin:4px 0 0;font-size:15px;line-height:1.45}
-.pf-reply{display:flex;flex-direction:column;gap:8px;margin-top:12px}
-.pf-reply textarea{width:100%;box-sizing:border-box;min-height:72px;font:inherit;font-size:16px;color:var(--paper);background:rgba(255,255,255,.05);border:1px solid var(--ink-3);border-radius:12px;padding:10px 12px;resize:vertical}
-.pf-reply .sendbtn{align-self:flex-start;min-height:44px;padding:0 16px}
-.pf-msg{margin:0;font-size:14px;color:var(--muted)}
+.pf-card{border-left:3px solid var(--ptone,transparent)}
+.pf-c-ok{--ptone:#3DDC97}.pf-c-warn{--ptone:var(--amber,#FBBF24)}.pf-c-bad{--ptone:var(--red)}.pf-c-none{--ptone:transparent}
+.pf-card .pf-acts{margin-top:14px}
+.pf-acts button{min-height:44px}
+.pf-acts a.pf-open{color:var(--paper)}
+.pf-confirm{flex:1 1 100%;margin-top:0}
+.pf-confirm .pf-acts{margin-top:0}
+.pf-shotlink{display:block;width:fit-content;max-width:100%;border-radius:12px}
+.pf-msg{margin:8px 0 0;font-size:14px;color:var(--muted)}
 .pf-msg:empty{display:none}
 .pf-all{margin-top:8px;border:1px solid var(--glass-line,var(--ink-3));border-radius:16px;padding:0 14px}
 .pf-all>summary{display:flex;align-items:center;min-height:52px;cursor:pointer;list-style:none;font-weight:650}
@@ -1683,7 +1690,6 @@ body.ws-on main{margin-left:0;max-width:none}
 .pf-all>summary::after{content:"Show";margin-left:auto;font-weight:500;font-size:13px;color:var(--muted)}
 .pf-all[open]>summary::after{content:"Hide"}
 .pf-all[open]{padding-bottom:14px}
-.pf-allgood{margin:0 0 12px;color:#3DDC97;font-weight:600}
 </style>
 </head>
 <body>
@@ -1917,9 +1923,10 @@ body.ws-on main{margin-left:0;max-width:none}
   <section class="card view" id="growth"><h2>Growth &amp; Fans</h2><p class="sub">TikTok, Instagram, then YouTube. A missing number says not reported. It is never shown as zero.</p><div class="sheeterr" id="errGrowth" hidden></div><div id="growthMain"></div><div class="grid g4" id="growthList" hidden></div><div class="subsec" id="ideasBox" hidden></div><div class="subsec" id="igBox"></div>
     <div class="subsec" id="growth-fans"><h3 class="sech">Fans</h3><p class="sub" id="fansSub"></p><div class="sheeterr" id="errFans" hidden></div><div id="fanExtra"></div><div class="tile"><div class="scroll"><table class="stack" id="fanTable"></table></div></div></div>
   </section>
-  <section class="card view" id="profiles"><h2>Profiles</h2><p class="sub" id="profNote">Upload your photo and banner. Each platform's copy is made from them. Green: it uses yours. Red: there's an issue.</p>
-    <!-- Profiles (21 Nov 2026, Luke): his two uploads, the strip (green = uses his upload, red = an issue), issue
-         cards with a reply to the bot, then every platform folded away -->
+  <section class="card view" id="profiles"><h2>Profiles</h2><p class="sub" id="profNote">Upload your photo and banner. Right after, each platform's bot logs in, puts it up, checks the public profile and sends a screenshot. Green: the profile shows yours. Yellow: the bot can't log in, or one image isn't yours. Red: neither the photo nor the banner is yours. Grey: nothing uploaded yet.</p>
+    <p class="secsub" id="profRule">A problem shows only here. Sort it out with that bot in its own chat: once it works, the bot uploads your picture, checks the profile and the ring turns green. Tap a ring to see what is wrong.</p>
+    <!-- Profiles (21 Nov 2026, Luke): his two uploads, the strip, then every platform folded away. 24 Nov 2026: the
+         ring is the bot's check of the real profile; a ring opens its card in Every platform (no issue cards) -->
     <div class="profmasters" id="profMasters">
       <article class="t-card">
         <h3 class="t-lbl">Profile photo</h3>
@@ -1938,7 +1945,6 @@ body.ws-on main{margin-left:0;max-width:none}
     </div>
     <p class="profsum" id="profSum" role="status"></p>
     <nav class="pf-strip" id="profStrip" aria-label="Platforms"></nav>
-    <div id="profIssues"></div>
     <details class="pf-all" id="profiles-all"><summary><span>Every platform</span></summary>
       <div class="profgrid" id="profList"><div class="ph big"></div><div class="ph"></div></div>
     </details>
@@ -2085,18 +2091,18 @@ body.ws-on main{margin-left:0;max-width:none}
   }, 400);
 })();
 </script>
-<script src="js/crt.js?v=aa64c502342a" defer></script>
-<script src="js/hq-lib.js?v=aa64c502342a" defer></script>
-<script src="js/hq-chart.js?v=aa64c502342a" defer></script>
-<script src="js/hq-growth.js?v=aa64c502342a" defer></script>
-<script src="js/hq-look.js?v=aa64c502342a" defer></script>
-<script src="js/hq.js?v=aa64c502342a" defer></script>
-<script src="js/hq-staff.js?v=aa64c502342a" defer></script>
-<script src="js/hq-phone.js?v=aa64c502342a" defer></script>
-<script src="js/hq-shell.js?v=aa64c502342a" defer></script>
-<script src="js/hq-workspaces.js?v=aa64c502342a" defer></script>
-<script src="js/hq-app.js?v=aa64c502342a" defer></script>
-<script src="js/hq-cmd.js?v=aa64c502342a" defer></script>
-<script src="js/hq-pages.js?v=aa64c502342a" defer></script>
+<script src="js/crt.js?v=62a451a8ab71" defer></script>
+<script src="js/hq-lib.js?v=62a451a8ab71" defer></script>
+<script src="js/hq-chart.js?v=62a451a8ab71" defer></script>
+<script src="js/hq-growth.js?v=62a451a8ab71" defer></script>
+<script src="js/hq-look.js?v=62a451a8ab71" defer></script>
+<script src="js/hq.js?v=62a451a8ab71" defer></script>
+<script src="js/hq-staff.js?v=62a451a8ab71" defer></script>
+<script src="js/hq-phone.js?v=62a451a8ab71" defer></script>
+<script src="js/hq-shell.js?v=62a451a8ab71" defer></script>
+<script src="js/hq-workspaces.js?v=62a451a8ab71" defer></script>
+<script src="js/hq-app.js?v=62a451a8ab71" defer></script>
+<script src="js/hq-cmd.js?v=62a451a8ab71" defer></script>
+<script src="js/hq-pages.js?v=62a451a8ab71" defer></script>
 </body>
 </html>

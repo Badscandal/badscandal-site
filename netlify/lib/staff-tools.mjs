@@ -45,7 +45,9 @@ const INSTRUCTION_LINES = [
   ["Forge Drop Verse Webmaster", "Before anything goes to the stores or into an ad, run preflight: the artist name is badscandal, one word (capitalisation does not matter), the primary artist is Badscandal and matches Spotify artist 29kaubgb6Esvwu0idVndGy, ads and links go to https://badscandal.com/<song>, the master is a WAV, the artwork a JPG or PNG 3000 x 3000. Fix what it lists first."],
   ["Atlas Laura Webmaster", "Before you upload a Spotify Canvas, a Spotify header image, a YouTube banner or a cover, run preflight with asset (canvas, spotify_header, youtube_banner or cover) and the file's width, height, seconds, format and size_mb: it checks them against that platform's rule. Fix what it lists first."],
   /* L12 (18 Nov 2026): profile photos and banners. HQ never logs in. */
-  ["Atlas Laura Steve Kevin", "Profiles: HQ's Profiles section lists the profile photo and the banner on every official platform. Luke uploads one master profile photo and one master banner there. When the shape fits, a sized copy is made. When it does not fit, profile_jobs lists the job: make an AI version of his master at the exact size that looks exactly like it. profile_master is the master and the size, profile_rework stores your file (exact pixels), and profile_uploaded records the https link after you put it on the platform yourself. HQ never logs in and never sends a file to a platform. Record the image that is live with profiles (action record). To propose a different image, action propose: Luke is asked \"Yes, correct\". Instagram is Luke's to upload. X has no owner yet: Luke uploads that one himself. Deezer is a square at least 1200. TikTok's help only requires 20 px; the file we prepare is 720. TIDAL is a square 1500."],
+  /* 24 Nov 2026, Luke: "immediately after luke submits an upload, upload it to each respected profile and then change
+     the profile ring to green". Green only after the bot checked the public profile. */
+  ["Atlas Laura Steve Kevin", "Profiles: HQ's Profiles section lists the profile photo and the banner on every official platform. Luke uploads one master profile photo and one master banner there. When the shape fits, a sized copy is made. When it does not fit, profile_jobs lists the job: make an AI version of his master at the exact size that looks exactly like it. profile_master is the master and the size, profile_rework stores your file (exact pixels). After Luke uploads, the same day: log in to each of your platforms, put it up, open the public profile, take a screenshot and record it with profile_uploaded (result live + screenshot_base64 + page). Only that turns his ring green; a copy on HQ alone does not. Could not log in: result login with what happened, then fix it with Luke in your own chat (never on HQ); once it works, upload, check and record live. The profile shows another image: result not_mine with the screenshot. A \"Try again\" from Luke arrives as a message and in profile_jobs (kind retry). HQ never logs in and never sends a file to a platform. Record the image that is live with profiles (action record). To propose a different image, action propose: Luke is asked \"Yes, correct\". Instagram is Luke's to upload. X has no owner yet: Luke uploads that one himself. Deezer is a square at least 1200. TikTok's help only requires 20 px; the file we prepare is 720. TIDAL is a square 1500."],
   /* A4 (17 Nov 2026): automatic chasing */
   [null, "When a duty or a release step of yours is late, HQ sends you ONE reminder (07:00 to 22:00). Do it then and post_update or release_step; if it is still not done 2 hours later, Nova is told and chases you."],
   ["Nova", "Nova: HQ reminds the bots about late duties and steps by itself and tells you only when one is still late 2 hours after its reminder: then chase that bot, or tell Luke if it needs him."],
@@ -499,8 +501,8 @@ export const TOOLS = [
   { name: "read_guide", title: "Read the staff guide", readOnly: true,
     description: "The written guide to this desk: who does what, the daily times, how messages work, the rules that never bend. Read it once when you are first connected, and again whenever Nova says it changed.",
     inputSchema: obj({ bot: BOT }, ["bot"]) },
-  { name: "profile_jobs", title: "List profile images that need a new shape", readOnly: true,
-    description: "ATLAS (Spotify, Apple Music, SoundCloud, Deezer, Amazon Music, TIDAL), LAURA (YouTube), KEVIN (TikTok), STEVE (Facebook). Nova sees every job. A job exists when Luke's master is the wrong shape or too small. Make an AI version of it at the exact size, exactly like his (nothing cropped or changed), then profile_rework. HQ never logs in and never sends a file to a platform. Reading this list changes nothing: HQ's hourly check tells Luke about a job open more than a day.",
+  { name: "profile_jobs", title: "List the profile images waiting on you", readOnly: true,
+    description: "ATLAS (Spotify, Apple Music, SoundCloud, Deezer, Amazon Music, TIDAL), LAURA (YouTube), KEVIN (TikTok), STEVE (Facebook). Nova sees every job. kind rework = Luke's master is the wrong shape or too small: make an AI version at the exact size, exactly like his (nothing cropped or changed), then profile_rework. kind upload = Luke uploaded and the public profile has no live check since: log in, put it up, screenshot the profile, profile_uploaded result live. kind retry = Luke pressed Try again: do the same now. HQ never logs in and never sends a file to a platform. Reading this list changes nothing.",
     inputSchema: obj({ bot: BOT }, ["bot"]) },
   { name: "profile_master", title: "Download a profile master and its target size", readOnly: true,
     description: "The master Luke uploaded, and the size a platform needs. kind = photo or banner, or slot = the id from profile_jobs (for example spotify-header). url is not public: open it with the same Authorization header you use for the connector. The answer has the exact width and height. HQ never logs in and never sends the file to a platform.",
@@ -512,13 +514,16 @@ export const TOOLS = [
     inputSchema: obj({ bot: BOT,
       slot: str("The id from profile_jobs, for example spotify-header."),
       image_base64: str("The picture itself, base64. A JPG or PNG at the exact size the job names.") }, ["bot", "slot", "image_base64"]) },
-  { name: "profile_uploaded", title: "Mark a profile image as uploaded, or rejected", idempotent: true,
-    description: "After YOU put the image on the platform yourself, record the proof. slot = the id. link = an https link that shows it there. HQ does not upload it and does not log in. If the platform rejected it, set rejected true and put what it said in note: Luke is asked, and the job stays open. Nothing on the platform is changed from here.",
+  { name: "profile_uploaded", title: "Record what the public profile shows", idempotent: true,
+    description: "After YOU log in and put Luke's image up, open the PUBLIC profile and record what it shows, with a screenshot of that image. result live = it shows Luke's current upload (this alone turns his ring green). not_mine = it shows another image (screenshot required). login = you could not log in: say what happened in note, then sort it out with Luke in your own chat; once it works, upload, check and record live. failed = the upload did not work (note). None of these messages Luke: he sees them on HQ. rejected true (old) = the platform refused it: Luke is asked. HQ never logs in and changes nothing on the platform.",
     inputSchema: obj({ bot: BOT,
       slot: str("The id from profile_jobs, for example youtube-banner."),
-      link: str("The https link that shows the image on the platform, after you uploaded it yourself."),
-      rejected: { type: "boolean", description: "True when the platform refused the image. Say what it said in note." },
-      note: str("With rejected: what the platform said, in its words.") }, ["bot", "slot"]) },
+      result: { type: "string", enum: ["live", "not_mine", "login", "failed"], description: "What you saw. Default live." },
+      screenshot_base64: str("A JPG or PNG screenshot of the image as the public profile shows it now, base64, 4 MB at most. Required for not_mine; send it every time."),
+      page: str("The https link to the public profile you checked."),
+      link: str("Optional: an https link that shows the image there."),
+      rejected: { type: "boolean", description: "Old: true when the platform refused the image. Say what it said in note." },
+      note: str("What happened, in plain words (login, failed, rejected). Never a password or a code.") }, ["bot", "slot"]) },
 ];
 
 /* Nothing is Claude-only. (24 Nov 2026, Luke: "lets fully remove the money section": the income tools
@@ -1137,7 +1142,8 @@ async function runTool(tool, args, ctx, read) {
             images: p.slots.map((s) => ({ id: s.id, kind: s.kind, rule: s.rule, size: s.sizeLine || "", status: s.current && s.status === "waiting" ? "Live" : s.statusLine || "",
               current: s.current ? { link: s.current.link, changed: s.current.changed, by: s.current.by } : "not recorded yet",
               waiting_for_luke: s.waiting ? { link: s.waiting.link, message: s.waiting.id } : null,
-              said_yes: s.approved ? { link: s.approved.link, upload: `${p.owner || "Luke"} uploads it by hand. HQ does not change the platform.` } : null })) })),
+              said_yes: s.approved ? { link: s.approved.link, upload: `${p.owner || "Luke"} uploads it by hand. HQ does not change the platform.` } : null,
+              last_check: s.check ? { result: s.check.result, by: s.check.by, at: s.check.at, after_lukes_upload: s.check.fresh } : null })) })),
           shown_on: "badscandal.com/hq, Profiles" };
       }
       if (action === "record") return S.recordProfile(store, now, roster, { by: me, platform: args.platform, image: args.image, link: args.link, changed: args.changed || args.changed_on });
@@ -1538,7 +1544,7 @@ async function runTool(tool, args, ctx, read) {
     case "profile_jobs": return P.listProfileJobs(store, now, roster, { by: me });
     case "profile_master": return P.profileMasterFile(store, roster, { by: me, kind: args.kind, slot: args.slot });
     case "profile_rework": return P.saveProfileVersion(store, now, roster, { by: me, slot: args.slot, image_base64: args.image_base64, source: "rework" });
-    case "profile_uploaded": return P.markProfileUploaded(store, now, roster, { by: me, slot: args.slot, link: args.link, rejected: args.rejected, note: args.note });
+    case "profile_uploaded": return P.markProfileUploaded(store, now, roster, { by: me, slot: args.slot, link: args.link, rejected: args.rejected, note: args.note, result: args.result, screenshot_base64: args.screenshot_base64, page: args.page });
   }
   throw new S.StaffError("That tool is not available.");
 }
