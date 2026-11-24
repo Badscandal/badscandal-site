@@ -12,6 +12,7 @@ No money amounts, payer names or account numbers in this file: the repo is publi
 
 | When | PR | What |
 |------|----|------|
+| 24 Nov | #117 | Profiles: a ring is green only after the bot checked the real profile after Luke's upload; yellow = can't log in or one image not his, red = photo and banner not his; the ring shows the bot's screenshot; tap a ring for the reason, Try again (to the bot) and Open the platform. Connector 1.21.0, 43 tools. |
 | 24 Nov | #118 | SF Pro self-hosted (assets/fonts, Latin subset, 10 woff2 files, Luke holds the licence) so Windows and Android also get SF Pro; Apple devices still use their built-in copy and download nothing. |
 | 24 Nov | #116 | Public site font: SF Pro (system stack) for titles, body and labels; the wordmark and stream number stay Archivo. HQ untouched. |
 | 24 Nov | #115 | HQ hands its stored money to badscandal books: `GET /api/staff/money-export` (Luke's login only, read only), one JSON file to import on the books site. |

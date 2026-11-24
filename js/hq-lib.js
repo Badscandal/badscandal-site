@@ -665,147 +665,151 @@
     return (p.action === "add" ? "Add " + p.title + " to the releases" : "Make these changes to " + p.title) + (p.send ? " and send it to the team" : "") + ", as " + m.from + " proposed?";
   }
   /* L12 (18 Nov 2026): the Profiles section. view = board.profiles from profilesView. */
-  /* Profiles (21 Nov 2026, Luke: "green should indicate that they're using my uploaded banner... red means
-     there's an issue"). ONE state per image, from Luke's two uploads:
-       issue  red: a new image waits for his yes, the master is the wrong shape or too small (the bot is making
-              an AI version), the platform rejected it, or the copy was not saved
-       ok     green: the platform's copy is made from his upload (ready, or live)
-       none   grey: nothing uploaded for it yet
-     The line under it never invents a day. */
-  function profileState(s, owner, cur, wait, ok, master) {
-    var who = owner && owner !== "Luke" ? owner : "";
-    var maker = who || "Nova";
-    var what = s.group === "banner" ? "banner" : "photo";
-    if (wait) return { key: "you", tone: "issue", label: "Needs your yes", line: (who || "A bot") + " proposes a new image" };
-    if (s.status === "rework") {
-      if (/rejected/i.test(s.statusLine || "")) return { key: "rejected", tone: "issue", label: "Rejected by " + (s.platform || "the platform"), line: (who || "You") + " to fix it" };
-      if (/too small/i.test(s.statusLine || "")) return { key: "small", tone: "issue", label: "Your " + what + " is too small", line: maker + " is making a bigger AI version" };
-      return { key: "shape", tone: "issue", label: "Different shape needed", line: maker + " is making an AI version" };
-    }
-    if (s.status === "uploaded") {
-      var d = cur && cur.changed && !/^unknown$/i.test(String(cur.changed)) ? day(cur.changed) : "";
-      return { key: "live", tone: "ok", label: "Live with your " + what, line: d && d !== "unknown" ? "Since " + d : "" };
-    }
-    if (s.status === "ready") return { key: "ready", tone: "ok", label: "Uses your " + what, line: who ? who + " uploads it" : "You upload it" };
-    if (master) return { key: "unsaved", tone: "issue", label: "Copy not saved", line: "Upload your " + what + " again" };
-    if (ok) return { key: "approved", tone: "none", label: "Approved", line: who ? who + " uploads it by hand" : "You upload it by hand" };
-    return { key: "none", tone: "none", label: "Waiting for your " + what, line: cur ? "Something is live, not from your upload" : "" };
+  /* Profiles, checked (24 Nov 2026, Luke: "deezer is showing up as green with a green ring around it but the bots ...
+     should be checking my profiles for each platform and making sure that's my profile photo after i submit a new
+     upload"). Green no longer means "HQ stored a copy": an image HAS HIS UPLOAD only when the bot's latest check of
+     the public profile is live AND came after his current master of that group. One tone per platform:
+       none  grey: no master yet for any of its images
+       ok    green: every image whose group has a master has his upload
+       warn  yellow: a bot could not log in (its name and note), or one image is missing (or the only one)
+       bad   red: all of a platform's 2+ images are missing (no photo AND no banner)
+     A problem shows only here: Luke sorts it out with the bot in its own chat. Never a Needs you item. */
+  function profileWhen(at) {
+    var sp = at ? spStampOf(at) : "";
+    return sp && /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}/.test(sp) ? day(sp.slice(0, 10)) + ", " + sp.slice(11, 16) : "";
   }
-  /* the clear sentence on an issue card (21 Nov 2026: "a card saying the issue clearly") */
-  function profileIssueText(s, platform, owner, master) {
-    var who = owner && owner !== "Luke" ? owner : "";
+  function profileState(s, owner) {
+    var bot = owner && owner !== "Luke" ? owner : "";
     var what = s.group === "banner" ? "banner" : "photo";
-    var need = s.exactW > 0 && s.exactH > 0 ? s.exactW + " × " + s.exactH : "";
-    var have = master && master.w && master.h ? master.w + " × " + master.h : "";
-    var k = s.state && s.state.key;
-    if (k === "you") return (who || "A bot") + " proposes a new " + String(s.kind || "image").toLowerCase() + " for " + platform + ". Open it, then say yes or no.";
-    if (k === "rejected") return platform + " rejected the " + String(s.kind || "image").toLowerCase() + (s.detail ? ": " + s.detail : ".") + " " + (who ? who + " fixes it and uploads again." : "Upload it again yourself.");
-    if (k === "small") return "Your " + what + (have ? " is " + have : " is too small") + ". " + platform + " needs " + (need || "a bigger one") + ". " + (who || "Nova") + " is making a bigger AI version that looks exactly like yours.";
-    if (k === "shape") return "Your " + what + (have ? " is " + have : "") + ". " + platform + " needs " + (need || "another shape") + ", a different shape. " + (who || "Nova") + " is making an AI version that looks exactly like yours. Nothing is cropped.";
-    if (k === "unsaved") return "The " + platform + " copy of your " + what + " was not saved. Upload your " + what + " again.";
-    return "";
+    var c = s.check || null;
+    var by = (c && c.by) || bot || "A bot";
+    var when = c ? profileWhen(c.at) : "";
+    var checked = c ? by + " checked" + (when ? " " + when : "") + (c.fresh ? "" : ", before your new upload") : "";
+    if (!s.hasMaster) return { key: "none", tone: "none", label: "Waiting for your " + what, line: "" };
+    if (s.has) return { key: "live", tone: "ok", label: "Has your " + what, line: checked };
+    if (c && c.result === "login") return { key: "login", tone: "warn", label: by + " can't log in", line: (c.note ? c.note + " " : "") + "Sort it out with " + by + " in its chat." };
+    if (s.waitingLink) return { key: "you", tone: "warn", label: "Needs your yes", line: (bot || "A bot") + " proposes a new image" };
+    if (s.job) return { key: "ai", tone: "warn", label: (bot || "Nova") + " is making an AI version", line: s.detail || "" };
+    if (c && c.rejected) return { key: "rejected", tone: "warn", label: "Rejected by " + (s.platform || "the platform"), line: (c.note ? c.note + " · " : "") + checked };
+    if (c && c.result === "not_mine") return { key: "notmine", tone: "warn", label: "Not your " + what, line: checked };
+    if (c && c.result === "failed") return { key: "failed", tone: "warn", label: "Upload failed: " + (c.note || "no reason given"), line: checked };
+    return { key: "waiting", tone: "warn", label: "Not uploaded yet: waiting for " + (bot || "you"), line: checked };
   }
   var IMG_LINK = /^https:\/\/[^\s"'<>]+\.(?:jpg|jpeg|png|webp|gif)(?:[?#][^\s"'<>]*)?$/i;
-  var OWN_FILE = /^\/api\/staff\/profile-file\/(?:master-(?:photo|banner)|slot-[a-z0-9-]+)$/;
-  function profileThumb(s, cur, wait, ok) {
-    var pick = [wait && wait.link, ok && ok.link];
-    if (s.status === "ready" || s.status === "rework") pick.push(s.preview);
-    pick.push(cur && cur.link, s.preview);
-    for (var i = 0; i < pick.length; i++) {
-      var v = String(pick[i] || "");
-      if (OWN_FILE.test(v) || IMG_LINK.test(v)) return v;
-    }
-    return "";
+  var OWN_FILE = /^\/api\/staff\/profile-file\/(?:master-(?:photo|banner)|(?:slot|shot)-[a-z0-9-]+)$/;
+  /* his own picture for an image that has his upload: the sized copy or the master, HQ's own file only */
+  function profileThumb(s) {
+    var v = String(s.preview || "");
+    return OWN_FILE.test(v) ? v : "";
   }
-  var PROF_RANK = { issue: 0, none: 1, ok: 2 };
-  /* the strip: one chip per platform (red if any of its images has an issue, green when all use his uploads),
-     one line of counts, and the issue cards below it */
+  var GROUP_WORD = function (gs) { return gs.indexOf("photo") >= 0 && gs.indexOf("banner") >= 0 ? "photo and banner" : gs.indexOf("banner") >= 0 ? "banner" : "photo"; };
+  function groupsOf(slots) { var g = []; slots.forEach(function (s) { if (g.indexOf(s.group) < 0) g.push(s.group); }); return g; }
+  /* one tone, one headline and one ring picture for a platform */
+  function profileTone(p) {
+    var slots = p.slots || [];
+    var rel = slots.filter(function (s) { return s.hasMaster; });
+    var photo = slots.filter(function (s) { return s.group === "photo"; })[0] || slots[0] || {};
+    if (!rel.length) return { tone: "none", headline: "Waiting for your " + GROUP_WORD(groupsOf(slots)), line: "", ring: "" };
+    var missing = rel.filter(function (s) { return !s.has; });
+    if (!missing.length) return { tone: "ok", headline: "Has your " + GROUP_WORD(groupsOf(rel)), line: rel.map(function (s) { return s.state.line; }).filter(Boolean)[0] || "", ring: photo.has ? profileThumb(photo) : "" };
+    var ring = photo.shot || "";
+    var login = rel.filter(function (s) { return s.state.key === "login"; })[0];
+    if (login) return { tone: "warn", headline: login.state.label, line: (login.check && login.check.note) || "", ring: ring, login: true };
+    var tone = rel.length >= 2 && missing.length === rel.length ? "bad" : "warn";
+    return { tone: tone, headline: "Missing your " + GROUP_WORD(groupsOf(missing)), line: missing.map(function (s) { return s.state.label; }).filter(function (v, i, a) { return a.indexOf(v) === i; }).join(" · "), ring: ring };
+  }
+  var PROF_RANK = { bad: 0, warn: 1, none: 2, ok: 3 };
+  /* the strip: one chip per platform, coloured by its tone, and the one line of counts. A chip opens that
+     platform's card in Every platform (#profiles/<id> -> #profiles-<id>). */
   function profileOverview(blocks) {
     var plats = (blocks && blocks.platforms) || [];
-    var counts = { ok: 0, issue: 0, none: 0 }, total = 0, issues = [];
+    var counts = { ok: 0, warn: 0, bad: 0, none: 0 }, total = 0, needYou = 0;
     var MARK = { facebook: "FB", instagram: "IG", youtube: "YT", spotify: "SP", apple: "AP", tiktok: "TT", x: "X", soundcloud: "SC", deezer: "DZ", amazon: "AM", tidal: "TD" };
     var chips = plats.map(function (p) {
-      var tone = "ok", thumb = "";
-      (p.slots || []).forEach(function (s) {
-        var t = (s.state && s.state.tone) || "none";
-        counts[t] = (counts[t] || 0) + 1; total++;
-        if (PROF_RANK[t] < PROF_RANK[tone]) tone = t;
-        if (!thumb && s.circle && s.thumb) thumb = s.thumb;
-        if (t === "issue") issues.push({ id: s.id, platformId: p.id, platform: p.platform, kind: s.kind, title: p.platform + " · " + s.kind, label: s.state.label, text: s.issue, to: s.to,
-          answer: /^#messages\/[A-Za-z0-9]+$/.test(s.waitingHref || "") ? s.waitingHref : "", open: s.openLink || "", thumb: s.thumb, circle: !!s.circle });
-      });
-      if (!thumb) (p.slots || []).forEach(function (s) { if (!thumb && s.thumb) thumb = s.thumb; });
+      counts[p.tone] = (counts[p.tone] || 0) + 1;
+      if (p.tone !== "none") total++;
+      if (p.needsYou) needYou++;
       var words = String(p.platform || "").split(/\s+/).filter(Boolean);
       var initials = MARK[p.id] || (words.length > 1 ? words[0].charAt(0) + words[1].charAt(0) : String(p.platform || "?").slice(0, 2)).toUpperCase();
       var label = String(p.platform || "").replace(/ (Page|Music)$/, "");
-      var href = tone === "issue" ? "#profiles/issue-" + p.id : "#profiles/" + p.id;
-      return { id: p.id, platform: p.platform, label: label, tone: tone, thumb: thumb, initials: initials, href: href };
+      return { id: p.id, platform: p.platform, label: label, tone: p.tone, thumb: p.ring || "", initials: initials, href: "#profiles/" + p.id, headline: p.headline };
     });
-    if (!total) return { total: 0, counts: counts, chips: [], issues: [], line: "No profiles listed." };
+    if (!plats.length) return { total: 0, counts: counts, chips: [], line: "No profiles listed." };
     var line;
-    if (!counts.ok && !counts.issue) line = "Upload your profile photo and banner to start.";
+    if (!total) line = "Upload your profile photo and banner to start.";
     else {
-      var bits = [counts.ok + " of " + total + " use your uploads"];
-      if (counts.issue) bits.push(counts.issue + (counts.issue === 1 ? " issue" : " issues"));
-      if (counts.none) bits.push(counts.none + " waiting for an upload");
+      var bits = [counts.ok + " of " + total + " have your uploads"];
+      if (needYou) bits.push(needYou + (needYou === 1 ? " needs you" : " need you"));
+      var bots = total - counts.ok - needYou;
+      if (bots > 0) bits.push(bots + " waiting for a bot");
+      if (counts.none) bits.push(counts.none + " waiting for your upload");
       line = bits.join(" · ");
     }
-    /* one card per platform with an issue (its images' sentences together) */
-    var byPlat = [];
-    issues.forEach(function (x) {
-      var g = byPlat.filter(function (y) { return y.platformId === x.platformId; })[0];
-      if (!g) { g = { platformId: x.platformId, platform: x.platform, to: x.to, items: [] }; byPlat.push(g); }
-      g.items.push(x);
-    });
-    return { total: total, counts: counts, chips: chips, issues: byPlat, line: line };
+    return { total: total, counts: counts, chips: chips, line: line };
   }
   function profileBlocks(view) {
     var mastersRaw = {};
-    ["photo", "banner"].forEach(function (g) { var m = view && view.masters && view.masters[g]; if (m && m.w && m.h) mastersRaw[g] = { w: m.w, h: m.h }; });
+    ["photo", "banner"].forEach(function (g) { var m = view && view.masters && view.masters[g]; if (m && m.w && m.h) mastersRaw[g] = { w: m.w, h: m.h, at: m.at || "" }; });
     var note = (view && view.note) || "HQ never logs in and never changes a platform.";
     var platforms = ((view && view.platforms) || []).map(function (p) {
       var owner = p.owner || "";
+      var bot = owner && owner !== "Luke" ? owner : "";
+      var slots = (p.slots || []).map(function (s) {
+        var cur = s.current && s.current.link ? s.current : null;
+        var wait = s.waiting && s.waiting.link ? s.waiting : null;
+        var ok = s.approved && s.approved.link ? s.approved : null;
+        var exact = s.exact && s.exact.length === 2 ? s.exact : null;
+        var status = s.status === "ready" || s.status === "uploaded" || s.status === "rework" ? s.status : "waiting";
+        var group = s.group === "banner" || s.group === "photo" ? s.group : (s.circle ? "photo" : "banner");
+        var c = s.check && s.check.result ? s.check : null;
+        var check = c ? { result: String(c.result), note: String(c.note || ""), by: String(c.by || ""), at: String(c.at || ""), page: /^https:\/\//.test(String(c.page || "")) ? c.page : "",
+          shot: OWN_FILE.test(String(c.shot || "")) ? c.shot : "", fresh: c.fresh === true, rejected: c.rejected === true } : null;
+        var x = {
+          id: s.id || "", kind: s.kind || "", rule: s.rule || "Rule not set",
+          currentLine: !cur ? "Not recorded yet" : (s.status === "uploaded" || s.statusLine === "Live" || !(cur.changed && day(cur.changed) && day(cur.changed) !== "unknown" && !/^unknown$/i.test(String(cur.changed))) ? "Live" : "Changed " + day(cur.changed) + (cur.by ? " · " + cur.by : "")),
+          currentLink: cur ? cur.link : "",
+          waitingLine: wait ? "New image waiting for your “Yes, correct”." : "",
+          waitingLink: wait ? wait.link : "",
+          waitingHref: wait && wait.id ? "#messages/" + wait.id : "",
+          approvedLine: ok ? "You said yes. " + (owner ? owner + " uploads it by hand." : "Luke uploads it himself.") + " HQ does not change the platform." : "",
+          approvedLink: ok ? ok.link : "",
+          status: status,
+          statusLine: cur && status !== "rework" && status !== "ready" ? "Live" : (s.statusLine || "Waiting"),
+          sizeLine: s.sizeLine || s.rule || "",
+          preview: typeof s.preview === "string" ? s.preview : "",
+          circle: !!s.circle,
+          exactW: exact ? exact[0] : 0,
+          exactH: exact ? exact[1] : 0,
+          detail: s.detail || "",
+          group: group,
+          platform: p.platform || "",
+          /* 24 Nov 2026: the bot's check of the public profile */
+          hasMaster: !!mastersRaw[group],
+          check: check,
+          job: s.job === true,
+          retryAt: typeof s.retryAt === "string" ? s.retryAt : "",
+          has: false, shot: "", state: null, thumb: ""
+        };
+        x.has = !!(x.hasMaster && check && check.result === "live" && check.fresh);
+        x.shot = check && check.shot ? check.shot : "";
+        x.state = profileState(x, owner);
+        /* never his own photo on an image without his upload: the bot's screenshot, else nothing */
+        x.thumb = x.has ? profileThumb(x) : x.shot;
+        x.when = check ? profileWhen(check.at) : "";
+        return x;
+      });
+      var t = profileTone({ slots: slots });
+      if (t.tone === "bad") slots.forEach(function (s) { if (s.hasMaster && !s.has) s.state.tone = "bad"; });
+      var retryAt = slots.map(function (s) { return s.retryAt; }).filter(Boolean).sort().pop() || "";
+      var page = /^https:\/\//.test(String(p.page || "")) ? p.page : "";
+      var open = t.tone === "warn" || t.tone === "bad";
       return {
-        id: p.id || "", platform: p.platform || "",
+        id: p.id || "", platform: p.platform || "", owner: owner, bot: bot,
         ownerLine: owner ? owner + " uploads this" : "No owner yet. Luke uploads this himself.",
-        slots: (p.slots || []).map(function (s) {
-          var cur = s.current && s.current.link ? s.current : null;
-          var wait = s.waiting && s.waiting.link ? s.waiting : null;
-          var ok = s.approved && s.approved.link ? s.approved : null;
-          var exact = s.exact && s.exact.length === 2 ? s.exact : null;
-          var status = s.status === "ready" || s.status === "uploaded" || s.status === "rework" ? s.status : "waiting";
-          return {
-            id: s.id || "", kind: s.kind || "", rule: s.rule || "Rule not set",
-            currentLine: !cur ? "Not recorded yet" : (s.status === "uploaded" || s.statusLine === "Live" || !(cur.changed && day(cur.changed) && day(cur.changed) !== "unknown" && !/^unknown$/i.test(String(cur.changed))) ? "Live" : "Changed " + day(cur.changed) + (cur.by ? " · " + cur.by : "")),
-            currentLink: cur ? cur.link : "",
-            waitingLine: wait ? "New image waiting for your “Yes, correct”." : "",
-            waitingLink: wait ? wait.link : "",
-            waitingHref: wait && wait.id ? "#messages/" + wait.id : "",
-            approvedLine: ok ? "You said yes. " + (owner ? owner + " uploads it by hand." : "Luke uploads it himself.") + " HQ does not change the platform." : "",
-            approvedLink: ok ? ok.link : "",
-            status: status,
-            statusLine: cur && status !== "rework" && status !== "ready" ? "Live" : (s.statusLine || "Waiting"),
-            sizeLine: s.sizeLine || s.rule || "",
-            preview: typeof s.preview === "string" ? s.preview : "",
-            circle: !!s.circle,
-            exactW: exact ? exact[0] : 0,
-            exactH: exact ? exact[1] : 0,
-            detail: s.detail || "",
-            /* Profiles v2 (21 Nov 2026): one state, a thumbnail, and the link to open */
-            group: s.group === "banner" || s.group === "photo" ? s.group : (s.circle ? "photo" : "banner"),
-            platform: p.platform || "",
-            state: null,
-            thumb: profileThumb(s, cur, wait, ok),
-            openLink: wait ? wait.link : ok ? ok.link : cur ? cur.link : ""
-          };
-        }).map(function (x, i) {
-          var raw = (p.slots || [])[i] || {};
-          var m = mastersRaw[x.group] || null;
-          x.state = profileState(x, owner, raw.current && raw.current.link ? raw.current : null, raw.waiting && raw.waiting.link ? raw.waiting : null, raw.approved && raw.approved.link ? raw.approved : null, m);
-          x.issue = x.state.tone === "issue" ? profileIssueText(x, p.platform || "", owner, m) : "";
-          x.to = owner && owner !== "Luke" ? owner : "Nova";
-          return x;
-        })
+        slots: slots, tone: t.tone, headline: t.headline, line: t.line, ring: t.ring, page: page,
+        /* Luke's part: a login to set up, a new image to say yes to, or a platform with no bot */
+        needsYou: open && (!!t.login || !bot || slots.some(function (s) { return s.state.key === "you"; })),
+        retry: { can: open && !!bot, bot: bot, at: retryAt }
       };
     });
     var waiting = 0;
@@ -816,6 +820,13 @@
         photo: masters.photo && masters.photo.line ? masters.photo.line : "",
         banner: masters.banner && masters.banner.line ? masters.banner.line : ""
       } };
+  }
+  /* the Try again button's two lines (24 Nov 2026, Luke: "give me an option to try again, which will go straight to
+     the bot, or hang somewhere for when the bot checks again") */
+  function profileRetryAsk(p) { return "Ask " + p.bot + " to try " + p.platform + " again?"; }
+  function profileRetrySent(bot, at) {
+    var hm = at ? spStampOf(at).slice(11, 16) : "";
+    return "Sent to " + bot + (hm ? " at " + hm : "") + ". " + bot + " tries again on its next run.";
   }
   /* ================= Replies that visibly land (11 Nov 2026) =================
      Luke: "when i reply to a message right now nothing happens let's make that clearer that i've
@@ -2218,7 +2229,7 @@
     snapshot: snapshot, changesSince: changesSince, tiles: tiles, summaryText: summaryText, shortStep: shortStep, day: day,
     slug: slug, workerLabel: workerLabel, sortWorkers: sortWorkers, workerView: workerView, dutyWhen: dutyWhen, workerCounts: workerCounts, seenLine: seenLine, connectorLine: connectorLine,
     novaMessage: novaMessage, liveFeed: liveFeed, spWhen: spWhen, waitLabel: waitLabel, needWords: needWords, reportParts: reportParts, siteCheckLine: siteCheckLine, composeNames: composeNames,
-    threadRoot: threadRoot, answerTarget: answerTarget, questionLines: questionLines, questionsLeft: questionsLeft, stepButton: stepButton, formKey: formKey, storeLine: storeLine, storeHistory: storeHistory, storeRows: storeRows, storeWhy: storeWhy, capRateLine: capRateLine, capMissingLine: capMissingLine, dutyGapsLine: dutyGapsLine, approvalLines: approvalLines, approvalUndo: approvalUndo, warnTone: warnTone, warnGroups: warnGroups, resubmitAsk: resubmitAsk, relStatus: relStatus, relProgress: relProgress, stepGroups: stepGroups, upcomingAsks: upcomingAsks, staffAttention: staffAttention, staffHealth: staffHealth, releasePage: releasePage, proposalRows: proposalRows, proposalConfirm: proposalConfirm, profileBlocks: profileBlocks, profileOverview: profileOverview, profileState: profileState, profileIssueText: profileIssueText, caseIssue: caseIssue, caseOutcome: caseOutcome, caseWaitWords: caseWaitWords,
+    threadRoot: threadRoot, answerTarget: answerTarget, questionLines: questionLines, questionsLeft: questionsLeft, stepButton: stepButton, formKey: formKey, storeLine: storeLine, storeHistory: storeHistory, storeRows: storeRows, storeWhy: storeWhy, capRateLine: capRateLine, capMissingLine: capMissingLine, dutyGapsLine: dutyGapsLine, approvalLines: approvalLines, approvalUndo: approvalUndo, warnTone: warnTone, warnGroups: warnGroups, resubmitAsk: resubmitAsk, relStatus: relStatus, relProgress: relProgress, stepGroups: stepGroups, upcomingAsks: upcomingAsks, staffAttention: staffAttention, staffHealth: staffHealth, releasePage: releasePage, proposalRows: proposalRows, proposalConfirm: proposalConfirm, profileBlocks: profileBlocks, profileOverview: profileOverview, profileState: profileState, profileTone: profileTone, profileRetryAsk: profileRetryAsk, profileRetrySent: profileRetrySent, caseIssue: caseIssue, caseOutcome: caseOutcome, caseWaitWords: caseWaitWords,
     /* replies that visibly land + the release pipeline (11 Nov 2026) */
     spStampOf: spStampOf, seenWords: seenWords, sentLine: sentLine, answeredList: answeredList,
     formGroups: formGroups, releaseDayNote: releaseDayNote, releaseWhen: releaseWhen, stepState: stepState, missingWords: missingWords, packLine: packLine, missingSentence: missingSentence,
