@@ -15,7 +15,7 @@ import { toolsVersion } from "./staff-tools.mjs";
 
 export const LEGACY = ["2025-11-25", "2025-06-18", "2025-03-26", "2024-11-05"];
 export const MODERN = "2026-07-28";
-export const SERVER = { name: "badscandal-hq", title: "badscandal HQ", version: "1.21.0" }; /* 24 Nov 2026: profile_uploaded records the bot's check of the real profile (1.20.0: Rights, money and Claude off the desk) */
+export const SERVER = { name: "badscandal-hq", title: "badscandal HQ", version: "1.22.0" }; /* 24 Nov 2026: Ledger and Sheet moved to badscandal books (1.21.0: profile_uploaded records the bot's check of the real profile ; 1.20.0: Rights, money and Claude off the desk) */
 /* protocol version stays 1.0.0. The tool list's fingerprint is extra, so a bot sees it on connect
    (18 Nov 2026 night test). A version-only change is not a reconnect. */
 function serverInfo(deps) {
