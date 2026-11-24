@@ -492,6 +492,13 @@ export function moneyReport(spend, today, fx = {}, o = {}) {
       byPlatform: Object.fromEntries(Object.entries(now.spend)),
       lastDay: Object.keys(days).sort().pop() || null,
     },
+    /* Ads per song (24 Nov 2026, Luke: "we need it done per song ... the total ad spend and then i can click per
+       song and in each song it says the spend on that song"). Every day's spend row, with the song it names (Forge's
+       record_spend rows carry one; the sheet's Daily log and Meta's own account totals do not). The page adds them
+       up for the picked range. Meta per song comes from Meta's per-ad read (the overview), not from here. */
+    rows: spend.map((r) => ({ d: (r.date || "").slice(0, 10), platform: r.platform || "?", meta: isMetaPlatform(r.platform),
+      song: norm(r.song), amount: num(r.spend), currency: (r.currency || "USD").toUpperCase() }))
+      .filter((r) => r.amount != null && DAY.test(r.d)),
   };
 }
 

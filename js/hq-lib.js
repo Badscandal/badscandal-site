@@ -302,6 +302,71 @@
     return out;
   }
 
+  /* Ads per song (24 Nov 2026, Luke: "it shows up at the top the total ad spend and then i can click per song and in
+     each song it says the spend on that song for ads and then the return but don't log return yet").
+     o = { ov: the overview (range, from, to, spend: Meta's per-ad read), rows: sheet.money.rows (every day's spend
+     row, with the song Forge named) }. Meta per song comes from Meta itself (each ad matched to its song); Google and
+     TikTok per song from the rows that name a song. Amounts stay in their own currency: never added across.
+     -> { ready, rangeWords, total: {cur: n}, totalLine, platforms: [{platform, line}], songs: [{key, title, total,
+     line, platforms, taps, cpt, ads, returnLine}], unlinked: {total, line, platforms} | null, metaNote, empty } */
+  var ADS_RANGE = { today: "Today", "7d": "Last 7 days", "30d": "Last 30 days", all: "All time" };
+  function adsBySong(o) {
+    o = o || {};
+    var ov = o.ov || null, rows = Array.isArray(o.rows) ? o.rows : [];
+    if (!ov || !ov.from || !ov.to) return { ready: false, songs: [], platforms: [], total: {}, totalLine: "–", unlinked: null, metaNote: "", empty: true, rangeWords: "" };
+    var from = ov.from, to = ov.to;
+    var rangeWords = ADS_RANGE[ov.range] || (from === to ? day(from) : day(from) + " – " + day(to));
+    var add = function (bag, cur, n) { if (n == null || !isFinite(n) || !n) return; bag[cur] = Math.round(((bag[cur] || 0) + n) * 100) / 100; };
+    var line = function (bag) { var k = Object.keys(bag || {}).filter(function (c) { return bag[c]; }).sort(); return k.length ? k.map(function (c) { return money(bag[c], c); }).join(" + ") : "–"; };
+    var weight = function (bag) { return Object.keys(bag || {}).reduce(function (n, c) { return n + (bag[c] || 0); }, 0); };
+    var total = {}, plats = {}, songs = {}, order = [], unlinked = { total: {}, platforms: {} };
+    var song = function (title) {
+      var k = titleKey(title);
+      if (!songs[k]) { songs[k] = { key: k, title: String(title).trim(), total: {}, platforms: {}, taps: 0, spendMeta: 0, ads: [] }; order.push(k); }
+      return songs[k];
+    };
+    var put = function (target, platform, cur, n) {
+      add(target.total, cur, n);
+      var p = target.platforms[platform] || (target.platforms[platform] = {}); add(p, cur, n);
+      add(total, cur, n);
+      var q = plats[platform] || (plats[platform] = {}); add(q, cur, n);
+    };
+    var sp = ov.spend || null, metaOk = !!(sp && sp.connected && !sp.error), metaNote = "";
+    if (metaOk) {
+      var cur = sp.currency || "USD";
+      (sp.songs || []).forEach(function (x) {
+        if (!x || !x.title || !(x.spend > 0) && !(x.taps > 0)) return;
+        var s = song(x.title);
+        put(s, "Meta", cur, x.spend || 0);
+        s.taps += x.taps || 0; s.spendMeta += x.spend || 0; s.metaCur = cur;
+      });
+      (sp.ads || []).forEach(function (a) {
+        if (!a || !a.song) return;
+        var k = titleKey(a.song);
+        if (songs[k]) songs[k].ads.push({ name: a.ad || "", line: money(a.spend, cur) + " · " + plural(a.taps || 0, "tap") });
+      });
+      if (sp.unmatched > 0) put(unlinked, "Meta", cur, sp.unmatched);
+    } else {
+      metaNote = sp && sp.error ? "Meta couldn't be read just now (" + sp.error + "), so Meta is not split by song." : "Meta spend isn't connected, so Meta is not split by song.";
+    }
+    rows.forEach(function (r) {
+      if (!r || r.d < from || r.d > to || r.amount == null) return;
+      if (r.meta && metaOk) return; /* Meta comes from Meta itself, per ad */
+      var cur = r.currency || "USD", plat = r.meta ? "Meta" : (r.platform || "?");
+      if (r.song && !r.meta) put(song(r.song), plat, cur, r.amount);
+      else put(unlinked, plat, cur, r.amount);
+    });
+    var platLines = function (bag) { return Object.keys(bag).sort().map(function (p) { return { platform: p, line: line(bag[p]) }; }).filter(function (x) { return x.line !== "–"; }); };
+    var list = order.map(function (k) { return songs[k]; }).filter(function (s) { return weight(s.total) > 0 || s.taps > 0; })
+      .sort(function (a, b) { return weight(b.total) - weight(a.total); })
+      .map(function (s) {
+        return { key: s.key, title: s.title, total: s.total, line: line(s.total), platforms: platLines(s.platforms), taps: s.taps,
+          cpt: s.taps && s.spendMeta ? money(s.spendMeta / s.taps, s.metaCur) : "–", ads: s.ads, returnLine: "Not logged yet" };
+      });
+    var un = weight(unlinked.total) > 0 ? { total: unlinked.total, line: line(unlinked.total), platforms: platLines(unlinked.platforms) } : null;
+    return { ready: true, rangeWords: rangeWords, total: total, totalLine: line(total), platforms: platLines(plats), songs: list, unlinked: un,
+      metaNote: metaNote, empty: !list.length && !un };
+  }
   /* headline tiles: value, change vs the period before, a small trend line */
   function tiles(o) {
     var sheet = o.sheet, ov = o.ov, out = [];
@@ -2226,7 +2291,7 @@
 
 
   return { rankParts: rankParts, songTile: songTile, igStatusLine: igStatusLine, igPostNumbers: igPostNumbers, fanKindWord: fanKindWord, fanFlagWord: fanFlagWord, FAN_INTRO: FAN_INTRO, FAN_EMPTY: FAN_EMPTY, FAN_ASK: FAN_ASK, FAN_BACK: FAN_BACK, artistLines: artistLines, preflightLine: preflightLine, sixWeeks: sixWeeks, pitchBlock: pitchBlock, recommendLines: recommendLines, recommendedOption: recommendedOption, releaseTrouble: releaseTrouble, navPad: navPad, signoutWords: signoutWords, growthWhen: growthWhen, ago: ago, spMs: spMs, releaseWords: releaseWords, releaseDetail: releaseDetail, healthRows: healthRows, healthState: healthState, median: median, change: change, money: money, attention: attention, briefing: briefing,
-    snapshot: snapshot, changesSince: changesSince, tiles: tiles, summaryText: summaryText, shortStep: shortStep, day: day,
+    snapshot: snapshot, changesSince: changesSince, tiles: tiles, adsBySong: adsBySong, summaryText: summaryText, shortStep: shortStep, day: day,
     slug: slug, workerLabel: workerLabel, sortWorkers: sortWorkers, workerView: workerView, dutyWhen: dutyWhen, workerCounts: workerCounts, seenLine: seenLine, connectorLine: connectorLine,
     novaMessage: novaMessage, liveFeed: liveFeed, spWhen: spWhen, waitLabel: waitLabel, needWords: needWords, reportParts: reportParts, siteCheckLine: siteCheckLine, composeNames: composeNames,
     threadRoot: threadRoot, answerTarget: answerTarget, questionLines: questionLines, questionsLeft: questionsLeft, stepButton: stepButton, formKey: formKey, storeLine: storeLine, storeHistory: storeHistory, storeRows: storeRows, storeWhy: storeWhy, capRateLine: capRateLine, capMissingLine: capMissingLine, dutyGapsLine: dutyGapsLine, approvalLines: approvalLines, approvalUndo: approvalUndo, warnTone: warnTone, warnGroups: warnGroups, resubmitAsk: resubmitAsk, relStatus: relStatus, relProgress: relProgress, stepGroups: stepGroups, upcomingAsks: upcomingAsks, staffAttention: staffAttention, staffHealth: staffHealth, releasePage: releasePage, proposalRows: proposalRows, proposalConfirm: proposalConfirm, profileBlocks: profileBlocks, profileOverview: profileOverview, profileState: profileState, profileTone: profileTone, profileRetryAsk: profileRetryAsk, profileRetrySent: profileRetrySent, caseIssue: caseIssue, caseOutcome: caseOutcome, caseWaitWords: caseWaitWords,

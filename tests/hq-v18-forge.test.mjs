@@ -130,7 +130,8 @@ test("Ads: song-page visits come from the song pages, and a missing cost per eng
   assert.equal(pins.visits.label, "7");
   assert.equal(pins.engagement.label, "not reported");
   assert.match(pins.engagement.vs, /on Growth/);
-  assert.match(fs.readFileSync(new URL("../js/hq.js", import.meta.url), "utf8"), /HQLook\.songVisits\(ov\)/);
+  /* 24 Nov 2026 (Luke): the Ads page is the total and per song now; the pins row is gone from it */
+  assert.doesNotMatch(fs.readFileSync(new URL("../js/hq.js", import.meta.url), "utf8"), /HQLook\.adsPins\(/);
 });
 
 test("a song's Rising pill says what it is compared with", () => {
