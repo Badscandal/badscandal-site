@@ -1460,13 +1460,18 @@
   /* Profiles v2 (21 Nov 2026, Luke): one line of counts, a strip with every platform's photo (coloured by
      what matters most), then one card per platform. Each image: a thumbnail, ONE state, one line, Answer /
      Open, and the size rule folded away. The words come from HQLib.profileBlocks / profileOverview. */
+  /* the sample's own-file pictures (a made-up screenshot) ask with ?sample=1, which always answers 404: the tile
+     falls back to the initials and never shows the real desk's picture (24 Nov 2026) */
+  function pSrc(src) { return HQ.sample && /^\/api\/staff\/profile-file\//.test(String(src || "")) ? src + "?sample=1" : src; }
   function pImg(src) {
-    return src ? '<img alt="" loading="lazy" referrerpolicy="no-referrer" data-pthumb src="' + esc(src) + '">' : "";
+    return src ? '<img alt="" loading="lazy" referrerpolicy="no-referrer" data-pthumb src="' + esc(pSrc(src)) + '">' : "";
   }
-  /* Profiles (21 Nov 2026, Luke): his two uploads on top; the strip (green = that platform uses his upload, red = an
-     issue); one issue card per red platform, saying it plainly, with a reply that goes straight to that bot; then
-     every platform folded away. Words from HQLib.profileBlocks / profileOverview. */
-  var pfMsg = {};
+  /* Profiles, checked (24 Nov 2026, Luke): his two uploads on top; the strip of rings (green = a bot checked the
+     public profile and it shows his upload, yellow = a login or one image missing, red = photo AND banner missing,
+     grey = nothing uploaded yet); a ring opens that platform's card in "Every platform": what is wrong, which bot,
+     when it checked, its screenshot, Try again (straight to the bot) and Open <platform>. Problems are sorted out
+     in the bot's own chat, so there is no reply box and no Needs you item. Words from HQLib. */
+  var pfUi = { ask: "", busy: "", sent: {}, err: {} };
   function masterPrev(boxId, kind, saved) {
     var box = $(boxId);
     if (!box || box.getAttribute("data-local")) return;
@@ -1476,6 +1481,17 @@
     box.hidden = false;
     if (!box.querySelector("img")) box.innerHTML = '<img alt="" data-pthumb src="' + esc(src) + '">' + (kind === "photo" ? '<i class="safe"></i>' : "");
   }
+  function pfActs(p) {
+    var r = p.retry || {};
+    var acts = "";
+    if (r.can) {
+      if (pfUi.ask === p.id) acts += '<div class="confirm pf-confirm" role="group" aria-label="Confirm"><p>' + esc(L.profileRetryAsk(p)) + '</p><div class="pf-acts"><button class="sendbtn" type="button" data-pfretry-yes="' + esc(p.id) + '"' + (pfUi.busy === p.id ? " disabled" : "") + ">" + (pfUi.busy === p.id ? "Sending…" : "Yes, ask " + esc(p.bot)) + '</button><button class="copybtn" type="button" data-pfretry-no="' + esc(p.id) + '">Cancel</button></div></div>';
+      else acts += '<button class="copybtn" type="button" data-pfretry="' + esc(p.id) + '"' + off() + ">Try again</button>";
+    }
+    if (p.page) acts += '<a class="pf-open" href="' + esc(p.page) + '" target="_blank" rel="noopener noreferrer">Open ' + esc(p.platform) + " ↗</a>";
+    var said = pfUi.err[p.id] || pfUi.sent[p.id] || (r.can && r.at ? L.profileRetrySent(r.bot, r.at) : "");
+    return (acts ? '<div class="pf-acts">' + acts + "</div>" : "") + (said ? '<p class="pf-msg" role="status">' + esc(said) + "</p>" : "");
+  }
   function drawProfiles() {
     var el = $("profList");
     if (!el) return;
@@ -1484,59 +1500,65 @@
     var o = L.profileOverview(b);
     if ($("profSum")) $("profSum").textContent = o.line;
     if ($("profStrip")) $("profStrip").innerHTML = o.chips.map(function (c) {
-      return '<a class="pf-chip pf-t-' + esc(c.tone) + '" href="' + esc(c.href) + '" aria-label="' + esc(c.platform) + '"><span class="pf-av">' + esc(c.initials) + pImg(c.thumb) + '</span><span class="pf-n">' + esc(c.label || c.platform) + "</span></a>";
+      return '<a class="pf-chip pf-t-' + esc(c.tone) + '" href="' + esc(c.href) + '" data-pfgo="' + esc(c.id) + '" aria-label="' + esc(c.platform + ": " + c.headline) + '"><span class="pf-av">' + esc(c.initials) + pImg(c.thumb) + '</span><span class="pf-n">' + esc(c.label || c.platform) + "</span></a>";
     }).join("");
     var pv = board.profiles.masters || {};
     if ($("profPhotoLine")) $("profPhotoLine").textContent = b.masters && b.masters.photo ? b.masters.photo + ". Only scaled down, never cropped." : "Not uploaded yet. Only scaled down, never cropped.";
     if ($("profBannerLine")) $("profBannerLine").textContent = b.masters && b.masters.banner ? b.masters.banner + ". Another shape or size: its bot makes an AI version that looks exactly like yours." : "Not uploaded yet. Another shape or size: its bot makes an AI version that looks exactly like yours.";
     masterPrev("profPhotoPrev", "photo", !!pv.photo);
     masterPrev("profBannerPrev", "banner", !!pv.banner);
-    var iss = $("profIssues");
-    if (iss) {
-      iss.innerHTML = o.issues.length ? o.issues.map(function (g) {
-        var chip = o.chips.filter(function (c) { return c.id === g.platformId; })[0] || { initials: "" };
-        var key = g.platformId;
-        return '<article class="t-card pf-issue" id="profiles-issue-' + esc(key) + '"><header class="pf-head"><span class="pf-av pf-t-issue">' + esc(chip.initials) + pImg(chip.thumb) + "</span><div><h3>" + esc(g.platform) + '</h3><p class="secsub">' + esc(g.to) + " is on it</p></div></header>" +
-          g.items.map(function (x) {
-            var acts = (x.answer ? '<a class="go" href="' + esc(x.answer) + '">Answer</a>' : "") + (x.open && /^https:\/\//.test(x.open) ? outLink(x.open, "See the image") : "");
-            return '<div class="pf-item"><p class="pf-state pf-t-issue"><i></i>' + esc(x.kind) + " · " + esc(x.label) + '</p><p class="pf-itext">' + esc(x.text) + "</p>" + (acts ? '<div class="pf-acts">' + acts + "</div>" : "") + "</div>";
-          }).join("") +
-          '<form class="pf-reply" data-pfreply="' + esc(key) + '" data-to="' + esc(g.to) + '" data-about="' + esc(g.items.map(function (x) { return g.platform + " " + String(x.kind || "").toLowerCase(); }).join(" and ")) + '">' +
-          '<textarea name="t" maxlength="1200" placeholder="Reply to ' + esc(g.to) + '" aria-label="Reply to ' + esc(g.to) + '"></textarea>' +
-          '<button type="submit" class="sendbtn"' + (HQ.sample ? " disabled" : "") + ">Send to " + esc(g.to) + '</button><p class="pf-msg" role="status">' + esc(pfMsg[key] || "") + "</p></form></article>";
-      }).join("") : (o.counts.ok ? '<p class="pf-allgood">No issues. Every platform with an upload uses yours.</p>' : "");
-    }
     el.innerHTML = b.platforms.map(function (p) {
-      var chip = o.chips.filter(function (c) { return c.id === p.id; })[0] || { tone: "none", initials: "", thumb: "" };
-      return '<article class="t-card pf-card" id="profiles-' + esc(p.id) + '"><header class="pf-head"><span class="pf-av pf-t-' + esc(chip.tone) + '">' + esc(chip.initials) + pImg(chip.thumb) + "</span><div><h3>" + esc(p.platform) + '</h3><p class="secsub">' + esc(p.ownerLine) + "</p></div></header>" +
+      var chip = o.chips.filter(function (c) { return c.id === p.id; })[0] || { initials: "" };
+      return '<article class="t-card pf-card pf-c-' + esc(p.tone) + '" id="profiles-' + esc(p.id) + '"><header class="pf-head"><span class="pf-av pf-t-' + esc(p.tone) + '">' + esc(chip.initials) + pImg(p.ring) + "</span><div><h3>" + esc(p.platform) + '</h3><p class="pf-headline pf-t-' + esc(p.tone) + '">' + esc(p.headline) + '</p><p class="secsub">' + esc(p.ownerLine) + "</p></div></header>" +
         p.slots.map(function (s) {
           var st = s.state || { tone: "none", label: "", line: "" };
           var ratio = !s.circle && s.exactW > 0 && s.exactH > 0 ? ' style="aspect-ratio:' + Number(s.exactW) + " / " + Number(s.exactH) + '"' : "";
-          var thumb = '<div class="pf-thumb ' + (s.circle ? "pf-round" : "pf-wide") + (s.thumb ? "" : " empty") + " pf-t-" + esc(st.tone) + '"' + (s.thumb ? ratio : "") + ">" + (s.thumb ? pImg(s.thumb) : s.circle ? "" : "<span>No image yet</span>") + "</div>";
+          var empty = s.has ? "No image yet" : "No screenshot yet";
+          var thumb = '<div class="pf-thumb ' + (s.circle ? "pf-round" : "pf-wide") + (s.thumb ? "" : " empty") + " pf-t-" + esc(st.tone) + '"' + (s.thumb ? ratio : "") + ">" + (s.thumb ? pImg(s.thumb) : s.circle ? "" : "<span>" + empty + "</span>") + "</div>";
+          /* the bot's screenshot opens full size */
+          if (!s.has && s.shot) thumb = '<a class="pf-shotlink" href="' + esc(pSrc(s.shot)) + '" target="_blank" rel="noopener" aria-label="Open the screenshot of the ' + esc(p.platform + " " + String(s.kind || "").toLowerCase()) + '">' + thumb + "</a>";
           var size = s.exactW > 0 && s.exactH > 0 ? s.exactW + " × " + s.exactH : "";
           var rule = '<details class="pf-rule"><summary>Size rule</summary><p>' + esc(s.rule) + "</p></details>";
+          var shotNote = !s.has && s.shot ? '<p class="pf-line">Screenshot of what the profile shows. Tap it to see it full size.</p>' : "";
           return '<div class="pf-slot' + (s.circle ? "" : " wide") + '">' + thumb + '<div class="pf-info"><p class="pf-kind">' + esc(s.kind) + (size ? "<small>" + esc(size) + "</small>" : "") + "</p>" +
-            '<p class="pf-state pf-t-' + esc(st.tone) + '"><i></i>' + esc(st.label) + "</p>" + (st.line ? '<p class="pf-line">' + esc(st.line) + "</p>" : "") + rule + "</div></div>";
-        }).join("") + "</article>";
+            '<p class="pf-state pf-t-' + esc(st.tone) + '"><i></i>' + esc(st.label) + "</p>" + (st.line ? '<p class="pf-line">' + esc(st.line) + "</p>" : "") + shotNote + rule + "</div></div>";
+        }).join("") + pfActs(p) + "</article>";
     }).join("");
   }
-  /* a reply on an issue card goes straight to that platform's bot, as a message from Luke */
-  document.addEventListener("submit", function (ev) {
-    var f = ev.target && ev.target.closest && ev.target.closest("[data-pfreply]");
-    if (!f) return;
-    ev.preventDefault();
-    if (HQ.sample) return;
-    var key = f.getAttribute("data-pfreply"), to = f.getAttribute("data-to"), about = f.getAttribute("data-about");
-    var box = f.querySelector("textarea"), btn = f.querySelector("button"), msg = f.querySelector(".pf-msg");
-    var text = box ? String(box.value || "").trim() : "";
-    if (text.length < 2) { if (msg) msg.textContent = "Write the reply first."; return; }
-    btn.disabled = true; btn.textContent = "Sending…";
-    write("message", { to: to, text: "About the " + about + ": " + text, needs: "none" }).then(function (r) {
-      btn.disabled = false; btn.textContent = "Send to " + to;
-      if (!r.ok) { if (msg) msg.textContent = r.error || "That didn't send. Your text is still here."; return; }
-      box.value = "";
-      pfMsg[key] = "Sent to " + to + ".";
-      if (msg) msg.textContent = pfMsg[key];
+  /* a ring opens "Every platform" at that platform's card */
+  function pfFocus(id) {
+    var all = $("profiles-all"), card = $("profiles-" + id);
+    if (!card) return;
+    if (all && !all.open) all.open = true;
+    card.scrollIntoView({ block: "start" });
+    card.classList.add("pulse");
+    setTimeout(function () { card.classList.remove("pulse"); }, 1600);
+  }
+  document.addEventListener("click", function (ev) {
+    var t = ev.target && ev.target.closest ? ev.target : null;
+    if (!t) return;
+    var go = t.closest("[data-pfgo]");
+    if (go) {
+      ev.preventDefault();
+      var gid = go.getAttribute("data-pfgo");
+      try { history.replaceState(null, "", location.pathname + location.search + "#profiles/" + gid); } catch (e) {}
+      pfFocus(gid);
+      return;
+    }
+    var ask = t.closest("[data-pfretry]");
+    if (ask) { if (HQ.sample) return; pfUi.ask = ask.getAttribute("data-pfretry"); delete pfUi.err[pfUi.ask]; drawProfiles(); return; }
+    var no = t.closest("[data-pfretry-no]");
+    if (no) { pfUi.ask = ""; drawProfiles(); return; }
+    var yes = t.closest("[data-pfretry-yes]");
+    if (!yes || pfUi.busy) return;
+    var id = yes.getAttribute("data-pfretry-yes");
+    pfUi.busy = id; drawProfiles();
+    write("profile-retry", { platform: id }).then(function (r) {
+      pfUi.busy = ""; pfUi.ask = "";
+      if (!r.ok) pfUi.err[id] = r.error || "That didn't send. Try again.";
+      else { delete pfUi.err[id]; pfUi.sent[id] = L.profileRetrySent(r.j.to, r.j.at || Date.now()); }
+      drawProfiles();
+      if (r.ok) reload(true);
     });
   });
   /* a thumbnail that won't load (an expired platform link, a file not stored yet) becomes a plain tile */

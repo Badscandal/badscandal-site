@@ -27,6 +27,9 @@
   function subFromHash() { var p = (location.hash || "").replace(/^#/, "").split("/"); return p[1] ? decodeURIComponent(p[1]).replace(/[^a-z0-9-]/gi, "") : ""; }
   function focusSub(tab, sub, tries) {
     var el = sub && (document.getElementById((tab === "songs" ? "song-" : tab + "-") + sub) || (sub === "disputes" ? document.getElementById("disputeList") : null));
+    /* 24 Nov 2026: a card inside a folded part (#profiles/<id> -> Every platform) opens that part first */
+    var fold = el && el.parentNode && el.parentNode.closest ? el.parentNode.closest("details") : null;
+    if (fold && !fold.open) fold.open = true;
     if (el) { if (el.tagName === "DETAILS") el.open = true; el.scrollIntoView({ block: "start" }); el.classList.add("pulse"); setTimeout(function () { el.classList.remove("pulse"); }, 1600); return; }
     if (sub && (tries || 0) < 20) setTimeout(function () { focusSub(tab, sub, (tries || 0) + 1); }, 300);
   }

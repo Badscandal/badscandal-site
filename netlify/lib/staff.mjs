@@ -599,7 +599,8 @@ export async function sendMessage(store, now, roster, a) {
   const tag = {};
   if (a.ask === "resubmit" && a.release) { tag.release = clean(a.release, 60); tag.ask = "resubmit"; }
   if (from === "HQ" && a.ask === "routenote") { tag.ask = "routenote"; if (a.release) tag.release = clean(a.release, 60); }
-  if (from === "HQ" && a.mailId) tag.mailId = clean(a.mailId, 80);
+  /* 24 Nov 2026: Luke's "Try again" on Profiles carries one too (set by the route, never by a tool argument) */
+  if ((from === "HQ" || from === "Luke") && a.mailId) tag.mailId = clean(a.mailId, 80);
   /* the asker's own recommendation (A3, 17 Nov 2026): which option and why, on a message that needs Luke */
   let recs = null;
   if ((a.recommend != null && String(a.recommend).trim()) || (a.recommend_option != null && String(a.recommend_option).trim())) {
@@ -1067,6 +1068,32 @@ function slotPicture(doc, slot) {
   const sizeLine = px ? (ratioBit ? px + " · " + ratioBit : px) : spec.rule;
   return { status, statusLine, sizeLine, preview, circle: spec.circle, exact: spec.exact, fit: !!plan.fit, group: spec.group, detail: plan.reason || (rej ? rej.note : "") };
 }
+/* 24 Nov 2026, Luke: "the bots ... should be checking my profiles for each platform and making sure that's my
+   profile photo after i submit a new upload". A bot's check of the REAL public profile (profile_uploaded result):
+   live (it shows Luke's current upload), not_mine (another image), login (could not log in), failed (the upload
+   did not work). The latest check per image decides the ring on the page; a ready copy on HQ alone is not green.
+   The old "rejected" record counts as a failed check. fresh = made after Luke's current master of that group. */
+export const PROFILE_RESULTS = ["live", "not_mine", "login", "failed"];
+/* the public profile pages we know; any other platform shows a link once a bot records one (page) */
+const PROFILE_PAGES = {
+  spotify: "https://open.spotify.com/artist/29kaubgb6Esvwu0idVndGy",
+  instagram: "https://www.instagram.com/badscandal",
+  tiktok: "https://www.tiktok.com/@badscandal",
+  youtube: "https://www.youtube.com/badscandal",
+  soundcloud: "https://soundcloud.com/badscandal",
+};
+export function profileCheck(doc, slot) {
+  const raw = doc && doc.checks && doc.checks[slot.id] && typeof doc.checks[slot.id] === "object" ? doc.checks[slot.id] : null;
+  const c = raw && PROFILE_RESULTS.includes(raw.result) ? raw : null;
+  const rej = doc && doc.rejected && doc.rejected[slot.id] && doc.rejected[slot.id].note ? doc.rejected[slot.id] : null;
+  let check = c ? { result: c.result, note: c.note || "", by: c.by || "", at: c.at || "", page: c.page || "", shot: !!c.shot, rejected: false } : null;
+  if (rej && (!check || String(rej.at || "") > String(check.at || ""))) check = { result: "failed", note: rej.note, by: rej.by || "", at: rej.at || "", page: "", shot: false, rejected: true };
+  const master = masterDoc(doc, profileGroup(slot));
+  const fresh = !!(check && master && master.at && String(check.at || "") >= String(master.at));
+  const r = doc && doc.retry && doc.retry[slot.id] && doc.retry[slot.id].at ? doc.retry[slot.id] : null;
+  const retryAt = r && (!check || String(r.at) > String(check.at || "")) ? r.at : "";
+  return { check, fresh, master, has: !!(master && check && check.result === "live" && fresh), retryAt };
+}
 function profilePlatforms(q) {
   const want = fold(q);
   if (!want) return [];
@@ -1134,14 +1161,21 @@ export function profilesView(doc, messages, platform) {
     const wait = (messages || []).filter((m) => m && m.proposal && m.proposal.action === "profile" && m.proposal.slot === s.id && isOpen(m))
       .sort((a, b) => (a.at < b.at ? 1 : -1))[0] || null;
     const pic = slotPicture(doc, s);
+    const chk = profileCheck(doc, s);
+    const job = (Array.isArray(doc && doc.jobs) ? doc.jobs : []).some((j) => j && j.slot === s.id && j.status === "open");
+    const check = chk.check ? { result: chk.check.result, note: chk.check.note, by: chk.check.by, at: chk.check.at, page: chk.check.page,
+      shot: chk.check.shot ? "/api/staff/profile-file/shot-" + s.id : "", fresh: chk.fresh, ...(chk.check.rejected ? { rejected: true } : {}) } : null;
+    if (check && check.page && (!p.pageAt || check.at > p.pageAt)) { p.page = check.page; p.pageAt = check.at; }
     p.slots.push({ id: s.id, kind: s.kind, asset: s.asset || "", rule: profileRule(s), current, approved,
       waiting: wait ? { id: wait.id, link: wait.proposal.link || "", by: wait.from || "" } : null,
-      status: pic.status, statusLine: pic.statusLine, sizeLine: pic.sizeLine, preview: pic.preview, circle: pic.circle, exact: pic.exact, fit: pic.fit, group: pic.group, detail: pic.detail });
+      status: pic.status, statusLine: pic.statusLine, sizeLine: pic.sizeLine, preview: pic.preview, circle: pic.circle, exact: pic.exact, fit: pic.fit, group: pic.group, detail: pic.detail,
+      check, retryAt: chk.retryAt, job });
   }
+  for (const p of platforms) { p.page = p.page || PROFILE_PAGES[p.id] || ""; delete p.pageAt; }
   const want = fold(platform);
   const shown = want ? platforms.filter((p) => fold(p.platform) === want || fold(p.platform).split(" ")[0] === want || p.id === want) : platforms;
   const masterLine = (group) => { const m = masterDoc(doc, group); return m ? { w: m.w, h: m.h, at: m.at || "", line: "Saved · " + m.w + " x " + m.h } : null; };
-  return { note: "New images need Luke's yes. The owner uploads them by hand and records them here. HQ never logs in.",
+  return { note: "New images need Luke's yes. The owner uploads them by hand, checks the public profile and records it here. HQ never logs in.",
     masters: { photo: masterLine("photo"), banner: masterLine("banner") }, platforms: shown };
 }
 export async function recordProfile(store, now, roster, a) {

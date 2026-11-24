@@ -150,7 +150,22 @@ export function sampleDesk(now = Date.now()) {
       "spotify-header": { current: { link: "https://example.com/sample/spotify-header.jpg", changed: d(40), by: "Atlas", at: new Date(ago(40 * 1440)).toISOString() } },
       "instagram-photo": { current: { link: "https://example.com/sample/ig-now.jpg", changed: d(20), by: "Steve", at: new Date(ago(20 * 1440)).toISOString() },
         approved: { link: "https://example.com/sample/ig-next.jpg", by: "Steve", at: new Date(ago(30)).toISOString(), msg: "msampleprof1" } },
-    } } };
+    },
+    /* 24 Nov 2026: Luke's two uploads and the bots' checks of the public profiles (all made up). Green: Spotify,
+       Apple Music, TIDAL. Yellow: Deezer (Atlas can't log in), TikTok (not his photo, with a screenshot that 404s
+       in the sample), Facebook and SoundCloud (the banner not up yet), Instagram and X (his own). Red: YouTube (the
+       photo failed, the banner waits for his yes) and Amazon Music (nothing up yet). Grey needs a group with no
+       upload, so it can't sit next to red here: tests/hq-profiles-verify.test.mjs covers it. */
+    masters: { photo: { w: 3000, h: 3000, bytes: 900000, format: "jpg", at: new Date(ago(2 * 1440)).toISOString(), by: "Luke" },
+      banner: { w: 3000, h: 1286, bytes: 700000, format: "jpg", at: new Date(ago(2 * 1440)).toISOString(), by: "Luke" } },
+    checks: Object.fromEntries([
+      ["spotify-photo", "live", "Atlas", "", true], ["spotify-header", "live", "Atlas", "", true], ["apple-image", "live", "Atlas", "", false], ["tidal-photo", "live", "Atlas", "", false],
+      ["deezer-photo", "login", "Atlas", "(sample) Deezer asked for a code sent to the inbox.", false],
+      ["tiktok-photo", "not_mine", "Kevin", "", true],
+      ["facebook-photo", "live", "Steve", "", true], ["soundcloud-photo", "live", "Atlas", "", false],
+      ["youtube-photo", "failed", "Laura", "(sample) YouTube said the file could not be processed.", true],
+    ].map(([slot, result, by, note, shot], i) => [slot, { result, note, by, at: new Date(ago(1440 - i * 20)).toISOString(), page: "", shot }])),
+    retry: { "youtube-photo": { at: new Date(ago(600)).toISOString(), by: "Luke" } } } };
 }
 
 export function sampleBoard(now = Date.now()) {

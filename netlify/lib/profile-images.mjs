@@ -8,8 +8,8 @@
    A problem (too small, a rework that fails the check, a platform that rejected it, a job open more
    than a day) is one decision for Luke, in plain words. The same problem is not asked twice. */
 import {
-  PROFILE_SLOTS, StaffError, clean, cleanText, getProfiles, httpsLink, isOpen, listMessages, mutate,
-  noSecrets, pictureOf, profileGroup, profilePlan, profileSpec, sendMessage, whoIs,
+  PROFILE_RESULTS, PROFILE_SLOTS, StaffError, clean, cleanText, getProfiles, httpsLink, isOpen, listMessages, mutate,
+  noSecrets, pictureOf, profileCheck, profileGroup, profilePlan, profileSpec, resolveMessage, sendMessage, whoIs,
 } from "./staff.mjs";
 
 const MAX = 4 * 1024 * 1024;
@@ -26,6 +26,8 @@ function asDoc(doc) {
   doc.uploaded = bag(doc.uploaded);
   doc.rejected = bag(doc.rejected);
   doc.asks = bag(doc.asks);
+  doc.checks = bag(doc.checks); /* 24 Nov 2026: a bot's check of the public profile, per slot */
+  doc.retry = bag(doc.retry); /* 24 Nov 2026: Luke's "Try again", per slot */
   doc.jobs = Array.isArray(doc.jobs) ? doc.jobs : [];
   return doc;
 }
@@ -124,7 +126,33 @@ export async function saveProfileMaster(store, now, roster, a) {
     return { ok: true };
   });
   for (const id of cleared) { try { await store.delete(FILE("slot-" + id)); } catch { /* the old copy is unused */ } }
-  return { kind: group, width: pic.w, height: pic.h, bytes: buf.length, slots: plans, note: "Saved. HQ did not log in and did not send this to a platform." };
+  const told = await tellOwners(store, now, roster, group, at);
+  return { kind: group, width: pic.w, height: pic.h, bytes: buf.length, slots: plans, told, note: "Saved. HQ did not log in and did not send this to a platform." };
+}
+
+/* 24 Nov 2026, Luke: "immediately after luke submits an upload, upload it to each respected profile and then change
+   the profile ring to green". ONE desk message from HQ to each owner bot of that group, once per upload (mailId).
+   Luke's own (Instagram) and the slots with no owner (X) get none. An older upload's note to that bot is closed. */
+const andList = (xs) => (xs.length < 2 ? xs.join("") : xs.slice(0, -1).join(", ") + " and " + xs[xs.length - 1]);
+const ownerBot = (slot) => (slot.owner && slot.owner !== "Luke" ? slot.owner : "");
+export const PROFILE_STEPS = "open the public profile, take a screenshot and record it with profile_uploaded (result live + screenshot_base64). Can't log in: result login with what happened, then sort it out with Luke in your chat; once it works, upload, check and record live.";
+async function tellOwners(store, now, roster, group, at) {
+  const mailId = `profile-upload-${group}-${at}`;
+  const bots = [...new Set(slotsOf(group).map(ownerBot).filter(Boolean))];
+  let msgs = [];
+  try { msgs = await listMessages(store, now, 2); } catch { msgs = []; }
+  const told = [];
+  for (const bot of bots) {
+    const mine = slotsOf(group).filter((s) => s.owner === bot);
+    for (const old of msgs.filter((m) => m && m.to === bot && isOpen(m) && String(m.mailId || "").startsWith(`profile-upload-${group}-`) && m.mailId !== mailId)) {
+      try { await resolveMessage(store, now, roster, { id: old.id, by: "HQ", note: "Luke uploaded a newer one." }); } catch { /* best effort */ }
+    }
+    if (msgs.some((m) => m && m.to === bot && m.mailId === mailId)) continue;
+    const what = group === "banner" ? "banner" : "profile photo";
+    const text = `Luke uploaded a new ${what}. Now: log in to ${andList([...new Set(mine.map((s) => s.platform))])}, put it up (use the sized copy from profile_master, or the AI version once your job is done), ${PROFILE_STEPS} Slots: ${mine.map((s) => s.id).join(", ")}.`;
+    try { await sendMessage(store, now, roster, { from: "HQ", to: bot, needs: "action", text, mailId }); told.push(bot); } catch { /* a full board never fails the upload */ }
+  }
+  return told;
 }
 
 function limitOf(spec) {
@@ -182,7 +210,8 @@ function jobOut(doc, j) {
   return { id: j.id, slot: slot.id, platform: slot.platform, kind: slot.kind, owner: slot.owner || "Luke", reason: j.reason || "", note: j.note || "",
     exact: spec.exact, formats: spec.formats, mb: spec.mb, rule: spec.rule, circle: spec.circle,
     master: master && master.w ? { width: master.w, height: master.h, format: master.format || "", url: PUBLIC("master-" + spec.group) } : null,
-    how: "Extend the canvas or pad it to the exact size. Do not crop the subject away. Do not scale the picture up. Upload that file with profile_rework. Then put it on the platform yourself and mark it with profile_uploaded and an https link. HQ never logs in and never sends the file to a platform." };
+    kind: "rework",
+    how: "Extend the canvas or pad it to the exact size. Do not crop the subject away. Do not scale the picture up. Upload that file with profile_rework. Then put it on the platform yourself, " + PROFILE_STEPS + " HQ never logs in and never sends the file to a platform." };
 }
 function visibleJob(by, slot) {
   if (by === "Luke" || by === "Claude" || by === "Nova") return true;
@@ -194,8 +223,24 @@ export async function listProfileJobs(store, now, roster, a) {
   /* a list only: the hourly job and the board ask Luke about a stuck job (18 Nov 2026, handoff bug 5) */
   const doc = await getProfiles(store);
   const jobs = (doc.jobs || []).filter((j) => j && j.status === "open").map((j) => ({ j, slot: PROFILE_SLOTS.find((s) => s.id === j.slot) })).filter((x) => x.slot && visibleJob(by, x.slot));
-  return { jobs: jobs.map((x) => jobOut(doc, x.j)).filter(Boolean),
-    note: jobs.length ? "Nothing here has been sent to a platform. HQ never logs in." : "No profile image is waiting on you." };
+  const out = jobs.map((x) => jobOut(doc, x.j)).filter(Boolean);
+  /* 24 Nov 2026: every image of yours with Luke's upload but no live check since it (kind upload), and Luke's
+     "Try again" (kind retry). An image whose AI version is still being made is the rework job above. */
+  for (const slot of PROFILE_SLOTS) {
+    if (!ownerBot(slot) || !visibleJob(by, slot)) continue;
+    const c = profileCheck(doc, slot);
+    if (!c.master || (c.has && !c.retryAt)) continue;
+    if (!c.retryAt && jobs.some((x) => x.slot.id === slot.id)) continue;
+    const spec = profileSpec(slot);
+    const copy = doc.versions && doc.versions[slot.id] && doc.versions[slot.id].w ? PUBLIC("slot-" + slot.id) : "";
+    out.push({ kind: c.retryAt ? "retry" : "upload", slot: slot.id, platform: slot.platform, image: slot.kind, owner: slot.owner,
+      exact: spec.exact, master: { width: c.master.w, height: c.master.h, url: PUBLIC("master-" + spec.group) }, ...(copy ? { copy_url: copy } : {}),
+      last_check: c.check ? { result: c.check.result, note: c.check.note, by: c.check.by, at: c.check.at } : null,
+      ...(c.retryAt ? { luke_asked_again: c.retryAt } : {}),
+      how: `Log in to ${slot.platform}, put up Luke's ${spec.group === "banner" ? "banner" : "photo"}, ` + PROFILE_STEPS });
+  }
+  return { jobs: out,
+    note: out.length ? "Nothing here has been sent to a platform. HQ never logs in: you do." : "No profile image is waiting on you." };
 }
 
 export async function profileMasterFile(store, roster, a) {
@@ -211,9 +256,15 @@ export async function profileMasterFile(store, roster, a) {
   const spec = slot ? profileSpec(slot) : null;
   return { ready: true, kind: group, width: m.w, height: m.h, format: m.format || "", bytes: m.bytes || 0, url: PUBLIC("master-" + group),
     ...(spec ? { slot: slot.id, platform: slot.platform, image: slot.kind, exact: spec.exact, formats: spec.formats, mb: spec.mb, rule: spec.rule } : {}),
+    ...(slot && doc.versions && doc.versions[slot.id] && doc.versions[slot.id].w ? { copy_url: PUBLIC("slot-" + slot.id) } : {}),
     how: "Open the url with the same Authorization header you use for the connector. It is not a public link. HQ never logs in and never sends this file to a platform." };
 }
 
+/* profile_uploaded. 24 Nov 2026 (Luke): the bot checks the REAL public profile after it uploads, and records what it
+   saw: result live (it shows Luke's current upload), not_mine (another image: a screenshot is required), login (it
+   could not log in) or failed (the upload did not work). Every result asks for a screenshot of the image as the
+   profile shows it now. The new results send NO message to Luke ("if there's an issue it should only show in the
+   HQ"): he sorts it out with the bot in its own chat. The old rejected: true path is kept as it was. */
 export async function markProfileUploaded(store, now, roster, a) {
   const by = whoIs(a.by, roster, { people: true });
   const slot = slotById(clean(a.slot, 40));
@@ -226,24 +277,102 @@ export async function markProfileUploaded(store, now, roster, a) {
     noSecrets(note);
     await changeProfiles(store, (doc) => {
       doc.rejected[slot.id] = { note, by, at };
+      delete doc.retry[slot.id];
       return { saved: true };
     });
     const who = slot.owner && slot.owner !== "Luke" ? slot.owner : "";
     await askLuke(store, now, roster, "rejected-" + slot.id, at,
       `${by} says ${slot.platform} rejected the ${slot.kind.toLowerCase()}: ${note} The picture on the platform was not changed from here.`,
       ["Make another version", "Leave the current one"], who);
+    await settleMail(store, now, roster, slot);
     return { saved: true, rejected: true, slot: slot.id, note: "Recorded. HQ did not change the platform." };
   }
-  const link = httpsLink(a.link);
-  if (!link) throw new StaffError("link must be an https link that shows the upload. Nothing was saved.");
-  noSecrets(link);
+  const result = a.result == null || String(a.result).trim() === "" ? "live" : String(a.result).trim().toLowerCase().replace(/[\s-]+/g, "_");
+  if (!PROFILE_RESULTS.includes(result)) throw new StaffError("result must be live, not_mine, login or failed. Nothing was saved.");
+  const note = cleanText(a.note, 300);
+  if ((result === "login" || result === "failed") && note.length < 2) throw new StaffError(result === "login" ? "Say what happened when you tried to log in, in note (never a password or a code). Nothing was saved." : "Say what went wrong with the upload, in note. Nothing was saved.");
+  if (note) noSecrets(note);
+  const pageRaw = a.page == null ? "" : String(a.page).trim();
+  const page = pageRaw ? httpsLink(pageRaw) : "";
+  if (pageRaw && !page) throw new StaffError("page must be the https link to the public profile. Nothing was saved.");
+  const linkRaw = a.link == null ? "" : String(a.link).trim();
+  const link = linkRaw ? httpsLink(linkRaw) : "";
+  if (linkRaw && !link) throw new StaffError("link must be an https link that shows the upload. Nothing was saved.");
+  if (page) noSecrets(page);
+  if (link) noSecrets(link);
+  if (result === "live" && !link && !page) throw new StaffError("Give page: the https link to the public profile that now shows Luke's upload. Nothing was saved.");
+  const hasShot = a.screenshot_base64 != null && String(a.screenshot_base64).trim() !== "";
+  if (result === "not_mine" && !hasShot) throw new StaffError("not_mine needs screenshot_base64: a JPG or PNG screenshot of the image the profile shows now. Nothing was saved.");
+  let shot = null;
+  if (hasShot) {
+    shot = bufOf(a.screenshot_base64);
+    const pic = readPic(shot);
+    await putFile(store, "shot-" + slot.id, shot, pic.ext);
+  }
   await changeProfiles(store, (doc) => {
-    doc.uploaded[slot.id] = { link, by, at };
-    delete doc.rejected[slot.id];
-    doc.jobs = doc.jobs.map((j) => (j.slot === slot.id && j.status === "open" ? { ...j, status: "done", doneAt: at, by } : j));
+    doc.checks[slot.id] = { result, note, by, at, page: page || (result === "live" ? link : ""), shot: !!shot };
+    delete doc.retry[slot.id];
+    if (result === "live") {
+      doc.uploaded[slot.id] = { link: link || page, by, at };
+      delete doc.rejected[slot.id];
+      doc.jobs = doc.jobs.map((j) => (j.slot === slot.id && j.status === "open" ? { ...j, status: "done", doneAt: at, by } : j));
+    }
     return { saved: true };
   });
-  return { saved: true, slot: slot.id, platform: slot.platform, kind: slot.kind, link, status: "uploaded", by, note: "Recorded as uploaded by you. HQ did not log in and did not change the platform." };
+  if (!shot) { try { await store.delete(FILE("shot-" + slot.id)); } catch { /* there was none */ } }
+  await settleMail(store, now, roster, slot);
+  const said = { live: "Recorded: the profile shows Luke's upload. The ring turns green.",
+    not_mine: "Recorded: the profile shows another image. Luke sees your screenshot on HQ. Upload his and record live.",
+    login: "Recorded: you could not log in. The ring is yellow with your name. Sort the login out with Luke in your chat; once it works, upload, check and record live.",
+    failed: "Recorded: the upload did not work. Try again, then record what the profile shows." }[result];
+  return { saved: true, slot: slot.id, platform: slot.platform, kind: slot.kind, result, by, screenshot: !!shot, ...(page ? { page } : {}), ...(link ? { link } : {}),
+    status: result === "live" ? "uploaded" : result, note: said + " HQ did not log in and did not change the platform." };
+}
+
+/* close the notes that asked for this: Luke's "Try again" once none of that platform's images waits on it, and the
+   upload note once every image of that group of the owner's is live. Best effort: a refusal never fails the check. */
+async function settleMail(store, now, roster, slot) {
+  const bot = ownerBot(slot);
+  if (!bot) return;
+  try {
+    const doc = await getProfiles(store);
+    const msgs = (await listMessages(store, now, 2)).filter((m) => m && m.to === bot && isOpen(m));
+    const plat = PROFILE_SLOTS.filter((s) => s.platformId === slot.platformId);
+    const retry = msgs.find((m) => m.mailId === "profile-retry-" + slot.platformId);
+    if (retry && !plat.some((s) => profileCheck(doc, s).retryAt)) await resolveMessage(store, now, roster, { id: retry.id, by: bot, note: "Checked again on HQ." });
+    const group = profileGroup(slot);
+    const m = doc.masters && doc.masters[group];
+    const up = m && m.at ? msgs.find((x) => x.mailId === `profile-upload-${group}-${m.at}`) : null;
+    if (up && slotsOf(group).filter((s) => s.owner === bot).every((s) => profileCheck(doc, s).has)) await resolveMessage(store, now, roster, { id: up.id, by: bot, note: "Live on every profile." });
+  } catch { /* best effort */ }
+}
+
+/* 24 Nov 2026, Luke: "give me an option to try again, which will go straight to the bot, or hang somewhere for when
+   the bot checks again". Luke only. Marks that platform's images that do not have his upload, and sends ONE message
+   from Luke to the owner (not while the last one is still open). profile_jobs lists them as kind retry. */
+export async function retryProfile(store, now, roster, a) {
+  const by = whoIs(a.by, roster, { people: true });
+  if (by !== "Luke") throw new StaffError("Only Luke asks a bot to try again. Nothing was sent.", "not_allowed");
+  const want = String(a.platform || "").trim().toLowerCase();
+  const slots = PROFILE_SLOTS.filter((s) => s.platformId === want || s.platform.toLowerCase() === want);
+  if (!slots.length) throw new StaffError("That platform is not on the list. Nothing was sent.");
+  const platform = slots[0].platform, pid = slots[0].platformId;
+  if (!slots[0].owner) throw new StaffError(`${platform} has no bot yet. Upload it yourself, or ask Nova who should take it. Nothing was sent.`);
+  if (slots[0].owner === "Luke") throw new StaffError(`${platform} is yours: you upload it yourself. Nothing was sent.`);
+  const bot = slots[0].owner;
+  const doc = await getProfiles(store);
+  const todo = slots.filter((s) => { const c = profileCheck(doc, s); return c.master && !c.has; });
+  if (!todo.length) throw new StaffError(slots.some((s) => profileCheck(doc, s).master) ? `${platform} already has your upload. Nothing was sent.` : "Upload your photo or banner first. Nothing was sent.");
+  const at = new Date(now).toISOString();
+  await changeProfiles(store, (d) => { for (const s of todo) d.retry[s.id] = { at, by }; return { saved: true }; });
+  const mailId = "profile-retry-" + pid;
+  const open = (await listMessages(store, now, 2)).find((m) => m && m.mailId === mailId && m.to === bot && isOpen(m));
+  if (open) return { sent: false, already: true, to: bot, platform, at: open.at, slots: todo.map((s) => s.id), note: `${bot} already has your last "Try again". It is on ${bot}'s list for its next run.` };
+  const what = andList([...new Set(todo.map((s) => (profileGroup(s) === "banner" ? "banner" : "profile photo")))]);
+  const steps = PROFILE_STEPS.replace("sort it out with Luke in your chat", "sort it out with me in your chat");
+  const text = `Try ${platform} again: log in, put up my ${what} (the sized copy from profile_master, or your AI version), ${steps} Slots: ${todo.map((s) => s.id).join(", ")}.`;
+  const r = await sendMessage(store, now, roster, { from: "Luke", to: bot, needs: "action", text, mailId });
+  return { sent: true, to: bot, platform, at: r.message.at, slots: todo.map((s) => s.id), note: `Sent to ${bot}. ${bot} tries again on its next run.` };
 }
 
 export async function profileAlerts(store, now, roster) {
@@ -265,8 +394,8 @@ export async function profileAlerts(store, now, roster) {
 export async function profileFileResponse(store, name) {
   const key = String(name || "").split("?")[0].replace(/\/+$/, "");
   const nf = () => new Response("Not found", { status: 404, headers: { "content-type": "text/plain", "cache-control": "no-store" } });
-  if (!/^(master-photo|master-banner|slot-[a-z0-9-]{1,40})$/.test(key)) return nf();
-  if (key.startsWith("slot-") && !PROFILE_SLOTS.some((s) => s.id === key.slice(5))) return nf();
+  if (!/^(master-photo|master-banner|(?:slot|shot)-[a-z0-9-]{1,40})$/.test(key)) return nf();
+  if ((key.startsWith("slot-") || key.startsWith("shot-")) && !PROFILE_SLOTS.some((s) => s.id === key.slice(5))) return nf();
   let doc = null;
   try { doc = await store.get(FILE(key), { type: "json" }); } catch { doc = null; }
   if (!doc || !doc.b64) return nf();
