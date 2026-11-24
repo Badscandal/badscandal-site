@@ -44,8 +44,10 @@ test("Ledger's and Sheet's my_day carry the one note: stop the money work, delet
     const day = await call(d, "my_day", { bot });
     assert.match(day.money_stopped, /HQ no longer handles money/);
     assert.match(day.money_stopped, /Stop checking income, payments, Revolut and the income sheet/);
-    assert.match(day.money_stopped, /Delete your money tasks/);
-    assert.match(day.money_stopped, /Ask Luke for your new task/);
+    assert.match(day.money_stopped, /Delete your HQ money tasks/);
+    assert.match(day.money_stopped, /badscandal-books\.netlify\.app\/mcp/); /* 24 Nov 2026: they moved to the books */
+    assert.match(day.money_stopped, /tell Alfred \(his assistant\) directly/);
+    assert.doesNotMatch(day.money_stopped, /Ask Luke/);
     assert.equal(day.income_problems, undefined);
     assert.equal(day.expected_money, undefined);
   }
@@ -71,4 +73,18 @@ test("the desk no longer reads income, and the site check says nothing about it"
   const b = S.board(desk, NOW, null);
   assert.equal(b.income, undefined); assert.equal(b.closes, undefined);
   assert.doesNotMatch(S.checkReport({ desk, hq: null, hqState: null, now: NOW }).text, /income/i);
+});
+
+/* 24 Nov 2026, Luke: "questions shouldn't go on HQ they should report directly to my other bot alfred ... they don't
+   interact with hq anymore". On HQ, Ledger and Sheet see only my_day, and it sends them to badscandal books. */
+test("Ledger and Sheet: HQ shows them only my_day, pointing to badscandal books and Alfred", async () => {
+  const { toolsFor, INSTRUCTIONS } = await import("../netlify/lib/staff-tools.mjs");
+  const S2 = await import("../netlify/lib/staff.mjs");
+  for (const who of ["Ledger", "Sheet"]) {
+    assert.deepEqual(toolsFor(who, S2.DEFAULT_ROSTER).map((t) => t.name), ["my_day"], who);
+    const b = S2.DEFAULT_ROSTER.find((x) => x.name === who);
+    assert.match(b.duty, /badscandal books.*Alfred/);
+  }
+  assert.ok(toolsFor("Atlas", S2.DEFAULT_ROSTER).length > 5, "the other bots keep their tools");
+  assert.match(INSTRUCTIONS, /Ledger and Sheet: you no longer use HQ/);
 });

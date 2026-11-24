@@ -55,13 +55,14 @@ export const DEFAULT_ROSTER = [
     writes: "Nothing: Alfred reports, he doesn't log" },
   /* 24 Nov 2026, Luke: "lets fully remove the money section ... Move the money site to the badscandal books
      site". Ledger and Sheet stay on the team; Luke gives them new work later. No duty time, so the site's
-     check never lists them as quiet. */
-  { name: "Ledger", role: "Waiting for new work", duty: "No money work: HQ no longer handles money. Ask Luke for your new task.", time: "",
-    why: "On the team. Luke gives Ledger new work soon. HQ no longer handles money, so there is nothing to check until then.",
-    schedule: [], writes: "Nothing until Luke gives the new task" },
-  { name: "Sheet", role: "Waiting for new work", duty: "No money work: HQ no longer handles money. Ask Luke for your new task.", time: "",
-    why: "On the team. Luke gives Sheet new work soon. HQ no longer handles money, so there is nothing to check until then.",
-    schedule: [], writes: "Nothing until Luke gives the new task" },
+     check never lists them as quiet. Later the same day (Luke): "they don't interact with hq anymore"; their money
+     work is on badscandal books and they report to Alfred directly. */
+  { name: "Ledger", role: "Money, on badscandal books", duty: "Works on badscandal books, not on HQ. Reports to Alfred.", time: "",
+    why: "Ledger keeps the money on badscandal books (badscandal-books.netlify.app). It does not use HQ and reports to Alfred directly.",
+    schedule: [], writes: "Nothing on HQ: the payments are on badscandal books" },
+  { name: "Sheet", role: "Money, on badscandal books", duty: "Works on badscandal books, not on HQ. Reports to Alfred.", time: "",
+    why: "Sheet keeps the money on badscandal books (badscandal-books.netlify.app). It does not use HQ and reports to Alfred directly.",
+    schedule: [], writes: "Nothing on HQ: the payments are on badscandal books" },
   { name: "Steve", role: "Instagram", duty: "Daily growth and best post", time: "09:10",
     why: "Instagram is where the fans are found first. Steve ties each day's growth to the post that caused it.",
     schedule: [{ time: "09:10", what: "Followers, change, views, best post and its link" }], writes: "The Growth tab" },

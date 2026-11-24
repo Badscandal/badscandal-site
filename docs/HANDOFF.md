@@ -2,6 +2,8 @@
 
 **Full picture:** [docs/HQ-FULL-HANDOFF.md](HQ-FULL-HANDOFF.md) (18 Nov 2026). It was checked against the code at `9e447e2` (PR #88). If this file disagrees with it, the full file wins. Main is through PR #89: 47 connector tools, service worker `bs-hq-v8`, 745 tests. The paragraphs below still describe the state at PR #84 in places. They are kept as the running log.
 
+**24 Nov 2026: Ledger and Sheet off HQ (this PR).** Luke: "questions shouldn't go on HQ they should report directly to my other bot alfred my assistant now they don't interact with hq anymore". On HQ they see only `my_day`; its `money_stopped` and their roster card send them to badscandal books (`https://badscandal-books.netlify.app/mcp`, same key) and tell them to report to Alfred directly. The books connector says the same (repo badscandal-books, deployed). Connector 1.22.0.
+
 **24 Nov 2026: the header tidied (PR #119, live).** Luke: "ok and sources is all meshed together"; "an option for all time ... instead of this month"; "remove the night quiet thing that's pointless".
 - **Sources** is one pill on one line: the dot, then "Sources OK" / "Check sources" / "Sources partly read".
 - **The date range:** Today · 7 days · 30 days · **All time** · Custom. "This month" is gone (a saved one opens on 30 days). All time = every day since the counter started (`ALL_FROM` 2026-10-11 in `netlify/lib/admin.mjs`, range `all`); it has no period before it, so no "vs" changes are shown.

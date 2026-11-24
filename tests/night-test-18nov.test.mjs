@@ -30,7 +30,7 @@ test("reconnect is the count or the names, never a version bump on its own", () 
 test("the connector says the tools version when a bot connects", async () => {
   const deps = { tools: TOOLS, instructions: "hello", call: async () => ({}) };
   const init = await handle({ jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion: "2025-06-18" } }, {}, deps);
-  assert.equal(init.body.result.serverInfo.version, "1.21.0"); /* 24 Nov 2026: profile checks */
+  assert.equal(init.body.result.serverInfo.version, "1.22.0"); /* 24 Nov 2026: Ledger and Sheet on the books */
   assert.equal(init.body.result.serverInfo.tools, TOOLS.length);
   assert.match(init.body.result.serverInfo.toolsVersion, /^[0-9a-f]{8}$/);
   const disc = await handle({ jsonrpc: "2.0", id: 2, method: "server/discover", params: { _meta: { "io.modelcontextprotocol/protocolVersion": "2026-07-28" } } }, { "mcp-protocol-version": "2026-07-28" }, deps);

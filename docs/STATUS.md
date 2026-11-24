@@ -12,6 +12,7 @@ No money amounts, payer names or account numbers in this file: the repo is publi
 
 | When | PR | What |
 |------|----|------|
+| 24 Nov | this PR | Ledger and Sheet no longer use HQ: only my_day, which sends them to badscandal books and to Alfred. Connector 1.22.0. |
 | 24 Nov | #119 | Header: Sources is one clean pill; the range has All time instead of This month; Night quiet removed. |
 | 24 Nov | #117 | Profiles: a ring is green only after the bot checked the real profile after Luke's upload; yellow = can't log in or one image not his, red = photo and banner not his; the ring shows the bot's screenshot; tap a ring for the reason, Try again (to the bot) and Open the platform. Connector 1.21.0, 43 tools. |
 | 24 Nov | revert | Back to the original fonts (Instrument Serif titles, Figtree body, DM Mono labels) and normal-case link buttons: #121, #118 and #116 undone, hosted SF Pro files removed. |
