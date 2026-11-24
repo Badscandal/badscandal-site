@@ -1,18 +1,19 @@
 /* BADSCANDAL HQ · the shell (11 Nov 2026, Step 0 of the new look): tabs with their own address
-   (#today, #songs, … — the back button works), the bottom bar on phones (Today, Songs, Ads, Money,
-   More) and the left rail on desktop, the More sheet, and the refresh button. The last tab is
+   (#today, #songs, … — the back button works), the bottom bar on phones (Needs you, Upcoming, Team,
+   Songs, More) and the left rail on desktop, the More sheet, and the refresh button. The last tab is
    remembered on this device. The data itself is js/hq.js + js/hq-pages.js + js/hq-staff.js.
    Messages (the staff desk, 11 Nov 2026) is the tenth tab: in the rail, and in More on phones. */
 (function () {
   "use strict";
   var $ = function (id) { return document.getElementById(id); };
-  var TABS = ["today", "songs", "ads", "pages", "growth", "rights", "profiles", "releases", "money", "team", "messages"];
-  /* songs and ads sit behind More on the phone; releases and team are on the bar (18 Nov 2026).
-     profiles stays here. The desktop rail still lists every tab. Rights is Content ID claims. */
-  var MORE = ["songs", "ads", "pages", "growth", "rights", "profiles", "messages"];
+  var TABS = ["today", "songs", "ads", "pages", "growth", "profiles", "releases", "team", "messages"];
+  /* ads sits behind More on the phone; releases and team are on the bar (18 Nov 2026). 24 Nov 2026 (Luke):
+     Rights and Money are gone, and Songs takes Money's place on the bar. The desktop rail lists every tab. */
+  var MORE = ["ads", "pages", "growth", "profiles", "messages"];
   /* addresses that moved: Fans is a part of the Growth & Fans page since 12 Nov 2026 (Luke: "growth and
      fans can be on the same page"); an old #fans link or bookmark lands on that part */
-  var ALIAS = { fans: "growth/fans" };
+  /* 24 Nov 2026: #rights and #money (removed) land on Needs you, and #disputes on Songs' disputes */
+  var ALIAS = { fans: "growth/fans", rights: "today", money: "today", disputes: "songs/disputes" };
   var KEY = "bs_hq_tab";
 
   function tabFromHash() {

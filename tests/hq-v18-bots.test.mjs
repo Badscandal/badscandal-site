@@ -222,15 +222,15 @@ test("an old stored set loses duplicate hooks, ideas with no song and auto cards
 });
 
 /* ---------- Spark, Steve: account health ---------- */
-test("Not enough data says what is missing; YouTube names an open claim; Instagram views name their age", () => {
+/* 24 Nov 2026: Content ID claims went with the Rights page, so YouTube's headline no longer names one */
+test("Not enough data says what is missing; YouTube's headline has no claim; Instagram views name their age", () => {
   const blank = evaluate({ now: NOW, growth: [], checks: [] });
   const tt = blank.accounts.find((a) => a.id === "tiktok");
   assert.match(tt.headline, /^Not enough data: /);
   assert.match(tt.headline, /Account Status/);
-  const quiet = evaluate({ now: NOW, claims: [{ claim: "A quiet claim", claimant: "our own label", impact: "no impact", date: "2026-11-18", by: "Laura", last_checked: "2026-11-20" }],
-    checks: [{ type: "reading", platform: "youtube", date: "2026-11-20", by: "Laura", at: "2026-11-20", account_status: "clear" }] });
+  const quiet = evaluate({ now: NOW, checks: [{ type: "reading", platform: "youtube", date: "2026-11-20", by: "Laura", at: "2026-11-20", account_status: "clear" }] });
   const yt = quiet.accounts.find((a) => a.id === "youtube");
-  assert.match(yt.headline, /Content ID claim/);
+  assert.doesNotMatch(yt.headline, /Content ID|claim/);
   const igPosts = [];
   for (let i = 0; i < 8; i++) igPosts.push({ id: "p" + i, at: new Date(NOW - (1 + i * 2) * 86400000).toISOString().slice(0, 10) + "T12:00:00Z", snaps: { d1: { views: 2000 + i, likes: 100, comments: 5, saves: 5, shares: 5 } } });
   const ig = evaluate({ now: NOW, igPosts }).accounts.find((a) => a.id === "instagram");

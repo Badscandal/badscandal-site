@@ -395,8 +395,10 @@ test("v2: Atlas's Spotify for Artists report, Luke's answer at /api/staff/sighti
 
 test("staff api: Claude reading the board with its key counts as READ (review, 11 Nov 2026), not only as having used the desk", async () => {
   const claude = { authorization: "Bearer " + ENV.STAFF_CLAUDE_KEY };
-  const sent = await (await api("message", { method: "POST", headers: { cookie, "content-type": "application/json" }, body: JSON.stringify({ to: "Claude", text: "Please look at the cap tonight." }) })).json();
-  const mark = async () => (await (await api("board", { headers: { cookie } })).json()).messages.find((m) => m.id === sent.message.id).seen;
+  /* 24 Nov 2026: Claude is off the desk, so Luke's note is an answer to Claude's old message */
+  const old = await (await api("message", { method: "POST", headers: { ...claude, "content-type": "application/json" }, body: JSON.stringify({ to: "Luke", text: "The cap looked high today.", needs: "none" }) })).json();
+  const sent = await (await api("message", { method: "POST", headers: { cookie, "content-type": "application/json" }, body: JSON.stringify({ to: "Claude", text: "Please look at the cap tonight.", re: old.message.id }) })).json();
+  const mark = async () => (await (await api("board", { headers: { cookie } })).json()).messages.flatMap((m) => [m, ...(m.replies || [])]).find((m) => m.id === sent.message.id).seen;
   assert.equal(await mark(), false, "Luke reading his own board marks nothing");
   await new Promise((r) => setTimeout(r, 5));
   assert.equal((await api("board", { headers: claude })).status, 200);

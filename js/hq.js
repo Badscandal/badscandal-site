@@ -724,14 +724,6 @@
   function loadInstagram() {
     return getJSON("/api/hq/instagram" + (sample ? "?sample=1" : "")).then(function (res) { if (res.s === 200) ig = res.j; drawInstagram(); }, function () { drawInstagram(); });
   }
-  /* L5: Content ID claims Laura recorded. Empty means none recorded, never a guessed claim. */
-  function drawClaims() {
-    var box = $("rightsBody"); if (!box || !window.HQLib || !HQLib.claimsHtml) return;
-    var b = window.HQStaff && HQStaff.board ? HQStaff.board() : null;
-    box.innerHTML = HQLib.claimsHtml(b && b.claims, sheet && sheet.today) + (HQLib.claimCaseLinks ? HQLib.claimCaseLinks(b && b.claims, b && b.disputes) : "");
-  }
-  document.addEventListener("hq:refreshed", drawClaims);
-
   function drawInstagram() {
     var box = $("igBox"); if (!box) return;
     if (!ig) { box.innerHTML = ""; return; }
@@ -817,9 +809,8 @@
     $("growthMain").innerHTML = broken("Growth") ? '<p class="empty">See the note above.</p>' : L.growthHtml({
       today: sheet.today, platforms: sheet.growth || [], rows: sheet.growthDetail || [],
       igPosts: (ig && ig.posts) || [], ranking: (ig && ig.ranking) || null, ideas: b.contentIdeas || null, releases: sheet.releases || [],
-      health: b.accountHealth || null, claims: b.claims || null
+      health: b.accountHealth || null
     });
-    drawClaims();
   }
   function drawFans() {
     var f = sheet.fans;

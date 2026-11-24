@@ -25,12 +25,12 @@ const obj = (properties, required) => ({ type: "object", properties, required, a
 /* Each line with the bots it is for (null = everyone). /mcp gives every line (INSTRUCTIONS, unchanged);
    /mcp/<bot> gives that bot the shared lines and its own (instructionsFor, batch 5). */
 const INSTRUCTION_LINES = [
-  [null, "This is the badscandal HQ staff desk: the one place where the bot team, Claude and Luke leave word for each other. It feeds Luke's dashboard at badscandal.com/hq."],
+  [null, "This is the badscandal HQ staff desk: the one place where the bot team and Luke leave word for each other. It feeds Luke's dashboard at badscandal.com/hq."],
   [null, "Every call needs `bot`: your own team name. Start every run with my_day. When you start or finish a duty, or get stuck, call post_update."],
   [null, "Rules: never write a password, login code, key, card or bank account number here. Never guess a number: if you could not see it, say so with status \"blocked\". Every amount keeps the currency it was paid in. Only Luke approves money, logins, account settings and public posts."],
   [null, "Your T- tasks (open_tasks in my_day): when one is finished, call task_update with status done (or blocked, with what is needed); daily D- duties go through post_update."],
   [null, "Asking Luke several things at once? Put each one in questions (2 to 6): each gets its own answer, and the message stays open until all are answered. A message to Luke about another bot names it in about, so the answer reaches that bot too."],
-  [null, "Disputes: RouteNote moderation, YouTube Content ID, a takedown, a distributor issue or a copyright dispute is a case. Open it with open_case, update it with update_case, and read Luke's decision with read_cases. You never set his decision. When the status is waiting on bot, do what he confirmed or wrote, then update the case. A Content ID claim is escalated with claim_id from read_claims. The claim stays on the Rights page. HQ does not send the email or file the dispute."],
+  [null, "Disputes: RouteNote moderation, YouTube Content ID, a takedown, a distributor issue or a copyright dispute is a case. Open it with open_case, update it with update_case, and read Luke's decision with read_cases. You never set his decision. When the status is waiting on bot, do what he confirmed or wrote, then update the case. HQ does not send the email or file the dispute."],
   [null, "Releases: when Luke sends a new song to the team, your steps and their dates appear in my_day. Read everything about the song with release_pack, mark ONLY your own steps with release_step (done only when it is really done), and fill the fields you are responsible for with release_fill."],
   [null, "Social Farm and Label stay off the BADSCANDAL numbers, the ad cap and the official accounts. Farm: log_growth with workspace farm (account or post). Label streams: log_growth with workspace label. Label spend: record_spend with workspace label (never the USD 1,000 cap). Label payouts: submit_income with workspace label. A Label cover is pack, then licence, then Drop's upload, then Atlas's pitch. The licence step shows waiting on licence until it is licensed, with a proof link. release_step step licence, workspace label: only the Licence bot (bot \"Licence\") or Nova can mark it, and only after Luke has said yes for that song. Fields: esl_order_number, licence_pdf_url, drive_folder_url, original_title, original_writers, original_publisher, status (todo, ordered_waiting_luke, paid, licensed, flagged) and flag_reason. The Licence bot reads its queue and marks one done with licence_queue and a proof link. Drop's upload stays blocked until the licence is licensed. HQ never pays a licence."],
   ["Licence", "Licence: you are idle until Luke starts a cover. He writes the covers himself and keeps the songs. When a pack is ready, and before Drop uploads it to RouteNote, get the mechanical licence through Easy Song Licensing. Save the licence, the song and the assets to Google Drive. Read the queue with licence_queue. Mark one licensed only with a proof link, and only after Luke has said yes for that song. You report to Nova only. Never pay. HQ does not take payment."],
@@ -61,7 +61,7 @@ const INSTRUCTION_LINES = [
   ["Atlas", "Atlas: send the Spotify pitch the same day the song shows in Spotify for Artists; don't wait for its planned day. Before you send it, improve Luke's words from the pack (mood, instruments, story): keep his meaning and make it clear and strong."],
   ["Atlas", "Atlas: when the pitch is sent, record the day with pitch_log (pitched_on). HQ never pitches a song and never changes Spotify: you send the pitch in Spotify for Artists, then record it here. When you see the song on a new editorial playlist in Spotify for Artists, record it the same day with pitch_log (playlist, added_on). A song the one-pitch rule skipped is not pitched: do not record a pitch for it."],
   ["Laura", "Laura: when the pack has a visualiser link, upload it to YouTube for the release and write its description like the other visualisers."],
-  ["Laura", "Laura: a Content ID claim is recorded with log_growth (claim, claimant, impact, and date: the day YouTube showed it). Leave claimant or impact out when YouTube did not show them: HQ says not reported. Never guess a claim. HQ does not look Content ID up itself."],
+  /* 24 Nov 2026 (Luke): the Rights page and Content ID claims are gone. Laura no longer records claims. */
   [null, "Account health: Steve (Instagram), Kevin (TikTok), Laura (YouTube), Atlas (Spotify) and Webmaster (badscandal.com) record what the platform's own page shows, with log_growth, on the same day as the numbers, and again that day if Account Status changes. account_status is clear, restricted, strike, copyright, ineligible or age, and status_note is the page's own words. visible is yes, no or unknown, and visible_where is where you looked (For You, Explore, a hashtag). non_follower_share is the percent of views from people who do not follow, when the page shows it. recent_posts is the last few posts, each with at (YYYY-MM-DD) and views or reach, as shown. Atlas records track_moved (and moved_to) when a track is on another profile, and artificial_streams for a warning on the screen. Drop records artificial_streams on Spotify only. Webmaster records site_ok yes or no. HQ messages that bot only when the health changes. Never buy reach, never use a pod, never sign in somewhere else to get around a block, and never delete or appeal from here. HQ will not delete, appeal or post anything."],
   ["Webmaster", "Webmaster: make each song page (badscandal.com/<song>) before the song comes out, in the order the songs come out: a week after the previous song's release day. The home page shows a song as Out now for 7 days after its release day, then switches to the next upcoming song."],
   ["Verse", "Verse: the lyrics go on Musixmatch only once the song is out and shows there. Your lyrics step waits until the release day; from that day check Musixmatch every day and add Luke's approved text (the pack's lyrics) the day the song appears. A song not on Musixmatch yet is not a block. Only Luke writes the lyrics into the pack."],
@@ -171,9 +171,9 @@ export const TOOLS = [
       proof_ref: str("Optional, with card. A booking reference."),
       proof_link: str("Optional, with card. An https link that proves it was done.") }, ["bot", "status", "message"]) },
   { name: "send_message", title: "Send a message",
-    description: "Write to Luke, Claude, another bot, or the whole team (to: all). Use needs to say what you expect: reply (a question), action (please do this), decision (Luke must choose: give 2 to 4 options) or none (just so you know). To answer a message, put its id in reply_to. Messages to Luke reach him through the dashboard and Alfred's 10:00 message: keep them short and say exactly what you need.",
+    description: "Write to Luke, another bot, or the whole team (to: all). Use needs to say what you expect: reply (a question), action (please do this), decision (Luke must choose: give 2 to 4 options) or none (just so you know). To answer a message, put its id in reply_to. Messages to Luke reach him through the dashboard and Alfred's 10:00 message: keep them short and say exactly what you need.",
     inputSchema: obj({ bot: BOT,
-      to: str('Who it is for: "Luke", "Claude", a bot\'s name, or "all".'),
+      to: str('Who it is for: "Luke", a bot\'s name, or "all".'),
       text: str("The message, plain words (1,500 characters at most). No passwords, codes or keys."),
       needs: str("none | reply | action | decision. Default none.", { enum: S.NEEDS }),
       reply_to: str("Optional. The id of the message you are answering (it starts with m)."),
@@ -212,7 +212,7 @@ export const TOOLS = [
       option: str("Only for a decision with options: the option Luke picked, exactly as listed."),
       answers: { type: "object", description: 'Only for a message with numbered questions: {"1": "Luke\'s answer to question 1", ...}.', additionalProperties: { type: "string" } } }, ["bot", "reply_to", "luke_said"]) },
   { name: "recommend", title: "Add your recommendation to a question waiting on Luke", idempotent: true,
-    description: "NOVA (Claude too). Luke's decisions inbox: on a message waiting on Luke (decisions_waiting_on_luke in team_board, or read_messages), add YOUR recommendation so Luke can decide at a glance: which option (exactly as listed, when it has options) and why, in one or two sentences. It does not answer the question: only Luke does. Calling it again replaces your earlier recommendation on that message; the asker's own stays beside it. Never for money questions from Ledger, Sheet or Forge unless you checked the numbers yourself.",
+    description: "NOVA. Luke's decisions inbox: on a message waiting on Luke (decisions_waiting_on_luke in team_board, or read_messages), add YOUR recommendation so Luke can decide at a glance: which option (exactly as listed, when it has options) and why, in one or two sentences. It does not answer the question: only Luke does. Calling it again replaces your earlier recommendation on that message; the asker's own stays beside it. Never for money questions from Ledger, Sheet or Forge unless you checked the numbers yourself.",
     inputSchema: obj({ bot: BOT, message_id: str("The id of the message waiting on Luke (it starts with m)."),
       option: str("Optional: the option you recommend, exactly as listed on the message."),
       why: str("Why, in one or two sentences (300 characters at most).") }, ["bot", "message_id", "why"]) },
@@ -311,8 +311,8 @@ export const TOOLS = [
       alias: str("Label only. The alias, when this spend is for one alias."),
       days: { type: "array", description: "Optional. Several days in one call: each {date, amount, currency, song} or {date, not_read}.", items: { type: "object", properties: { date: { type: "string" }, amount: { type: "number" }, currency: { type: "string" }, not_read: { type: "string" }, song: { type: "string" } } } } }, ["bot", "platform"]) },
   { name: "log_growth", title: "Log a day's growth or song numbers",
-    description: "STEVE, ATLAS, KEVIN, LAURA: ONE call per platform (Growth: followers, views, the best post) or per song (Songs: Spotify streams, listeners, saves, playlist adds) for ONE day, numbers exactly as shown. The change in followers is worked out for you. Anything you could not read: leave it out and name it in gaps with why (TikTok views come a day late; Instagram has no daily views on the web): your duty is marked done, with gaps, never blocked. Sending the same numbers again does nothing; a later call for the same day fills in what was missing. Put your duty id (D-...) in duty if you have more than one duty today. LAURA, a Content ID claim: send claim, and claimant and impact when YouTube showed them, with date. Leave a blank when it was not shown. Do not also send follower numbers on that call. Never guess a claim. Steve, Atlas and Kevin do not record claims. Account health, same tool: Steve, Kevin, Laura, Atlas and Webmaster can send account_status, visible, non_follower_share, recent_posts or site_ok without follower numbers. Atlas or Drop can send artificial_streams on Spotify. Atlas can send track_moved. A check on its own does not mark a growth duty done. Record only what the page showed. STEVE, a boost: send boosts. Each item is link (the post's https link), ad (that ad's id, not the ad account), spend (the amount that one ad has spent), currency (USD) and status (active or paused). Not the daily budget. Not the account's day total. Forge does not record this with record_spend. It is not added to the cap.",
-    inputSchema: obj({ bot: BOT, date: str("The day the numbers are for, YYYY-MM-DD. For a Content ID claim: the day YouTube showed it."),
+    description: "STEVE, ATLAS, KEVIN, LAURA: ONE call per platform (Growth: followers, views, the best post) or per song (Songs: Spotify streams, listeners, saves, playlist adds) for ONE day, numbers exactly as shown. The change in followers is worked out for you. Anything you could not read: leave it out and name it in gaps with why (TikTok views come a day late; Instagram has no daily views on the web): your duty is marked done, with gaps, never blocked. Sending the same numbers again does nothing; a later call for the same day fills in what was missing. Put your duty id (D-...) in duty if you have more than one duty today. Account health, same tool: Steve, Kevin, Laura, Atlas and Webmaster can send account_status, visible, non_follower_share, recent_posts or site_ok without follower numbers. Atlas or Drop can send artificial_streams on Spotify. Atlas can send track_moved. A check on its own does not mark a growth duty done. Record only what the page showed. STEVE, a boost: send boosts. Each item is link (the post's https link), ad (that ad's id, not the ad account), spend (the amount that one ad has spent), currency (USD) and status (active or paused). Not the daily budget. Not the account's day total. Forge does not record this with record_spend. It is not added to the cap.",
+    inputSchema: obj({ bot: BOT, date: str("The day the numbers are for, YYYY-MM-DD."),
       platform: str("For Growth: TikTok, Instagram, YouTube..."), account: str("For Growth: the account handle."),
       followers: str("Followers as shown, for example 1240 or 1,240. YouTube: use subscribers (followers is accepted too). A rounded figure like 1.7k is stored as approximate."), subscribers: str("YouTube: subscribers as shown. Stored as the follower number. 1.7k is approximate."), views: str("Views as shown, including 1.7k or 3.8k. A k or m figure is approximate and shown with a tilde. Not the channel's lifetime total."),
       change: str("Optional. The subscriber or follower change the page itself shows, like +1 or -2. When you send it, HQ keeps it instead of working one out."),
@@ -338,13 +338,9 @@ export const TOOLS = [
       paid_views: str("Optional. Paid views that day, as shown."),
       organic_views: str("Optional. Organic views that day, as shown."),
       ads_read_at: str("Optional. When the ads numbers were read, YYYY-MM-DD or YYYY-MM-DD HH:MM."),
-      claims_checked: { type: "boolean", description: "Laura: true once YouTube's Content ID page was checked today. No follower numbers on that call. It does not invent a claim." },
       song: str("For Songs: the song's title."), streams: str("Spotify streams for that day."), listeners: str("Spotify listeners."), saves: str("Saves."), playlist_adds: str("Playlist adds."),
       gaps: { type: "object", description: 'What could not be read, and why: {"views": "TikTok shows them a day late"}.', additionalProperties: { type: "string" } },
       duty: str('Optional. Your duty id from my_day (it starts with "D-").'),
-      claim: str("Laura only. A Content ID claim, in the words YouTube showed. Leave it out when you are logging followers or a song. Never guess one."),
-      claimant: str("Laura only. Who made the claim, as YouTube showed. Leave it out when YouTube did not show a name: HQ says not reported."),
-      impact: str("Laura only. What the claim did, as YouTube showed (for example a video flagged). Leave it out when YouTube did not show it: HQ says not reported."),
       workspace: str("Leave this out for the official BADSCANDAL accounts. farm = a Social Farm page. label = that genre's streams or listeners. Neither is written to BADSCANDAL Growth."),
       farm: str("With workspace farm: account (the page) or post."),
       handle: str("Farm: the handle, without the @."),
@@ -372,16 +368,7 @@ export const TOOLS = [
       moved_to: str("Spotify only. The other profile's name, when Atlas saw it. Needs track_moved."),
       site_ok: str("Webmaster only, platform badscandal.com: yes or no, as the page answered."),
       site_note: str("Webmaster only. One line about what the page showed. Needs site_ok."),
-      monetisation: str("YouTube only. What Studio shows: on, limited or off. Leave it out when Studio did not show it."),
-      song_claim: str("Laura, with a Content ID claim: the song's title, when YouTube showed which song. This is not the claim text."),
-      video: str("Laura, with a claim: the video's https link or its YouTube video id."),
-      claim_type: str("Laura, with a claim: the claim type YouTube showed."),
-      status: str("Laura, with a claim: the status YouTube showed (for example active, blocked, muted)."),
-      reach_effect: str("Laura, with a claim: the effect on reach, in YouTube's words."),
-      money_effect: str("Laura, with a claim: the effect on money, in YouTube's words."),
-      strike: str("Laura, with a claim: yes or no, only when YouTube showed whether it is a strike."),
-      action: str("Laura, with a claim: the action needed, in a few words, only when YouTube showed one."),
-      owner: str("Laura, with a claim: the bot who owns the next step. Defaults to Laura.") }, ["bot", "date"]) },
+      monetisation: str("YouTube only. What Studio shows: on, limited or off. Leave it out when Studio did not show it.") }, ["bot", "date"]) },
   { name: "read_growth", title: "Read growth rows", readOnly: true,
     description: "STEVE, ATLAS, KEVIN, LAURA (Nova too): the growth rows already on the desk. Read only. Filter with platform, date or song. A missing number was not logged. It is not zero. channel_views is the lifetime total. views is that day's views. YouTube's count is subscribers. TikTok fan_signals are on the TikTok rows. boosts lists a post Steve logged as boosted. how_to_log_a_boost says what to send: link, ad, spend, currency, status.",
     inputSchema: obj({ bot: BOT, platform: str("Optional. TikTok, Instagram, YouTube or Spotify."), date: str("Optional. One day, YYYY-MM-DD."), song: str("Optional. A song title, for the Songs rows.") }, ["bot"]) },
@@ -444,11 +431,8 @@ export const TOOLS = [
       original_publisher: str("Label licence: the original publisher, if known."),
       flag_reason: str("Label licence: required when status is flagged. What is wrong."),
       s4a: { type: "boolean", description: "Label pitch: true once the alias has Spotify for Artists access." } }, ["bot", "song", "step", "status"]) },
-  { name: "read_claims", title: "Read Content ID claims", readOnly: true,
-    description: "LAURA (Nova too): the Content ID claims on the Rights page, and whether Laura checked them today. Read only. Each claim has an id. To escalate one into a dispute case, call open_case with that claim_id. A missing field is not reported, not zero. To mark the day checked, call log_growth with claims_checked true and no follower numbers. HQ never invents a claim. Label licences stay on licence_queue.",
-    inputSchema: obj({ bot: BOT }, ["bot"]) },
   { name: "open_case", title: "Open a dispute or moderation case",
-    description: "Open ONE case the team is handling: a RouteNote moderation email, a YouTube Content ID claim, a dispute, a DSP takedown, a distributor issue, or another copyright problem. Say what is wrong in issue: Luke sees it first. To escalate a Content ID claim, pass claim_id from read_claims: the Rights page then links to this case, and the claim stays on Rights. status starts at open. Set waiting_on to who or what you are waiting for, and next_check to the next day you will look (YYYY-MM-DD). recommendation is one plain paragraph. proposal is the reply you want Luke to approve (the email draft, or the dispute text). You never set Luke's decision. HQ does not send the email or file the dispute.",
+    description: "Open ONE case the team is handling: a RouteNote moderation email, a YouTube Content ID claim, a dispute, a DSP takedown, a distributor issue, or another copyright problem. Say what is wrong in issue: Luke sees it first. status starts at open. Set waiting_on to who or what you are waiting for, and next_check to the next day you will look (YYYY-MM-DD). recommendation is one plain paragraph. proposal is the reply you want Luke to approve (the email draft, or the dispute text). You never set Luke's decision. HQ does not send the email or file the dispute.",
     inputSchema: obj({ bot: BOT,
       song: str("The song's title."),
       platform: str("Who the case is with: RouteNote, YouTube, Spotify, or another store or distributor."),
@@ -461,8 +445,7 @@ export const TOOLS = [
       recommendation: str("Optional. One plain paragraph: what you recommend and why."),
       proposal: str("Optional. The reply or dispute text you want Luke to approve, as he would send it."),
       issue: str("What is wrong, one sentence."),
-      entry: str("Optional. One short line for the timeline."),
-      claim_id: str("Optional. The id from read_claims, when this case escalates that Content ID claim.") }, ["bot", "song", "platform", "type"]) },
+      entry: str("Optional. One short line for the timeline.") }, ["bot", "song", "platform", "type"]) },
   { name: "update_case", title: "Update a dispute case",
     description: "Update ONE case you own (Nova may update any). id from read_cases. Set song, status (open, waiting on them, waiting on Luke, waiting on bot, solved - confirm, resolved), waiting_on, waiting_since (when the wait started), next_check (YYYY-MM-DD), recommendation, proposal, entry (one timeline line; entry_date is its YYYY-MM-DD), or timeline (replaces the whole timeline; only the bot who opened the case). Put status waiting on Luke when he has to decide. Put status solved - confirm when it is solved and he only has to confirm. When it is resolved, say how it ended in outcome. You cannot set his decision, and you cannot mark a case ignored.",
     inputSchema: obj({ bot: BOT,
@@ -644,7 +627,7 @@ export const TOOL_USERS = {
   submit_income: INCOME_TEAM, fix_payment: INCOME_TEAM, income_source: INCOME_TEAM, income_check: INCOME_TEAM, sort_payment: INCOME_TEAM,
   income_status: [...INCOME_TEAM, "Alfred"], payments: INCOME_TEAM, link_transfer: INCOME_TEAM, month_check: INCOME_TEAM, close_month: INCOME_TEAM,
   record_spend: ["Forge"], log_growth: ["Steve", "Atlas", "Kevin", "Laura"],
-  read_growth: ["Steve", "Atlas", "Kevin", "Laura"], read_claims: ["Laura"],
+  read_growth: ["Steve", "Atlas", "Kevin", "Laura"],
   account_health: ["Steve", "Kevin", "Laura", "Atlas", "Drop", "Webmaster"],
   song_pl: ["Ledger", "Sheet", "Forge"],
   store_status: ["Drop"], spotify_upcoming: ["Atlas"], pitch_log: ["Atlas"], song_page: ["Webmaster"], roster_card: ["Nova"], recommend: ["Nova"], preflight: ["Forge", "Drop", "Verse", "Webmaster", "Atlas", "Laura"], instagram: ["Steve", "Kevin", "Forge"], song_pages: ["Webmaster"], upload_cover: ["Webmaster"],
@@ -926,7 +909,7 @@ async function runTool(tool, args, ctx, read) {
         note: r.message.to === "Luke" ? "Luke sees this on the dashboard and in Alfred's next message. It is not sent to his phone straight away." : "Saved on the board." };
     }
     case "instagram": {
-      if (!ctx.ig) throw new S.StaffError("The Instagram reader isn't available here. Tell Claude.");
+      if (!ctx.ig) throw new S.StaffError("The Instagram reader isn't available here. Tell Nova.");
       const oa = args.our_accounts ? String(args.our_accounts) : "";
       const ig = ctx.ig();
       const hour = new Date(now).toISOString().slice(0, 13);
@@ -1160,19 +1143,6 @@ async function runTool(tool, args, ctx, read) {
         const c = await recordAccountCheck(store, now, roster, { ...args, by: me });
         return { account_check: c.summary, account_check_saved: !!c.saved };
       };
-      /* L5: a Content ID claim is not a growth number. It does not mark a growth duty done.
-         A claim on its own returns the same shape as before. A status check sent with it is kept too. */
-      if (args.claim != null && String(args.claim).trim()) {
-        const extra = hasAccountCheck(args) ? await checkOf() : {};
-        const c = await S.recordContentClaim(store, now, roster, { by: me, date: args.date, claim: args.claim, claimant: args.claimant, impact: args.impact, song: args.song_claim || args.song, video: args.video, video_id: args.video_id, claim_type: args.claim_type, status: args.status, reach_effect: args.reach_effect, money_effect: args.money_effect, strike: args.strike, action: args.action, owner: args.owner });
-        if (!c || !c.item) throw new S.StaffError("That claim was not saved. Try again.");
-        if (c.duplicate) return { saved: false, duplicate: true, note: "That claim is already recorded. Nothing was added. A later day only updates last checked.", ...extra };
-        return { saved: true, duplicate: false, claim: c.item.claim, date: c.item.date, shown_on: "badscandal.com/hq, Rights", ...extra };
-      }
-      if ((args.claims_checked === true || args.claims_checked === "yes" || args.claims_checked === "true") && !hasNumbers) {
-        const c = await S.markClaimsChecked(store, now, roster, { by: me });
-        return { saved: true, checked_today: true, day: c.day, by: c.by, shown_on: "badscandal.com/hq, Rights" };
-      }
       /* A status-page check with no follower numbers does not mark a growth duty done. */
       if (!hasNumbers && hasAccountCheck(args)) {
         const c = await recordAccountCheck(store, now, roster, { ...args, by: me });
@@ -1214,13 +1184,11 @@ async function runTool(tool, args, ctx, read) {
       }
       return S.readGrowth(store, now, { platform: args.platform, date: args.date, song: args.song, ranking, ads });
     }
-    case "read_claims":
-      return S.readClaims(store, now);
     case "open_case": {
       const r = await S.openCase(store, now, roster, { ...args, by: me });
       const c = S.caseOut(r.item);
-      if (r.duplicate) return { saved: false, duplicate: true, id: c.id, status: c.status, note: "That claim already has a case that is still open. Use update_case on it. Nothing new was opened.", shown_on: "badscandal.com/hq, Songs" };
-      return { saved: true, id: c.id, status: c.status, song: c.song, platform: c.platform, type: c.type, owner: c.owner, ...(c.claimId ? { claim_id: c.claimId } : {}), shown_on: "badscandal.com/hq, Songs" };
+      if (r.duplicate) return { saved: false, duplicate: true, id: c.id, status: c.status, note: "That case is already open. Use update_case on it. Nothing new was opened.", shown_on: "badscandal.com/hq, Songs" };
+      return { saved: true, id: c.id, status: c.status, song: c.song, platform: c.platform, type: c.type, owner: c.owner, shown_on: "badscandal.com/hq, Songs" };
     }
     case "update_case": {
       const r = await S.updateCase(store, now, roster, { ...args, by: me });
@@ -1491,7 +1459,7 @@ async function runTool(tool, args, ctx, read) {
       return { saved: true, song: r.title, field: f.key, label: f.label, value: v.length > 200 ? v.slice(0, 200) + `… (${v.length} characters saved)` : v };
     }
     case "account_health": {
-      /* the same inputs as the board (stored Instagram copy, claims, song-page builds), so the tool and Luke's
+      /* the same inputs as the board (stored Instagram copy, song-page builds), so the tool and Luke's
          phone show the same health (18 Nov 2026: the tool read without them) */
       const report = await healthReport(store, now, { ig: ctx.ig ? ctx.ig() : null });
       return { read_only: true, wrote: false, accounts: (report.accounts || []).map((a) => ({ id: a.id, label: a.label, owner: a.owner, state: a.state, headline: a.headline })),
@@ -1526,7 +1494,7 @@ async function runTool(tool, args, ctx, read) {
         "A statement that is still payable is settled the same way payments settles it: paid_by. It then shows as settled, not still payable.",
         "expected_money lists each statement. payout_routes shows Exchange and fees from amounts already recorded. A gap with no source is short, unexplained, never a fee. A split with no rule Luke confirmed says rule pending. close_month needs an evidence link (https). A remainder of 1.00 or less after every Revolut leg of one Wise or PayPal payment is left in Wise or PayPal, not a fee.",
         "A payment counts in the month it arrived. HQ never moves money and never writes to the Google Sheet.",
-        "GROWTH (19 Nov 2026). Daily numbers are logged on the desk with log_growth and read back with read_growth. They are not written into a Google Sheet. YouTube's count is subscribers, not followers. watch_hours may be a decimal (56.6). A YouTube video may be a video id when there is no https link. official_views and other_views are that day's views. channel_views is the lifetime total. TikTok fan signals go in fan_signals (handle, quote, link), the same idea as the Instagram fan inbox. Content ID claims are on the Rights page: read them with read_claims. Laura marks the day checked with log_growth claims_checked true. A missing number is left out. The page says not reported. Do not send a zero you did not see.",
+        "GROWTH (19 Nov 2026). Daily numbers are logged on the desk with log_growth and read back with read_growth. They are not written into a Google Sheet. YouTube's count is subscribers, not followers. watch_hours may be a decimal (56.6). A YouTube video may be a video id when there is no https link. official_views and other_views are that day's views. channel_views is the lifetime total. TikTok fan signals go in fan_signals (handle, quote, link), the same idea as the Instagram fan inbox. A missing number is left out. The page says not reported. Do not send a zero you did not see.",
         `RouteNote mail is read from ${S.ROUTE_NOTE_INBOX} (Lilian's mail is forwarded there). A draft to a moderation team is From ${S.MODERATION_FROM}, CC ${S.MODERATION_CC}. HQ does not send the email.`,
       ].join("\n");
       let text = g.text || BUILT_IN_GUIDE;
@@ -1538,7 +1506,7 @@ async function runTool(tool, args, ctx, read) {
       text = text.replace(new RegExp(`\\b${COUNT_WORD}\\s+in all\\b`, "gi"), `${TOOLS.length} tools in all`);
       text = text.replace(new RegExp(`\\b${COUNT_WORD}\\s+tools\\b`, "gi"), `${TOOLS.length} tools`);
       text = text.replace(/\bv\d+,\s*((?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)\s+\d{1,2}\s+[A-Z][a-z]{2}\s+20\d{2})\b/g, "first written $1");
-      text = text.replace(/you still write your numbers into the Google Sheets exactly as before[^.]*\./gi, "Growth, Songs, Fans and Content ID claims are logged on the desk with log_growth. Read them with read_growth and read_claims. They are not written into a Google Sheet.");
+      text = text.replace(/you still write your numbers into the Google Sheets exactly as before[^.]*\./gi, "Growth, Songs and Fans are logged on the desk with log_growth. Read them with read_growth. They are not written into a Google Sheet.");
       return `${current}\n\n${live}\n\n` + (g.text ? `STAFF GUIDE (stored ${g.at ? g.at.slice(0, 10) : "?"}; the current rules above win)\n\n${text}` : text);
     }
   }
@@ -1649,7 +1617,8 @@ async function runTool(tool, args, ctx, read) {
         ...(licenceDay ? { reports_to: "Nova", licence_queue: licenceDay, idle_until: "Luke starts a cover. He writes the covers and keeps the songs." } : {}),
         ...(sparkDay ? { reports_to: "Nova", content_ideas: sparkDay, posts: "Read only. Never post, comment, send a DM, or touch an ad." } : {}),
         ...(me === "Atlas" ? { numbers_how: "Monthly listeners and Brazil listeners go in log_growth as monthly_listeners and brazil_listeners. They are not a note." } : {}),
-        ...(me === "Laura" ? { claims_page: "badscandal.com/hq#rights", claims_how: "Read claims with read_claims. Each claim has an id: escalate one into a dispute with open_case and that claim_id. The claim stays on Rights. When YouTube's Content ID page has been checked today, call log_growth with claims_checked true and no follower numbers. A missing field stays not reported." } : {}),
+        /* 24 Nov 2026 (Luke): "fully remove the rights section ... leave a note for the bots to ignore this" */
+        ...(me === "Laura" ? { rights_removed: "The Rights page is gone. Stop checking YouTube Content ID claims for HQ and delete any task about them. A real problem with a video is still a dispute: open_case." } : {}),
         daily_duty: dutyShown.text, daily_duty_full: dutyShown.full, usual_time: w.time, schedule: S.scheduleForMyDay(me, w.schedule, { today, releases: rel, nextDate: nextRel && nextRel.date, duty: duties[0] }),
         duties_today: duties,
         open_tasks: w.tasks.filter((t) => !S.staleTask(t) && S.signInOpen(t, signedRaw.join(" "))).map((t) => ({ id: t.id, task: dutyTask(t.task), deadline: /^invalid date$/i.test(String(t.deadline || "")) ? "" : t.deadline, status: t.late ? "late" : t.status, ...(t.blocker ? { blocker: t.blocker } : {}), ...(S.blockerCheck(t.blocker, backIn) ? { blocker_check: S.blockerCheck(t.blocker, backIn) } : {}), ...(t.note ? { your_note: t.note } : {}) })),

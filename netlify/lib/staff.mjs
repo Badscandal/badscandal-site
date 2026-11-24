@@ -52,12 +52,12 @@ export const LIMITS = { updatesPerBotPerDay: 60, messagesPerSenderPerDay: 40, me
    is needed, its tools, its times) is seeded into the store and replaces this. */
 export const DEFAULT_ROSTER = [
   { name: "Nova", role: "Chief of staff", duty: "Runs the team's day and the task board", time: "07:00",
-    why: "Without Nova nobody resets the day's duties, chases what is missing or writes the evening wrap-up. She is Claude's contact and the one who passes instructions to every other bot.",
+    why: "Without Nova nobody resets the day's duties, chases what is missing or writes the evening wrap-up. She is the one who passes instructions to every other bot.",
     schedule: [{ time: "07:00", what: "Reset today's duties on the task board, each with its time (before Ledger's 07:30 run)" }, { time: "08:00", what: "Read new briefs and the messages on the desk" }, { time: "09:00", what: "Standup: logged, or the blocker" },
       { time: "09:45", what: "Check the month's ad spend against the cap" }, { time: "12:00", what: "Chase anything missing" }, { time: "21:00", what: "Wrap-up: mark what slipped, write the daily report" }, { time: "Sunday", what: "Weekly numbers and the weekly report" }],
     writes: "The task board and the release timeline; the daily report" },
   { name: "Alfred", role: "Luke's assistant", duty: "One message to Luke a day, plus urgent alerts", time: "10:00",
-    why: "The only voice that reaches Luke, once a day, so no other bot has to interrupt him. Carries the site's check, Claude's note and anything that needs Luke's yes.",
+    why: "The only voice that reaches Luke, once a day, so no other bot has to interrupt him. Carries the site's check and anything that needs Luke's yes.",
     schedule: [{ time: "10:00", what: "The daily message: ad spend against the cap, income, what needs Luke, who didn't log, the next release" }, { time: "any time", what: "Alert at USD 750, at USD 900 and above USD 1,000 of ad spend" }],
     writes: "Nothing: Alfred reports, he doesn't log" },
   { name: "Ledger", role: "Income", duty: "Logs every new payment", time: "07:30",
@@ -592,6 +592,10 @@ const msgKey = (month) => `msg/${month}.json`;
 export async function sendMessage(store, now, roster, a) {
   const from = whoIs(a.from, roster, { people: true });
   const to = low(a.to) === "all" || low(a.to) === "everyone" || low(a.to) === "team" ? "all" : whoIs(a.to, roster, { people: true });
+  /* 24 Nov 2026 (Luke): "remove claudes api tasks he is no longer required ... the entire dashboard HQ will be
+     handled by the bots". Claude no longer takes work on the desk: a new note for Claude goes to Nova.
+     An answer to one of Claude's old messages still lands in its thread. */
+  if (to === "Claude" && from !== "Claude" && !(a.re != null && String(a.re).trim())) fail("Claude is no longer on the desk. Write to Nova instead. Nothing was sent.", "not_allowed");
   if ((from === "Licence" || from === "Spark") && to !== "Nova") fail(`${from} reports to Nova only. Put Nova in to. Nothing was sent.`, "not_allowed");
   const text = cleanText(a.text, 1500);
   if (text.length < 2) fail("text is empty");
@@ -606,7 +610,7 @@ export async function sendMessage(store, now, roster, a) {
      "Correct" closed Verse's 4 questions, 3 of them unanswered) */
   const qs = Array.isArray(a.questions) ? a.questions.map((q) => clean(q, 300)).filter(Boolean) : [];
   if (Array.isArray(a.questions) && a.questions.length) {
-    if (to === "all") fail("Questions need one name in to (Luke, Claude or a bot), not all.");
+    if (to === "all") fail("Questions need one name in to (Luke or a bot), not all.");
     if (qs.length < 2 || qs.length > 6) fail("questions must be 2 to 6 questions. One question goes in text.");
     if (options.length) fail("Use options for ONE question, or questions for several, not both.");
     if (from !== "HQ") noSecrets(qs.join("\n"));
@@ -1384,7 +1388,8 @@ export function waitedFor(ms) {
   return `${d} day${d === 1 ? "" : "s"}`;
 }
 /* what is waiting on one name, oldest first */
-export const waitingOn = (messages, name) => messages.filter((m) => isOpen(m) && low(m.to) === low(name)).sort((a, b) => (a.at < b.at ? -1 : 1));
+/* 24 Nov 2026 (Luke): Claude is off the desk, so an old question from Claude no longer waits on Luke */
+export const waitingOn = (messages, name) => messages.filter((m) => isOpen(m) && low(m.to) === low(name) && !(low(name) === "luke" && m.from === "Claude")).sort((a, b) => (a.at < b.at ? -1 : 1));
 export function threads(messages) {
   /* a thread = a first message and EVERY answer under it, however deep the answers were chained
      (an answer to an answer must not vanish from the board) */
@@ -4447,8 +4452,9 @@ export async function checkSongBuilds(store, now, roster) {
     try {
       if (!build.ok) await sendMessage(store, now, roster, { from: "HQ", to: m.from, needs: "none", re: m.id,
         text: `Not done: ${what} did not go live. GitHub's build stopped at "${build.step}": ${build.reason.replace(/[.\s]+$/, "")}. Nothing was published, so the site is as it was. Fix what it says, then ask again with song_page.` + (build.run ? ` Run: ${build.run}` : "") });
-      else if (build.others) await sendMessage(store, now, roster, { from: "HQ", to: "Claude", needs: "none",
-        text: `${where} went live, but ${build.others.replace(/^(\d+ other tests? failed|Other tests failed)/, (w) => w.charAt(0).toLowerCase() + w.slice(1))}. Fix them in the code.` + (build.run ? ` Run: ${build.run}` : "") });
+      /* 24 Nov 2026: Claude is off the desk, so this note goes to Nova for Luke's next session on the site */
+      else if (build.others) await sendMessage(store, now, roster, { from: "HQ", to: "Nova", needs: "none",
+        text: `${where} went live, but ${build.others.replace(/^(\d+ other tests? failed|Other tests failed)/, (w) => w.charAt(0).toLowerCase() + w.slice(1))}. Nothing is broken on the page. Tell Luke, so the code gets fixed the next time he works on the site.` + (build.run ? ` Run: ${build.run}` : "") });
     } catch {}
   }));
   return found;
@@ -5344,10 +5350,9 @@ function cardNow(card, today) {
   return out;
 }
 /* ---------- L5 watchers (18 Nov 2026) ----------
-   RouteNote mail, Verse's release-day note, and Content ID claims. Nothing here sends email, changes an
+   RouteNote mail and Verse's release-day note. Nothing here sends email, changes an
    ad, or invents a status. The mailbox is not connected: the Google key only reads the sheet. */
 
-const CLAIMS_KEY = "claims.json";
 const MAIL_PHRASES = [
   ["action required", "rejected"], ["action needed", "rejected"], ["needs action", "rejected"],
   ["has been rejected", "rejected"], ["was rejected", "rejected"], ["release rejected", "rejected"], ["not approved", "rejected"],
@@ -5498,195 +5503,12 @@ export async function verseReleaseDay(store, now, roster) {
   return out;
 }
 
-/* One claim is one record: video id + claimant + type, with no date (19 Nov 2026). A daily check updates
-   last_checked and keeps the earliest first_seen. Older date-keyed rows for the same claim fold in. */
-export function claimStableKey(c) {
-  const video = (c && (c.video_id || ytIdOf(c.video))) || "";
-  const claimant = songKey((c && c.claimant) || "");
-  const type = songKey((c && c.claim_type) || "");
-  if (video) return `${video}|${claimant}|${type}`;
-  return `${songKey((c && c.claim) || "")}|${claimant}|${type}`;
-}
-export function mergeClaimItems(items) {
-  const list = Array.isArray(items) ? items : (items && Array.isArray(items.items) ? items.items : []);
-  const groups = new Map();
-  const order = [];
-  for (const c of list) {
-    if (!c || typeof c !== "object") continue;
-    const key = claimStableKey(c);
-    if (!groups.has(key)) { groups.set(key, []); order.push(key); }
-    groups.get(key).push(c);
-  }
-  return order.map((key) => {
-    const g = groups.get(key);
-    const byFirst = g.slice().sort((a, b) => String(a.first_seen || a.date || "").localeCompare(String(b.first_seen || b.date || "")));
-    const byLast = g.slice().sort((a, b) => String(a.last_checked || a.date || "").localeCompare(String(b.last_checked || b.date || "")));
-    const first = byFirst[0], last = byLast[byLast.length - 1];
-    const aliases = [...new Set(g.flatMap((x) => [x.key, ...(Array.isArray(x.aliases) ? x.aliases : [])]).filter((k) => k && k !== key))];
-    const out = {};
-    for (const x of byLast) for (const [k, v] of Object.entries(x)) {
-      if (v == null || String(v).trim() === "" || k === "key" || k === "aliases") continue;
-      out[k] = v;
-    }
-    out.key = key;
-    out.by = first.by || out.by || "";
-    out.at = first.at || out.at || "";
-    out.date = first.date || first.first_seen || "";
-    out.first_seen = first.first_seen || first.date || "";
-    out.last_checked = last.last_checked || last.date || first.date || "";
-    if (aliases.length) out.aliases = aliases;
-    return out;
-  });
-}
-/* Content ID claims. Laura records what YouTube showed. A blank claimant or impact stays blank: the page
-   says not reported. The same video, claimant and type is stored once. A later call fills a blank field. */
-function claimFields(a) {
-  const out = {};
-  const song = clean(a.song, 120);
-  if (song) out.song = song;
-  const video = a.video != null ? String(a.video).trim() : "";
-  if (video) {
-    if (/^https:\/\//i.test(video)) {
-      const l = httpsLink(video);
-      if (!l) fail("video must be an https link or a YouTube video id.");
-      out.video = l;
-    } else {
-      const id = ytIdOf(video);
-      if (!id) fail("video must be an https link or a YouTube video id.");
-      out.video_id = id;
-    }
-  }
-  if (a.video_id != null && String(a.video_id).trim() && !out.video_id) {
-    const id = ytIdOf(a.video_id);
-    if (!id) fail("video_id must be a YouTube video id.");
-    out.video_id = id;
-  }
-  for (const [k, max] of [["claim_type", 80], ["status", 40], ["reach_effect", 240], ["money_effect", 240], ["action", 240]]) {
-    const v = clean(a[k], max);
-    if (v) out[k] = v;
-  }
-  if (a.strike != null && String(a.strike).trim()) {
-    const s = low(a.strike);
-    if (s !== "yes" && s !== "no") fail("strike must be yes or no, as YouTube showed.");
-    out.strike = s;
-  }
-  const owner = clean(a.owner, 40);
-  if (owner) out.owner = owner;
-  return out;
-}
-export async function recordContentClaim(store, now, roster, a) {
-  const by = whoIs(a.by, roster, { people: true });
-  if (!["Laura", "Nova", "Claude", "Luke"].includes(by)) fail("Content ID claims are Laura's to record (Nova may record one for her). Nothing was saved.", "not_allowed");
-  const claim = clean(a.claim, 200);
-  if (claim.length < 2) fail("claim is the claim YouTube showed, in a few words. Nothing was saved.");
-  const date = clean(a.date, 10);
-  if (!isDay(date)) fail("date is the day YouTube showed the claim, YYYY-MM-DD. Nothing was saved.");
-  if (date > spDay(now)) fail("That day is still in the future. Nothing was saved.");
-  const claimant = a.claimant != null && String(a.claimant).trim() ? clean(a.claimant, 120) : "";
-  const impact = a.impact != null && String(a.impact).trim() ? clean(a.impact, 240) : "";
-  const more = claimFields(a);
-  noSecrets(claim, claimant, impact, more.song || "", more.action || "", more.reach_effect || "", more.money_effect || "");
-  const key = claimStableKey({ claim, claimant, ...more });
-  const today = spDay(now);
-  return mutate(store, CLAIMS_KEY, { items: [], checked: {} }, (doc) => {
-    const checked = doc && doc.checked && typeof doc.checked === "object" ? doc.checked : {};
-    if (!doc || typeof doc !== "object" || Array.isArray(doc)) return { replace: { items: [], checked }, value: { saved: false, duplicate: false } };
-    const items = mergeClaimItems(doc.items);
-    const prev = items.find((x) => {
-      if (!x) return false;
-      if (x.key === key || (x.aliases || []).includes(key)) return true;
-      if (songKey(x.claim) !== songKey(claim) || songKey(x.claimant || "") !== songKey(claimant)) return false;
-      const theirs = songKey(x.claim_type || ""), ours = songKey(more.claim_type || "");
-      return !ours || !theirs || ours === theirs;
-    });
-    if (prev) {
-      const filled = [];
-      for (const [k, v] of Object.entries({ claimant, impact, ...more })) {
-        if (!v) continue;
-        if (prev[k] == null || prev[k] === "") { prev[k] = v; filled.push(k); }
-      }
-      if (date < (prev.first_seen || prev.date || date)) { prev.first_seen = date; prev.date = date; filled.push("first_seen"); }
-      const moved = prev.last_checked !== today;
-      const nextKey = claimStableKey({ ...prev, claim, claimant, ...more });
-      if (nextKey !== prev.key) {
-        prev.aliases = [...new Set([...(prev.aliases || []), prev.key])].filter((k) => k && k !== nextKey);
-        prev.key = nextKey;
-        filled.push("key");
-      }
-      if (!filled.length && !moved && items.length === (doc.items || []).length) return { skip: true, value: { saved: false, duplicate: true, item: prev } };
-      prev.last_checked = today;
-      doc.items = items;
-      return { value: { saved: true, duplicate: false, updated: true, item: prev } };
-    }
-    const item = { key, claim, claimant, impact, date, by, at: new Date(now).toISOString(), first_seen: date, last_checked: today, owner: more.owner || "Laura", ...more };
-    doc.items = [item, ...items].slice(0, 80);
-    if (!doc.checked) doc.checked = checked;
-    return { value: { saved: true, duplicate: false, item } };
-  });
-}
-/* Laura's daily claims checklist. It does not invent a claim and it does not mark one resolved. */
-export async function markClaimsChecked(store, now, roster, a) {
-  const by = whoIs(a.by, roster, { people: true });
-  if (!["Laura", "Nova", "Claude", "Luke"].includes(by)) fail("The claims checklist is Laura's. Nothing was saved.", "not_allowed");
-  const day = spDay(now);
-  return mutate(store, CLAIMS_KEY, { items: [], checked: {} }, (doc) => {
-    const items = mergeClaimItems(doc && Array.isArray(doc.items) ? doc.items : []);
-    const checked = doc && doc.checked && typeof doc.checked === "object" && !Array.isArray(doc.checked) ? doc.checked : {};
-    checked[day] = { by, at: new Date(now).toISOString() };
-    return { replace: { items, checked }, value: { saved: true, day, by, at: checked[day].at } };
-  });
-}
-async function retargetClaimCases(store, items) {
-  const map = new Map();
-  for (const c of items || []) for (const a of c.aliases || []) if (a && a !== c.key) map.set(a, c.key);
-  if (!map.size) return;
-  await mutate(store, CASES_KEY, { items: [] }, (doc) => {
-    const list = doc && Array.isArray(doc.items) ? doc.items : [];
-    let n = 0;
-    for (const c of list) if (c && map.has(c.claimId)) { c.claimId = map.get(c.claimId); n++; }
-    return n ? { value: n } : { skip: true, value: 0 };
-  });
-}
-const nrClaim = (v) => (v != null && String(v).trim() !== "" ? v : "not reported");
-/* a date baked into the claim id is not the day the claim was first seen */
-export function claimFirstSeen(c) {
-  const idDay = (String(c && c.key || "").match(/(20\d{2}-\d{2}-\d{2})/) || [])[1] || "";
-  if (c && c.first_seen && c.first_seen !== idDay) return c.first_seen;
-  if (c && c.first_seen && !idDay) return c.first_seen;
-  if (c && !c.first_seen && c.date && c.date !== idDay) return c.date;
-  return "";
-}
-export async function readClaims(store, now) {
-  const { data } = await readDoc(store, CLAIMS_KEY, { items: [], checked: {} });
-  const raw = data && Array.isArray(data.items) ? data.items : [];
-  const items = mergeClaimItems(raw);
-  if (JSON.stringify(items) !== JSON.stringify(raw)) {
-    const checked0 = data && data.checked && typeof data.checked === "object" ? data.checked : {};
-    await mutate(store, CLAIMS_KEY, { items: [], checked: {} }, () => ({ replace: { items, checked: checked0 }, value: true }));
-  }
-  await retargetClaimCases(store, items);
-  const checked = data && data.checked && typeof data.checked === "object" ? data.checked : {};
-  const day = spDay(now), today = checked[day] || null;
-  return {
-    read_only: true, wrote: false, day,
-    checked_today: !!today, checked_by: today ? today.by : "not reported", checked_at: today ? today.at : "not reported",
-    claims: items.map((c) => ({
-      id: c.key || "",
-      song: nrClaim(c.song), claim: c.claim || "not reported", claimant: nrClaim(c.claimant),
-      video: nrClaim(c.video || c.video_id), claim_type: nrClaim(c.claim_type), status: nrClaim(c.status),
-      reach_effect: nrClaim(c.reach_effect || c.impact), money_effect: nrClaim(c.money_effect),
-      strike: nrClaim(c.strike), action: nrClaim(c.action), owner: nrClaim(c.owner),
-      first_seen: nrClaim(claimFirstSeen(c)), last_checked: nrClaim(c.last_checked),
-      date: c.date || "not reported", impact: nrClaim(c.impact),
-    })),
-    note: "Read only. A missing field is not reported, not zero. id is the claim id: pass it as claim_id to open_case to escalate that claim into a dispute. Laura marks the day with log_growth, claims_checked true. HQ never invents a claim.",
-  };
-}
+/* Content ID claims and the Rights page were removed on 24 Nov 2026 (Luke: "fully remove the rights section
+   totally unnecessary"). claims.json is left as it was; nothing reads it now. */
 
 /* ---------- Disputes (19 Nov 2026) ----------
    Bots run the case (RouteNote moderation, Content ID, a takedown, a distributor, a copyright dispute).
-   Luke is the only one who decides. A bot cannot write his decision. A Content ID claim is escalated
-   by its id (claims.json key); the Rights page keeps the claim and links to the case. */
+   Luke is the only one who decides. A bot cannot write his decision. */
 const CASES_KEY = "disputes.json";
 export const CASE_STATUS = ["open", "waiting on them", "waiting on Luke", "waiting on bot", "solved - confirm", "resolved", "ignored"];
 const CASE_TYPES = {
@@ -5765,7 +5587,7 @@ export function caseOut(c) {
     id: c.id, song: stripSecure(c.song || ""), songKey: c.songKey || songKey(c.song), platform: stripSecure(c.platform || ""), type: stripSecure(c.type || ""),
     opened: c.opened || "", owner: stripSecure(c.owner || ""), status: c.status || "open",
     waitingOn: closed ? "" : waitingName(c.waitingOn || ""), waitingSince: closed ? "" : (c.waitingSince || ""), nextCheck: closed ? "" : (c.nextCheck || ""),
-    claimId: c.claimId || "", recommendation: stripSecure(c.recommendation || ""), proposal: stripSecure(c.proposal || ""),
+    recommendation: stripSecure(c.recommendation || ""), proposal: stripSecure(c.proposal || ""),
     /* 23 Nov 2026 (Luke: "kind of unclear what the issue is"; "say what exactly was resolved"): the issue in one
        sentence, and how it ended once it is closed */
     issue: stripSecure(c.issue || ""), outcome: stripSecure(c.outcome || ""), closedAt: closed ? (c.closedAt || c.updatedAt || "") : "",
@@ -5792,20 +5614,11 @@ export async function openCase(store, now, roster, a) {
   let owner = a.owner != null && String(a.owner).trim() ? whoIs(a.owner, roster) : (PEOPLE.includes(by) ? "" : by);
   if (!owner) fail("owner is the bot who carries this case. Nothing was saved.");
   if (owner !== by && !caseManagers(by)) fail(`That case would be ${owner}'s. Only ${owner} (or Nova) opens it. Nothing was saved.`, "not_allowed");
-  let claimId = a.claim_id != null && String(a.claim_id).trim() ? clean(a.claim_id, 200) : "";
-  let claim = null;
-  if (claimId) {
-    const { data } = await readDoc(store, CLAIMS_KEY, { items: [] });
-    const items = mergeClaimItems(data && data.items);
-    claim = items.find((c) => c && (c.key === claimId || (c.aliases || []).includes(claimId))) || null;
-    if (claim) claimId = claim.key;
-    if (!claim) fail("No Content ID claim has that id. Read them with read_claims, then pass that id as claim_id. Nothing was opened.");
-  }
-  const song = clean(a.song, 120) || (claim && clean(claim.song, 120)) || "";
+  const song = clean(a.song, 120);
   if (song.length < 2) fail("song is the song's title. Nothing was saved.");
-  const platform = clean(a.platform, 60) || (claim ? "YouTube" : "");
+  const platform = clean(a.platform, 60);
   if (platform.length < 2) fail("platform is who the case is with, for example RouteNote, YouTube or Spotify. Nothing was saved.");
-  const type = a.type != null && String(a.type).trim() ? caseTypeOf(a.type) : (claim ? "Content ID claim" : "");
+  const type = a.type != null && String(a.type).trim() ? caseTypeOf(a.type) : "";
   if (!type) fail("type must be moderation, Content ID claim, dispute, takedown or other. Nothing was saved.");
   const opened = a.opened != null && String(a.opened).trim() ? clean(a.opened, 10) : spDay(now);
   if (!caseDay(opened)) fail("opened is the day the case started, YYYY-MM-DD. Nothing was saved.");
@@ -5823,14 +5636,10 @@ export async function openCase(store, now, roster, a) {
   const at = new Date(now).toISOString();
   return mutate(store, CASES_KEY, { items: [] }, (doc) => {
     const items = doc && Array.isArray(doc.items) ? doc.items : [];
-    if (claimId) {
-      const prev = items.find((x) => x && x.claimId === claimId && x.status !== "resolved" && x.status !== "ignored");
-      if (prev) return { skip: true, value: { saved: false, duplicate: true, item: prev } };
-    }
     const item = {
       id: newId("d", now), song, songKey: songKey(song), platform, type, opened, owner, status,
       waitingOn, waitingSince: waitingOn || status.startsWith("waiting") ? at : "", nextCheck,
-      claimId, recommendation, proposal, issue, outcome: "", decision: null, timeline: [],
+      recommendation, proposal, issue, outcome: "", decision: null, timeline: [],
       createdAt: at, createdBy: by, updatedAt: at,
     };
     caseTimeline(item, now, by, entry || `Opened. ${type} with ${platform}.`);
@@ -6167,11 +5976,10 @@ export async function saveContentIdeas(store, now, a) {
 
 export async function loadDesk(store, now) {
   const [roster, updates, messages, cardsDoc, config, releases, sightings] = await Promise.all([getRoster(store), listUpdates(store, now, 3), listMessages(store, now, 2), readDoc(store, "cards.json", {}), getConfig(store), listReleases(store), getSightings(store)]);
-  const [seen, read, income, closesDoc, profiles, claimsDoc, ideasDoc, disputesDoc, doneDoc] = await Promise.all([getSeen(store, roster), getRead(store, roster), incomeState(store, now), readDoc(store, "closes.json", []), getProfiles(store), readDoc(store, CLAIMS_KEY, { items: [] }), readDoc(store, IDEAS_KEY, {}), readDoc(store, CASES_KEY, { items: [] }), readDoc(store, NEED_DONE_KEY, { marks: {} })]);
-  const claims = claimsDoc.data && Array.isArray(claimsDoc.data.items) ? { items: claimsDoc.data.items, checked: claimsDoc.data.checked && typeof claimsDoc.data.checked === "object" ? claimsDoc.data.checked : {} } : { items: [], checked: {} };
+  const [seen, read, income, closesDoc, profiles, ideasDoc, disputesDoc, doneDoc] = await Promise.all([getSeen(store, roster), getRead(store, roster), incomeState(store, now), readDoc(store, "closes.json", []), getProfiles(store), readDoc(store, IDEAS_KEY, {}), readDoc(store, CASES_KEY, { items: [] }), readDoc(store, NEED_DONE_KEY, { marks: {} })]);
   const disputes = disputesDoc.data && Array.isArray(disputesDoc.data.items) ? disputesDoc.data.items : [];
   const needsDone = doneDoc.data && doneDoc.data.marks && typeof doneDoc.data.marks === "object" ? { marks: doneDoc.data.marks } : { marks: {} };
-  return { roster, updates, messages, cards: cardsDoc.data || {}, seen, read, income, config, releases, sightings, closes: Array.isArray(closesDoc.data) ? closesDoc.data : [], profiles, claims, disputes, contentIdeas: ideasDoc.data || {}, needsDone };
+  return { roster, updates, messages, cards: cardsDoc.data || {}, seen, read, income, config, releases, sightings, closes: Array.isArray(closesDoc.data) ? closesDoc.data : [], profiles, disputes, contentIdeas: ideasDoc.data || {}, needsDone };
 }
 
 /* Has the person a message was sent to READ it? (V6, 11 Nov 2026: from the read markers, read/<name>,
@@ -6546,9 +6354,8 @@ export function board(desk, now, hq) {
     waiting: { luke: waitingOn(desk.messages, "Luke"), claude: waitingOn(desk.messages, "Claude"), bots: desk.messages.filter((m) => isOpen(m) && !PEOPLE.includes(m.to)).length },
     income: desk.income,
     closes: desk.closes || [], /* A7, 17 Nov 2026: the closed months (closes.json) */
-    /* L5: RouteNote's inbox is not connected until Luke signs it in. Claims are only what Laura recorded. */
+    /* L5: RouteNote's inbox is not connected until Luke signs it in. */
     mail: routeNoteMailSource(),
-    claims: desk.claims && Array.isArray(desk.claims.items) ? { items: desk.claims.items.slice(0, 80), checked: desk.claims.checked && typeof desk.claims.checked === "object" ? desk.claims.checked : {} } : { items: [], checked: {} },
     disputes: { items: (Array.isArray(desk.disputes) ? desk.disputes : []).slice(0, 80).map(caseOut) },
     contentIdeas: contentIdeasView(desk.contentIdeas),
     connector: { botsOn: desk.config.botsOn, changedAt: desk.config.changedAt, lastUsed: lastSeen ? { bot: lastSeen[0], at: lastSeen[1].at, tool: lastSeen[1].tool } : null,

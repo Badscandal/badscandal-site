@@ -137,29 +137,3 @@ test("on the release day, São Paulo time, Verse gets one duty note and not the 
   assert.match(day.lyrics_duty[0], /Paper Moon/);
 });
 
-test("Content ID claims are only what Laura records, and the panel never invents one", async () => {
-  const d = memoryDesk();
-  assert.deepEqual(L.contentClaimRows(null), { reported: false, rows: [], empty: "No Content ID claim has been recorded." });
-  assert.equal(L.contentClaimRows({ items: [] }).rows.length, 0);
-  await assert.rejects(call(d, "log_growth", { bot: "Steve", date: "2026-11-18", claim: "Sample claim", claimant: "Sample Channel" }), /Laura/);
-  const saved = await call(d, "log_growth", { bot: "Laura", date: "2026-11-17", claim: "Sample claim", claimant: "Sample Channel", impact: "one video flagged" });
-  assert.equal(saved.saved, true);
-  assert.equal(saved.duplicate, false);
-  const again = await call(d, "log_growth", { bot: "Laura", date: "2026-11-17", claim: "Sample claim", claimant: "Sample Channel", impact: "one video flagged" });
-  assert.equal(again.duplicate, true);
-  const blank = await call(d, "log_growth", { bot: "Laura", date: "2026-11-16", claim: "Another sample claim" });
-  assert.equal(blank.saved, true);
-  const board = S.board(await S.loadDesk(d, NOW), NOW, null);
-  const rows = L.contentClaimRows(board.claims);
-  assert.equal(rows.reported, true);
-  assert.equal(rows.rows.length, 2);
-  const open = rows.rows.find((x) => x.claim === "Another sample claim");
-  assert.equal(open.claimant, "not reported");
-  assert.equal(open.impact, "not reported");
-  assert.match(open.date, /16 Nov/);
-  const full = rows.rows.find((x) => x.claim === "Sample claim");
-  assert.equal(full.claimant, "Sample Channel");
-  assert.equal(full.impact, "one video flagged");
-  assert.equal(TOOLS.length, 55, "account_health, needs_you, song_pl (18 Nov 2026 night test) + profile_jobs, profile_master, profile_rework, profile_uploaded (PR #87)");
-  assert.ok(TOOLS.find((t) => t.name === "log_growth").inputSchema.properties.claim);
-});

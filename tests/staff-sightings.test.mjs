@@ -359,7 +359,8 @@ test("read markers: only my_day, read_messages and Alfred's luke_briefing write 
   await call(d, "team_board", { bot: "Nova" }, NOW + 60000);
   await call(d, "luke_briefing", { bot: "Nova" }, NOW + 60000);
   let b = S.board(await S.loadDesk(d, NOW + 120000), NOW + 120000, null);
-  const mark = (id) => { const x = b.messages.find((t) => t.id === id); return [x.seen, x.seenAt]; };
+  /* an answer sits under its thread (24 Nov 2026: Luke's note to Claude is now an answer) */
+  const mark = (id) => { const x = b.messages.flatMap((t) => [t, ...(t.replies || [])]).find((t) => t.id === id); return [x.seen, x.seenAt]; };
   assert.deepEqual(mark(m.id), [false, null], "Drop used the desk but did not read");
   assert.ok(b.staff.find((w) => w.name === "Drop").seen, "…and still shows as having used it");
   assert.deepEqual(mark(toNova.id), [false, null], "team_board and someone else's briefing hand over no messages");
@@ -371,7 +372,9 @@ test("read markers: only my_day, read_messages and Alfred's luke_briefing write 
   assert.deepEqual(mark(toNova.id), [false, null]);
   assert.deepEqual(Object.keys(await S.getRead(d, R)).sort(), ["Alfred", "Drop", "Ledger"]);
   /* Claude's own key: my_day writes Claude's marker */
-  const toClaude = (await S.sendMessage(d, NOW, R, { from: "Luke", to: "Claude", text: "Look at the cap." })).message;
+  /* 24 Nov 2026: Claude is off the desk, so Luke's note is an answer to Claude's old message */
+  const fromClaude = (await S.sendMessage(d, NOW - 1000, R, { from: "Claude", to: "Luke", text: "The cap looked high." })).message;
+  const toClaude = (await S.sendMessage(d, NOW, R, { from: "Luke", to: "Claude", text: "Look at the cap.", re: fromClaude.id })).message;
   await call(d, "my_day", { bot: "x" }, NOW + 300000, "claude");
   b = S.board(await S.loadDesk(d, NOW + 360000), NOW + 360000, null);
   assert.equal(mark(toClaude.id)[0], true);
@@ -487,7 +490,8 @@ test("read means handed over: my_day gives every new message for the bot (Luke's
   assert.deepEqual((await call(d, "luke_briefing", { bot: "Alfred" }, NOW + HOUR)).messages_for_you.map((m) => m.text), [toAlfred.text, ...notes.map((n) => n.text)], "his own, oldest first, and the notes to all");
   assert.equal((await call(d, "luke_briefing", { bot: "Nova" }, NOW + HOUR)).messages_for_you, undefined);
   /* Claude's own my_day too */
-  const toClaude = (await S.sendMessage(d, NOW, R, { from: "Luke", to: "Claude", text: "Thanks, noted." })).message;
+  const fromClaude = (await S.sendMessage(d, NOW - 1000, R, { from: "Claude", to: "Luke", text: "A note for you." })).message; /* 24 Nov 2026: an answer, not a new note */
+  const toClaude = (await S.sendMessage(d, NOW, R, { from: "Luke", to: "Claude", text: "Thanks, noted.", re: fromClaude.id })).message;
   assert.ok((await call(d, "my_day", { bot: "x" }, NOW + HOUR, "claude")).messages_for_you.some((m) => m.id === toClaude.id));
   assert.match(TOOLS.find((t) => t.name === "my_day").description, /messages_for_you/);
 });

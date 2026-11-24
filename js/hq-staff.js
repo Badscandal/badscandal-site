@@ -390,7 +390,7 @@
     $("waitList").innerHTML = rows.length ? rows.map(function (x) { return x.html; }).join("") : '<p class="empty2">Nothing is waiting on you.</p>';
     drawAnswered();
     var all = board.messages || [], list = ui.allThreads ? all : all.slice(0, 25);
-    $("threadList").innerHTML = (all.length ? list.map(thread).join("") : '<p class="empty2">No messages yet. They show up here when a bot, Claude or you write one.</p>') +
+    $("threadList").innerHTML = (all.length ? list.map(thread).join("") : '<p class="empty2">No messages yet. They show up here when a bot or you write one.</p>') +
       (all.length > list.length ? '<button class="copybtn more-row" type="button" data-act="older">Show older messages (' + (all.length - list.length) + ")</button>" : "");
     if (fk) { var el = $("messages").querySelector('[data-f="' + fk.replace(/[^a-z0-9:]/gi, "") + '"]'); if (el) { el.focus(); try { el.setSelectionRange(s0, s1); } catch (e) {} } }
   }

@@ -100,20 +100,6 @@ test("Luke's confirm, respond and ignore are stored with a time, and a bot reads
   assert.equal(luke.cases.length, 0);
 });
 
-test("a Content ID claim escalates into one case, and a second open is the same case", async () => {
-  const d = memoryDesk();
-  const claim = await S.recordContentClaim(d, NOW, R, { by: "Laura", date: "2026-11-18", claim: "Sample claim", claimant: "Sample Channel", song: "Northwind", impact: "one video flagged" });
-  const id = claim.item.key;
-  const first = await call(d, "open_case", { bot: "Laura", song: "Northwind", platform: "YouTube", type: "Content ID claim", claim_id: id, status: "waiting on Luke", recommendation: "Ask them to release it.", proposal: "Please release the claim." });
-  assert.equal(first.saved, true);
-  assert.equal(first.claim_id, id);
-  const again = await call(d, "open_case", { bot: "Laura", song: "Northwind", platform: "YouTube", type: "Content ID claim", claim_id: id });
-  assert.equal(again.duplicate, true);
-  assert.equal(again.id, first.id);
-  await fails(call(d, "open_case", { bot: "Laura", song: "Northwind", platform: "YouTube", type: "dispute", claim_id: "no-such-claim" }), /No Content ID claim/);
-  const listed = await S.readClaims(d, NOW);
-  assert.equal(listed.claims[0].id, id);
-});
 
 test("waiting on Luke is a Needs you item, and the phone line carries the start of the proposal", async () => {
   const d = memoryDesk();
@@ -142,16 +128,10 @@ test("waiting on Luke is a Needs you item, and the phone line carries the start 
   assert.match(html, /data-case-do="ignore"/);
   assert.match(html, /data-case-do="respond"/);
   assert.match(html, new RegExp('href="#songs/' + opened.item.songKey + '"'));
-  const links = L.claimCaseLinks(board.claims, board.disputes);
-  assert.equal(links, "", "no claim id, so Rights has nothing to link");
 });
 
-test("Rights links a claim to its case, and the sample desk has one case waiting on Luke", () => {
-  const claims = { items: [{ key: "sampleclaimsample|samplechannel|2026-11-01", song: "Slow Burn", claim: "Sample claim (sample)" }] };
-  const cases = { items: [{ id: "dsampleyt", claimId: "sampleclaimsample|samplechannel|2026-11-01", song: "Slow Burn", status: "waiting on Luke" }] };
-  const html = L.claimCaseLinks(claims, cases);
-  assert.match(html, /href="#songs\/dsampleyt"/);
-  assert.match(html, /Slow Burn/);
+/* 24 Nov 2026: the Rights page is gone, so a case no longer links back to a claim there */
+test("the sample desk has one case waiting on Luke", () => {
   const desk = sampleDesk(NOW);
   /* v18, 21 Nov 2026: the sample also has a case with a draft email (dsamplemail), so Reply shows the email */
   const all = S.waitingOnLuke(desk, S.spDay(NOW), NOW).filter((x) => x.kind === "dispute");

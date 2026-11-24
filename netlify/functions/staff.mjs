@@ -220,7 +220,7 @@ async function api(req, context, path) {
     const pageBuilds = await S.songPages(st.desk, now).catch(() => []);
     const auto = await C.boardAuto(st.desk, now, desk).catch(() => null);
     /* account health reads the desk and the stored Instagram copy. A failure here must not blank the board. */
-    const accountHealth = await loadReport({ store: st.desk, ig: igStore(context), now, claims: desk.claims, builds: pageBuilds }).catch(() => null);
+    const accountHealth = await loadReport({ store: st.desk, ig: igStore(context), now, builds: pageBuilds }).catch(() => null);
     /* the ONE Needs you count (C.needsCount): the phone's line and the needs_you tool say the same number */
     const counted = await needsDesk(st.desk, now, { desk, auto, report: accountHealth, ig: igStore(context) });
     const cap = hqAns && hqAns.money && hqAns.money.cap;

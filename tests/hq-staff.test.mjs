@@ -97,9 +97,10 @@ test("Messages: when, who it waits on, and what it wants from Luke", () => {
   assert.deepEqual(["decision", "action", "reply"].map((n) => L.needWords({ needs: n })), ["needs a decision", "asks you to do something", "needs a reply"]);
 });
 
-test("Messages: Luke writes to Nova first, then Claude, every bot, then everyone (never to himself or the site)", () => {
-  assert.deepEqual(L.composeNames(["Alfred", "Nova", "Ledger", "Luke", "Claude", "HQ"]), [{ value: "Nova", label: "Nova" }, { value: "Claude", label: "Claude" }, { value: "Alfred", label: "Alfred" }, { value: "Ledger", label: "Ledger" }, { value: "all", label: "Everyone" }]);
-  assert.deepEqual(L.composeNames(null).map((n) => n.label), ["Claude", "Everyone"]);
+/* 24 Nov 2026 (Luke): Claude is off the desk, so it is not someone to write to */
+test("Messages: Luke writes to Nova first, then every bot, then everyone (never to himself, Claude or the site)", () => {
+  assert.deepEqual(L.composeNames(["Alfred", "Nova", "Ledger", "Luke", "Claude", "HQ"]), [{ value: "Nova", label: "Nova" }, { value: "Alfred", label: "Alfred" }, { value: "Ledger", label: "Ledger" }, { value: "all", label: "Everyone" }]);
+  assert.deepEqual(L.composeNames(null).map((n) => n.label), ["Everyone"]);
 });
 
 test("Messages: an answer points at the message that starts the thread, so the board shows it", () => {
@@ -210,7 +211,7 @@ test("the server's made-up board goes through every rule without a hitch", () =>
   for (const th of b.messages) { assert.equal(L.threadRoot(b, th), th.id); for (const r of th.replies) assert.equal(L.threadRoot(b, r), th.id); }
   for (const a of b.income.accounts) assert.ok(L.accountLine(a, b.today).text);
   for (const s of b.income.sources) assert.ok(L.sourceState(s).text !== "Not read", s.verdict);
-  assert.equal(L.composeNames(b.names).length, b.staff.length + 2, "every bot, Claude and Everyone");
+  assert.equal(L.composeNames(b.names).length, b.staff.length + 1, "every bot and Everyone (24 Nov 2026: not Claude)");
 });
 
 test("the page: Messages is the tenth tab, the new script is kept offline, and nothing pops a browser dialog", () => {
@@ -223,7 +224,7 @@ test("the page: Messages is the tenth tab, the new script is kept offline, and n
   assert.ok(page.indexOf("js/hq.js?v=") < page.indexOf("js/hq-staff.js?v=") && page.indexOf("js/hq-staff.js?v=") < page.indexOf("js/hq-shell.js?v="), "after hq.js (it uses window.HQ), before the shell routes");
   assert.equal(page.split('href="#messages" data-tab="messages"').length - 1, 2, "in the rail and in the More sheet");
   assert.ok(page.indexOf('href="#team"') < page.indexOf('href="#messages"'), "after the nine");
-  assert.match(shell, /TABS = \["today", "songs", "ads", "pages", "growth", "rights", "profiles", "releases", "money", "team", "messages"\]/); /* + rights, 19 Nov 2026 */
+  assert.match(shell, /TABS = \["today", "songs", "ads", "pages", "growth", "profiles", "releases", "team", "messages"\]/); /* 24 Nov 2026: Rights and Money gone */
   assert.match(shell, /MORE = \[[^\]]*"messages"\]/);
   assert.doesNotMatch(shell, /scrollBy\(/, "the deep link is one plain jump");
   assert.doesNotMatch(page, /scroll-behavior:\s*smooth/);
@@ -240,7 +241,7 @@ test("the page: Messages is the tenth tab, the new script is kept offline, and n
 /* ================= Replies that visibly land + the release pipeline on /hq (11 Nov 2026) ================= */
 const isoAt = (sp) => new Date(Date.parse(sp.replace(" ", "T") + ":00-03:00")).toISOString(); /* "YYYY-MM-DD HH:MM" São Paulo -> ISO */
 
-test("replies: where it went and when, in one line; Claude's rounds are said", () => {
+test("replies: where it went and when, in one line; no rounds line now Claude is off the desk (24 Nov 2026)", () => {
   assert.equal(L.spStampOf(isoAt("2026-11-11 17:03")), "2026-11-11 17:03");
   assert.equal(L.spStampOf(null), "");
   const at = Date.parse(isoAt("2026-11-11 17:03"));
@@ -248,7 +249,7 @@ test("replies: where it went and when, in one line; Claude's rounds are said", (
   assert.equal(L.sentLine("message", "all", at), "Sent to everyone at 17:03.");
   assert.equal(L.sentLine("option", "Atlas", at, "Yes"), "Your answer “Yes” went to Atlas at 17:03.");
   assert.equal(L.sentLine("done", "Kevin", at), "Marked as done at 17:03. Kevin sees it on the desk.");
-  assert.equal(L.sentLine("reply", "Claude", at), "Sent to Claude at 17:03. Claude reads the desk at 09:40, 15:40 and 21:40.");
+  assert.equal(L.sentLine("reply", "Claude", at), "Sent to Claude at 17:03.");
 });
 
 test("replies: 'Read by Nova 17:10' / 'Not read yet' / 'Read by 7 of 12', and nothing when nobody can read it", () => {
@@ -256,7 +257,7 @@ test("replies: 'Read by Nova 17:10' / 'Not read yet' / 'Read by 7 of 12', and no
   assert.deepEqual(L.seenWords({ to: "Nova", seen: true, seenAt: isoAt("2026-11-11 17:10") }, TODAY), { seen: true, text: "Read by Nova 17:10", note: "" });
   assert.deepEqual(L.seenWords({ to: "Nova", seen: true, seenAt: isoAt("2026-11-10 08:05") }, TODAY), { seen: true, text: "Read by Nova Tue 10 Nov, 08:05", note: "" });
   assert.deepEqual(L.seenWords({ to: "Drop", seen: false, seenAt: null }, TODAY), { seen: false, text: "Not read yet", note: "" });
-  assert.equal(L.seenWords({ to: "Claude", seen: false }, TODAY).note, "Claude reads the desk at 09:40, 15:40 and 21:40.");
+  assert.equal(L.seenWords({ to: "Claude", seen: false }, TODAY).note, "");
   assert.deepEqual(L.seenWords({ to: "all", seen: null, read: { by: 7, of: 12, names: [] } }, TODAY), { seen: true, text: "Read by 7 of 12", note: "" });
   assert.deepEqual(L.seenWords({ to: "all", seen: null, read: { by: 0, of: 11, names: [] } }, TODAY), { seen: false, text: "Not read yet", note: "" });
   for (const to of ["all", "Luke", "HQ"]) assert.equal(L.seenWords({ to, seen: null }, TODAY), null, to);

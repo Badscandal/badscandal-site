@@ -527,12 +527,11 @@
     var when = spWhen(report.sp, today);
     return "Site check" + (when ? " " + when : "") + ": " + checkResult(report);
   }
-  /* who Luke can write to: Nova first, then Claude, every other bot, then everyone */
+  /* who Luke can write to: Nova first, every other bot, then everyone (24 Nov 2026: Claude is off the desk) */
   function composeNames(names) {
     var bots = (names || []).filter(function (n) { return ["Luke", "Claude", "HQ"].indexOf(n) < 0; });
     var out = [];
     if (bots.indexOf("Nova") >= 0) out.push({ value: "Nova", label: "Nova" });
-    out.push({ value: "Claude", label: "Claude" });
     bots.forEach(function (n) { if (n !== "Nova") out.push({ value: n, label: n }); });
     out.push({ value: "all", label: "Everyone" });
     return out;
@@ -1003,7 +1002,6 @@
     if (!sp) return "not reported";
     return spWhen(sp, today) || "not reported";
   }
-  var CLAUDE_ROUNDS = "Claude reads the desk at 09:40, 15:40 and 21:40.";
   /* the small mark on a message: "Read by Nova 17:10" / "Not read yet" (v2, 11 Nov 2026: READ, from the
      desk's read markers, which only the tools that hand a bot its messages write; no longer "the bot used
      the desk"). A note to everyone: "Read by 7 of 12" (x.read = { by, of }). null when nobody can read it
@@ -1017,7 +1015,7 @@
     }
     if (x.seen == null) return null;
     if (x.seen) { var w = spWhen(spStampOf(x.seenAt), today); return { seen: true, text: "Read by " + x.to + (w ? " " + w : ""), note: "" }; }
-    return { seen: false, text: "Not read yet", note: x.to === "Claude" ? CLAUDE_ROUNDS : "" };
+    return { seen: false, text: "Not read yet", note: "" };
   }
   /* the line that takes the place of what Luke just answered. kind: reply | option | done | message */
   function sentLine(kind, to, at, choice) {
@@ -1025,7 +1023,7 @@
     if (kind === "option") out = "Your answer “" + choice + "” went to " + who + " at " + hm + ".";
     else if (kind === "done") out = "Marked as done at " + hm + ". " + who + " sees it on the desk.";
     else out = "Sent to " + who + " at " + hm + ".";
-    return to === "Claude" ? out + " " + CLAUDE_ROUNDS : out;
+    return out;
   }
   /* "You answered": the board's list (board.answered), each with what was asked, what Luke said and
      whether the bot has seen it. An answer to a message deep in a thread is filed by the desk under
@@ -2058,10 +2056,10 @@
      already loaded (o.board = the staff board, o.songs = [{name, id}] as Songs draws them); cmdResults
      picks the best matches for what was typed: accents and capitals don't count, a match at the start
      beats one inside, and nothing typed shows what waits on Luke first. */
-  var CMD_TABS = [["today", "Today", "home briefing start"], ["songs", "Songs", "spotify streams tracks"], ["ads", "Ads", "meta cap spend cost tap"], ["rights", "Rights", "content id claims licence"],
+  var CMD_TABS = [["today", "Today", "home briefing start"], ["songs", "Songs", "spotify streams tracks disputes"], ["ads", "Ads", "meta cap spend cost tap"],
     ["pages", "Pages", "visits page counter people"], ["growth", "Growth & Fans", "followers instagram tiktok fans"], ["growth/fans", "Fans", "fans forming comments dms"],
     ["profiles", "Profiles", "profile photo banner header cover"],
-    ["releases", "Upcoming", "releases pipeline new song"], ["money", "Money", "income revolut payments royalties"], ["team", "Team", "bots duties staff"],
+    ["releases", "Upcoming", "releases pipeline new song"], ["team", "Team", "bots duties staff"],
     ["messages", "Messages", "inbox questions board"]];
   function cmdNorm(v) { var s = String(v == null ? "" : v); try { s = s.normalize("NFD").replace(/[\u0300-\u036f]/g, ""); } catch (e) {} return s.toLowerCase().replace(/\s+/g, " ").trim(); }
   function cmdIndex(o) {
@@ -2254,7 +2252,6 @@
     else if (mail.status === "rejected") bits.push("reason not reported");
     return bits.join(" · ");
   }
-  /* What YouTube showed, as Laura recorded it. An empty list is none recorded, never a made-up claim. */
   /* Spark's daily ideas. The best post is the official one with the highest engagement per view. Nothing is posted. */
   function contentIdeasCard(doc) {
     var d = doc && doc.reported != null ? doc : null;
@@ -2266,13 +2263,6 @@
     var best = b ? b.title + " · " + b.platform + " · " + b.perView + " per view (" + eng + " engagements, " + b.views + " views" + nr + ")" : "No official post was ranked.";
     return { reported: true, title: "Content ideas", best: best, compared: d.compared || "", note: d.note || "Ideas for Nova. Nothing is posted.",
       ideas: (d.ideas || []).map(function (i) { return i.platform + ": " + i.hook + " — " + i.text + " (" + i.format + "). " + i.why; }) };
-  }
-  function contentClaimRows(claims) {
-    var list = !claims ? [] : (Array.isArray(claims) ? claims : (claims.items || []));
-    if (!list.length) return { reported: false, rows: [], empty: "No Content ID claim has been recorded." };
-    return { reported: true, empty: "", rows: list.map(function (c) {
-      return { claim: c.claim || "not reported", claimant: c.claimant ? c.claimant : "not reported", impact: c.impact ? c.impact : "not reported", date: c.date ? day(c.date) : "not reported" };
-    }) };
   }
   /* Phone home: one dot per official account. Red is the only state that needs Luke.
      A watch that is only missing numbers shows as a gap, so "not enough data" is not a warning. */
@@ -2525,21 +2515,6 @@
     }).join("") + "</details>" : "";
     return h + list.map(function (c) { return disputeCard(c, false, o); }).join("") + done;
   }
-  /* Rights keeps the claim. A case that names its id gets a link. */
-  function claimCaseLinks(claims, cases) {
-    var items = !claims ? [] : (Array.isArray(claims) ? claims : (claims.items || []));
-    var list = Array.isArray(cases) ? cases : ((cases && cases.items) || []);
-    var h = "";
-    items.forEach(function (c) {
-      var id = c && (c.key || c.id);
-      if (!id) return;
-      var hit = list.find(function (x) { return x && x.claimId === id && x.status !== "resolved" && x.status !== "ignored"; }) || list.find(function (x) { return x && x.claimId === id; });
-      if (!hit || !hit.id) return;
-      h += '<p class="d"><a href="#songs/' + escHtml(hit.id) + '">Case for ' + escHtml(c.song || c.claim || "this claim") + "</a></p>";
-    });
-    return h;
-  }
-
   function teamDots(workers) {
     return (workers || []).map(function (w) {
       var tone = w.state === "blocked" || w.state === "late" ? "bad" : (w.state === "done" || w.state === "idle" || w.state === "paused") ? "grey" : "on";
@@ -2677,7 +2652,7 @@
     threadRoot: threadRoot, answerTarget: answerTarget, questionLines: questionLines, questionsLeft: questionsLeft, stepButton: stepButton, formKey: formKey, storeLine: storeLine, storeHistory: storeHistory, storeRows: storeRows, storeWhy: storeWhy, capRateLine: capRateLine, capMissingLine: capMissingLine, dutyGapsLine: dutyGapsLine, incomeTotals: incomeTotals, approvalLines: approvalLines, approvalUndo: approvalUndo, warnTone: warnTone, warnGroups: warnGroups, resubmitAsk: resubmitAsk, relStatus: relStatus, relProgress: relProgress, stepGroups: stepGroups, upcomingAsks: upcomingAsks, staffAttention: staffAttention, staffHealth: staffHealth, curList: curList, cadenceWord: cadenceWord, accountLine: accountLine, sourceState: sourceState, payLine: payLine, accountsLine: accountsLine, receivedMonths: receivedMonths, releasePage: releasePage, monthRows: monthRows, mainSources: mainSources, sourceMonthLine: sourceMonthLine, proposalRows: proposalRows, proposalConfirm: proposalConfirm, profileBlocks: profileBlocks, profileOverview: profileOverview, profileState: profileState, profileIssueText: profileIssueText, caseIssue: caseIssue, caseOutcome: caseOutcome, caseWaitWords: caseWaitWords,
     incomeEmpty: incomeEmpty, incomeProblems: incomeProblems, expectedJourney: expectedJourney, expectedDue: expectedDue, expectedFlags: expectedFlags, expectedFlagKind: expectedFlagKind, missingLine: missingLine, learnedLine: learnedLine, routeLines: routeLines,
     /* replies that visibly land + the release pipeline (11 Nov 2026) */
-    spStampOf: spStampOf, seenWords: seenWords, sentLine: sentLine, answeredList: answeredList, CLAUDE_ROUNDS: CLAUDE_ROUNDS,
+    spStampOf: spStampOf, seenWords: seenWords, sentLine: sentLine, answeredList: answeredList,
     formGroups: formGroups, releaseDayNote: releaseDayNote, releaseWhen: releaseWhen, stepState: stepState, missingWords: missingWords, packLine: packLine, missingSentence: missingSentence,
     packChanges: packChanges, fillWho: fillWho, relPill: relPill, releaseLists: releaseLists, stepsSummary: stepsSummary,
     sendQuestion: sendQuestion, moveQuestion: moveQuestion, cancelQuestion: cancelQuestion,
@@ -2707,9 +2682,9 @@
     releaseFace: releaseFace, teamDots: teamDots, weekAhead: weekAhead, quietFeed: quietFeed, screenText: screenText, dropAccountId: dropAccountId, plainWords: plainWords, pitchSentence: pitchSentence, followerStrip: followerStrip,
     mondayPick: mondayPick, lyricsPreview: lyricsPreview,
     /* L5 watchers (18 Nov 2026) */
-    routeMailLine: routeMailLine, contentClaimRows: contentClaimRows, contentIdeasCard: contentIdeasCard, phoneWatchers: phoneWatchers,
-    /* disputes (19 Nov 2026): cases live on Songs; a claim on Rights links across */
-    disputeHtml: disputeHtml, claimCaseLinks: claimCaseLinks, caseProgress: caseProgress, caseColour: caseColour, songMark: songMark,
+    routeMailLine: routeMailLine, contentIdeasCard: contentIdeasCard, phoneWatchers: phoneWatchers,
+    /* disputes (19 Nov 2026): cases live on Songs */
+    disputeHtml: disputeHtml, caseProgress: caseProgress, caseColour: caseColour, songMark: songMark,
     /* account health (18 Nov 2026) */
     accountHealthHome: accountHealthHome };
 });

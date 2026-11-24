@@ -28,7 +28,7 @@ export const STEPS = [
   { key: "t-14 pitched", days: 14, label: "Spotify pitch sent", owner: "Atlas" },
   { key: "t-10 lyrics", days: 10, label: "Lyrics ready", owner: "Verse" },
   { key: "t-7 video + page", days: 7, label: "Video scheduled, song page live", owner: "Laura + Webmaster" },
-  { key: "ads_ready", days: 1, label: "Ad drafts ready", owner: "Claude + Forge" },
+  { key: "ads_ready", days: 1, label: "Ad drafts ready", owner: "Forge" }, /* 24 Nov 2026: Claude is off the desk */
 ];
 
 const norm = (s) => String(s == null ? "" : s).trim();

@@ -229,7 +229,3 @@ test("a pitched song has no later deadline, and PayPal waiting counts as holding
   assert.equal(pl.counted.length, 0);
 });
 
-test("first seen is not taken from a date inside the claim id", () => {
-  assert.equal(S.claimFirstSeen({ key: "2026-11-01-sample", date: "2026-11-01", first_seen: "2026-11-01" }), "");
-  assert.equal(S.claimFirstSeen({ key: "sample", first_seen: "2026-11-17" }), "2026-11-17");
-});
