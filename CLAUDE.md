@@ -2513,3 +2513,44 @@ The suspected bugs in `docs/HQ-FULL-HANDOFF.md` section 9, fixed. Tests: `tests/
   step is "Approved by RouteNote" (old ones renamed quietly in `healOne`); Money hides the bots' id list (`incomeProblems`);
   Needs you has no platform blocks (Growth cards carry the health dot + 7-day views) and no RouteNote email card
   (`phoneWatchers`); Instagram posts keep `thumb` from the same `/media` read, the Monday pick falls back to the song cover.
+
+## Social Farm › Edits: the edit machine on /hq (25 Nov 2026, branch `hq-farm-edits`)
+
+A cloud worker (private repo Badscandal/badscandal-edits, Python + ffmpeg; Cloud Run job `edits-worker` from
+Phase 3) turns badscandal songs + film moments + stock clips into short vertical lyric edits for the farm
+pages. HQ is where Luke asks for them and approves them. Spec: badscandal-hq `knowledge/edits/edit-machine-spec.md`.
+
+* **Drive is the store, not this repo** (never footage, songs or keys here). One shared folder "BADSCANDAL
+  Edits": `0 Songs/<slug>/` (master.wav, lyrics.txt, timings.json; slug = the site's song slug, e.g. `touchme`,
+  so the bio link `/<slug>?utm_source=edits&utm_content=<page>` works), `0 Clips/Movies/`, `0 Clips/Vibes/`,
+  `1 Review/` (`<name>.mp4` + `<name>.preview.mp4` 540 px + `<name>.json` recipe), `2 Approved/<slug>/` (the
+  bots post from here), `3 Posted/<slug>/<page>/`, `9 Rejected/`.
+* **`netlify/lib/gdrive.mjs`**: no dependencies; signs a service-account JWT (scope `drive`) with the existing
+  `GOOGLE_SA_KEY`; a service account sees only what is shared with it. list / named / path (find or make a
+  sub-folder) / move (change parents, so a move can be undone) / readJSON / stream (a byte range).
+  `parseRange` (one range; open or missing ranges capped at 4 MB; 416 when it can't be met). The key is
+  never logged or answered; errors are plain sentences (`DriveError`) naming the service account's email.
+* **`netlify/lib/edits.mjs`** (pure; store, Drive, clock, starter passed in): `validateJob` (song with
+  timings, styles from `STYLES`, 1-50, en/pt/es, 15/31 s), `createJob` (Blobs `edits/jobs/<id>.json`; with no
+  cloud set up the job says "Waiting for the cloud worker"; with `EDITS_GCP_PROJECT/REGION/JOB_NAME` it calls
+  the Cloud Run Admin API `jobs:run` with args `work render <id>` via `cloudStarter`), `workerOk` (bearer
+  `EDITS_WORKER_TOKEN`, SHA-256 then constant time), `workerUpdate` (progress, edits with a cleaned recipe,
+  stock counts), `reviewList` (groups the three files, recipe from the worker, else read from Drive once and
+  kept; writes `review.json` = which previews may be streamed), `decide` (one per edit, claimed with
+  `onlyIfNew`; approve -> `2 Approved/<song>/`, reject -> `9 Rejected/` with a reason from `REASONS`; a Drive
+  failure moves back what moved and frees the claim), `undo` (10 minutes), `stockView` (warn under 30
+  unused), `scoresView` (approve rate per style / hook / grade, reject reasons, taps per farm page from the
+  counter: src `edits`, content = the page, people only via `hardBot`).
+* **`netlify/functions/edits.mjs`**, `/api/edits/*`: Luke's cookie for overview, jobs, review,
+  preview/<fileId> (only previews in the review list; `Cache-Control: private, max-age=300`), decide, undo,
+  stock, scores; POSTs need our Origin. `status` is the worker's (404 when the token is unset). `?sample=1` =
+  `netlify/lib/edits-sample.mjs`: made-up, never opens a store or calls Google, saves nothing (no video in
+  the sample). No Drive folder set -> overview says so; the other Drive routes answer 503 with the sentence.
+* **The page**: `js/hq-edits.js` (after hq-workspaces.js; `hq:ws` event + `window.HQWorkspace.current()`).
+  In Social Farm a Farm | Edits switch (`bs_hq_farmtab`, red count of edits waiting) and five tabs (Review,
+  Make, Jobs, Stock, Scores; `bs_hq_editstab`). Review: two columns on a phone, previews load and play muted
+  only on screen, tap for sound; Approve / Reject (reasons), Undo, "Approve all N on screen" with a second
+  tap to confirm. Cache `bs-hq-v19`. Tests: `tests/edits.test.mjs`. robots.txt disallows `/api/edits/`.
+* **Netlify env (Luke adds; names only):** `EDITS_DRIVE_FOLDER_ID`; for the worker (Phase 3)
+  `EDITS_WORKER_TOKEN`, `EDITS_GCP_PROJECT`, `EDITS_REGION`, `EDITS_JOB_NAME`.
+

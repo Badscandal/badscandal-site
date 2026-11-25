@@ -1417,6 +1417,50 @@ body.ws-on main{margin-left:0;max-width:none}
 #workspace .wsstep{padding:12px;border-radius:12px;background:var(--glass-2)}
 #workspace .blocked{color:var(--red)}
 @media(min-width:900px){#workspace .wscols{display:grid;grid-template-columns:1fr 1fr;gap:12px}}
+/* Social Farm › Edits (25 Nov 2026, js/hq-edits.js): phone first, 44 px targets, previews 9:16 */
+.farmtabs{display:flex;gap:8px;margin:0 0 14px}
+.farmtabs button,.edsubs button{flex:1;min-height:44px;padding:8px 12px;border-radius:999px;border:.5px solid var(--glass-line);background:transparent;color:var(--uv);font:600 15px/1.2 var(--sans, sans-serif);cursor:pointer}
+.farmtabs button[aria-selected="true"],.edsubs button[aria-selected="true"]{background:var(--accent);color:var(--accent-ink);border-color:transparent}
+.edcount{display:inline-block;min-width:22px;padding:1px 7px;margin-left:4px;border-radius:999px;background:var(--red-deep, #8D060C);color:#fff;font:700 13px/18px var(--sans, sans-serif)}
+.edsubs{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:4px;margin:0 0 12px}
+.edsubs button{padding:8px 2px;font-size:14px}
+#workspace .ednote{color:var(--uv);margin:0 0 12px}
+#workspace .edwarn{color:var(--amber, #FBBF24)}
+#workspace .edhead{color:var(--uv);margin:0 0 10px}
+.edgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+@media(min-width:700px){.edgrid{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(min-width:1100px){.edgrid{grid-template-columns:repeat(4,minmax(0,1fr))}}
+.edcard{background:var(--glass);border:.5px solid var(--glass-line);border-radius:var(--r-in, 16px);padding:8px;display:flex;flex-direction:column;gap:6px;min-width:0}
+.edcard.done{opacity:.62}
+.edvid{position:relative;aspect-ratio:9/16;border-radius:12px;overflow:hidden;background:#000;cursor:pointer}
+.edvid video{width:100%;height:100%;object-fit:cover;display:block}
+.edblank{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;padding:12px;color:var(--uv);font:500 14px var(--sans, sans-serif);background:linear-gradient(160deg,#1c1c22,#050505 70%)}
+.edsound{position:absolute;left:8px;bottom:8px;padding:3px 9px;border-radius:999px;background:rgba(0,0,0,.6);color:#fff;font:600 13px var(--sans, sans-serif);pointer-events:none}
+#workspace .edline{font-size:13px;line-height:1.35;color:var(--uv);margin:0;overflow-wrap:anywhere}
+#workspace .edhook{font-size:14px;margin:0;overflow-wrap:anywhere}
+.edacts{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.edok,.edno{min-height:48px;border-radius:12px;border:0;font:700 15px var(--sans, sans-serif);cursor:pointer}
+.edok{background:var(--paper);color:var(--ink)}
+.edno{background:transparent;color:var(--paper);border:1px solid var(--glass-line)}
+.edok:disabled,.edno:disabled{opacity:.5}
+.edchips{display:flex;flex-direction:column;gap:6px}
+.edchips .copybtn{width:100%;padding:8px 10px;font-size:14px}
+#workspace .edq,#workspace .edstate{margin:0;font-weight:600}
+.edmore,.edall{width:100%;margin:14px 0 0}
+.edmake fieldset{border:0;padding:0;margin:0 0 10px}
+.edmake legend{font-size:15px;margin:0 0 6px}
+#workspace .edcheck{display:flex;align-items:center;gap:10px;min-height:44px;margin:0 0 4px}
+#workspace .edcheck input{width:22px;min-height:22px;height:22px;margin:0;flex:0 0 22px}
+#workspace .edest{font-weight:600}
+.edjobs{display:grid;gap:8px}
+.edjob.bad .edjw{color:var(--red)}
+#workspace .edjw{font-weight:700;margin:0 0 4px}
+#workspace .ednum{font:700 28px/1.1 var(--sans, sans-serif);margin:0 0 6px}
+.edrows{list-style:none;padding:0;margin:0}
+.edrows li{display:flex;gap:10px;align-items:baseline;padding:8px 0;border-top:.5px solid var(--glass-line)}
+.edrows li span{flex:1;min-width:0;overflow-wrap:anywhere}
+.edrows li i{color:var(--uv);font-style:normal;font-size:13px}
+.edlow{color:var(--amber, #FBBF24)}
 /* the phone look (18 Nov 2026): fixed-height cards, a source on every number, light theme on request */
 .pulse-n{font:700 28px/1.15 var(--sans);letter-spacing:-.03em;margin:0 0 12px}
 .wallet{border-radius:var(--r-tile);background:var(--glass);border:.5px solid var(--glass-line);margin:0 0 10px;overflow:hidden}
@@ -2037,6 +2081,8 @@ body.ws-on main{margin-left:0;max-width:none}
   </section>
 <section class="card" id="workspace" hidden>
   <p class="wsnote" id="farmNote" hidden>Farm accounts are kept separate from the official BADSCANDAL accounts and ad accounts.</p>
+  <div class="farmtabs" id="farmTabs" role="tablist" aria-label="Social Farm" hidden><button type="button" role="tab" data-ft="farm" aria-selected="true">Farm</button><button type="button" role="tab" data-ft="edits" aria-selected="false">Edits <span class="edcount" id="editsCount" hidden></span></button></div>
+  <div id="editsBody" hidden></div>
   <div id="wsBody"></div>
 </section>
 </main>
@@ -2113,18 +2159,19 @@ body.ws-on main{margin-left:0;max-width:none}
   }, 400);
 })();
 </script>
-<script src="js/crt.js?v=fca7e2862d99" defer></script>
-<script src="js/hq-lib.js?v=fca7e2862d99" defer></script>
-<script src="js/hq-chart.js?v=fca7e2862d99" defer></script>
-<script src="js/hq-growth.js?v=fca7e2862d99" defer></script>
-<script src="js/hq-look.js?v=fca7e2862d99" defer></script>
-<script src="js/hq.js?v=fca7e2862d99" defer></script>
-<script src="js/hq-staff.js?v=fca7e2862d99" defer></script>
-<script src="js/hq-phone.js?v=fca7e2862d99" defer></script>
-<script src="js/hq-shell.js?v=fca7e2862d99" defer></script>
-<script src="js/hq-workspaces.js?v=fca7e2862d99" defer></script>
-<script src="js/hq-app.js?v=fca7e2862d99" defer></script>
-<script src="js/hq-cmd.js?v=fca7e2862d99" defer></script>
-<script src="js/hq-pages.js?v=fca7e2862d99" defer></script>
+<script src="js/crt.js?v=7d45d1e68820" defer></script>
+<script src="js/hq-lib.js?v=7d45d1e68820" defer></script>
+<script src="js/hq-chart.js?v=7d45d1e68820" defer></script>
+<script src="js/hq-growth.js?v=7d45d1e68820" defer></script>
+<script src="js/hq-look.js?v=7d45d1e68820" defer></script>
+<script src="js/hq.js?v=7d45d1e68820" defer></script>
+<script src="js/hq-staff.js?v=7d45d1e68820" defer></script>
+<script src="js/hq-phone.js?v=7d45d1e68820" defer></script>
+<script src="js/hq-shell.js?v=7d45d1e68820" defer></script>
+<script src="js/hq-workspaces.js?v=7d45d1e68820" defer></script>
+<script src="js/hq-edits.js?v=7d45d1e68820" defer></script>
+<script src="js/hq-app.js?v=7d45d1e68820" defer></script>
+<script src="js/hq-cmd.js?v=7d45d1e68820" defer></script>
+<script src="js/hq-pages.js?v=7d45d1e68820" defer></script>
 </body>
 </html>

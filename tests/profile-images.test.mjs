@@ -173,7 +173,7 @@ test("the new tools are on the connector for the owners, and the page buttons se
   assert.match(page, /color-scheme:\s*dark/);
   assert.match(page, /id="profPhoto"/);
   assert.match(page, /id="profBanner"/);
-  assert.match(sw, /var CACHE = "bs-hq-v18"/); /* v18: Needs you decision and ask cards. v17: Needs you cards. */
+  assert.match(sw, /var CACHE = "bs-hq-v19"/); /* v19 (25 Nov 2026): js/hq-edits.js added.  v18: Needs you decision and ask cards. v17: Needs you cards. */
   const fn = readFileSync(new URL("../netlify/functions/staff.mjs", import.meta.url), "utf8");
   assert.match(fn, /profile_rework/);
   assert.match(fn, /profile-file/);

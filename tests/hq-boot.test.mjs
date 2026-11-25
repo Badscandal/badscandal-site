@@ -6,7 +6,7 @@ import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import vm from "node:vm";
 
-const HQ_SCRIPTS = ["js/crt.js", "js/hq-lib.js", "js/hq-chart.js", "js/hq-growth.js", "js/hq-look.js", "js/hq.js", "js/hq-staff.js", "js/hq-phone.js", "js/hq-shell.js", "js/hq-workspaces.js", "js/hq-app.js", "js/hq-cmd.js", "js/hq-pages.js"];
+const HQ_SCRIPTS = ["js/crt.js", "js/hq-lib.js", "js/hq-chart.js", "js/hq-growth.js", "js/hq-look.js", "js/hq.js", "js/hq-staff.js", "js/hq-phone.js", "js/hq-shell.js", "js/hq-workspaces.js", "js/hq-edits.js", "js/hq-app.js", "js/hq-cmd.js", "js/hq-pages.js"];
 
 function contentVersion() {
   const h = createHash("sha256");
@@ -23,7 +23,7 @@ test("every HQ script url carries the same content hash, and the service worker 
   const scripts = [...page.matchAll(/<script src="(js\/[^"]+)" defer><\/script>/g)].map((m) => m[1]);
   assert.deepEqual(scripts, HQ_SCRIPTS.map((s) => s + "?v=" + v));
   assert.match(sw, new RegExp('var V = "' + v + '"'));
-  assert.match(sw, /var CACHE = "bs-hq-v18"/); /* v18, 21 Nov 2026: Needs you decision and ask cards. */
+  assert.match(sw, /var CACHE = "bs-hq-v19"/); /* v19, 25 Nov 2026: a new file, js/hq-edits.js (Social Farm › Edits). v18: Needs you cards. */
   assert.match(sw, /var FETCH_MS = 8000/);
   for (const s of HQ_SCRIPTS) assert.match(sw, new RegExp('"\\/' + s.replace(/\./g, "\\.") + '\\?v=" \\+ V'));
   for (const tag of page.matchAll(/<link[^>]*rel="stylesheet"[^>]*>/g)) {
