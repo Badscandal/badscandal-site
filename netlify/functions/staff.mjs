@@ -300,6 +300,13 @@ async function api(req, context, path) {
       if (role !== "luke") return json(403, { error: "Only Luke answers his own asks" });
       return json(200, await S.markNeedDone(st.desk, now, roster, { by: "Luke", key: a.key, to: a.to, text: a.text, done: a.done, choice: a.choice, needs: a.needs }));
     }
+    /* 25 Nov 2026: Luke's call for this month: keep ads running past the stop line (or take it back with off).
+       His login only, from our own page (an Origin is required here); Claude's key and the bots get 403. */
+    if (path === "capover" && req.method === "POST") {
+      if (role !== "luke") return json(403, { error: "Only Luke keeps the ads running past the stop line" });
+      if (req.headers.get("origin") !== url.origin) return json(403, { error: "Forbidden" });
+      return json(200, await S.setCapOverride(st.desk, now, roster, { by: "Luke", note: a.note, off: a.off === true }));
+    }
     if (path === "card" && req.method === "POST") {
       if (role !== "luke") return json(403, { error: "Only Luke answers a card" });
       const card = await C.answerCard(st.desk, now, roster, { by: "Luke", id: a.id, choice: a.choice, text: a.text });

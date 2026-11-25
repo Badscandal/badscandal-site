@@ -203,6 +203,9 @@ export async function runCapCheck(store, now, roster, o) {
   const month = S.spDay(now).slice(0, 7);
   const rows = o.spend || await S.listSpend(store, now);
   const cap = capFromRows(rows, month);
+  /* 25 Nov 2026: Luke's call for this month (keep running past the stop line): no 750/900 message, no card */
+  const over = await S.getCapOverride(store, month).catch(() => null);
+  if (over) return { wrote: false, level: S.LUKES_CALL };
   const state = await getState(store);
   const prev = state.cap && state.cap.month === month ? state.cap : { level: "", cardId: "" };
   if (cap.level === "unread") {

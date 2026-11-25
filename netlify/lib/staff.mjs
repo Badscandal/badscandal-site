@@ -31,6 +31,8 @@
 
 import { SONGS, RESERVED as SONG_RESERVED, SLUG_RE, TRACK_RE, homeCardSong, homeCardNow as homeCardPublished } from "./songs.mjs";
 import { boostReport } from "./postrank.mjs";
+import { isOffHq, offHqNames, moneyText, dropMoneyText, LUKES_CALL, capCallLine, applyCapOverride } from "./offhq.mjs";
+export { isOffHq, offHqNames, moneyText, dropMoneyText, LUKES_CALL, capCallLine, applyCapOverride };
 export const homeCardNow = homeCardPublished;
 export const TZ = "America/Sao_Paulo";
 export const UPDATE_STATUS = ["done", "working", "blocked", "error", "info"];
@@ -51,16 +53,17 @@ export const DEFAULT_ROSTER = [
     writes: "The task board and the release timeline; the daily report" },
   { name: "Alfred", role: "Luke's assistant", duty: "One message to Luke a day, plus urgent alerts", time: "10:00",
     why: "The only voice that reaches Luke, once a day, so no other bot has to interrupt him. Carries the site's check and anything that needs Luke's yes.",
-    schedule: [{ time: "10:00", what: "The daily message: ad spend against the cap, what needs Luke, who didn't log, the next release" }, { time: "any time", what: "Alert at USD 750, at USD 900 and above USD 1,000 of ad spend" }],
+    schedule: [{ time: "10:00", what: "The daily message: ad spend against the USD 1,000 cap and yesterday per platform, what needs Luke today, who didn't log yesterday, the next release" }, { time: "any time", what: "Alert at USD 750, at USD 900 and above USD 1,000 of ad spend" }],
     writes: "Nothing: Alfred reports, he doesn't log" },
   /* 24 Nov 2026, Luke: "lets fully remove the money section ... Move the money site to the badscandal books
      site". Ledger and Sheet stay on the team; Luke gives them new work later. No duty time, so the site's
      check never lists them as quiet. Later the same day (Luke): "they don't interact with hq anymore"; their money
      work is on badscandal books and they report to Alfred directly. */
-  { name: "Ledger", role: "Money, on badscandal books", duty: "Works on badscandal books, not on HQ. Reports to Alfred.", time: "",
+  /* 25 Nov 2026: offHq = on the roster (my_day still answers) but not on Team, never quiet, late, chased or counted */
+  { name: "Ledger", role: "Money, on badscandal books", duty: "Works on badscandal books, not on HQ. Reports to Alfred.", time: "", offHq: true,
     why: "Ledger keeps the money on badscandal books (badscandal-books.netlify.app). It does not use HQ and reports to Alfred directly.",
     schedule: [], writes: "Nothing on HQ: the payments are on badscandal books" },
-  { name: "Sheet", role: "Money, on badscandal books", duty: "Works on badscandal books, not on HQ. Reports to Alfred.", time: "",
+  { name: "Sheet", role: "Money, on badscandal books", duty: "Works on badscandal books, not on HQ. Reports to Alfred.", time: "", offHq: true,
     why: "Sheet keeps the money on badscandal books (badscandal-books.netlify.app). It does not use HQ and reports to Alfred directly.",
     schedule: [], writes: "Nothing on HQ: the payments are on badscandal books" },
   { name: "Steve", role: "Instagram", duty: "Daily growth and best post", time: "09:10",
@@ -177,6 +180,8 @@ export function freshDuty(text) {
   t = t.replace(/\breset (?:today's |the )?D-\s*rows\b/gi, "reset today's duties");
   t = t.replace(/\bD-\s*rows\b/gi, "duties");
   t = t.replace(/\b(?:todo|to do)\s*(?:->|→|=>)\s*blocked\b/gi, "mark a missed duty blocked");
+  /* 25 Nov 2026: money, Revolut, PayPal/Wise checks, month close and Content ID claims are off HQ */
+  t = dropMoneyText(t);
   return t.replace(/\s{2,}/g, " ").replace(/\s+([,.;])/g, "$1").trim();
 }
 export function freshWhy(name, why) {
@@ -387,7 +392,9 @@ export async function getRoster(store) {
   /* A seed loaded before Licence or Spark existed must still know those names, or the connector rejects the bot.
      A shorter roster is left as it was: only these two are added back. */
   const missing = DEFAULT_ROSTER.filter((b) => (b.name === "Licence" || b.name === "Spark") && !named.some((n) => low(n.name) === low(b.name)));
-  return missing.length ? named.concat(missing.map((b) => ({ ...b }))) : named;
+  const all = missing.length ? named.concat(missing.map((b) => ({ ...b }))) : named;
+  /* 25 Nov 2026: the seed may set offHq; when it doesn't, Ledger and Sheet are off HQ (offhq.mjs) */
+  return all.map((b) => ({ ...b, offHq: isOffHq(b) }));
 }
 /* roster_card (17 Nov 2026, Nova: Drop's card still listed royalties, Forge's times were old, and the private seed
    is not on this Mac): Nova (or Claude, Luke) fixes a bot's duty, why, usual time, schedule or role on the desk */
@@ -483,9 +490,10 @@ export const updateRows = (updates) => updates.map((u) => [u.sp, u.bot, u.status
 /* today's word from each bot on its duty: { byDuty: {"d-atlas-1": {...}}, byBot: {"atlas": {...}} }.
    Each keeps who said it and when, so the reader can take the NEWER of the two and ignore a bot
    speaking about another bot's duty. */
-export function dutyOverlay(updates, today) {
+export function dutyOverlay(updates, today, off = null) {
   const byDuty = {}, byBot = {};
   for (const u of [...updates].sort((a, b) => (a.at < b.at ? -1 : 1))) {
+    if (off && off.has(low(u.bot))) continue; /* 25 Nov 2026: an off-HQ bot's word finishes no duty */
     if (!u.sp || u.sp.slice(0, 10) !== today || !["done", "blocked", "working", "error"].includes(u.status)) continue;
     if (u.release) continue; /* "Survivors: Lyrics live — done" is about a release step, not today's duty */
     const v = { status: u.status === "error" ? "blocked" : u.status, message: u.message, at: u.sp, iso: u.at, bot: low(u.bot), ...(u.gaps ? { gaps: u.gaps } : {}) };
@@ -728,7 +736,7 @@ export async function chaseLate(store, now, roster, o = {}) {
   const out = { nudged: [], escalated: [] };
   const hm = spHM(now), day = spDay(now);
   if (hm < CHASE_FROM || hm >= CHASE_UNTIL) return out;
-  const active = new Set((roster || []).filter((b) => b.state !== "paused").map((b) => b.name));
+  const active = new Set((roster || []).filter((b) => b.state !== "paused" && !isOffHq(b)).map((b) => b.name));
   const items = [];
   const byOwner = (o.hq && o.hq.team && o.hq.team.duties && o.hq.team.duties.byOwner) || [];
   for (const g of byOwner) for (const x of g.items || []) {
@@ -4002,7 +4010,9 @@ export function workers(roster, { hq, updates, messages, cards, seen, today, now
     else if (b.time && nowHM && nowHM > b.time && !todays.length) state = "quiet";
     const s = seen[b.name] || null;
     const blk = blockerOf(cards[k], b.blockers || "", now);
-    return { name: b.name, role: b.role || "", why: b.why || "", duty: b.duty || "", time: b.time || "", schedule: b.schedule || [], writes: b.writes || "", access: b.access || "", ...(b.grok ? { grok: b.grok } : {}),
+    /* 25 Nov 2026: a seeded card that still talks about money shows without it */
+    const schedule = (b.schedule || []).map((x) => (x && x.what ? { ...x, what: dropMoneyText(x.what) } : x)).filter((x) => !x || !("what" in x) || x.what);
+    return { name: b.name, role: b.role || "", why: dropMoneyText(b.why || ""), duty: dropMoneyText(b.duty || ""), time: b.time || "", schedule, writes: dropMoneyText(b.writes || ""), access: b.access || "", ...(b.grok ? { grok: b.grok } : {}), ...(isOffHq(b) ? { offHq: true } : {}),
       blockers: blk.blockers, blockersStale: blk.blockersStale, paused: b.state === "paused", state, duties: items, tasks: open.slice(0, 12), lateTasks: open.filter((t) => t.late).length,
       last: last ? { at: last.sp, status: last.status, message: last.message, link: last.link } : null, updatesToday: todays.length,
       card: cardNow(cards[k], today), waiting: asks.map((m) => ({ id: m.id, from: m.from, text: m.text.slice(0, 200), needs: m.needs, at: m.sp })),
@@ -4874,10 +4884,11 @@ function lukeExtraNeeds(desk, nowMs = Date.now()) {
   const cards = desk && desk.cards && typeof desk.cards === "object" ? desk.cards : {};
   const bits = [];
   const fresh = (at) => { const t = Date.parse(at || ""); return !Number.isFinite(t) || nowMs - t <= BLOCKER_STALE; };
+  const off = offHqNames(desk && desk.roster);
   for (const [key, c] of Object.entries(cards)) {
-    if (!c || typeof c !== "object") continue;
+    if (!c || typeof c !== "object" || off.has(low(key))) continue; /* 25 Nov 2026: off-HQ bots put nothing on Needs you */
     const who = key.charAt(0).toUpperCase() + key.slice(1);
-    for (const [text, at] of [[c.needs, c.at], [c.workingOn, c.at], [c.blockers, c.blockersAt || c.at]]) if (text && fresh(at)) bits.push({ who, text: String(text), at: at || null });
+    for (const [text, at] of [[c.needs, c.at], [c.workingOn, c.at], [c.blockers, c.blockersAt || c.at]]) if (text && fresh(at) && !moneyText(text)) bits.push({ who, text: String(text), at: at || null });
   }
   for (const text of desk && desk.notRead || []) if (text) bits.push({ who: "", text: String(text), at: null });
   for (const line of signedOutLines(bits)) {
@@ -4920,7 +4931,30 @@ function lukeExtraNeeds(desk, nowMs = Date.now()) {
   return out;
 }
 export const NEED_DONE_KEY = "needs-done.json", NEED_DONE_DAYS = 3;
-const MONEY_TASK = /\b(?:EUR|USD|GBP|BRL)\s?\d|[€$£]\s?\d|\bpayments?\b|\bpayouts?\b|\broyalt|\bstatements?\b|proof of arrival|\binvoices?\b|\brevolut\b|\bwise\b|\bpaypal\b|\bincome\b/i;
+
+/* ---------- the month's cap override (25 Nov 2026) ----------
+   Luke chose to keep the Me Dá Seu Body campaign running past the 900 stop line. Only Luke sets it, for ONE month
+   (capover/<YYYY-MM>.json {by, at, note}); next month there is none. While it is set the cap says "Past the stop line
+   on Luke's call", amber, the bots' cap checks report only, and no 750/900 message or card goes out. Display only:
+   nothing on the site pauses or changes an ad. */
+export const capOverKey = (month) => `capover/${month}.json`;
+export async function getCapOverride(store, month) {
+  if (!/^\d{4}-\d{2}$/.test(String(month || ""))) return null;
+  const { data } = await readDoc(store, capOverKey(month), null);
+  return data && data.by === "Luke" && data.at ? { by: "Luke", at: data.at, note: clean(data.note, 140), month } : null;
+}
+export async function setCapOverride(store, now, roster, a) {
+  const by = whoIs(a.by, roster, { people: true });
+  if (by !== "Luke") fail("Only Luke keeps the ads running past the stop line. Nothing was saved.", "not_allowed");
+  const month = spDay(now).slice(0, 7);
+  if (a.off === true) { try { await store.delete(capOverKey(month)); } catch {} return { ok: true, month, override: null }; }
+  const note = clean(a.note, 140);
+  noSecrets(note);
+  const doc = { by: "Luke", at: new Date(now).toISOString(), note, month };
+  await store.setJSON(capOverKey(month), doc);
+  return { ok: true, month, override: doc };
+}
+
 /* a short print of a task's words: its Done mark holds until the words change */
 function taskPrint(text) {
   let h = 0x811c9dc5;
@@ -4951,10 +4985,17 @@ export async function markNeedDone(store, now, roster, a) {
   const r = await sendMessage(store, now, roster, { from: "Luke", to, text, needs: a.needs === "action" ? "action" : "none" });
   return { ok: true, key, done, message: r.message };
 }
+/* 25 Nov 2026: ONE rule for what never reaches Needs you (the list, the count, the badge, the alerts and needs_you all
+   come from here): an off-HQ bot's ask, and an ask about money (offhq.mjs moneyText; ad spend is not money). */
+export function offNeeds(owner, text, off) {
+  return (!!owner && off.has(low(owner))) || moneyText(text);
+}
 export function waitingOnLuke(desk, today, now = null) {
   const out = [];
+  const off = offHqNames(desk.roster);
   for (const m of waitingOn(desk.messages || [], "Luke")) {
     if (!ASKS[m.needs]) continue;
+    if (offNeeds(m.from, m.text, off)) continue;
     const from = clean(m.from, 40);
     let kind = "message", text = `${from} ${ASKS[m.needs]}`;
     /* Nova's "handle this" / "contact me" is its own card. The answer still goes back to Nova. */
@@ -4971,6 +5012,7 @@ export function waitingOnLuke(desk, today, now = null) {
      text names who and what kind only: never an amount, a payer or the card's text. */
   for (const c of desk.lukeCards || []) {
     if (!c || !c.id) continue;
+    if (offNeeds(c.owner, `${c.text || ""} ${c.preview || ""}`, off)) continue;
     out.push({ key: "c:" + c.id, kind: "card", id: c.id, from: clean(c.owner || "HQ", 40), text: `${clean(c.owner || "HQ", 40)} needs your yes or no`, href: "#today", at: null });
   }
   for (const a of redAccounts(desk.health)) {
@@ -5000,8 +5042,8 @@ export function waitingOnLuke(desk, today, now = null) {
     if (!/luke|your yes|system user|you to/i.test(blocker || title)) continue;
     if (/google ads/i.test(blocker) && /sign/i.test(blocker)) continue;
     if (/netlify|viewer access|site analytics/i.test(blocker + " " + title)) continue;
-    /* 25 Nov 2026: money is not on HQ (PR #114); money questions go to Alfred, not Needs you */
-    if (MONEY_TASK.test(blocker + " " + title)) continue;
+    /* 25 Nov 2026: money is not on HQ (PR #114); money questions go to Alfred, not Needs you. Nor an off-HQ bot's task. */
+    if (offNeeds(t.owner, blocker + " " + title, off)) continue;
     const text = lukeLine(blocker || title).replace(/\s*\(?\b(?:see |per |use |in )?runbook\s*b\b\)?[,.;:]?/gi, "").replace(/\s{2,}/g, " ").trim();
     if (!text) continue;
     const owner = clean(t.owner, 40);
@@ -5035,7 +5077,7 @@ export function waitingOnLuke(desk, today, now = null) {
   return deduped.sort((a, b) => rank(a) - rank(b) || (a.at == null ? 1 : b.at == null ? -1 : a.at < b.at ? -1 : a.at > b.at ? 1 : 0));
 }
 
-export function board(desk, now, hq) {
+export function board(desk, now, hq, o = {}) {
   const today = spDay(now), nowHM = spHM(now);
   const views = (desk.releases || []).map((r) => releaseView(r, today, { sightings: desk.sightings || null }));
   const read = desk.read || {};
@@ -5053,10 +5095,14 @@ export function board(desk, now, hq) {
     return Number.isFinite(t) ? spStamp(t) : s;
   };
   const updates = live ? live.map((u) => ({ sp: asSp(u.at), at: /^\d{4}-\d{2}-\d{2}T/.test(String(u.at || "")) ? u.at : u.at, bot: u.bot, status: u.status, message: u.message, link: u.link || "" })) : desk.updates;
-  const staff = workers(desk.roster, { hq, updates, messages: desk.messages, cards: desk.cards, seen: desk.seen, today, nowHM, now, releases: views, deskUpdates: desk.updates || [] });
+  const everyone = workers(desk.roster, { hq, updates, messages: desk.messages, cards: desk.cards, seen: desk.seen, today, nowHM, now, releases: views, deskUpdates: desk.updates || [] });
+  /* 25 Nov 2026: off-HQ bots (Ledger, Sheet) are not on Team, in the counts, the check or Search. my_day still
+     finds them in allStaff (the connector asks for it). */
+  const staff = everyone.filter((w) => !w.offHq);
   const lastSeen = Object.entries(desk.seen).filter(([n]) => n !== "Claude").sort((a, b) => (a[1].at < b[1].at ? 1 : -1))[0] || null;
   return {
-    today, now: spStamp(now), staff,
+    today, now: spStamp(now), staff, ...(o.all ? { allStaff: everyone } : {}),
+    offHq: everyone.filter((w) => w.offHq).map((w) => w.name),
     updates: updates.slice(0, 60),
     messages: threads(desk.messages).slice(0, 80).map((t) => ({ ...mark(t), replies: t.replies.map(mark) })),
     answered: answeredByLuke(desk.messages, read, now),
@@ -5071,7 +5117,7 @@ export function board(desk, now, hq) {
     connector: { botsOn: desk.config.botsOn, changedAt: desk.config.changedAt, lastUsed: lastSeen ? { bot: lastSeen[0], at: lastSeen[1].at, tool: lastSeen[1].tool } : null,
       connected: staff.filter((w) => w.connected).length, total: staff.length, claudeSeen: desk.seen.Claude ? desk.seen.Claude.at : null },
     report: freshReport(desk.messages.find((m) => m.from === "HQ" && m.kind === "report") || null, hq, spStamp(now)),
-    names: botNames(desk.roster).concat(PEOPLE),
+    names: botNames((desk.roster || []).filter((x) => !isOffHq(x))).concat(PEOPLE), /* 25 Nov 2026: not the off-HQ bots */
   };
 }
 
@@ -5152,7 +5198,7 @@ export function checkReport({ desk, hq, hqState, now }) {
     for (const [tab, e] of Object.entries(hqState.sheetErrors || {})) problems.push(`Sheet tab ${tab} shows an error (${e.first})`);
     if (hqState.metaKey && hqState.metaKey.state && hqState.metaKey.state !== "ok") problems.push(hqState.metaKey.text || "The Meta key is not reading");
     const cap = hq && hq.money && hq.money.cap;
-    if (cap) say(cap.status === "ok", `Ad spend this month: ${cap.currency} ${cap.spent.toFixed(2)} of ${cap.amount}` + (cap.status === "ok" ? "" : cap.status === "warn" ? " (past the 750 warning)" : " (at or past 900: every ad must be off)"));
+    if (cap) say(cap.status === "ok" || cap.status === LUKES_CALL, `Ad spend this month: ${cap.currency} ${cap.spent.toFixed(2)} of ${cap.amount}` + (cap.status === "ok" ? "" : cap.status === LUKES_CALL ? ` (${capCallLine(cap)}: report only)` : cap.status === "warn" ? " (past the 750 warning)" : " (at or past 900: every ad must be off)"));
     const next = hq && hq.next;
     /* a desk release's late steps are already listed above, so they are not said twice */
     if (next) say(!next.late, `Next release: ${next.song}, ${next.date} (${next.daysToGo} days)` + (next.late ? `, ${next.late} step${next.late === 1 ? "" : "s"} late` + (next.desk ? " (listed above)" : `: ${next.steps.filter((s) => s.late).map((s) => s.label + " (" + s.owner + ")").join("; ")}`) : ", nothing late"));

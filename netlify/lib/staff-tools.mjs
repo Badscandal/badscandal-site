@@ -648,6 +648,9 @@ function releaseCard(v, me, chase, mail) {
 /* 24 Nov 2026, Luke: "lets fully remove the money section ... We can fully ignore the money section". */
 const NO_MONEY = "Money is no longer on HQ.";
 const MONEY_STOP_BOTS = ["Ledger", "Sheet"];
+/* 25 Nov 2026: Luke's call on the month's cap, said the same way in every cap check */
+const CAP_CHECKERS = ["Forge", "Nova", "Alfred"];
+const capCallWords = (cap) => `Luke's call: keep running, report only. ${S.capCallLine(cap)}. Do not switch ads off for the cap this month, and send no 750 or 900 alert.`;
 const MONEY_STOP = "HQ no longer handles money. Stop checking income, payments, Revolut and the income sheet on HQ. Delete your HQ money tasks. Your money work is on badscandal books now: connect https://badscandal-books.netlify.app/mcp with the same key. You no longer use HQ. When you need Luke, tell Alfred (his assistant) directly.";
 /* the recommendations on a decision, for Alfred's SHORT briefing only (A3, 17 Nov 2026); luke_briefing stays as it is */
 const recWords = (m) => (Array.isArray(m.recommendations) ? m.recommendations.slice().sort((a, b) => (a.by === "Nova" ? -1 : b.by === "Nova" ? 1 : 0)) : [])
@@ -1008,7 +1011,7 @@ async function runTool(tool, args, ctx, read) {
       const cap = hq && hq.money ? hq.money.cap : null;
       return { saved: saved.some((x) => x), days: saved.length, ...(r.duplicate ? { duplicate: true } : {}), ...(r.updated ? { updated: true } : {}),
         recorded: saved.map((x) => `${x.platform} ${x.date}: ` + (x.amount != null ? `${x.currency} ${x.amount.toFixed(2)}` : `not read (${x.notRead})`)).join("; "),
-        month_to_date: cap ? { spent: `${cap.currency} ${cap.spent.toFixed(2)}`, cap: `${cap.currency} ${cap.amount}`, left: `${cap.currency} ${cap.left.toFixed(2)}`, status: cap.status,
+        month_to_date: cap ? { spent: `${cap.currency} ${cap.spent.toFixed(2)}`, cap: `${cap.currency} ${cap.amount}`, left: `${cap.currency} ${cap.left.toFixed(2)}`, status: cap.status, ...(cap.override ? { luke_call: capCallWords(cap) } : {}),
           rate: cap.rateUsed ? `${cap.rateUsed.value} USD per EUR (${cap.rateUsed.from})` : "no conversion needed", not_read: cap.notRead || [], estimated: !!cap.estimated }
           : "not read just now: the team's sheet could not be read" };
     }
@@ -1302,7 +1305,7 @@ async function runTool(tool, args, ctx, read) {
   const [desk, hqAns, cardDoc] = await Promise.all([S.loadDesk(store, now), ctx.hq ? ctx.hq().catch(() => null) : null, S.readDoc(store, "action-cards.json", []).catch(() => ({ data: [] }))]);
   const hq = hqAns && hqAns.team ? hqAns : null;
   read.list = desk.messages;
-  const b = S.board(desk, now, hq);
+  const b = S.board(desk, now, hq, { all: true }); /* allStaff: my_day still answers an off-HQ bot (25 Nov 2026) */
   const actionCards = Array.isArray(cardDoc && cardDoc.data) ? cardDoc.data : [];
   const rel = (desk.releases || []).map((r) => S.releaseView(r, today, { sightings: desk.sightings, messages: desk.messages, actionCards }));
   const sheetNote = hq ? null : "The team's Google Sheet could not be read just now, so duties and tasks are missing from this answer. Carry on with your job card.";
@@ -1353,7 +1356,7 @@ async function runTool(tool, args, ctx, read) {
         releases: rel.filter((v) => S.releaseActive(v) || v.status === "draft").map((v) => `${v.title}: ${v.status === "draft" ? "draft" : v.released ? "released" : "coming"}, ${when(v.date)}, ${v.counts.done} of ${v.counts.total} steps done` + (v.counts.late ? `, ${v.counts.late} late` : "") + (v.counts.blocked ? `, ${v.counts.blocked} blocked` : "") + (v.missing.length ? `; missing: ${v.missing.map((m) => m.short).join(", ")}` : "")),
         unknown_in_spotify: b.sightings.items.filter((x) => x.state === "unknown").map((x) => `${x.title}, ${x.dateWords}`),
         ...(sheetNote ? { note: sheetNote } : {}) };
-      const w = b.staff.find((x) => x.name === me);
+      const w = (b.allStaff || b.staff).find((x) => x.name === me);
       const rs = w.releaseSteps.map((s) => ({ song: s.title, step: s.key, label: s.label, due: s.waitingFor === "spotify-window" ? SPOTIFY_WHEN : (s.waiting || S.blockIsWait(s)) ? "when it can start" : when(s.due), state: stepState(s), ...(s.note ? { note: s.note } : {}), ...(s.link ? { link: s.link } : {}),
         ...(s.spotifyTrack ? { spotify_track: s.spotifyTrack } : {}), ...((s.waiting || S.blockIsWait(s)) ? { waiting_for: s.waiting ? waitFor(s) : (s.note || "the note on this step") } : {}), ...(s.key === "spotify" ? { how: SPOT_HOW } : {}) }));
       /* the soonest step the bot can work on now; a waiting one (including a block that is only a wait) is not today's job */
@@ -1418,6 +1421,8 @@ async function runTool(tool, args, ctx, read) {
         /* 24 Nov 2026, Luke: "leave a note for the bots telling them to stop checking all things related to money and
            delete any tasks related to money". Ledger and Sheet get it at the start of every run until Luke gives them new work. */
         ...(MONEY_STOP_BOTS.includes(me) ? { money_stopped: MONEY_STOP } : {}),
+        /* 25 Nov 2026: Luke kept the ads running past the stop line this month: the cap checks report only */
+        ...((() => { const c = hq && hq.money ? hq.money.cap : null; return c && c.override && CAP_CHECKERS.includes(me) ? { cap_call: capCallWords(c) } : {}; })()),
         /* L5: Verse, on a release day only. Not a sheet duty, and not the lyrics. */
         ...(me === "Verse" ? { lyrics_duty: rel.filter((v) => v.status === "scheduled" && v.daysToGo != null && v.daysToGo >= 0 && v.daysToGo <= 14).map((v) => `${v.title}: submit the approved lyrics on Musixmatch when the song shows there. A song not on Musixmatch yet is not a block.`) } : {}),
         release_steps: rs, rules: RULES,
@@ -1475,7 +1480,8 @@ async function runTool(tool, args, ctx, read) {
       const unread = cap ? S.unreadSpendLine(cap.notRead || cap.estimatedWhy || []) : "";
       const ad_spend = cap ? `${cap.month}: ${cap.currency} ${money(cap.spent)} of ${cap.currency} ${cap.amount}, ${cap.currency} ${money(cap.left)} left (${cap.status})` +
         (cap.rateUsed ? `; EUR at ${cap.rateUsed.value} (${rateFrom})` : "") +
-        (cap.estimated || unread ? `; estimated${unread ? ": " + unread : ""}` : "")
+        (cap.estimated || unread ? `; estimated${unread ? ": " + unread : ""}` : "") +
+        (cap.override ? `; ${capCallWords(cap)}` : "")
         : "not read: the team's sheet could not be read just now";
       /* a decision's deadline: an approval -> that step's day; "ready to resubmit" -> the release day */
       const due = (m) => {

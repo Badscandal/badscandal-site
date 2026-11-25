@@ -16,6 +16,7 @@
    skipped); every amount keeps its own currency; an amount in another currency is an ESTIMATE at
    that month's average ECB rate (netlify/lib/fx.mjs) and is always labelled as one. */
 import { convert } from "./fx.mjs";
+import { offHqNames, dropMoneyText, applyCapOverride } from "./offhq.mjs";
 /* v18 (21 Nov 2026, Luke): the "Salvation" line is gone from Atlas's duty, so the duty list and the reminders
    built from it never say it (the sheet itself is not changed) */
 const noSalvation = (v) => (v == null ? v : String(v).replace(/[^.\n]*\bsalvation\b[^.\n]*\.?/gi, "").replace(/\s{2,}/g, " ").trim());
@@ -310,7 +311,8 @@ export const ownerName = (o) => norm(o).replace(/\s*\([^)]*\)\s*$/, "").trim();
    connector, by duty id or (when the bot has one duty) by bot. The sheet's "done" always wins; a
    connector "done" finishes a duty the sheet still shows as to do; "blocked" brings its reason. */
 export function dutiesReport(tasks, today, nowHM = "", overlay = null) {
-  const mine = tasks.filter((t) => isDuty(t) && t.task && (!DAY.test(norm(t.deadline).slice(0, 10)) || norm(t.deadline).slice(0, 10) === today));
+  /* 25 Nov 2026: a duty that is only about money or Content ID claims is not shown (offhq.mjs) */
+  const mine = tasks.filter((t) => isDuty(t) && t.task && dropMoneyText(noSalvation(t.task)) && (!DAY.test(norm(t.deadline).slice(0, 10)) || norm(t.deadline).slice(0, 10) === today));
   const perOwner = {};
   for (const t of mine) perOwner[key(ownerName(t.owner))] = (perOwner[key(ownerName(t.owner))] || 0) + 1;
   const list = mine
@@ -339,7 +341,7 @@ export function dutiesReport(tasks, today, nowHM = "", overlay = null) {
         else if (said.status === "blocked") { status = "blocked"; blocker = blocker || said.message; via = "connector"; }
         else if (said.status === "working") working = true;
       }
-      return { id: norm(t.id), owner: ownerName(t.owner) || "?", task: noSalvation(t.task), blocker: noSalvation(blocker), status, due,
+      return { id: norm(t.id), owner: ownerName(t.owner) || "?", task: dropMoneyText(noSalvation(t.task)), blocker: noSalvation(blocker), status, due,
         late: status === "todo" && !!due && !!nowHM && nowHM > due, updated: norm(t.updated), ...(via ? { via } : {}), ...(working ? { working } : {}), ...(gaps ? { gaps } : {}) };
     });
   const owners = {};
@@ -607,8 +609,13 @@ export function hqModel(sheets, today, fx = {}, meta, nowHM = "", staff = null) 
   const growth = growthReport(t.Growth, today);
   const fans = fansReport(t.Fans);
   const releases = mergeReleases(releasesReport(t.Releases, today), deskReleases, today, staff && "sightings" in staff ? staff.sightings : undefined, staff && staff.now != null ? staff.now : undefined);
+  /* 25 Nov 2026: an off-HQ bot's rows (Ledger, Sheet) are not HQ's: no duty, task, count or chase */
+  const off = staff && staff.offHq instanceof Set ? staff.offHq : offHqNames(null);
+  t.Tasks = t.Tasks.filter((r) => !off.has(ownerName(r.owner).toLowerCase()));
   const team = teamReport(t.Tasks, [t.Growth, t.Songs, t.Fans], today, staff ? staff.taskOverlay || null : null);
   const money = { ...moneyReport(t.Spend, today, fx, { fixed: fixedRate(sheets.Rates), notRead }), metaSource: ms.source };
+  /* 25 Nov 2026: Luke's call for this month (keep running past the stop line), from the desk */
+  money.cap = applyCapOverride(money.cap, staff && staff.capOver);
   const empty = HQ_TABS.filter((n) => !t[n].length);
   team.duties = dutiesReport(t.Tasks, today, nowHM, staff ? staff.overlay : null);
   const sheetUpdates = sheets.Updates == null ? null : rowsToObjects(sheets.Updates);

@@ -137,11 +137,40 @@
      - the sheet's Meta spend disagreeing with Meta (by more than 1.00 on a day)
      - from the staff desk (o.board, see staffAttention()): messages waiting on Luke, the bots' connector
        switched off (income and Revolut went on 24 Nov 2026: money is no longer on HQ) */
+  /* ---- Luke's call on the month's cap (25 Nov 2026): keep running past the stop line. Amber, never red. ---- */
+  function capLeftWords(c) { return c.left >= 0 ? money(c.left, c.currency, true) + " left" : money(-c.left, c.currency, true) + " over the " + fmt(c.amount) + " cap"; }
+  function capCallPace(c) { return c && c.perDay > 0 ? "At " + money(c.perDay, c.currency, true) + " a day." : ""; }
+  function capCallMessage(c) {
+    var line = c.overrideLine || "Past the stop line on Luke's call";
+    return line + ": " + money(c.spent, c.currency, true) + " of " + fmt(c.amount) + ", " + capLeftWords(c) + "." + (capCallPace(c) ? " " + capCallPace(c) : "") + " HQ does not warn at " + fmt(c.warn) + " or " + fmt(c.stop) + " this month, and the bots report only.";
+  }
+  function capCallOn(c) {
+    var o = (c && c.override) || {};
+    var m = /^(\d{4})-(\d{2})$/.exec(String(c && c.month || ""));
+    var month = m ? MONTHS[Number(m[2]) - 1] : "this month";
+    return "Set for " + month + " only" + (o.at ? ", " + day(spStampOf(o.at).slice(0, 10)) : "") + ". Next month the usual " + fmt((c && c.warn) || 750) + " and " + fmt((c && c.stop) || 900) + " lines are back.";
+  }
+  function capCallQuestion(c) {
+    return "Keep ads running past the " + fmt((c && c.stop) || 900) + " stop line for the rest of this month? HQ stops warning and the bots only report. HQ never changes or pauses an ad.";
+  }
+  /* 25 Nov 2026: "Ledger and Sheet work outside HQ now (money → badscandal books, they report to Alfred)." */
+  function offHqLine(names) {
+    var n = (names || []).filter(Boolean);
+    if (!n.length) return "";
+    var who = n.length === 1 ? n[0] : n.slice(0, -1).join(", ") + " and " + n[n.length - 1];
+    return who + " work" + (n.length === 1 ? "s" : "") + " outside HQ now (money → badscandal books, " + (n.length === 1 ? "it reports" : "they report") + " to Alfred).";
+  }
+  /* 25 Nov 2026: a done step keeps no "waiting on Luke" / "in draft" note from before it was done */
+  function staleDoneNote(s) {
+    var done = s && (s.status === "done" || s.done === true);
+    return !!done && /\bwaiting\b|\bin draft\b|luke'?s (?:answer|yes|reply)|\bunpublished\b/i.test(String((s && s.note) || ""));
+  }
   function attention(o) {
     var sheet = o.sheet, ov = o.ov, out = [];
     if (sheet) {
       var c = sheet.money.cap;
-      if (c.status === "over") out.push({ key: "cap", text: "Ad spend is over the " + fmt(c.amount) + " cap (" + money(c.spent, c.currency, true) + "): every ad must be off now", href: "#ads" });
+      if (c.status === "lukes_call") out.push({ key: "cap", text: (c.overrideLine || "Past the stop line on Luke's call") + ": " + money(c.spent, c.currency, true) + " of " + fmt(c.amount), href: "#ads", tone: "amber" });
+      else if (c.status === "over") out.push({ key: "cap", text: "Ad spend is over the " + fmt(c.amount) + " cap (" + money(c.spent, c.currency, true) + "): every ad must be off now", href: "#ads" });
       else if (c.status === "stop") out.push({ key: "cap", text: "Ad spend is past " + fmt(c.stop) + " (" + money(c.spent, c.currency, true) + "): every ad should be off for the rest of the month", href: "#ads" });
       else if (c.status === "warn") out.push({ key: "cap", text: "Ad spend is past " + fmt(c.warn) + " (" + money(c.spent, c.currency, true) + " of " + fmt(c.amount) + ")", href: "#ads" });
       (sheet.releases || []).forEach(function (r) {
@@ -243,7 +272,8 @@
     }
     if (sheet) {
       var c = sheet.money.cap;
-      out.push({ ok: money(c.left, c.currency, true) + " left this month.", warn: "Ad spend is past " + fmt(c.warn) + ": " + money(c.spent, c.currency, true) + " of " + fmt(c.amount) + " this month.",
+      if (c.status === "lukes_call") out.push((c.overrideLine || "Past the stop line on Luke's call") + ": " + money(c.spent, c.currency, true) + " of " + fmt(c.amount) + " this month.");
+      else out.push({ ok: money(c.left, c.currency, true) + " left this month.", warn: "Ad spend is past " + fmt(c.warn) + ": " + money(c.spent, c.currency, true) + " of " + fmt(c.amount) + " this month.",
         stop: "Ad spend is past " + fmt(c.stop) + ": every ad should be off for the rest of the month.", over: "Ad spend is over the " + fmt(c.amount) + " cap: every ad must be off now." }[c.status]);
       var n = sheet.next;
       if (n) {
@@ -2289,7 +2319,7 @@
   }
 
 
-  return { rankParts: rankParts, songTile: songTile, igStatusLine: igStatusLine, igPostNumbers: igPostNumbers, fanKindWord: fanKindWord, fanFlagWord: fanFlagWord, FAN_INTRO: FAN_INTRO, FAN_EMPTY: FAN_EMPTY, FAN_ASK: FAN_ASK, FAN_BACK: FAN_BACK, artistLines: artistLines, preflightLine: preflightLine, sixWeeks: sixWeeks, pitchBlock: pitchBlock, recommendLines: recommendLines, recommendedOption: recommendedOption, releaseTrouble: releaseTrouble, navPad: navPad, signoutWords: signoutWords, growthWhen: growthWhen, ago: ago, spMs: spMs, releaseWords: releaseWords, releaseDetail: releaseDetail, healthRows: healthRows, healthState: healthState, median: median, change: change, money: money, attention: attention, briefing: briefing,
+  return { rankParts: rankParts, songTile: songTile, igStatusLine: igStatusLine, igPostNumbers: igPostNumbers, fanKindWord: fanKindWord, fanFlagWord: fanFlagWord, FAN_INTRO: FAN_INTRO, FAN_EMPTY: FAN_EMPTY, FAN_ASK: FAN_ASK, FAN_BACK: FAN_BACK, artistLines: artistLines, preflightLine: preflightLine, sixWeeks: sixWeeks, pitchBlock: pitchBlock, recommendLines: recommendLines, recommendedOption: recommendedOption, releaseTrouble: releaseTrouble, navPad: navPad, signoutWords: signoutWords, growthWhen: growthWhen, ago: ago, spMs: spMs, releaseWords: releaseWords, releaseDetail: releaseDetail, healthRows: healthRows, healthState: healthState, median: median, change: change, money: money, attention: attention, briefing: briefing, capCallMessage: capCallMessage, capCallPace: capCallPace, capCallOn: capCallOn, capCallQuestion: capCallQuestion, offHqLine: offHqLine, staleDoneNote: staleDoneNote,
     snapshot: snapshot, changesSince: changesSince, tiles: tiles, adsBySong: adsBySong, summaryText: summaryText, shortStep: shortStep, day: day,
     slug: slug, workerLabel: workerLabel, sortWorkers: sortWorkers, workerView: workerView, dutyWhen: dutyWhen, workerCounts: workerCounts, seenLine: seenLine, connectorLine: connectorLine,
     novaMessage: novaMessage, liveFeed: liveFeed, spWhen: spWhen, waitLabel: waitLabel, needWords: needWords, reportParts: reportParts, siteCheckLine: siteCheckLine, composeNames: composeNames,

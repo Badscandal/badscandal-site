@@ -126,9 +126,10 @@ test("connector: a bot's whole day, end to end (the sheet isn't connected in thi
   assert.match((await tool("resolve_message", { bot: "Atlas", id: ask.id })).content[0].text, /waiting on Ledger, not on you/, "a bot can't close what isn't its own");
   assert.equal((await tool("set_my_card", { bot: "Atlas", working_on: "Backfilling Touch Me" })).data.saved, true);
   const team = (await tool("team_board", { bot: "Nova" })).data;
-  assert.equal(team.team.length, 14); assert.equal(team.duties, "not read"); assert.equal(team.waiting_on_luke.length, 1);
-  assert.equal(team.team.find((w) => w.name === "Ledger").last_update.includes("working: Checking Wise"), true); assert.equal(team.team.find((w) => w.name === "Atlas").working_on, "Backfilling Touch Me");
-  assert.match(team.team.find((w) => w.name === "Ledger").last_used_the_desk, /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/, "São Paulo time, not UTC"); assert.equal(team.team.find((w) => w.name === "Verse").last_used_the_desk, "never");
+  /* 25 Nov 2026: Ledger and Sheet are off HQ (offHq): not on Team, so 12, and Ledger's update is not listed */
+  assert.equal(team.team.length, 12); assert.equal(team.duties, "not read"); assert.equal(team.waiting_on_luke.length, 1);
+  assert.equal(team.team.some((w) => w.name === "Ledger"), false); assert.equal(team.team.find((w) => w.name === "Atlas").working_on, "Backfilling Touch Me");
+  assert.match(team.team.find((w) => w.name === "Atlas").last_used_the_desk, /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/, "São Paulo time, not UTC"); /* 25 Nov 2026: Ledger is off Team */ assert.equal(team.team.find((w) => w.name === "Verse").last_used_the_desk, "never");
   const brief = (await tool("luke_briefing", { bot: "Alfred" })).data;
   assert.equal(brief.ad_spend, "not read", "a number that could not be read is never 0"); assert.equal(brief.decisions_waiting_on_luke[0].options.length, 2); assert.equal(brief.income_this_month.received, "Money is no longer on HQ."); /* 24 Nov 2026: money removed from HQ */
   assert.match((await tool("read_guide", { bot: "Verse" })).content[0].text, /has not been loaded/);
@@ -143,7 +144,7 @@ test("staff api: Luke's login reads the board, writes and settles; he can switch
   assert.equal((await api("board")).status, 401); assert.deepEqual(await (await api("board")).json(), { error: "Not logged in" });
   assert.equal((await api("board", { headers: { authorization: "Bearer " + ENV.STAFF_BOT_KEY } })).status, 403, "the bots' key opens the connector only");
   const b = await (await api("board", { headers: { cookie } })).json();
-  assert.equal(b.staff.length, 14); assert.equal(b.waiting.luke.length, 1); assert.equal(b.income, undefined); /* 24 Nov 2026: money removed from HQ */ assert.equal(b.connector.lastUsed.bot.length > 0, true); assert.deepEqual(b.keys, { bots: true, claude: true });
+  assert.equal(b.staff.length, 12); /* 25 Nov 2026: Ledger and Sheet off HQ */ assert.equal(b.waiting.luke.length, 1); assert.equal(b.income, undefined); /* 24 Nov 2026: money removed from HQ */ assert.equal(b.connector.lastUsed.bot.length > 0, true); assert.deepEqual(b.keys, { bots: true, claude: true });
   assert.equal(b.hqRead, false);
   const send = (body, headers = {}) => api("message", { method: "POST", headers: { cookie, "content-type": "application/json", ...headers }, body: JSON.stringify(body) });
   assert.equal((await send({ to: "Nova", text: "Yes to Survivors." }, { origin: "https://evil.example" })).status, 403);
@@ -168,7 +169,7 @@ test("staff api: the sample is made up, needs the login, and never opens the rea
   assert.equal((await api("board?sample=1")).status, 401);
   globalThis.__asked.length = 0;
   const s = await (await api("board?sample=1", { headers: { cookie } })).json();
-  assert.equal(s.sample, true); assert.equal(s.staff.length, 14); assert.equal(s.waiting.luke.length, 6); /* + a profile image waiting for yes, L12, 18 Nov 2026 */ assert.equal(s.income, undefined); /* 24 Nov 2026: money removed from HQ */
+  assert.equal(s.sample, true); assert.equal(s.staff.length, 12); /* 25 Nov 2026: Ledger and Sheet off HQ */ assert.equal(s.waiting.luke.length, 6); /* + a profile image waiting for yes, L12, 18 Nov 2026 */ assert.equal(s.income, undefined); /* 24 Nov 2026: money removed from HQ */
   assert.deepEqual(globalThis.__asked, [], "no store was opened");
   assert.equal((await (await api("message?sample=1", { method: "POST", headers: { cookie }, body: JSON.stringify({ to: "Nova", text: "hello" }) })).json()).sample, true);
   assert.deepEqual(globalThis.__asked, []);

@@ -149,7 +149,8 @@ test("one list: messages, Spotify questions, cards (held ones too) and red accou
   const d = memoryDesk();
   const m = await lyricsAsk(d, NOW - 3600000);
   const other = (await S.sendMessage(d, NOW, R, { from: "Kevin", to: "Luke", needs: "reply", text: "A made-up question" })).message;
-  const pay = await C.saveCard(d, NOW, R, { by: "Ledger", kind: "payment", text: "Pay the made-up studio 12.", dedupe_key: "p-1", action: "pay it", amount: 12, currency: "USD", recipient: "Made Up Studio" });
+  /* 25 Nov 2026: Ledger and Sheet are off HQ and money asks never reach Needs you, so the made-up asker is an on-HQ bot */ 
+  const pay = await C.saveCard(d, NOW, R, { by: "Drop", kind: "payment", text: "Pay the made-up studio 12.", dedupe_key: "p-1", action: "pay it", amount: 12, currency: "USD", recipient: "Made Up Studio" });
   const note = await C.saveCard(d, NOW, R, { by: "Nova", kind: "message", text: "Send the made-up note.", dedupe_key: "n-1", action: "send it" });
   const report = { accounts: [{ id: "ig", label: "Instagram", state: "red" }, { id: "yt", label: "YouTube", state: "watch" }], connection: { state: "down", text: "made up" } };
   await import("../js/hq-lib.js");
