@@ -12,6 +12,7 @@ No money amounts, payer names or account numbers in this file: the repo is publi
 
 | When | PR | What |
 |------|----|------|
+| 25 Nov | #127 | Social Farm › Edits: review, approve/reject (reason, 10-min undo) and make lyric edits from the Drive folder; Jobs, Stock, Scores. Needs the Drive folder shared + `EDITS_DRIVE_FOLDER_ID`. Cache `bs-hq-v19`. |
 | 25 Nov | #126 | Team clean-up: Ledger and Sheet off Team, counts, the check and the chase (`offHq`; their my_day still answers); money and Content ID wording dropped from duty and card text; no money ask or off-HQ ask on Needs you; Luke's call on the month's cap (Ads cap card, Luke only, this month only): amber, no 750/900 alerts, the bots report only. 804 tests. |
 | 25 Nov | #125 | Needs you tidy: Done on a Nova task card works and holds until the task changes; money tasks and bot card lines older than 2 days are off Needs you; no Messages tab (`#messages` lands on Needs you, "You answered" folded there); Waiting on others moved to Team. 794 tests. |
 | 24 Nov | #124 | Ads per song: total ad spend on top (with the month's cap), then each song (tap: spend by platform, taps, cost per tap, its ads, Return not logged yet), Meta events health at the bottom. |
@@ -84,7 +85,7 @@ No money amounts, payer names or account numbers in this file: the repo is publi
 
 ## In flight
 
-- `hq-farm-edits`: Social Farm › Edits (the edit machine's review screen on HQ). Waiting for Luke's look at the preview.
+- None.
 
 ## Next up
 
