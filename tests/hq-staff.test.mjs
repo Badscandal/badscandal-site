@@ -176,18 +176,18 @@ test("the server's made-up board goes through every rule without a hitch", () =>
   assert.equal(L.composeNames(b.names).length, b.staff.length + 1, "every bot and Everyone (24 Nov 2026: not Claude)");
 });
 
-test("the page: Messages is the tenth tab, the new script is kept offline, and nothing pops a browser dialog", () => {
+test("the page: Messages is no longer a tab, the new script is kept offline, and nothing pops a browser dialog", () => {
   const page = readFileSync(new URL("../hq.html", import.meta.url), "utf8");
   const shell = readFileSync(new URL("../js/hq-shell.js", import.meta.url), "utf8");
   const staff = readFileSync(new URL("../js/hq-staff.js", import.meta.url), "utf8");
   const sw = readFileSync(new URL("../hq-sw.js", import.meta.url), "utf8");
-  assert.match(page, /<section class="card view" id="messages">/);
+  /* 25 Nov 2026 (Luke: "messages section is pointless"): kept hidden, not a tab; #messages lands on Needs you */
+  assert.match(page, /<section class="card view" id="messages" hidden>/);
   assert.match(page, /<script src="js\/hq-staff\.js\?v=[0-9a-f]+" defer><\/script>/);
   assert.ok(page.indexOf("js/hq.js?v=") < page.indexOf("js/hq-staff.js?v=") && page.indexOf("js/hq-staff.js?v=") < page.indexOf("js/hq-shell.js?v="), "after hq.js (it uses window.HQ), before the shell routes");
-  assert.equal(page.split('href="#messages" data-tab="messages"').length - 1, 2, "in the rail and in the More sheet");
-  assert.ok(page.indexOf('href="#team"') < page.indexOf('href="#messages"'), "after the nine");
-  assert.match(shell, /TABS = \["today", "songs", "ads", "pages", "growth", "profiles", "releases", "team", "messages"\]/); /* 24 Nov 2026: Rights and Money gone */
-  assert.match(shell, /MORE = \[[^\]]*"messages"\]/);
+  assert.equal(page.split('data-tab="messages"').length - 1, 0, "not in the rail or the More sheet");
+  assert.match(shell, /TABS = \["today", "songs", "ads", "pages", "growth", "profiles", "releases", "team"\]/); /* 24 Nov 2026: Rights and Money gone; 25 Nov: Messages gone */
+  assert.match(shell, /messages: "today"/);
   assert.doesNotMatch(shell, /scrollBy\(/, "the deep link is one plain jump");
   assert.doesNotMatch(page, /scroll-behavior:\s*smooth/);
   /* 19 Nov 2026: interactive charts. Cache is v12 so phones drop the old shell. */

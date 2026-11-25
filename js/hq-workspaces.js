@@ -75,10 +75,7 @@
     if (auto.quiet && auto.held && auto.held.length) h += '<p class="dnone">Quiet hours until 08:00. These wait.</p>' + stack(auto.held, false);
     if (v.needs && v.needs.length) h += "<ul>" + v.needs.map(function (n) { return "<li>" + esc(n.text) + "</li>"; }).join("") + "</ul>";
     else if (!cards.length && !(auto.held && auto.held.length)) h += '<p class="dnone">Nothing is waiting on you.</p>';
-    var others = auto.waitingOnOthers || [];
-    if (others.length) h += '<section class="waitlane"><h3>Waiting on others</h3><ul>' + others.map(function (it) {
-      return '<li class="' + (it.tone === "bad" ? "bad" : "") + '"><b>' + esc(it.name) + "</b> " + esc(it.text) + "</li>";
-    }).join("") + "</ul></section>";
+    /* 25 Nov 2026 (Luke): what waits on the bots is not on Needs you */
     return h + "</div>";
   }
   function team(v) {

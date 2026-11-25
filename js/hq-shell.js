@@ -6,14 +6,16 @@
 (function () {
   "use strict";
   var $ = function (id) { return document.getElementById(id); };
-  var TABS = ["today", "songs", "ads", "pages", "growth", "profiles", "releases", "team", "messages"];
+  /* 25 Nov 2026 (Luke: "messages section is pointless"): Messages is no longer a tab. What waits on him is
+     on Needs you, and so is "You answered". #messages and #messages/<id> (push alerts, old links) land there. */
+  var TABS = ["today", "songs", "ads", "pages", "growth", "profiles", "releases", "team"];
   /* ads sits behind More on the phone; releases and team are on the bar (18 Nov 2026). 24 Nov 2026 (Luke):
      Rights and Money are gone, and Songs takes Money's place on the bar. The desktop rail lists every tab. */
-  var MORE = ["ads", "pages", "growth", "profiles", "messages"];
+  var MORE = ["ads", "pages", "growth", "profiles"];
   /* addresses that moved: Fans is a part of the Growth & Fans page since 12 Nov 2026 (Luke: "growth and
      fans can be on the same page"); an old #fans link or bookmark lands on that part */
   /* 24 Nov 2026: #rights and #money (removed) land on Needs you, and #disputes on Songs' disputes */
-  var ALIAS = { fans: "growth/fans", rights: "today", money: "today", disputes: "songs/disputes" };
+  var ALIAS = { fans: "growth/fans", rights: "today", money: "today", disputes: "songs/disputes", messages: "today" };
   var KEY = "bs_hq_tab";
 
   function tabFromHash() {

@@ -98,15 +98,6 @@
     }).join("");
     return '<section class="waitlane you" aria-label="Waiting on you"><h2>Waiting on you</h2><ul>' + rows + "</ul></section>";
   }
-  function othersHtml(items) {
-    if (!items || !items.length) return "";
-    return '<section class="waitlane"><h2>Waiting on others</h2><ul>' + items.map(function (it) {
-      var meta = [];
-      if (it.ticket) meta.push(it.ticket);
-      if (it.days != null) meta.push(window.HQLib.waitedWords(it.days));
-      return '<li class="' + (it.tone === "bad" ? "bad" : "") + '"><b>' + esc(it.name) + "</b> " + esc(it.text) + (meta.length ? "<small>" + esc(meta.join(" · ")) + "</small>" : "") + "</li>";
-    }).join("") + "</ul></section>";
-  }
   function sendChoice(id, choice, text) {
     if (!window.HQ || HQ.sample) return;
     HQ.postJSON("/api/staff/card", { id: id, choice: choice, text: text || "" }).then(function (res) {
@@ -148,7 +139,7 @@
       if (!items.length) decision += '<p class="dnone">Nothing is waiting on you.</p>';
     }
     decision += healthDots(health);
-    if (auto) decision += othersHtml(auto.waitingOnOthers);
+    /* 25 Nov 2026 (Luke): what waits on the bots is on Team only, not here (js/hq-staff.js drawOthers) */
     if (snoozedN) decision += '<p class="wcount">' + snoozedN + " snoozed on this phone (still counted above)</p>";
     var covers = {};
     ((ov && ov.songs) || []).forEach(function (s) { if (s && s.title) covers[s.title] = s.cover || ""; });
