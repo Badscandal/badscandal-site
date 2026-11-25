@@ -193,7 +193,15 @@
   }
   /* 25 Nov 2026 (Luke: "any info regarding bots should only be in the team section"): Waiting on others
      moved here from Needs you, folded */
+  /* 25 Nov 2026: one quiet line for the bots that work outside HQ now (offHq on the roster) */
+  function drawOffHq() {
+    var el = $("offHqLine"); if (!el) return;
+    var names = (board && board.offHq) || [];
+    el.hidden = !names.length;
+    el.textContent = names.length ? L.offHqLine(names) : "";
+  }
   function drawOthers() {
+    drawOffHq();
     var el = $("othersFold"); if (!el) return;
     var items = (board && board.auto && board.auto.waitingOnOthers) || [];
     el.hidden = !items.length;
@@ -692,7 +700,7 @@
     return '<li class="' + (st.done ? "done" : st.bad ? "bad" : st.skipped ? "skip" : st.waiting ? "wait" : "") + '"><i aria-hidden="true"></i><div class="rs"><b>' + esc(s.label) + "</b>" +
       '<span class="ro">' + esc((mine ? "You" : s.owner) + (s.due && !quiet ? " · due " + L.day(s.due) : "")) + "</span>" +
       '<span class="rline"><span class="rw">' + esc(cap(st.text)) + "</span>" + (lk || btn ? '<span class="racts2">' + lk + btn + "</span>" : "") + "</span>" +
-      (s.note && !st.bad && !st.waiting && !st.skipped ? '<span class="rn">' + esc(s.note) + "</span>" : "") + "</div></li>";
+      (s.note && !st.bad && !st.waiting && !st.skipped && !L.staleDoneNote(s) ? '<span class="rn">' + esc(s.note) + "</span>" : "") + "</div></li>";
   }
   /* the inline questions under a card: a new release day, or cancelling */
   function relAsk(v) {
@@ -975,7 +983,7 @@
       return '<article class="relrow"><button type="button" class="relrow-h" data-rel="time" data-id="' + esc(r.id) + '"><i class="sdot ' + esc(r.store.tone) + '" aria-label="' + esc(r.store.label) + '"></i><b>' + esc(r.title) + '</b><span>' + esc(r.when) + '</span><span class="rdots">' + r.dots.map(function (d) { return '<i class="' + (d.on ? "on" : "") + '" title="' + esc(d.label) + '"></i>'; }).join("") + '</span></button>' +
         (open ? '<ol class="tl-v">' + tl.map(function (s) {
           var when = HQLook.stampDay ? HQLook.stampDay(s.at, L) : "";
-          var sub = s.note || (s.done && when ? when : "");
+          var sub = (L.staleDoneNote(s) ? "" : s.note) || (s.done && when ? when : "");
           return '<li class="' + (s.bad ? "bad" : s.done ? "ok" : "") + '"><b>' + esc(s.label) + "</b>" + (sub ? "<span>" + esc(sub) + "</span>" : "") + "</li>"; }).join("") + "</ol>" +
           (ready ? '<div class="readybox"><p>' + esc(ready.line) + "</p>" + (ready.items.length ? "<ul>" + ready.items.map(function (i) { return "<li>" + esc(i) + "</li>"; }).join("") + "</ul>" : "") + "</div>" : "") : "") + "</article>";
     }).join("") + key;

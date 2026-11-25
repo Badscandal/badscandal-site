@@ -57,9 +57,10 @@ test("push api: register -> waiting -> unregister", async () => {
 
   const empty = await (await call("waiting", { headers: { cookie } })).json();
   assert.deepEqual(empty, { count: 0, items: [] });
-  const m = (await S.sendMessage(desk(), Date.now(), S.DEFAULT_ROSTER, { from: "Ledger", to: "Luke", text: "Is USD 1,234.56 from the label right?", needs: "decision" })).message;
+  /* 25 Nov 2026: Ledger and Sheet are off HQ and money asks never reach Needs you, so the made-up asker is an on-HQ bot */ 
+  const m = (await S.sendMessage(desk(), Date.now(), S.DEFAULT_ROSTER, { from: "Forge", to: "Luke", text: "Is USD 1,234.56 of ad spend on the label campaign right?", needs: "decision" })).message;
   const w = await (await call("waiting", { headers: { cookie } })).json();
-  assert.deepEqual(w, { count: 1, items: [{ key: "m:" + m.id, kind: "message", id: m.id, text: "Ledger asked you to decide something", href: "#messages/" + m.id }] });
+  assert.deepEqual(w, { count: 1, items: [{ key: "m:" + m.id, kind: "message", id: m.id, text: "Forge asked you to decide something", href: "#messages/" + m.id }] });
   const sample = await (await call("waiting?sample=1", { headers: { cookie } })).json();
   assert.equal(sample.sample, true);
   assert.ok(sample.count >= 2 && sample.items.every((x) => x.key && x.href.startsWith("#")), "the made-up desk has things waiting");

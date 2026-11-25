@@ -7,7 +7,7 @@ import * as P from "../netlify/lib/push.mjs";
 import { memoryDesk } from "../netlify/lib/staff-sample.mjs";
 
 const MIN = 60000, HOUR = 3600000;
-const R = S.DEFAULT_ROSTER;
+const R = S.DEFAULT_ROSTER.filter((b) => !b.offHq); /* 25 Nov 2026: Ledger and Sheet are off HQ and money asks never reach Needs you, so the made-up asker is an on-HQ bot */
 const pair = await crypto.subtle.generateKey({ name: "ECDSA", namedCurve: "P-256" }, true, ["sign", "verify"]);
 const KEY = Buffer.from(await crypto.subtle.exportKey("pkcs8", pair.privateKey)).toString("base64");
 const ENV = (o = { APNS_KEY: KEY, APNS_KEY_ID: "TESTKEY123", APNS_TEAM_ID: "TEAMTEST12" }) => (k) => o[k];
@@ -303,7 +303,7 @@ test("a card and a red account are on the badge too, and their alert names who, 
   await P.registerDevice(d, DAY0, dev(tok("c")));
   const m1 = (await ask(d, DAY0)).message;
   await P.sweep(d, DAY0 + MIN, { desk: () => needsDesk(d, DAY0 + MIN, { report: null }), env: ENV(), send: f.send });
-  await C.saveCard(d, DAY0 + 20 * MIN, R, { by: "Ledger", kind: "payment", text: "Pay the made-up studio.", dedupe_key: "pay-x", action: "pay it", amount: 99, currency: "EUR", recipient: "Made Up Studio" });
+  await C.saveCard(d, DAY0 + 20 * MIN, R, { by: "Drop", kind: "payment", text: "Pay the made-up studio.", dedupe_key: "pay-x", action: "pay it", amount: 99, currency: "EUR", recipient: "Made Up Studio" });
   const report = { accounts: [{ id: "tiktok", label: "TikTok", state: "red" }] };
   const r = await P.sweep(d, DAY0 + 30 * MIN, { desk: () => needsDesk(d, DAY0 + 30 * MIN, { report }), env: ENV(), send: f.send });
   assert.equal(r.newKeys.length, 2);
@@ -314,5 +314,5 @@ test("a card and a red account are on the badge too, and their alert names who, 
   const one = await P.sweep(d, DAY0 + 50 * MIN, { desk: () => needsDesk(d, DAY0 + 50 * MIN, { report }), env: ENV(), send: f.send });
   assert.deepEqual(one.newKeys, [], "nothing new: no second buzz");
   const items = S.waitingOnLuke(await needsDesk(d, DAY0, { report }), "2026-11-12", DAY0);
-  assert.deepEqual(items.filter((x) => x.kind !== "message").map((x) => x.text).sort(), ["Ledger needs your yes or no", "TikTok needs a look"]);
+  assert.deepEqual(items.filter((x) => x.kind !== "message").map((x) => x.text).sort(), ["Drop needs your yes or no", "TikTok needs a look"]);
 });

@@ -13,7 +13,7 @@ import { hqModel, HQ_TABS } from "./hq.mjs";
 import { sampleMeta, sampleSheets } from "./hq-sample.mjs";
 import { EXPIRED_CODE, keyHealth, readKeyHealth, readMeta } from "./metaread.mjs";
 import { DEFAULT_ACCOUNT } from "./metaspend.mjs";
-import { dutyOverlay, getSightings, getTaskOverlay, listGrowth, listReleases, listSpend, listUpdates, releaseView, spDay, spHM } from "./staff.mjs";
+import { dutyOverlay, getCapOverride, getRoster, getSightings, getTaskOverlay, listGrowth, listReleases, listSpend, listUpdates, offHqNames, releaseView, spDay, spHM } from "./staff.mjs";
 import { sampleReleases, sampleSightings } from "./staff-sample.mjs";
 
 /* the sheet is read at most every 2 minutes so the bots' live updates show quickly; one batch read
@@ -75,10 +75,12 @@ const live = (list, today, sightings) => list.filter((r) => r && r.status !== "c
 async function staffSide(desk, now) {
   if (!desk) return null;
   try {
-    const [updates, releases, sightings, taskOverlay, spend, growth] = await Promise.all([listUpdates(desk, now, 3), listReleases(desk).catch(() => []), getSightings(desk).catch(() => undefined), getTaskOverlay(desk).catch(() => null),
-      listSpend(desk, now).catch(() => []), listGrowth(desk, now).catch(() => [])]);
+    const [updates, releases, sightings, taskOverlay, spend, growth, roster, capOver] = await Promise.all([listUpdates(desk, now, 3), listReleases(desk).catch(() => []), getSightings(desk).catch(() => undefined), getTaskOverlay(desk).catch(() => null),
+      listSpend(desk, now).catch(() => []), listGrowth(desk, now).catch(() => []), getRoster(desk).catch(() => null), getCapOverride(desk, spDay(now).slice(0, 7)).catch(() => null)]);
+    /* 25 Nov 2026: off-HQ bots (offHq on the roster) and Luke's cap call for this month */
+    const offHq = offHqNames(roster);
     /* undefined = the report could not be read: the sheet's late pitch is then left as the sheet says */
-    return { updates, overlay: dutyOverlay(updates, spDay(now)), taskOverlay, releases: live(releases, spDay(now), sightings || null), now, spend, growth, ...(sightings === undefined ? {} : { sightings }) };
+    return { updates, overlay: dutyOverlay(updates, spDay(now), offHq), offHq, capOver, taskOverlay, releases: live(releases, spDay(now), sightings || null), now, spend, growth, ...(sightings === undefined ? {} : { sightings }) };
   } catch { return null; }
 }
 

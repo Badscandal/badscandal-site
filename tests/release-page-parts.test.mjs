@@ -84,7 +84,8 @@ test("roster_card: Nova fixes a bot's job card on the desk; others can't", async
   const drop = (await S.getRoster(d)).find((b) => b.name === "Drop");
   assert.deepEqual([drop.duty, drop.time, drop.schedule.length], ["Where every release is at the distributor (no royalties: that is Ledger's)", "09:20", 1]);
   const md = await call(d, "my_day", { bot: "Drop" });
-  assert.match(md.daily_duty, /no royalties/);
+  /* 25 Nov 2026: what HQ shows drops the money clause; the stored card keeps Nova's words */
+  assert.equal(md.daily_duty, "Where every release is at the distributor");
   await fails(call(d, "roster_card", { bot: "Kevin", for: "Drop", duty: "x" }), /Nova/);
   await fails(call(d, "roster_card", { bot: "Nova", for: "Drop", time: "9am" }), /HH:MM/);
 });

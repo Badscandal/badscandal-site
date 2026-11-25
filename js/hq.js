@@ -395,8 +395,11 @@
 
   /* ---------- Today ---------- */
   function capMessage(c) {
+    /* 25 Nov 2026: Luke's call for this month (keep running past the stop line): amber, never red; spent, left and pace stay */
+    if (c.status === "lukes_call") return L.capCallMessage(c);
     var msg = { ok: money(c.left, c.currency) + " left.", warn: "Getting close: past " + money(c.warn, c.currency) + ".", stop: "Past " + money(c.stop, c.currency) + ": every ad should be off for the rest of the month.", over: "OVER the cap. Every ad must be off now." }[c.status] || "";
     if (c.status === "ok" && c.perDay > 0) msg += " At " + money(c.perDay, c.currency) + " a day " + (c.stopDay ? "the " + fmt(c.stop) + " line comes around day " + c.stopDay + "." : "the month ends under the line.");
+    if (c.override && c.overrideLine) msg += " " + c.overrideLine + ".";
     return msg;
   }
   function paintBar(c, fill, warn, stop) {
@@ -412,15 +415,16 @@
     return bits.length ? ' · <span class="attn">' + esc(bits.join(" · ")) + "</span>" : " · on time";
   }
   function drawToday() {
-    var c = sheet.money.cap, attn = c.status !== "ok";
+    var c = sheet.money.cap, call = c.status === "lukes_call", attn = c.status !== "ok" && !call;
     $("capMonth").textContent = monthName(c.month);
     $("todaySub").textContent = day(sheet.today);
     $("capTile").className = "t-card t-cap " + c.status;
     $("capSpent").innerHTML = esc(money(c.spent, c.currency)) + " <small>of " + esc(fmt(c.amount)) + "</small>";
     paintBar(c, "capFill", "capWarn", "capStop");
-    var line = { ok: money(c.left, c.currency) + " left", warn: "Past " + fmt(c.warn) + ": getting close", stop: "Past " + fmt(c.stop) + ": every ad should be off", over: "Over the cap: every ad must be off now" }[c.status] || "";
+    var line = call ? c.overrideLine : { ok: money(c.left, c.currency) + " left", warn: "Past " + fmt(c.warn) + ": getting close", stop: "Past " + fmt(c.stop) + ": every ad should be off", over: "Over the cap: every ad must be off now" }[c.status] || "";
     var pace = c.status === "ok" && c.perDay > 0 ? (c.stopDay ? "At this pace the " + fmt(c.stop) + " line comes on the " + ordinal(c.stopDay) + "." : "On pace to stay under " + fmt(c.stop) + ".") : "";
-    $("capShort").innerHTML = '<b class="' + (attn ? "attn" : "") + '">' + esc(line) + "</b>" + (pace ? " · " + esc(pace) : "");
+    if (call) pace = L.capCallPace(c);
+    $("capShort").innerHTML = '<b class="' + (attn ? "attn" : call ? "amber" : "") + '">' + esc(line) + "</b>" + (pace ? " · " + esc(pace) : "");
     var n = sheet.next;
     $("nextSong").textContent = broken("Releases") ? "Can't be read" : n ? n.song : "None set";
     $("nextMsg").innerHTML = broken("Releases") ? '<span class="attn">The Releases tab in the sheet shows an error.</span>' : n ? "<b>" + (n.daysToGo === 0 ? "Out today" : n.daysToGo + " day" + (n.daysToGo === 1 ? "" : "s")) + "</b> · " + esc(day(n.date)) +
@@ -450,8 +454,9 @@
     var lead = br.slice(0, 1), rest = br.slice(1);
     $("brief").innerHTML = lead.map(function (x) { return "<p>" + esc(x) + "</p>"; }).join("") +
       (rest.length ? '<details class="fold"><summary>The rest of the note</summary>' + rest.map(function (x) { return "<p>" + esc(x) + "</p>"; }).join("") + "</details>" : "");
-    $("attnCard").classList.toggle("has", att.length > 0);
-    var item = function (a) { return '<li><a href="' + esc(a.href) + '"' + (a.href === "#health" ? " data-health" : "") + ">" + esc(a.text) + "</a></li>"; };
+    /* 25 Nov 2026: Luke's call on the cap is amber, so it alone never turns the card red */
+    $("attnCard").classList.toggle("has", att.some(function (a) { return a.tone !== "amber"; }));
+    var item = function (a) { return '<li' + (a.tone === "amber" ? ' class="amber"' : "") + '><a href="' + esc(a.href) + '"' + (a.href === "#health" ? " data-health" : "") + ">" + esc(a.text) + "</a></li>"; };
     var top = att.slice(0, 4), moreAtt = att.slice(4);
     $("attnList").innerHTML = att.length ? top.map(item).join("") + (moreAtt.length ? '<li class="foldli"><details class="fold"><summary>' + moreAtt.length + " more</summary><ul class=\"attn-list\">" + moreAtt.map(item).join("") + "</ul></details></li>" : "") : '<li class="calm">Nothing needs attention.</li>';
     $("tilesRange").textContent = ov ? "· " + (ov.range === "today" ? "today" : ov.range === "custom" ? day(ov.from) + " to " + day(ov.to) : "last " + ov.days + " days") + " for ads and taps" : "";
@@ -609,6 +614,7 @@
       paintBar(c, "capFill2", "capWarn2", "capStop2");
       $("capMsg").textContent = capMessage(c) + (c.estimated ? " The total is an estimate." : "");
     }
+    drawCapCall();
     var box = $("adsSongList");
     if (!v.ready) { box.innerHTML = '<div class="ph"></div><div class="ph"></div>'; return; }
     var open = {};
@@ -630,6 +636,43 @@
     if (v.metaNote) h += '<p class="note">' + esc(v.metaNote) + "</p>";
     box.innerHTML = h;
   }
+  /* 25 Nov 2026: Luke's call on the month's cap. Only Luke sets it (POST /api/staff/capover, his login), for this
+     month only. HQ then stops warning about 750 / 900 and the bots report only. Nothing here changes an ad. */
+  var capAsk = false, capBusy = false, capErr = "", capNote = "";
+  function drawCapCall() {
+    var el = $("capCall"); if (!el) return;
+    var c = sheet && sheet.money && sheet.money.cap;
+    if (!c) { el.innerHTML = ""; return; }
+    var dis = sample || capBusy ? " disabled" : "";
+    var h = "";
+    if (c.override) {
+      h = '<p class="capcall-on">' + esc(L.capCallOn(c)) + '</p><button class="linkbtn" type="button" data-capcall="off"' + dis + ">Take it back: warn at " + esc(fmt(c.stop)) + " again</button>";
+    } else if (!capAsk) {
+      h = '<button class="copybtn" type="button" data-capcall="ask"' + dis + ">Keep ads running past the stop line this month</button>";
+    } else {
+      h = '<div class="confirm" role="group"><label class="flbl" for="capNote">A short note (why)</label><input class="fld" id="capNote" maxlength="140" autocomplete="off" placeholder="e.g. Me Dá Seu Body campaign" value="' + esc(capNote) + '">' +
+        "<p>" + esc(L.capCallQuestion(c)) + "</p>" +
+        '<button class="sendbtn" type="button" data-capcall="yes"' + dis + ">" + (capBusy ? "Saving…" : "Yes, keep them running") + '</button><button class="copybtn" type="button" data-capcall="cancel">Cancel</button></div>';
+    }
+    if (sample) h += '<p class="d">The sample: this is switched off here.</p>';
+    el.innerHTML = h + (capErr ? '<p class="ferr" role="alert">' + esc(capErr) + "</p>" : "");
+  }
+  document.addEventListener("input", function (ev) { if (ev.target && ev.target.id === "capNote") capNote = ev.target.value; });
+  document.addEventListener("click", function (ev) {
+    var b = ev.target && ev.target.closest ? ev.target.closest("[data-capcall]") : null;
+    if (!b) return;
+    var act = b.getAttribute("data-capcall");
+    capErr = "";
+    if (act === "ask") { capAsk = true; drawCapCall(); var f = $("capNote"); if (f) f.focus(); return; }
+    if (act === "cancel") { capAsk = false; drawCapCall(); return; }
+    if (sample || capBusy) return;
+    capBusy = true; drawCapCall();
+    postJSON("/api/staff/capover", act === "off" ? { off: true } : { note: capNote }).then(function (res) {
+      capBusy = false;
+      if (res && res.s === 200 && res.j && res.j.ok) { capAsk = false; capNote = ""; refresh(); return; }
+      capErr = (res && res.j && res.j.error) || "Couldn't save that."; drawCapCall();
+    }, function () { capBusy = false; capErr = "No connection. Nothing was saved."; drawCapCall(); });
+  });
   function drawAds() {
     drawAdsTop();
     drawHealth();

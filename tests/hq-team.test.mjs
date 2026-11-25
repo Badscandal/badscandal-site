@@ -18,13 +18,14 @@ test("teamGroups: stuck = blocked or late; haven't checked in = quiet; the rest 
   /* 24 Nov 2026, Luke: money removed from HQ. Ledger and Sheet wait for new work: no duty time, so Sheet is no
      longer "quiet", and the sample's Ledger payment update is gone */
   assert.deepEqual(g.quiet.map((w) => w.name), ["Alfred", "Verse", "Webmaster"]);
-  assert.deepEqual(g.onTrack.map((w) => w.name), ["Forge", "Atlas", "Steve", "Ledger", "Licence", "Nova", "Sheet"]);
+  /* 25 Nov 2026: Ledger and Sheet are off HQ (offHq): not on Team at all */
+  assert.deepEqual(g.onTrack.map((w) => w.name), ["Forge", "Atlas", "Steve", "Licence", "Nova"]);
   assert.equal(g.stuck.length + g.quiet.length + g.onTrack.length, views.length, "every bot once");
   assert.deepEqual(L.teamGroups([]), { stuck: [], quiet: [], onTrack: [] });
 });
 
 test("teamCounts: the three numbers on top", () => {
-  assert.deepEqual(L.teamCounts(views), { stuck: 4, quiet: 3, onTrack: 7, total: 14 }); /* 24 Nov 2026: Sheet waits for new work, not quiet */
+  assert.deepEqual(L.teamCounts(views), { stuck: 4, quiet: 3, onTrack: 5, total: 12 }); /* 24 Nov 2026: Sheet waits for new work, not quiet; 25 Nov: Ledger and Sheet off HQ */
 });
 
 test("botProblems: only what is wrong, in words, blocked before late; nothing for a bot on track", () => {
@@ -44,7 +45,7 @@ test("botNext: one line for the compact row", () => {
   assert.equal(L.botNext(bot("Verse"), b.today), "No update today", "the lyrics wait for the release day (15 Nov 2026): nothing to do yet");
   assert.equal(L.botNext(bot("Webmaster"), b.today), "Working on: Song page live on badscandal.com · Me Dá Seu Body", "a step already being worked on comes first");
   assert.equal(L.botNext(bot("Steve"), b.today), "All done today");
-  assert.equal(L.botNext(bot("Ledger"), b.today), "Nothing to do today", "24 Nov 2026, money removed from HQ: Ledger waits for new work");
+  assert.equal(bot("Ledger"), undefined, "25 Nov 2026: Ledger is off HQ, not on Team");
   assert.equal(L.botNext(bot("Nova"), b.today), "Nothing to do today", "not the pill's words twice");
   assert.equal(L.botNext(bot("Alfred"), b.today), "No update today");
   assert.equal(L.botNext({ state: "paused" }, b.today), "Paused");

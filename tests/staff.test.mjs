@@ -107,7 +107,7 @@ test("staff: the roster, the sources and the guide are checked before they are s
 
 test("staff: the board and the site's own check say what is wrong in plain lines", async () => {
   const b = sampleBoard(NOW);
-  assert.equal(b.staff.length, S.DEFAULT_ROSTER.length);
+  assert.equal(b.staff.length, S.DEFAULT_ROSTER.filter((x) => !x.offHq).length); /* 25 Nov 2026: Ledger and Sheet off HQ */
   const st = Object.fromEntries(b.staff.map((w) => [w.name, w.state]));
   assert.equal(st.Kevin, "blocked"); assert.equal(st.Steve, "done"); assert.equal(st.Laura, "late");
   assert.equal(b.waiting.luke.length, 6); /* + Laura's profile image, L12, 18 Nov 2026 */ assert.equal(b.connector.botsOn, true); assert.equal(b.report.from, "HQ");

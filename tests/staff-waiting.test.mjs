@@ -72,8 +72,9 @@ test("waitingOnLuke: no release step waits on Luke any more (the teaser step wen
 
 test("waitingOnLuke: alert text never carries amounts", async () => {
   const d = memoryDesk();
-  await S.sendMessage(d, NOW, R, { from: "Ledger", to: "Luke", text: "Did USD 1,234.56 from Northlight Records land in Wise? It is still pending.", needs: "decision" });
-  await S.sendMessage(d, NOW + MIN, R, { from: "Sheet", to: "Luke", text: "EUR 1.204,00 or EUR 1.240,00 for October?", needs: "reply" });
+  /* 25 Nov 2026: Ledger and Sheet are off HQ and money asks never reach Needs you, so the made-up asker is an on-HQ bot */ 
+  await S.sendMessage(d, NOW, R, { from: "Forge", to: "Luke", text: "Did USD 1,234.56 of Meta ad spend go on the Northlight campaign? It is still pending.", needs: "decision" });
+  await S.sendMessage(d, NOW + MIN, R, { from: "Atlas", to: "Luke", text: "EUR 1.204,00 or EUR 1.240,00 for the October TikTok budget?", needs: "reply" });
   const w = await waiting(d, NOW + 2 * MIN);
   assert.equal(w.length, 2);
   for (const x of w) {

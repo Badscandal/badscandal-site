@@ -1699,6 +1699,12 @@ body.ws-on main{margin-left:0;max-width:none}
 .adscap{margin-top:14px;padding-top:12px;border-top:1px solid var(--ink-3)}
 .adscap .bar{margin:8px 0 6px}
 .adscap.warn #capSpent2,.adscap.stop #capSpent2,.adscap.over #capSpent2{color:var(--red)}
+/* 25 Nov 2026: Luke's call (keep running past the stop line): amber, never red */
+.adscap.lukes_call #capSpent2,#capShort b.amber{color:var(--amber)}
+.capcall-on{margin:0 0 6px;color:var(--muted);font-size:14px}
+.t-cap.lukes_call{border:.5px solid rgba(251,191,36,.5)} .t-cap.lukes_call .capbar i,.adscap.lukes_call .bar i{background:var(--amber)}
+.attn-list li.amber a{color:var(--amber)} .attn-list li.amber a::before{background:var(--amber)}
+.capcall{margin:10px 0 0}.capcall .confirm{margin:8px 0 0}.capcall .confirm .sendbtn{margin-right:8px}
 .adsong{border-top:1px solid var(--ink-3)}
 .adsong:first-child{border-top:0}
 .adsong>summary{list-style:none;display:flex;align-items:center;gap:12px;min-height:56px;padding:8px 2px;cursor:pointer}
@@ -1833,6 +1839,7 @@ body.ws-on main{margin-left:0;max-width:none}
           <div class="keyrow"><span id="capMonth2">This month</span><b id="capSpent2">–</b></div>
           <div class="bar" aria-hidden="true"><i id="capFill2"></i><b id="capWarn2"></b><b id="capStop2"></b></div>
           <p class="d" id="capMsg"></p>
+          <div class="capcall" id="capCall"></div>
         </div>
       </div>
       <div class="tile w12" id="adsSongs">
@@ -2002,7 +2009,8 @@ body.ws-on main{margin-left:0;max-width:none}
     <!-- 25 Nov 2026: what waits on the bots, moved here from Needs you -->
     <details class="tile connfold othersfold" id="othersFold" hidden><summary>Waiting on others · <span id="othersN"></span></summary><ul class="otherslist" id="othersList"></ul></details>
     <details class="tile connfold" id="connFold" hidden><summary>Bots' connector: <span id="connState"></span></summary><div id="connCard" hidden></div></details>
-    <div class="tile" id="autoCard" hidden></div></section>
+    <div class="tile" id="autoCard" hidden></div>
+    <p class="secsub offhq" id="offHqLine" hidden></p></section>
   <!-- 25 Nov 2026 (Luke: "messages section is pointless"): no longer a tab; kept hidden so the desk code still has its elements -->
   <section class="card view" id="messages" hidden><h2>Messages</h2><p class="sub">One board for you and every bot. What waits on you is on top.</p>
     <div class="mwrap">
@@ -2105,18 +2113,18 @@ body.ws-on main{margin-left:0;max-width:none}
   }, 400);
 })();
 </script>
-<script src="js/crt.js?v=346a8a2eeb81" defer></script>
-<script src="js/hq-lib.js?v=346a8a2eeb81" defer></script>
-<script src="js/hq-chart.js?v=346a8a2eeb81" defer></script>
-<script src="js/hq-growth.js?v=346a8a2eeb81" defer></script>
-<script src="js/hq-look.js?v=346a8a2eeb81" defer></script>
-<script src="js/hq.js?v=346a8a2eeb81" defer></script>
-<script src="js/hq-staff.js?v=346a8a2eeb81" defer></script>
-<script src="js/hq-phone.js?v=346a8a2eeb81" defer></script>
-<script src="js/hq-shell.js?v=346a8a2eeb81" defer></script>
-<script src="js/hq-workspaces.js?v=346a8a2eeb81" defer></script>
-<script src="js/hq-app.js?v=346a8a2eeb81" defer></script>
-<script src="js/hq-cmd.js?v=346a8a2eeb81" defer></script>
-<script src="js/hq-pages.js?v=346a8a2eeb81" defer></script>
+<script src="js/crt.js?v=fca7e2862d99" defer></script>
+<script src="js/hq-lib.js?v=fca7e2862d99" defer></script>
+<script src="js/hq-chart.js?v=fca7e2862d99" defer></script>
+<script src="js/hq-growth.js?v=fca7e2862d99" defer></script>
+<script src="js/hq-look.js?v=fca7e2862d99" defer></script>
+<script src="js/hq.js?v=fca7e2862d99" defer></script>
+<script src="js/hq-staff.js?v=fca7e2862d99" defer></script>
+<script src="js/hq-phone.js?v=fca7e2862d99" defer></script>
+<script src="js/hq-shell.js?v=fca7e2862d99" defer></script>
+<script src="js/hq-workspaces.js?v=fca7e2862d99" defer></script>
+<script src="js/hq-app.js?v=fca7e2862d99" defer></script>
+<script src="js/hq-cmd.js?v=fca7e2862d99" defer></script>
+<script src="js/hq-pages.js?v=fca7e2862d99" defer></script>
 </body>
 </html>
