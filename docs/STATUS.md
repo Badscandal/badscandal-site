@@ -84,7 +84,7 @@ No money amounts, payer names or account numbers in this file: the repo is publi
 
 ## In flight
 
-- None.
+- `hq-farm-edits`: Social Farm › Edits (the edit machine's review screen on HQ). Waiting for Luke's look at the preview.
 
 ## Next up
 

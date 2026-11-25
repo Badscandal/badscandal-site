@@ -6,8 +6,8 @@
    An airline network can hang, so each fetch gives up after 8s and uses the cached copy.
    Script urls carry ?v= (one content hash of the HQ scripts, including hq-look.js and hq-workspaces.js).
    The cache key is the full url, so a new page can never be paired with an older script. */
-var CACHE = "bs-hq-v18"; /* v18 (21 Nov 2026): Needs you as decision and ask cards, the bots' re-check fixes. v17: Needs you cards, dispute cards, money. */
-var V = "fca7e2862d99";
+var CACHE = "bs-hq-v19"; /* v19 (25 Nov 2026): Social Farm › Edits (js/hq-edits.js). v18 (21 Nov 2026): v18 (21 Nov 2026): Needs you as decision and ask cards, the bots' re-check fixes. v17: Needs you cards, dispute cards, money. */
+var V = "7d45d1e68820";
 var SHELL = ["/hq",
   "/js/crt.js?v=" + V,
   "/js/hq-lib.js?v=" + V,
@@ -19,6 +19,7 @@ var SHELL = ["/hq",
   "/js/hq-phone.js?v=" + V,
   "/js/hq-shell.js?v=" + V,
   "/js/hq-workspaces.js?v=" + V,
+  "/js/hq-edits.js?v=" + V,
   "/js/hq-app.js?v=" + V,
   "/js/hq-cmd.js?v=" + V,
   "/js/hq-pages.js?v=" + V,

@@ -3,3 +3,4 @@ Disallow: /admin
 Disallow: /hq
 Disallow: /stats
 Disallow: /api/
+Disallow: /api/edits/

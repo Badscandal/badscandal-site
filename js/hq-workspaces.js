@@ -4,6 +4,7 @@
 (function () {
   "use strict";
   var KEY = "bs_hq_ws";
+  window.HQWorkspace = { current: function () { return current; } };
   var $ = function (id) { return document.getElementById(id); };
   var current = "badscandal";
   var openCard = "", editing = "";
@@ -30,6 +31,8 @@
       b.setAttribute("aria-selected", b.getAttribute("data-ws") === current ? "true" : "false");
     });
     try { localStorage.setItem(KEY, current); } catch (e) {}
+    /* Social Farm › Edits (js/hq-edits.js, 25 Nov 2026) follows the switch */
+    try { document.dispatchEvent(new CustomEvent("hq:ws", { detail: current })); } catch (e) {}
     if (window.HQShell) window.HQShell.show((location.hash || "#today").replace(/^#/, "").split("/")[0] || "today");
     if (current === "badscandal") { if ($("wsBody")) $("wsBody").innerHTML = ""; return; }
     load();
