@@ -15,7 +15,7 @@ const hrefs = (list) => list.map((x) => x.href || "action:" + x.action);
 test("cmdIndex: every tab, the actions, songs, bots, releases and what waits on Luke", () => {
   const tabs = items.filter((x) => x.kind === "tab");
   /* 24 Nov 2026 (Luke): Rights and Money are gone */
-  assert.deepEqual(tabs.map((x) => x.href), ["#today", "#songs", "#ads", "#pages", "#growth", "#growth/fans", "#profiles", "#releases", "#team", "#messages"]);
+  assert.deepEqual(tabs.map((x) => x.href), ["#today", "#songs", "#ads", "#pages", "#growth", "#growth/fans", "#profiles", "#releases", "#team"]); /* 25 Nov 2026: no Messages tab */
   assert.deepEqual(tabs.slice(4, 6).map((x) => x.label), ["Growth & Fans", "Fans"], "Fans is a section of Growth & Fans, still found by its name");
   assert.equal(tabs.find((x) => x.href === "#releases").label, "Upcoming");
   const acts = items.filter((x) => x.kind === "action");
@@ -35,7 +35,7 @@ test("cmdIndex: every tab, the actions, songs, bots, releases and what waits on 
   assert.ok(msg[0].label.length <= 80);
   assert.equal(new Set(hrefs(items)).size, items.length, "no doubles");
   /* nothing loaded yet: the tabs and actions are still there */
-  assert.equal(L.cmdIndex({}).length, 14); /* 24 Nov 2026: Rights and Money gone */
+  assert.equal(L.cmdIndex({}).length, 13); /* 24 Nov 2026: Rights and Money gone; 25 Nov: Messages gone */
 });
 
 test("cmdResults: nothing typed = what waits on you first, then the tabs", () => {
@@ -51,7 +51,7 @@ test("cmdResults: starts-with beats contains, accents and capitals don't matter,
   assert.equal(L.cmdResults(items, "new")[0].href, "#releases/new", "New song");
   assert.deepEqual(hrefs(L.cmdResults(items, "me da")).slice(0, 2).sort(), ["#releases/medaseubody", "#songs/medaseubody"]);
   assert.equal(L.cmdResults(items, "body")[0].label, "Me Dá Seu Body", "a later word of the title");
-  assert.equal(L.cmdResults(items, "inbox")[0].href, "#messages", "found by its other words");
+  assert.equal(L.cmdResults(items, "duties")[0].href, "#team", "found by its other words"); /* 25 Nov 2026: was "inbox" -> Messages (gone) */
   assert.deepEqual(L.cmdResults(items, "zzzq"), []);
   assert.equal(L.cmdResults(items, "e", 3).length, 3, "at most max");
 });

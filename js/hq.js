@@ -443,8 +443,9 @@
     var L = window.HQLib;
     /* the site's own twice-daily check: one quiet line under the briefing, opening its message */
     var chk = board && board.report ? L.siteCheckLine(board.report, board.today) : "";
-    $("siteCheck").hidden = !chk;
-    if (chk) { $("siteCheck").textContent = chk + " ›"; $("siteCheck").setAttribute("href", "#messages/" + String(board.report.id || "").replace(/[^a-z0-9]/gi, "")); }
+    /* 25 Nov 2026: the site check's line linked to the Messages tab, which is gone; Alfred passes it on */
+    $("siteCheck").hidden = true;
+    void chk;
     var att = L.attention({ sheet: sheet, ov: ov, board: board }), br = L.briefing({ sheet: sheet, ov: ov, attention: att }), ti = L.tiles({ sheet: sheet, ov: ov });
     var lead = br.slice(0, 1), rest = br.slice(1);
     $("brief").innerHTML = lead.map(function (x) { return "<p>" + esc(x) + "</p>"; }).join("") +

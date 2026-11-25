@@ -152,7 +152,7 @@ test("Today: no New release button (Luke, 12 Nov 2026: it lives in Upcoming); th
   const page = readFileSync(new URL("../hq.html", import.meta.url), "utf8");
   const today = page.slice(page.indexOf('id="today"'), page.indexOf('id="brief"'));
   assert.doesNotMatch(page, /id="newRel"|class="newrel/, "the button is gone from Today");
-  assert.match(today, /<a class="waitline" id="waitLine" href="#messages" hidden><\/a>/, "the waiting line is at the top of Today, before the briefing");
+  assert.match(today, /<a class="waitline" id="waitLine" href="#today" hidden><\/a>/ /* 25 Nov 2026: Messages is gone */, "the waiting line is at the top of Today, before the briefing");
   const upcoming = page.slice(page.indexOf('id="releases"'));
   assert.match(upcoming, /id="relNew"[^>]*>New song</, "Upcoming keeps its own New song button");
   assert.match(readFileSync(new URL("../js/hq-staff.js", import.meta.url), "utf8"), /window\.addEventListener\("hashchange", routeNew\)/, "the iPhone's hold-menu and the Mac's ⌘N still land on the form");

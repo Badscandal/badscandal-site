@@ -1740,8 +1740,7 @@
   var CMD_TABS = [["today", "Today", "home briefing start"], ["songs", "Songs", "spotify streams tracks disputes"], ["ads", "Ads", "meta cap spend cost tap"],
     ["pages", "Pages", "visits page counter people"], ["growth", "Growth & Fans", "followers instagram tiktok fans"], ["growth/fans", "Fans", "fans forming comments dms"],
     ["profiles", "Profiles", "profile photo banner header cover"],
-    ["releases", "Upcoming", "releases pipeline new song"], ["team", "Team", "bots duties staff"],
-    ["messages", "Messages", "inbox questions board"]];
+    ["releases", "Upcoming", "releases pipeline new song"], ["team", "Team", "bots duties staff"]]; /* 25 Nov 2026: no Messages tab */
   function cmdNorm(v) { var s = String(v == null ? "" : v); try { s = s.normalize("NFD").replace(/[\u0300-\u036f]/g, ""); } catch (e) {} return s.toLowerCase().replace(/\s+/g, " ").trim(); }
   function cmdIndex(o) {
     o = o || {};
@@ -1755,7 +1754,7 @@
     var cut = function (t, n) { t = String(t || "").replace(/\s+/g, " ").trim(); return t.length > n ? t.slice(0, n - 1) + "…" : t; };
     var needWord = { decision: "Decide", reply: "Reply", action: "To do" };
     if (b && b.waiting && Array.isArray(b.waiting.luke)) b.waiting.luke.forEach(function (m) {
-      add({ kind: "message", label: cut(m.from + ": " + m.text, 80), hint: needWord[m.needs] || "Waiting", href: "#messages/" + m.id, words: "waiting " + (m.needs || "") });
+      add({ kind: "message", label: cut(m.from + ": " + m.text, 80), hint: needWord[m.needs] || "Waiting", href: "#messages/" + m.id, words: "waiting " + (m.needs || "") }); /* lands on Needs you (js/hq-shell.js ALIAS) */
     });
     (o.songs || []).forEach(function (s) { if (s && s.name && s.id) add({ kind: "song", label: s.name, hint: "Song", href: "#songs/" + s.id, words: "song" }); });
     if (b && Array.isArray(b.releases)) b.releases.forEach(function (r) {

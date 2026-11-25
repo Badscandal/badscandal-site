@@ -187,8 +187,23 @@
       (g.quiet.length ? '<h3 class="lblh">Haven\'t checked in today</h3><div class="botlist">' + g.quiet.map(botRow).join("") + "</div>" : "") +
       (g.onTrack.length ? '<h3 class="lblh">On track</h3><div class="botlist">' + g.onTrack.map(botRow).join("") + "</div>" : "");
     HQ.drawFeed(L.liveFeed(board, sheet), board.today);
+    drawOthers();
     drawAuto();
     return true;
+  }
+  /* 25 Nov 2026 (Luke: "any info regarding bots should only be in the team section"): Waiting on others
+     moved here from Needs you, folded */
+  function drawOthers() {
+    var el = $("othersFold"); if (!el) return;
+    var items = (board && board.auto && board.auto.waitingOnOthers) || [];
+    el.hidden = !items.length;
+    $("othersN").textContent = items.length;
+    $("othersList").innerHTML = items.map(function (it) {
+      var meta = [];
+      if (it.ticket) meta.push(it.ticket);
+      if (it.days != null) meta.push(L.waitedWords(it.days));
+      return '<li class="' + (it.tone === "bad" ? "bad" : "") + '"><b>' + esc(it.name) + "</b> " + esc(it.text) + (meta.length ? "<small>" + esc(meta.join(" · ")) + "</small>" : "") + "</li>";
+    }).join("");
   }
   function drawAuto() {
     var el = $("autoCard"); if (!el || !board || !board.auto) { if (el) el.hidden = true; return; }
@@ -393,8 +408,9 @@
   function waitingNow() { return ((board && board.waiting && board.waiting.luke) || []).filter(function (m) { var x = ui.landed[m.id]; return !(x && Date.now() - x.at < KEEP_MS); }); }
   function drawBadges() {
     var n = board ? waitingNow().length : 0;
-    ["msgBadge", "msgBadge2", "waitN"].forEach(function (id) { $(id).hidden = !n; $(id).textContent = n; $(id).setAttribute("aria-label", n + " waiting on you"); });
-    $("moreDot").hidden = !n;
+    /* 25 Nov 2026: the Messages tab is gone, so only its (hidden) list keeps a count; More has no dot for it */
+    ["msgBadge", "msgBadge2", "waitN"].forEach(function (id) { var el = $(id); if (!el) return; el.hidden = !n; el.textContent = n; el.setAttribute("aria-label", n + " waiting on you"); });
+    if ($("moreDot")) $("moreDot").hidden = true;
   }
   function focusIn(sel) { var el = $("messages").querySelector(sel); if (el) el.focus(); }
   /* answer a message, to whoever wrote it, filed under THAT message (11 Nov 2026: it used to be filed under

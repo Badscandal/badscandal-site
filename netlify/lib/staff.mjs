@@ -4813,10 +4813,12 @@ export function signedOutLines(items) {
     const line = since ? `Sign in to ${name} (signed out since ${since})` : `Sign in to ${name}`;
     const key = (plat || id).toLowerCase();
     const prev = found.get(key);
-    if (prev && (prev.since || !since)) continue;
-    found.set(key, { who: (it && it.who) || (prev && prev.who) || "", line, since });
+    const at = [prev && prev.at, it && it.at].filter(Boolean).sort().pop() || null;
+    if (prev && (prev.since || !since)) { prev.at = at; continue; }
+    found.set(key, { who: (it && it.who) || (prev && prev.who) || "", line, since, at });
   }
-  return [...found.values()].map(({ who, line }) => ({ who, line }));
+  /* 25 Nov 2026: `at` = the newest time a bot said it (a Done holds until the bot says it again) */
+  return [...found.values()].map(({ who, line, at }) => ({ who, line, ...(at ? { at } : {}) }));
 }
 /* v18 (21 Nov 2026, Forge T-30): the platforms a bot says are signed in again, and nobody says are signed
    out. A task blocker that still waits on that sign-in gets a check line; the blocker itself is the
@@ -4864,20 +4866,24 @@ export function freshReport(report, hq, liveAt) {
   return { ...report, stale: true, ...(liveAt ? { sp: liveAt } : {}), text: `The board shows ${d.done} of ${d.total} duties done, ${d.blocked} blocked.` };
 }
 /* Sign-ins, access, a yes Luke still owes, and fan replies only he can send. Notes are not asks. */
-function lukeExtraNeeds(desk) {
+/* 25 Nov 2026 (Luke: "fully outdated and pointless"): a card line the bot has not said again for two days is
+   not on Needs you. A bot's card keeps its last words until the bot rewrites them, so an old "signed out"
+   stayed up for days. The blockers have their own clock (blockersAt). A line with no time counts as new. */
+function lukeExtraNeeds(desk, nowMs = Date.now()) {
   const out = [];
   const cards = desk && desk.cards && typeof desk.cards === "object" ? desk.cards : {};
   const bits = [];
+  const fresh = (at) => { const t = Date.parse(at || ""); return !Number.isFinite(t) || nowMs - t <= BLOCKER_STALE; };
   for (const [key, c] of Object.entries(cards)) {
     if (!c || typeof c !== "object") continue;
     const who = key.charAt(0).toUpperCase() + key.slice(1);
-    for (const text of [c.needs, c.workingOn, c.blockers]) if (text) bits.push({ who, text: String(text), at: c.at || null });
+    for (const [text, at] of [[c.needs, c.at], [c.workingOn, c.at], [c.blockers, c.blockersAt || c.at]]) if (text && fresh(at)) bits.push({ who, text: String(text), at: at || null });
   }
   for (const text of desk && desk.notRead || []) if (text) bits.push({ who: "", text: String(text), at: null });
   for (const line of signedOutLines(bits)) {
     /* v18: the id is a short slug, never the whole sentence; the answer goes to the bot that said it */
     const slug = line.line.toLowerCase().replace(/\(.*?\)/g, "").replace(/^sign in to /, "").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40) || "account";
-    out.push({ key: "sign:" + line.line.toLowerCase(), kind: "signin", id: "sign-" + slug, ...(line.who ? { from: line.who } : {}), text: line.line, href: "#today", at: null });
+    out.push({ key: "sign:" + line.line.toLowerCase(), kind: "signin", id: "sign-" + slug, ...(line.who ? { from: line.who } : {}), text: line.line, href: "#today", at: line.at || null });
   }
   const seenYes = new Set(), seenAcc = new Set();
   for (const b of bits) {
@@ -4914,6 +4920,13 @@ function lukeExtraNeeds(desk) {
   return out;
 }
 export const NEED_DONE_KEY = "needs-done.json", NEED_DONE_DAYS = 3;
+const MONEY_TASK = /\b(?:EUR|USD|GBP|BRL)\s?\d|[€$£]\s?\d|\bpayments?\b|\bpayouts?\b|\broyalt|\bstatements?\b|proof of arrival|\binvoices?\b|\brevolut\b|\bwise\b|\bpaypal\b|\bincome\b/i;
+/* a short print of a task's words: its Done mark holds until the words change */
+function taskPrint(text) {
+  let h = 0x811c9dc5;
+  for (const ch of String(text || "").toLowerCase().replace(/\s+/g, " ").trim()) { h ^= ch.codePointAt(0); h = Math.imul(h, 16777619) >>> 0; }
+  return h.toString(36);
+}
 /* v18 (21 Nov 2026): Luke answers an ask that has no message of its own (a sign-in, Netlify access, a task, a
    fan, a bot waiting on his yes) on its card. ONE write records the mark (key -> when), then the answer goes to
    the bot as a message from Luke, so the bot reads it in messages_for_you exactly like any other answer. */
@@ -4972,7 +4985,8 @@ export function waitingOnLuke(desk, today, now = null) {
   for (const c of disputeWaits(desk.disputes)) {
     out.push({ key: "d:" + c.id, kind: "dispute", id: c.id, text: c.text, href: "#songs/" + c.id, at: c.at || null });
   }
-  for (const x of lukeExtraNeeds(desk)) out.push(x);
+  const nowMs = now == null ? Date.now() : Number(now);
+  for (const x of lukeExtraNeeds(desk, nowMs)) out.push(x);
   /* a blocked T-task whose blocker is a real ask. The old task titles (runbook B, Read Google Ads
      spend, TikTok Campaign A, Site analytics) are not cards: the sign-in and the access line cover them. */
   /* v18 (21 Nov 2026, Luke): T-32 (the Meta system user) IS his to do, so "runbook B" no longer drops a task;
@@ -4986,24 +5000,28 @@ export function waitingOnLuke(desk, today, now = null) {
     if (!/luke|your yes|system user|you to/i.test(blocker || title)) continue;
     if (/google ads/i.test(blocker) && /sign/i.test(blocker)) continue;
     if (/netlify|viewer access|site analytics/i.test(blocker + " " + title)) continue;
+    /* 25 Nov 2026: money is not on HQ (PR #114); money questions go to Alfred, not Needs you */
+    if (MONEY_TASK.test(blocker + " " + title)) continue;
     const text = lukeLine(blocker || title).replace(/\s*\(?\b(?:see |per |use |in )?runbook\s*b\b\)?[,.;:]?/gi, "").replace(/\s{2,}/g, " ").trim();
     if (!text) continue;
     const owner = clean(t.owner, 40);
-    out.push({ key: "t:" + t.id, kind: owner === "Nova" ? "handle" : "task", id: String(t.id), from: owner, text: owner === "Nova" && !/nova needs you/i.test(text) ? "Nova needs you to handle this: " + text : text, href: "#team", at: null });
+    out.push({ key: "t:" + t.id + ":" + taskPrint(blocker || title), kind: owner === "Nova" ? "handle" : "task", id: String(t.id), from: owner, text: owner === "Nova" && !/nova needs you/i.test(text) ? "Nova needs you to handle this: " + text : text, href: "#team", at: null });
   }
   /* v18: an ask Luke marked done (or answered Yes/No) on a card leaves the list. An ask with a time comes back
      when the bot says it again later; one without a time stays off for NEED_DONE_DAYS. */
   const marks = (desk.needsDone && desk.needsDone.marks) || {};
-  const nowMs = now == null ? Date.now() : Number(now);
   const isDone = (x) => {
     const mk = marks[x.key];
     if (!mk || !mk.at) return false;
     if (x.at) return String(x.at) <= String(mk.at);
+    /* 25 Nov 2026: a task's key carries its words, so Done holds while the sheet says the same thing */
+    if (/^t:/.test(x.key)) return true;
     return nowMs - Date.parse(mk.at) < NEED_DONE_DAYS * 86400000;
   };
   const seen = new Set(), deduped = [];
   for (const x of out) {
-    if (x.kind !== "message" && x.kind !== "handle" && x.kind !== "card" && x.kind !== "dispute" && x.kind !== "spotify" && x.kind !== "account" && isDone(x)) continue;
+    /* 25 Nov 2026: by key, not kind. A Nova task is kind "handle" too, and its Done never took it off. */
+    if (/^(sign|acc|yes|fan|t):/.test(String(x.key || "")) && isDone(x)) continue;
     const bare = String(x.text || "").toLowerCase().replace(/\b\d{3}-\d{3}-\d{4}\b/g, "").replace(/\s+/g, " ").trim();
     const k = x.kind === "signin" || /^sign in to /.test(bare) ? "signin:" + bare
       : x.kind === "access" || /netlify viewer/.test(bare) ? "access:" + bare
