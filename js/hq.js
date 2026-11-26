@@ -401,9 +401,11 @@
   }
   function broken(tab) { var e = sheet && sheet.sheetErrors && sheet.sheetErrors[tab]; return !!(e && !e.readable); }
 
+  /* 26 Nov 2026: each tab draws on its own, so one that throws can't stop the others on that pass */
   function drawSheet() {
-    drawSheetErrors();
-    drawToday(); drawBriefing(); drawSongs(); drawAdsTop(); drawGrowth(); drawFans(); drawReleases(); drawTeam(); drawDataHealth();
+    [drawSheetErrors, drawToday, drawBriefing, drawSongs, drawAdsTop, drawGrowth, drawFans, drawReleases, drawTeam, drawDataHealth].forEach(function (draw) {
+      try { draw(); } catch (e) { if (window.console) console.error("HQ: " + (draw.name || "a tab") + " couldn't be drawn", e); }
+    });
   }
 
   /* ---------- Today ---------- */
@@ -831,7 +833,9 @@
     $("relDesk").innerHTML = ""; $("relPipe").innerHTML = "";
     $("relOut").innerHTML = ol ? '<p class="routline">' + esc(ol) + ' <a href="#songs">See Songs</a></p>' : "";
     $("relSpot").innerHTML = ""; if ($("relSpotWrap")) $("relSpotWrap").hidden = true;
-    var deskHas = window.HQStaff && HQStaff.board && (HQStaff.board().releases || []).length;
+    /* 26 Nov 2026: board() is null until the staff board arrives; if the sheet answers first this threw and stopped drawSheet */
+    var b = window.HQStaff && HQStaff.board && HQStaff.board();
+    var deskHas = b && (b.releases || []).length;
     $("relList").innerHTML = broken("Releases") ? '<p class="empty">See the note above.</p>' : l.sheetOnly.length ? l.sheetOnly.map(sheetReleaseCard).join("") : (deskHas ? "" : '<p class="empty">Nothing coming in the sheet yet.</p>');
   }
   function sheetReleaseCard(r) {

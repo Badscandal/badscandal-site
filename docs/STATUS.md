@@ -86,7 +86,7 @@ No money amounts, payer names or account numbers in this file: the repo is publi
 
 ## In flight
 
-- None.
+- Upcoming review part A (branch `upcoming-polish`): no zoom on the phone, and Upcoming no longer stops Team drawing when the sheet answers first. Waits for Luke's "deploy".
 
 ## Next up
 
