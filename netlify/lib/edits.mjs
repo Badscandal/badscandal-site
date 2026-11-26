@@ -47,10 +47,18 @@ export const SECONDS = [15, 31];
 export const REASONS = [
   { key: "timing", label: "Wrong timing" },
   { key: "clip", label: "Weak clip" },
+  { key: "dark", label: "Too dark" },
   { key: "text", label: "Text hard to read" },
   { key: "vibe", label: "Off-vibe" },
   { key: "repeat", label: "Repeat" },
+  { key: "other", label: "Something else" }, // Luke types why (a note, at most NOTE_MAX characters)
 ];
+export const NOTE_MAX = 200;
+
+/* Luke's own words for a reject: one line, no control characters, at most NOTE_MAX characters. */
+export function cleanNote(v) {
+  return String(v == null ? "" : v).replace(/[\u0000-\u001f\u007f]/g, " ").replace(/\s+/g, " ").trim().slice(0, NOTE_MAX);
+}
 export const UNDO_MS = 10 * 60 * 1000;
 export const LOW_STOCK = 30;
 export const MAX_EDITS = 50;
@@ -347,6 +355,8 @@ export async function decide(store, drv, rootId, body, now) {
   if (choice !== "approve" && choice !== "reject") fail("Approve or reject?");
   const reason = choice === "reject" ? String(b.reason || "") : "";
   if (choice === "reject" && !REASONS.some((r) => r.key === reason)) fail("Pick why: " + REASONS.map((r) => r.label.toLowerCase()).join(", ") + ".");
+  const note = choice === "reject" ? cleanNote(b.note) : "";
+  if (reason === "other" && !note) fail("Say why in a few words.");
   const before = await store.get("decision/" + id + ".json", { type: "json" }).catch(() => null);
   if (before) fail("Already " + (before.choice === "approve" ? "approved" : "rejected") + ".", 409);
   const { items, folder } = await reviewList(store, drv, rootId, now, { maxReads: 0 });
@@ -358,7 +368,7 @@ export async function decide(store, drv, rootId, body, now) {
   const song = SLUG_RE.test(String(recipe.song || "")) ? recipe.song : "";
   if (choice === "approve" && !song) fail("This edit's recipe doesn't name its song, so it can't go to 2 Approved/<song>.");
   const rec = {
-    id, choice, reason, song, style: recipe.style || "", variant: recipe.variant || "", hook: (recipe.hook && recipe.hook.id) || "", grade: recipe.grade || "",
+    id, choice, reason, note, song, style: recipe.style || "", variant: recipe.variant || "", hook: (recipe.hook && recipe.hook.id) || "", grade: recipe.grade || "",
     at: now, from: folder, to: "", files: [it.file, it.preview, it.json].filter(Boolean).map((f) => f.id),
   };
   const claim = await store.setJSON("decision/" + id + ".json", rec, { onlyIfNew: true });
@@ -375,10 +385,10 @@ export async function decide(store, drv, rootId, body, now) {
   await store.setJSON("decision/" + id + ".json", rec);
   await mutate(store, "log/" + month(now) + ".json", [], (list) => {
     const l = Array.isArray(list) ? list.filter((x) => x && x.id !== id) : [];
-    l.push({ id, choice, reason, song, style: rec.style, variant: rec.variant, hook: rec.hook, grade: rec.grade, at: now });
+    l.push({ id, choice, reason, note, song, style: rec.style, variant: rec.variant, hook: rec.hook, grade: rec.grade, at: now });
     return { replace: l.slice(-5000) };
   });
-  return { ok: true, id, choice, reason, undoUntil: now + UNDO_MS };
+  return { ok: true, id, choice, reason, note, undoUntil: now + UNDO_MS };
 }
 
 export async function undo(store, drv, body, now) {
@@ -435,6 +445,8 @@ export function scoresView(decisions, events) {
   return {
     total, approved, rate: total ? Math.round((100 * approved) / total) : null,
     styles: rate(by.style), hooks: rate(by.hook), grades: rate(by.grade),
+    notes: (decisions || []).filter((d) => d.choice === "reject" && d.note).sort((a, b) => (b.at || 0) - (a.at || 0)).slice(0, 20)
+      .map((d) => ({ note: d.note, hook: d.hook || "", grade: d.grade || "", at: d.at || null })),
     reasons: [...by.reason.entries()].map(([key, v]) => ({ key, label: (REASONS.find((r) => r.key === key) || { label: key }).label, n: v.r })).sort((a, b) => b.n - a.n),
     pages: [...pages.values()].map((v) => ({ page: v.page, visits: v.visits, taps: v.taps, songs: [...v.songs] })).sort((a, b) => b.taps - a.taps || b.visits - a.visits),
   };

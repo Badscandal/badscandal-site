@@ -290,7 +290,7 @@ test("reject needs a reason and moves to 9 Rejected/; undo after 10 minutes is r
   const store = memoryDesk(), drv = fakeDrive();
   const no = await call("/api/edits/decide", { method: "POST", body: { id: "touchme__movie-card__a1", choice: "reject" }, store, drv });
   assert.equal(no.s, 400);
-  assert.match(no.j.error, /Pick why: wrong timing, weak clip, text hard to read, off-vibe, repeat/);
+  assert.match(no.j.error, /Pick why: wrong timing, weak clip, too dark, text hard to read, off-vibe, repeat, something else/);
   assert.equal(drv.calls.moves.length, 0);
   const r = await call("/api/edits/decide", { method: "POST", body: { id: "touchme__movie-card__a1", choice: "reject", reason: "text" }, store, drv });
   assert.equal(r.s, 200, r.text);
@@ -450,4 +450,56 @@ test("robots keeps /api/edits/ out of search; the page never sees the key", () =
   assert.match(readFileSync(new URL("../robots.txt", import.meta.url), "utf8"), /Disallow: \/api\/edits\//);
   const ui = readFileSync(new URL("../js/hq-edits.js", import.meta.url), "utf8");
   assert.doesNotMatch(ui, /GOOGLE_SA_KEY|EDITS_WORKER_TOKEN|private_key/);
+});
+
+/* 26 Nov 2026: Luke wants to say "too dark", and to type his own reason when none of the buttons fit. */
+test("reject can say too dark, or something else in Luke's own words (kept short and plain)", async () => {
+  assert.deepEqual(E.REASONS.map((r) => r.key), ["timing", "clip", "dark", "text", "vibe", "repeat", "other"]);
+  const store = memoryDesk(), drv = fakeDrive();
+  const dark = await call("/api/edits/decide", { method: "POST", body: { id: "touchme__movie-card__a1", choice: "reject", reason: "dark" }, store, drv });
+  assert.equal(dark.s, 200, dark.text);
+  assert.equal(dark.j.reason, "dark");
+
+  const store2 = memoryDesk(), drv2 = fakeDrive();
+  const empty = await call("/api/edits/decide", { method: "POST", body: { id: "touchme__movie-card__a1", choice: "reject", reason: "other", note: "   " }, store: store2, drv: drv2 });
+  assert.equal(empty.s, 400);
+  assert.match(empty.j.error, /Say why in a few words/);
+  assert.equal(drv2.calls.moves.length, 0);
+  const long = "  not\u0007 sensual   enough,\n the  girl looks sad " + "x".repeat(400);
+  const r = await call("/api/edits/decide", { method: "POST", body: { id: "touchme__movie-card__a1", choice: "reject", reason: "other", note: long }, store: store2, drv: drv2 });
+  assert.equal(r.s, 200, r.text);
+  const saved = await store2.get("decision/touchme__movie-card__a1.json", { type: "json" });
+  assert.ok(saved.note.startsWith("not sensual enough, the girl looks sad x"));
+  assert.equal(saved.note.length, 200);
+  const log = await store2.get("log/2026-11.json", { type: "json" });
+  assert.equal(log[0].note, saved.note);
+});
+
+test("an approval never keeps a note, and scores list the latest typed reasons", () => {
+  const s = E.scoresView([
+    { choice: "reject", reason: "other", note: "older note", hook: "quote", grade: "red", at: 1 },
+    { choice: "approve", hook: "quote", grade: "red", at: 2 },
+    { choice: "reject", reason: "dark", hook: "try-again", grade: "night-blue", at: 3 },
+    { choice: "reject", reason: "other", note: "not sensual", hook: "the-pull", grade: "red", at: 4 },
+  ], []);
+  assert.deepEqual(s.notes, [{ note: "not sensual", hook: "the-pull", grade: "red", at: 4 }, { note: "older note", hook: "quote", grade: "red", at: 1 }]);
+  assert.deepEqual(s.reasons.map((r) => r.label).sort(), ["Something else", "Too dark"]);
+});
+
+test("Review shows a box for Luke's own reason when he picks Something else", () => {
+  const js = readFileSync(new URL("../js/hq-edits.js", import.meta.url), "utf8");
+  assert.match(js, /data-enote=/);
+  assert.match(js, /maxlength="200"/);
+  assert.match(js, /Your notes/);
+});
+
+/* 26 Nov 2026: Luke: approvals quicker, and a green border when approved. */
+test("Review: a tap marks the card at once (green when approved) and only that card is redrawn", () => {
+  const js = readFileSync(new URL("../js/hq-edits.js", import.meta.url), "utf8");
+  const html = readFileSync(new URL("../hq.html", import.meta.url), "utf8");
+  assert.match(html, /\.edcard\.ok\{[^}]*border:2px solid #22c55e/);
+  assert.match(js, /function patch\(id\)/);
+  const eok = js.slice(js.indexOf('hasAttribute("data-eok")'), js.indexOf('hasAttribute("data-eno")'));
+  assert.doesNotMatch(eok, /draw\(\)|redraw\(/, "approving never redraws the whole list");
+  assert.match(eok, /patch\(/);
 });
