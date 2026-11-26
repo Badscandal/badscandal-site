@@ -11,7 +11,19 @@ export function memoryDesk() {
   let n = 0;
   return {
     _map: m,
-    async get(key, o) { const v = m.get(key); return v ? (o && o.type === "json" ? JSON.parse(v.body) : v.body) : null; },
+    async get(key, o) {
+      const v = m.get(key);
+      if (!v) return null;
+      const t = o && o.type;
+      if (t === "json") return JSON.parse(v.body);
+      /* binary (26 Nov 2026: the release covers, netlify/lib/artwork.mjs), as the real store answers it */
+      if (t === "arrayBuffer" || t === "stream") {
+        const b = typeof v.body === "string" ? Buffer.from(v.body) : v.body;
+        const ab = b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength);
+        return t === "arrayBuffer" ? ab : new Response(ab).body;
+      }
+      return typeof v.body === "string" ? v.body : Buffer.from(v.body).toString();
+    },
     async getWithMetadata(key, o) { const v = m.get(key); return v ? { data: o && o.type === "json" ? JSON.parse(v.body) : v.body, etag: v.etag, metadata: {} } : null; },
     async setJSON(key, value, o = {}) {
       const cur = m.get(key);
@@ -21,7 +33,7 @@ export function memoryDesk() {
       m.set(key, { body: JSON.stringify(value), etag });
       return { modified: true, etag };
     },
-    async set(key, value) { m.set(key, { body: String(value), etag: '"e' + ++n + '"' }); return { modified: true }; },
+    async set(key, value) { m.set(key, { body: typeof value === "string" ? value : value instanceof ArrayBuffer || ArrayBuffer.isView(value) ? Buffer.from(value instanceof ArrayBuffer ? new Uint8Array(value) : value) : String(value), etag: '"e' + ++n + '"' }); return { modified: true }; },
     async delete(key) { m.delete(key); },
     async list({ prefix = "" } = {}) { return { blobs: [...m.keys()].filter((k) => k.startsWith(prefix)).map((key) => ({ key })) }; },
   };

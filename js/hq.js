@@ -218,6 +218,7 @@
     if (kept("bs_hq_last_sheet") || kept("bs_hq_last_ov") || kept("bs_hq_last_staff")) showShell(); else $("boot").hidden = false;
     $("sample").hidden = !sample;
     syncRangeSelects();
+    drawKept();
     refresh();
     clearInterval(timer);
     timer = setInterval(function () { if (!document.hidden) refresh(); }, EVERY);
@@ -227,6 +228,18 @@
       if (document.hidden || $("shell").hidden) return;
       getJSON("/api/admin/session").then(function (r) { if (r && r.s === 401) authFail(r); }, function () {});
     }, 2 * 60 * 1000);
+  }
+  /* 26 Nov 2026 (Luke: "it loads kinda slowly when you go to the needs you page"): on opening, this device's last
+     good answers are drawn AT ONCE (Needs you, Today, Team…), and the fresh ones replace them as they land.
+     Before, every section showed grey placeholders until the network answered. The header says "updating…"
+     until then. Never in the sample; logging out forgets the copies (bs_hq_last_*). */
+  function drawKept() {
+    if (sample) return;
+    var ks = kept("bs_hq_last_sheet"), ko = kept("bs_hq_last_ov", rangeQuery().toString()), any = false;
+    if (ks && !sheet && ks.j.connected) { sheet = ks.j; any = true; try { drawSheet(); } catch (e) { drewBadly("the kept sheet", e); } }
+    if (ko && !ov) { ov = ko.j; any = true; try { drawOverview(); } catch (e) { drewBadly("the kept page numbers", e); } }
+    if (window.HQStaff && window.HQStaff.showKept) { try { if (window.HQStaff.showKept()) any = true; } catch (e) { drewBadly("the kept desk", e); } }
+    if (any) $("when").textContent = "updating…";
   }
   /* every 5 minutes while the page is on screen; coming back after longer than that refreshes at once */
   document.addEventListener("visibilitychange", function () { if (!document.hidden && started && Date.now() - lastRefresh > EVERY) refresh(); });

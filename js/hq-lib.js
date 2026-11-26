@@ -1897,6 +1897,13 @@
     return "wait";
   }
   /* the face of one release: cover is supplied by the page (a song that has one). pre-HQ hides missing-field warnings. */
+  /* a release cover from its Artwork link, small (26 Nov 2026): the site's copy (/api/staff/artwork/<token>) through
+     Netlify's picture service at 200 x 200 (the card shows it at 92 px; 2x for phones). Anything else is left as it is. */
+  function artworkThumb(path) {
+    path = String(path || "");
+    if (!/^\/api\/staff\/artwork\/[a-f0-9]{32}$/.test(path)) return path;
+    return "/.netlify/images?url=" + encodeURIComponent(path) + "&w=200&h=200&fit=cover&q=80";
+  }
   function releaseFace(v, today, extra) {
     extra = extra || {};
     if (!v) return null;
@@ -2345,7 +2352,7 @@
     fmt: fmt,
     /* phone HQ (18 Nov 2026): Needs you, the release strip, the team dots, the week, the spend gauge */
     deskWhen: deskWhen, spendGauge: spendGauge, gapNotes: gapNotes, decisionCards: decisionCards,
-    releaseFace: releaseFace, teamDots: teamDots, weekAhead: weekAhead, quietFeed: quietFeed, screenText: screenText, dropAccountId: dropAccountId, plainWords: plainWords, pitchSentence: pitchSentence, followerStrip: followerStrip,
+    releaseFace: releaseFace, artworkThumb: artworkThumb, teamDots: teamDots, weekAhead: weekAhead, quietFeed: quietFeed, screenText: screenText, dropAccountId: dropAccountId, plainWords: plainWords, pitchSentence: pitchSentence, followerStrip: followerStrip,
     mondayPick: mondayPick, lyricsPreview: lyricsPreview,
     /* L5 watchers (18 Nov 2026) */
     routeMailLine: routeMailLine, contentIdeasCard: contentIdeasCard, phoneWatchers: phoneWatchers,
