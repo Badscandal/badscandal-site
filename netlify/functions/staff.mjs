@@ -45,6 +45,8 @@ import { getDeployStore, getStore } from "@netlify/blobs";
 import { keyOk } from "../lib/feed.mjs";
 import { dispatchSongJob, readSongReport } from "../lib/github.mjs";
 import { loadHq } from "../lib/hq-load.mjs";
+import { artworkPath, artworkResponse, artworkToken } from "../lib/artwork.mjs";
+import { drive as driveClient } from "../lib/gdrive.mjs";
 import { handle } from "../lib/mcp.mjs";
 import { sweep as pushSweep } from "../lib/push.mjs";
 import { COOKIE, readCookie, verifySession } from "../lib/session.mjs";
@@ -112,7 +114,11 @@ function pushAfter(context, st, now) {
   return p;
 }
 const asksLuke = (m) => !!m && m.to === "Luke" && m.needs !== "none";
-const hqLoader = (st) => { let p = null; return () => p || (p = loadHq({ cache: st.cache, desk: st.desk, env: (k) => Netlify.env.get(k) })); };
+/* the release covers on Upcoming (26 Nov 2026, netlify/lib/artwork.mjs): the address of a release's Artwork
+   copy, a hash of its id, its link and ADMIN_KEY, so nobody can guess one */
+const artSecret = () => Netlify.env.get("ADMIN_KEY") || Netlify.env.get("STATS_KEY") || "";
+const artworkUrlFor = (id, link) => artworkPath(artworkToken(id, link, artSecret()));
+const hqLoader = (st, later = null) => { let p = null; return () => p || (p = loadHq({ cache: st.cache, desk: st.desk, env: (k) => Netlify.env.get(k), later })); };
 
 /* one line in the connector's trouble log for a request that was turned away (and for every first
    contact), so a client's "HTTP 404" can be looked up. Requests without a valid key are noted at most
@@ -181,6 +187,14 @@ async function api(req, context, path) {
   /* a cover Webmaster put on the desk (16 Nov 2026): public, the picture only (it goes on the song page anyway;
      GitHub fetches it to build the page). Nothing else on the desk is reachable without a key. */
   if (req.method === "GET" && path.startsWith("cover/")) return S.coverResponse(stores(context).desk, path.slice("cover/".length));
+  /* a release's cover from its Artwork link (26 Nov 2026): public like the desk covers, the picture only, at an
+     address only the board hands out (netlify/lib/artwork.mjs) */
+  if (req.method === "GET" && path.startsWith("artwork/")) {
+    const desk = stores(context).desk;
+    const releases = await S.listReleases(desk).catch(() => []);
+    const saKey = Netlify.env.get("GOOGLE_SA_KEY");
+    return artworkResponse(desk, path.slice("artwork/".length), { releases, secret: artSecret(), drive: saKey ? driveClient(saKey) : null, why: url.searchParams.get("why") === "1" });
+  }
   const luke = await isLuke(req);
   const role = luke ? "luke" : await keyRole(req);
   if (!role) return json(401, { error: "Not logged in" });
@@ -212,24 +226,31 @@ async function api(req, context, path) {
   if (path === "board" && req.method === "GET") {
     if (sample) return json(200, { sample: true, ...sampleBoard(now), auto: C.sampleAuto(now), accountHealth: sampleReport(now), needs: C.needsCount(await sampleNeedsDesk(now), S.spDay(now), now) });
     const st = stores(context);
+    /* 26 Nov 2026 (Luke: "it loads kinda slowly when you go to the needs you page"): what doesn't depend on
+       each other is read side by side (it was one after another), the sheet may answer from its copy
+       (hq-load SHEET_STALE_OK), and Server-Timing says where the time went */
+    const t0 = Date.now(), lap = {};
+    const timed = (name, p) => Promise.resolve(p).finally(() => { lap[name] = Date.now() - t0; });
+    const later = context && typeof context.waitUntil === "function" ? (p) => { try { context.waitUntil(p); } catch {} } : null;
     /* a stuck profile job is asked about by the hourly job (pushhourly.mjs), not by opening the page (18 Nov 2026) */
-    await S.upgradeReleases(st.desk, now).catch(() => null); /* releases sent before the pipeline changed (15 Nov 2026) */
-    const [desk, hqAns] = await Promise.all([S.loadDesk(st.desk, now), hqLoader(st)().catch(() => null)]);
+    await timed("upgrade", S.upgradeReleases(st.desk, now).catch(() => null)); /* releases sent before the pipeline changed (15 Nov 2026) */
+    /* L6: what happened to each song-page request (the Pages tab's tiles) */
+    const [desk, hqAns, pageBuilds] = await Promise.all([timed("desk", S.loadDesk(st.desk, now)), timed("sheet", hqLoader(st, later)().catch(() => null)), timed("pages", S.songPages(st.desk, now).catch(() => []))]);
     /* the board hands Claude every message, so it counts as Claude having READ them (11 Nov 2026, review:
        a round that reads the desk this way left Luke's answers to Claude "Not read yet" for good) */
-    if (role === "claude") await Promise.all([S.touchSeen(st.desk, now, "Claude", "board"), S.touchRead(st.desk, now, "Claude")]);
-    /* L6: what happened to each song-page request (the Pages tab's tiles) */
-    const pageBuilds = await S.songPages(st.desk, now).catch(() => []);
-    const auto = await C.boardAuto(st.desk, now, desk).catch(() => null);
     /* account health reads the desk and the stored Instagram copy. A failure here must not blank the board. */
-    const accountHealth = await loadReport({ store: st.desk, ig: igStore(context), now, builds: pageBuilds }).catch(() => null);
+    const [auto, accountHealth] = await Promise.all([timed("auto", C.boardAuto(st.desk, now, desk).catch(() => null)),
+      timed("health", loadReport({ store: st.desk, ig: igStore(context), now, builds: pageBuilds }).catch(() => null)),
+      role === "claude" ? Promise.all([S.touchSeen(st.desk, now, "Claude", "board"), S.touchRead(st.desk, now, "Claude")]) : null]);
     /* the ONE Needs you count (C.needsCount): the phone's line and the needs_you tool say the same number */
-    const counted = await needsDesk(st.desk, now, { desk, auto, report: accountHealth, ig: igStore(context) });
+    const counted = await timed("needs", needsDesk(st.desk, now, { desk, auto, report: accountHealth, ig: igStore(context) }));
     const cap = hqAns && hqAns.money && hqAns.money.cap;
     counted.notRead = cap && Array.isArray(cap.notRead) ? cap.notRead : [];
     counted.lukeTasks = (hqAns && hqAns.team && hqAns.team.tasks) || [];
     const needs = C.needsCount(counted, S.spDay(now), now);
-    return json(200, { ...S.board(desk, now, hqAns && hqAns.team ? hqAns : null), pageBuilds, hqRead: !!(hqAns && hqAns.team), accountHealth, needs, ...(auto ? { auto } : {}), keys: { bots: !!Netlify.env.get("STAFF_BOT_KEY"), claude: !!Netlify.env.get("STAFF_CLAUDE_KEY") } });
+    const body = { ...S.board(desk, now, hqAns && hqAns.team ? hqAns : null, { artworkUrl: artworkUrlFor }), pageBuilds, hqRead: !!(hqAns && hqAns.team), accountHealth, needs, ...(auto ? { auto } : {}), keys: { bots: !!Netlify.env.get("STAFF_BOT_KEY"), claude: !!Netlify.env.get("STAFF_CLAUDE_KEY") } };
+    lap.total = Date.now() - t0;
+    return json(200, body, { "Server-Timing": Object.entries(lap).map(([k, v]) => `${k};dur=${v}`).join(", ") });
   }
   if (path === "trace" && req.method === "GET") return sample ? json(200, { sample: true, trace: [] }) : json(200, { trace: await S.getTrace(stores(context).desk) });
   if (path === "workspace" && req.method === "GET") {

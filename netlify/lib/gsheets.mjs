@@ -32,18 +32,44 @@ export function batchUrl(sheetId, tabs) {
   return `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(sheetId)}/values:batchGet?${q}&majorDimension=ROWS&valueRenderOption=FORMATTED_VALUE`;
 }
 
-/* -> { sheets: {Tab: [[cells]]} } or { error }. fetchImpl is injectable for tests. */
-export async function readTabs(rawKey, sheetId, tabs, fetchImpl = fetch) {
-  const sa = parseKey(rawKey);
-  if (!sa) return { error: "The Google key on Netlify isn't a service-account JSON key" };
-  try {
+/* 26 Nov 2026 (speed): one token per warm function, reused until 5 minutes before it runs out. It used to be
+   asked for on every read (a signature and a round trip to Google each time). Kept per fetchImpl, so a test's
+   own fetch never sees another test's token. Never logged, never sent anywhere but Google. */
+const tokens = new WeakMap();
+async function sheetToken(sa, fetchImpl) {
+  let m = tokens.get(fetchImpl);
+  if (!m) tokens.set(fetchImpl, (m = new Map()));
+  const hit = m.get(sa.email);
+  if (hit && hit.until > Date.now()) return { token: hit.token };
+  const p = (async () => {
     const tok = await fetchImpl("https://oauth2.googleapis.com/token", {
       method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, signal: AbortSignal.timeout(8000),
       body: new URLSearchParams({ grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer", assertion: signJwt(sa) }),
     });
     const tj = await tok.json().catch(() => null);
     if (!tok.ok || !tj || !tj.access_token) return { error: "Google refused the key (HTTP " + tok.status + ")" };
-    const res = await fetchImpl(batchUrl(sheetId, tabs), { method: "GET", headers: { Authorization: "Bearer " + tj.access_token }, signal: AbortSignal.timeout(9000) });
+    const life = Number(tj.expires_in) > 0 ? Number(tj.expires_in) * 1000 : 3600 * 1000;
+    m.set(sa.email, { token: tj.access_token, until: Date.now() + life - 5 * 60 * 1000 });
+    return { token: tj.access_token };
+  })();
+  /* three reads at once share one token request */
+  m.set(sa.email, { pending: p, until: 0 });
+  try { return await p; } finally { const cur = m.get(sa.email); if (cur && cur.pending === p) m.delete(sa.email); }
+}
+async function tokenFor(sa, fetchImpl) {
+  const m = tokens.get(fetchImpl), cur = m && m.get(sa.email);
+  if (cur && cur.pending) return cur.pending;
+  return sheetToken(sa, fetchImpl);
+}
+
+/* -> { sheets: {Tab: [[cells]]} } or { error }. fetchImpl is injectable for tests. */
+export async function readTabs(rawKey, sheetId, tabs, fetchImpl = fetch) {
+  const sa = parseKey(rawKey);
+  if (!sa) return { error: "The Google key on Netlify isn't a service-account JSON key" };
+  try {
+    const t = await tokenFor(sa, fetchImpl);
+    if (t.error) return { error: t.error };
+    const res = await fetchImpl(batchUrl(sheetId, tabs), { method: "GET", headers: { Authorization: "Bearer " + t.token }, signal: AbortSignal.timeout(9000) });
     const j = await res.json().catch(() => null);
     if (res.status === 403) return { error: "The sheet isn't shared with " + sa.email + " (add it as Viewer)" };
     if (res.status === 400) return { error: "A tab is missing in the sheet (need: " + tabs.join(", ") + ")" };

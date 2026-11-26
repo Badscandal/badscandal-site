@@ -6,8 +6,8 @@
    An airline network can hang, so each fetch gives up after 8s and uses the cached copy.
    Script urls carry ?v= (one content hash of the HQ scripts, including hq-look.js and hq-workspaces.js).
    The cache key is the full url, so a new page can never be paired with an older script. */
-var CACHE = "bs-hq-v19"; /* v19 (25 Nov 2026): Social Farm › Edits (js/hq-edits.js). v18 (21 Nov 2026): v18 (21 Nov 2026): Needs you as decision and ask cards, the bots' re-check fixes. v17: Needs you cards, dispute cards, money. */
-var V = "7d45d1e68820";
+var CACHE = "bs-hq-v20"; /* v20 (26 Nov 2026): speed: the scripts come from this copy first. v19 (25 Nov 2026): Social Farm › Edits (js/hq-edits.js). v18 (21 Nov 2026): v18 (21 Nov 2026): Needs you as decision and ask cards, the bots' re-check fixes. v17: Needs you cards, dispute cards, money. */
+var V = "afd74295548c";
 var SHELL = ["/hq",
   "/js/crt.js?v=" + V,
   "/js/hq-lib.js?v=" + V,
@@ -26,8 +26,13 @@ var SHELL = ["/hq",
   "/hq.webmanifest",
   "/assets/hq-icon-192-v1.png"];
 var FETCH_MS = 8000;
+/* 26 Nov 2026 (Luke: "it loads kinda slowly"): the page waits at most 3.5 s for the network before this
+   device's copy of it is shown (it was 8 s), and a script whose url carries ?v=<hash> is taken from the copy
+   FIRST, never asked for again: a new hash is a new url, so a new version can never be paired with an old
+   script. Before, every open downloaded all the scripts again (the site serves them no-store). */
+var PAGE_MS = 3500;
 
-function fetchWithTimeout(req) {
+function fetchWithTimeout(req, ms) {
   return new Promise(function (resolve, reject) {
     var ctrl = typeof AbortController === "function" ? new AbortController() : null;
     var settled = false;
@@ -36,7 +41,7 @@ function fetchWithTimeout(req) {
       settled = true;
       try { if (ctrl) ctrl.abort(); } catch (e) {}
       reject(new Error("timeout"));
-    }, FETCH_MS);
+    }, ms || FETCH_MS);
     fetch(req, ctrl ? { signal: ctrl.signal } : undefined).then(function (res) {
       if (settled) return;
       settled = true;
@@ -71,7 +76,16 @@ self.addEventListener("fetch", function (e) {
   if (url.pathname.indexOf("/api/") === 0) return; /* never the numbers */
   var key = req.mode === "navigate" ? "/hq" : url.pathname + url.search;
   if (req.mode !== "navigate" && SHELL.indexOf(key) < 0) return;
-  e.respondWith(fetchWithTimeout(req).then(function (res) {
+  if (req.mode !== "navigate" && url.search.indexOf("?v=") === 0) {
+    e.respondWith(caches.match(key).then(function (hit) {
+      return hit || fetchWithTimeout(req).then(function (res) {
+        if (res.ok && res.type === "basic") { var copy = res.clone(); caches.open(CACHE).then(function (c) { c.put(key, copy); }); }
+        return res;
+      });
+    }));
+    return;
+  }
+  e.respondWith(fetchWithTimeout(req, req.mode === "navigate" ? PAGE_MS : FETCH_MS).then(function (res) {
     /* only a real page: never keep an error or a redirect over the good copy */
     if (res.ok && res.type === "basic") { var copy = res.clone(); caches.open(CACHE).then(function (c) { c.put(key, copy); }); }
     return res;

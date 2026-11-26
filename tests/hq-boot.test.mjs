@@ -23,7 +23,7 @@ test("every HQ script url carries the same content hash, and the service worker 
   const scripts = [...page.matchAll(/<script src="(js\/[^"]+)" defer><\/script>/g)].map((m) => m[1]);
   assert.deepEqual(scripts, HQ_SCRIPTS.map((s) => s + "?v=" + v));
   assert.match(sw, new RegExp('var V = "' + v + '"'));
-  assert.match(sw, /var CACHE = "bs-hq-v19"/); /* v19, 25 Nov 2026: a new file, js/hq-edits.js (Social Farm › Edits). v18: Needs you cards. */
+  assert.match(sw, /var CACHE = "bs-hq-v20"/); /* v20 (26 Nov 2026): the scripts from the copy first (speed). v19, 25 Nov 2026: a new file, js/hq-edits.js (Social Farm › Edits). v18: Needs you cards. */
   assert.match(sw, /var FETCH_MS = 8000/);
   for (const s of HQ_SCRIPTS) assert.match(sw, new RegExp('"\\/' + s.replace(/\./g, "\\.") + '\\?v=" \\+ V'));
   for (const tag of page.matchAll(/<link[^>]*rel="stylesheet"[^>]*>/g)) {
@@ -202,17 +202,19 @@ test("service worker: a hang falls back to the cached copy of that exact url, ne
     handlers.fetch({ request: { url, mode, method: "GET" }, respondWith(p) { used = true; promise = p; } });
     return { used, promise };
   };
+  /* 26 Nov 2026 (speed): a script with ?v= comes from the copy FIRST: the network is not even asked */
   const hit = ask("https://badscandal.com" + key);
   assert.equal(hit.used, true);
-  assert.equal(timers.filter((t) => t.ms === 8000 && !t.cleared).length, 1);
-  timers.filter((t) => t.ms === 8000 && !t.cleared).forEach((t) => t.fn());
   assert.equal(await (await hit.promise).text(), "same-version");
-  assert.deepEqual(puts, [], "a failed fetch does not replace the cached copy");
+  assert.equal(hung, 0, "a versioned script in the copy never waits on the network");
+  assert.deepEqual(puts, [], "nothing replaces the cached copy");
+  /* the page waits 3.5 s (it was 8 s), then the one cached page */
   const page = ask("https://badscandal.com/hq?sample=1", "navigate");
-  timers.filter((t) => t.ms === 8000 && !t.cleared).forEach((t) => t.fn());
+  assert.equal(timers.filter((t) => t.ms === 3500 && !t.cleared).length, 1);
+  timers.filter((t) => t.ms === 3500 && !t.cleared).forEach((t) => t.fn());
   assert.equal(await (await page.promise).text(), "cached-page", "a hung navigation falls back to the one cached page");
   assert.equal(ask("https://badscandal.com" + other).used, false, "a different hash is not served from this shell");
-  assert.equal(hung >= 2, true);
+  assert.equal(hung >= 1, true);
 
   const fresh = new Map();
   const ok = loadSW(async () => basic("from-network"), fresh);

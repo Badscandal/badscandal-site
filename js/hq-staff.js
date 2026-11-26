@@ -65,6 +65,36 @@
     }, function () { loading = null; tried = true; failed("No connection", "offline"); });
     return loading;
   }
+  /* the release covers from the Artwork link (26 Nov 2026, netlify/lib/artwork.mjs). The small copy comes from
+     /.netlify/images; if that fails, the site's own copy; if that fails too, the card drops the picture and
+     says why ("share it as Anyone with the link"), asked once per address: artWhy[address] = the reason (1 while
+     it is being asked). */
+  var artWhy = {};
+  document.addEventListener("error", function (ev) {
+    var t = ev.target;
+    if (!t || t.tagName !== "IMG" || !t.classList || !t.classList.contains("rcover")) return;
+    var orig = t.getAttribute("data-art");
+    if (orig && t.getAttribute("src") !== orig) { t.setAttribute("src", orig); return; }
+    var src = orig || t.getAttribute("src") || "";
+    if (src.indexOf("/api/staff/artwork/") !== 0 || artWhy[src]) { if (t.parentNode) t.parentNode.removeChild(t); return; }
+    artWhy[src] = 1;
+    if (t.parentNode) t.parentNode.removeChild(t);
+    HQ.getJSON(src + "?why=1").then(function (res) {
+      artWhy[src] = res && res.j && res.j.why ? res.j.why : res && res.s === 200 ? "" : "The Artwork link couldn't be shown.";
+      if (artWhy[src] === "") { delete artWhy[src]; return; }
+      drawReleases();
+    }, function () { artWhy[src] = 1; });
+  }, true);
+  /* on opening (26 Nov 2026, speed): this device's last good board is drawn at once, before the network answers;
+     the fresh board replaces it as soon as it lands. -> true when something was drawn. */
+  function showKept() {
+    if (board || HQ.sample) return false;
+    var old = HQ.kept(KEY);
+    if (!old || !old.j || !Array.isArray(old.j.staff)) return false;
+    board = old.j; goodAt = old.at;
+    draw();
+    return true;
+  }
   /* A failed board never breaks the page: the last good one stays (or this device's kept copy),
      else Team falls back to the sheet and Messages offers Retry. */
   function failed(why, msg) {
@@ -848,7 +878,11 @@
         (g.done.length ? '<details class="bwhy" data-fold="done:' + esc(v.id) + '"' + (ui.rel.fold["done:" + v.id] ? " open" : "") + "><summary>Done or not ours (" + g.done.length + ")</summary>" + stepList(g.done) + "</details>" : "");
     var sheetSong = (HQ.sheet() && HQ.sheet().songs || []).filter(function (s) { return L.titleKey(s.song) === L.titleKey(v.title); })[0];
     var pageSong = (HQ.overview && HQ.overview() && HQ.overview().songs || []).filter(function (s) { return L.titleKey(s.title) === L.titleKey(v.title); })[0];
-    var face = L.releaseFace(v, today, { cover: (pageSong && pageSong.cover) || (sheetSong && sheetSong.cover) || "", taps: pageSong ? pageSong.taps : null, people: pageSong ? pageSong.people : null, spend: "", mail: board && board.mail });
+    /* the cover (26 Nov 2026): the song page's, else the release's own Artwork link (the site's copy of it, made
+       small by /.netlify/images), else the sheet's. An Artwork link that can't be opened says why on the card. */
+    var art = v.artworkUrl && !artWhy[v.artworkUrl] ? v.artworkUrl : "", pageCover = pageSong && pageSong.cover;
+    var cover = pageCover || (art ? L.artworkThumb(art) : "") || (sheetSong && sheetSong.cover) || "";
+    var face = L.releaseFace(v, today, { cover: cover, taps: pageSong ? pageSong.taps : null, people: pageSong ? pageSong.people : null, spend: "", mail: board && board.mail });
     var ring = face.progress.total ? '<span class="ring" style="--p:' + face.progress.pct + '" aria-label="' + esc(face.progress.text) + '"><b>' + face.progress.done + "/" + face.progress.total + "</b></span>" : "";
     var dots = face.dots.length ? '<p class="rdots" aria-hidden="true">' + face.dots.map(function (t) { return '<i class="' + t + '"></i>'; }).join("") + "</p>" : "";
     var nxt = face.next ? '<p class="rnext">Next: ' + esc(face.next.label) + " · " + esc(face.next.owner) + (face.next.when ? " · " + esc(face.next.when) : "") + "</p>" : "";
@@ -858,11 +892,12 @@
     if (face.prehq) { badLeft = []; wg = { bad: [], caution: [] }; }
     var mark = L.songMark(board && board.disputes, v.title, today, [v]);
     return '<article class="tile relcard rstrip' + (mark.tone ? " tone-" + mark.tone : "") + '" id="releases-' + esc(safe(v.id)) + '">' +
-      (face.cover ? '<img class="rcover" src="' + esc(face.cover) + '" alt="">' : "") +
+      (face.cover ? '<img class="rcover" src="' + esc(face.cover) + '" alt=""' + (!pageCover && art && face.cover !== art ? ' data-art="' + esc(art) + '"' : "") + ' decoding="async">' : "") +
       '<div class="rface"><div class="bhead"><div><h3>' + esc(v.title) + "</h3>" +
       '<p class="rwhen">' + esc(face.when) + "</p>" + dealHtml(v) + (mark.badge ? '<p class="dbadge">' + esc(mark.badge) + "</p>" : "") + "</div>" + ring +
       '<span class="' + (pill.bad ? "bstate late" : "pill" + (pill.rel ? " rel" : "")) + '">' + esc(pill.text) + "</span></div>" +
       (face.prehq ? '<p class="prehq">pre-HQ</p>' : "") + dots + nxt +
+      (!pageCover && v.artworkUrl && artWhy[v.artworkUrl] && artWhy[v.artworkUrl] !== 1 ? '<p class="rdist rcoverwhy">Cover: ' + esc(artWhy[v.artworkUrl]) + "</p>" : "") +
       (face.distributor && !/ISRC|UPC/i.test(face.distributor) ? '<p class="rdist">' + esc(face.distributor) + "</p>" : "") +
       (face.mailLine && !/^RouteNote email: (not connected|not reported)$/.test(face.mailLine) ? '<p class="rdist">' + esc(face.mailLine) + "</p>" : "") + stats +
       (ui.rel.note[v.id] ? '<p class="rdone" role="status">' + esc(ui.rel.note[v.id]) + "</p>" : "") +
@@ -1725,5 +1760,5 @@
   }
   bindProfiles();
 
-  window.HQStaff = { reload: reload, clear: clear, drawWorkers: drawWorkers, drawReleases: drawReleases, addDetails: addDetails, board: function () { return board; }, problem: function () { return problem; } };
+  window.HQStaff = { reload: reload, showKept: showKept, clear: clear, drawWorkers: drawWorkers, drawReleases: drawReleases, addDetails: addDetails, board: function () { return board; }, problem: function () { return problem; } };
 })();

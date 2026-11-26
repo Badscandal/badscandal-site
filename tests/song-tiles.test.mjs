@@ -83,7 +83,8 @@ test("songPages hands each request's page slug (the tile matches on it)", async 
 });
 test("the board carries pageBuilds; overview carries track, health and the home card; HQ draws the tiles", () => {
   const fn = readFileSync(new URL("../netlify/functions/staff.mjs", import.meta.url), "utf8");
-  assert.match(fn, /const pageBuilds = await S\.songPages\(st\.desk, now\)/); assert.match(fn, /pageBuilds, hqRead/);
+  /* 26 Nov 2026 (speed): the board reads the song pages beside the desk and the sheet, not after them */
+  assert.match(fn, /const \[desk, hqAns, pageBuilds\] = await Promise\.all\(\[[^\n]*S\.songPages\(st\.desk, now\)/); assert.match(fn, /pageBuilds, hqRead/);
   const adm = readFileSync(new URL("../netlify/functions/admin.mjs", import.meta.url), "utf8");
   assert.match(adm, /track: !!l\.track/); assert.match(adm, /homeCard: \{ now: homeCardNow\(\), due: homeCardSong\(/);
   const cf = readFileSync(new URL("../netlify/functions/capi.mjs", import.meta.url), "utf8");

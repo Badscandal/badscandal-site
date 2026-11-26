@@ -3038,8 +3038,14 @@ export async function proposeSongPage(store, now, roster, a) {
     noSecrets(title);
     const date = clean(a.date, 10);
     if (!isDay(date) || Number.isNaN(Date.parse(date + "T12:00:00Z"))) fail("The release day must be a date written YYYY-MM-DD, for example 2026-11-27. Nothing was asked.");
-    const cover = httpsLink(a.cover);
-    if (!cover) fail("cover must be a link to the cover picture that starts with https:// (the square JPG or PNG; a Dropbox link is fine). Nothing was asked.");
+    /* 26 Nov 2026 (Luke: "every song in future takes the artwork from the ... link that's posted into the song
+       upload thing in the artwork section"): no cover given = the Artwork link of the song's release on the desk */
+    let cover = httpsLink(a.cover);
+    if (!cover && !clean(a.cover, 500)) {
+      const rel = (await listReleases(store).catch(() => [])).find((r) => r && r.status !== "cancelled" && sameSong(r.title, title) && r.pack && httpsLink(r.pack.artwork));
+      if (rel) cover = httpsLink(rel.pack.artwork);
+    }
+    if (!cover) fail("cover must be a link to the cover picture that starts with https:// (the square JPG or PNG; a Dropbox link is fine), or leave it out when the song's release has its Artwork link in the release form. Nothing was asked.");
     const artists = clean(a.artists, 160);
     if (artists) noSecrets(artists);
     p = { action: "page", kind, slug, title, date, cover, ...(artists ? { artists } : {}) };
@@ -5106,7 +5112,8 @@ export function board(desk, now, hq, o = {}) {
     updates: updates.slice(0, 60),
     messages: threads(desk.messages).slice(0, 80).map((t) => ({ ...mark(t), replies: t.replies.map(mark) })),
     answered: answeredByLuke(desk.messages, read, now),
-    releases: releaseOrder(views).slice(0, 20).map(slimRelease), pitchSlots: pitchSlots(views, today), packFields: packFieldsOut(), releaseSteps: releaseStepsOut(),
+    /* o.artworkUrl(id, link): the address of the release's cover copy (functions/staff.mjs, netlify/lib/artwork.mjs) */
+    releases: releaseOrder(views).slice(0, 20).map(slimRelease).map((r) => (typeof o.artworkUrl === "function" && r.pack && r.pack.artwork ? { ...r, artworkUrl: o.artworkUrl(r.id, r.pack.artwork) } : r)), pitchSlots: pitchSlots(views, today), packFields: packFieldsOut(), releaseSteps: releaseStepsOut(),
     profiles: profilesView(desk.profiles || {}, desk.messages || []), /* L12 */
     sightings: sightingsView(desk.sightings || null, desk.releases || [], today, now),
     waiting: { luke: waitingOn(desk.messages, "Luke"), claude: waitingOn(desk.messages, "Claude"), bots: desk.messages.filter((m) => isOpen(m) && !PEOPLE.includes(m.to)).length },

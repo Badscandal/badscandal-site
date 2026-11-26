@@ -81,7 +81,9 @@ export default async (req, context) => {
   let desk = null;
   if (!sample) { try { desk = prod ? getStore({ name: "staff", consistency: "strong" }) : getDeployStore({ name: "staff", consistency: "strong" }); } catch { desk = null; } }
   try {
-    return json(200, await loadHq({ cache, desk, env: (k) => Netlify.env.get(k), sample, fresh: url.searchParams.get("fresh") === "1" }));
+    /* the page's own read: a copy up to 15 minutes old answers at once, the sheet is read again after (hq-load SHEET_STALE_OK) */
+    const later = context && typeof context.waitUntil === "function" ? (p) => { try { context.waitUntil(p); } catch {} } : null;
+    return json(200, await loadHq({ cache, desk, env: (k) => Netlify.env.get(k), sample, fresh: url.searchParams.get("fresh") === "1", later }));
   } catch (e) {
     console.error("hq data failed", e?.name || e);
     return json(500, { error: "Could not read the numbers" });

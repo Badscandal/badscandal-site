@@ -4,7 +4,7 @@
    new input is the staff desk (netlify/lib/staff.mjs): the bots' connector updates join the sheet's
    Updates tab and can finish or block today's duties.
 
-   loadHq({ cache, desk, env, now, sample, fresh, fetchImpl }) -> the JSON body:
+   loadHq({ cache, desk, env, now, sample, fresh, fetchImpl, later }) -> the JSON body:
      { connected:false, need:[…] } | { connected:true, error } | { connected:true, …hqModel(), metaKey, health, readAt, generated }
    cache = the "meta-cache" store, desk = the "staff" store (may be null), env = (name) => value. */
 import { fetchMonthAverage } from "./fx.mjs";
@@ -19,6 +19,26 @@ import { sampleReleases, sampleSightings } from "./staff-sample.mjs";
 /* the sheet is read at most every 2 minutes so the bots' live updates show quickly; one batch read
    + one small read of the optional "Updates" tab, well inside Google's limits */
 export const SHEET_TTL = 2 * 60 * 1000;
+/* 26 Nov 2026 (Luke: "it loads kinda slowly when you go to the needs you page"): opening /hq after a break
+   used to wait for Google every time (the copy is older than 2 minutes then). Now the page's own reads
+   (`later` given: /api/hq/data and /api/staff/board) answer at once with a copy up to 15 minutes old and
+   read the sheet again in the background; the next refresh has it. Older than that, or `fresh`, or a bot's
+   tool call (no `later`), it still waits for Google. The bots' connector updates are live either way
+   (they are on the desk, not the sheet). */
+export const SHEET_STALE_OK = 15 * 60 * 1000;
+
+/* one read of the sheet: the main tabs, the bots' live log and the team's fixed rate, all three at once
+   (they used to be two rounds) */
+async function readSheet(rawKey, sheetId, fetchImpl) {
+  const [read, up, rt] = await Promise.all([readTabs(rawKey, sheetId, HQ_TABS, fetchImpl), readTabs(rawKey, sheetId, ["Updates"], fetchImpl), readTabs(rawKey, sheetId, ["Rates"], fetchImpl)]);
+  /* a missing "Updates" tab must never break the rest; so is the team's fixed monthly rate (batch 4, 15 Nov
+     2026: tab "Rates", B1 = USD per 1 EUR) */
+  if (!read.error) {
+    read.sheets.Updates = up.error ? null : up.sheets.Updates || [];
+    read.sheets.Rates = rt.error ? null : rt.sheets.Rates || [];
+  }
+  return read;
+}
 
 async function rates(cache, months, today, fetchImpl) {
   const out = {}, at = {};
@@ -84,7 +104,7 @@ async function staffSide(desk, now) {
   } catch { return null; }
 }
 
-export async function loadHq({ cache, desk = null, env, now = Date.now(), sample = false, fresh = false, fetchImpl }) {
+export async function loadHq({ cache, desk = null, env, now = Date.now(), sample = false, fresh = false, fetchImpl, later = null }) {
   const today = spDay(now);
   const rawKey = env("GOOGLE_SA_KEY"), sheetId = env("HQ_SHEET_ID");
   if (sample || !rawKey || !sheetId) {
@@ -98,15 +118,15 @@ export async function loadHq({ cache, desk = null, env, now = Date.now(), sample
   let got = null;
   try { got = await cache.get("hq/sheets.json", { type: "json" }); } catch {}
   let readError = "";
-  if (!got || now - got.at > SHEET_TTL || fresh) {
-    const read = await readTabs(rawKey, sheetId, HQ_TABS, fetchImpl);
-    /* the bots' live log is its own read: a missing "Updates" tab must never break the rest; so is the
-       team's fixed monthly rate (batch 4, 15 Nov 2026: tab "Rates", B1 = USD per 1 EUR) */
-    if (!read.error) {
-      const [up, rt] = await Promise.all([readTabs(rawKey, sheetId, ["Updates"], fetchImpl), readTabs(rawKey, sheetId, ["Rates"], fetchImpl)]);
-      read.sheets.Updates = up.error ? null : up.sheets.Updates || [];
-      read.sheets.Rates = rt.error ? null : rt.sheets.Rates || [];
-    }
+  const age = got ? now - got.at : Infinity;
+  if (!fresh && age > SHEET_TTL && age <= SHEET_STALE_OK && typeof later === "function") {
+    /* the copy now, the new read in the background (see SHEET_STALE_OK) */
+    later(readSheet(rawKey, sheetId, fetchImpl).then(async (read) => {
+      if (read.error) { console.error("hq sheet (background): " + read.error); return; }
+      try { await cache.setJSON("hq/sheets.json", { at: Math.max(now, Date.now()), sheets: read.sheets }); } catch {}
+    }).catch(() => {}));
+  } else if (!got || age > SHEET_TTL || fresh) {
+    const read = await readSheet(rawKey, sheetId, fetchImpl);
     if (read.error) {
       console.error("hq sheet: " + read.error);
       if (!got) return { connected: true, error: read.error };
