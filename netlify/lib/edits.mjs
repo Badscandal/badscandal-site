@@ -28,8 +28,20 @@ export const STYLES = [
   { key: "vibe-small", label: "Small line", hint: "one small line, club footage" },
   { key: "vibe-mixed", label: "Mixed", hint: "mixed case with a soft glow" },
   { key: "movie-card", label: "Movie card", hint: "film moments, words beside the face" },
+  { key: "movie-dialogue", label: "Dialogue scene", hint: "one film scene, then the song comes in under it" },
 ];
 export const STYLE_KEYS = STYLES.map((s) => s.key);
+/* Dialogue scenes (26 Nov 2026, renderer Badscandal/badscandal-edits `--style movie-dialogue`): one film
+   scene with its subtitles, then the song comes in under it. The scene sets the length (about 25-31 s), so a
+   job of only dialogue scenes is stored as 31 s. Tone: "" = Mix (the renderer alternates heartbreak and
+   sensual). Footage: which collection the film comes from; the worker maps it to the renderer's
+   `--collection` (the Drive folder names live in the renderer, not here). Footage counts for dialogue
+   scenes and movie cards, tone for dialogue scenes only; elsewhere they are stored as Mix / all. */
+export const DIALOGUE = "movie-dialogue";
+export const SCENE_SECONDS = 31;
+export const TONES = [{ key: "", label: "Mix" }, { key: "heartbreak", label: "Heartbreak" }, { key: "sensual", label: "Sensual" }];
+export const FOOTAGE = [{ key: "romance", label: "Romance films" }, { key: "tv", label: "TV shows" }, { key: "all", label: "Everything" }];
+const FOOTAGE_STYLES = ["movie-dialogue", "movie-card"];
 export const LANGS = [{ key: "en", label: "English" }, { key: "pt", label: "Português" }, { key: "es", label: "Español" }];
 export const SECONDS = [15, 31];
 export const REASONS = [
@@ -55,10 +67,13 @@ const fail = (m, s) => { throw new EditsError(m, s); };
 
 /* ---------- making edits ---------- */
 
-/* About how long the cloud works: a few minutes to start (song, clips, models), then per edit. */
-export function estimateMinutes(n, seconds) {
-  const per = Number(seconds) === 31 ? 1.1 : 0.6;
-  return Math.ceil(3 + Math.max(0, Number(n) || 0) * per);
+/* About how long the cloud works: a few minutes to start (song, clips, models), then per edit. With the
+   styles given, the edits are taken as shared evenly between them, and a dialogue scene counts as 31 s
+   whatever length was picked. Worked in tenths of a minute, so no rounding error tips a ceiling. */
+export function estimateMinutes(n, seconds, styles) {
+  const list = Array.isArray(styles) && styles.length ? styles : [""];
+  const tenths = list.reduce((sum, st) => sum + (st === DIALOGUE || Number(seconds) === 31 ? 11 : 6), 0);
+  return Math.ceil((30 * list.length + Math.max(0, Number(n) || 0) * tenths) / (10 * list.length));
 }
 
 /* -> { job } or throws EditsError with a plain sentence. `songs` = the slugs that have timings. */
@@ -76,9 +91,16 @@ export function validateJob(body, songs) {
   if (!Number.isInteger(n) || n < 1 || n > MAX_EDITS) fail("How many: a whole number from 1 to " + MAX_EDITS + ".");
   const lang = b.lang == null || b.lang === "" ? "en" : String(b.lang);
   if (!LANGS.some((l) => l.key === lang)) fail("Language: English, Português or Español.");
-  const seconds = b.seconds == null || b.seconds === "" ? 15 : Number(b.seconds);
+  let seconds = b.seconds == null || b.seconds === "" ? 15 : Number(b.seconds);
   if (!SECONDS.includes(seconds)) fail("Length: 15 or 31 seconds.");
-  return { job: { song, styles, n, lang, seconds } };
+  if (styles.length === 1 && styles[0] === DIALOGUE) seconds = SCENE_SECONDS;
+  let tone = b.tone == null ? "" : b.tone;
+  if (typeof tone !== "string" || !TONES.some((t) => t.key === tone)) fail("Tone: Mix, Heartbreak or Sensual.");
+  let footage = b.footage == null || b.footage === "" ? "all" : b.footage;
+  if (typeof footage !== "string" || !FOOTAGE.some((f) => f.key === footage)) fail("Footage: Romance films, TV shows or Everything.");
+  if (!styles.includes(DIALOGUE)) tone = "";
+  if (!styles.some((s) => FOOTAGE_STYLES.includes(s))) footage = "all";
+  return { job: { song, styles, n, lang, seconds, tone, footage } };
 }
 
 export function newJobId(now = Date.now(), rand = Math.random) {
@@ -88,7 +110,7 @@ export function newJobId(now = Date.now(), rand = Math.random) {
 export async function createJob(store, input, now, start) {
   const job = {
     id: newJobId(now), ...input, state: "waiting", done: 0, total: input.n, edits: [], error: "",
-    minutes: estimateMinutes(input.n, input.seconds), createdAt: new Date(now).toISOString(), updatedAt: new Date(now).toISOString(),
+    minutes: estimateMinutes(input.n, input.seconds, input.styles), createdAt: new Date(now).toISOString(), updatedAt: new Date(now).toISOString(),
   };
   await store.setJSON("jobs/" + job.id + ".json", job);
   if (start) {
@@ -111,11 +133,26 @@ export function jobWords(j) {
   return String(j.state || "");
 }
 
+/* What the job card says it asked for: "Dialogue scene · Heartbreak · Romance films". The defaults (Mix,
+   Everything) aren't said; a job from before 26 Nov has neither. */
+export function jobLine(j) {
+  if (!j) return "";
+  const bits = [(j.styles || []).map(styleLabel).join(", ")];
+  const tone = TONES.find((t) => t.key && t.key === j.tone);
+  if (tone) bits.push(tone.label);
+  const foot = FOOTAGE.find((f) => f.key !== "all" && f.key === j.footage);
+  if (foot) bits.push(foot.label);
+  return bits.filter(Boolean).join(" · ");
+}
+
+/* The words go on when a job is listed or answered, never stored. */
+export const jobView = (j) => ({ ...j, words: jobWords(j), line: jobLine(j) });
+
 /* The newest jobs first (ids carry the time, so the keys sort by it). */
 export async function listJobs(store, limit = 20) {
   const keys = ((await store.list({ prefix: "jobs/" })).blobs || []).map((b) => b.key).sort().reverse().slice(0, limit);
   const jobs = await Promise.all(keys.map((k) => store.get(k, { type: "json" }).catch(() => null)));
-  return jobs.filter(Boolean).map((j) => ({ ...j, words: jobWords(j) }));
+  return jobs.filter(Boolean).map(jobView);
 }
 
 /* ---------- the worker (bearer EDITS_WORKER_TOKEN) ---------- */
@@ -129,7 +166,9 @@ export function workerOk(header, token) {
   return sameString(h(given), h(token));
 }
 
-const RECIPE_KEYS = ["id", "song", "style", "variant", "layout", "grade", "lang", "seconds", "created", "opener_text", "accent_word"];
+/* 26 Nov 2026: + tone, film (the renderer's film slug, e.g. "the-notebook-2004-1") and scene for dialogue
+   scenes. A dialogue recipe's land_line (a lyric) and dialogue (the film's lines) are never kept here. */
+const RECIPE_KEYS = ["id", "song", "style", "variant", "layout", "grade", "lang", "seconds", "created", "opener_text", "accent_word", "tone", "film", "scene"];
 export function cleanRecipe(r) {
   if (!r || typeof r !== "object") return {};
   const out = {};
@@ -165,7 +204,7 @@ export async function workerUpdate(store, body, now) {
       return { value: j };
     });
   }
-  return { ok: true, saved: saved.length, job: job ? { ...job, words: jobWords(job) } : null };
+  return { ok: true, saved: saved.length, job: job ? jobView(job) : null };
 }
 
 function cleanStock(s) {
@@ -214,8 +253,29 @@ export async function songsWithTimings(drv, rootId, titles = {}) {
 
 export function styleLabel(key) { return (STYLES.find((s) => s.key === key) || { label: key || "?" }).label; }
 
+/* A film slug in words: "the-notebook-2004-1" -> "The Notebook (2004)", "gossip-girl-s01e01-pilot" ->
+   "Gossip Girl S01E01". The year or the episode ends the name; what follows it is dropped. */
+const SMALL_WORDS = new Set(["a", "an", "and", "at", "by", "for", "in", "of", "on", "or", "the", "to"]);
+export function filmWords(slug) {
+  const parts = String(slug || "").toLowerCase().split("-").filter(Boolean);
+  if (!parts.length) return "";
+  let tail = "";
+  const cut = parts.findIndex((p, i) => i > 0 && (/^(19|20)\d\d$/.test(p) || /^s\d{1,2}e\d{1,3}$/.test(p)));
+  if (cut > 0) { tail = /^s/.test(parts[cut]) ? " " + parts[cut].toUpperCase() : " (" + parts[cut] + ")"; parts.length = cut; }
+  const name = parts.map((w, i) => (i > 0 && SMALL_WORDS.has(w) ? w : w.charAt(0).toUpperCase() + w.slice(1))).join(" ");
+  return (name + tail).slice(0, 60);
+}
+const toneLabel = (key) => (TONES.find((t) => t.key && t.key === key) || { label: "" }).label;
+
 export function recipeLine(r) {
   if (!r || !r.style) return "Recipe not read yet";
+  if (r.style === DIALOGUE) {
+    const bits = [r.song, styleLabel(r.style), toneLabel(r.tone), filmWords(r.film)];
+    if (r.hook && r.hook.id === "quote") bits.push("caption from the film");
+    else if (r.hook && r.hook.id && r.hook.id !== "none") bits.push("hook " + r.hook.id);
+    if (r.grade) bits.push(r.grade);
+    return bits.filter(Boolean).join(" · ");
+  }
   const bits = [r.song, styleLabel(r.style) + (r.variant && r.variant !== "plain" ? " (" + r.variant + ")" : "")];
   if (r.hook && r.hook.id && r.hook.id !== "none") bits.push("hook " + r.hook.id);
   if (r.grade) bits.push(r.grade);

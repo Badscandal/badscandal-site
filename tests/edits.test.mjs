@@ -57,9 +57,10 @@ async function call(path, { method = "GET", body, cookie = true, origin = ORIGIN
 
 /* ---------- making a job ---------- */
 test("a job is checked: a song with timings, known styles, 1-50, en/pt/es, 15 or 31 s", () => {
+  /* 26 Nov 2026: every job now also carries tone ("" = Mix) and footage ("all" = everything) for the dialogue scenes */
   const ok = E.validateJob({ song: "touchme", styles: ["vibe-wall", "movie-card", "vibe-wall"], n: 12, lang: "pt", seconds: 31 }, ["touchme"]);
-  assert.deepEqual(ok.job, { song: "touchme", styles: ["vibe-wall", "movie-card"], n: 12, lang: "pt", seconds: 31 });
-  assert.deepEqual(E.validateJob({ song: "touchme", styles: "vibe-bigword", n: 1 }, ["touchme"]).job, { song: "touchme", styles: ["vibe-bigword"], n: 1, lang: "en", seconds: 15 });
+  assert.deepEqual(ok.job, { song: "touchme", styles: ["vibe-wall", "movie-card"], n: 12, lang: "pt", seconds: 31, tone: "", footage: "all" });
+  assert.deepEqual(E.validateJob({ song: "touchme", styles: "vibe-bigword", n: 1 }, ["touchme"]).job, { song: "touchme", styles: ["vibe-bigword"], n: 1, lang: "en", seconds: 15, tone: "", footage: "all" });
   const no = (b, re) => assert.throws(() => E.validateJob(b, ["touchme"]), (e) => e instanceof E.EditsError && re.test(e.message));
   no({ song: "medaseubody", styles: ["vibe-wall"], n: 2 }, /no timings yet/);
   no({ song: "", styles: ["vibe-wall"], n: 2 }, /Pick a song/);
@@ -70,6 +71,101 @@ test("a job is checked: a song with timings, known styles, 1-50, en/pt/es, 15 or
   no({ song: "touchme", styles: ["vibe-wall"], n: 2, seconds: 20 }, /15 or 31/);
   assert.equal(E.estimateMinutes(10, 15), 9);
   assert.equal(E.estimateMinutes(10, 31), 14);
+});
+
+/* ---------- the dialogue scene style (26 Nov 2026): tone, footage, its own length ---------- */
+test("tone is Mix, Heartbreak or Sensual and footage is Romance films, TV shows or Everything; anything else is a plain sentence", () => {
+  const job = (o) => E.validateJob({ song: "touchme", styles: ["movie-dialogue"], n: 4, ...o }, ["touchme"]).job;
+  assert.equal(job({ tone: "heartbreak" }).tone, "heartbreak");
+  assert.equal(job({ tone: "sensual" }).tone, "sensual");
+  for (const mix of ["", null, undefined]) assert.equal(job({ tone: mix }).tone, "", "no tone = Mix, which alternates");
+  assert.equal(job({ footage: "romance" }).footage, "romance");
+  assert.equal(job({ footage: "tv" }).footage, "tv");
+  assert.equal(job({ footage: "all" }).footage, "all");
+  for (const any of ["", null, undefined]) assert.equal(job({ footage: any }).footage, "all", "no footage = everything");
+  const no = (b, re) => assert.throws(() => E.validateJob({ song: "touchme", styles: ["movie-dialogue"], n: 4, ...b }, ["touchme"]), (e) => e instanceof E.EditsError && re.test(e.message));
+  for (const tone of ["happy", "Heartbreak", "mix", 3, ["sensual"]]) no({ tone }, /^Tone: Mix, Heartbreak or Sensual\.$/);
+  for (const footage of ["movies", "Romance Movies", "TV SHOWS", 1, {}]) no({ footage }, /^Footage: Romance films, TV shows or Everything\.$/);
+  /* a wrong value is refused even where it wouldn't be used */
+  no({ styles: ["vibe-wall"], tone: "angry" }, /^Tone:/);
+  /* tone only means something for dialogue scenes, footage for dialogue scenes and movie cards */
+  const vibe = E.validateJob({ song: "touchme", styles: ["vibe-wall"], n: 2, tone: "sensual", footage: "tv" }, ["touchme"]).job;
+  assert.equal(vibe.tone, "");
+  assert.equal(vibe.footage, "all");
+  const card = E.validateJob({ song: "touchme", styles: ["movie-card"], n: 2, tone: "sensual", footage: "tv" }, ["touchme"]).job;
+  assert.equal(card.tone, "");
+  assert.equal(card.footage, "tv");
+  assert.deepEqual(job({ tone: "sensual", footage: "tv", lang: "pt" }), { song: "touchme", styles: ["movie-dialogue"], n: 4, lang: "pt", seconds: 31, tone: "sensual", footage: "tv" });
+  assert.deepEqual(E.STYLES.find((s) => s.key === "movie-dialogue"), { key: "movie-dialogue", label: "Dialogue scene", hint: "one film scene, then the song comes in under it" });
+  assert.deepEqual(E.TONES.map((t) => [t.key, t.label]), [["", "Mix"], ["heartbreak", "Heartbreak"], ["sensual", "Sensual"]]);
+  assert.deepEqual(E.FOOTAGE.map((f) => [f.key, f.label]), [["romance", "Romance films"], ["tv", "TV shows"], ["all", "Everything"]]);
+});
+
+test("the scene sets the length: a dialogue-only job is 31 s whatever was picked, and the estimate counts it as 31 s", () => {
+  const job = (o) => E.validateJob({ song: "touchme", n: 10, ...o }, ["touchme"]).job;
+  assert.equal(job({ styles: ["movie-dialogue"] }).seconds, 31);
+  assert.equal(job({ styles: ["movie-dialogue"], seconds: 15 }).seconds, 31);
+  assert.equal(job({ styles: ["movie-dialogue"], seconds: 31 }).seconds, 31);
+  /* with other styles too, the length picked is for those; the dialogue scenes stay about 30 s */
+  assert.equal(job({ styles: ["movie-dialogue", "vibe-wall"], seconds: 15 }).seconds, 15);
+  assert.equal(job({ styles: ["vibe-wall"] }).seconds, 15);
+  assert.throws(() => job({ styles: ["movie-dialogue"], seconds: 20 }), /15 or 31/);
+  assert.equal(E.estimateMinutes(10, 15, ["movie-dialogue"]), E.estimateMinutes(10, 31), "a dialogue scene costs what a 31 s edit costs");
+  assert.equal(E.estimateMinutes(10, 15, ["movie-dialogue"]), 14);
+  assert.equal(E.estimateMinutes(10, 15, ["movie-dialogue", "vibe-wall"]), 12, "half the edits at 31 s, half at 15 s");
+  assert.equal(E.estimateMinutes(10, 15, ["vibe-wall"]), 9);
+  assert.equal(E.estimateMinutes(10, 15), 9, "the old two-argument call is unchanged");
+});
+
+test("the job card says the style, the tone and the footage in words", async () => {
+  const base = { song: "touchme", n: 4, lang: "en", seconds: 31, state: "waiting" };
+  assert.equal(E.jobLine({ ...base, styles: ["movie-dialogue"], tone: "heartbreak", footage: "romance" }), "Dialogue scene · Heartbreak · Romance films");
+  assert.equal(E.jobLine({ ...base, styles: ["movie-dialogue"], tone: "sensual", footage: "tv" }), "Dialogue scene · Sensual · TV shows");
+  assert.equal(E.jobLine({ ...base, styles: ["movie-dialogue"], tone: "", footage: "all" }), "Dialogue scene", "Mix and Everything are the defaults: not said");
+  assert.equal(E.jobLine({ ...base, styles: ["vibe-wall", "movie-card"], tone: "", footage: "tv" }), "Wall, Movie card · TV shows");
+  assert.equal(E.jobLine({ ...base, styles: ["vibe-bigword"] }), "Big word", "a job from before 26 Nov has no tone or footage");
+  /* the stored job, the list and the answer to POST all carry the line */
+  const store = memoryDesk(), drv = fakeDrive();
+  const r = await call("/api/edits/jobs", { method: "POST", body: { song: "touchme", styles: ["movie-dialogue"], n: 3, seconds: 15, tone: "heartbreak", footage: "romance" }, store, drv });
+  assert.equal(r.s, 200, r.text);
+  assert.equal(r.j.job.seconds, 31);
+  assert.equal(r.j.job.tone, "heartbreak");
+  assert.equal(r.j.job.footage, "romance");
+  assert.equal(r.j.job.minutes, E.estimateMinutes(3, 31));
+  assert.equal(r.j.job.line, "Dialogue scene · Heartbreak · Romance films");
+  const kept = await store.get("jobs/" + r.j.job.id + ".json", { type: "json" });
+  assert.equal(kept.tone, "heartbreak");
+  assert.equal(kept.footage, "romance");
+  assert.equal(kept.line, undefined, "the words are made when listed, not stored");
+  const list = await call("/api/edits/jobs", { store, drv });
+  assert.equal(list.j.jobs[0].line, "Dialogue scene · Heartbreak · Romance films");
+  const bad = await call("/api/edits/jobs", { method: "POST", body: { song: "touchme", styles: ["movie-dialogue"], n: 3, tone: "angry" }, store, drv });
+  assert.equal(bad.s, 400);
+  assert.equal(bad.j.error, "Tone: Mix, Heartbreak or Sensual.");
+});
+
+test("a dialogue recipe reads well on the review card and keeps its tone and film, never the lines", () => {
+  const raw = {
+    id: "c3", song: "touchme", style: "movie-dialogue", layout: "card", lang: "en", tone: "heartbreak", seconds: 31, variant: null, grade: "night-blue",
+    scene: "the-notebook-2004-1/s003", film: "the-notebook-2004-1", film_start: 4123.5, hook: { id: "quote", text: "made-up line" }, clips: ["the-notebook-2004-1/s003"],
+    land_line: "a made-up lyric", dialogue: ["made-up film line one", "made-up film line two"], shots: [{ t0: 0, t1: 3, src: "x" }],
+  };
+  const r = E.cleanRecipe(raw);
+  assert.equal(r.tone, "heartbreak");
+  assert.equal(r.film, "the-notebook-2004-1");
+  assert.equal(r.scene, "the-notebook-2004-1/s003");
+  for (const k of ["land_line", "dialogue", "shots", "variant"]) assert.equal(r[k], undefined, k + " is not kept (lyrics and film lines stay in Drive)");
+  assert.equal(E.recipeLine(r), "touchme · Dialogue scene · Heartbreak · The Notebook (2004) · caption from the film · night-blue");
+  assert.equal(E.recipeLine({ ...r, tone: "sensual", film: "one-tree-hill-s08e04-we-all-fall-down", hook: { id: "late-night", text: "x" } }), "touchme · Dialogue scene · Sensual · One Tree Hill S08E04 · hook late-night · night-blue");
+  assert.equal(E.filmWords("the-notebook-2004-1"), "The Notebook (2004)");
+  assert.equal(E.filmWords("titanic-1997-1080"), "Titanic (1997)");
+  assert.equal(E.filmWords("la-la-land"), "La La Land");
+  assert.equal(E.filmWords("gossip-girl-s01e01-pilot"), "Gossip Girl S01E01");
+  assert.equal(E.filmWords("me-before-you-2016"), "Me Before You (2016)");
+  assert.equal(E.filmWords("a-walk-to-remember-2002"), "A Walk to Remember (2002)");
+  assert.equal(E.filmWords(""), "");
+  /* the movie card's line is unchanged */
+  assert.equal(E.recipeLine(E.cleanRecipe(RECIPE)), "touchme · Movie card (serif) · hook let-go · warm-film · 2 clips");
 });
 
 test("POST jobs stores the job and, with no cloud set up, it waits for the cloud worker", async () => {
@@ -277,7 +373,9 @@ test("without the Drive folder set, HQ says so instead of failing", async () => 
   assert.equal(rev.s, 503);
   const ov = await call("/api/edits/overview", { store: memoryDesk(), drv: fakeDrive() });
   assert.deepEqual(ov.j.songs, [{ slug: "touchme", title: "Touch Me" }]);
-  assert.equal(ov.j.styles.length, 5);
+  assert.equal(ov.j.styles.length, 6); /* 26 Nov 2026: Dialogue scene added (it was 5) */
+  assert.deepEqual(ov.j.tones.map((t) => t.label), ["Mix", "Heartbreak", "Sensual"]);
+  assert.deepEqual(ov.j.footage.map((f) => f.label), ["Romance films", "TV shows", "Everything"]);
 });
 
 test("stock warns under 30 unused clips; scores count approvals and taps per farm page", async () => {

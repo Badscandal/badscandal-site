@@ -130,7 +130,7 @@
       acts = '<div class="edacts"><button type="button" class="edok" data-eok="' + esc(it.id) + '">Approve</button><button type="button" class="edno" data-eno="' + esc(it.id) + '">Reject</button></div>';
     }
     return '<article class="edcard' + (d ? " done" : "") + '" id="ed-' + esc(it.id) + '"><div class="edvid" data-etap="' + esc(it.id) + '">' + vid + "</div>" +
-      '<p class="edline">' + esc(it.line || "") + "</p>" + (it.recipe && it.recipe.hook && it.recipe.hook.text ? '<p class="edhook">“' + esc(it.recipe.hook.text) + "”</p>" : "") +
+      '<p class="edline">' + esc(it.line || "") + "</p>" + (it.recipe && it.recipe.hook && it.recipe.hook.text ? '<p class="edhook">“' + esc(String(it.recipe.hook.text).replace(/^[“"]+|[”"]+$/g, "")) + "”</p>" : "") +
       acts + '<p class="ferr" data-eerr="' + esc(it.id) + '" hidden></p></article>';
   }
 
@@ -144,23 +144,41 @@
     h += '<fieldset class="edstyles"><legend>Styles</legend>' + (ov.styles || []).map(function (s, i) {
       return '<label class="edcheck"><input type="checkbox" name="styles" value="' + esc(s.key) + '"' + (i === 0 || s.key === "movie-card" ? " checked" : "") + "><span><b>" + esc(s.label) + "</b> " + esc(s.hint) + "</span></label>";
     }).join("") + "</fieldset>";
+    /* 26 Nov 2026: dialogue scenes. Tone only while Dialogue scene is ticked; Footage for Dialogue scene and Movie card. */
+    h += '<fieldset class="edchoice" id="edTone" hidden><legend>Tone</legend>' + (ov.tones || []).map(function (t, i) {
+      return '<label class="edcheck"><input type="radio" name="tone" value="' + esc(t.key) + '"' + (i === 0 ? " checked" : "") + "><span>" + esc(t.label) + "</span></label>";
+    }).join("") + '<p class="ednote edsmall">Mix takes turns: heartbreak, then sensual.</p></fieldset>';
+    h += '<fieldset class="edchoice" id="edFootage" hidden><legend>Footage</legend>' + (ov.footage || []).map(function (f) {
+      return '<label class="edcheck"><input type="radio" name="footage" value="' + esc(f.key) + '"' + (f.key === "all" ? " checked" : "") + "><span>" + esc(f.label) + "</span></label>";
+    }).join("") + "</fieldset>";
     h += '<label>How many<input name="n" type="number" inputmode="numeric" min="1" max="' + esc(ov.maxEdits || 50) + '" value="10"></label>';
     h += '<label>Language<select name="lang">' + (ov.langs || []).map(function (l) { return '<option value="' + esc(l.key) + '">' + esc(l.label) + "</option>"; }).join("") + "</select></label>";
     h += '<fieldset class="edlen"><legend>Length</legend>' + (ov.seconds || [15, 31]).map(function (s, i) {
       return '<label class="edcheck"><input type="radio" name="seconds" value="' + s + '"' + (i === 0 ? " checked" : "") + "><span>" + s + " seconds</span></label>";
-    }).join("") + "</fieldset>";
+    }).join("") + '<p class="ednote edsmall" id="edSceneLen" hidden>Dialogue scenes are about 30 seconds whatever length you pick: the film scene sets it.</p></fieldset>';
     h += '<p class="edest" id="edEst"></p>';
     if (!ov.cloud) h += '<p class="ednote">The cloud worker isn\'t switched on yet: a job waits for it.</p>';
     h += '<button class="sendbtn" type="submit"' + (sample() || (ov.drive && !ov.drive.ok) ? " disabled" : "") + ">Make</button>";
     h += '<p class="ferr" id="edMakeErr" hidden></p><p class="fok" id="edMakeOk" role="status"></p></form>';
     return h;
   }
+  function ticked(f) { return [].map.call(f.querySelectorAll('input[name="styles"]:checked'), function (i) { return i.value; }); }
+  function picked(f, name, dflt) { return (f.querySelector('input[name="' + name + '"]:checked') || { value: dflt }).value; }
+  /* Shows Tone and Footage only for the styles they're for, then the estimate (the same rule as the
+     server's estimateMinutes: edits shared evenly between the styles, a dialogue scene counts as 31 s). */
   function estimate() {
     var f = $("edMake"), out = $("edEst");
     if (!f || !out) return;
+    var styles = ticked(f), dlg = styles.indexOf("movie-dialogue") >= 0;
+    var tone = $("edTone"), foot = $("edFootage"), len = $("edSceneLen");
+    if (tone) tone.hidden = !dlg;
+    if (foot) foot.hidden = !(dlg || styles.indexOf("movie-card") >= 0);
+    if (len) len.hidden = !dlg;
     var n = Math.max(0, Math.min(50, parseInt(f.elements.n.value, 10) || 0));
-    var secs = (f.querySelector('input[name="seconds"]:checked') || { value: "15" }).value;
-    var mins = Math.ceil(3 + n * (secs === "31" ? 1.1 : 0.6));
+    var secs = picked(f, "seconds", "15");
+    var list = styles.length ? styles : [""], tenths = 0;
+    list.forEach(function (st) { tenths += st === "movie-dialogue" || secs === "31" ? 11 : 6; });
+    var mins = Math.ceil((30 * list.length + n * tenths) / (10 * list.length));
     out.textContent = n ? "About " + mins + " cloud minutes for " + n + (n === 1 ? " edit." : " edits.") : "";
   }
 
@@ -170,7 +188,7 @@
     if (!jobs.length) return '<div class="wscard"><p>No jobs yet. Make some edits.</p></div>';
     return '<div class="edjobs">' + jobs.map(function (j) {
       var bad = j.state === "failed";
-      return '<article class="wscard edjob' + (bad ? " bad" : "") + '"><p class="edjw">' + esc(j.words) + "</p><p>" + esc(songTitle(j.song)) + " · " + esc((j.styles || []).map(styleWord).join(", ")) + " · " + esc(j.n) + " × " + esc(j.seconds) + " s · " + esc((j.lang || "").toUpperCase()) + '</p><p class="dmeta">' + esc(when(j.createdAt)) + (j.minutes ? " · about " + esc(j.minutes) + " cloud minutes" : "") + "</p></article>";
+      return '<article class="wscard edjob' + (bad ? " bad" : "") + '"><p class="edjw">' + esc(j.words) + "</p><p>" + esc(songTitle(j.song)) + " · " + esc(j.line || (j.styles || []).map(styleWord).join(", ")) + " · " + esc(j.n) + " × " + (onlyScenes(j) ? "about 30" : esc(j.seconds)) + " s · " + esc((j.lang || "").toUpperCase()) + '</p><p class="dmeta">' + esc(when(j.createdAt)) + (j.minutes ? " · about " + esc(j.minutes) + " cloud minutes" : "") + "</p></article>";
     }).join("") + "</div>";
   }
 
@@ -187,6 +205,7 @@
     return h;
   }
 
+  function onlyScenes(j) { return !!(j.styles && j.styles.length === 1 && j.styles[0] === "movie-dialogue"); }
   function songTitle(slug) {
     var s = ((state.overview && state.overview.songs) || []).filter(function (x) { return x.slug === slug; })[0];
     return s ? s.title : slug;
@@ -336,8 +355,9 @@
     var err = $("edMakeErr"), ok = $("edMakeOk");
     err.hidden = true; ok.textContent = "";
     if (sample()) { err.hidden = false; err.textContent = "Sample: nothing is saved."; return; }
-    var styles = [].map.call(f.querySelectorAll('input[name="styles"]:checked'), function (i) { return i.value; });
-    var body = { song: f.elements.song.value, styles: styles, n: parseInt(f.elements.n.value, 10), lang: f.elements.lang.value, seconds: parseInt((f.querySelector('input[name="seconds"]:checked') || { value: "15" }).value, 10) };
+    var styles = ticked(f), dlg = styles.indexOf("movie-dialogue") >= 0;
+    var body = { song: f.elements.song.value, styles: styles, n: parseInt(f.elements.n.value, 10), lang: f.elements.lang.value, seconds: parseInt(picked(f, "seconds", "15"), 10),
+      tone: dlg ? picked(f, "tone", "") : "", footage: dlg || styles.indexOf("movie-card") >= 0 ? picked(f, "footage", "all") : "all" };
     var btn = f.querySelector('button[type="submit"]');
     btn.disabled = true; btn.textContent = "Sending…";
     post("jobs", body).then(function (res) {
