@@ -6,7 +6,7 @@
   "use strict";
   var $ = function (id) { return document.getElementById(id); };
   var TAB_KEY = "bs_hq_farmtab", SUB_KEY = "bs_hq_editstab";
-  var state = { tab: "farm", sub: "review", overview: null, review: null, stock: null, scores: null, decided: {}, shown: 12, sound: "", busy: false, allArm: 0, why: "" };
+  var state = { tab: "farm", sub: "review", overview: null, review: null, stock: null, scores: null, decided: {}, shown: 12, sound: "", busy: false, allArm: 0, why: "", whyOther: false };
   var observer = null;
 
   function esc(s) {
@@ -108,30 +108,57 @@
     var open = items.filter(function (it) { return !state.decided[it.id] || state.decided[it.id].undoUntil > Date.now(); });
     var list = open.slice(0, state.shown);
     var pending = list.filter(function (it) { return !state.decided[it.id]; });
-    var h = '<p class="edhead">' + open.filter(function (it) { return !state.decided[it.id]; }).length + " waiting · newest first · tap a video for sound</p>";
+    var h = '<p class="edhead">' + headText() + "</p>";
     h += '<div class="edgrid">' + list.map(card).join("") + "</div>";
     if (open.length > list.length) h += '<button type="button" class="copybtn edmore" data-emore="1">Show ' + Math.min(12, open.length - list.length) + " more</button>";
     if (pending.length > 1) h += '<button type="button" class="sendbtn edall" data-eall="1"' + (state.busy ? " disabled" : "") + ">" + (state.allArm ? "Tap again to approve all " + pending.length : "Approve all " + pending.length + " on screen") + "</button>";
     return h;
   }
-  function card(it) {
+  function headText() {
+    return (state.review || []).filter(function (it) { return !state.decided[it.id]; }).length + " waiting · newest first · tap a video for sound";
+  }
+  function cardClass(it) {
     var d = state.decided[it.id];
+    return "edcard" + (d ? " done " + (d.choice === "approve" ? "ok" : "no") : "");
+  }
+  /* The buttons under a card: Approve/Reject, then Why? (Something else opens a box for Luke's own words), then the result with Undo. */
+  function acts(it) {
+    var d = state.decided[it.id];
+    if (d) {
+      return '<p class="edstate">' + (d.choice === "approve" ? "✓ Approved" : "Rejected: " + esc(d.label)) + (d.saving ? '<span class="edsaving"> · saving…</span>' : "") + "</p>" +
+        (d.saving ? "" : '<button type="button" class="copybtn" data-eundo="' + esc(it.id) + '">Undo</button>');
+    }
+    if (state.why === it.id && state.whyOther) {
+      return '<p class="edq">Say why</p><textarea class="ednotein" data-enotefor="' + esc(it.id) + '" maxlength="200" rows="2" placeholder="e.g. too dark, not sensual, wrong film"></textarea>' +
+        '<div class="edacts"><button type="button" class="edno" data-enote="' + esc(it.id) + '">Reject</button><button type="button" class="copybtn" data-ecancel="1">Back</button></div>';
+    }
+    if (state.why === it.id) {
+      return '<p class="edq">Why?</p><div class="edchips">' + ((state.overview && state.overview.reasons) || []).map(function (r) {
+        return '<button type="button" class="copybtn" data-ereason="' + esc(r.key) + '" data-eid="' + esc(it.id) + '">' + esc(r.label) + "</button>";
+      }).join("") + '<button type="button" class="copybtn" data-ecancel="1">Back</button></div>';
+    }
+    return '<div class="edacts"><button type="button" class="edok" data-eok="' + esc(it.id) + '">Approve</button><button type="button" class="edno" data-eno="' + esc(it.id) + '">Reject</button></div>';
+  }
+  function card(it) {
     var vid = it.preview && it.preview.id
       ? '<video muted loop playsinline preload="none" data-src="' + esc("/api/edits/preview/" + it.preview.id) + '" data-eid="' + esc(it.id) + '"></video><span class="edsound" aria-hidden="true">' + (state.sound === it.id ? "Sound on" : "Muted") + "</span>"
       : '<div class="edblank">' + (sample() ? "Sample: no video" : "Preview not made") + "</div>";
-    var acts;
-    if (d) {
-      acts = '<p class="edstate">' + (d.choice === "approve" ? "Approved" : "Rejected: " + esc(d.label)) + '</p><button type="button" class="copybtn" data-eundo="' + esc(it.id) + '">Undo</button>';
-    } else if (state.why === it.id) {
-      acts = '<p class="edq">Why?</p><div class="edchips">' + ((state.overview && state.overview.reasons) || []).map(function (r) {
-        return '<button type="button" class="copybtn" data-ereason="' + esc(r.key) + '" data-eid="' + esc(it.id) + '">' + esc(r.label) + "</button>";
-      }).join("") + '<button type="button" class="copybtn" data-ecancel="1">Back</button></div>';
-    } else {
-      acts = '<div class="edacts"><button type="button" class="edok" data-eok="' + esc(it.id) + '">Approve</button><button type="button" class="edno" data-eno="' + esc(it.id) + '">Reject</button></div>';
-    }
-    return '<article class="edcard' + (d ? " done" : "") + '" id="ed-' + esc(it.id) + '"><div class="edvid" data-etap="' + esc(it.id) + '">' + vid + "</div>" +
-      '<p class="edline">' + esc(it.line || "") + "</p>" + (it.recipe && it.recipe.hook && it.recipe.hook.text ? '<p class="edhook">“' + esc(it.recipe.hook.text) + "”</p>" : "") +
-      acts + '<p class="ferr" data-eerr="' + esc(it.id) + '" hidden></p></article>';
+    return '<article class="' + cardClass(it) + '" id="ed-' + esc(it.id) + '"><div class="edvid" data-etap="' + esc(it.id) + '">' + vid + "</div>" +
+      '<p class="edline">' + esc(it.line || "") + "</p>" + (it.recipe && it.recipe.hook && it.recipe.hook.text ? '<p class="edhook">“' + esc(String(it.recipe.hook.text).replace(/^[“"]+|[”"]+$/g, "")) + "”</p>" : "") +
+      '<div class="edfoot">' + acts(it) + '</div><p class="ferr" data-eerr="' + esc(it.id) + '" hidden></p></article>';
+  }
+  /* Redraw ONE card (its border and buttons) without touching the others, so their videos keep playing. */
+  function patch(id) {
+    var el = $("ed-" + id), it = (state.review || []).filter(function (x) { return x.id === id; })[0];
+    count();
+    if (!el || !it) return;
+    el.className = cardClass(it);
+    var foot = el.querySelector(".edfoot");
+    if (foot) foot.innerHTML = acts(it);
+    var err = el.querySelector("[data-eerr]");
+    if (err) { err.hidden = true; err.textContent = ""; }
+    var head = document.querySelector("#editsBody .edhead");
+    if (head) head.textContent = headText();
   }
 
   function makeHtml(ov) {
@@ -144,23 +171,41 @@
     h += '<fieldset class="edstyles"><legend>Styles</legend>' + (ov.styles || []).map(function (s, i) {
       return '<label class="edcheck"><input type="checkbox" name="styles" value="' + esc(s.key) + '"' + (i === 0 || s.key === "movie-card" ? " checked" : "") + "><span><b>" + esc(s.label) + "</b> " + esc(s.hint) + "</span></label>";
     }).join("") + "</fieldset>";
+    /* 26 Nov 2026: dialogue scenes. Tone only while Dialogue scene is ticked; Footage for Dialogue scene and Movie card. */
+    h += '<fieldset class="edchoice" id="edTone" hidden><legend>Tone</legend>' + (ov.tones || []).map(function (t, i) {
+      return '<label class="edcheck"><input type="radio" name="tone" value="' + esc(t.key) + '"' + (i === 0 ? " checked" : "") + "><span>" + esc(t.label) + "</span></label>";
+    }).join("") + '<p class="ednote edsmall">Mix takes turns: heartbreak, then sensual.</p></fieldset>';
+    h += '<fieldset class="edchoice" id="edFootage" hidden><legend>Footage</legend>' + (ov.footage || []).map(function (f) {
+      return '<label class="edcheck"><input type="radio" name="footage" value="' + esc(f.key) + '"' + (f.key === "all" ? " checked" : "") + "><span>" + esc(f.label) + "</span></label>";
+    }).join("") + "</fieldset>";
     h += '<label>How many<input name="n" type="number" inputmode="numeric" min="1" max="' + esc(ov.maxEdits || 50) + '" value="10"></label>';
     h += '<label>Language<select name="lang">' + (ov.langs || []).map(function (l) { return '<option value="' + esc(l.key) + '">' + esc(l.label) + "</option>"; }).join("") + "</select></label>";
     h += '<fieldset class="edlen"><legend>Length</legend>' + (ov.seconds || [15, 31]).map(function (s, i) {
       return '<label class="edcheck"><input type="radio" name="seconds" value="' + s + '"' + (i === 0 ? " checked" : "") + "><span>" + s + " seconds</span></label>";
-    }).join("") + "</fieldset>";
+    }).join("") + '<p class="ednote edsmall" id="edSceneLen" hidden>Dialogue scenes are about 30 seconds whatever length you pick: the film scene sets it.</p></fieldset>';
     h += '<p class="edest" id="edEst"></p>';
     if (!ov.cloud) h += '<p class="ednote">The cloud worker isn\'t switched on yet: a job waits for it.</p>';
     h += '<button class="sendbtn" type="submit"' + (sample() || (ov.drive && !ov.drive.ok) ? " disabled" : "") + ">Make</button>";
     h += '<p class="ferr" id="edMakeErr" hidden></p><p class="fok" id="edMakeOk" role="status"></p></form>';
     return h;
   }
+  function ticked(f) { return [].map.call(f.querySelectorAll('input[name="styles"]:checked'), function (i) { return i.value; }); }
+  function picked(f, name, dflt) { return (f.querySelector('input[name="' + name + '"]:checked') || { value: dflt }).value; }
+  /* Shows Tone and Footage only for the styles they're for, then the estimate (the same rule as the
+     server's estimateMinutes: edits shared evenly between the styles, a dialogue scene counts as 31 s). */
   function estimate() {
     var f = $("edMake"), out = $("edEst");
     if (!f || !out) return;
+    var styles = ticked(f), dlg = styles.indexOf("movie-dialogue") >= 0;
+    var tone = $("edTone"), foot = $("edFootage"), len = $("edSceneLen");
+    if (tone) tone.hidden = !dlg;
+    if (foot) foot.hidden = !(dlg || styles.indexOf("movie-card") >= 0);
+    if (len) len.hidden = !dlg;
     var n = Math.max(0, Math.min(50, parseInt(f.elements.n.value, 10) || 0));
-    var secs = (f.querySelector('input[name="seconds"]:checked') || { value: "15" }).value;
-    var mins = Math.ceil(3 + n * (secs === "31" ? 1.1 : 0.6));
+    var secs = picked(f, "seconds", "15");
+    var list = styles.length ? styles : [""], tenths = 0;
+    list.forEach(function (st) { tenths += st === "movie-dialogue" || secs === "31" ? 11 : 6; });
+    var mins = Math.ceil((30 * list.length + n * tenths) / (10 * list.length));
     out.textContent = n ? "About " + mins + " cloud minutes for " + n + (n === 1 ? " edit." : " edits.") : "";
   }
 
@@ -170,7 +215,7 @@
     if (!jobs.length) return '<div class="wscard"><p>No jobs yet. Make some edits.</p></div>';
     return '<div class="edjobs">' + jobs.map(function (j) {
       var bad = j.state === "failed";
-      return '<article class="wscard edjob' + (bad ? " bad" : "") + '"><p class="edjw">' + esc(j.words) + "</p><p>" + esc(songTitle(j.song)) + " · " + esc((j.styles || []).map(styleWord).join(", ")) + " · " + esc(j.n) + " × " + esc(j.seconds) + " s · " + esc((j.lang || "").toUpperCase()) + '</p><p class="dmeta">' + esc(when(j.createdAt)) + (j.minutes ? " · about " + esc(j.minutes) + " cloud minutes" : "") + "</p></article>";
+      return '<article class="wscard edjob' + (bad ? " bad" : "") + '"><p class="edjw">' + esc(j.words) + "</p><p>" + esc(songTitle(j.song)) + " · " + esc(j.line || (j.styles || []).map(styleWord).join(", ")) + " · " + esc(j.n) + " × " + (onlyScenes(j) ? "about 30" : esc(j.seconds)) + " s · " + esc((j.lang || "").toUpperCase()) + '</p><p class="dmeta">' + esc(when(j.createdAt)) + (j.minutes ? " · about " + esc(j.minutes) + " cloud minutes" : "") + "</p></article>";
     }).join("") + "</div>";
   }
 
@@ -187,6 +232,7 @@
     return h;
   }
 
+  function onlyScenes(j) { return !!(j.styles && j.styles.length === 1 && j.styles[0] === "movie-dialogue"); }
   function songTitle(slug) {
     var s = ((state.overview && state.overview.songs) || []).filter(function (x) { return x.slug === slug; })[0];
     return s ? s.title : slug;
@@ -207,6 +253,7 @@
     if (s.error) return '<p class="ednote edwarn">' + esc(s.error) + "</p>";
     var h = '<div class="wscard"><h3>Approved</h3><p class="ednum">' + (s.rate == null ? "—" : esc(s.rate) + "%") + "</p><p>" + esc(s.approved) + " of " + esc(s.total) + " edits in the last 3 months.</p></div>";
     h += table("By style", s.styles, "", styleWord) + table("By hook", s.hooks) + table("By grade", s.grades);
+    if (s.notes && s.notes.length) h += '<div class="wscard"><h3>Your notes</h3><ul class="edrows">' + s.notes.map(function (n) { return "<li><span>" + esc(n.note) + "</span><i>" + esc([n.hook, n.grade].filter(Boolean).join(" · ")) + "</i></li>"; }).join("") + "</ul></div>";
     if (s.reasons && s.reasons.length) h += '<div class="wscard"><h3>Why rejected</h3><ul class="edrows">' + s.reasons.map(function (r) { return "<li><span>" + esc(r.label) + "</span><b>" + esc(r.n) + "</b></li>"; }).join("") + "</ul></div>";
     h += '<div class="wscard"><h3>Spotify taps per farm page</h3>' + (s.pages && s.pages.length
       ? '<ul class="edrows">' + s.pages.map(function (p) { return "<li><span>" + esc(p.page) + "</span><b>" + esc(p.taps) + " taps</b><i>" + esc(p.visits) + " visits</i></li>"; }).join("") + "</ul><p class=\"dmeta\">Last 30 days, people only.</p>"
@@ -255,30 +302,32 @@
     var r = ((state.overview && state.overview.reasons) || []).filter(function (x) { return x.key === key; })[0];
     return r ? r.label : key;
   }
-  function decide(id, choice, reason) {
-    if (sample()) { showErr(id, "Sample: nothing is saved."); return Promise.resolve(false); }
-    return post("decide", { id: id, choice: choice, reason: reason || "" }).then(function (res) {
+  /* A tap shows its result at once (green border for Approve); the save runs behind it, and a failed save puts the card back. */
+  function mark(id, choice, reason, note) {
+    state.decided[id] = { choice: choice, label: reason === "other" && note ? note : reasonLabel(reason), undoUntil: Date.now() + 600000, saving: true };
+    if (state.why === id) { state.why = ""; state.whyOther = false; }
+    patch(id);
+  }
+  function decide(id, choice, reason, note) {
+    if (sample()) { delete state.decided[id]; patch(id); showErr(id, "Sample: nothing is saved."); return Promise.resolve(false); }
+    function failed(text) { delete state.decided[id]; patch(id); showErr(id, text); return false; }
+    return post("decide", { id: id, choice: choice, reason: reason || "", note: note || "" }).then(function (res) {
       if (res && res.s === 200 && res.j && res.j.ok) {
-        state.decided[id] = { choice: choice, label: reasonLabel(reason), undoUntil: res.j.undoUntil || Date.now() + 600000 };
+        var d = state.decided[id];
+        if (d) { d.saving = false; d.undoUntil = res.j.undoUntil || Date.now() + 600000; }
+        patch(id);
         setTimeout(function () { if (state.sub === "review") draw(); count(); }, 600000 + 500);
         return true;
       }
-      showErr(id, (res && res.j && res.j.error) || "Couldn't save that. Nothing changed.");
-      return false;
-    }, function () { showErr(id, "No connection. Nothing changed."); return false; });
-  }
-  function redraw(id) {
-    state.why = "";
-    var el = $("ed-" + id);
-    count();
-    if (!el) { draw(); return; }
-    draw();
-    var again = $("ed-" + id);
-    if (again && again.scrollIntoView && again.getBoundingClientRect().top < 0) again.scrollIntoView({ block: "nearest" });
+      return failed((res && res.j && res.j.error) || "Couldn't save that. Nothing changed.");
+    }, function () { return failed("No connection. Nothing changed."); });
   }
   function approveAll() {
     var list = (state.review || []).filter(function (it) { return !state.decided[it.id]; }).slice(0, state.shown);
-    state.busy = true; state.allArm = 0; draw();
+    state.busy = true; state.allArm = 0;
+    list.forEach(function (it) { mark(it.id, "approve"); });
+    var btn = document.querySelector("#editsBody [data-eall]");
+    if (btn) { btn.disabled = true; btn.textContent = "Saving " + list.length + "…"; }
     var i = 0;
     (function next() {
       if (i >= list.length) { state.busy = false; draw(); count(); return; }
@@ -288,7 +337,7 @@
 
   /* ---------- events ---------- */
   document.addEventListener("click", function (ev) {
-    var t = ev.target.closest && ev.target.closest("[data-ft],[data-esub],[data-eok],[data-eno],[data-ereason],[data-ecancel],[data-eundo],[data-etap],[data-emore],[data-eall]");
+    var t = ev.target.closest && ev.target.closest("[data-ft],[data-esub],[data-eok],[data-eno],[data-ereason],[data-enote],[data-ecancel],[data-eundo],[data-etap],[data-emore],[data-eall]");
     if (!t) return;
     if (t.hasAttribute("data-ft")) {
       state.tab = t.getAttribute("data-ft") === "edits" ? "edits" : "farm";
@@ -309,19 +358,30 @@
       if (!state.allArm) { state.allArm = setTimeout(function () { state.allArm = 0; if (state.sub === "review") draw(); }, 4000); draw(); return; }
       clearTimeout(state.allArm); approveAll(); return;
     }
-    if (t.hasAttribute("data-eok")) { var id = t.getAttribute("data-eok"); t.disabled = true; decide(id, "approve").then(function () { redraw(id); }); return; }
-    if (t.hasAttribute("data-eno")) { state.why = t.getAttribute("data-eno"); draw(); return; }
-    if (t.hasAttribute("data-ecancel")) { state.why = ""; draw(); return; }
+    if (t.hasAttribute("data-eok")) { var id = t.getAttribute("data-eok"); mark(id, "approve"); patch(id); decide(id, "approve"); return; }
+    if (t.hasAttribute("data-eno")) { var was = state.why; state.why = t.getAttribute("data-eno"); state.whyOther = false; if (was) patch(was); patch(state.why); return; }
+    if (t.hasAttribute("data-ecancel")) { var back = state.why; state.why = ""; state.whyOther = false; if (back) patch(back); return; }
     if (t.hasAttribute("data-ereason")) {
-      var rid = t.getAttribute("data-eid");
-      [].forEach.call(t.parentNode.querySelectorAll("button"), function (b) { b.disabled = true; });
-      decide(rid, "reject", t.getAttribute("data-ereason")).then(function () { redraw(rid); }); return;
+      var rid = t.getAttribute("data-eid"), key = t.getAttribute("data-ereason");
+      if (key === "other") {
+        state.whyOther = true; patch(rid);
+        var box = document.querySelector('[data-enotefor="' + rid + '"]');
+        if (box) box.focus();
+        return;
+      }
+      mark(rid, "reject", key); decide(rid, "reject", key); return;
+    }
+    if (t.hasAttribute("data-enote")) {
+      var nid = t.getAttribute("data-enote"), inp = document.querySelector('[data-enotefor="' + nid + '"]');
+      var note = inp ? inp.value.replace(/\s+/g, " ").trim() : "";
+      if (!note) { showErr(nid, "Say why in a few words."); return; }
+      mark(nid, "reject", "other", note); decide(nid, "reject", "other", note); return;
     }
     if (t.hasAttribute("data-eundo")) {
       var uid = t.getAttribute("data-eundo");
       t.disabled = true;
       post("undo", { id: uid }).then(function (res) {
-        if (res && res.s === 200 && res.j && res.j.ok) { delete state.decided[uid]; redraw(uid); return; }
+        if (res && res.s === 200 && res.j && res.j.ok) { delete state.decided[uid]; patch(uid); return; }
         showErr(uid, (res && res.j && res.j.error) || "Couldn't undo.");
         t.disabled = false;
       }, function () { showErr(uid, "No connection. Nothing changed."); t.disabled = false; });
@@ -336,8 +396,9 @@
     var err = $("edMakeErr"), ok = $("edMakeOk");
     err.hidden = true; ok.textContent = "";
     if (sample()) { err.hidden = false; err.textContent = "Sample: nothing is saved."; return; }
-    var styles = [].map.call(f.querySelectorAll('input[name="styles"]:checked'), function (i) { return i.value; });
-    var body = { song: f.elements.song.value, styles: styles, n: parseInt(f.elements.n.value, 10), lang: f.elements.lang.value, seconds: parseInt((f.querySelector('input[name="seconds"]:checked') || { value: "15" }).value, 10) };
+    var styles = ticked(f), dlg = styles.indexOf("movie-dialogue") >= 0;
+    var body = { song: f.elements.song.value, styles: styles, n: parseInt(f.elements.n.value, 10), lang: f.elements.lang.value, seconds: parseInt(picked(f, "seconds", "15"), 10),
+      tone: dlg ? picked(f, "tone", "") : "", footage: dlg || styles.indexOf("movie-card") >= 0 ? picked(f, "footage", "all") : "all" };
     var btn = f.querySelector('button[type="submit"]');
     btn.disabled = true; btn.textContent = "Sending…";
     post("jobs", body).then(function (res) {

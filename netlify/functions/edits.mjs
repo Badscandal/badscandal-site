@@ -3,7 +3,8 @@
 
    Luke (the /hq login cookie; POSTs only from our own page):
      GET  /api/edits/overview          songs with timings, the jobs, whether Drive and the cloud are set up
-     POST /api/edits/jobs              { song, styles[], n 1-50, lang, seconds 15|31 } -> the job
+     POST /api/edits/jobs              { song, styles[], n 1-50, lang, seconds 15|31, tone ""|heartbreak|sensual,
+                                         footage romance|tv|all } -> the job (only dialogue scenes = 31 s)
      GET  /api/edits/jobs              the newest 20 jobs
      GET  /api/edits/review            the edits in 1 Review, newest first, with their recipes
      GET  /api/edits/preview/<fileId>  the 540 px preview, streamed with Range (only ids in the review list)
@@ -112,7 +113,7 @@ async function route(req, ctx) {
     const songs = (await E.songsWithTimings(drv, root, TITLES)).map((s) => s.slug);
     const { job } = E.validateJob(body, songs);
     const made = await E.createJob(store(), job, now, E.cloudStarter(env, rawKey, ctx.fetch || fetch));
-    return json(200, { ok: true, job: { ...made, words: E.jobWords(made) } });
+    return json(200, { ok: true, job: E.jobView(made) });
   }
   if (sub === "review" && req.method === "GET") {
     const { items } = await E.reviewList(store(), drv, root, now);
@@ -156,7 +157,7 @@ async function route(req, ctx) {
 }
 
 function options() {
-  return { styles: E.STYLES, langs: E.LANGS, seconds: E.SECONDS, reasons: E.REASONS, maxEdits: E.MAX_EDITS, lowStock: E.LOW_STOCK, undoMinutes: E.UNDO_MS / 60000 };
+  return { styles: E.STYLES, langs: E.LANGS, seconds: E.SECONDS, tones: E.TONES, footage: E.FOOTAGE, sceneSeconds: E.SCENE_SECONDS, reasons: E.REASONS, maxEdits: E.MAX_EDITS, lowStock: E.LOW_STOCK, undoMinutes: E.UNDO_MS / 60000 };
 }
 
 export default async (req, context) => handleEdits(req, { env: (k) => Netlify.env.get(k), prod: context.deploy?.context === "production" });

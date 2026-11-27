@@ -2554,3 +2554,17 @@ pages. HQ is where Luke asks for them and approves them. Spec: badscandal-hq `kn
 * **Netlify env (Luke adds; names only):** `EDITS_DRIVE_FOLDER_ID`; for the worker (Phase 3)
   `EDITS_WORKER_TOKEN`, `EDITS_GCP_PROJECT`, `EDITS_REGION`, `EDITS_JOB_NAME`.
 
+* **Dialogue scenes (26 Nov 2026, branch `hq-edits-dialogue`).** Style `movie-dialogue` ("Dialogue scene":
+  one film scene with its subtitles, then the song comes in under it, about 25-31 s; renderer
+  `--style movie-dialogue`). A job is `{song, styles, n, lang, seconds, tone, footage}`: `tone` "" (Mix, the
+  renderer alternates) | heartbreak | sensual (`TONES`); `footage` romance | tv | all (`FOOTAGE`, "Romance
+  films" / "TV shows" / "Everything"; the worker maps it to the renderer's `--collection`, the Drive folder
+  names live in the renderer). Tone is kept only when Dialogue scene is a style, footage only with Dialogue
+  scene or Movie card (else "" / "all"); a wrong value is refused anyway. A job of only dialogue scenes is
+  stored as 31 s (`SCENE_SECONDS`); `estimateMinutes(n, seconds, styles)` shares the edits evenly between
+  the styles and counts a dialogue scene as 31 s (the page mirrors it). `jobLine` ("Dialogue scene ·
+  Heartbreak · Romance films", defaults not said) goes on each listed job as `line` (`jobView`), never
+  stored. Recipes keep `tone`, `film` (the renderer's slug, said by `filmWords`: "the-notebook-2004-1" ->
+  "The Notebook (2004)") and `scene`, never `land_line` (a lyric) or `dialogue` (the film's lines). Make shows
+  Tone only while Dialogue scene is ticked, Footage for Dialogue scene and Movie card, and says dialogue
+  scenes are about 30 s whatever length is picked. Script hash only (cache name stays `bs-hq-v20`).
