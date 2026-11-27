@@ -990,7 +990,12 @@
   document.addEventListener("keydown", function (ev) { if (ev.key === "Escape") closeRelease(); });
   window.addEventListener("hashchange", closeRelease);
 
-  window.HQ = { sample: sample, state: state, setRange: setRange, refresh: refresh, net: function (p, m, a) { netState(p, m, a); }, keep: keep, kept: kept, showLogin: showLogin, showShell: showShell, rangeQuery: rangeQuery,
+  /* 26 Nov 2026: what the header's range is, in words (Upcoming says it next to a song's people and taps, since the picker is hidden there) */
+  function rangeWords() {
+    var r = state.range;
+    return r === "today" ? "today" : r === "7d" ? "last 7 days" : r === "30d" ? "last 30 days" : r === "all" ? "all time" : r === "custom" && state.from && state.to ? day(state.from) + " to " + day(state.to) : "this period";
+  }
+  window.HQ = { sample: sample, state: state, setRange: setRange, rangeWords: rangeWords, refresh: refresh, net: function (p, m, a) { netState(p, m, a); }, keep: keep, kept: kept, showLogin: showLogin, showShell: showShell, rangeQuery: rangeQuery,
     esc: esc, fmt: fmt, money: money, day: day, ago: ago, getJSON: getJSON, authFail: authFail,
     /* for js/hq-staff.js (11 Nov 2026) */
     postJSON: postJSON, copyText: copyText, link: link, stack: stack, drawFeed: drawFeed, sheet: function () { return sheet; },

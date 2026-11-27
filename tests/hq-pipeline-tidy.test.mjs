@@ -46,11 +46,11 @@ function oldStyle(r, lyrics = {}) {
 }
 
 test("the pipeline: no teaser steps, the ads after the song page, the lyrics a week after the release", () => {
-  assert.deepEqual(S.RELEASE_STEPS.map((s) => s.key), ["upload", "approved", "spotify", "pitch", "canvas", "page", "video", "ads", "live", "lyrics"]); /* + canvas (17 Nov 2026) */
+  assert.deepEqual(S.RELEASE_STEPS.map((s) => s.key), ["upload", "approved", "spotify", "pitch", "video_pitch", "canvas", "page", "video", "ads", "live", "lyrics", "thisis"]); /* + canvas (17 Nov 2026) */ /* 26 Nov 2026: + the two optional Spotify steps (video_pitch, thisis), skipped until Luke switches them on */
   assert.ok(!S.RELEASE_STEPS.some((s) => /teaser/.test(s.key) || s.owner === "Luke"));
   const steps = S.scheduleSteps("2026-12-11", TODAY).steps;
   /* 16 Nov 2026 (Luke): the ads are made with him AFTER the release: due two days after it */
-  assert.deepEqual(steps.map((s) => [s.key, s.due]).slice(-3), [["ads", "2026-12-13"], ["live", "2026-12-11"], ["lyrics", "2026-12-18"]]);
+  assert.deepEqual(steps.map((s) => [s.key, s.due]).slice(-4), [["ads", "2026-12-13"], ["live", "2026-12-11"], ["lyrics", "2026-12-18"], ["thisis", "2026-12-14"]]); /* 26 Nov 2026: + thisis, 3 days after the release */
   assert.deepEqual(S.releaseStepsOut().find((s) => s.key === "lyrics"), { key: "lyrics", label: "Lyrics live on Musixmatch", owner: "Verse", days: -7, fromRelease: true });
   assert.deepEqual(S.releaseStepsOut().find((s) => s.key === "ads"), { key: "ads", label: "Ads made with Luke, after the release", owner: "Forge", days: -2, after: "page", fromRelease: true });
   /* the page says it the same way */
@@ -103,7 +103,7 @@ test("the tools bring an old release up to date before answering: Verse's lyrics
   assert.deepEqual([ly.song, ly.state, ly.label], ["Night Drive", "waiting", "Lyrics live on Musixmatch"]);
   assert.match(ly.waiting_for, /^the release day: then check Musixmatch every day/);
   assert.deepEqual((await call(d, "my_day", { bot: "Kevin" })).release_steps || [], []);
-  assert.equal((await stored(d, r.id)).steps.length, 10, "+ the Canvas step (17 Nov 2026)");
+  assert.equal((await stored(d, r.id)).steps.length, 12, "+ the Canvas step (17 Nov 2026), + video_pitch and thisis (26 Nov 2026)");
 });
 
 test("Verse's lyrics: waiting before the release day (done refused), open from it, late a week after", async () => {

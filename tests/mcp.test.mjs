@@ -228,7 +228,7 @@ test("release pipeline: Luke's routes, the bots' four tools, refusals as sentenc
   const filled = await rel("release", { id, pack: { kind: "Self-release", artwork: "https://example.com/c.jpg", language: "English", explicit: "No", writers: "Sample Writer: music and lyrics", copyright: "℗ 2026 Sample · © 2026 Sample" } }, claude);
   assert.equal(filled.body.release.log[0].by, "Claude");
   const sent = await rel("release/send", { id });
-  assert.deepEqual([sent.status, sent.body.release.status, sent.body.release.steps.length, sent.body.already, sent.body.told], [200, "scheduled", 10, false, true]);
+  assert.deepEqual([sent.status, sent.body.release.status, sent.body.release.steps.length, sent.body.already, sent.body.told], [200, "scheduled", 12, false, true]); /* 26 Nov 2026: + video_pitch and thisis (optional, skipped until Luke switches them on) */
   assert.equal((await rel("release/send", { id })).body.already, true);
   /* ONE whole release for the page (the board's copy has no lyrics and no log) */
   const whole = await api("release?id=" + id, { headers: { cookie } });
@@ -243,10 +243,10 @@ test("release pipeline: Luke's routes, the bots' four tools, refusals as sentenc
   assert.deepEqual(list.releases.map((r) => r.song), ["Night Drive"]);
   assert.deepEqual(list.releases[0].your_steps.map((s) => s.step), ["upload", "approved"]);
   assert.ok(!list.releases[0].all_steps, "only Nova and Claude see every step");
-  assert.equal((await tool("releases", { bot: "Nova" })).data.releases[0].all_steps.length, 10, "+ the Canvas step (17 Nov 2026)");
+  assert.equal((await tool("releases", { bot: "Nova" })).data.releases[0].all_steps.length, 12, "+ the Canvas step (17 Nov 2026), + video_pitch and thisis (26 Nov 2026)");
   assert.deepEqual((await tool("releases", { bot: "x" }, "Bearer " + ENV.STAFF_CLAUDE_KEY)).data.releases.map((r) => r.song).sort(), ["Hidden Draft", "Night Drive"]);
   const pack = (await tool("release_pack", { bot: "Verse", song: "night drive" })).data;
-  assert.equal(pack.pack.length, 34); assert.equal(pack.pack.find((f) => f.field === "wav").value, "https://example.com/n.wav");
+  assert.equal(pack.pack.length, 36); /* 26 Nov 2026: + videoPitch, thisIs */ assert.equal(pack.pack.find((f) => f.field === "wav").value, "https://example.com/n.wav");
   assert.match(pack.pack.find((f) => f.field === "lyrics").state, /missing \(needed for "Lyrics live on Musixmatch"\)/);
   assert.match((await tool("release_pack", { bot: "Drop", song: "Hidden Draft" })).content[0].text, /There is no release called "Hidden Draft"\. The releases on the desk are: Night Drive \(nightdrive\)\./);
   const wrongBot = await tool("release_step", { bot: "Atlas", song: "Night Drive", step: "upload", status: "done" });
@@ -282,7 +282,7 @@ test("release pipeline: Luke's routes, the bots' four tools, refusals as sentenc
   const dn = await rel("release/step", { id, step: "lyrics", status: "done", done_on: day(-1) });
   assert.equal(dn.body.release.steps.find((s) => s.key === "lyrics").doneOn, day(-1));
   const b = await (await api("board", { headers: { cookie } })).json();
-  assert.equal(b.packFields.length, 34); assert.equal(b.releaseSteps.length, 10); assert.ok(Array.isArray(b.answered));
+  assert.equal(b.packFields.length, 36); assert.equal(b.releaseSteps.length, 12); /* 26 Nov 2026: + the optional Spotify extras */ assert.ok(Array.isArray(b.answered));
   assert.equal(b.releases[0].id, "nightdrive"); assert.deepEqual([b.releases[0].slim, b.releases[0].log], [true, []]); assert.equal(b.staff.find((w) => w.name === "Drop").releaseSteps[0].key, "approved");
   assert.ok(b.messages.some((m) => m.to === "all" && m.from === "HQ" && /^New release from Luke: Night Drive/.test(m.text) && m.seen === null));
   const gone = await rel("release/cancel", { id }, claude);
@@ -297,7 +297,7 @@ test("release pipeline: Luke's routes, the bots' four tools, refusals as sentenc
   globalThis.__asked.length = 0;
   for (const p of ["release", "release/send", "release/date", "release/cancel", "release/step"]) assert.deepEqual((await rel(p + "?sample=1", { id: "x", title: "y" })).body, { ok: true, sample: true }, p);
   const sb = await (await api("board?sample=1", { headers: { cookie } })).json();
-  assert.equal(sb.releases.length, 4); assert.equal(sb.answered.length, 2); assert.equal(sb.packFields.length, 34);
+  assert.equal(sb.releases.length, 4); assert.equal(sb.answered.length, 2); assert.equal(sb.packFields.length, 36);
   assert.deepEqual([sb.sightings.items.length, sb.sightings.unknown], [2, 1]);
   const sw = await (await api("release?id=touchme&sample=1", { headers: { cookie } })).json();
   assert.deepEqual([sw.sample, sw.release.id, /^\(sample\)/.test(sw.release.pack.lyrics)], [true, "touchme", true]);
