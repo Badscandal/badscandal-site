@@ -6,10 +6,12 @@
      0 Songs/<slug>/   master.wav, lyrics.txt, timings.json (a song can be made once timings.json is there)
      0 Clips/Movies/   films waiting to be chopped        0 Clips/Vibes/  stock + Luke's own footage
      1 Review/         <name>.mp4 + <name>.preview.mp4 (540 px) + <name>.json (the recipe)
-     2 Approved/<slug>/   the bots post from here         3 Posted/<slug>/<page>/   9 Rejected/
+     2 Approved/<slug>/   ONLY the final videos (people post from here)   3 Posted/<slug>/<page>/   9 Rejected/
+     8 Machine files/approved/<slug>/   an approved edit's preview + recipe (not for people)
 
    Luke asks for edits here, watches the 540 px previews and approves or rejects each one; approving
-   moves the three files to 2 Approved/<slug>/, rejecting to 9 Rejected/ with a reason. One decision per
+   moves the video to 2 Approved/<slug>/ (preview + recipe to 8 Machine files/approved/<slug>/), rejecting
+   moves all three to 9 Rejected/ with a reason. One decision per
    edit, undo within 10 minutes. Everything is pure: the Blob store, Drive, the clock and the cloud
    starter are passed in (tests: tests/edits.test.mjs).
 
@@ -62,7 +64,9 @@ export function cleanNote(v) {
 export const UNDO_MS = 10 * 60 * 1000;
 export const LOW_STOCK = 30;
 export const MAX_EDITS = 50;
-export const FOLDERS = { songs: "0 Songs", movies: "0 Clips/Movies", review: "1 Review", approved: "2 Approved", rejected: "9 Rejected" };
+export const FOLDERS = { songs: "0 Songs", movies: "0 Clips/Movies", review: "1 Review", approved: "2 Approved", rejected: "9 Rejected", machine: "8 Machine files" };
+/* 27 Nov 2026 (Luke): 2 Approved/<song>/ holds ONLY the final videos, for the people who post them; an approved
+   edit's preview and recipe go to 8 Machine files/approved/<song>/. Rejected edits keep all three in 9 Rejected/. */
 
 const NAME_RE = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,119}$/;
 const SLUG_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
@@ -369,16 +373,18 @@ export async function decide(store, drv, rootId, body, now) {
   if (choice === "approve" && !song) fail("This edit's recipe doesn't name its song, so it can't go to 2 Approved/<song>.");
   const rec = {
     id, choice, reason, note, song, style: recipe.style || "", variant: recipe.variant || "", hook: (recipe.hook && recipe.hook.id) || "", grade: recipe.grade || "",
-    at: now, from: folder, to: "", files: [it.file, it.preview, it.json].filter(Boolean).map((f) => f.id),
+    at: now, from: folder, to: "", files: [it.file, it.preview, it.json].filter(Boolean).map((f) => f.id), moves: [],
   };
   const claim = await store.setJSON("decision/" + id + ".json", rec, { onlyIfNew: true });
   if (claim && claim.modified === false) fail("Already decided.", 409);
   const moved = [];
   try {
     rec.to = await drv.path(rootId, choice === "approve" ? FOLDERS.approved + "/" + song : FOLDERS.rejected, true);
-    for (const f of rec.files) { await drv.move(f, rec.to, folder); moved.push(f); }
+    const side = choice === "approve" ? await drv.path(rootId, FOLDERS.machine + "/approved/" + song, true) : rec.to;
+    rec.moves = [it.file, it.preview, it.json].filter(Boolean).map((f) => [f.id, f === it.file ? rec.to : side]);
+    for (const [f, to] of rec.moves) { await drv.move(f, to, folder); moved.push([f, to]); }
   } catch (e) {
-    for (const f of moved) await drv.move(f, folder, rec.to).catch(() => {});
+    for (const [f, to] of moved) await drv.move(f, folder, to).catch(() => {});
     await store.delete("decision/" + id + ".json").catch(() => {});
     throw e;
   }
@@ -397,7 +403,8 @@ export async function undo(store, drv, body, now) {
   const rec = await store.get("decision/" + id + ".json", { type: "json" }).catch(() => null);
   if (!rec) fail("Nothing to undo.", 404);
   if (now - rec.at > UNDO_MS) fail("Too late to undo: that was more than 10 minutes ago.", 409);
-  for (const f of rec.files || []) await drv.move(f, rec.from, rec.to);
+  const moves = Array.isArray(rec.moves) && rec.moves.length ? rec.moves : (rec.files || []).map((f) => [f, rec.to]);
+  for (const [f, to] of moves) await drv.move(f, rec.from, to);
   await store.delete("decision/" + id + ".json");
   await mutate(store, "log/" + month(rec.at) + ".json", [], (list) => ({ replace: (Array.isArray(list) ? list : []).filter((x) => x && x.id !== id) }));
   return { ok: true, id };

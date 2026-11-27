@@ -265,13 +265,15 @@ test("the review list groups the three files, reads a recipe once, and is newest
   assert.equal(drv.calls.reads, 1, "the recipe is kept after the first read");
 });
 
-test("approve moves all three files to 2 Approved/<song>/, once; undo within 10 minutes puts them back", async () => {
+/* 27 Nov 2026, Luke: "in the approved folder i don't want any preview ... just the final version". Only the
+   video goes to 2 Approved/<song>/; its preview and recipe go to 8 Machine files/approved/<song>/. */
+test("approve puts only the video in 2 Approved/<song>/ and the machine's files in 8 Machine files; undo puts each back", async () => {
   const store = memoryDesk(), drv = fakeDrive();
   const r = await call("/api/edits/decide", { method: "POST", body: { id: "touchme__movie-card__a1", choice: "approve" }, store, drv });
   assert.equal(r.s, 200, r.text);
-  assert.deepEqual(drv.calls.made, ["2 Approved/touchme"]);
-  const to = "MADE1FOLDER0";
-  assert.deepEqual(drv.calls.moves, [[F.main, to, "REVIEWFOLDER01"], [F.prev, to, "REVIEWFOLDER01"], [F.json, to, "REVIEWFOLDER01"]]);
+  assert.deepEqual(drv.calls.made, ["2 Approved/touchme", "8 Machine files/approved/touchme"]);
+  const to = "MADE1FOLDER0", side = "MADE2FOLDER0";
+  assert.deepEqual(drv.calls.moves, [[F.main, to, "REVIEWFOLDER01"], [F.prev, side, "REVIEWFOLDER01"], [F.json, side, "REVIEWFOLDER01"]]);
   const again = await call("/api/edits/decide", { method: "POST", body: { id: "touchme__movie-card__a1", choice: "reject", reason: "clip" }, store, drv });
   assert.equal(again.s, 409);
   assert.match(again.j.error, /Already approved/);
@@ -281,9 +283,17 @@ test("approve moves all three files to 2 Approved/<song>/, once; undo within 10 
 
   const u = await call("/api/edits/undo", { method: "POST", body: { id: "touchme__movie-card__a1" }, store, drv });
   assert.equal(u.s, 200, u.text);
-  assert.deepEqual(drv.calls.moves.slice(3), [[F.main, "REVIEWFOLDER01", to], [F.prev, "REVIEWFOLDER01", to], [F.json, "REVIEWFOLDER01", to]]);
+  assert.deepEqual(drv.calls.moves.slice(3), [[F.main, "REVIEWFOLDER01", to], [F.prev, "REVIEWFOLDER01", side], [F.json, "REVIEWFOLDER01", side]]);
   assert.deepEqual(await store.get("log/2026-11.json", { type: "json" }), []);
   assert.equal(await store.get("decision/touchme__movie-card__a1.json"), null);
+});
+
+test("undo of a decision saved before 27 Nov (all files in one folder) still works", async () => {
+  const store = memoryDesk(), drv = fakeDrive();
+  await store.setJSON("decision/touchme__movie-card__a1.json", { id: "touchme__movie-card__a1", choice: "approve", at: NOW - 1000, from: "REVIEWFOLDER01", to: "OLDFOLDER0001", files: [F.main, F.prev, F.json] });
+  const u = await call("/api/edits/undo", { method: "POST", body: { id: "touchme__movie-card__a1" }, store, drv });
+  assert.equal(u.s, 200, u.text);
+  assert.deepEqual(drv.calls.moves, [[F.main, "REVIEWFOLDER01", "OLDFOLDER0001"], [F.prev, "REVIEWFOLDER01", "OLDFOLDER0001"], [F.json, "REVIEWFOLDER01", "OLDFOLDER0001"]]);
 });
 
 test("reject needs a reason and moves to 9 Rejected/; undo after 10 minutes is refused", async () => {
