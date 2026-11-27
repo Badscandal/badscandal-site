@@ -265,13 +265,15 @@ test("the review list groups the three files, reads a recipe once, and is newest
   assert.equal(drv.calls.reads, 1, "the recipe is kept after the first read");
 });
 
-test("approve moves all three files to 2 Approved/<song>/, once; undo within 10 minutes puts them back", async () => {
+/* 27 Nov 2026, Luke: "in the approved folder i don't want any preview ... just the final version". Only the
+   video goes to 2 Approved/<song>/; its preview and recipe go to 8 Machine files/approved/<song>/. */
+test("approve puts only the video in 2 Approved/<song>/ and the machine's files in 8 Machine files; undo puts each back", async () => {
   const store = memoryDesk(), drv = fakeDrive();
   const r = await call("/api/edits/decide", { method: "POST", body: { id: "touchme__movie-card__a1", choice: "approve" }, store, drv });
   assert.equal(r.s, 200, r.text);
-  assert.deepEqual(drv.calls.made, ["2 Approved/touchme"]);
-  const to = "MADE1FOLDER0";
-  assert.deepEqual(drv.calls.moves, [[F.main, to, "REVIEWFOLDER01"], [F.prev, to, "REVIEWFOLDER01"], [F.json, to, "REVIEWFOLDER01"]]);
+  assert.deepEqual(drv.calls.made, ["2 Approved/touchme", "8 Machine files/approved/touchme"]);
+  const to = "MADE1FOLDER0", side = "MADE2FOLDER0";
+  assert.deepEqual(drv.calls.moves, [[F.main, to, "REVIEWFOLDER01"], [F.prev, side, "REVIEWFOLDER01"], [F.json, side, "REVIEWFOLDER01"]]);
   const again = await call("/api/edits/decide", { method: "POST", body: { id: "touchme__movie-card__a1", choice: "reject", reason: "clip" }, store, drv });
   assert.equal(again.s, 409);
   assert.match(again.j.error, /Already approved/);
@@ -281,9 +283,17 @@ test("approve moves all three files to 2 Approved/<song>/, once; undo within 10 
 
   const u = await call("/api/edits/undo", { method: "POST", body: { id: "touchme__movie-card__a1" }, store, drv });
   assert.equal(u.s, 200, u.text);
-  assert.deepEqual(drv.calls.moves.slice(3), [[F.main, "REVIEWFOLDER01", to], [F.prev, "REVIEWFOLDER01", to], [F.json, "REVIEWFOLDER01", to]]);
+  assert.deepEqual(drv.calls.moves.slice(3), [[F.main, "REVIEWFOLDER01", to], [F.prev, "REVIEWFOLDER01", side], [F.json, "REVIEWFOLDER01", side]]);
   assert.deepEqual(await store.get("log/2026-11.json", { type: "json" }), []);
   assert.equal(await store.get("decision/touchme__movie-card__a1.json"), null);
+});
+
+test("undo of a decision saved before 27 Nov (all files in one folder) still works", async () => {
+  const store = memoryDesk(), drv = fakeDrive();
+  await store.setJSON("decision/touchme__movie-card__a1.json", { id: "touchme__movie-card__a1", choice: "approve", at: NOW - 1000, from: "REVIEWFOLDER01", to: "OLDFOLDER0001", files: [F.main, F.prev, F.json] });
+  const u = await call("/api/edits/undo", { method: "POST", body: { id: "touchme__movie-card__a1" }, store, drv });
+  assert.equal(u.s, 200, u.text);
+  assert.deepEqual(drv.calls.moves, [[F.main, "REVIEWFOLDER01", "OLDFOLDER0001"], [F.prev, "REVIEWFOLDER01", "OLDFOLDER0001"], [F.json, "REVIEWFOLDER01", "OLDFOLDER0001"]]);
 });
 
 test("reject needs a reason and moves to 9 Rejected/; undo after 10 minutes is refused", async () => {
@@ -502,4 +512,39 @@ test("Review: a tap marks the card at once (green when approved) and only that c
   const eok = js.slice(js.indexOf('hasAttribute("data-eok")'), js.indexOf('hasAttribute("data-eno")'));
   assert.doesNotMatch(eok, /draw\(\)|redraw\(/, "approving never redraws the whole list");
   assert.match(eok, /patch\(/);
+});
+
+/* 27 Nov 2026 (Fable review): the machine can only learn from a decision if the log says what was in the
+   edit: which film and scene, the tone, the caption, the song part and the lengths. */
+test("a decision logs what the machine needs to learn: film, scene, tone, caption, song part, lengths", async () => {
+  const recipe = { id: "d1", song: "touchme", style: "movie-dialogue", variant: "caps", grade: "night-blue", tone: "heartbreak",
+    film: "titanic-1997-1080", scene: "titanic-1997-1080/s012", clips: ["titanic-1997-1080/s012"],
+    hook: { id: "quote", text: "“I'll never let go.”" }, land_line: "a made-up lyric", land_key: "a made-up lyric", land: 118.733,
+    S: 14.2, U: 8.8, duration: 23.0, path: "/work/secret/path.mp4" };
+  const store = memoryDesk(), drv = fakeDrive({ recipe });
+  const r = await call("/api/edits/decide", { method: "POST", body: { id: "touchme__movie-card__a1", choice: "reject", reason: "dark" }, store, drv });
+  assert.equal(r.s, 200, r.text);
+  const [l] = await store.get("log/2026-11.json", { type: "json" });
+  assert.deepEqual({ film: l.film, scene: l.scene, tone: l.tone, caption: l.caption, land: l.land, S: l.S, U: l.U, duration: l.duration },
+    { film: "titanic-1997-1080", scene: "titanic-1997-1080/s012", tone: "heartbreak", caption: "“I'll never let go.”",
+      land: 118.733, S: 14.2, U: 8.8, duration: 23.0 });
+  assert.equal(l.reason, "dark");
+  assert.equal(JSON.stringify(l).includes("/work/"), false, "no file paths in the log");
+  assert.equal(JSON.stringify(l).includes("made-up lyric"), false, "no lyrics in the log: the song part is kept as a time");
+  // an older movie-card recipe still logs, with the new fields simply empty
+  const store2 = memoryDesk(), drv2 = fakeDrive();
+  await call("/api/edits/decide", { method: "POST", body: { id: "touchme__movie-card__a1", choice: "approve" }, store: store2, drv: drv2 });
+  const [old] = await store2.get("log/2026-11.json", { type: "json" });
+  assert.equal(old.style, "movie-card");
+  assert.equal(old.film, "");
+  assert.equal(old.S, null);
+});
+
+/* 27 Nov 2026 (Fable review): the Make form pre-ticked Big word and Movie card, the style Luke rejected.
+   Only Dialogue scene, the one he approves, starts ticked. */
+test("the Make form starts with only Dialogue scene ticked", () => {
+  const js = readFileSync(new URL("../js/hq-edits.js", import.meta.url), "utf8");
+  const form = js.slice(js.indexOf('name="styles"') - 200, js.indexOf('name="styles"') + 200);
+  assert.match(form, /s\.key === "movie-dialogue" \? " checked"/);
+  assert.doesNotMatch(form, /i === 0|"movie-card" \?/);
 });
