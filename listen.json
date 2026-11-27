@@ -1,12 +1,20 @@
 {
   "artist": "BADSCANDAL",
-  "updated": "2026-11-10",
+  "updated": "2026-11-27",
   "streams": {
     "total": 450000000,
     "asOf": "September 2026",
     "source": "songstats"
   },
-  "release": {"mode": "upcoming", "title": "Me Dá Seu Body", "kicker": "New single", "date": "2026-11-24", "cover": "assets/listen-medaseubody-cover-v1.jpg", "cta": "https://open.spotify.com/artist/29kaubgb6Esvwu0idVndGy", "links": {}},
+  "release": {
+    "mode": "out",
+    "title": "Love you",
+    "kicker": "New single",
+    "date": "2026-11-27",
+    "cover": "assets/listen-loveyou-cover-v1.jpg",
+    "cta": "https://open.spotify.com/track/1faSDnb1WjkTkD97wmaPpZ",
+    "links": {}
+  },
   "links": {
     "spotify": "https://open.spotify.com/artist/29kaubgb6Esvwu0idVndGy",
     "apple": "https://music.apple.com/us/artist/badscandal/1578748373",
