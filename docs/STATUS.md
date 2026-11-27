@@ -86,7 +86,8 @@ No money amounts, payer names or account numbers in this file: the repo is publi
 
 ## In flight
 
-- None.
+- Upcoming review part A (PR #130, branch `upcoming-polish`): no zoom on the phone, and Upcoming no longer stops Team drawing when the sheet answers first. Waits for Luke's "deploy".
+- Upcoming review parts B and C (branch `upcoming-polish-bc`, on top of #130): one card per song, the problem said once, colours with icons, steps in pipeline order, 44 px taps, the header that hides on scroll; Copy from a previous song, genre/language pick lists, the Release Radar countdown, asset chips, and Atlas's two optional Spotify steps (connector 1.23.0). Waits for Luke's "deploy" (after #130).
 
 ## Next up
 

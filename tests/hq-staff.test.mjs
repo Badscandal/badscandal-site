@@ -507,7 +507,7 @@ test("v2: a step that is not ours, and the pitch that waits for Spotify for Arti
   assert.deepEqual(L.stepButton({ status: "scheduled" }, { owner: "Atlas", status: "done", waiting: true }), { to: "todo", text: "Reopen", main: false }, "a pitch already done can still be reopened");
   assert.deepEqual(L.stepButton({ status: "scheduled" }, { owner: "Atlas", status: "blocked", waiting: false }), { to: "done", text: "Mark done", main: false });
   const b = sampleBoard(NOW), sb = b.releases.find((v) => v.id === "slowburn"), mdsb = b.releases.find((v) => v.id === "medaseubody");
-  assert.deepEqual(sb.steps.filter((s) => L.stepState(s, b.today).skipped).map((s) => s.key), ["upload", "approved", "canvas"], "the label delivers Slow Burn; no Canvas link (17 Nov 2026)");
+  assert.deepEqual(sb.steps.filter((s) => L.stepState(s, b.today).skipped).map((s) => s.key), ["upload", "approved", "video_pitch", "canvas", "thisis"], "the label delivers Slow Burn; no Canvas link (17 Nov 2026); the optional Spotify steps are off (26 Nov 2026)");
   assert.equal(L.stepState(mdsb.steps.find((s) => s.key === "pitch"), b.today).text, "waiting: the song is not in Spotify for Artists yet");
   assert.equal(L.shortStep("Showing as upcoming in Spotify for Artists"), "Spotify for Artists");
   /* the release panel (Today's "Next release") says the same */

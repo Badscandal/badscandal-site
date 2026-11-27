@@ -109,7 +109,7 @@
     $("msgText").value = ""; counter(); $("msgErr").textContent = ""; $("msgOk").textContent = "";
     $("waitList").innerHTML = $("threadList").innerHTML = $("dutyList").innerHTML = '<div class="ph"></div>';
     $("answeredList").innerHTML = ""; $("answeredCard").hidden = true;
-    $("relForm").hidden = true; $("relForm").innerHTML = ""; $("relDesk").innerHTML = $("relOut").innerHTML = $("relPipe").innerHTML = $("relSpot").innerHTML = ""; if ($("relSpotWrap")) $("relSpotWrap").hidden = true; if ($("relRows")) $("relRows").innerHTML = ""; $("relMsg").textContent = "";
+    $("relForm").hidden = true; $("relForm").innerHTML = ""; $("relDesk").innerHTML = $("relOut").innerHTML = $("relPipe").innerHTML = $("relSpot").innerHTML = ""; if ($("relSpotWrap")) $("relSpotWrap").hidden = true; $("relMsg").textContent = "";
     draw();
   }
   function draw() {
@@ -726,8 +726,9 @@
     var lk = isLink(s.link) ? outLink(s.link, "Open the link", "rl") : "";
     /* v2: a step that is not ours (skipped) or that waits for Spotify for Artists has no due date that
        means anything: none is shown, and its note is already in its words */
-    var quiet = st.skipped || st.waiting;
-    return '<li class="' + (st.done ? "done" : st.bad ? "bad" : st.skipped ? "skip" : st.waiting ? "wait" : "") + '"><i aria-hidden="true"></i><div class="rs"><b>' + esc(s.label) + "</b>" +
+    var quiet = st.skipped || st.waiting, look = L.stepLook(s, board.today);
+    /* 26 Nov 2026: one meaning per colour, always with an icon: done ✓ green, to do ○ grey, waiting ◷ grey, blocked or late ! red */
+    return '<li class="' + (st.done ? "done" : st.bad ? "bad" : st.skipped ? "skip" : st.waiting ? "wait" : "todo") + '"><i class="si" aria-hidden="true">' + esc(look.icon) + '</i><div class="rs"><b>' + esc(s.label) + '<span class="sr"> (' + esc(look.word) + ")</span></b>" +
       '<span class="ro">' + esc((mine ? "You" : s.owner) + (s.due && !quiet ? " · due " + L.day(s.due) : "")) + "</span>" +
       '<span class="rline"><span class="rw">' + esc(cap(st.text)) + "</span>" + (lk || btn ? '<span class="racts2">' + lk + btn + "</span>" : "") + "</span>" +
       (s.note && !st.bad && !st.waiting && !st.skipped && !L.staleDoneNote(s) ? '<span class="rn">' + esc(s.note) + "</span>" : "") + "</div></li>";
@@ -810,13 +811,14 @@
   /* ---------- batch 3 (14 Nov 2026): the distributor's history, Luke's approvals, "ready to resubmit" ---------- */
   /* where the song is at the distributor, then its history folded (Drop's moderation log) */
   function storeHtml(v) {
-    var line = L.storeLine(v.store), hist = L.storeHistory(v.store);
+    /* 26 Nov 2026 (Luke's review: say the problem once): the distributor's word and day only; a rejection's
+       reason is on the step it blocks (and on the card's problem line), not again here */
+    var st = v.store, line = st && st.status ? L.storeLine({ status: st.status, since: st.since }) : L.storeLine(st), rows = L.storeRows(st);
     if (!line) return "";
-    return '<div class="rstore"><p class="rstore-now' + (v.store.status === "rejected" ? " bad" : "") + '">' + esc(line) + "</p>" +
-      /* 23 Nov 2026 (Luke): day, one word, and a reason only for a rejection; no brackets */
-      (hist.length > 1 ? '<details class="bwhy" data-fold="store:' + esc(v.id) + '"' + (ui.rel.fold["store:" + v.id] ? " open" : "") + "><summary>What the distributor said</summary><ul class=\"slog\">" +
-        L.storeRows(v.store).map(function (r) {
-          return '<li><span class="sl-d">' + esc(r.day) + '</span><b class="sl-w' + (r.tone ? " " + r.tone : "") + '">' + esc(r.word) + "</b>" + (r.why ? '<span class="sl-y">' + esc(r.why) + "</span>" : "") + "</li>";
+    return '<div class="rstore"><p class="rstore-now' + (st.status === "rejected" ? " bad" : "") + '">' + esc(line) + "</p>" +
+      (rows.length > 1 ? '<details class="bwhy" data-fold="store:' + esc(v.id) + '"' + (ui.rel.fold["store:" + v.id] ? " open" : "") + "><summary>What the distributor said</summary><ul class=\"slog\">" +
+        rows.map(function (r) {
+          return '<li><span class="sl-d">' + esc(r.day) + '</span><b class="sl-w' + (r.tone ? " " + r.tone : "") + '">' + esc(r.word) + "</b></li>";
         }).join("") + "</ul></details>" : "") + "</div>";
   }
   /* Luke's two approvals; he can approve the final lyrics here (the pitch comes from Atlas, as a question
@@ -860,18 +862,38 @@
     return '<p class="rpitch' + (p.status === "missed" ? " bad" : "") + '">' + esc(p.line || "") +
       (eds.length ? "<span>Editorial: " + esc(eds.join(" · ")) + "</span>" : "") + "</p>";
   }
-  /* Coming up: a song sent to the team (the overhaul, 15 Nov 2026). The card itself: its day, whose it is, a
-     progress bar and ONE status line (the most urgent problem, else the next step); Drop's "ready to resubmit?"
-     stays in sight because it waits on Luke. Everything else (the warnings, the distributor, every step, the
-     approvals, the files) folds behind "Steps and details", remembered per song. */
+  /* Coming up: ONE card per song (26 Nov 2026, Luke's review: each song showed twice, as a compact row with its own
+     dots and again as a full card with a ring and nine dots, and a rejection was said up to six times).
+     Closed: the cover (56 px, beside the title), the title, "Wed 9 Dec · 13 days", ONE pill, ONE "Next:" line, a thin
+     bar from 3 weeks out to the release day, the Release Radar countdown, the four asset chips, and the most urgent
+     problem once, with its button. Open (tap the top): every step (the reason sits on its step), what the distributor
+     said, the approvals, the files and details, and the buttons. Remembered per song (ui.rel.fold "card:<id>"). */
+  function trackHtml(v) {
+    var t = L.relTrack(v, board.today);
+    if (!t) return "";
+    return '<div class="rc-track" role="img" aria-label="' + esc(t.text) + '"><span class="rc-rail"></span>' +
+      t.ticks.map(function (x) { return '<i class="rc-tick ' + x.tone + '" style="left:' + x.pct + '%" title="' + esc(x.label) + '"></i>'; }).join("") +
+      (t.today != null ? '<b class="rc-today" style="left:' + t.today + '%"></b>' : "") + "</div>" +
+      '<p class="rc-ends" aria-hidden="true"><span>3 weeks out</span>' + (t.today != null && t.today >= 26 && t.today <= 74 ? '<span class="rc-tl" style="left:' + t.today + '%">Today</span>' : "") + "<span>Release day</span></p>";
+  }
+  function chipsHtml(v) {
+    var radar = L.radarChip(v, board.today), live = v.status === "scheduled" && !v.released;
+    var assets = live ? L.assetChips(v).map(function (a) {
+      return a.ok ? '<span class="rc-chip ok"><i aria-hidden="true">✓</i>' + esc(a.label) + '<span class="sr"> is filled in</span></span>'
+        : '<button class="rc-chip no" type="button" data-rel="asset" data-id="' + esc(v.id) + '" data-field="' + esc(a.key) + '"><i aria-hidden="true">○</i>' + esc(a.label) + '<span class="sr">: missing, add it</span></button>';
+    }).join("") : "";
+    if (!radar && !assets) return "";
+    return '<div class="rc-chips">' + (radar ? '<span class="rc-chip radar' + (radar.bad ? " bad" : "") + '"><i aria-hidden="true">' + (radar.bad ? "!" : "◷") + "</i>" + esc(radar.text) + "</span>" : "") + assets + "</div>";
+  }
   function relCard(v) {
-    var today = board.today, pill = L.upcomingPill(v, today), live = v.status === "scheduled" && !v.released, off = HQ.sample ? " disabled" : "";
+    var today = board.today, live = v.status === "scheduled" && !v.released, off = HQ.sample ? " disabled" : "", open = !!ui.rel.fold["card:" + v.id], sid = safe(v.id);
+    var pill = L.cardPill(v, today, board), nx = L.cardNext(v, today), prob = L.cardProblem(v, board, today);
     var acts = ['<div class="racts-main"><button class="copybtn" type="button" data-rel="page" data-id="' + esc(v.id) + '">Release page</button><button class="copybtn" type="button" data-rel="edit" data-id="' + esc(v.id) + '">Edit the details</button></div>'];
     if (live) acts.push('<div class="racts-more"><button class="linkbtn" type="button" data-rel="date" data-id="' + esc(v.id) + '"' + off + ">Change the date</button>" +
       '<button class="linkbtn danger" type="button" data-rel="cancel" data-id="' + esc(v.id) + '"' + off + ">Cancel release</button></div>");
-    var asking = ui.rel.ask && ui.rel.ask.id === v.id, wg = L.warnGroups(v), st = L.relStatus(v, today), pr = L.relProgress(v), g = L.stepGroups(v);
-    var badLeft = st.bad ? wg.bad.slice(1) : wg.bad;
+    var asking = ui.rel.ask && ui.rel.ask.id === v.id, wg = L.warnGroups(v);
     var allDone = v.released && v.counts && v.counts.total && v.counts.done === v.counts.total;
+    var g = L.stepGroups(v, board.releaseSteps);
     var stepList = function (list) { return '<ol class="rsteps" aria-label="Steps">' + list.map(function (s) { return relStep(v, s); }).join("") + "</ol>"; };
     var steps = allDone ? '<p class="rnote">All ' + v.counts.total + " steps done.</p>"
       : (g.open.length ? '<p class="bsub">Still to do (' + g.open.length + ")</p>" + stepList(g.open) : "") +
@@ -879,37 +901,40 @@
     var sheetSong = (HQ.sheet() && HQ.sheet().songs || []).filter(function (s) { return L.titleKey(s.song) === L.titleKey(v.title); })[0];
     var pageSong = (HQ.overview && HQ.overview() && HQ.overview().songs || []).filter(function (s) { return L.titleKey(s.title) === L.titleKey(v.title); })[0];
     /* the cover (26 Nov 2026): the song page's, else the release's own Artwork link (the site's copy of it, made
-       small by /.netlify/images), else the sheet's. An Artwork link that can't be opened says why on the card. */
+       small by /.netlify/images), else the sheet's. An Artwork link that can't be opened says why inside the card. */
     var art = v.artworkUrl && !artWhy[v.artworkUrl] ? v.artworkUrl : "", pageCover = pageSong && pageSong.cover;
     var cover = pageCover || (art ? L.artworkThumb(art) : "") || (sheetSong && sheetSong.cover) || "";
     var face = L.releaseFace(v, today, { cover: cover, taps: pageSong ? pageSong.taps : null, people: pageSong ? pageSong.people : null, spend: "", mail: board && board.mail });
-    var ring = face.progress.total ? '<span class="ring" style="--p:' + face.progress.pct + '" aria-label="' + esc(face.progress.text) + '"><b>' + face.progress.done + "/" + face.progress.total + "</b></span>" : "";
-    var dots = face.dots.length ? '<p class="rdots" aria-hidden="true">' + face.dots.map(function (t) { return '<i class="' + t + '"></i>'; }).join("") + "</p>" : "";
-    var nxt = face.next ? '<p class="rnext">Next: ' + esc(face.next.label) + " · " + esc(face.next.owner) + (face.next.when ? " · " + esc(face.next.when) : "") + "</p>" : "";
     var tapN = face.taps == null ? null : Number(String(face.taps).replace(/,/g, ""));
     var statBits = [face.people != null ? L.fmt(face.people) + " people" : "", face.taps != null ? L.fmt(face.taps) + " Spotify tap" + (tapN === 1 ? "" : "s") : ""].filter(Boolean);
-    var stats = statBits.length ? '<p class="rstats">' + esc(statBits.join(" · ")) + "</p>" : "";
-    if (face.prehq) { badLeft = []; wg = { bad: [], caution: [] }; }
+    var stats = statBits.length ? '<p class="rstats">' + esc(statBits.join(" · ")) + ' <span class="rc-range">(' + esc(HQ.rangeWords ? HQ.rangeWords() : "this period") + ")</span></p>" : "";
     var mark = L.songMark(board && board.disputes, v.title, today, [v]);
-    return '<article class="tile relcard rstrip' + (mark.tone ? " tone-" + mark.tone : "") + '" id="releases-' + esc(safe(v.id)) + '">' +
-      (face.cover ? '<img class="rcover" src="' + esc(face.cover) + '" alt=""' + (!pageCover && art && face.cover !== art ? ' data-art="' + esc(art) + '"' : "") + ' decoding="async">' : "") +
-      '<div class="rface"><div class="bhead"><div><h3>' + esc(v.title) + "</h3>" +
-      '<p class="rwhen">' + esc(face.when) + "</p>" + dealHtml(v) + (mark.badge ? '<p class="dbadge">' + esc(mark.badge) + "</p>" : "") + "</div>" + ring +
-      '<span class="' + (pill.bad ? "bstate late" : "pill" + (pill.rel ? " rel" : "")) + '">' + esc(pill.text) + "</span></div>" +
-      (face.prehq ? '<p class="prehq">pre-HQ</p>' : "") + dots + nxt +
-      (!pageCover && v.artworkUrl && artWhy[v.artworkUrl] && artWhy[v.artworkUrl] !== 1 ? '<p class="rdist rcoverwhy">Cover: ' + esc(artWhy[v.artworkUrl]) + "</p>" : "") +
-      (face.distributor && !/ISRC|UPC/i.test(face.distributor) ? '<p class="rdist">' + esc(face.distributor) + "</p>" : "") +
-      (face.mailLine && !/^RouteNote email: (not connected|not reported)$/.test(face.mailLine) ? '<p class="rdist">' + esc(face.mailLine) + "</p>" : "") + stats +
+    /* inside: the warnings that are not about one step (those are said on the step) and not the headline */
+    var badIn = face.prehq ? [] : wg.bad.filter(function (w) { return !L.stepWarning(w, v) && !(prob && prob.kind === "bad" && prob.text === w); });
+    var cautionIn = face.prehq ? [] : wg.caution;
+    var problem = !prob ? "" : prob.kind === "resubmit" ? resubmitHtml(v)
+      : '<p class="rc-prob"><i aria-hidden="true">!</i><span>' + esc(prob.text) + "</span>" + (prob.more ? '<button class="rmore" type="button" data-rel="fold" data-id="' + esc(v.id) + '" aria-controls="rcb-' + esc(sid) + '">+' + prob.more + " more</button>" : "") + "</p>";
+    return '<article class="tile relcard rc' + (mark.tone ? " tone-" + mark.tone : "") + (open ? " open" : "") + '" id="releases-' + esc(sid) + '">' +
+      '<button class="rc-head" type="button" data-rel="fold" data-id="' + esc(v.id) + '" aria-expanded="' + open + '" aria-controls="rcb-' + esc(sid) + '">' +
+      (face.cover ? '<img class="rcover rc-cover" src="' + esc(face.cover) + '" alt=""' + (!pageCover && art && face.cover !== art ? ' data-art="' + esc(art) + '"' : "") + ' decoding="async">' : '<span class="rc-cover none" aria-hidden="true"></span>') +
+      '<span class="rc-t"><b class="rc-title">' + esc(v.title) + '</b><span class="rc-when">' + esc(face.prehq ? face.when + " · pre-HQ" : L.cardWhen(v, today)) + "</span></span>" +
+      (pill.text ? '<span class="rc-pill ' + pill.tone + '">' + (pill.icon ? '<i aria-hidden="true">' + esc(pill.icon) + "</i>" : "") + esc(pill.text) + "</span>" : "") +
+      '<span class="rc-chev" aria-hidden="true"></span><span class="sr">' + (open ? "Hide the steps and details" : "Show the steps and details") + "</span></button>" +
+      (nx && !face.prehq && !allDone ? '<p class="rc-next">' + esc(nx.text) + "</p>" : "") +
+      (live ? trackHtml(v) : "") +
+      chipsHtml(v) +
       (ui.rel.note[v.id] ? '<p class="rdone" role="status">' + esc(ui.rel.note[v.id]) + "</p>" : "") +
-      (!face.prehq && (st.bad || st.caution) ? '<p class="rstat' + (st.bad ? " bad" : " caution") + '">' + esc(st.text) + (st.more ? ' <span class="rmore">+' + st.more + " more</span>" : "") + "</p>" : "") +
-      "</div>" +
-      pitchHtml(v) +
-      resubmitHtml(v) + preflightHtml(v) +
-      '<details class="rfold" data-fold="card:' + esc(v.id) + '"' + (ui.rel.fold["card:" + v.id] ? " open" : "") + "><summary>Steps and details</summary>" +
-      (badLeft.length ? '<ul class="rwarn" aria-label="Warnings">' + badLeft.map(function (w) { return "<li>" + esc(w) + "</li>"; }).join("") + "</ul>" : "") +
-      (wg.caution.length ? '<ul class="rwarn note" aria-label="Notes">' + wg.caution.map(function (w) { return "<li>" + esc(w) + "</li>"; }).join("") + "</ul>" : "") +
-      storeHtml(v) + steps + approvalsHtml(v) + packHtml(v) + relPack(v) + "</details>" +
-      (asking && (ui.rel.ask.kind === "date" || ui.rel.ask.kind === "cancel") ? relAsk(v) : '<div class="racts racts-card">' + acts.join("") + "</div>") +
+      problem + preflightHtml(v) +
+      '<div class="rc-body" id="rcb-' + esc(sid) + '"' + (open ? "" : " hidden") + ">" +
+      (mark.badge ? '<p class="dbadge">' + esc(mark.badge) + "</p>" : "") + dealHtml(v) +
+      (!pageCover && v.artworkUrl && artWhy[v.artworkUrl] && artWhy[v.artworkUrl] !== 1 ? '<p class="rdist rcoverwhy">Cover: ' + esc(artWhy[v.artworkUrl]) + "</p>" : "") +
+      (face.distributor && !/ISRC|UPC/i.test(face.distributor) && !(v.store && v.store.status) ? '<p class="rdist">' + esc(face.distributor) + "</p>" : "") +
+      (face.mailLine && !/^RouteNote email: (not connected|not reported)$/.test(face.mailLine) ? '<p class="rdist">' + esc(face.mailLine) + "</p>" : "") + stats +
+      (badIn.length ? '<ul class="rwarn" aria-label="Warnings">' + badIn.map(function (w) { return "<li>" + esc(w) + "</li>"; }).join("") + "</ul>" : "") +
+      (cautionIn.length ? '<ul class="rwarn note" aria-label="Notes">' + cautionIn.map(function (w) { return "<li>" + esc(w) + "</li>"; }).join("") + "</ul>" : "") +
+      steps + storeHtml(v) + pitchHtml(v) + approvalsHtml(v) + packHtml(v) + relPack(v) +
+      (asking && (ui.rel.ask.kind === "date" || ui.rel.ask.kind === "cancel") ? "" : '<div class="racts racts-card">' + acts.join("") + "</div>") + "</div>" +
+      (asking && (ui.rel.ask.kind === "date" || ui.rel.ask.kind === "cancel") ? relAsk(v) : "") +
       '<p class="ferr" role="alert">' + esc(ui.rel.err[v.id] || "") + "</p></article>";
   }
   /* Needs you (the overhaul): what on this tab waits on Luke, first; each one opens its card (or the message,
@@ -947,7 +972,8 @@
         var s = L.suggestDates(today, rels, { except: v.id, n: 1 })[0];
         return s ? '<p class="plan-draft"><b>' + esc(v.title) + "</b> has no release day yet. " + '<button class="linkbtn" type="button" data-plan="use" data-id="' + esc(v.id) + '" data-date="' + esc(s.date) + '">Use ' + esc(s.words) + " for " + esc(v.title) + "</button></p>" : "";
       }).join("") + (HQ.sample ? '<p class="fok">Sample: the form opens, nothing is saved.</p>' : "") + "</section>";
-    var m = L.calendarMonth(ui.cal.ym || today.slice(0, 7), rels, today);
+    /* 26 Nov 2026 (Luke's review): the calendar opens on the month of the next release, not this month */
+    var m = L.calendarMonth(ui.cal.ym || L.calendarStart(rels, today), rels, today);
     var sel = ui.cal.sel && m.weeks.some(function (w) { return w.some(function (c) { return c.date === ui.cal.sel; }); }) ? ui.cal.sel : "";
     var cell = function (c) {
       var rel = c.items.filter(function (x) { return x.kind === "release"; }), steps = c.items.filter(function (x) { return x.kind === "step"; });
@@ -993,36 +1019,6 @@
       Object.keys(groups).map(function (g) { return '<div class="rpsec"><p class="t-lbl">' + esc(GROUPS[g] || g) + '</p><dl class="rpfields">' + groups[g].map(function (f) { return "<dt>" + esc(f.label) + "</dt><dd>" + show(f) + "</dd>"; }).join("") + "</dl></div>"; }).join("") +
       "</article>";
   }
-  function drawRelRows(list) {
-    var box = $("relRows");
-    if (!box || !window.HQLook) return;
-    var rows = HQLook.releaseRows(list, board.today);
-    var key = rows.length ? '<p class="rdots-key">Dots, in order: in Spotify for Artists · pitched · Canvas · lyrics · song page. Filled = done.</p>' : "";
-    rows.forEach(function (r) {
-      var rel = relById[r.id];
-      var tl = rel ? HQLook.releaseTimeline(rel) : [];
-      if (!ui.rel.time && !ui.rel.shut[r.id] && tl.some(function (s) { return s.autoOpen; })) ui.rel.time = r.id;
-    });
-    box.innerHTML = rows.map(function (r) {
-      var open = ui.rel.time === r.id;
-      var rel = relById[r.id];
-      var tl = open && rel ? HQLook.releaseTimeline(rel) : [];
-      var blockers = [];
-      if (open && rel) {
-        try {
-          var view = L.releaseView(rel, board.today);
-          blockers = (view.missing || []).map(function (m) { return m && (m.label || m.text || m); });
-        } catch (e) { blockers = []; }
-      }
-      var ready = open ? HQLook.readinessBox(blockers) : null;
-      return '<article class="relrow"><button type="button" class="relrow-h" data-rel="time" data-id="' + esc(r.id) + '"><i class="sdot ' + esc(r.store.tone) + '" aria-label="' + esc(r.store.label) + '"></i><b>' + esc(r.title) + '</b><span>' + esc(r.when) + '</span><span class="rdots">' + r.dots.map(function (d) { return '<i class="' + (d.on ? "on" : "") + '" title="' + esc(d.label) + '"></i>'; }).join("") + '</span></button>' +
-        (open ? '<ol class="tl-v">' + tl.map(function (s) {
-          var when = HQLook.stampDay ? HQLook.stampDay(s.at, L) : "";
-          var sub = (L.staleDoneNote(s) ? "" : s.note) || (s.done && when ? when : "");
-          return '<li class="' + (s.bad ? "bad" : s.done ? "ok" : "") + '"><b>' + esc(s.label) + "</b>" + (sub ? "<span>" + esc(sub) + "</span>" : "") + "</li>"; }).join("") + "</ol>" +
-          (ready ? '<div class="readybox"><p>' + esc(ready.line) + "</p>" + (ready.items.length ? "<ul>" + ready.items.map(function (i) { return "<li>" + esc(i) + "</li>"; }).join("") + "</ul>" : "") + "</div>" : "") : "") + "</article>";
-    }).join("") + key;
-  }
   function drawReleases() {
     if (!board || !Array.isArray(board.releases)) return false;
     var sheet = HQ.sheet(), lists = L.releaseLists(board, sheet);
@@ -1035,7 +1031,6 @@
     var act = document.activeElement, fk = act && act.getAttribute ? act.getAttribute("data-reldate") : null;
     $("relPipe").innerHTML = lists.pipeline.length ? lists.pipeline.map(pipeCard).join("") : '<p class="empty2">Nothing is being prepared right now. Start one with New song.</p>';
     $("relDesk").innerHTML = lists.coming.map(relCard).join("");
-    drawRelRows(lists.coming);
     if (sheet && HQ.releasesBroken()) $("relList").innerHTML = '<p class="empty">See the note above.</p>';
     else $("relList").innerHTML = lists.sheetOnly.map(HQ.sheetReleaseCard).join("") ||
       ((lists.coming.length || (board.releases || []).some(function (r) { return r && r.status === "scheduled"; })) ? "" : '<p class="empty2">Nothing has been sent to the team yet. A song moves here from “In the pipeline” when you send it.</p>');
@@ -1179,13 +1174,15 @@
     var b = ev.target.closest && ev.target.closest("[data-rel]");
     if (!b || !board) return;
     var act = b.getAttribute("data-rel"), id = b.getAttribute("data-id") || "", v = relById[id];
-    if (act === "time") {
-      ui.rel.time = ui.rel.time === id ? "" : id;
-      if (!ui.rel.time) ui.rel.shut[id] = true;
-      else delete ui.rel.shut[id];
-      drawReleases();
+    /* 26 Nov 2026: one card per song; its top (and "+N more") opens and closes it */
+    if (act === "fold") {
+      var k = "card:" + id, nowOpen = !ui.rel.fold[k];
+      ui.rel.fold[k] = nowOpen; drawReleases();
+      var hd = $("releases").querySelector('#releases-' + id.replace(/[^a-z0-9]/gi, "") + " .rc-head"); if (hd) hd.focus({ preventScroll: true });
       return;
     }
+    /* an asset chip that is ○: Edit the details, at that field */
+    if (act === "asset") { ui.rel.focusField = b.getAttribute("data-field") || ""; act = "edit"; }
     var focusSel = function (sel) { var el = $("releases").querySelector(sel); if (el) el.focus(); };
     var sid = id.replace(/[^a-z0-9]/gi, "");
     if (act === "page") { ui.rel.page = id; drawReleases(); var pgEl = $("relPage"); if (pgEl) pgEl.scrollIntoView({ block: "start" }); return; }
@@ -1299,7 +1296,11 @@
     drawForm();
     $("relForm").hidden = false; $("relNew").setAttribute("aria-expanded", "true");
     $("relForm").scrollIntoView({ block: "start" });
-    var t = $("rf-title"); if (t) t.focus({ preventScroll: true });
+    var t = $("rf-title"), want = ui.rel.focusField; ui.rel.focusField = "";
+    /* from an asset chip: straight to that field (its section opened) */
+    var at = want ? $("relForm").querySelector('[data-ff="' + want.replace(/[^a-z0-9]/gi, "") + '"]') : null;
+    if (at) { var fd = at.closest("details"); if (fd) fd.open = true; var inp = at.querySelector("input,textarea,select"); at.scrollIntoView({ block: "center" }); if (inp) inp.focus({ preventScroll: true }); return; }
+    if (t) t.focus({ preventScroll: true });
   }
   function closeForm(keep) {
     if (!keep && ui.form) forgetForm(ui.form.id);
@@ -1321,6 +1322,19 @@
       return '<fieldset class="ff' + miss + '" data-ff="' + esc(f.key) + '"><legend class="flbl">' + lbl + "</legend>" + hint + '<div class="chooser">' + (f.choices || []).map(function (c) {
         return '<label><input type="radio" name="' + id + '" value="' + esc(c) + '" data-rf="' + esc(f.key) + '"' + (val === c ? " checked" : "") + desc + "><span>" + esc(c) + "</span></label>"; }).join("") + "</div></fieldset>";
     var common = ' class="fld' + (f.key === "lyrics" ? " lyrics" : "") + '" id="' + id + '" data-rf="' + esc(f.key) + '" maxlength="' + (f.max || 200) + '"' + desc;
+    /* 26 Nov 2026 (Luke's review): genre, second genre and language are picked, not typed, so a typo can't get a
+       song rejected by the stores. What he used before is on top; "Other…" takes anything else. */
+    var pl = f.kind === "line" ? L.pickList(f.key, board ? board.releases : []) : null;
+    if (pl) {
+      var all = pl.used.concat(pl.rest).map(function (x) { return x.toLowerCase(); });
+      var other = !!(F.other && F.other[f.key]) || (!!val && all.indexOf(val.toLowerCase()) < 0);
+      var opt = function (x) { return '<option value="' + esc(x) + '"' + (!other && val.toLowerCase() === x.toLowerCase() ? " selected" : "") + ">" + esc(x) + "</option>"; };
+      var sel = '<select class="fld" id="' + id + '" data-rf="' + esc(f.key) + '" data-pick="' + esc(f.key) + '"' + desc + '><option value="">Choose…</option>' +
+        (pl.used.length ? '<optgroup label="Used before">' + pl.used.map(opt).join("") + '</optgroup><optgroup label="All">' + pl.rest.map(opt).join("") + "</optgroup>" : pl.rest.map(opt).join("")) +
+        '<option value="__other"' + (other ? " selected" : "") + ">Other…</option></select>" +
+        (other ? '<input type="text" autocomplete="off" class="fld fother" id="' + id + '-o" data-rf="' + esc(f.key) + '" maxlength="' + (f.max || 200) + '" aria-label="' + esc(f.short || f.label) + ', in your own words" value="' + esc(val) + '">' : "");
+      return '<div class="ff' + miss + '" data-ff="' + esc(f.key) + '"><label class="flbl" for="' + id + '">' + lbl + "</label>" + hint + sel + "</div>";
+    }
     var input = f.kind === "text" ? "<textarea" + common + ' rows="' + (f.key === "lyrics" ? 10 : 4) + '">' + esc(val) + "</textarea>"
       : f.kind === "link" ? '<input type="url" inputmode="url" autocapitalize="off" autocorrect="off" spellcheck="false" autocomplete="off" placeholder="https://"' + common + ' value="' + esc(val) + '">'
       : '<input type="text" autocomplete="off"' + common + ' value="' + esc(val) + '">';
@@ -1347,7 +1361,7 @@
     var h = '<h3 id="rfTitleH">' + (F.id ? (sched ? "Edit " : "Finish ") + esc(F.orig.title || F.title) : "New song") + "</h3>" +
       '<p class="rf-sub">' + (sched ? "It's already with the team: what you change here reaches every bot the next time it opens its day."
         : out ? "Already out: only “Whose release is it” is needed. Recording it keeps whose song it is, for Songs; there are no steps and nobody is told."
-        : "Fill in what you have. Save it for later, or send it to the team once everything marked “needed to send” is in. The pitch details can wait.") + "</p>" +
+        : "Fill in what you have. Save it for later, or send it to the team once everything marked “needed to send” is in. The pitch details can wait.") + "</p>" + copyHtml() +
       '<div class="ffrow"><div class="ff' + miss("title") + '" data-ff="title"><label class="flbl" for="rf-title">Title <span class="req">' + need + '</span></label><input class="fld" id="rf-title" data-rf="title" maxlength="120" autocomplete="off" value="' + esc(F.title) + '"></div>' +
       /* no lower limit (v2): a day that has passed records a song that is already out */
       '<div class="ff' + miss("date") + '" data-ff="date"><label class="flbl" for="rf-date">Release day <span class="req">' + need + '</span></label><input class="fld" type="date" id="rf-date" data-rf="date" value="' + esc(F.date) + '"' + (sched ? " disabled" : "") + ' aria-describedby="rfDay"><div id="rfDay" aria-live="polite">' + dayNoteHtml() + "</div></div></div>";
@@ -1361,6 +1375,22 @@
     });
     $("relForm").innerHTML = h + '<div class="rf-foot" id="rfFoot"></div>';
     drawFoot();
+  }
+  /* 26 Nov 2026 (Luke's review: Survivors' draft was "2 of 20 filled", and most of the missing fields are the same every
+     time): "Copy from a previous song" fills the writers, producers, primary artists, copyright line, language,
+     genre, second genre, explicit and self-release or label from a song he picks (the last one sent first). Only
+     empty fields are filled. Title, date, files, lyrics and pitch notes stay empty. */
+  function copyHtml() {
+    var F = ui.form;
+    if (!F || F.status === "scheduled" || !board) return "";
+    var src = L.copySources(board.releases, F.id);
+    if (!src.length) return "";
+    var pick = F.copyFrom && src.some(function (x) { return x.id === F.copyFrom; }) ? F.copyFrom : src[0].id;
+    return '<div class="rf-copy"><label class="flbl" for="rf-copyfrom">Copy from a previous song</label><div class="rf-copyrow"><select class="fld" id="rf-copyfrom" data-rf-copy>' +
+      src.map(function (x) { return '<option value="' + esc(x.id) + '"' + (x.id === pick ? " selected" : "") + ">" + esc(x.title + (x.sent ? "" : " (draft)")) + "</option>"; }).join("") +
+      '</select><button class="copybtn" type="button" data-rf-act="copy">Copy</button></div>' +
+      '<p class="fhint">Writers, producers, primary artists, copyright line, language, genres, explicit and self-release or label. Only empty fields are filled. Title, date, files, lyrics and pitch notes stay empty.</p>' +
+      (F.copyOk ? '<p class="fok" role="status">' + esc(F.copyOk) + "</p>" : "") + "</div>";
   }
   function footKey() { return (board ? "b" : "") + (tried ? "t" : ""); }
   function drawFoot() {
@@ -1456,6 +1486,19 @@
     var F = ui.form, el = ev.target, k = el.getAttribute && el.getAttribute("data-rf");
     if (!F || !k) return;
     if (el.type === "radio" && !el.checked) return;
+    /* a pick list: "Other…" opens a box for his own words; a listed value closes it */
+    var pk = el.getAttribute("data-pick");
+    if (pk && ev.type === "change") {
+      F.other = F.other || {};
+      var wasOther = !!F.other[pk] || (!!F.vals[pk] && el.querySelector('option[value="' + String(F.vals[pk]).replace(/["\\]/g, "") + '"]') == null);
+      if (el.value === "__other") { F.other[pk] = true; drawForm(); markMiss(); var ob = $("rf-" + safe(pk) + "-o"); if (ob) ob.focus({ preventScroll: true }); keepForm(); return; }
+      F.other[pk] = false; F.vals[pk] = el.value;
+      if (wasOther) { drawForm(); markMiss(); var sb = $("rf-" + safe(pk)); if (sb) sb.focus({ preventScroll: true }); }
+      if (F.miss.indexOf(pk) >= 0 && el.value) { F.miss = F.miss.filter(function (x) { return x !== pk; }); var pw = el.closest("[data-ff]"); if (pw) pw.classList.remove("miss"); }
+      if (F.ask) { F.ask = false; drawFoot(); }
+      keepForm(); return;
+    }
+    if (pk) return; /* a select's input event: its change event does the work */
     var wasOut = outNow(F);
     if (k === "title" || k === "date") F[k] = el.value; else F.vals[k] = el.value;
     if (k === "date") $("rfDay").innerHTML = dayNoteHtml();
@@ -1474,6 +1517,20 @@
     var b = ev.target.closest && ev.target.closest("[data-rf-act]");
     if (!b || !ui.form) return;
     var act = b.getAttribute("data-rf-act");
+    if (act === "copy") {
+      var CF = ui.form, sel = $("rf-copyfrom"), src = sel && relById[sel.value];
+      if (!src) return;
+      CF.copyFrom = src.id;
+      var got = L.copyValues(src, CF.vals), word = function (k) { var f = relFields().filter(function (x) { return x.key === k; })[0]; return f ? f.short || f.label : k; };
+      CF.vals = got.vals; CF.other = {};
+      CF.miss = CF.miss.filter(function (k) { return got.filled.indexOf(k) < 0; });
+      CF.copyOk = got.filled.length ? "Copied from " + src.title + ": " + got.filled.map(word).join(", ") + "." + (got.kept.length ? " Kept what you had typed in " + got.kept.map(word).join(", ") + "." : "") + " Check them, then Save."
+        : "Nothing to copy from " + src.title + ": those fields are filled already.";
+      if (CF.ask) CF.ask = false;
+      drawForm(); markMiss(); keepForm();
+      var cb = $("relForm").querySelector('[data-rf-act="copy"]'); if (cb) cb.focus({ preventScroll: true });
+      return;
+    }
     if (act === "pickdate") {
       /* a suggested day (14 Nov 2026): set it, as if typed in the date field */
       var F = ui.form, d = b.getAttribute("data-date") || "";

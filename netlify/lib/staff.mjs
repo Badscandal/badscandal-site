@@ -2053,6 +2053,9 @@ export const PACK_FIELDS = [
   F("mood", "Mood (for the pitch)", "Mood", "line", "pitch", { neededBy: "pitch", hint: 'Can wait. For example "late night, euphoric".' }),
   F("instruments", "Instruments (for the pitch)", "Instruments", "line", "pitch", { neededBy: "pitch", hint: 'Can wait. For example "synths, drum machine, vocal chops".' }),
   F("story", "The song in two lines (for the pitch)", "The song in two lines", "text", "pitch", { neededBy: "pitch", max: 400, hint: "Can wait. What the song is about and why it matters, for Atlas's Spotify pitch." }),
+  /* 26 Nov 2026 (Luke's Upcoming review): two optional Spotify extras for Atlas, off unless Luke says Yes here */
+  F("videoPitch", "Pitch the music video to Spotify too?", "Video pitch", "choice", "pitch", { fill: [], choices: ["Yes", "No"], hint: "Only for an official music video or a performance, not a visualiser. Spotify takes it apart from the song's pitch. Yes adds Atlas's step \"Music video pitched to Spotify\"." }),
+  F("thisIs", "Pin the song on its This Is playlist?", "This Is pin", "choice", "pitch", { fill: [], choices: ["Yes", "No"], hint: "Atlas asks Spotify to pin it on This Is badscandal after the pitch, once the song is out, if the profile can. One pin request at a time; about 3 days once the song is live." }),
   F("isrc", "ISRC", "ISRC", "line", "later", { fill: ["Drop"], max: 40, hint: "Drop fills it from RouteNote." }),
   F("upc", "UPC", "UPC", "line", "later", { fill: ["Drop"], max: 40, hint: "Drop fills it from RouteNote." }),
   F("storeStatus", "Status at the distributor", "Status at the distributor", "choice", "later", { fill: ["Drop"], choices: STORE_STATUS, hint: "Drop keeps it current with store_status (a rejection with RouteNote's reason). Every change is kept." }),
@@ -2210,6 +2213,10 @@ export const RELEASE_STEPS = [
      it In Review); a label release skips the approval, so it never waits */
   { key: "spotify", label: "Showing as upcoming in Spotify for Artists", owner: "Atlas", days: 15, after: "approved" },
   { key: "pitch", label: "Spotify pitch sent", owner: "Atlas", days: 14, after: "spotify", asap: true },
+  /* 26 Nov 2026 (Luke's Upcoming review): two optional Spotify extras, Atlas's, OFF unless Luke switches them on for
+     the song in the pack (optIn: that field is "Yes"). Spotify takes a song pitch and a video pitch separately: only
+     for an official music video or a performance, never a visualiser. */
+  { key: "video_pitch", label: "Music video pitched to Spotify", owner: "Atlas", days: 7, after: "spotify", optIn: "videoPitch" },
   /* 17 Nov 2026: only when the pack has a Canvas link (needs); once the song shows in Spotify for Artists, by a week after the release */
   { key: "canvas", label: "Spotify Canvas uploaded", owner: "Atlas", days: -7, after: "spotify", needs: "canvas" },
   { key: "page", label: "Song page live on badscandal.com", owner: "Webmaster", days: 7 },
@@ -2226,6 +2233,9 @@ export const RELEASE_STEPS = [
      release day (fromRelease), then due a week after it. The teaser steps (batch 3) are gone (15 Nov 2026,
      Luke: "remove all the teaser clips fully im going to build a new section for that later"). */
   { key: "lyrics", label: "Lyrics live on Musixmatch", owner: "Verse", days: -7, fromRelease: true },
+  /* 26 Nov 2026: the This Is pin (Spotify for Artists' Artist Pick on the This Is playlist), after the pitch, once the
+     song is out, when the profile is eligible. One pin request at a time; it takes about 3 days once the song is live. */
+  { key: "thisis", label: "Pinned to This Is on Spotify", owner: "Atlas", days: -3, after: "pitch", fromRelease: true, optIn: "thisIs" },
 ];
 const STEP = Object.assign(Object.create(null), Object.fromEntries(RELEASE_STEPS.map((s) => [s.key, s])));
 /* skipped (11 Nov 2026): a step that does not apply (the label delivers it; the song was already out).
@@ -2387,6 +2397,35 @@ function pitchRule(list, today, at = null) {
   return changed;
 }
 const NEEDS_NOTE = "No Spotify Canvas link in the pack (Luke adds one if there is a Canvas)";
+/* an optional step Luke has not switched on for the song (26 Nov 2026) */
+export const OPT_NOTE = "Off for this song: Luke switches it on in the release form";
+/* does a step apply to this pack? the Canvas only with its link; an optional step only when switched on */
+const stepApplies = (def, pack) => !def || (def.needs ? filled((pack || {})[def.needs]) : def.optIn ? low((pack || {})[def.optIn]) === "yes" : true);
+const offNote = (def) => (def.optIn ? OPT_NOTE : NEEDS_NOTE);
+/* the field that switches a step on or off, and the steps it switches */
+const fieldOf = (def) => def.needs || def.optIn || "";
+/* after a pack change: a step whose field was filled (or switched on) applies again, one whose field was cleared (or
+   switched off) is skipped; an optional step a release sent before it existed is added in its place */
+function syncFieldSteps(r, keys, today) {
+  r.steps = r.steps || [];
+  for (const def of RELEASE_STEPS) {
+    const field = fieldOf(def);
+    if (!field || !keys.includes(field)) continue;
+    const on = stepApplies(def, r.pack), st = r.steps.find((x) => x.key === def.key);
+    const dueNow = () => { if (!isDay(r.date)) return null; const want = addDays(r.date, -def.days); return want < today ? today : want; };
+    if (!st) {
+      if (!def.optIn || !on || r.status !== "scheduled" || r.alreadyOut) continue;
+      const order = RELEASE_STEPS.map((x) => x.key), mine = order.indexOf(def.key);
+      let at = r.steps.length;
+      for (let i = 0; i < r.steps.length; i++) { const k = order.indexOf(r.steps[i].key); if (k > mine) { at = i; break; } }
+      r.steps.splice(at, 0, { key: def.key, label: def.label, owner: def.owner, due: dueNow(), status: "todo", note: "", link: "", at: null, by: null });
+      continue;
+    }
+    const offSkip = st.status === "skipped" && (def.optIn ? st.note === OPT_NOTE : canvasSkipNote(st.note));
+    if (on && offSkip) { st.status = "todo"; st.note = ""; const d = dueNow(); if (d) st.due = d; }
+    else if (!on && st.status === "todo") { st.status = "skipped"; st.note = offNote(def); }
+  }
+}
 /* a step skipped only because its link was missing comes back when the link is added (18 Nov 2026) */
 function canvasSkipNote(note) {
   const n = String(note || "");
@@ -2397,9 +2436,9 @@ export function scheduleSteps(date, today, o = {}) {
   const steps = RELEASE_STEPS.map((s) => {
     const want = addDays(date, -s.days);
     const skip = o.labelDelivers && (s.key === "upload" || s.key === "approved");
-    const noNeed = s.needs && !filled((o.pack || {})[s.needs]); /* the Canvas step without a Canvas link */
+    const noNeed = !stepApplies(s, o.pack); /* the Canvas step without a Canvas link; an optional step not switched on */
     const due = s.key === "page" ? pageDue(date, o.prevDate, today) : want < today ? today : want;
-    return { key: s.key, label: s.label, owner: s.owner, due, status: skip || noNeed ? "skipped" : "todo", note: skip ? LABEL_NOTE : noNeed ? NEEDS_NOTE : "", link: "", at: null, by: null };
+    return { key: s.key, label: s.label, owner: s.owner, due, status: skip || noNeed ? "skipped" : "todo", note: skip ? LABEL_NOTE : noNeed ? offNote(s) : "", link: "", at: null, by: null };
   });
   /* Spotify for Artists is due 3 days after RouteNote's approval, not on the approval day (18 Nov 2026).
      A label release skips approval, so its Spotify step keeps its own day. */
@@ -2500,7 +2539,7 @@ function healOne(r, today, at) {
   /* only a song not out yet; never the Spotify for Artists step (an old release gets that one when Luke moves it: its
      pitch may have gone out already, 11 Nov 2026) */
   if (r.status === "scheduled" && !r.alreadyOut && isDay(r.date) && r.date >= today) {
-    const have = new Set(r.steps.map((s) => s.key)), add = RELEASE_STEPS.filter((x) => !have.has(x.key) && x.key !== "spotify");
+    const have = new Set(r.steps.map((s) => s.key)), add = RELEASE_STEPS.filter((x) => !have.has(x.key) && x.key !== "spotify" && !x.optIn); /* 26 Nov 2026: an optional step comes only when Luke switches it on (syncFieldSteps) */
     if (add.length) {
       const fresh = scheduleSteps(r.date, today, { labelDelivers: labelDelivers(r.pack), pack: r.pack }).steps;
       for (const x of add) r.steps.push(fresh.find((y) => y.key === x.key));
@@ -2708,7 +2747,7 @@ export function releaseView(r, today, o = {}) {
   if (firstOpt >= 0) missing.splice(firstOpt, missing.length - firstOpt, ...missing.slice(firstOpt).map((m, i) => [m, i]).sort((a, b) => (when(a[0]) < when(b[0]) ? -1 : when(a[0]) > when(b[0]) ? 1 : a[1] - b[1])).map((x) => x[0]));
   /* "Pack: 14 of 17 filled": the fields Luke fills about the song; the team's "later" fields and the
      deal (shown on its own line) are not counted */
-  const own = PACK_FIELDS.filter((f) => f.key !== "prehq" && f.key !== "adplan" && f.group !== "later" && f.group !== "deal");
+  const own = PACK_FIELDS.filter((f) => f.key !== "prehq" && f.key !== "adplan" && f.key !== "videoPitch" && f.key !== "thisIs" && f.group !== "later" && f.group !== "deal");
   const open = steps.filter((s) => !finished(s));
   /* next = the first open step someone can work on now (a waiting one only when nothing else is open) */
   const next = open.find((s) => !s.waiting) || open[0] || null;
@@ -3361,13 +3400,9 @@ export async function saveRelease(store, now, roster, a) {
       const changed = Object.keys(values).filter((k) => (r.pack[k] || "") !== values[k]);
       for (const k of changed) { if (values[k]) r.pack[k] = values[k]; else delete r.pack[k]; }
       if (changed.includes("storeStatus") && values.storeStatus) storeEntry(r, { status: values.storeStatus, on: today, at, by });
-      /* a step that needs a field (the Canvas): it applies once the field is filled, and stops applying when cleared */
-      for (const st of r.steps || []) {
-        const need = STEP[st.key] && STEP[st.key].needs;
-        if (!need || !changed.includes(need)) continue;
-        if (filled(r.pack[need]) && st.status === "skipped" && canvasSkipNote(st.note)) { st.status = "todo"; st.note = ""; if (isDay(r.date)) { const want = addDays(r.date, -STEP[st.key].days); st.due = want < today ? today : want; } }
-        else if (!filled(r.pack[need]) && st.status === "todo") { st.status = "skipped"; st.note = NEEDS_NOTE; }
-      }
+      /* a step that needs a field (the Canvas) applies once the field is filled, and stops applying when cleared; an
+         optional step (the video pitch, the This Is pin) follows its Yes the same way (26 Nov 2026) */
+      syncFieldSteps(r, changed, today);
       if (changed.length) changes.push(`changed ${joinWords(changed.map((k) => FIELD[k].short))}`);
       /* the deal changed on a release already sent: the upload and the approval follow it, and Drop is told */
       if (changed.some((k) => k === "kind" || k === "distributor")) {
@@ -3554,11 +3589,8 @@ export async function fillRelease(store, now, roster, a) {
     r.pack[key] = value; r.updatedAt = at;
     logIt(r, at, by, `${by} ${had ? "changed" : "filled"} ${f.short}`);
     const today = spDay(now);
-    for (const st of r.steps || []) {
-      const need = STEP[st.key] && STEP[st.key].needs;
-      if (need !== key) continue;
-      if (filled(r.pack[need]) && st.status === "skipped" && canvasSkipNote(st.note)) { st.status = "todo"; st.note = ""; if (isDay(r.date)) { const want = addDays(r.date, -STEP[st.key].days); st.due = want < today ? today : want; } }
-    }
+    /* filling the Canvas link brings its step back; an optional step follows its Yes (only Luke or Claude may set those) */
+    syncFieldSteps(r, [key], today);
     return { value: r };
   });
 }
@@ -4742,7 +4774,7 @@ export function slimRelease(v) {
 }
 /* what the page needs to build the form and the pipeline without hard-coding either */
 export const packFieldsOut = () => PACK_FIELDS.map((f) => ({ key: f.key, label: f.label, short: f.short, kind: f.kind, required: f.required, requiredWhen: f.requiredWhen, showWhen: f.showWhen, neededBy: f.neededBy, choices: f.choices, hint: f.hint, fill: f.fill, group: f.group, max: f.max }));
-export const releaseStepsOut = () => RELEASE_STEPS.map((s) => ({ key: s.key, label: s.label, owner: s.owner, days: s.days, ...(s.after ? { after: s.after } : {}), ...(s.fromRelease ? { fromRelease: true } : {}) }));
+export const releaseStepsOut = () => RELEASE_STEPS.map((s) => ({ key: s.key, label: s.label, owner: s.owner, days: s.days, ...(s.after ? { after: s.after } : {}), ...(s.fromRelease ? { fromRelease: true } : {}), ...(s.optIn ? { optional: true } : {}) }));
 
 /* What is waiting on Luke (12 Nov 2026, the HQ apps): ONE rule for the app badge, GET
    /api/hq/push/waiting and the push alerts (netlify/lib/push.mjs). luke_briefing keeps its own output.

@@ -43,6 +43,9 @@
       if (a.getAttribute("data-tab") === tab) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current");
     });
     $("moreBtn").classList.toggle("on", MORE.indexOf(tab) >= 0);
+    /* 26 Nov 2026: the page knows its tab (the date range hides on Upcoming, Team and Profiles: it changes nothing there) */
+    document.body.setAttribute("data-view", tab);
+    document.body.classList.remove("hdr-hide");
     try { localStorage.setItem(KEY, tab); } catch (e) {}
     closeMore(); closeHealth();
     window.scrollTo(0, 0);
@@ -64,6 +67,19 @@
     show(t);
   }
   window.addEventListener("hashchange", route);
+  /* 26 Nov 2026 (Luke's review: the header and the bar took about a third of the phone's screen): on the phone the
+     header slides away while scrolling down past 150px and comes back on any scroll up (CSS: body.hdr-hide, no
+     slide with reduced motion). Not while a field is being typed in, the More sheet is open, or near the top. */
+  var lastY = 0, ticking = false, HIDE_AFTER = 150;
+  function onScroll() {
+    ticking = false;
+    var y = window.scrollY || window.pageYOffset || 0, b = document.body, dy = y - lastY;
+    var typing = document.activeElement && /^(INPUT|SELECT|TEXTAREA)$/.test(document.activeElement.tagName);
+    if (y <= HIDE_AFTER || dy < 0 || b.classList.contains("more-open")) b.classList.remove("hdr-hide");
+    else if (dy > 4 && !typing && window.matchMedia && window.matchMedia("(max-width: 899px)").matches) b.classList.add("hdr-hide");
+    if (Math.abs(dy) > 4 || y <= HIDE_AFTER) lastY = y;
+  }
+  window.addEventListener("scroll", function () { if (!ticking) { ticking = true; (window.requestAnimationFrame || setTimeout)(onScroll); } }, { passive: true });
   /* a deep link opened from scratch (#growth/fans, #songs/touchme, #team/nova…) jumps before the numbers
      above it have loaded, and they then push it out of view: once HQ's first load is in, jump again */
   var firstLoad = true;

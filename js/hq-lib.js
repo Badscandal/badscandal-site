@@ -1159,10 +1159,16 @@
     var c = (v && v.counts) || {}, done = c.done || 0, total = c.total || 0;
     return { done: done, total: total, pct: total ? Math.round((done / total) * 100) : 0, text: total ? done + " of " + total + " steps done" : "" };
   }
-  /* the steps in two groups: still to do (blocked first, then soonest), and done or not ours */
-  function stepGroups(v) {
-    var all = (v && v.steps) || [];
-    var open = all.filter(openStep).sort(function (a, b) { return (b.status === "blocked") - (a.status === "blocked") || byDue(a, b); });
+  /* the steps in two groups: still to do, and done or not ours.
+     26 Nov 2026 (Luke's Upcoming review): "Still to do" sorted by date put "Spotify pitch sent" above "Showing as
+     upcoming in Spotify for Artists", though the pitch waits for it. Open steps go blocked first, then in the
+     pipeline's order (the desk's RELEASE_STEPS: board.releaseSteps, else STEP_ORDER), then by date. */
+  var STEP_ORDER = ["upload", "approved", "spotify", "pitch", "video_pitch", "canvas", "page", "video", "ads", "live", "lyrics", "thisis"];
+  function stepGroups(v, order) {
+    var all = (v && v.steps) || [], keys = (Array.isArray(order) && order.length ? order : STEP_ORDER).map(function (x) { return typeof x === "string" ? x : x && x.key; });
+    var at = function (s) { var i = keys.indexOf(s.key); return i < 0 ? keys.length + all.indexOf(s) : i; };
+    var blockedNow = function (s) { return s.status === "blocked" && !s.waiting && !blockWaitNote(s.label, s.note); };
+    var open = all.filter(openStep).sort(function (a, b) { return (blockedNow(b) - blockedNow(a)) || (at(a) - at(b)) || byDue(a, b); });
     return { open: open, done: all.filter(function (s) { return !openStep(s); }) };
   }
   /* what on the Upcoming tab waits on Luke, first on the tab: Drop's "ready to resubmit?", an approval a bot
@@ -1302,7 +1308,7 @@
   function stepsSummary(steps) {
     var byDays = [], after = [];
     (steps || []).forEach(function (s) {
-      if (s.days === 0) return;
+      if (s.days === 0 || s.optional) return; /* 26 Nov 2026: the optional Spotify extras are off unless Luke switches them on */
       if (s.days < 0) { after.push(shortStep(s.label) + " within " + plural(-s.days, "day")); return; }
       var last = byDays[byDays.length - 1], w = shortStep(s.label);
       if (last && last.days === s.days) last.words.push(w); else byDays.push({ days: s.days, words: [w] });
@@ -1923,6 +1929,171 @@
       cover: extra.cover || "", taps: extra.taps == null ? null : extra.taps, people: extra.people == null ? null : extra.people, spend: extra.spend || "" };
   }
 
+  /* ---------- Upcoming, one card per song (26 Nov 2026, Luke's review) ----------
+     Closed: the cover, the title, "Wed 9 Dec · 13 days", ONE pill, ONE "Next:" line, a thin bar from T-21 to the
+     release day, the Release Radar countdown, four asset chips and the most urgent problem with its button.
+     Open: every step, the distributor's history, the files and details, the buttons. Colours mean one thing:
+     done green ✓, to do grey outline ○, waiting grey with a clock, blocked or late red !, a warning amber. */
+  /* one step's look: { tone: done|todo|wait|bad|skip, icon, word } */
+  function stepLook(s, today) {
+    var st = stepState(s, today);
+    if (st.skipped) return { tone: "skip", icon: "–", word: "not ours" };
+    if (st.done) return { tone: "done", icon: "✓", word: "done" };
+    if (st.waiting) return { tone: "wait", icon: "◷", word: "waiting" };
+    if (st.bad) return { tone: "bad", icon: "!", word: s.status === "blocked" ? "blocked" : "late" };
+    return { tone: "todo", icon: "○", word: "to do" };
+  }
+  /* does a bot's question about this release wait on Luke (resubmit, an approval), or a dispute about the song? */
+  function relNeedsLuke(v, board) {
+    if (!v || !board) return false;
+    if (resubmitAsk(board, v.id)) return true;
+    if ((board.messages || []).some(function (m) { return m && m.to === "Luke" && !m.resolved && m.approval && m.approval.id === v.id; })) return true;
+    return ((board.disputes && board.disputes.items) || []).some(function (c) { return c && titleKey(c.song) === titleKey(v.title) && c.status === "waiting on Luke"; });
+  }
+  /* the card's ONE pill: Needs you / Blocked / Late / Warning / On track (or Out now, Draft) */
+  function cardPill(v, today, board) {
+    if (!v) return { text: "", tone: "" };
+    if (v.status === "draft") return { text: "Draft", tone: "todo", icon: "○" };
+    var rp = relPill(v, today);
+    if (v.released && rp.rel) return { text: rp.text, tone: "out", icon: "" };
+    if (relNeedsLuke(v, board)) return { text: "Needs you", tone: "you", icon: "●" };
+    var c = v.counts || {}, g = warnGroups(v);
+    if (c.blocked) return { text: "Blocked", tone: "bad", icon: "!" };
+    if (c.late) return { text: "Late", tone: "bad", icon: "!" };
+    if (g.bad.length) return { text: "Warning", tone: "warn", icon: "!" };
+    return { text: "On track", tone: "ok", icon: "✓" };
+  }
+  /* "Wed 9 Dec · 13 days" */
+  function cardWhen(v, today) {
+    if (!v || !isDay(v.date)) return "No release day yet";
+    var n = isDay(today) ? dayDiff(today, v.date) : null;
+    if (n == null) return day(v.date);
+    if (n === 0) return day(v.date) + " · release day";
+    if (n < 0) return day(v.date) + " · out " + plural(-n, "day") + " ago";
+    return day(v.date) + " · " + plural(n, "day");
+  }
+  /* the ONE "Next:" line: step · owner · when. A blocked step says only "blocked": the reason is said once, on
+     the card's problem line or on the step itself. */
+  function cardNext(v, today) {
+    var n = v && v.next;
+    if (!n) return null;
+    var st = stepState(n, today), when;
+    if (n.status === "blocked" && !st.waiting) when = "blocked";
+    else if (st.waiting) when = "waiting";
+    else if (st.bad) when = st.text;
+    else when = isDay(n.due) ? (st.text.replace(/^working · /, "") === "due today" ? "today" : day(n.due)) : st.text;
+    return { label: shortStep(n.label), owner: n.owner === "Luke" ? "You" : (n.owner || ""), when: when, text: "Next: " + [shortStep(n.label), n.owner === "Luke" ? "You" : (n.owner || ""), when].filter(Boolean).join(" · ") };
+  }
+  /* the thin bar: T-21 to the release day, a tick per step (steps after the day sit at its end), and today */
+  var TRACK_DAYS = 21;
+  function relTrack(v, today) {
+    if (!v || !isDay(v.date)) return null;
+    var start = addDaysIso(v.date, -TRACK_DAYS);
+    var pct = function (d) { var x = dayDiff(start, d) / TRACK_DAYS * 100; return Math.max(0, Math.min(100, Math.round(x * 10) / 10)); };
+    var ticks = ((v.steps || []).filter(function (s) { return s && s.status !== "skipped" && isDay(s.due); })).map(function (s) {
+      var lk = stepLook(s, today);
+      return { key: s.key, label: shortStep(s.label), pct: pct(s.due), tone: lk.tone, icon: lk.icon };
+    });
+    var c = v.counts || {};
+    return { start: start, end: v.date, today: isDay(today) ? pct(today) : null, ticks: ticks,
+      text: "From " + day(start) + " (3 weeks out) to " + day(v.date) + (c.total ? ": " + c.done + " of " + c.total + " steps done" : "") };
+  }
+  function addDaysIso(d, n) { var t = new Date(Date.parse(d + "T12:00:00Z") + n * 86400000); return t.toISOString().slice(0, 10); }
+  /* Release Radar (Spotify): the pitch must go at least 7 days before release. From 10 days before that deadline
+     until the pitch is sent: "Pitch by Wed 2 Dec for Release Radar · 6 days", red at 2 days or less. Reads the
+     pitch line the desk already makes (v.pitch.deadline); nothing new on the desk. */
+  function radarChip(v, today) {
+    var p = v && v.pitch;
+    if (!p || p.skipped || p.status === "pitched" || !v || v.status !== "scheduled" || v.released || !isDay(today)) return null;
+    if (p.status === "missed") return { text: "Release Radar missed: the pitch had to go 7 days before release", bad: true, days: null };
+    if (!isDay(p.deadline)) return null;
+    var n = dayDiff(today, p.deadline);
+    if (n > 10) return null;
+    if (n < 0) return { text: "Release Radar missed: the pitch had to go by " + day(p.deadline), bad: true, days: n };
+    return { text: "Pitch by " + day(p.deadline) + " for Release Radar · " + (n === 0 ? "today" : plural(n, "day")), bad: n <= 2, days: n };
+  }
+  /* four chips: Artwork · Canvas · Visualiser · Lyrics, each ✓ or ○, from the pack (the board's copy has no lyrics,
+     only how long they are) */
+  var ASSETS = [["artwork", "Artwork"], ["canvas", "Canvas"], ["visualiser", "Visualiser"], ["lyrics", "Lyrics"]];
+  function assetChips(v) {
+    var pack = (v && v.pack) || {};
+    return ASSETS.map(function (a) {
+      var ok = String(pack[a[0]] == null ? "" : pack[a[0]]).trim() !== "" || (a[0] === "lyrics" && !!(v && v.lyricsChars));
+      return { key: a[0], label: a[1], ok: ok };
+    });
+  }
+  /* the most urgent problem, said ONCE on the closed card: Drop's "ready to resubmit?" (with its buttons), else the
+     first failure; how many more are inside */
+  function cardProblem(v, board, today) {
+    if (!v || v.status !== "scheduled" || (v.pack && v.pack.prehq === "Yes")) return null;
+    var m = resubmitAsk(board, v.id);
+    var g = warnGroups(v), more = g.bad.length;
+    if (m) return { kind: "resubmit", msg: m, text: m.text, more: Math.max(0, more - 1) };
+    var st = relStatus(v, today);
+    if (st.bad) return { kind: "bad", text: st.text, more: st.more || 0 };
+    return null;
+  }
+  /* a warning that is about one step ("X is blocked (Drop): …", "X is 2 days late (Verse)") is said on that step,
+     not again in the list inside the card */
+  function stepWarning(w, v) {
+    var t = String(w || ""), steps = (v && v.steps) || [];
+    if (steps.some(function (s) { return s && s.label && t.indexOf(s.label + " is ") === 0; })) return true;
+    /* the distributor's rejection: its reason is on the step it blocks */
+    return /^Rejected at the distributor/.test(t) && steps.some(function (s) { return s && s.status === "blocked" && !s.waiting && !blockWaitNote(s.label, s.note); });
+  }
+
+  /* the month the calendar opens on: the next release's (one sent to the team first, else a draft with a day), else this month */
+  function calendarStart(releases, today) {
+    var ahead = (releases || []).filter(function (v) { return v && v.status !== "cancelled" && isDay(v.date) && v.date >= today; });
+    var pick = function (list) { return list.sort(function (a, b) { return a.date < b.date ? -1 : 1; })[0]; };
+    var next = pick(ahead.filter(function (v) { return v.status === "scheduled"; })) || pick(ahead);
+    return (next ? next.date : String(today || "")).slice(0, 7);
+  }
+  /* ---------- the New song form saves typing (26 Nov 2026, Luke's review) ---------- */
+  /* "Copy from a previous song": what is the same every time. Title, date, files, lyrics and pitch notes stay empty. */
+  var COPY_KEYS = ["kind", "writers", "producers", "primary", "copyright", "language", "genre", "subgenre", "explicit"];
+  /* the songs to copy from, the last one sent first (then the newest draft) */
+  function copySources(releases, exceptId) {
+    var has = function (v) { return v && v.pack && COPY_KEYS.some(function (k) { return String(v.pack[k] || "").trim(); }); };
+    var stamp = function (v) { return String(v.sentAt || v.createdAt || v.updatedAt || v.date || ""); };
+    return (releases || []).filter(function (v) { return v && v.status !== "cancelled" && v.id !== exceptId && has(v); })
+      .sort(function (a, b) { return (b.status === "scheduled") - (a.status === "scheduled") || (stamp(a) < stamp(b) ? 1 : stamp(a) > stamp(b) ? -1 : 0); })
+      .map(function (v) { return { id: v.id, title: v.title, sent: v.status === "scheduled" }; });
+  }
+  /* -> { vals, filled: [keys], kept: [keys] }: empty fields take the song's values; anything already typed stays */
+  function copyValues(src, vals) {
+    var out = {}, filled = [], kept = [];
+    Object.keys(vals || {}).forEach(function (k) { out[k] = vals[k]; });
+    var pack = (src && src.pack) || {};
+    COPY_KEYS.forEach(function (k) {
+      var v = String(pack[k] == null ? "" : pack[k]).trim();
+      if (!v) return;
+      if (String(out[k] || "").trim()) { if (String(out[k]).trim() !== v) kept.push(k); return; }
+      out[k] = v; filled.push(k);
+    });
+    return { vals: out, filled: filled, kept: kept };
+  }
+  /* pick lists for genre, second genre and language: the values used before on top, then the store list.
+     RouteNote doesn't publish its dropdown: this is the usual store list; "Other…" in the form takes anything else. */
+  var PICKS = {
+    genre: ["Alternative", "Blues", "Children's Music", "Classical", "Comedy", "Country", "Dance", "Electronic", "Folk", "Hip Hop/Rap", "Holiday", "Indie Pop", "Inspirational", "Instrumental", "Jazz", "Latin", "Metal", "New Age", "Pop", "Punk", "R&B/Soul", "Reggae", "Rock", "Singer/Songwriter", "Soundtrack", "Spoken Word", "World"],
+    language: ["English", "Portuguese", "Spanish", "French", "Italian", "German", "Dutch", "Swedish", "Polish", "Russian", "Arabic", "Hindi", "Japanese", "Korean", "Chinese (Mandarin)", "Yoruba", "Swahili", "Zulu", "Irish", "Instrumental"]
+  };
+  PICKS.subgenre = PICKS.genre;
+  function pickList(key, releases) {
+    var base = PICKS[key];
+    if (!base) return null;
+    var count = {}, first = {};
+    (releases || []).forEach(function (v) {
+      var x = v && v.status !== "cancelled" && v.pack ? String(v.pack[key] || "").trim() : "";
+      if (!x) return;
+      var k = x.toLowerCase(); count[k] = (count[k] || 0) + 1; if (!first[k]) first[k] = x;
+    });
+    var used = Object.keys(count).sort(function (a, b) { return count[b] - count[a] || (a < b ? -1 : 1); }).map(function (k) { return first[k]; });
+    var low = used.map(function (x) { return x.toLowerCase(); });
+    return { used: used, rest: base.filter(function (x) { return low.indexOf(x.toLowerCase()) < 0; }) };
+  }
+
   /* L5. RouteNote's inbox is not connected until Luke signs it in. A song with no parsed email says not reported. */
   function routeMailLine(src, release) {
     if (!src || src.connected !== true) return "RouteNote email: not connected";
@@ -2359,5 +2530,9 @@
     /* disputes (19 Nov 2026): cases live on Songs */
     disputeHtml: disputeHtml, caseProgress: caseProgress, caseColour: caseColour, songMark: songMark,
     /* account health (18 Nov 2026) */
-    accountHealthHome: accountHealthHome };
+    accountHealthHome: accountHealthHome,
+    /* Upcoming, one card per song + the form saves typing (26 Nov 2026) */
+    STEP_ORDER: STEP_ORDER, stepLook: stepLook, cardPill: cardPill, cardWhen: cardWhen, cardNext: cardNext, relTrack: relTrack, radarChip: radarChip,
+    assetChips: assetChips, cardProblem: cardProblem, stepWarning: stepWarning, relNeedsLuke: relNeedsLuke,
+    calendarStart: calendarStart, COPY_KEYS: COPY_KEYS, copySources: copySources, copyValues: copyValues, pickList: pickList };
 });

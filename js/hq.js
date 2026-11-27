@@ -401,9 +401,11 @@
   }
   function broken(tab) { var e = sheet && sheet.sheetErrors && sheet.sheetErrors[tab]; return !!(e && !e.readable); }
 
+  /* 26 Nov 2026: each tab draws on its own, so one that throws can't stop the others on that pass */
   function drawSheet() {
-    drawSheetErrors();
-    drawToday(); drawBriefing(); drawSongs(); drawAdsTop(); drawGrowth(); drawFans(); drawReleases(); drawTeam(); drawDataHealth();
+    [drawSheetErrors, drawToday, drawBriefing, drawSongs, drawAdsTop, drawGrowth, drawFans, drawReleases, drawTeam, drawDataHealth].forEach(function (draw) {
+      try { draw(); } catch (e) { if (window.console) console.error("HQ: " + (draw.name || "a tab") + " couldn't be drawn", e); }
+    });
   }
 
   /* ---------- Today ---------- */
@@ -831,7 +833,9 @@
     $("relDesk").innerHTML = ""; $("relPipe").innerHTML = "";
     $("relOut").innerHTML = ol ? '<p class="routline">' + esc(ol) + ' <a href="#songs">See Songs</a></p>' : "";
     $("relSpot").innerHTML = ""; if ($("relSpotWrap")) $("relSpotWrap").hidden = true;
-    var deskHas = window.HQStaff && HQStaff.board && (HQStaff.board().releases || []).length;
+    /* 26 Nov 2026: board() is null until the staff board arrives; if the sheet answers first this threw and stopped drawSheet */
+    var b = window.HQStaff && HQStaff.board && HQStaff.board();
+    var deskHas = b && (b.releases || []).length;
     $("relList").innerHTML = broken("Releases") ? '<p class="empty">See the note above.</p>' : l.sheetOnly.length ? l.sheetOnly.map(sheetReleaseCard).join("") : (deskHas ? "" : '<p class="empty">Nothing coming in the sheet yet.</p>');
   }
   function sheetReleaseCard(r) {
@@ -986,7 +990,12 @@
   document.addEventListener("keydown", function (ev) { if (ev.key === "Escape") closeRelease(); });
   window.addEventListener("hashchange", closeRelease);
 
-  window.HQ = { sample: sample, state: state, setRange: setRange, refresh: refresh, net: function (p, m, a) { netState(p, m, a); }, keep: keep, kept: kept, showLogin: showLogin, showShell: showShell, rangeQuery: rangeQuery,
+  /* 26 Nov 2026: what the header's range is, in words (Upcoming says it next to a song's people and taps, since the picker is hidden there) */
+  function rangeWords() {
+    var r = state.range;
+    return r === "today" ? "today" : r === "7d" ? "last 7 days" : r === "30d" ? "last 30 days" : r === "all" ? "all time" : r === "custom" && state.from && state.to ? day(state.from) + " to " + day(state.to) : "this period";
+  }
+  window.HQ = { sample: sample, state: state, setRange: setRange, rangeWords: rangeWords, refresh: refresh, net: function (p, m, a) { netState(p, m, a); }, keep: keep, kept: kept, showLogin: showLogin, showShell: showShell, rangeQuery: rangeQuery,
     esc: esc, fmt: fmt, money: money, day: day, ago: ago, getJSON: getJSON, authFail: authFail,
     /* for js/hq-staff.js (11 Nov 2026) */
     postJSON: postJSON, copyText: copyText, link: link, stack: stack, drawFeed: drawFeed, sheet: function () { return sheet; },
