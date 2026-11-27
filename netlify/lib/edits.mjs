@@ -180,7 +180,18 @@ export function workerOk(header, token) {
 
 /* 26 Nov 2026: + tone, film (the renderer's film slug, e.g. "the-notebook-2004-1") and scene for dialogue
    scenes. A dialogue recipe's land_line (a lyric) and dialogue (the film's lines) are never kept here. */
-const RECIPE_KEYS = ["id", "song", "style", "variant", "layout", "grade", "lang", "seconds", "created", "opener_text", "accent_word", "tone", "film", "scene"];
+const RECIPE_KEYS = ["id", "song", "style", "variant", "layout", "grade", "lang", "seconds", "created", "opener_text", "accent_word", "tone", "film", "scene",
+  "land", "S", "U", "duration"];  // land = where in the song the song part lands (seconds): never the lyric itself
+/* 27 Nov 2026: what a decision log line keeps about the edit, so the machine can learn from it (no file paths) */
+const num = (v) => (typeof v === "number" && isFinite(v) ? Math.round(v * 1000) / 1000 : null);
+function learnFields(recipe) {
+  const r = recipe || {};
+  return {
+    film: String(r.film || "").slice(0, 80), scene: String(r.scene || (Array.isArray(r.clips) && r.clips[0]) || "").slice(0, 80),
+    tone: String(r.tone || "").slice(0, 20), caption: String((r.hook && r.hook.text) || "").slice(0, 160),
+    land: num(r.land), S: num(r.S), U: num(r.U), duration: num(r.duration),
+  };
+}
 export function cleanRecipe(r) {
   if (!r || typeof r !== "object") return {};
   const out = {};
@@ -373,7 +384,7 @@ export async function decide(store, drv, rootId, body, now) {
   if (choice === "approve" && !song) fail("This edit's recipe doesn't name its song, so it can't go to 2 Approved/<song>.");
   const rec = {
     id, choice, reason, note, song, style: recipe.style || "", variant: recipe.variant || "", hook: (recipe.hook && recipe.hook.id) || "", grade: recipe.grade || "",
-    at: now, from: folder, to: "", files: [it.file, it.preview, it.json].filter(Boolean).map((f) => f.id), moves: [],
+    ...learnFields(recipe), at: now, from: folder, to: "", files: [it.file, it.preview, it.json].filter(Boolean).map((f) => f.id), moves: [],
   };
   const claim = await store.setJSON("decision/" + id + ".json", rec, { onlyIfNew: true });
   if (claim && claim.modified === false) fail("Already decided.", 409);
@@ -391,7 +402,7 @@ export async function decide(store, drv, rootId, body, now) {
   await store.setJSON("decision/" + id + ".json", rec);
   await mutate(store, "log/" + month(now) + ".json", [], (list) => {
     const l = Array.isArray(list) ? list.filter((x) => x && x.id !== id) : [];
-    l.push({ id, choice, reason, note, song, style: rec.style, variant: rec.variant, hook: rec.hook, grade: rec.grade, at: now });
+    l.push({ id, choice, reason, note, song, style: rec.style, variant: rec.variant, hook: rec.hook, grade: rec.grade, ...learnFields(recipe), at: now });
     return { replace: l.slice(-5000) };
   });
   return { ok: true, id, choice, reason, note, undoUntil: now + UNDO_MS };

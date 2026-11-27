@@ -169,7 +169,7 @@
     var h = '<form class="wscard edmake" id="edMake"><h3>Make edits</h3>';
     h += '<label>Song<select name="song">' + songs.map(function (s) { return '<option value="' + esc(s.slug) + '">' + esc(s.title) + "</option>"; }).join("") + "</select></label>";
     h += '<fieldset class="edstyles"><legend>Styles</legend>' + (ov.styles || []).map(function (s, i) {
-      return '<label class="edcheck"><input type="checkbox" name="styles" value="' + esc(s.key) + '"' + (i === 0 || s.key === "movie-card" ? " checked" : "") + "><span><b>" + esc(s.label) + "</b> " + esc(s.hint) + "</span></label>";
+      return '<label class="edcheck"><input type="checkbox" name="styles" value="' + esc(s.key) + '"' + (s.key === "movie-dialogue" ? " checked" : "") + "><span><b>" + esc(s.label) + "</b> " + esc(s.hint) + "</span></label>";
     }).join("") + "</fieldset>";
     /* 26 Nov 2026: dialogue scenes. Tone only while Dialogue scene is ticked; Footage for Dialogue scene and Movie card. */
     h += '<fieldset class="edchoice" id="edTone" hidden><legend>Tone</legend>' + (ov.tones || []).map(function (t, i) {
